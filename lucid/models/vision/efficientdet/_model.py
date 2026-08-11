@@ -48,10 +48,13 @@ Faithfulness notes
 
 from typing import ClassVar, cast, final, override
 
+import math
+
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import make_divisible
 from lucid.models._base import PretrainedModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
@@ -87,9 +90,11 @@ class _SepConv(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return F.relu(
-            cast(Tensor, self.bn(cast(Tensor, self.pw(cast(Tensor, self.dw(x))))))
-        )
+        # Reference order is act -> dwconv -> pwconv -> BN, with no activation
+        # after the norm: the fused sum is activated on the way *in*, and the
+        # node's output stays linear.
+        h = F.silu(x)
+        return cast(Tensor, self.bn(cast(Tensor, self.pw(cast(Tensor, self.dw(h))))))
 
 
 # ---------------------------------------------------------------------------
@@ -112,17 +117,22 @@ class _BiFPNLayer(nn.Module):
         self.td_weights: nn.ParameterList = nn.ParameterList(
             [nn.Parameter(lucid.ones((2,))) for _ in range(L - 1)]
         )
-        # Bottom-up output weights
-        # Level 0 (finest): fuse 2 inputs (P_in + P_td)
-        # Levels 1..L-1: fuse 3 inputs (P_in + P_td + down-sampled output)
+        # Bottom-up output weights, for levels 1 … L-1 only.
+        # Paper Fig. 2(d): a BiFPN cell over P3…P7 has exactly EIGHT nodes —
+        # four top-down (levels 6,5,4,3) and four bottom-up (levels 4,5,6,7).
+        # The finest level owns a single node: the top-down node at level 3 IS
+        # P3_out, never re-fused with P3_in.  The coarsest bottom-up node takes
+        # two inputs (P7_in and the down-sampled P6_out), because level 7 has no
+        # top-down intermediate — fusing ``td[L-1]`` there would count P7_in
+        # twice, since the top-down pass passes it straight through.
         self.out_weights: nn.ParameterList = nn.ParameterList(
-            [nn.Parameter(lucid.ones((2,)))]
-            + [nn.Parameter(lucid.ones((3,))) for _ in range(L - 1)]
+            [nn.Parameter(lucid.ones((3,))) for _ in range(L - 2)]
+            + [nn.Parameter(lucid.ones((2,)))]
         )
 
-        # Convolutions (one per intermediate top-down node + one per output)
+        # One conv per top-down node (L-1) and one per bottom-up node (L-1).
         self.td_convs = nn.ModuleList([_SepConv(num_channels) for _ in range(L - 1)])
-        self.out_convs = nn.ModuleList([_SepConv(num_channels) for _ in range(L)])
+        self.out_convs = nn.ModuleList([_SepConv(num_channels) for _ in range(L - 1)])
         # Registered down-sampler (avoids allocating a new module each forward call)
         self.down = nn.MaxPool2d(2, stride=2)
 
@@ -143,31 +153,35 @@ class _BiFPNLayer(nn.Module):
         # ``self.td_weights`` / ``self.out_weights`` (paper's key contribution).
         td: list[Tensor] = [features[-1]]  # coarsest passes through
         for i in range(L - 2, -1, -1):  # from coarsest-1 down to finest
-            w: Tensor = F.relu(cast(Tensor, self.td_weights[L - 2 - i])) + _EPS
-            wsum = w.sum()
+            # Eq. (3): the epsilon guards the *denominator* only.  Adding it to
+            # the weight vector puts +eps in every numerator and N*eps in the
+            # sum, which changes the fusion ratios rather than just avoiding a
+            # division by zero.
+            w: Tensor = F.relu(cast(Tensor, self.td_weights[L - 2 - i]))
+            wsum = w.sum() + _EPS
             up = F.interpolate(td[0], scale_factor=2.0, mode="nearest")
             fused: Tensor = (w[0] / wsum) * features[i] + (w[1] / wsum) * up
             node = cast(Tensor, self.td_convs[L - 2 - i](fused))
             td.insert(0, node)  # prepend so td[0] = finest
 
         # --- Bottom-up output ---
-        out: list[Tensor] = []
-        # Finest level (only 2 inputs).
-        wf: Tensor = F.relu(cast(Tensor, self.out_weights[0])) + _EPS
-        wfsum = wf.sum()
-        fused_f: Tensor = (wf[0] / wfsum) * features[0] + (wf[1] / wfsum) * td[0]
-        out.append(cast(Tensor, self.out_convs[0](fused_f)))
+        # The finest level's top-down node is already P3_out.
+        out: list[Tensor] = [td[0]]
 
         for i in range(1, L):
-            wl: Tensor = F.relu(cast(Tensor, self.out_weights[i])) + _EPS
-            wlsum = wl.sum()
+            wl: Tensor = F.relu(cast(Tensor, self.out_weights[i - 1]))
+            wlsum = wl.sum() + _EPS
             down = cast(Tensor, self.down(out[-1]))
-            fused_l: Tensor = (
-                (wl[0] / wlsum) * features[i]
-                + (wl[1] / wlsum) * td[i]
-                + (wl[2] / wlsum) * down
-            )
-            out.append(cast(Tensor, self.out_convs[i](fused_l)))
+            if i < L - 1:
+                fused_l: Tensor = (
+                    (wl[0] / wlsum) * features[i]
+                    + (wl[1] / wlsum) * td[i]
+                    + (wl[2] / wlsum) * down
+                )
+            else:
+                # Coarsest level: no top-down intermediate exists here.
+                fused_l = (wl[0] / wlsum) * features[i] + (wl[1] / wlsum) * down
+            out.append(cast(Tensor, self.out_convs[i - 1](fused_l)))
 
         return out
 
@@ -187,6 +201,7 @@ class _MBConv(nn.Module):
         expand_ratio: int = 6,
         stride: int = 1,
         kernel_size: int = 3,
+        se_ratio: float = 0.25,
     ) -> None:
         super().__init__()
         mid_ch = in_ch * expand_ratio
@@ -197,7 +212,7 @@ class _MBConv(nn.Module):
             layers += [
                 nn.Conv2d(in_ch, mid_ch, 1, bias=False),
                 nn.BatchNorm2d(mid_ch),
-                nn.ReLU(inplace=True),
+                nn.SiLU(inplace=True),
             ]
         layers += [
             nn.Conv2d(
@@ -210,16 +225,38 @@ class _MBConv(nn.Module):
                 bias=False,
             ),
             nn.BatchNorm2d(mid_ch),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(mid_ch, out_ch, 1, bias=False),
-            nn.BatchNorm2d(out_ch),
+            nn.SiLU(inplace=True),
         ]
         self.block = nn.Sequential(*layers)
+
+        # EfficientNet's MBConv carries squeeze-and-excitation at ratio 0.25;
+        # omitting it drops the channel-gating the backbone was designed
+        # around and quietly changes the parameter count.
+        self.se: nn.Module | None
+        if 0.0 < se_ratio <= 1.0:
+            se_ch = max(1, int(in_ch * se_ratio))
+            self.se = nn.Sequential(
+                nn.AdaptiveAvgPool2d(1),
+                nn.Conv2d(mid_ch, se_ch, 1),
+                nn.SiLU(inplace=True),
+                nn.Conv2d(se_ch, mid_ch, 1),
+                nn.Sigmoid(),
+            )
+        else:
+            self.se = None
+
+        self.project = nn.Sequential(
+            nn.Conv2d(mid_ch, out_ch, 1, bias=False),
+            nn.BatchNorm2d(out_ch),
+        )
         self.use_skip = stride == 1 and in_ch == out_ch
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out: Tensor = cast(Tensor, self.block(x))
+        if self.se is not None:
+            out = out * cast(Tensor, self.se(out))
+        out = cast(Tensor, self.project(out))
         return out + x if self.use_skip else out
 
 
@@ -243,25 +280,45 @@ class _EfficientNetBackbone(nn.Module):
       After stage 6 (stride 32): P5 = 320ch
     """
 
-    def __init__(self, in_channels: int) -> None:
+    def __init__(
+        self,
+        in_channels: int,
+        width_coeff: float = 1.0,
+        depth_coeff: float = 1.0,
+    ) -> None:
         super().__init__()
-        # Stem
+
+        # EfficientNet compound scaling: widths rounded to a multiple of 8 with
+        # the "never lose more than 10%" guard, depths rounded up.  Without
+        # this the backbone stayed at B0 for every variant while the channel
+        # projections were built from the scaled table, so D2 and up could be
+        # constructed but not run — the first projection saw 40 channels where
+        # it expected 48.
+        def w(c: int) -> int:
+            return make_divisible(c * width_coeff, 8)
+
+        def d(n: int) -> int:
+            return int(math.ceil(n * depth_coeff))
+
+        stem_ch = w(32)
         self.stem = nn.Sequential(
-            nn.Conv2d(in_channels, 32, 3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels, stem_ch, 3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(stem_ch),
+            nn.SiLU(inplace=True),
         )
-        # MBConv stages (EfficientNet-B0 settings)
-        self.stage0 = _make_mbconv_stage(32, 16, n=1, stride=1, expand=1, k=3)
-        self.stage1 = _make_mbconv_stage(16, 24, n=2, stride=2, expand=6, k=3)
-        self.stage2 = _make_mbconv_stage(24, 40, n=2, stride=2, expand=6, k=5)
-        self.stage3 = _make_mbconv_stage(40, 80, n=3, stride=2, expand=6, k=3)
-        self.stage4 = _make_mbconv_stage(80, 112, n=3, stride=1, expand=6, k=5)
-        self.stage5 = _make_mbconv_stage(112, 192, n=4, stride=2, expand=6, k=5)
-        self.stage6 = _make_mbconv_stage(192, 320, n=1, stride=1, expand=6, k=3)
-        self.p3_channels: int = 40
-        self.p4_channels: int = 112
-        self.p5_channels: int = 320
+        # MBConv stages (EfficientNet-B0 base settings, compound-scaled)
+        c0, c1, c2 = w(16), w(24), w(40)
+        c3, c4, c5, c6 = w(80), w(112), w(192), w(320)
+        self.stage0 = _make_mbconv_stage(stem_ch, c0, n=d(1), stride=1, expand=1, k=3)
+        self.stage1 = _make_mbconv_stage(c0, c1, n=d(2), stride=2, expand=6, k=3)
+        self.stage2 = _make_mbconv_stage(c1, c2, n=d(2), stride=2, expand=6, k=5)
+        self.stage3 = _make_mbconv_stage(c2, c3, n=d(3), stride=2, expand=6, k=3)
+        self.stage4 = _make_mbconv_stage(c3, c4, n=d(3), stride=1, expand=6, k=5)
+        self.stage5 = _make_mbconv_stage(c4, c5, n=d(4), stride=2, expand=6, k=5)
+        self.stage6 = _make_mbconv_stage(c5, c6, n=d(1), stride=1, expand=6, k=3)
+        self.p3_channels: int = c2
+        self.p4_channels: int = c4
+        self.p5_channels: int = c6
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:  # type: ignore[override]
@@ -326,6 +383,11 @@ class _PredictionHead(nn.Module):
                 for _ in range(num_repeats)
             ]
         )
+        # The reference predictor is a *separable 3x3* conv, not a dense 1x1:
+        # depthwise 3x3 then a pointwise projection, no norm and no activation.
+        self.predictor_dw = nn.Conv2d(
+            in_channels, in_channels, 3, padding=1, groups=in_channels, bias=False
+        )
         self.predictor = nn.Conv2d(in_channels, num_outputs, 1)
 
     @override
@@ -344,9 +406,39 @@ class _PredictionHead(nn.Module):
                 dw: Tensor = cast(Tensor, self.dw_convs[depth](x))
                 pw: Tensor = cast(Tensor, self.pw_convs[depth](dw))
                 bn_list = cast(nn.ModuleList, self.bns[depth])
-                x = F.relu(cast(Tensor, bn_list[lvl](pw)))
-            outs.append(cast(Tensor, self.predictor(x)))
+                x = F.silu(cast(Tensor, bn_list[lvl](pw)))
+            outs.append(
+                cast(Tensor, self.predictor(cast(Tensor, self.predictor_dw(x))))
+            )
         return outs
+
+
+def _init_head_priors(
+    cls_head: _PredictionHead,
+    box_head: _PredictionHead,
+    prior_prob: float = 0.01,
+) -> None:
+    """Apply the focal-loss bias prior to the class predictor.
+
+    The class head's output bias is set to :math:`-\\log((1 - \\pi) / \\pi)`
+    so that a freshly built detector predicts :math:`p \\approx \\pi` for every
+    anchor and class.  Without it the initial sigmoid sits at 0.5 across
+    ~10^5 mostly-background slots and the focal loss starts two orders of
+    magnitude too large — the instability RetinaNet and EfficientDet both
+    document.  The box predictor's bias starts at zero.
+
+    Args:
+        cls_head:   Classification head whose ``predictor`` bias is set.
+        box_head:   Box head whose ``predictor`` bias is zeroed.
+        prior_prob: Target foreground probability at initialisation.
+    """
+    bias_value = -math.log((1.0 - prior_prob) / prior_prob)
+    cls_bias = cls_head.predictor.bias
+    if cls_bias is not None:
+        nn.init.constant_(cls_bias, bias_value)
+    box_bias = box_head.predictor.bias
+    if box_bias is not None:
+        nn.init.zeros_(box_bias)
 
 
 # ---------------------------------------------------------------------------
@@ -355,29 +447,52 @@ class _PredictionHead(nn.Module):
 
 
 def _smooth_l1(x: Tensor, beta: float = 0.1) -> Tensor:
+    """Huber loss with the reference's scaling.
+
+    The reference is ``0.5 x^2`` for ``|x| < delta`` and
+    ``delta |x| - 0.5 delta^2`` beyond — *not* divided by delta.  Dividing
+    made the box term 1/delta times larger (10x at the default 0.1), which
+    silently re-weights it against the classification term.
+    """
     abs_x: Tensor = lucid.abs(x)
     cond: Tensor = abs_x < beta
-    return lucid.where(cond, 0.5 * x * x / beta, abs_x - 0.5 * beta)
+    return lucid.where(cond, 0.5 * x * x, beta * abs_x - 0.5 * beta * beta)
 
 
 def _focal_loss(
     logits: Tensor,
     targets: Tensor,
     alpha: float = 0.25,
-    gamma: float = 2.0,
+    gamma: float = 1.5,
+    mask: Tensor | None = None,
 ) -> Tensor:
     """Binary focal loss for multi-label classification (sigmoid).
+
+    Returns the SUM over all anchor x class slots.  The RetinaNet /
+    EfficientDet convention is to normalise the summed class and box losses by
+    ``num_positives + 1`` — the count of foreground anchors — not by the number
+    of logits.  Averaging over A*K instead divides by ~10^5 slots that are
+    almost all background, which shrinks the term by orders of magnitude and
+    makes it drift with the anchor count rather than the object count.
+
+    ``gamma`` defaults to the paper's 1.5, not RetinaNet's 2.0.
 
     Args:
         logits:  (N,) raw logits.
         targets: (N,) binary targets {0.0, 1.0}.
+        mask:    Optional (N,) multiplier in {0.0, 1.0}.  Slots set to 0 are
+                 excluded from the loss — this is how the reference drops the
+                 "ignore" IoU band, which otherwise trains as background.
     """
     p: Tensor = F.sigmoid(logits)
     ce: Tensor = F.binary_cross_entropy_with_logits(logits, targets, reduction="none")
     p_t: Tensor = targets * p + (1.0 - targets) * (1.0 - p)
     alpha_t = targets * alpha + (1.0 - targets) * (1.0 - alpha)
     focal_weight = alpha_t * (1.0 - p_t) ** gamma
-    return (focal_weight * ce).mean()
+    per_slot: Tensor = focal_weight * ce
+    if mask is not None:
+        per_slot = per_slot * mask
+    return per_slot.sum()
 
 
 # ---------------------------------------------------------------------------
@@ -463,7 +578,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
     >>> x = lucid.randn(1, 3, 512, 512)
     >>> out = model(x)
     >>> out.logits.shape[-1], out.pred_boxes.shape[-1]
-    (90, 4)
+    (80, 4)
     """
 
     config_class: ClassVar[type[EfficientDetConfig]] = EfficientDetConfig
@@ -478,7 +593,11 @@ class EfficientDetForObjectDetection(PretrainedModel):
         num_anchors = len(config.anchor_scales) * len(config.anchor_ratios)
 
         # Backbone
-        self.backbone = _EfficientNetBackbone(config.in_channels)
+        self.backbone = _EfficientNetBackbone(
+            config.in_channels,
+            width_coeff=config.backbone_width_coeff,
+            depth_coeff=config.backbone_depth_coeff,
+        )
 
         # Channel projection: P3/P4/P5 → fpn_channels
         bb_ch = config.backbone_in_channels
@@ -486,10 +605,14 @@ class EfficientDetForObjectDetection(PretrainedModel):
         self.p4_proj = nn.Sequential(nn.Conv2d(bb_ch[1], W, 1), nn.BatchNorm2d(W))
         self.p5_proj = nn.Sequential(nn.Conv2d(bb_ch[2], W, 1), nn.BatchNorm2d(W))
 
-        # P6 = MaxPool(P5), P7 = MaxPool(P6)  — both in W channels after proj
-        self.p6_pool = nn.MaxPool2d(2, stride=2)
-        self.p7_pool = nn.MaxPool2d(2, stride=2)
-        # P6/P7 still W channels (from P5 projection)
+        # Each coarse level gets its own ResampleFeatureMap in the reference:
+        # a 1x1 conv + BN (no activation) resampling from the *backbone's* C5,
+        # then a max-pool with ``kernel_size = stride + 1 = 3``.  Reusing P5's
+        # already-projected tensor and pooling it with a kernel-2 window is a
+        # different operator with a different receptive field.
+        self.p6_proj = nn.Sequential(nn.Conv2d(bb_ch[2], W, 1), nn.BatchNorm2d(W))
+        self.p6_pool = nn.MaxPool2d(3, stride=2, padding=1)
+        self.p7_pool = nn.MaxPool2d(3, stride=2, padding=1)
 
         # BiFPN stack
         self.bifpn = nn.ModuleList(
@@ -502,6 +625,13 @@ class EfficientDetForObjectDetection(PretrainedModel):
         )
         self.box_head = _PredictionHead(
             W, 4 * num_anchors, config.head_repeats, num_levels
+        )
+        # Focal-loss prior on the class predictor's bias: at initialisation
+        # every anchor should predict p ~= prior (0.01), not 0.5, or the first
+        # steps are swamped by ~10^5 background slots.  The box predictor's
+        # bias starts at zero, as in the reference.
+        _init_head_priors(
+            self.cls_head, self.box_head, prior_prob=config.focal_prior_prob
         )
 
         # Anchor generator (5 levels; one base size per level)
@@ -533,10 +663,12 @@ class EfficientDetForObjectDetection(PretrainedModel):
 
     def _project_backbone(self, p3: Tensor, p4: Tensor, p5: Tensor) -> list[Tensor]:
         """Project P3/P4/P5 to FPN width and build P6/P7."""
-        fp3: Tensor = F.relu(cast(Tensor, self.p3_proj(p3)))
-        fp4: Tensor = F.relu(cast(Tensor, self.p4_proj(p4)))
-        fp5: Tensor = F.relu(cast(Tensor, self.p5_proj(p5)))
-        fp6: Tensor = cast(Tensor, self.p6_pool(fp5))
+        # The reference's ResampleFeatureMap is conv + BN with ``act_layer=None``
+        # — no activation on the lateral projections.
+        fp3: Tensor = cast(Tensor, self.p3_proj(p3))
+        fp4: Tensor = cast(Tensor, self.p4_proj(p4))
+        fp5: Tensor = cast(Tensor, self.p5_proj(p5))
+        fp6: Tensor = cast(Tensor, self.p6_pool(cast(Tensor, self.p6_proj(p5))))
         fp7: Tensor = cast(Tensor, self.p7_pool(fp6))
         return [fp3, fp4, fp5, fp6, fp7]
 
@@ -669,9 +801,17 @@ class EfficientDetForObjectDetection(PretrainedModel):
             lg_b = all_logits[b]  # (A, K)
 
             if M == 0:
-                # All anchors → background
+                # All anchors → background; normaliser is the +1 floor.
                 tgt_cls = lucid.zeros((A, K), device=dev)
-                cls_losses.append(_focal_loss(lg_b.reshape(-1), tgt_cls.reshape(-1)))
+                cls_losses.append(
+                    _focal_loss(
+                        lg_b.reshape(-1),
+                        tgt_cls.reshape(-1),
+                        alpha=self._cfg.focal_alpha,
+                        gamma=self._cfg.focal_gamma,
+                    )
+                    / 1.0
+                )
                 continue
 
             # Compute pairwise IoU between anchors and GT boxes
@@ -682,6 +822,10 @@ class EfficientDetForObjectDetection(PretrainedModel):
 
             # Assign each anchor: best GT, then label
             tgt_cls_data = [[0.0] * K for _ in range(A)]
+            # Slot mask: 1 everywhere except the ignore band, which the
+            # reference removes from the class loss with
+            # ``cls_loss * (cls_targets_at_level != -2)``.
+            cls_mask_data = [[1.0] * K for _ in range(A)]
             pos_idx: list[int] = []
             pos_gt: list[int] = []
 
@@ -691,21 +835,61 @@ class EfficientDetForObjectDetection(PretrainedModel):
             best_v_list: list[float] = [float(best_v_t[a].item()) for a in range(A)]
             best_m_list: list[int] = [int(best_m_t[a].item()) for a in range(A)]
 
+            fg_thr = self._cfg.iou_fg_thresh
+            bg_thr = self._cfg.iou_bg_thresh
+            num_ignored = 0
             for a in range(A):
                 best_v = best_v_list[a]
                 best_m = best_m_list[a]
-                if best_v >= 0.5:
+                if best_v >= fg_thr:
                     c = int(gt_labels[best_m].item()) - 1  # 0-indexed
                     if 0 <= c < K:
                         tgt_cls_data[a][c] = 1.0
                     pos_idx.append(a)
                     pos_gt.append(best_m)
-                elif best_v < 0.4:
+                elif best_v < bg_thr:
                     pass  # background — all zeros (already set)
-                # else: ignore (IoU in [0.4, 0.5)) — no loss
+                else:
+                    # Ignore band: ambiguous supervision, so the anchor is
+                    # dropped from the class loss rather than trained as
+                    # background.
+                    cls_mask_data[a] = [0.0] * K
+                    num_ignored += 1
+
+            # Force-match: every GT row takes its best anchor regardless of IoU
+            # (``force_match_for_each_row=True``).  Anchor-major assignment
+            # alone leaves an object with no positive at all whenever its best
+            # overlap falls under the foreground threshold — common for small
+            # or oddly-shaped boxes — so it contributes only background loss.
+            best_a_per_gt = lucid.argmax(iou_mat, dim=0)
+            for m_i in range(M):
+                a_forced = int(best_a_per_gt[m_i].item())
+                if a_forced in pos_idx:
+                    continue
+                c_f = int(gt_labels[m_i].item()) - 1
+                if 0 <= c_f < K:
+                    tgt_cls_data[a_forced][c_f] = 1.0
+                cls_mask_data[a_forced] = [1.0] * K
+                pos_idx.append(a_forced)
+                pos_gt.append(m_i)
 
             tgt_cls = lucid.tensor(tgt_cls_data, device=dev)  # (A, K)
-            cls_losses.append(_focal_loss(lg_b.reshape(-1), tgt_cls.reshape(-1)))
+            cls_mask: Tensor | None = (
+                lucid.tensor(cls_mask_data, device=dev) if num_ignored else None
+            )
+            # ``num_positives_sum = num_positives.sum() + 1.0`` in the reference
+            # loss; both the class and box terms divide by it.
+            num_pos = float(len(pos_idx)) + 1.0
+            cls_losses.append(
+                _focal_loss(
+                    lg_b.reshape(-1),
+                    tgt_cls.reshape(-1),
+                    alpha=self._cfg.focal_alpha,
+                    gamma=self._cfg.focal_gamma,
+                    mask=None if cls_mask is None else cls_mask.reshape(-1),
+                )
+                / num_pos
+            )
 
             if pos_idx:
                 pos_t = lucid.tensor(pos_idx, device=dev).long()
@@ -719,7 +903,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
                 anc_pos = all_anchors[pos_t]  # (P, 4)
                 tgt_d = encode_boxes(gt_boxes_pos, anc_pos)
                 pred_d = all_deltas[b][pos_t]  # (P, 4)
-                reg_losses.append(_smooth_l1(pred_d - tgt_d).mean())
+                reg_losses.append(_smooth_l1(pred_d - tgt_d).sum() / num_pos)
 
         cls_l = (
             lucid.cat([l.reshape(1) for l in cls_losses]).mean()
@@ -731,7 +915,10 @@ class EfficientDetForObjectDetection(PretrainedModel):
             if reg_losses
             else lucid.zeros((1,), device=dev)
         )
-        return cls_l + reg_l
+        # ``total_loss = cls_loss + box_loss_weight * box_loss`` — the box term
+        # is boosted 50x precisely because both terms share the same
+        # positive-anchor normaliser.
+        return cls_l + self._cfg.box_loss_weight * reg_l
 
     # ------------------------------------------------------------------
     # Post-processing
@@ -759,15 +946,19 @@ class EfficientDetForObjectDetection(PretrainedModel):
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
 
+            # One host transfer for the whole (A, K) score matrix.  Reading
+            # it element-by-element cost a device sync per (anchor, class):
+            # at D0's 512px input that is 49104 anchors x 90 classes =
+            # 4.4M syncs per image, which is not a runnable postprocess.
+            A = int(sc_b.shape[0])
+            thr = self._cfg.score_thresh
+            flat = cast(list[float], sc_b.reshape(-1).tolist())
+
             for c in range(K):
-                sc_c = sc_b[:, c]
-                mask: list[int] = [
-                    i
-                    for i in range(int(sc_c.shape[0]))
-                    if float(sc_c[i].item()) >= self._cfg.score_thresh
-                ]
+                mask: list[int] = [a for a in range(A) if flat[a * K + c] >= thr]
                 if not mask:
                     continue
+                sc_c = sc_b[:, c]
                 mask_t = lucid.tensor(mask, device=dev).long()
                 sc_sel = sc_c[mask_t]
                 bx_sel = bx_b[mask_t]
@@ -777,7 +968,12 @@ class EfficientDetForObjectDetection(PretrainedModel):
                     lucid.zeros(int(sc_sel.shape[0]), device=dev),
                     self._cfg.nms_thresh,
                 )
-                keep = keep[: self._cfg.max_detections]
+                # No per-class cap here — ``max_detections`` is a *per image*
+                # limit in the reference, applied once after a global score
+                # sort.  Capping inside the class loop let K classes each keep
+                # ``max_detections``, so the returned count scaled with the
+                # class count and low-scoring boxes from a sparse class
+                # outranked nothing.
                 keep_boxes.append(bx_sel[keep])
                 keep_scores.append(sc_sel[keep])
                 keep_labels.append(
@@ -785,11 +981,15 @@ class EfficientDetForObjectDetection(PretrainedModel):
                 )
 
             if keep_boxes:
+                all_b = lucid.cat(keep_boxes, dim=0)
+                all_s = lucid.cat(keep_scores, dim=0)
+                all_l = lucid.cat(keep_labels, dim=0)
+                order = lucid.argsort(-all_s)[: self._cfg.max_detections]
                 results.append(
                     {
-                        "boxes": lucid.cat(keep_boxes, dim=0),
-                        "scores": lucid.cat(keep_scores, dim=0),
-                        "labels": lucid.cat(keep_labels, dim=0),
+                        "boxes": all_b[order],
+                        "scores": all_s[order],
+                        "labels": all_l[order],
                     }
                 )
             else:

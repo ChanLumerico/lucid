@@ -1,7 +1,7 @@
 """Discovery registry for pretrained-weight enums.
 
 Maps model names → their :class:`WeightsEnum` so weights can be
-discovered by string (mirroring torchvision's ``get_weight`` /
+discovered by string (mirroring reference_vision's ``get_weight`` /
 ``list_models`` helpers).  Each per-architecture weights module
 registers its enum via :func:`register_weights`.
 """

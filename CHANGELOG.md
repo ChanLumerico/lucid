@@ -232,6 +232,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - clamp complex abs against the input's own lane width
 
+- close every confirmed finding in the model-zoo audit
+
 ### Changed
 
 - give the engine ops one shared operand check

@@ -6,6 +6,7 @@ from typing import Any, cast
 from lucid.models._registry import register_model
 from lucid.models.vision.unet._config import UNetConfig
 from lucid.models.vision.unet._model import UNetForSemanticSegmentation
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_BASE = UNetConfig(
     num_classes=2,
@@ -31,11 +32,15 @@ _CFG_RES_2D = UNetConfig(
 _CFG_3D = UNetConfig(
     num_classes=2,
     in_channels=1,
-    base_channels=32,
+    # Cicek's analysis path is 32 -> 64 -> 128 -> 256 with the second conv of
+    # each level carrying the doubling, so the *level outputs* are 64/128/256
+    # and the bottom of the U is 512.
+    base_channels=64,
     depth=3,
     bilinear=False,
     dropout=0.0,
     dim=3,
+    double_before_pool=True,
 )
 
 _CFG_RES_3D = UNetConfig(
@@ -108,6 +113,8 @@ def unet(
     >>> out.logits.shape
     (1, 4, 256, 256)
     """
+    if pretrained:
+        reject_unavailable_pretrained("unet")
     return _build(_CFG_BASE, overrides)
 
 
@@ -122,7 +129,7 @@ def res_unet_2d(
     pretrained: bool = False,
     **overrides: object,
 ) -> UNetForSemanticSegmentation:
-    r"""ResUNet — U-Net with residual DoubleConv blocks, 2-D (Zhang et al., 2018).
+    r"""ResUNet — U-Net with residual DoubleConv blocks, 2-D.
 
     Builds a 2-D U-Net with the standard channel / depth schedule but
     every DoubleConv block wraps an identity shortcut around its two
@@ -145,16 +152,26 @@ def res_unet_2d(
 
     Notes
     -----
-    See Zhang, Liu, Wang, "Road Extraction by Deep Residual U-Net",
-    IEEE Geosci. Remote Sens. Lett. 2018 (arXiv:1711.10684).  The
-    DoubleConv update with residual shortcut is
+    This is a residual U-Net, **not Deep ResUNet**.  The DoubleConv
+    update with residual shortcut is
 
     .. math::
 
         y = \mathrm{ReLU}(F(x; W) + W_s x),
 
-    matching the He et al. residual formulation but applied at every
-    encoder / decoder stage rather than only inside the backbone.
+    the He et al. residual formulation applied at every encoder /
+    decoder stage rather than only inside a backbone.
+
+    Zhang, Liu, Wang, "Road Extraction by Deep Residual U-Net" (IEEE
+    Geosci. Remote Sens. Lett. 2018, arXiv:1711.10684) describes a
+    different network and is deliberately *not* cited as this model's
+    source: it uses full pre-activation units (BN → ReLU → Conv twice,
+    with no activation after the addition), replaces every pooling layer
+    with a stride-2 convolution, and has three encoding levels plus a
+    bridge — 15 convolutions and 7.8 M parameters against this model's
+    post-activation blocks, max-pooling, four levels and 32.4 M
+    parameters.  A caller wanting the paper's architecture wants a
+    separate implementation, not this factory.
 
     Examples
     --------
@@ -166,6 +183,8 @@ def res_unet_2d(
     >>> out.logits.shape
     (1, 2, 256, 256)
     """
+    if pretrained:
+        reject_unavailable_pretrained("res_unet_2d")
     return _build(_CFG_RES_2D, overrides)
 
 
@@ -218,6 +237,8 @@ def unet_3d(
     >>> out.logits.shape
     (1, 2, 64, 64, 64)
     """
+    if pretrained:
+        reject_unavailable_pretrained("unet_3d")
     return _build(_CFG_3D, overrides)
 
 
@@ -233,6 +254,13 @@ def res_unet_3d(
     **overrides: object,
 ) -> UNetForSemanticSegmentation:
     r"""3-D ResUNet — volumetric residual U-Net.
+
+    H11 marker: **not a paper variant.**  No single paper defines a 3-D
+    residual U-Net with this depth and channel schedule; it is the
+    volumetric counterpart of :func:`res_unet_2d`, assembled from the
+    same building blocks rather than reproduced from a publication.  It
+    ships no weights and no accuracy claim.  Treat it as a starting
+    point to configure, not as a reproduction of any published result.
 
     Builds a 3-D U-Net with residual DoubleConv blocks: the volumetric
     counterpart to :func:`res_unet_2d`.  Useful for deeper variants on
@@ -267,4 +295,6 @@ def res_unet_3d(
     >>> out.logits.shape
     (1, 2, 64, 64, 64)
     """
+    if pretrained:
+        reject_unavailable_pretrained("res_unet_3d")
     return _build(_CFG_RES_3D, overrides)

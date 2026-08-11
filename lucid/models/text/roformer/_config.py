@@ -83,6 +83,13 @@ class RoFormerConfig(LanguageModelConfig):
     # RoFormer-base in the paper: L=12, H=768, A=12, intermediate=3072.
     vocab_size: int = 50_000
     hidden_size: int = 768
+    # RoFormer checkpoints may factorise the embedding: the reference takes
+    # ``embedding_size=None`` (falling back to hidden_size) and, when the two
+    # differ, sizes the word/token-type tables and their LayerNorm at
+    # ``embedding_size`` and adds an ``embeddings_project`` linear up to
+    # ``hidden_size``.  Without the field such a checkpoint has no
+    # representation here at all.
+    embedding_size: int | None = None
     num_hidden_layers: int = 12
     num_attention_heads: int = 12
     intermediate_size: int = 3_072
@@ -91,6 +98,10 @@ class RoFormerConfig(LanguageModelConfig):
 
     # RoPE-specific.
     rotary_base: float = 10_000.0
+    # The reference implementation carries a ``rotary_value`` switch that also
+    # rotates V.  The paper's Eq. 16 rotates Q and K only, and every released
+    # checkpoint was trained that way, so this defaults off.
+    rotary_value: bool = False
     position_embedding_type: Literal["rotary"] = "rotary"
 
     # Inherited-from-BERT extras.

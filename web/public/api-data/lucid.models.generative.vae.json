@@ -3,7 +3,7 @@
   "name": "vae",
   "path": "lucid.models.generative.vae",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/__init__.py#L1",
   "members": [
     {
       "name": "VAEConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "VAEConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', latent_dim: int | tuple[int, ...] = 128, down_block_channels: tuple[int, ...] = (lambda: (64, 128, 256))(), kl_weight: float = 1.0, recon_loss: Literal['mse', 'bce'] = 'mse')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_config.py#L26",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_config.py#L26",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "is_hierarchical: bool",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_config.py#L169",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_config.py#L177",
           "summary": "True when `latent_dim` is a tuple — selects the HVAE topology.",
           "extended": null,
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "latent_dims: tuple[int, ...]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_config.py#L174",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_config.py#L182",
           "summary": "Always-tuple view of `latent_dim` (length 1 in vanilla mode).",
           "extended": null,
           "parameters": [],
@@ -72,7 +72,7 @@
             "property"
           ],
           "signature": "total_latent_dim: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_config.py#L181",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_config.py#L189",
           "summary": "Sum across levels — what the decoder consumes at its top input.",
           "extended": null,
           "parameters": [],
@@ -93,7 +93,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', latent_dim: int | tuple[int, ...] = 128, down_block_channels: tuple[int, ...] = (lambda: (64, 128, 256))(), kl_weight: float = 1.0, recon_loss: Literal['mse', 'bce'] = 'mse')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -156,7 +156,7 @@
       ],
       "labels": [],
       "signature": "VAEForImageGeneration(config: VAEConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L412",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L413",
       "subcategory": "model",
       "methods": [
         {
@@ -165,7 +165,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VAEConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L479",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L485",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -187,7 +187,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L500",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L518",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -208,8 +208,8 @@
           "path": "lucid.models.generative.vae._model.VAEForImageGeneration.generate",
           "kind": "function",
           "labels": [],
-          "signature": "generate(n_samples: int = 1, device: str = 'cpu')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L549",
+          "signature": "generate(n_samples: int = 1, device: str | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L567",
           "subcategory": "model",
           "summary": "Sample `n_samples` images from the prior `N(0, I)`.",
           "extended": null,
@@ -227,7 +227,7 @@
         }
       ],
       "summary": "VAE with the ELBO training loss and prior-sample `.generate()`.",
-      "extended": "Wraps `VAEModel` with the standard reconstruction +\n$\\beta$-weighted KL training loss and a prior-sampler convenience\nmethod.  `forward(x)` returns a `VAEOutput` carrying the\nreconstruction, latent (concatenated across levels in HVAE mode),\nposterior parameters, and the three loss components\n(`recon_loss`, `kl_loss`, `loss = recon + beta * kl`).  In\nhierarchical mode `kl_loss` is the sum of per-level KL terms.\n\n`generate(n_samples)` samples from the prior —\n$z \\sim \\mathcal{N}(0, \\mathbf{I})$ for vanilla, one\n$z_l \\sim \\mathcal{N}(0, \\mathbf{I})$ per level for HVAE — and\nreturns the decoder output.  BCE reconstructions are squashed through\na sigmoid before being returned.",
+      "extended": "Wraps `VAEModel` with the standard reconstruction +\n$\\beta$-weighted KL training loss and a prior-sampler convenience\nmethod.  `forward(x)` returns a `VAEOutput` carrying the\nreconstruction, latent (concatenated across levels in HVAE mode),\nposterior parameters, and the three loss components\n(`recon_loss`, `kl_loss`, `loss = recon + beta * kl`).  In\nhierarchical mode `kl_loss` is the sum of per-level KL terms.\n\n`generate(n_samples)` samples from the prior —\n$z \\sim \\mathcal{N}(0, \\mathbf{I})$ for vanilla, one\n$z_l \\sim \\mathcal{N}(0, \\mathbf{I})$ per level for HVAE — and\nreturns the decoder output.\n\nUnder `recon_loss=\"bce\"` the decoder emits logits, and both\n`forward(x).sample` and `generate().samples` squash them through a\nsigmoid so every reconstruction this class hands back lives in the same\n`[0, 1]` space as the input.  The loss is still computed from the raw\nlogits.",
       "parameters": [
         {
           "name": "config",
@@ -264,7 +264,7 @@
       ],
       "labels": [],
       "signature": "VAEModel(config: VAEConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L274",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L275",
       "subcategory": "model",
       "methods": [
         {
@@ -273,7 +273,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VAEConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L349",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L350",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -297,7 +297,7 @@
             "property"
           ],
           "signature": "is_hierarchical: bool",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L357",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L358",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -320,7 +320,7 @@
             "property"
           ],
           "signature": "latent_dims: tuple[int, ...]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L361",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L362",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -341,7 +341,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L364",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L365",
           "subcategory": "model",
           "summary": "Return posterior parameters of `q(z|x)`.",
           "extended": "Vanilla mode → `(mu, logvar)`.  Hierarchical mode → `(mus,\nlogvars)` with one entry per encoder stage.",
@@ -363,7 +363,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(z_or_zs: Tensor | list[Tensor])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L377",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L378",
           "subcategory": "model",
           "summary": "Map a latent (or list of per-level latents) back to image space.",
           "extended": null,
@@ -385,7 +385,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_model.py#L381",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_model.py#L382",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -441,7 +441,7 @@
       "kind": "function",
       "labels": [],
       "signature": "hvae(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_pretrained.py#L114",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_pretrained.py#L117",
       "subcategory": "pretrained",
       "summary": "Construct a hierarchical (Ladder-style) VAE with one latent per stage.",
       "extended": "Hierarchical VAE topology following Sønderby et al., 2016, configured\nwith a 32x32 input, `down_block_channels=(64, 128, 256)` (three\nstride-2 encoder stages), and per-stage latent widths\n`(32, 64, 128)` — one $z_l \\in \\mathbb{R}^{d_l}$ extracted per\nstage and re-injected at the matching decoder resolution.  The KL\nbecomes a sum over levels (independent-posterior Ladder variant).",
@@ -628,7 +628,7 @@
       "kind": "function",
       "labels": [],
       "signature": "hvae_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_pretrained.py#L225",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_pretrained.py#L232",
       "subcategory": "pretrained",
       "summary": "Construct a hierarchical VAE with the ELBO loss and prior-sample `.generate()`.",
       "extended": "Same trunk as `hvae` (3-level latent stack, 3-stage encoder),\nwrapped with the hierarchical ELBO training loss (reconstruction +\nsum of per-level $\\beta$-weighted KLs) and a convenience prior\nsampler that draws one $z_l \\sim \\mathcal{N}(0, \\mathbf{I})$\nper level.",
@@ -823,7 +823,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vae(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_pretrained.py#L52",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_pretrained.py#L53",
       "subcategory": "pretrained",
       "summary": "Construct a convolutional VAE with a single bottleneck latent.",
       "extended": "Vanilla VAE topology following Kingma and Welling, 2014, configured with\na 32x32 input, `down_block_channels=(64, 128, 256)` (three stride-2\nencoder stages — 32 -> 16 -> 8 -> 4), and a 128-dimensional latent.\nPass `latent_dim` as a tuple of integers to switch to the\nhierarchical topology, or call `hvae` directly to use the\nSønderby 3-level stack default.\n\nPass `kl_weight!=1.0` to obtain a $\\beta$-VAE (Higgins 2017).",
@@ -966,7 +966,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vae_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/generative/vae/_pretrained.py#L178",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/generative/vae/_pretrained.py#L183",
       "subcategory": "pretrained",
       "summary": "Construct a vanilla VAE with the ELBO loss and prior-sample `.generate()`.",
       "extended": "Same trunk as `vae` (single 128-dim bottleneck, 3-stage encoder),\nwrapped with the ELBO training loss (reconstruction +\n$\\beta$-weighted KL) and a convenience prior sampler.",
@@ -1124,7 +1124,7 @@
   "see_also": [],
   "canonical_name": "VAE",
   "citation": "Kingma, Diederik P., and Max Welling. \"Auto-Encoding Variational Bayes.\" International Conference on Learning Representations, 2014.",
-  "theory": "The Variational Auto-Encoder defines a latent-variable generative\nmodel $p_\\theta(x, z) = p_\\theta(x \\mid z)\\, p(z)$ with a\nstandard-normal prior $p(z) = \\mathcal{N}(0, \\mathbf{I})$ and\na neural decoder $p_\\theta(x \\mid z)$.  Because the marginal\nlikelihood $p_\\theta(x) = \\int p_\\theta(x \\mid z)\\, p(z)\\, dz$\nis intractable, training maximises the **evidence lower bound\n(ELBO)** instead:\n\n\n\n$$\n\\log p_\\theta(x) \\;\\geq\\;\n    \\underbrace{\n        \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\n            \\big[\\log p_\\theta(x \\mid z)\\big]\n    }_{\\text{reconstruction}}\n    \\;-\\;\n    \\underbrace{\n        \\mathrm{KL}\\!\\big(\n            q_\\phi(z \\mid x)\\,\\big\\|\\,p(z)\n        \\big)\n    }_{\\text{regulariser}}.\n$$\n\nHere $q_\\phi(z \\mid x) = \\mathcal{N}\\!\\big(z;\\, \\mu_\\phi(x),\\; \\mathrm{diag}\\,\\sigma_\\phi^2(x)\\big)$ is the **encoder** (the\nvariational posterior).  Gradients flow through the stochastic\nsample via the **reparameterization trick** —\n$z = \\mu_\\phi(x) + \\sigma_\\phi(x) \\odot \\epsilon$,\n$\\epsilon \\sim \\mathcal{N}(0, \\mathbf{I})$ — which keeps the\nMonte-Carlo gradient low-variance and pathwise-differentiable.  The\nKL term enjoys the closed form\n\n\n\n$$\n\\mathrm{KL}\\!\\big(\\mathcal{N}(\\mu, \\sigma^2)\\,\\big\\|\\,\n    \\mathcal{N}(0, \\mathbf{I})\\big)\n    = \\tfrac{1}{2} \\sum_{i} \\!\\big(\n        \\mu_i^2 + \\sigma_i^2 - 1 - \\log \\sigma_i^2\n      \\big).\n$$\n\nThe **β-VAE** (Higgins et al., 2017) variant rescales the KL term\nby a coefficient $\\beta$ to trade reconstruction fidelity for\nposterior compression / latent disentanglement, recovering vanilla\nELBO at $\\beta = 1$.  The **hierarchical / Ladder VAE**\n(Sønderby et al., 2016) extends the latent to a stack\n$z = (z_1, \\dots, z_L)$, with one $z_\\ell$ extracted per\nencoder stage and re-injected at the matching decoder resolution;\nthe KL becomes a sum\n$\\sum_\\ell \\mathrm{KL}(q_\\phi(z_\\ell \\mid x) \\,\\|\\, p(z_\\ell))$,\ngranting strictly tighter bounds and richer multi-scale priors.\n\nThe encoder/decoder backbones here are convolutional with stride-2\ndown-/up-sampling blocks; the reconstruction term is selectable\nbetween Gaussian (`mse`) and Bernoulli (`bce`) likelihoods to match\nthe data domain.  Despite being eclipsed by diffusion on raw sample\nquality, the VAE remains the workhorse of representation learning\nand a key component inside latent-diffusion pipelines (Stable\nDiffusion's first-stage autoencoder).",
+  "theory": "The Variational Auto-Encoder defines a latent-variable generative\nmodel $p_\\theta(x, z) = p_\\theta(x \\mid z)\\, p(z)$ with a\nstandard-normal prior $p(z) = \\mathcal{N}(0, \\mathbf{I})$ and\na neural decoder $p_\\theta(x \\mid z)$.  Because the marginal\nlikelihood $p_\\theta(x) = \\int p_\\theta(x \\mid z)\\, p(z)\\, dz$\nis intractable, training maximises the **evidence lower bound\n(ELBO)** instead:\n\n\n\n$$\n\\log p_\\theta(x) \\;\\geq\\;\n    \\underbrace{\n        \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\n            \\big[\\log p_\\theta(x \\mid z)\\big]\n    }_{\\text{reconstruction}}\n    \\;-\\;\n    \\underbrace{\n        \\mathrm{KL}\\!\\big(\n            q_\\phi(z \\mid x)\\,\\big\\|\\,p(z)\n        \\big)\n    }_{\\text{regulariser}}.\n$$\n\nHere $q_\\phi(z \\mid x) = \\mathcal{N}\\!\\big(z;\\, \\mu_\\phi(x),\\; \\mathrm{diag}\\,\\sigma_\\phi^2(x)\\big)$ is the **encoder** (the\nvariational posterior).  Gradients flow through the stochastic\nsample via the **reparameterization trick** —\n$z = \\mu_\\phi(x) + \\sigma_\\phi(x) \\odot \\epsilon$,\n$\\epsilon \\sim \\mathcal{N}(0, \\mathbf{I})$ — which keeps the\nMonte-Carlo gradient low-variance and pathwise-differentiable.  The\nKL term enjoys the closed form\n\n\n\n$$\n\\mathrm{KL}\\!\\big(\\mathcal{N}(\\mu, \\sigma^2)\\,\\big\\|\\,\n    \\mathcal{N}(0, \\mathbf{I})\\big)\n    = \\tfrac{1}{2} \\sum_{i} \\!\\big(\n        \\mu_i^2 + \\sigma_i^2 - 1 - \\log \\sigma_i^2\n      \\big).\n$$\n\nThe **β-VAE** (Higgins et al., 2017) variant rescales the KL term\nby a coefficient $\\beta$ to trade reconstruction fidelity for\nposterior compression / latent disentanglement, recovering vanilla\nELBO at $\\beta = 1$.  The **hierarchical / Ladder VAE**\n(Sønderby et al., 2016) extends the latent to a stack\n$z = (z_1, \\dots, z_L)$, with one $z_\\ell$ extracted per\nencoder stage and re-injected at the matching decoder resolution;\nthe KL becomes a sum\n$\\sum_\\ell \\mathrm{KL}(q_\\phi(z_\\ell \\mid x) \\,\\|\\, p(z_\\ell))$,\ngiving the decoder a multi-scale prior to condition on.\n\nNote that this is *not* the Ladder VAE of Sønderby et al.: their\ntighter bound comes from a top-down inference path that merges\nbottom-up evidence with the generative prior at each layer, not from\nstacking latents.  Independent $\\mathcal{N}(0, I)$ latents\nconditioning the same decoder carry no such guarantee — their Fig. 3b\nshows a plain layered VAE gaining nothing from extra stochastic\nlayers.\n\nThe encoder/decoder backbones here are convolutional with stride-2\ndown-/up-sampling blocks; the reconstruction term is selectable\nbetween Gaussian (`mse`) and Bernoulli (`bce`) likelihoods to match\nthe data domain.  Despite being eclipsed by diffusion on raw sample\nquality, the VAE remains the workhorse of representation learning\nand a key component inside latent-diffusion pipelines (Stable\nDiffusion's first-stage autoencoder).",
   "tasks": [
     "image-generation"
   ]

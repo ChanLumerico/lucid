@@ -12,6 +12,7 @@ from lucid.models.vision.cvt._weights import (
     CvT21Weights,
     CvTW24Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -23,6 +24,7 @@ _CFG_13 = CvTConfig(
     depths=(1, 2, 10),
     num_heads=(1, 3, 6),
     embed_strides=(4, 2, 2),
+    drop_path_rate=0.1,  # Table 1
 )
 
 _CFG_21 = CvTConfig(
@@ -31,6 +33,7 @@ _CFG_21 = CvTConfig(
     depths=(1, 4, 16),
     num_heads=(1, 3, 6),
     embed_strides=(4, 2, 2),
+    drop_path_rate=0.1,  # Table 1
 )
 
 _CFG_W24 = CvTConfig(
@@ -39,6 +42,7 @@ _CFG_W24 = CvTConfig(
     depths=(2, 2, 20),
     num_heads=(3, 12, 16),
     embed_strides=(4, 2, 2),
+    drop_path_rate=0.3,  # Table 1 (wide variant)
 )
 
 # ---------------------------------------------------------------------------
@@ -93,6 +97,8 @@ def cvt_13(pretrained: bool = False, **overrides: object) -> CvT:
     >>> feat.shape
     (1, 384)
     """
+    if pretrained:
+        reject_unavailable_pretrained("cvt_13", alternative="cvt_13_cls")
     cfg = replace(_CFG_13, **cast(dict[str, Any], overrides)) if overrides else _CFG_13
     return CvT(cfg)
 
@@ -140,6 +146,8 @@ def cvt_21(pretrained: bool = False, **overrides: object) -> CvT:
     >>> model.forward_features(x).shape
     (1, 384)
     """
+    if pretrained:
+        reject_unavailable_pretrained("cvt_21", alternative="cvt_21_cls")
     cfg = replace(_CFG_21, **cast(dict[str, Any], overrides)) if overrides else _CFG_21
     return CvT(cfg)
 
@@ -189,6 +197,8 @@ def cvt_w24(pretrained: bool = False, **overrides: object) -> CvT:
     >>> model.forward_features(x).shape
     (1, 1024)
     """
+    if pretrained:
+        reject_unavailable_pretrained("cvt_w24", alternative="cvt_w24_cls")
     cfg = (
         replace(_CFG_W24, **cast(dict[str, Any], overrides)) if overrides else _CFG_W24
     )

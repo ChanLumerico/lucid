@@ -39,6 +39,16 @@ class GPTTokenizer(ByteLevelBPETokenizer):
     :class:`~lucid.utils.tokenizer.ByteLevelBPETokenizer` with GPT-1's
     default ``add_prefix_space=False``.
 
+    Divergence, deliberate: this is **byte-level** BPE, the scheme GPT-2
+    introduced.  GPT-1 §4.1 uses word-level BPE over text cleaned with
+    ftfy and pre-tokenised with spaCy, lowercased, with ``</w>`` end-of-word
+    markers rather than the ``Ġ`` space marker.  Reproducing it would mean
+    importing ftfy and spaCy, which H4 forbids anywhere in ``lucid/``
+    outside the six bridge points — so there is no compliant way to
+    implement the original.  Text tokenised here will not match ids
+    produced by the published GPT-1 vocabulary; a caller needing that must
+    tokenise outside Lucid and feed ``input_ids`` directly.
+
     Parameters
     ----------
     vocab : dict[str, int]

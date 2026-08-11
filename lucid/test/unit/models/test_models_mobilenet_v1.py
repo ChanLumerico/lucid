@@ -76,7 +76,7 @@ class TestMobileNetV1Backbone(unittest.TestCase):
     def test_forward_features_shape_224(self) -> None:
         x = lucid.randn(1, 3, 224, 224)
         out = self.model.forward_features(x)
-        self.assertEqual(out.shape, (1, 1024, 1, 1))
+        self.assertEqual(out.shape, (1, 1024, 7, 7))
 
     def test_forward_returns_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput

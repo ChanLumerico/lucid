@@ -16,13 +16,24 @@ from lucid.models.vision.resnest._weights import (
     ResNeSt200Weights,
     ResNeSt269Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
+# H11 marker: `resnest_14` and `resnest_26` are **not paper variants**.
+# Zhang et al. (arXiv:2004.08955) define exactly four depths — 50, 101, 200
+# and 269 — and its Table 1 variant column is the radix/cardinality ablation
+# (0s1x64d ... 2s2x40d), not a depth table; no (1,1,1,1) or (2,2,2,2)
+# configuration appears anywhere in it.  These two are kept as small,
+# fast-building stand-ins for tests and examples, and ship no weights.
+# Anything claiming to reproduce the paper must use 50/101/200/269.
 _CFG_14 = ResNeStConfig(layers=(1, 1, 1, 1), radix=2, stem_width=32)
 _CFG_26 = ResNeStConfig(layers=(2, 2, 2, 2), radix=2, stem_width=32)
 _CFG_50 = ResNeStConfig(layers=(3, 4, 6, 3), radix=2)
 _CFG_101 = ResNeStConfig(layers=(3, 4, 23, 3), radix=2, stem_width=64)
-_CFG_200 = ResNeStConfig(layers=(3, 24, 36, 3), radix=2, stem_width=64)
-_CFG_269 = ResNeStConfig(layers=(3, 30, 48, 8), radix=2, stem_width=64)
+# Section 4.2: "A dropout layer with the dropout probability of 0.2 is
+# applied before the final fully-connected layer to the networks with more
+# than 200 layers."  200 and 269 are the two that qualify.
+_CFG_200 = ResNeStConfig(layers=(3, 24, 36, 3), radix=2, stem_width=64, dropout=0.2)
+_CFG_269 = ResNeStConfig(layers=(3, 30, 48, 8), radix=2, stem_width=64, dropout=0.2)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -34,6 +45,7 @@ _CFG_269 = ResNeStConfig(layers=(3, 30, 48, 8), radix=2, stem_width=64)
     model_type="resnest",
     model_class=ResNeSt,
     default_config=_CFG_14,
+    params=8562688,
 )
 def resnest_14(pretrained: bool = False, **overrides: object) -> ResNeSt:
     r"""ResNeSt-14 feature-extracting backbone (no classification head).
@@ -73,6 +85,8 @@ def resnest_14(pretrained: bool = False, **overrides: object) -> ResNeSt:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnest_14")
     cfg = replace(_CFG_14, **cast(dict[str, Any], overrides)) if overrides else _CFG_14
     return ResNeSt(cfg)
 
@@ -83,6 +97,7 @@ def resnest_14(pretrained: bool = False, **overrides: object) -> ResNeSt:
     model_type="resnest",
     model_class=ResNeSt,
     default_config=_CFG_26,
+    params=15020448,
 )
 def resnest_26(pretrained: bool = False, **overrides: object) -> ResNeSt:
     r"""ResNeSt-26 feature-extracting backbone (no classification head).
@@ -122,6 +137,8 @@ def resnest_26(pretrained: bool = False, **overrides: object) -> ResNeSt:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnest_26")
     cfg = replace(_CFG_26, **cast(dict[str, Any], overrides)) if overrides else _CFG_26
     return ResNeSt(cfg)
 
@@ -132,6 +149,7 @@ def resnest_26(pretrained: bool = False, **overrides: object) -> ResNeSt:
     model_type="resnest",
     model_class=ResNeSt,
     default_config=_CFG_50,
+    params=25434240,
 )
 def resnest_50(pretrained: bool = False, **overrides: object) -> ResNeSt:
     r"""ResNeSt-50 feature-extracting backbone (no classification head).
@@ -173,6 +191,8 @@ def resnest_50(pretrained: bool = False, **overrides: object) -> ResNeSt:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnest_50", alternative="resnest_50_cls")
     cfg = replace(_CFG_50, **cast(dict[str, Any], overrides)) if overrides else _CFG_50
     return ResNeSt(cfg)
 
@@ -183,6 +203,7 @@ def resnest_50(pretrained: bool = False, **overrides: object) -> ResNeSt:
     model_type="resnest",
     model_class=ResNeSt,
     default_config=_CFG_101,
+    params=46226016,
 )
 def resnest_101(pretrained: bool = False, **overrides: object) -> ResNeSt:
     r"""ResNeSt-101 feature-extracting backbone (no classification head).
@@ -222,6 +243,8 @@ def resnest_101(pretrained: bool = False, **overrides: object) -> ResNeSt:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnest_101", alternative="resnest_101_cls")
     cfg = (
         replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
     )
@@ -234,6 +257,7 @@ def resnest_101(pretrained: bool = False, **overrides: object) -> ResNeSt:
     model_type="resnest",
     model_class=ResNeSt,
     default_config=_CFG_200,
+    params=68152544,
 )
 def resnest_200(pretrained: bool = False, **overrides: object) -> ResNeSt:
     r"""ResNeSt-200 feature-extracting backbone (no classification head).
@@ -272,6 +296,8 @@ def resnest_200(pretrained: bool = False, **overrides: object) -> ResNeSt:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnest_200", alternative="resnest_200_cls")
     cfg = (
         replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
     )
@@ -284,6 +310,7 @@ def resnest_200(pretrained: bool = False, **overrides: object) -> ResNeSt:
     model_type="resnest",
     model_class=ResNeSt,
     default_config=_CFG_269,
+    params=108880480,
 )
 def resnest_269(pretrained: bool = False, **overrides: object) -> ResNeSt:
     r"""ResNeSt-269 feature-extracting backbone (no classification head).
@@ -325,6 +352,8 @@ def resnest_269(pretrained: bool = False, **overrides: object) -> ResNeSt:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnest_269", alternative="resnest_269_cls")
     cfg = (
         replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
     )
@@ -340,6 +369,7 @@ def resnest_269(pretrained: bool = False, **overrides: object) -> ResNeSt:
     model_type="resnest",
     model_class=ResNeStForImageClassification,
     default_config=_CFG_14,
+    params=10611688,
 )
 def resnest_14_cls(
     pretrained: bool = False, **overrides: object
@@ -382,6 +412,8 @@ def resnest_14_cls(
     >>> out.logits.shape
     (2, 10)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnest_14_cls")
     cfg = replace(_CFG_14, **cast(dict[str, Any], overrides)) if overrides else _CFG_14
     return ResNeStForImageClassification(cfg)
 
@@ -392,6 +424,7 @@ def resnest_14_cls(
     model_type="resnest",
     model_class=ResNeStForImageClassification,
     default_config=_CFG_26,
+    params=17069448,
 )
 def resnest_26_cls(
     pretrained: bool = False, **overrides: object
@@ -432,6 +465,8 @@ def resnest_26_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnest_26_cls")
     cfg = replace(_CFG_26, **cast(dict[str, Any], overrides)) if overrides else _CFG_26
     return ResNeStForImageClassification(cfg)
 
@@ -444,6 +479,7 @@ def resnest_26_cls(
     model_type="resnest",
     model_class=ResNeStForImageClassification,
     default_config=_CFG_50,
+    params=27483240,
 )
 def resnest_50_cls(
     pretrained: bool | str = False,
@@ -513,6 +549,7 @@ def resnest_50_cls(
     model_type="resnest",
     model_class=ResNeStForImageClassification,
     default_config=_CFG_101,
+    params=48275016,
 )
 def resnest_101_cls(
     pretrained: bool | str = False,
@@ -582,6 +619,7 @@ def resnest_101_cls(
     model_type="resnest",
     model_class=ResNeStForImageClassification,
     default_config=_CFG_200,
+    params=70201544,
 )
 def resnest_200_cls(
     pretrained: bool | str = False,
@@ -651,6 +689,7 @@ def resnest_200_cls(
     model_type="resnest",
     model_class=ResNeStForImageClassification,
     default_config=_CFG_269,
+    params=110929480,
 )
 def resnest_269_cls(
     pretrained: bool | str = False,

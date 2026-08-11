@@ -3,8 +3,10 @@
 B/16, B/32 — slow tier.  L/16, L/32 — heavy tier.
 H/14 — self-consistency only (632 M params).
 
-Attention block key naming (32%% coverage) causes timm parity to skip
-until a key_transform is written for the ViT block structure."""
+Key naming already matches the reference exactly — ``vit_base_16_cls``
+exposes 152 parameters named ``blocks.N.attn.qkv.*`` / ``blocks.N.attn.proj.*``
+alongside ``cls_token``, ``pos_embed`` and ``patch_embed.proj.*`` — so no
+key_transform is needed."""
 
 import pytest
 import lucid.models as M

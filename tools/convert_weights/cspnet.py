@@ -115,7 +115,9 @@ class CSPNetArch(Architecture):
 
         cfg = self._model.default_cfg
         crop = int(cfg["input_size"][1])
-        resize = int(round(crop / float(cfg.get("crop_pct", 0.875))))
+        # Floor, as the reference does — rounding puts the two 256px
+        # presets at 289 instead of the 288 they were evaluated with.
+        resize = int(crop / float(cfg.get("crop_pct", 0.875)))
         preset = ImageClassification(
             crop_size=crop,
             resize_size=resize,

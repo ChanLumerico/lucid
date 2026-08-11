@@ -25,6 +25,7 @@ _CFG = ZFNetConfig()
     model_type="zfnet",
     model_class=ZFNet,
     default_config=_CFG,
+    params=3726464,
 )
 def zfnet(pretrained: bool = False, **overrides: object) -> ZFNet:
     r"""ZFNet feature-extracting backbone (no fully-connected head).
@@ -40,8 +41,9 @@ def zfnet(pretrained: bool = False, **overrides: object) -> ZFNet:
     Parameters
     ----------
     pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
+        No ZFNet weights are published.  Passing ``True`` raises
+        :class:`NotImplementedError` rather than returning a randomly
+        initialised model that looks pretrained.
     **overrides
         Keyword overrides forwarded into :class:`ZFNetConfig` (e.g.
         ``in_channels=1`` for grayscale inputs).
@@ -56,7 +58,8 @@ def zfnet(pretrained: bool = False, **overrides: object) -> ZFNet:
     -----
     See Zeiler & Fergus, "Visualizing and Understanding Convolutional
     Networks", ECCV 2014.  The paper reports a top-5 ImageNet validation
-    error of 11.7% — an improvement over AlexNet's 15.3% achieved with
+    error of 16.5% for a single net (Table 2); §5.1 states this beats
+    Krizhevsky's single-model test top-5 by 1.7%.  Achieved with
     essentially the same parameter count by retuning the first two conv
     layers based on deconvolutional-network visualisations.  ZFNet is a
     single architecture; there are no paper-cited size variants (H11).
@@ -72,6 +75,15 @@ def zfnet(pretrained: bool = False, **overrides: object) -> ZFNet:
     (1, 256, 6, 6)
     """
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    if pretrained:
+        # ``from_pretrained("zfnet...")`` routes here with pretrained=True and
+        # returns whatever comes back, with no check that weights loaded.
+        # Silently handing back a randomly-initialised model is worse than
+        # refusing: the caller believes they have trained weights.
+        raise NotImplementedError(
+            "No pretrained ZFNet weights are published; "
+            "zfnet(pretrained=True) cannot be honoured."
+        )
     return ZFNet(cfg)
 
 
@@ -86,6 +98,7 @@ def zfnet(pretrained: bool = False, **overrides: object) -> ZFNet:
     model_type="zfnet",
     model_class=ZFNetForImageClassification,
     default_config=_CFG,
+    params=62357608,
 )
 def zfnet_cls(
     pretrained: bool = False, **overrides: object
@@ -95,7 +108,8 @@ def zfnet_cls(
     Builds a :class:`ZFNetForImageClassification` with the paper-cited
     Zeiler & Fergus 2014 topology and the AlexNet-style two-layer
     4096-dim FC head.  Approximately 62 M parameters total.  Achieves
-    a top-5 ImageNet-1k validation error of 11.7% in the original
+    a top-5 ImageNet-1k validation error of 16.5% (Table 2, single
+    net) in the original
     paper.
 
     Parameters
@@ -131,4 +145,13 @@ def zfnet_cls(
     (2, 1000)
     """
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    if pretrained:
+        # ``from_pretrained("zfnet...")`` routes here with pretrained=True and
+        # returns whatever comes back, with no check that weights loaded.
+        # Silently handing back a randomly-initialised model is worse than
+        # refusing: the caller believes they have trained weights.
+        raise NotImplementedError(
+            "No pretrained ZFNet weights are published; "
+            "zfnet_cls(pretrained=True) cannot be honoured."
+        )
     return ZFNetForImageClassification(cfg)

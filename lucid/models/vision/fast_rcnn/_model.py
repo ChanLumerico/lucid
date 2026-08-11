@@ -132,6 +132,13 @@ class _FastRCNNHead(nn.Module):
         super().__init__()
         flat = in_channels * roi_size * roi_size  # 25 088 for VGG16 + 7×7
 
+        # §3.1's truncated-SVD compression — replacing each of fc6/fc7 with
+        # a rank-t factorisation to cut detection time — is deliberately not
+        # implemented.  It is a post-training inference optimisation applied
+        # to already-trained weights, it costs ~0.3 mAP, and it changes the
+        # parameter layout so compressed weights no longer load into this
+        # head.  A caller who wants it can factorise ``fc6``/``fc7`` after
+        # training without any support from the model.
         self.fc6 = nn.Linear(flat, 4096)
         self.fc7 = nn.Linear(4096, 4096)
         self.drop = nn.Dropout(p=dropout)
@@ -362,6 +369,18 @@ class FastRCNNForObjectDetection(PretrainedModel):
 
         Returns:
             Scalar total loss.
+
+        Note:
+            There is no **mini-batch RoI sampler**.  §2.3 trains on 64 RoIs
+            per image, 25% of them foreground (IoU >= 0.5) and the rest
+            drawn from the [0.1, 0.5) hard-negative band; the reference
+            config sets ``BATCH_SIZE=128`` and ``FG_FRACTION=0.25`` and
+            draws exactly that split.  Here *every* proposal contributes,
+            so the foreground fraction is whatever the proposal generator
+            happened to produce — typically far below 25%, which biases the
+            classifier towards background and changes what the loss
+            optimises.  Callers reproducing the paper should sample their
+            proposals to the 64/25% schedule before passing them in.
         """
         all_cls_labels: list[Tensor] = []
         all_bbox_targets: list[Tensor] = []
@@ -426,14 +445,21 @@ class FastRCNNForObjectDetection(PretrainedModel):
             cls_n = min(cls_n, K - 1)
             pred_d = pred_deltas[n, cls_n]  # (4,)
             tgt_d = bbox_targets[n]  # (4,)
-            reg_loss_parts.append(_smooth_l1(pred_d - tgt_d).mean())
+            # Eq. (2) sums over the four coordinates; the division is by
+            # *all* sampled RoIs (background included), not by the
+            # foreground count and not by 4.
+            reg_loss_parts.append(_smooth_l1(pred_d - tgt_d).sum())
 
         if reg_loss_parts:
-            reg_loss = lucid.cat([l.reshape(1) for l in reg_loss_parts]).mean()
+            reg_loss = lucid.cat([l.reshape(1) for l in reg_loss_parts]).sum() / float(
+                max(N_total, 1)
+            )
         else:
-            reg_loss = lucid.zeros((1,), device=dev)
+            # Scalar in both branches — a foreground-free batch used to
+            # return shape (1,), so the total loss changed rank.
+            reg_loss = lucid.zeros((), device=dev)
 
-        return cls_loss + reg_loss
+        return (cls_loss + reg_loss).reshape(())
 
     # ------------------------------------------------------------------
     # Forward
@@ -494,6 +520,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
         return ObjectDetectionOutput(
             logits=all_logits,
             pred_boxes=all_boxes,
+            proposals=tuple(proposals),
             loss=loss,
         )
 
@@ -593,7 +620,10 @@ class FastRCNNForObjectDetection(PretrainedModel):
                     lucid.zeros(int(sc_c.shape[0]), device=dev),
                     self._nms_thresh,
                 )
-                keep = keep[: self._max_det]
+                # ``max_detections`` is a *per image* limit applied once after a
+                # global score sort.  Capping inside the class loop let each of
+                # the K classes keep its own full quota, so the returned count
+                # scaled with the class count.
 
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
@@ -602,11 +632,15 @@ class FastRCNNForObjectDetection(PretrainedModel):
                 )
 
             if keep_boxes:
+                all_b = lucid.cat(keep_boxes, dim=0)
+                all_s = lucid.cat(keep_scores, dim=0)
+                all_l = lucid.cat(keep_labels, dim=0)
+                order = lucid.argsort(-all_s)[: self._max_det]
                 results.append(
                     {
-                        "boxes": lucid.cat(keep_boxes, dim=0),
-                        "scores": lucid.cat(keep_scores, dim=0),
-                        "labels": lucid.cat(keep_labels, dim=0),
+                        "boxes": all_b[order],
+                        "scores": all_s[order],
+                        "labels": all_l[order],
                     }
                 )
             else:

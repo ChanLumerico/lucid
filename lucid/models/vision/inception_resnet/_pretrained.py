@@ -11,6 +11,7 @@ from lucid.models.vision.inception_resnet._model import (
     InceptionResNetV2ForImageClassification,
 )
 from lucid.models.vision.inception_resnet._weights import InceptionResNetV2Weights
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG = InceptionResNetConfig()
 
@@ -69,6 +70,10 @@ def inception_resnet_v2(
     >>> out.last_hidden_state.shape   # (B, 1536, 1, 1)
     (1, 1536, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "inception_resnet_v2", alternative="inception_resnet_v2_cls"
+        )
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return InceptionResNetV2(cfg)
 

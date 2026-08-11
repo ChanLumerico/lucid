@@ -3,7 +3,7 @@
   "name": "swin",
   "path": "lucid.models.vision.swin",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/__init__.py#L1",
   "members": [
     {
       "name": "SwinConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "SwinConfig(image_size: int = 224, patch_size: int = 4, in_channels: int = 3, num_classes: int = 1000, embed_dim: int = 96, depths: tuple[int, ...] = (2, 2, 6, 2), num_heads: tuple[int, ...] = (3, 6, 12, 24), window_size: int = 7, mlp_ratio: float = 4.0, dropout: float = 0.0, attention_dropout: float = 0.0, drop_path_rate: float = 0.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(image_size: int = 224, patch_size: int = 4, in_channels: int = 3, num_classes: int = 1000, embed_dim: int = 96, depths: tuple[int, ...] = (2, 2, 6, 2), num_heads: tuple[int, ...] = (3, 6, 12, 24), window_size: int = 7, mlp_ratio: float = 4.0, dropout: float = 0.0, attention_dropout: float = 0.0, drop_path_rate: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -113,7 +113,7 @@
         {
           "name": "drop_path_rate",
           "annotation": "float",
-          "description": "Stochastic-depth maximum rate; linearly scheduled across all\nblocks of the trunk (Liu et al., 2021, Appendix A).  The paper\nuses `0.2` for Swin-T and `0.3` for Swin-S/B/L.  Defaults to\n`0.0`.",
+          "description": "Stochastic-depth maximum rate; linearly scheduled across all\nblocks of the trunk.  Appendix A2.1 gives `0.2` / `0.3` /\n`0.5` for Swin-T / Swin-S / Swin-B on ImageNet-1k.  It gives no\nfrom-scratch rate for Swin-L, which the paper only ever\npre-trains on ImageNet-22k (that fine-tune stage uses `0.1`).\nDefaults to `0.0`.",
           "default": "0.0"
         }
       ],
@@ -146,7 +146,7 @@
       ],
       "labels": [],
       "signature": "SwinTransformer(config: SwinConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_model.py#L393",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_model.py#L469",
       "subcategory": "model",
       "methods": [
         {
@@ -155,7 +155,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: SwinConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_model.py#L480",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_model.py#L556",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -179,7 +179,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_model.py#L492",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_model.py#L574",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -200,7 +200,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_model.py#L495",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_model.py#L577",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -222,7 +222,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_model.py#L507",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_model.py#L589",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -298,7 +298,7 @@
       ],
       "labels": [],
       "signature": "SwinTransformerForImageClassification(config: SwinConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_model.py#L518",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_model.py#L600",
       "subcategory": "model",
       "methods": [
         {
@@ -307,7 +307,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: SwinConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_model.py#L583",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_model.py#L665",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -329,7 +329,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_model.py#L592",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_model.py#L674",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -400,7 +400,7 @@
       "kind": "function",
       "labels": [],
       "signature": "swin_tiny(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_pretrained.py#L39",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_pretrained.py#L40",
       "subcategory": "pretrained",
       "summary": "Swin-Tiny backbone (Liu et al., 2021).",
       "extended": "Builds the canonical *Swin-T* configuration: `embed_dim=96`,\n`depths=(2, 2, 6, 2)`, `num_heads=(3, 6, 12, 24)`,\n`window_size=7`.  With the default 224x224 input the trunk\nproduces a $(B, 768)$ feature after the final stage's\n$7 \\times 7$ map is globally pooled.  Approximately\n**28M parameters**.",
@@ -1029,7 +1029,7 @@
       "kind": "function",
       "labels": [],
       "signature": "swin_tiny_cls(pretrained: bool | str = False, weights: SwinTinyWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_pretrained.py#L237",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_pretrained.py#L247",
       "subcategory": "pretrained",
       "summary": "Swin-Tiny image classifier (Liu et al., 2021).",
       "extended": "Combines the `swin_tiny` backbone with a global average pool\n+ single `nn.Linear` classification head.  Default output is\n`num_classes=1000` (ImageNet-1k).  Approximately **28M parameters**\nfor the 1000-class head.",
@@ -1062,7 +1062,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.swin import swin_tiny_cls\n>>> model = swin_tiny_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Swin-T reaches **81.3% top-1 on ImageNet-1k** (Liu et al., 2021).\nPretrained weights are converted from torchvision's\n`Swin_T_Weights.IMAGENET1K_V1` and hosted under\n`lucid-dl/swin-tiny`."
+        "Swin-T reaches **81.3% top-1 on ImageNet-1k** (Liu et al., 2021).\nPretrained weights are converted from reference_vision's\n`Swin_T_Weights.IMAGENET1K_V1` and hosted under\n`lucid-dl/swin-tiny`."
       ],
       "attributes": [],
       "warns": [],
@@ -1671,7 +1671,7 @@
       "kind": "function",
       "labels": [],
       "signature": "swin_small(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_pretrained.py#L92",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_pretrained.py#L95",
       "subcategory": "pretrained",
       "summary": "Swin-Small backbone (Liu et al., 2021).",
       "extended": "Builds the canonical *Swin-S* configuration: `embed_dim=96`,\n`depths=(2, 2, 18, 2)`, `num_heads=(3, 6, 12, 24)`.  Same width\nas Swin-T but with 18 blocks in stage 3 instead of 6, roughly\ndoubling the compute.  Approximately **50M parameters**.",
@@ -2300,7 +2300,7 @@
       "kind": "function",
       "labels": [],
       "signature": "swin_small_cls(pretrained: bool | str = False, weights: SwinSmallWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_pretrained.py#L304",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_pretrained.py#L314",
       "subcategory": "pretrained",
       "summary": "Swin-Small image classifier (Liu et al., 2021).",
       "extended": "Combines the `swin_small` backbone (`embed_dim=96`,\n`depths=(2, 2, 18, 2)`) with a global average pool plus a linear\nclassification head.  ~50M parameters.",
@@ -2333,7 +2333,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.swin import swin_small_cls\n>>> model = swin_small_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Swin-S reaches **83.0% top-1 on ImageNet-1k** (Liu et al., 2021,\nTable 1).  Pretrained weights are converted from torchvision's\n`Swin_S_Weights.IMAGENET1K_V1` and hosted under\n`lucid-dl/swin-small`."
+        "Swin-S reaches **83.0% top-1 on ImageNet-1k** (Liu et al., 2021,\nTable 1).  Pretrained weights are converted from reference_vision's\n`Swin_S_Weights.IMAGENET1K_V1` and hosted under\n`lucid-dl/swin-small`."
       ],
       "attributes": [],
       "warns": [],
@@ -2942,7 +2942,7 @@
       "kind": "function",
       "labels": [],
       "signature": "swin_base(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_pretrained.py#L138",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_pretrained.py#L143",
       "subcategory": "pretrained",
       "summary": "Swin-Base backbone (Liu et al., 2021).",
       "extended": "Builds the canonical *Swin-B* configuration: `embed_dim=128`,\n`depths=(2, 2, 18, 2)`, `num_heads=(4, 8, 16, 32)`.  Same depth\nas Swin-S but ~33% wider per stage; final feature dimension is\n$8 \\cdot 128 = 1024$.  Approximately **88M parameters**.",
@@ -3571,7 +3571,7 @@
       "kind": "function",
       "labels": [],
       "signature": "swin_base_cls(pretrained: bool | str = False, weights: SwinBaseWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_pretrained.py#L366",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_pretrained.py#L376",
       "subcategory": "pretrained",
       "summary": "Swin-Base image classifier (Liu et al., 2021).",
       "extended": "Combines the `swin_base` backbone (`embed_dim=128`,\n`depths=(2, 2, 18, 2)`) with a global average pool plus a linear\nclassification head.  Final feature width is $8 \\cdot 128 = 1024$.  ~88M parameters.",
@@ -3604,7 +3604,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.swin import swin_base_cls\n>>> model = swin_base_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Swin-B reaches **83.5% top-1 on ImageNet-1k** (224x224) and\n**86.4% top-1** at 384x384 after ImageNet-22k pretraining (Liu\net al., 2021, Tables 1 and 2).  The shipped checkpoint is converted\nfrom torchvision's `Swin_B_Weights.IMAGENET1K_V1` and hosted under\n`lucid-dl/swin-base`."
+        "Swin-B reaches **83.5% top-1 on ImageNet-1k** (224x224) and\n**86.4% top-1** at 384x384 after ImageNet-22k pretraining (Liu\net al., 2021, Tables 1 and 2).  The shipped checkpoint is converted\nfrom reference_vision's `Swin_B_Weights.IMAGENET1K_V1` and hosted under\n`lucid-dl/swin-base`."
       ],
       "attributes": [],
       "warns": [],
@@ -4213,7 +4213,7 @@
       "kind": "function",
       "labels": [],
       "signature": "swin_large(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_pretrained.py#L185",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_pretrained.py#L192",
       "subcategory": "pretrained",
       "summary": "Swin-Large backbone (Liu et al., 2021).",
       "extended": "Builds the canonical *Swin-L* configuration: `embed_dim=192`,\n`depths=(2, 2, 18, 2)`, `num_heads=(6, 12, 24, 48)`.  Final\nfeature dimension is $8 \\cdot 192 = 1536$.  Approximately\n**197M parameters**.  Pretrained variants are typically released\nonly with ImageNet-22k pretraining due to the model's capacity.",
@@ -4240,7 +4240,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.swin import swin_large\n>>> model = swin_large()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 1536)"
       ],
       "notes": [
-        "Swin-L reaches **87.3% top-1 on ImageNet-1k** (384x384) after\nImageNet-22k pretraining (Liu et al., 2021, Table 2)."
+        "Swin-L reaches **87.3% top-1 on ImageNet-1k** (384x384) after\nImageNet-22k pretraining (Liu et al., 2021 — the classification\nresults; Table 2 is COCO detection)."
       ],
       "attributes": [],
       "warns": [],
@@ -4842,7 +4842,7 @@
       "kind": "function",
       "labels": [],
       "signature": "swin_large_cls(pretrained: bool | str = False, weights: SwinLargeWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_pretrained.py#L430",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_pretrained.py#L440",
       "subcategory": "pretrained",
       "summary": "Swin-Large image classifier (Liu et al., 2021).",
       "extended": "Combines the `swin_large` backbone (`embed_dim=192`,\n`depths=(2, 2, 18, 2)`) with a global average pool plus a linear\nclassification head.  Final feature width is $8 \\cdot 192 = 1536$.  ~197M parameters.",
@@ -4875,7 +4875,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.swin import swin_large_cls\n>>> model = swin_large_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Swin-L reaches **87.3% top-1 on ImageNet-1k** at 384x384\nfine-tune resolution after ImageNet-22k pretraining (Liu\net al., 2021, Table 2).  The shipped checkpoint is the 224x224\nImageNet-22k → ImageNet-1k finetune (86.3% top-1), converted from\ntimm's `swin_large_patch4_window7_224.ms_in22k_ft_in1k` and\nhosted under `lucid-dl/swin-large`."
+        "Swin-L reaches **87.3% top-1 on ImageNet-1k** at 384x384\nfine-tune resolution after ImageNet-22k pretraining (Liu\net al., 2021 — the classification results; Table 2 is COCO\ndetection).  The shipped checkpoint is the 224x224\nImageNet-22k → ImageNet-1k finetune (86.3% top-1), converted from\ntimm's `swin_large_patch4_window7_224.ms_in22k_ft_in1k` and\nhosted under `lucid-dl/swin-large`."
       ],
       "attributes": [],
       "warns": [],
@@ -5488,7 +5488,7 @@
       ],
       "labels": [],
       "signature": "SwinBaseWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_weights.py#L88",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_weights.py#L88",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.swin_base_cls`.",
@@ -5512,11 +5512,11 @@
       ],
       "labels": [],
       "signature": "SwinLargeWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_weights.py#L114",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_weights.py#L114",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.swin_large_cls`.",
-      "extended": "Ships the original Microsoft ImageNet-22k → ImageNet-1k finetune\n(`MS_IN22K_FT_IN1K`), re-hosted via timm\n(`swin_large_patch4_window7_224.ms_in22k_ft_in1k`) under\n`huggingface.co/lucid-dl/swin-large`.  The paper (Liu et al.,\n2021, Table 2) reports 86.3% top-1 for this checkpoint at 224×224.",
+      "extended": "Ships the original Microsoft ImageNet-22k → ImageNet-1k finetune\n(`MS_IN22K_FT_IN1K`), re-hosted via timm\n(`swin_large_patch4_window7_224.ms_in22k_ft_in1k`) under\n`huggingface.co/lucid-dl/swin-large`.  86.3% top-1 at 224×224 is\nthe figure published for this checkpoint tag; the paper does not\nreport a 224×224 number for Swin-L, and its Table 2 is COCO\ndetection, not classification.",
       "parameters": [],
       "returns": null,
       "raises": [],
@@ -5536,7 +5536,7 @@
       ],
       "labels": [],
       "signature": "SwinSmallWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_weights.py#L62",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_weights.py#L62",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.swin_small_cls`.",
@@ -5560,7 +5560,7 @@
       ],
       "labels": [],
       "signature": "SwinTinyWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/swin/_weights.py#L36",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/swin/_weights.py#L36",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.swin_tiny_cls`.",

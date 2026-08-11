@@ -38,6 +38,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import GenerationOutput, VAEOutput
 from lucid.models._utils._generative import (
+    resolve_generation_device,
     gaussian_kl_divergence,
     generative_activation,
     reparameterize,
@@ -423,8 +424,13 @@ class VAEForImageGeneration(PretrainedModel):
     ``generate(n_samples)`` samples from the prior —
     :math:`z \sim \mathcal{N}(0, \mathbf{I})` for vanilla, one
     :math:`z_l \sim \mathcal{N}(0, \mathbf{I})` per level for HVAE — and
-    returns the decoder output.  BCE reconstructions are squashed through
-    a sigmoid before being returned.
+    returns the decoder output.
+
+    Under ``recon_loss="bce"`` the decoder emits logits, and both
+    ``forward(x).sample`` and ``generate().samples`` squash them through a
+    sigmoid so every reconstruction this class hands back lives in the same
+    ``[0, 1]`` space as the input.  The loss is still computed from the raw
+    logits.
 
     Parameters
     ----------
@@ -484,6 +490,18 @@ class VAEForImageGeneration(PretrainedModel):
         self._is_hierarchical = config.is_hierarchical
         self._latent_dims = config.latent_dims
 
+    def _to_data_space(self, recon: Tensor) -> Tensor:
+        """Map a raw decoder output into the space the data lives in.
+
+        Under a Bernoulli likelihood the decoder emits logits — that is what
+        the reconstruction loss needs — but the *reconstruction* a caller
+        reads off the output should be comparable with the input it passed
+        in.  ``generate`` already squashed its samples; ``forward`` did not,
+        so ``out.sample`` and ``generate().samples`` lived in different
+        spaces for the same model.
+        """
+        return F.sigmoid(recon) if self._recon_loss == "bce" else recon
+
     def _reconstruction_loss(self, recon: Tensor, target: Tensor) -> Tensor:
         if self._recon_loss == "mse":
             diff = (recon - target) ** 2
@@ -519,7 +537,7 @@ class VAEForImageGeneration(PretrainedModel):
             logvar_flat = lucid.cat(logvars, dim=-1)
             z_flat = lucid.cat(zs, dim=-1)
             return VAEOutput(
-                sample=recon,
+                sample=self._to_data_space(recon),
                 latent=z_flat,
                 mu=mu_flat,
                 logvar=logvar_flat,
@@ -537,7 +555,7 @@ class VAEForImageGeneration(PretrainedModel):
         total = recon_l + self._kl_weight * kl_l
 
         return VAEOutput(
-            sample=recon,
+            sample=self._to_data_space(recon),
             latent=z,
             mu=mu,
             logvar=logvar,
@@ -551,9 +569,10 @@ class VAEForImageGeneration(PretrainedModel):
         self,
         n_samples: int = 1,
         *,
-        device: str = "cpu",
+        device: str | None = None,
     ) -> GenerationOutput:
         """Sample ``n_samples`` images from the prior ``N(0, I)``."""
+        device = resolve_generation_device(self, device)
         if self._is_hierarchical:
             zs = [lucid.randn((n_samples, d), device=device) for d in self._latent_dims]
             samples = self.vae.decode(zs)

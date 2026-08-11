@@ -5,6 +5,7 @@ import math
 import pytest
 
 import lucid
+import lucid.nn as _nn
 from lucid.models import (
     DiffusionModelOutput,
     FlowMatchingConfig,
@@ -322,9 +323,28 @@ class TestVelocityField:
         assert _worst(scalar - per_sample) < 1e-6
 
     def test_time_actually_changes_the_field(self) -> None:
+        # The reference zero-initialises ``conv_out`` *and* the last conv of
+        # every residual branch, so a freshly built field is dormant: it
+        # predicts exactly zero, and — because ``t`` enters only through those
+        # residual branches — the time embedding cannot reach the output at
+        # all.  Both are the intended initial state, so comparing raw outputs
+        # at init would compare 0 against 0 and prove nothing.  Wake the
+        # residual branches and the output projection, as the first optimiser
+        # step does, then check that t still reaches the prediction.
         unet = _VelocityField(_cfg()).eval()
+        for name, mod in unet.named_modules():
+            if isinstance(mod, _nn.Conv2d) and (
+                name.endswith("conv2") or name.endswith("conv_out")
+            ):
+                _nn.init.normal_(mod.weight, mean=0.0, std=0.05)
         x = lucid.randn((2, 3, 8, 8))
         assert _worst(unet(x, lucid.tensor(0.1)) - unet(x, lucid.tensor(0.9))) > 1e-4
+
+    def test_predicted_velocity_is_zero_at_initialisation(self) -> None:
+        """The zero-initialised output projection is a documented contract."""
+        unet = _VelocityField(_cfg()).eval()
+        x = lucid.randn((2, 3, 8, 8))
+        assert _worst(unet(x, lucid.tensor(0.5))) == 0.0
 
     def test_matches_the_checkpoint_validated_u_net_exactly(self) -> None:
         """The wiring is borrowed, so pin it to the thing it was borrowed from.
@@ -416,10 +436,22 @@ class TestFlowMatchingModel:
         assert model.sample(n_samples=2, steps=4).shape == (2, 3, 8, 8)
 
     def test_fixed_step_sampling_costs_exactly_the_budget(self) -> None:
-        model = FlowMatchingModel(_cfg()).eval()
+        # ``steps`` is a *budget*, so the cost has to be a fixed multiple of
+        # it: one field evaluation per step for Euler, two for midpoint, four
+        # for RK4 — and no retries in any case.
+        for solver, per_step in (("euler", 1), ("midpoint", 2), ("rk4", 4)):
+            model = FlowMatchingModel(_cfg(solver=solver)).eval()
+            model.sample(n_samples=2, steps=5)
+            assert model.nfe == 5 * per_step, solver
+
+    def test_fixed_step_sampling_refuses_to_go_adaptive(self) -> None:
+        # ``solver`` defaults to an adaptive method, which on a fixed grid
+        # would re-choose its own step sizes and stop ``steps`` being a
+        # budget at all.  The fixed-step path falls back to Euler instead —
+        # one evaluation per step, as the reference's sampler defaults to.
+        model = FlowMatchingModel(_cfg(solver="dopri5")).eval()
         model.sample(n_samples=2, steps=5)
-        # Classical RK4: four field evaluations per step, and no retries.
-        assert model.nfe == 20
+        assert model.nfe == 5
 
     def test_sampling_is_deterministic_given_the_noise(self) -> None:
         model = FlowMatchingModel(_cfg()).eval()

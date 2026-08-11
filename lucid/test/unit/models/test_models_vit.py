@@ -248,7 +248,7 @@ class TestViTWeightsEnums(unittest.TestCase):
             self.assertIn("/IMAGENET1K_V1/", e.url)
             self.assertEqual(
                 cls.IMAGENET1K_V1.meta["source"],
-                f"torchvision/{src}.IMAGENET1K_V1",
+                f"reference_vision/{src}.IMAGENET1K_V1",
             )
             self.assertEqual(cls.IMAGENET1K_V1.meta["license"], "bsd-3-clause")
             self.assertEqual(cls.IMAGENET1K_V1.meta["num_params"], nparams)

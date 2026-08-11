@@ -216,7 +216,7 @@ class TestCv2AccuracyBench:
 class TestPipelineBench:
     def test_imagenet_eval_pipeline(self, bench: Callable[..., object]) -> None:
         """Resize 256 → CenterCrop 224 → Normalize: the canonical eval
-        pipeline shipped with every torchvision-style preset."""
+        pipeline shipped with every reference-style preset."""
         chw, hwc = _make_inputs()
         mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
         lucid_tf = T.Compose(

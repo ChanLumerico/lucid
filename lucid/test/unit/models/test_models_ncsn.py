@@ -50,10 +50,17 @@ def _tiny_cfg(**overrides: object) -> NCSNConfig:
 
 class TestNCSNConfig:
     def test_paper_defaults(self) -> None:
+        """The defaults must be one paper's settings, not a mix of two.
+
+        ``sigma_max=50`` is NCSNv2 (Technique 1) and goes with ``L=232``;
+        ``L=10`` is NCSN v1 and goes with ``sigma_max=1.0``.  Pairing 50 with
+        10 gives a schedule ratio of 0.388, which fails Technique 2's
+        criterion outright — the registered factories carry the v2 pairs.
+        """
         cfg = NCSNConfig()
         assert cfg.base_channels == 128
         assert cfg.num_noise_levels == 10
-        assert cfg.sigma_max == 50.0
+        assert cfg.sigma_max == 1.0
         assert cfg.sigma_min == 0.01
         assert cfg.langevin_steps == 100
         assert cfg.langevin_eps == 2e-5

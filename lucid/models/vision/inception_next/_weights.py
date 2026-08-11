@@ -50,7 +50,7 @@ class InceptionNeXtTinyWeights(WeightsEnum):
             "tag": "SAIL_IN1K",
             "source": "timm/inception_next_tiny.sail_in1k",
             "license": "apache-2.0",
-            "num_params": 28_055_112,
+            "num_params": 28_055_680,
             "metrics": {"ImageNet-1k": {"acc@1": 82.3, "acc@5": 96.1}},
         },
     )
@@ -75,7 +75,7 @@ class InceptionNeXtSmallWeights(WeightsEnum):
             "tag": "SAIL_IN1K",
             "source": "timm/inception_next_small.sail_in1k",
             "license": "apache-2.0",
-            "num_params": 49_374_120,
+            "num_params": 49_374_016,
             "metrics": {"ImageNet-1k": {"acc@1": 83.5, "acc@5": 96.6}},
         },
     )
@@ -101,7 +101,7 @@ class InceptionNeXtBaseWeights(WeightsEnum):
             "tag": "SAIL_IN1K",
             "source": "timm/inception_next_base.sail_in1k",
             "license": "apache-2.0",
-            "num_params": 86_667_752,
+            "num_params": 86_672_136,
             "metrics": {"ImageNet-1k": {"acc@1": 84.0, "acc@5": 96.9}},
         },
     )

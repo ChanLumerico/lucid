@@ -31,7 +31,6 @@ and 4d:
     → FC(num_classes)
 """
 
-import math
 from dataclasses import dataclass
 from typing import ClassVar, cast, final, override
 
@@ -39,64 +38,17 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import transform_input_imagenet_to_tf
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models.vision.googlenet._config import GoogLeNetConfig
 
 # Large finite stand-in for ``-inf`` used to pad the extra ceil-mode
 # window so it never wins a max against real activations.
-_NEG_FILL = -1e30
-
 
 # ---------------------------------------------------------------------------
 # Ceil-mode max pool (stateless)
 # ---------------------------------------------------------------------------
-
-
-@final
-class _CeilMaxPool2d(nn.Module):
-    r"""Max pool with ``ceil_mode=True`` semantics.
-
-    The compute engine's :func:`~lucid.nn.functional.max_pool2d` only
-    implements floor-mode output sizing.  GoogLeNet's reference
-    implementation pools with ceiling-mode sizing, which yields one extra
-    output row/column whenever the final window overhangs the (padded)
-    input edge.  This module reproduces that behaviour by padding the
-    bottom / right with a large negative fill so a floor-mode pool emits
-    the ceil-mode output size and identical values (the negative fill can
-    never win a max against real activations).
-
-    Carries no parameters, so it is invisible to ``state_dict`` and does
-    not affect weight loading.
-    """
-
-    def __init__(self, kernel_size: int, stride: int, padding: int = 0) -> None:
-        super().__init__()
-        self.kernel_size = kernel_size
-        self.stride = stride
-        self.padding = padding
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        k, s, p = self.kernel_size, self.stride, self.padding
-        _, _, h, w = x.shape
-
-        def _ceil_out(length: int) -> int:
-            return math.ceil((length + 2 * p - k) / s) + 1
-
-        oh, ow = _ceil_out(int(h)), _ceil_out(int(w))
-        need_h = max((oh - 1) * s + k - (int(h) + 2 * p), 0)
-        need_w = max((ow - 1) * s + k - (int(w) + 2 * p), 0)
-        if need_h or need_w:
-            x = F.pad(x, (0, need_w, 0, need_h), mode="constant", value=_NEG_FILL)
-        return F.max_pool2d(x, k, stride=s, padding=p)
-
-    @override
-    def extra_repr(self) -> str:
-        return (
-            f"kernel_size={self.kernel_size}, stride={self.stride}, "
-            f"padding={self.padding}, ceil_mode=True"
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +118,7 @@ class _InceptionModule(nn.Module):
         )
         # Branch 4: 3×3 max pool → 1×1
         self.branch4 = nn.Sequential(
-            _CeilMaxPool2d(3, stride=1, padding=1),
+            nn.MaxPool2d(3, stride=1, padding=1, ceil_mode=True),
             _BasicConv2d(in_channels, out_pool_proj, kernel_size=1),
         )
 
@@ -297,6 +249,28 @@ def _make_inception(spec: tuple[int, int, int, int, int, int, int]) -> _Inceptio
 # ---------------------------------------------------------------------------
 
 
+def _init_reference_weights(model: nn.Module) -> None:
+    r"""Truncated-normal init at std 0.01, as the reference builds this net.
+
+    The reference initialises every conv and linear with
+    ``trunc_normal_(std=0.01, a=-2, b=2)`` and sets BatchNorm to unit
+    scale / zero shift.  The unusually small std is deliberate for a
+    22-layer network with no residual connections — Lucid's default is a
+    kaiming-uniform roughly 7x wider, and uniform rather than truncated
+    normal.
+    """
+    for m in model.modules():
+        if isinstance(m, (nn.Conv2d, nn.Linear)):
+            nn.init.trunc_normal_(m.weight, mean=0.0, std=0.01, a=-2.0, b=2.0)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.BatchNorm2d):
+            if m.weight is not None:
+                nn.init.ones_(m.weight)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+
+
 class GoogLeNet(PretrainedModel, BackboneMixin):
     r"""GoogLeNet (Inception v1) feature-extracting backbone.
 
@@ -325,7 +299,7 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
         Stored copy of the config that built this model.
     conv1, conv2, conv3 : _BasicConv2d
         The pre-Inception conv stack.
-    maxpool1, maxpool2 : _CeilMaxPool2d
+    maxpool1, maxpool2 : nn.MaxPool2d
         Stem :math:`3\times3` stride-2 ceil-mode max-pools.
     inception3a, inception3b : _InceptionModule
         First Inception stage, producing a :math:`28\times28` spatial
@@ -336,7 +310,7 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
     inception5a, inception5b : _InceptionModule
         Third Inception stage at :math:`7\times7` resolution, producing
         the final 1024-channel feature map.
-    maxpool3, maxpool4 : _CeilMaxPool2d
+    maxpool3, maxpool4 : nn.MaxPool2d
         Ceil-mode max-pools between Inception stages
         (:math:`3\times3` stride-2 and :math:`2\times2` stride-2).
     avgpool : nn.AdaptiveAvgPool2d
@@ -386,22 +360,22 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
         self.conv1 = _BasicConv2d(
             config.in_channels, 64, kernel_size=7, stride=2, padding=3
         )
-        self.maxpool1 = _CeilMaxPool2d(3, stride=2)
+        self.maxpool1 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
         self.conv2 = _BasicConv2d(64, 64, kernel_size=1)
         self.conv3 = _BasicConv2d(64, 192, kernel_size=3, padding=1)
-        self.maxpool2 = _CeilMaxPool2d(3, stride=2)
+        self.maxpool2 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
 
         specs = _INCEPTION_SPECS
         self.inception3a = _make_inception(specs[0])
         self.inception3b = _make_inception(specs[1])
-        self.maxpool3 = _CeilMaxPool2d(3, stride=2)
+        self.maxpool3 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
 
         self.inception4a = _make_inception(specs[2])
         self.inception4b = _make_inception(specs[3])
         self.inception4c = _make_inception(specs[4])
         self.inception4d = _make_inception(specs[5])
         self.inception4e = _make_inception(specs[6])
-        self.maxpool4 = _CeilMaxPool2d(2, stride=2)
+        self.maxpool4 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
 
         self.inception5a = _make_inception(specs[7])
         self.inception5b = _make_inception(specs[8])
@@ -413,6 +387,8 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=5, num_channels=1024, reduction=32),
         ]
 
+        _init_reference_weights(self)
+
     @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
@@ -420,6 +396,8 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
+        if getattr(self.config, "transform_input", False):
+            x = transform_input_imagenet_to_tf(x)
         x = cast(Tensor, self.conv1(x))
         x = cast(Tensor, self.maxpool1(x))
         x = cast(Tensor, self.conv2(x))
@@ -436,7 +414,12 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.maxpool4(x))
         x = cast(Tensor, self.inception5a(x))
         x = cast(Tensor, self.inception5b(x))
-        return cast(Tensor, self.avgpool(x))
+        # ``feature_info`` describes the pre-pool pyramid, and the mixin
+        # documents this as returning the deepest stage's *feature map*.
+        # Pooling here collapsed it to 1x1, so the declared reduction was
+        # wrong by the input size and no consumer could reach a spatial map.
+        # The classifier applies its own pooling.
+        return x
 
     @override
     def forward(self, x: Tensor) -> GoogLeNetOutput:  # type: ignore[override]
@@ -536,22 +519,22 @@ class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.conv1 = _BasicConv2d(
             config.in_channels, 64, kernel_size=7, stride=2, padding=3
         )
-        self.maxpool1 = _CeilMaxPool2d(3, stride=2)
+        self.maxpool1 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
         self.conv2 = _BasicConv2d(64, 64, kernel_size=1)
         self.conv3 = _BasicConv2d(64, 192, kernel_size=3, padding=1)
-        self.maxpool2 = _CeilMaxPool2d(3, stride=2)
+        self.maxpool2 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
 
         specs = _INCEPTION_SPECS
         self.inception3a = _make_inception(specs[0])
         self.inception3b = _make_inception(specs[1])
-        self.maxpool3 = _CeilMaxPool2d(3, stride=2)
+        self.maxpool3 = nn.MaxPool2d(3, stride=2, ceil_mode=True)
 
         self.inception4a = _make_inception(specs[2])
         self.inception4b = _make_inception(specs[3])
         self.inception4c = _make_inception(specs[4])
         self.inception4d = _make_inception(specs[5])
         self.inception4e = _make_inception(specs[6])
-        self.maxpool4 = _CeilMaxPool2d(2, stride=2)
+        self.maxpool4 = nn.MaxPool2d(2, stride=2, ceil_mode=True)
 
         self.inception5a = _make_inception(specs[7])
         self.inception5b = _make_inception(specs[8])
@@ -572,6 +555,8 @@ class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.drop = nn.Dropout(p=config.dropout)
         self._build_classifier(1024, config.num_classes)
 
+        _init_reference_weights(self)
+
     @override
     def forward(  # type: ignore[override]
         self,
@@ -582,6 +567,8 @@ class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         assert isinstance(cfg, GoogLeNetConfig)
         use_aux = cfg.aux_logits and self.training
 
+        if getattr(self.config, "transform_input", False):
+            x = transform_input_imagenet_to_tf(x)
         x = cast(Tensor, self.conv1(x))
         x = cast(Tensor, self.maxpool1(x))
         x = cast(Tensor, self.conv2(x))

@@ -37,7 +37,7 @@ class AlexNetWeights(WeightsEnum):
         transforms=ImageClassification(crop_size=224, resize_size=256),
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/AlexNet_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/AlexNet_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 61_100_840,
             "gflops": 0.714,

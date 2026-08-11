@@ -58,11 +58,17 @@ class MobileNetV1Config(ModelConfig):
     ``width_mult`` — uniform channel multiplier (α in the paper).
       1.0 → full model; 0.75 / 0.5 / 0.25 → slimmer variants.
 
-    ``resolution_mult`` — spatial resolution multiplier (ρ).
-      Typically applied to the input, not the architecture itself.
-      Kept here for documentation parity; not enforced inside the model.
+    The paper's second knob, the resolution multiplier ρ, is *not* a
+      field here: it scales the input image, not the architecture, so a
+      caller applies it by feeding a smaller image.  It was previously
+      documented as ``resolution_mult``, which never existed —
+      constructing with it raised ``TypeError``.
 
-    ``dropout`` — classifier dropout (0.001 in the original paper).
+    ``dropout`` — classifier dropout.  The paper never mentions dropout;
+    §3.2 only says "we use less regularization ... because small models
+    have less trouble with overfitting".  0.001 is TF-Slim's
+    ``dropout_keep_prob=0.999`` restated as a drop probability, which is
+    what the released model was trained with.
     """
 
     model_type: ClassVar[str] = "mobilenet_v1"

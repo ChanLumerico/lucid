@@ -102,6 +102,12 @@ class EfficientFormerConfig(ModelConfig):
         stage; the learned attention-bias table has
         ``resolution ** 2`` entries per head.  Defaults to ``7``
         (a ``7 x 7`` grid at the default ``224`` input).
+
+        This is **coupled to the input size**: the trunk downsamples by
+        32, so ``resolution`` must equal ``image_size / 32``.  It is not
+        derived automatically because the bias table's shape — and hence
+        the checkpoint's — depends on it; feeding a different input size
+        without changing it raises a ``ValueError`` naming both.
     drop_path_rate : float, optional
         Maximum stochastic-depth rate; linearly scheduled across all
         blocks of the trunk.  The paper uses ``0.0`` for L1, ``0.1``

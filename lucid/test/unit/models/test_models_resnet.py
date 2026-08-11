@@ -184,9 +184,23 @@ class TestResNetRegistry(unittest.TestCase):
         self.assertIsInstance(cfg, ResNetConfig)
         self.assertEqual(cfg.layers, (3, 4, 6, 3))
 
-    def test_auto_model_from_pretrained_base(self) -> None:
-        m = models.AutoModel.from_pretrained("resnet_18")
+    def test_auto_model_base_dispatch(self) -> None:
+        # The backbone factories publish no weights of their own — only the
+        # ``_cls`` variants do — so the Auto dispatch is exercised through
+        # ``create_model`` rather than ``from_pretrained``.
+        m = models.create_model("resnet_18")
         self.assertIsInstance(m, ResNet)
+
+    def test_backbone_from_pretrained_points_at_the_classifier(self) -> None:
+        """Refusing beats returning a randomly initialised "pretrained" model.
+
+        ``from_pretrained`` invokes the factory with ``pretrained=True`` and
+        never verifies that weights loaded, so a backbone factory that ignored
+        the flag silently handed back random weights.
+        """
+        with self.assertRaises(NotImplementedError) as ctx:
+            models.AutoModel.from_pretrained("resnet_18")
+        self.assertIn("resnet_18_cls", str(ctx.exception))
 
     def test_auto_model_for_classification(self) -> None:
         m = models.AutoModelForImageClassification.from_pretrained("resnet_50_cls")

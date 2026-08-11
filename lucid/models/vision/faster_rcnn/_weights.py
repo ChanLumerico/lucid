@@ -15,7 +15,8 @@ preset).
 from lucid.utils.transforms import Detection
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-_PRESET = Detection(max_size=1333)
+# Reference ``FasterRCNN`` defaults: min_size=800, max_size=1333.
+_PRESET = Detection(min_size=800, max_size=1333)
 
 
 @register_weights("faster_rcnn")
@@ -37,7 +38,7 @@ class FasterRCNNResNet50FPNWeights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "COCO_V1",
-            "source": "torchvision/FasterRCNN_ResNet50_FPN_Weights.COCO_V1",
+            "source": "reference_vision/FasterRCNN_ResNet50_FPN_Weights.COCO_V1",
             "license": "bsd-3-clause",
             "num_params": 41_755_286,
             "metrics": {"COCO": {"box mAP": 37.0}},

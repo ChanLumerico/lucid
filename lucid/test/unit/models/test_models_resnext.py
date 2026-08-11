@@ -97,8 +97,10 @@ class TestResNeXtClassifier(unittest.TestCase):
 
 class TestResNeXtRegistry(unittest.TestCase):
 
-    def test_6_variants_registered(self) -> None:
-        self.assertEqual(len(models.list_models(family="resnext")), 6)
+    def test_variants_registered(self) -> None:
+        # 4 topologies x 2 (raw + ``_cls``).  64x4d is the paper's headline
+        # Table 4 model; 32x8d comes from the reference zoo, not the paper.
+        self.assertEqual(len(models.list_models(family="resnext")), 8)
 
     def test_all_variants_present(self) -> None:
         names = models.list_models(family="resnext")
@@ -106,6 +108,7 @@ class TestResNeXtRegistry(unittest.TestCase):
             "resnext_50_32x4d",
             "resnext_101_32x4d",
             "resnext_101_32x8d",
+            "resnext_101_64x4d",
         ]:
             self.assertIn(v, names)
             self.assertIn(f"{v}_cls", names)

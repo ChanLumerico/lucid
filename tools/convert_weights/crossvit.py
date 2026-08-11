@@ -113,7 +113,7 @@ class CrossViTArch(Architecture):
         # Paper Table 2 ImageNet-1k acc@1 (the IN1K-trained-from-scratch
         # column — no 22k pretrain for CrossViT).
         _acc_table = {
-            "crossvit_tiny": 72.6,
+            "crossvit_tiny": 73.4,
             "crossvit_9": 73.9,
             "crossvit_small": 81.0,
             "crossvit_15": 81.5,

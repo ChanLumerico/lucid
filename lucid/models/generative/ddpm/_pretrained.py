@@ -23,6 +23,7 @@ from lucid.models.generative.ddpm._weights import (
     DDPMChurchWeights,
     DDPMCifarWeights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # Ho 2020 Table 9 — CIFAR-10.
 _CFG_CIFAR = DDPMConfig(
@@ -63,12 +64,20 @@ _CFG_IMAGENET64 = DDPMConfig(
     base_channels=128,
     channel_mult=(1, 2, 3, 4),
     num_res_blocks=3,
-    attention_resolutions=(8, 16, 32),
+    # Improved-DDPM's ImageNet-64 model attends at 16 and 8 only
+    # (attention_resolutions="16,8").  A 32x32 attention block is not in the
+    # cited configuration and costs a 4096-token map per residual stage.
+    attention_resolutions=(8, 16),
     num_heads=4,
     dropout=0.0,
     num_train_timesteps=4_000,
     beta_schedule="cosine",
     learn_sigma=True,
+    # Improved-DDPM's ImageNet-64 run keeps both of its defaults: FiLM
+    # conditioning in every ResBlock, and the t * (1000 / 4000) rescale that
+    # keeps the sinusoidal embedding in the range it was designed for.
+    use_scale_shift_norm=True,
+    rescale_timesteps=True,
 )
 
 
@@ -87,6 +96,7 @@ def _apply(cfg: DDPMConfig, overrides: dict[str, object]) -> DDPMConfig:
     model_type="ddpm",
     model_class=DDPMModel,
     default_config=_CFG_CIFAR,
+    params=35746307,
 )
 def ddpm_cifar(
     pretrained: bool | str = False,
@@ -155,6 +165,7 @@ def ddpm_cifar(
     model_type="ddpm",
     model_class=DDPMModel,
     default_config=_CFG_LSUN,
+    params=113673219,
 )
 def ddpm_lsun(
     pretrained: bool | str = False,
@@ -219,6 +230,7 @@ def ddpm_lsun(
     model_type="ddpm",
     model_class=DDPMModel,
     default_config=_CFG_IMAGENET64,
+    params=121063942,
 )
 def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
     r"""Construct an Improved-DDPM U-Net trunk for ImageNet 64x64.
@@ -261,6 +273,8 @@ def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
     >>> out.sample.shape   # learn_sigma=True -> 2 * 3 = 6 channels
     (1, 6, 64, 64)
     """
+    if pretrained:
+        reject_unavailable_pretrained("ddpm_imagenet64")
     return DDPMModel(_apply(_CFG_IMAGENET64, overrides))
 
 
@@ -275,6 +289,7 @@ def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
     model_type="ddpm",
     model_class=DDPMForImageGeneration,
     default_config=_CFG_CIFAR,
+    params=35746307,
 )
 def ddpm_cifar_gen(
     pretrained: bool | str = False,
@@ -338,6 +353,7 @@ def ddpm_cifar_gen(
     model_type="ddpm",
     model_class=DDPMForImageGeneration,
     default_config=_CFG_LSUN,
+    params=113673219,
 )
 def ddpm_lsun_gen(
     pretrained: bool | str = False,
@@ -399,6 +415,7 @@ def ddpm_lsun_gen(
     model_type="ddpm",
     model_class=DDPMForImageGeneration,
     default_config=_CFG_IMAGENET64,
+    params=121060483,
 )
 def ddpm_imagenet64_gen(
     pretrained: bool = False, **overrides: object
@@ -444,4 +461,13 @@ def ddpm_imagenet64_gen(
     >>> out.sample.shape   # (1, 3, 64, 64)
     (1, 3, 64, 64)
     """
-    return DDPMForImageGeneration(_apply(_CFG_IMAGENET64, overrides))
+    if pretrained:
+        reject_unavailable_pretrained("ddpm_imagenet64_gen")
+    # ``DDPMForImageGeneration`` refuses ``learn_sigma=True`` because the
+    # hybrid L_simple + L_vlb objective is not implemented, so this factory
+    # raised unconditionally — a registered name that can never be built.
+    # Sampling uses the fixed-small variance regardless, so the generation
+    # wrapper gets the same U-Net with the variance head off; the base
+    # ``ddpm_imagenet64`` keeps ``learn_sigma=True`` for weight compatibility.
+    cfg = replace(_CFG_IMAGENET64, learn_sigma=False)
+    return DDPMForImageGeneration(_apply(cfg, overrides))

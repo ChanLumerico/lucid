@@ -13,12 +13,17 @@ from lucid.models.vision.densenet._weights import (
     DenseNet169Weights,
     DenseNet201Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_121 = DenseNetConfig(
     block_config=(6, 12, 24, 16), growth_rate=32, num_init_features=64
 )
-# DenseNet-161 (Huang et al., 2017, Table 2): wider growth rate k=48 and a
-# 96-channel stem — the only paper variant that departs from k=32 / 64.
+# DenseNet-161: k=48 with a 96-channel stem.  NOT from the paper — Table 1
+# lists exactly four ImageNet architectures (121/169/201/264) and states
+# "Growth rate k=32 for all networks"; the strings "161" and "k=48" appear
+# nowhere in it.  The provenance is the authors' own released Torch models
+# (liuzhuang13/DenseNet: "DenseNet-161 (k=48) | 22.2"), which the reference
+# vision library mirrors and which the shipped checkpoint comes from.
 _CFG_161 = DenseNetConfig(
     block_config=(6, 12, 36, 24), growth_rate=48, num_init_features=96
 )
@@ -52,6 +57,7 @@ def _c(cfg: DenseNetConfig, kw: dict[str, object]) -> DenseNetForImageClassifica
     model_type="densenet",
     model_class=DenseNet,
     default_config=_CFG_121,
+    params=6_953_856,
 )
 def densenet_121(pretrained: bool = False, **overrides: object) -> DenseNet:
     r"""DenseNet-121 feature-extracting backbone (no classification head).
@@ -61,7 +67,7 @@ def densenet_121(pretrained: bool = False, **overrides: object) -> DenseNet:
     growth rate :math:`k = 32`, initial conv channels 64.
     Approximately 8.0 M parameters total — by far the most
     parameter-efficient of the ImageNet DenseNets, reaching a top-1
-    error of 25.0% (Huang et al., 2017, Table 2).
+    error of 25.0% (Huang et al., 2017, Table 3).
 
     Parameters
     ----------
@@ -93,6 +99,8 @@ def densenet_121(pretrained: bool = False, **overrides: object) -> DenseNet:
     >>> out.last_hidden_state.shape   # (B, 1024, 1, 1)
     (1, 1024, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("densenet_121", alternative="densenet_121_cls")
     return _b(_CFG_121, overrides)
 
 
@@ -102,6 +110,7 @@ def densenet_121(pretrained: bool = False, **overrides: object) -> DenseNet:
     model_type="densenet",
     model_class=DenseNet,
     default_config=_CFG_169,
+    params=12_484_480,
 )
 def densenet_169(pretrained: bool = False, **overrides: object) -> DenseNet:
     r"""DenseNet-169 feature-extracting backbone (no classification head).
@@ -110,7 +119,7 @@ def densenet_169(pretrained: bool = False, **overrides: object) -> DenseNet:
     topology: per-block dense-layer counts ``(6, 12, 32, 32)``, growth
     rate :math:`k = 32`, initial conv channels 64.  Approximately
     14.3 M parameters total.  Reaches a top-1 ImageNet error of 23.8%
-    (Huang et al., 2017, Table 2).
+    (Huang et al., 2017, Table 3).
 
     Parameters
     ----------
@@ -141,6 +150,8 @@ def densenet_169(pretrained: bool = False, **overrides: object) -> DenseNet:
     >>> out.last_hidden_state.shape   # (B, 1664, 1, 1)
     (1, 1664, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("densenet_169", alternative="densenet_169_cls")
     return _b(_CFG_169, overrides)
 
 
@@ -150,6 +161,7 @@ def densenet_169(pretrained: bool = False, **overrides: object) -> DenseNet:
     model_type="densenet",
     model_class=DenseNet,
     default_config=_CFG_201,
+    params=18_092_928,
 )
 def densenet_201(pretrained: bool = False, **overrides: object) -> DenseNet:
     r"""DenseNet-201 feature-extracting backbone (no classification head).
@@ -158,7 +170,7 @@ def densenet_201(pretrained: bool = False, **overrides: object) -> DenseNet:
     topology: per-block dense-layer counts ``(6, 12, 48, 32)``, growth
     rate :math:`k = 32`, initial conv channels 64.  Approximately
     20.0 M parameters total.  Reaches a top-1 ImageNet error of 22.6%
-    (Huang et al., 2017, Table 2).
+    (Huang et al., 2017, Table 3).
 
     Parameters
     ----------
@@ -189,6 +201,8 @@ def densenet_201(pretrained: bool = False, **overrides: object) -> DenseNet:
     >>> out.last_hidden_state.shape   # (B, 1920, 1, 1)
     (1, 1920, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("densenet_201", alternative="densenet_201_cls")
     return _b(_CFG_201, overrides)
 
 
@@ -198,6 +212,7 @@ def densenet_201(pretrained: bool = False, **overrides: object) -> DenseNet:
     model_type="densenet",
     model_class=DenseNet,
     default_config=_CFG_264,
+    params=30_648_704,
 )
 def densenet_264(pretrained: bool = False, **overrides: object) -> DenseNet:
     r"""DenseNet-264 feature-extracting backbone (no classification head).
@@ -207,7 +222,7 @@ def densenet_264(pretrained: bool = False, **overrides: object) -> DenseNet:
     rate :math:`k = 32`, initial conv channels 64.  Approximately
     33.3 M parameters total — the deepest DenseNet evaluated in the
     paper, reaching a top-1 ImageNet error of 22.2% (Huang et al.,
-    2017, Table 2).
+    2017, Table 3).
 
     Parameters
     ----------
@@ -238,6 +253,8 @@ def densenet_264(pretrained: bool = False, **overrides: object) -> DenseNet:
     >>> out.last_hidden_state.shape   # (B, 2688, 1, 1)
     (1, 2688, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("densenet_264")
     return _b(_CFG_264, overrides)
 
 
@@ -250,6 +267,7 @@ def densenet_264(pretrained: bool = False, **overrides: object) -> DenseNet:
     model_type="densenet",
     model_class=DenseNetForImageClassification,
     default_config=_CFG_121,
+    params=7_978_856,
 )
 def densenet_121_cls(
     pretrained: bool | str = False,
@@ -263,7 +281,7 @@ def densenet_121_cls(
     paper-cited DenseNet-121 topology and a single
     :class:`~lucid.nn.Linear` classifier projecting 1024 →
     ``config.num_classes``.  Approximately 8.0 M parameters; top-1
-    ImageNet accuracy 74.43% (torchvision weights).
+    ImageNet accuracy 74.43% (reference_vision weights).
 
     Parameters
     ----------
@@ -311,6 +329,7 @@ def densenet_121_cls(
     model_type="densenet",
     model_class=DenseNetForImageClassification,
     default_config=_CFG_169,
+    params=14_149_480,
 )
 def densenet_169_cls(
     pretrained: bool | str = False,
@@ -324,7 +343,7 @@ def densenet_169_cls(
     paper-cited DenseNet-169 topology and a :class:`~lucid.nn.Linear`
     classifier projecting 1664 → ``config.num_classes``.
     Approximately 14.3 M parameters; top-1 ImageNet accuracy 75.60%
-    (torchvision weights).
+    (reference_vision weights).
 
     Parameters
     ----------
@@ -365,6 +384,7 @@ def densenet_169_cls(
     model_type="densenet",
     model_class=DenseNetForImageClassification,
     default_config=_CFG_201,
+    params=20_013_928,
 )
 def densenet_201_cls(
     pretrained: bool | str = False,
@@ -378,7 +398,7 @@ def densenet_201_cls(
     paper-cited DenseNet-201 topology and a :class:`~lucid.nn.Linear`
     classifier projecting 1920 → ``config.num_classes``.
     Approximately 20.0 M parameters; top-1 ImageNet accuracy 76.90%
-    (torchvision weights).
+    (reference_vision weights).
 
     Parameters
     ----------
@@ -419,6 +439,7 @@ def densenet_201_cls(
     model_type="densenet",
     model_class=DenseNetForImageClassification,
     default_config=_CFG_264,
+    params=33_337_704,
 )
 def densenet_264_cls(
     pretrained: bool = False, **overrides: object
@@ -430,7 +451,7 @@ def densenet_264_cls(
     classifier projecting 2688 → ``config.num_classes``.
     Approximately 33.3 M parameters; the deepest DenseNet evaluated in
     the paper, with a top-1 ImageNet error of 22.2% (Huang et al.,
-    2017, Table 2).
+    2017, Table 3).
 
     Parameters
     ----------
@@ -456,6 +477,8 @@ def densenet_264_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("densenet_264_cls")
     return _c(_CFG_264, overrides)
 
 
@@ -468,15 +491,21 @@ def densenet_264_cls(
     model_type="densenet",
     model_class=DenseNet,
     default_config=_CFG_161,
+    params=26_472_000,
 )
 def densenet_161(pretrained: bool = False, **overrides: object) -> DenseNet:
     r"""DenseNet-161 feature-extracting backbone (no classification head).
 
-    Builds a :class:`DenseNet` with the paper-cited DenseNet-161
-    topology: per-block dense-layer counts ``(6, 12, 36, 24)``, growth
-    rate :math:`k = 48`, initial conv channels 96.  Approximately
-    28.7 M parameters — the widest of the ImageNet DenseNets.  Reaches
-    a top-1 ImageNet accuracy of 77.14% (torchvision weights).
+    Builds a :class:`DenseNet` with the DenseNet-161 topology: per-block
+    dense-layer counts ``(6, 12, 36, 24)``, growth rate :math:`k = 48`,
+    initial conv channels 96.  Approximately 28.7 M parameters — the
+    widest of the ImageNet DenseNets.  Reaches a top-1 ImageNet accuracy
+    of 77.14%.
+
+    This variant is *not* in Huang et al., CVPR 2017 — that paper's
+    Table 1 lists 121/169/201/264 at :math:`k = 32` only.  It comes from
+    the authors' own released Torch models, which the reference vision
+    library mirrors.
 
     Parameters
     ----------
@@ -511,6 +540,8 @@ def densenet_161(pretrained: bool = False, **overrides: object) -> DenseNet:
     >>> out.last_hidden_state.shape   # (B, 2208, 1, 1)
     (1, 2208, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("densenet_161", alternative="densenet_161_cls")
     return _b(_CFG_161, overrides)
 
 
@@ -520,6 +551,7 @@ def densenet_161(pretrained: bool = False, **overrides: object) -> DenseNet:
     model_type="densenet",
     model_class=DenseNetForImageClassification,
     default_config=_CFG_161,
+    params=28_681_000,
 )
 def densenet_161_cls(
     pretrained: bool | str = False,
@@ -530,11 +562,14 @@ def densenet_161_cls(
     r"""DenseNet-161 image classifier (backbone + GAP + linear head).
 
     Builds a :class:`DenseNetForImageClassification` with the
-    paper-cited DenseNet-161 topology (``k=48``, 96-channel stem) and a
+    DenseNet-161 topology (``k=48``, 96-channel stem) and a
     :class:`~lucid.nn.Linear` classifier projecting 2208 →
     ``config.num_classes``.  Approximately 28.7 M parameters; top-1
-    ImageNet accuracy 77.14% (torchvision weights) — the most accurate
-    of the four canonical DenseNets.
+    ImageNet accuracy 77.14% — the most accurate DenseNet shipped here.
+
+    The topology is *not* in Huang et al., CVPR 2017 (Table 1 lists
+    121/169/201/264 at :math:`k = 32`); it comes from the authors' own
+    released Torch models.
 
     Parameters
     ----------

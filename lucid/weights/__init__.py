@@ -19,7 +19,7 @@ Design
 Each architecture declares a :class:`WeightsEnum` (e.g.
 ``ResNet18Weights``) whose members are :class:`WeightEntry` manifests —
 one per tagged checkpoint (``IMAGENET1K_V1``, …) plus a ``DEFAULT``
-alias.  This mirrors the torchvision ``Weights`` enum so call sites are
+alias.  This mirrors the reference_vision ``Weights`` enum so call sites are
 familiar::
 
     import lucid.models as models
@@ -44,7 +44,7 @@ no circular import.  Crucially, :class:`WeightEntry` carries no model
 config — named factories already pin their own.
 
 Checkpoints are hosted on the Hugging Face Hub under the ``lucid-dl``
-org, converted from torchvision / timm / transformers sources by the
+org, converted from reference_vision / timm / transformers sources by the
 offline ``tools/convert_weights`` pipeline.
 """
 

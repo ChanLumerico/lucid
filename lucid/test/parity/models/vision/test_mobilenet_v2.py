@@ -1,6 +1,8 @@
 """MobileNet v2 parity tests (1.0 / 0.75 width vs timm mobilenetv2_*).
 
-v2-1.0 — parity verified.  v2-0.75 — positional shape mismatch (skips)."""
+Both widths align positionally; the 0.75 shape mismatch this file used to
+record is gone (mobilenet_v2_075 builds 1,355,424 parameters and its
+classifier 2,636,424, both matching the reference layer for layer)."""
 
 import pytest
 import lucid.models as M

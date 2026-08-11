@@ -2,7 +2,7 @@
 
 Paper: "Very Deep Convolutional Networks for Large-Scale Image Recognition"
 All variants share the same macro structure:
-  5 blocks of (N × Conv3×3 → ReLU [→ BN]) → MaxPool
+  5 blocks of (N × Conv3×3 [→ BN] → ReLU) → MaxPool
   → AdaptiveAvgPool(7×7)
   → FC(512*7*7, 4096) → ReLU → Dropout
   → FC(4096, 4096)   → ReLU → Dropout
@@ -17,6 +17,7 @@ from typing import ClassVar, cast, override
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -128,6 +129,12 @@ class VGG(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=i + 1, num_channels=ch, reduction=2 ** (i + 1))
             for i, ch in enumerate(_CHANNELS)
         ]
+
+        # Reference initialisation (He/MSRA fan-out convs, unit norms).
+        # Without this the family starts from Lucid's generic
+        # kaiming_uniform(a=sqrt(5)), a different distribution and gain
+        # than the one the paper's schedule is tuned for.
+        init_cnn_fan_out(self)
 
     @override
     @property

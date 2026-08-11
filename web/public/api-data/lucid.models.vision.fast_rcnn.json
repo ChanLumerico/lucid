@@ -3,7 +3,7 @@
   "name": "fast_rcnn",
   "path": "lucid.models.vision.fast_rcnn",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/fast_rcnn/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/fast_rcnn/__init__.py#L1",
   "members": [
     {
       "name": "FastRCNNConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "FastRCNNConfig(num_classes: int = 80, in_channels: int = 3, roi_size: int = 7, spatial_scale: float = 1.0 / 16.0, dropout: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 300)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/fast_rcnn/_config.py#L10",
+      "signature": "FastRCNNConfig(num_classes: int = 80, in_channels: int = 3, roi_size: int = 7, spatial_scale: float = 1.0 / 16.0, dropout: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), score_thresh: float = 0.05, nms_thresh: float = 0.3, max_detections: int = 300)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/fast_rcnn/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.fast_rcnn._config.FastRCNNConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 80, in_channels: int = 3, roi_size: int = 7, spatial_scale: float = 1.0 / 16.0, dropout: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 300)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/fast_rcnn/_config.py#L1",
+          "signature": "__init__(num_classes: int = 80, in_channels: int = 3, roi_size: int = 7, spatial_scale: float = 1.0 / 16.0, dropout: float = 0.5, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), score_thresh: float = 0.05, nms_thresh: float = 0.3, max_detections: int = 300)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/fast_rcnn/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -77,7 +77,7 @@
         {
           "name": "bbox_reg_weights",
           "annotation": "tuple[float, float, float, float]",
-          "description": "Per-component weight scaling for bbox regression\n              targets (tx, ty, tw, th).  Matches the paper's\n              normalisation by (0, 0, 0, 0) mean / (0.1, 0.1,\n              0.2, 0.2) std, encoded here as multiplicative\n              weights.",
+          "description": "Per-component weight scaling for bbox regression\n              targets (tx, ty, tw, th).  The paper states no\n              target normalisation; the (0, 0, 0, 0) mean /\n              (0.1, 0.1, 0.2, 0.2) std these weights invert\n              comes from the authors' released code\n              (`BBOX_NORMALIZE_STDS`), which every later\n              two-stage detector inherited.",
           "default": "(10.0, 10.0, 5.0, 5.0)"
         },
         {
@@ -90,7 +90,7 @@
           "name": "nms_thresh",
           "annotation": "float",
           "description": "Per-class NMS IoU threshold.",
-          "default": "0.5"
+          "default": "0.3"
         },
         {
           "name": "max_detections",
@@ -117,7 +117,7 @@
       ],
       "labels": [],
       "signature": "FastRCNNForObjectDetection(config: FastRCNNConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/fast_rcnn/_model.py#L169",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/fast_rcnn/_model.py#L176",
       "subcategory": "model",
       "methods": [
         {
@@ -126,7 +126,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: FastRCNNConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/fast_rcnn/_model.py#L257",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/fast_rcnn/_model.py#L264",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -148,7 +148,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, proposals: list[Tensor] | None = None, targets: list[dict[str, Tensor]] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/fast_rcnn/_model.py#L442",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/fast_rcnn/_model.py#L468",
           "subcategory": "model",
           "summary": "Run Fast R-CNN on a batch of images.",
           "extended": null,
@@ -189,7 +189,7 @@
           "kind": "function",
           "labels": [],
           "signature": "postprocess(output: ObjectDetectionOutput, proposals: list[Tensor])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/fast_rcnn/_model.py#L536",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/fast_rcnn/_model.py#L563",
           "subcategory": "model",
           "summary": "Apply per-class NMS to raw Fast R-CNN output.",
           "extended": null,
@@ -263,10 +263,10 @@
       "kind": "function",
       "labels": [],
       "signature": "fast_rcnn(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/fast_rcnn/_pretrained.py#L29",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/fast_rcnn/_pretrained.py#L31",
       "subcategory": "pretrained",
       "summary": "Fast R-CNN with VGG16 backbone (Girshick, ICCV 2015).",
-      "extended": "Builds a `FastRCNNForObjectDetection` with the paper-cited\nVGG16 topology: shared backbone applied once to the full image, then\n7x7 RoI Pool over the stride-16 feature map followed by two 4096-dim\nFC layers and sibling K+1 / 4K heads.  Approximately 138M parameters\n(most in the FC layers) and ~146x faster training than R-CNN while\nreaching the same VOC2007 mAP of 66.9% (paper Table 1).",
+      "extended": "Builds a `FastRCNNForObjectDetection` with the paper-cited\nVGG16 topology: shared backbone applied once to the full image, then\n7x7 RoI Pool over the stride-16 feature map followed by two 4096-dim\nFC layers and sibling K+1 / 4K heads.  Approximately 138M parameters\n(most in the FC layers).  Section 4.4 / Table 4 give **146x faster\ninference** than R-CNN for VGG16 (213x with truncated SVD); *training*\nis 9x faster, from 84 hours to 9.5.  Table 1 puts Fast R-CNN's VOC2007\nmAP at 66.9% against R-CNN BB's 66.0% — higher, not equal.",
       "parameters": [
         {
           "name": "pretrained",

@@ -63,11 +63,19 @@ class TestMaxViTBackbone(unittest.TestCase):
         self.assertIsInstance(out, BaseModelOutput)
 
     def test_non_divisible_spatial_dims(self) -> None:
-        """MaxViT must handle H,W not divisible by window_size via padding."""
-        # ws=8, after stage 2 downsampling spatial=28 (not divisible by 8)
-        x = lucid.randn(1, 3, 224, 224)
-        feat = self.model.forward_features(x)
-        self.assertEqual(feat.shape[0], 1)
+        """MaxViT must handle H,W not divisible by window_size via padding.
+
+        224 is divisible all the way down, so it never reaches the padding
+        branch — the input has to be chosen so a stage's feature map is not
+        a multiple of the window.  240/32 = 7.5, so the last stage lands on
+        an odd grid and the pad-then-crop path runs.
+        """
+        for size in (224, 240):
+            with self.subTest(size=size):
+                x = lucid.randn(1, 3, size, size)
+                feat = self.model.forward_features(x)
+                self.assertEqual(feat.shape[0], 1)
+                self.assertTrue(bool(feat.isfinite().all().item()))
 
 
 class TestMaxViTClassifier(unittest.TestCase):

@@ -8,8 +8,8 @@ from lucid.models.vision.pvt import (
     PVTConfig,
     PVT,
     PVTForImageClassification,
-    pvt_tiny,
-    pvt_tiny_cls,
+    pvt_v2_b1,
+    pvt_v2_b1_cls,
 )
 
 
@@ -23,7 +23,7 @@ class TestPVTConfig(unittest.TestCase):
 class TestPVTBackbone(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = pvt_tiny()
+        self.model = pvt_v2_b1()
         self.model.eval()
 
     def test_forward_features_shape(self) -> None:
@@ -42,7 +42,7 @@ class TestPVTBackbone(unittest.TestCase):
 class TestPVTClassifier(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = pvt_tiny_cls()
+        self.model = pvt_v2_b1_cls()
         self.model.eval()
 
     def test_logits_shape_1000(self) -> None:
@@ -72,11 +72,16 @@ class TestPVTRegistry(unittest.TestCase):
 
     def test_variants_registered(self) -> None:
         names = models.list_models(family="pvt")
-        self.assertIn("pvt_tiny", names)
-        self.assertIn("pvt_tiny_cls", names)
+        # ``pvt_tiny`` is deliberately absent: PVT-Tiny is a PVT *v1*
+        # variant (non-overlapping patch embed, per-stage position
+        # embedding, cls token), and this family implements only v2.  The
+        # name used to be registered as an alias for v2-B1, which is a
+        # different architecture with different published accuracy.
+        self.assertNotIn("pvt_tiny", names)
+        self.assertNotIn("pvt_tiny_cls", names)
 
     def test_create_model(self) -> None:
-        m = models.create_model("pvt_tiny")
+        m = models.create_model("pvt_v2_b1")
         self.assertIsInstance(m, PVT)
 
 

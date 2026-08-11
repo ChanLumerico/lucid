@@ -71,16 +71,25 @@ class TestGoogLeNetBackbone(unittest.TestCase):
         self.assertEqual([f.num_channels for f in fi], [480, 832, 1024])
         self.assertEqual([f.reduction for f in fi], [8, 16, 32])
 
-    def test_forward_features_shape_224(self) -> None:
+    def test_forward_features_matches_the_declared_reduction(self) -> None:
+        """``feature_info``'s last entry must describe what is returned.
+
+        The backbone used to end on ``AdaptiveAvgPool2d((1, 1))``, so it
+        returned a 1x1 map while declaring reduction=32 — and the earlier
+        stages it advertises were computed and discarded, unreachable by any
+        pyramid consumer.
+        """
         x = lucid.randn(1, 3, 224, 224)
         out = self.model.forward_features(x)
-        self.assertEqual(out.shape, (1, 1024, 1, 1))
+        last = self.model.feature_info[-1]
+        self.assertEqual(out.shape, (1, last.num_channels, 7, 7))
+        self.assertEqual(224 // int(out.shape[2]), last.reduction)
 
     def test_forward_returns_googlenet_output(self) -> None:
         x = lucid.randn(2, 3, 224, 224)
         out = self.model(x)
         self.assertIsInstance(out, GoogLeNetOutput)
-        self.assertEqual(out.logits.shape, (2, 1024, 1, 1))
+        self.assertEqual(out.logits.shape, (2, 1024, 7, 7))
         self.assertIsNone(out.aux_logits1)
         self.assertIsNone(out.aux_logits2)
 
@@ -206,7 +215,9 @@ class TestGoogLeNetWeightsEnums(unittest.TestCase):
         from lucid.models.weights import GoogLeNetWeights
 
         meta = GoogLeNetWeights.IMAGENET1K_V1.meta
-        self.assertEqual(meta["source"], "torchvision/GoogLeNet_Weights.IMAGENET1K_V1")
+        self.assertEqual(
+            meta["source"], "reference_vision/GoogLeNet_Weights.IMAGENET1K_V1"
+        )
         self.assertEqual(meta["num_params"], 13_004_888)
         self.assertEqual(meta["license"], "bsd-3-clause")
         self.assertAlmostEqual(meta["metrics"]["ImageNet-1k"]["acc@1"], 69.778)

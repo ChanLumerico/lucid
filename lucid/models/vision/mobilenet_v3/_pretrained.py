@@ -14,6 +14,7 @@ from lucid.models.vision.mobilenet_v3._weights import (
     MobileNetV3LargeWeights,
     MobileNetV3SmallWeights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_LARGE = MobileNetV3Config(variant="large")
 _CFG_SMALL = MobileNetV3Config(variant="small")
@@ -28,6 +29,7 @@ _CFG_SMALL = MobileNetV3Config(variant="small")
     model_type="mobilenet_v3",
     model_class=MobileNetV3,
     default_config=_CFG_LARGE,
+    params=2971952,
 )
 def mobilenet_v3_large(pretrained: bool = False, **overrides: object) -> MobileNetV3:
     r"""MobileNet-v3-Large feature-extracting backbone.
@@ -70,6 +72,10 @@ def mobilenet_v3_large(pretrained: bool = False, **overrides: object) -> MobileN
     >>> out.last_hidden_state.shape
     (1, 960, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "mobilenet_v3_large", alternative="mobilenet_v3_large_cls"
+        )
     cfg = (
         replace(_CFG_LARGE, **cast(dict[str, Any], overrides))
         if overrides
@@ -84,6 +90,7 @@ def mobilenet_v3_large(pretrained: bool = False, **overrides: object) -> MobileN
     model_type="mobilenet_v3",
     model_class=MobileNetV3,
     default_config=_CFG_SMALL,
+    params=927008,
 )
 def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileNetV3:
     r"""MobileNet-v3-Small feature-extracting backbone.
@@ -92,8 +99,9 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
     topology from Howard et al., 2019 (Table 2): 11 inverted-residual
     bottleneck blocks with selective SE attention and aggressive
     hard-swish usage from the very first stage, followed by a 1×1
-    expansion to 576 channels.  Approximately 2.9M parameters and
-    67.4% ImageNet-1k top-1 accuracy (Table 3) — the lower-latency
+    expansion to 576 channels.  927k parameters headless (2.5M with
+    the classification head, which is Table 3's figure) and 67.4%
+    ImageNet-1k top-1 accuracy (Table 3) — the lower-latency
     variant of the family, targeting tight mobile budgets.
 
     Parameters
@@ -126,6 +134,10 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
     >>> out.last_hidden_state.shape
     (1, 576, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "mobilenet_v3_small", alternative="mobilenet_v3_small_cls"
+        )
     cfg = (
         replace(_CFG_SMALL, **cast(dict[str, Any], overrides))
         if overrides
@@ -146,6 +158,7 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
     model_type="mobilenet_v3",
     model_class=MobileNetV3ForImageClassification,
     default_config=_CFG_LARGE,
+    params=5483032,
 )
 def mobilenet_v3_large_cls(
     pretrained: bool | str = False,
@@ -187,7 +200,7 @@ def mobilenet_v3_large_cls(
     -----
     See Howard et al., "Searching for MobileNetV3", ICCV 2019
     (arXiv:1905.02244), Table 1 and Table 3.  Pretrained weights are
-    converted from torchvision's ``MobileNet_V3_Large_Weights`` and
+    converted from reference_vision's ``MobileNet_V3_Large_Weights`` and
     hosted on the Hugging Face Hub under ``lucid-dl/mobilenet-v3-large``.
 
     Examples
@@ -227,6 +240,7 @@ def mobilenet_v3_large_cls(
     model_type="mobilenet_v3",
     model_class=MobileNetV3ForImageClassification,
     default_config=_CFG_SMALL,
+    params=2542856,
 )
 def mobilenet_v3_small_cls(
     pretrained: bool | str = False,
@@ -238,8 +252,8 @@ def mobilenet_v3_small_cls(
 
     Builds a :class:`MobileNetV3ForImageClassification` with the
     Small topology (Howard et al., 2019) plus the redesigned
-    inverted classification head.  Approximately 2.9M parameters
-    and 67.4% ImageNet-1k top-1 accuracy (Table 3) — the
+    inverted classification head.  2.5M parameters, matching
+    Table 3, and 67.4% ImageNet-1k top-1 accuracy — the
     latency-focused variant of the family.
 
     Parameters
@@ -267,7 +281,7 @@ def mobilenet_v3_small_cls(
     -----
     See Howard et al., "Searching for MobileNetV3", ICCV 2019
     (arXiv:1905.02244), Table 2 and Table 3.  Pretrained weights are
-    converted from torchvision's ``MobileNet_V3_Small_Weights`` and
+    converted from reference_vision's ``MobileNet_V3_Small_Weights`` and
     hosted on the Hugging Face Hub under ``lucid-dl/mobilenet-v3-small``.
 
     Examples

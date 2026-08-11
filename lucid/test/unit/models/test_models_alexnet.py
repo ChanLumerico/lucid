@@ -171,7 +171,9 @@ class TestAlexNetWeightsEnum(unittest.TestCase):
 
     def test_meta_keys(self) -> None:
         meta = AlexNetWeights.IMAGENET1K_V1.meta
-        self.assertEqual(meta["source"], "torchvision/AlexNet_Weights.IMAGENET1K_V1")
+        self.assertEqual(
+            meta["source"], "reference_vision/AlexNet_Weights.IMAGENET1K_V1"
+        )
         self.assertEqual(meta["num_params"], 61_100_840)
         self.assertIn("ImageNet-1k", meta["metrics"])
 

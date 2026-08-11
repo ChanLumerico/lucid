@@ -111,6 +111,15 @@ class MaskRCNNConfig(ModelConfig):
         nms_thresh:      Per-class NMS IoU threshold.
         max_detections:  Maximum detections returned per image.
         mask_thresh:     Binarisation threshold applied to mask sigmoid output.
+
+    .. note::
+
+       **Inference only.**  §3's multi-task objective — ``L = L_cls +
+       L_box + L_mask``, with ``L_mask`` the per-pixel sigmoid BCE on the
+       ground-truth class's mask channel and targets from RoI-aligning
+       the ground-truth masks onto positive proposals — is unimplemented,
+       as is the proposal assignment it needs.  ``forward`` returns no
+       loss.  Use this family to run a trained detector, not to train one.
     """
 
     model_type: ClassVar[str] = "mask_rcnn"
@@ -131,6 +140,11 @@ class MaskRCNNConfig(ModelConfig):
     rpn_nms_thresh: float = 0.7
     rpn_min_size: float = 1e-3
     rpn_score_thresh: float = 0.0
+    # NOTE: the four assignment thresholds below are declared but INERT.
+    # They describe the label-assignment rule, which lives entirely in the
+    # training path -- and this family has no training path yet, so nothing
+    # reads them.  Rather than let a caller believe a value took effect,
+    # __post_init__ refuses any non-default setting.
     rpn_fg_iou_thresh: float = 0.7
     rpn_bg_iou_thresh: float = 0.3
 
@@ -161,3 +175,22 @@ class MaskRCNNConfig(ModelConfig):
         object.__setattr__(self, "rpn_anchor_sizes", tuple(self.rpn_anchor_sizes))
         object.__setattr__(self, "rpn_anchor_ratios", tuple(self.rpn_anchor_ratios))
         object.__setattr__(self, "bbox_reg_weights", tuple(self.bbox_reg_weights))
+
+        # Refuse silently-ignored assignment thresholds, as the Faster R-CNN
+        # sibling does.  Accepting a value nothing reads is worse than
+        # refusing it: the caller walks away believing the model was
+        # configured.
+        inert = {
+            "rpn_fg_iou_thresh": 0.7,
+            "rpn_bg_iou_thresh": 0.3,
+            "roi_fg_iou_thresh": 0.5,
+            "roi_bg_iou_thresh": 0.5,
+        }
+        for field_name, default in inert.items():
+            if getattr(self, field_name) != default:
+                raise ValueError(
+                    f"{field_name} is not implemented: Mask R-CNN's label "
+                    "assignment lives in the training path, which this family "
+                    f"does not have yet, so {field_name} would be ignored. "
+                    f"Leave it at its documented default ({default})."
+                )

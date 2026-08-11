@@ -165,7 +165,10 @@ class TestBERTForQuestionAnswering:
         starts = lucid.tensor([1, 3]).long()
         ends = lucid.tensor([4, 5]).long()
         out = m(ids, attn, tt, start_positions=starts, end_positions=ends)
-        assert tuple(out.logits.shape) == (2, 8, 2)
+        # Start and end scores arrive as named fields rather than fused into
+        # a trailing size-2 axis the caller has to remember the order of.
+        assert tuple(out.start_logits.shape) == (2, 8)
+        assert tuple(out.end_logits.shape) == (2, 8)
         assert out.loss is not None
 
 

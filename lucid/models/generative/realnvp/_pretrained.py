@@ -31,6 +31,7 @@ from lucid.models.generative.realnvp._model import (
     RealNVPForImageGeneration,
     RealNVPModel,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # Paper §4.1 — CIFAR-10: 8 residual blocks, 64 feature maps, one downscale.
 _CFG_CIFAR = RealNVPConfig(
@@ -139,6 +140,8 @@ def realnvp_cifar(pretrained: bool = False, **overrides: object) -> RealNVPModel
     >>> model.bits_per_dim(x).shape
     (1,)
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_cifar")
     return RealNVPModel(_apply(_CFG_CIFAR, overrides))
 
 
@@ -183,6 +186,8 @@ def realnvp_imagenet32(pretrained: bool = False, **overrides: object) -> RealNVP
     >>> model.config.num_scales
     4
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_imagenet32")
     return RealNVPModel(_apply(_CFG_IMAGENET32, overrides))
 
 
@@ -226,6 +231,8 @@ def realnvp_imagenet64(pretrained: bool = False, **overrides: object) -> RealNVP
     >>> model.input_dim
     12288
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_imagenet64")
     return RealNVPModel(_apply(_CFG_IMAGENET64, overrides))
 
 
@@ -272,6 +279,8 @@ def realnvp_lsun(pretrained: bool = False, **overrides: object) -> RealNVPModel:
     >>> model.config.residual_blocks
     2
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_lsun")
     return RealNVPModel(_apply(_CFG_LSUN, overrides))
 
 
@@ -316,6 +325,8 @@ def realnvp_celeba(pretrained: bool = False, **overrides: object) -> RealNVPMode
     >>> model.prior
     'gaussian'
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_celeba")
     return RealNVPModel(_apply(_CFG_CELEBA, overrides))
 
 
@@ -364,6 +375,8 @@ def realnvp_cifar_gen(
     >>> model.generate(n_samples=2).samples.shape
     (2, 3, 32, 32)
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_cifar_gen")
     return RealNVPForImageGeneration(_apply(_CFG_CIFAR, overrides))
 
 
@@ -408,6 +421,8 @@ def realnvp_imagenet32_gen(
     >>> model.generate(n_samples=2).samples.shape
     (2, 3, 32, 32)
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_imagenet32_gen")
     return RealNVPForImageGeneration(_apply(_CFG_IMAGENET32, overrides))
 
 
@@ -452,6 +467,8 @@ def realnvp_imagenet64_gen(
     >>> model.generate(n_samples=1).samples.shape
     (1, 3, 64, 64)
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_imagenet64_gen")
     return RealNVPForImageGeneration(_apply(_CFG_IMAGENET64, overrides))
 
 
@@ -496,6 +513,8 @@ def realnvp_lsun_gen(
     >>> model.generate(n_samples=1).samples.shape
     (1, 3, 64, 64)
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_lsun_gen")
     return RealNVPForImageGeneration(_apply(_CFG_LSUN, overrides))
 
 
@@ -544,4 +563,6 @@ def realnvp_celeba_gen(
     >>> model.generate(n_samples=1).samples.shape
     (1, 3, 64, 64)
     """
+    if pretrained:
+        reject_unavailable_pretrained("realnvp_celeba_gen")
     return RealNVPForImageGeneration(_apply(_CFG_CELEBA, overrides))

@@ -69,7 +69,11 @@ class DDPMScheduler(DiffusionScheduler):
 
     Reverse process:
         ``x_{t-1} = (1/√α_t) · (x_t - (β_t / √(1-ᾱ_t)) · ε̂_θ(x_t, t)) + σ_t · z``
-        where ``σ_t² = β_t`` (Algorithm 2, "fixed_small" variance choice).
+        where ``σ_t² = β_t`` (Algorithm 2).  Section 3.2 offers two choices;
+    this is the *upper* bound — ``fixedlarge`` in the official code, and
+    what ``run_cifar.py`` sets.  The lower bound
+    ``σ_t² = β̃_t = (1 - ᾱ_{t-1}) / (1 - ᾱ_t) · β_t`` is the one other
+    libraries call "fixed_small".
 
     Args:
         num_train_timesteps: Length of forward process ``T``.
@@ -96,6 +100,7 @@ class DDPMScheduler(DiffusionScheduler):
         beta_end: float = 0.02,
         beta_schedule: str = "linear",
         prediction_type: str = "epsilon",
+        clip_denoised: bool = True,
     ) -> None:
         if prediction_type not in ("epsilon", "sample"):
             raise ValueError(
@@ -104,6 +109,7 @@ class DDPMScheduler(DiffusionScheduler):
             )
         self.num_train_timesteps = num_train_timesteps
         self.prediction_type = prediction_type
+        self.clip_denoised = clip_denoised
         self.beta_schedule = beta_schedule
         self.beta_start = beta_start
         self.beta_end = beta_end
@@ -127,6 +133,11 @@ class DDPMScheduler(DiffusionScheduler):
 
         # Inference schedule defaults to the full training one.
         self.timesteps = lucid.arange(num_train_timesteps - 1, -1, -1).long()
+        # Spacing between consecutive entries of ``self.timesteps``.  ``step()``
+        # needs it: with a sub-sampled schedule the previous timestep is
+        # ``t - step_ratio``, not ``t - 1``, and the per-step α/β must be the
+        # ratio across that whole interval.
+        self._step_ratio = 1
 
     @override
     def set_timesteps(self, num_inference_steps: int, *, device: str = "cpu") -> None:
@@ -141,10 +152,17 @@ class DDPMScheduler(DiffusionScheduler):
                 f"num_train_timesteps ({self.num_train_timesteps})"
             )
         step = self.num_train_timesteps // num_inference_steps
-        idx = [
-            self.num_train_timesteps - 1 - i * step for i in range(num_inference_steps)
-        ]
+        # Anchor the grid at 0 and count *up* by ``step``, then reverse:
+        # [(n-1)·step, …, step, 0].  Anchoring at T-1 instead leaves the last
+        # entry at ``T-1 - (n-1)·step``, which is only 0 when ``n`` divides
+        # ``T``; otherwise the chain stops at some t > 0 and hands back a
+        # sample that is still noisy — and, because ``prev_t`` is then >= 0,
+        # adds one more σ·z on the way out.  Ending at exactly 0 makes the
+        # final step noiseless for every ``n``, which is Algorithm 2 line 3
+        # ("z = 0 if t == 1").
+        idx = [i * step for i in range(num_inference_steps)][::-1]
         self.timesteps = lucid.tensor(idx, device=device).long()
+        self._step_ratio = step
 
     @override
     def add_noise(self, original: Tensor, noise: Tensor, timesteps: Tensor) -> Tensor:
@@ -185,9 +203,18 @@ class DDPMScheduler(DiffusionScheduler):
             ``x_{t-1}`` (still noisy except at ``t == 0``, where mean only).
         """
         t = timestep
-        beta_t = float(self.betas[t].item())
-        alpha_t = float(self.alphas[t].item())
+        # The previous entry of the *inference* schedule, which is ``t - 1``
+        # only when the schedule is the untouched training one.  Under
+        # sub-sampling the reverse step spans ``step_ratio`` training steps, so
+        # α and β for the step are the cumulative-product ratio across the whole
+        # interval — using ``self.alphas[t]`` / ``self.betas[t]`` there would
+        # under-denoise by the stride factor and return near-pure noise.
+        prev_t = t - self._step_ratio
         ab_t = float(self.alphas_cumprod[t].item())
+        ab_prev = float(self.alphas_cumprod[prev_t].item()) if prev_t >= 0 else 1.0
+
+        alpha_t = ab_t / ab_prev
+        beta_t = 1.0 - alpha_t
 
         if self.prediction_type == "epsilon":
             # x_0 reconstruction from predicted noise.
@@ -195,16 +222,17 @@ class DDPMScheduler(DiffusionScheduler):
         else:  # "sample"
             x0_pred = model_output
 
+        if self.clip_denoised:
+            # DDPM samples live in [-1, 1]; without this the 1/sqrt(ᾱ_t) factor
+            # (≈157 at t=999) lets an early x̂₀ blow the chain up.
+            x0_pred = lucid.clip(x0_pred, -1.0, 1.0)
+
         # Posterior mean q(x_{t-1} | x_t, x_0).
-        if t > 0:
-            ab_prev = float(self.alphas_cumprod[t - 1].item())
-        else:
-            ab_prev = 1.0
         coef_x0 = (ab_prev**0.5) * beta_t / (1.0 - ab_t)
         coef_xt = (alpha_t**0.5) * (1.0 - ab_prev) / (1.0 - ab_t)
         mean: Tensor = coef_x0 * x0_pred + coef_xt * sample
 
-        if t == 0:
+        if prev_t < 0:
             return mean
         # Add Gaussian noise scaled by posterior variance σ_t² = β_t (fixed-small).
         sigma = beta_t**0.5

@@ -21,6 +21,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -109,9 +110,13 @@ class _Attention(nn.Module):
         Output projection mapping ``dim`` -> ``dim``.
     attn_drop : nn.Dropout
         Dropout on attention weights.
+    proj_drop : nn.Dropout
+        Dropout on the output projection (Appendix B.1).
     """
 
-    def __init__(self, dim: int, num_heads: int, attn_drop: float) -> None:
+    def __init__(
+        self, dim: int, num_heads: int, attn_drop: float, proj_drop: float = 0.0
+    ) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
@@ -121,6 +126,7 @@ class _Attention(nn.Module):
         self.qkv = nn.Linear(dim, 3 * dim, bias=True)
         self.proj = nn.Linear(dim, dim, bias=True)
         self.attn_drop = nn.Dropout(p=attn_drop)
+        self.proj_drop = nn.Dropout(p=proj_drop)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -150,7 +156,10 @@ class _Attention(nn.Module):
 
         # (B, H, N, D) → (B, N, H*D) = (B, N, C)
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)
-        return cast(Tensor, self.proj(out))
+        # Appendix B.1: "Dropout, when used, is applied after every dense layer
+        # except for the qkv-projections".  The output projection is such a
+        # layer, and all three references drop on it before the residual add.
+        return cast(Tensor, self.proj_drop(cast(Tensor, self.proj(out))))
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +265,9 @@ class _ViTBlock(nn.Module):
     ) -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(dim, eps=eps)
-        self.attn = _Attention(dim, num_heads, attn_drop=attention_dropout)
+        self.attn = _Attention(
+            dim, num_heads, attn_drop=attention_dropout, proj_drop=dropout
+        )
         self.norm2 = nn.LayerNorm(dim, eps=eps)
         self.mlp = _MLP(dim, mlp_dim, dropout)
 
@@ -418,9 +429,16 @@ class ViT(PretrainedModel, BackboneMixin):
         self.blocks = blocks
         self.norm = norm
         self._num_patches = num_patches
+        self._classifier = config.classifier
         self._feature_info = [
             FeatureInfo(stage=1, num_channels=config.dim, reduction=config.patch_size),
         ]
+
+        # Reference initialisation: trunc_normal_(0.02) on Linear / patch-embed
+        # convs with zero bias, unit LayerNorms, and the same draw for the
+        # class token and positional table (bare Parameters the framework
+        # default never touches — they were sitting at exact zeros).
+        init_transformer_trunc_normal(self)
 
     @override
     @property
@@ -437,13 +455,26 @@ class ViT(PretrainedModel, BackboneMixin):
         for blk in self.blocks:
             x = cast(Tensor, blk(x))
         x = cast(Tensor, self.norm(x))
-        return x[:, 0]  # CLS token: (B, dim)
+        return _pool(x, self._classifier)
 
     @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         # Unsqueeze to (B, 1, dim) so BaseModelOutput is spatially consistent
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
+
+
+def _pool(x: Tensor, classifier: str) -> Tensor:
+    """Reduce ``(B, N+1, dim)`` tokens to the ``(B, dim)`` head input.
+
+    ``"token"`` takes the CLS token, which sits at index 0.  ``"gap"``
+    averages the *patch* tokens only — the CLS token is excluded, as in the
+    official implementation, since under global pooling it carries no
+    supervised signal.
+    """
+    if classifier == "gap":
+        return x[:, 1:].mean(dim=1)
+    return x[:, 0]
 
 
 # ---------------------------------------------------------------------------
@@ -543,8 +574,38 @@ class ViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.pos_drop = drop
         self.blocks = blocks
         self.norm = norm
+        self._classifier = config.classifier
+        # §3.1's pre-training head: Linear(dim -> representation_size) + tanh,
+        # then the classifier.  ``None`` (the default, and what every released
+        # checkpoint uses) leaves the module out entirely so those state-dicts
+        # still load key-for-key.
+        head_in = config.dim
+        if config.representation_size is not None:
+            self.pre_logits: nn.Module = nn.Sequential(
+                nn.Linear(config.dim, config.representation_size), nn.Tanh()
+            )
+            head_in = config.representation_size
+        else:
+            self.pre_logits = nn.Identity()
         # Named ``head`` to match timm's vit_base_patch16_224 state-dict keys.
-        self.head = nn.Linear(config.dim, config.num_classes)
+        self.head = nn.Linear(head_in, config.num_classes)
+        # Section 3.1: the fine-tuning head is a *zero-initialised* D x K
+        # layer, and the zoo these checkpoints come from zeroes both weight
+        # and bias.  Lucid's generic kaiming_uniform(a=sqrt(5)) head starts
+        # every class logit at a random offset instead of at zero.
+        nn.init.zeros_(self.head.weight)
+        if self.head.bias is not None:
+            nn.init.zeros_(self.head.bias)
+
+    @override
+    def reset_classifier(self, num_classes: int) -> None:
+        """Replace the classification head with a freshly initialised one.
+
+        ViT keeps the reference's ``head`` attribute name so checkpoints port
+        directly, which means the mixin's default — which looks for
+        ``self.classifier`` — cannot find it and raised ``AttributeError``.
+        """
+        self.head = nn.Linear(self.head.in_features, num_classes)
 
     @override
     def forward(  # type: ignore[override]
@@ -560,7 +621,8 @@ class ViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         for blk in self.blocks:
             x = cast(Tensor, blk(x))
         x = cast(Tensor, self.norm(x))
-        logits = cast(Tensor, self.head(x[:, 0]))
+        feat = cast(Tensor, self.pre_logits(_pool(x, self._classifier)))
+        logits = cast(Tensor, self.head(feat))
 
         loss: Tensor | None = None
         if labels is not None:

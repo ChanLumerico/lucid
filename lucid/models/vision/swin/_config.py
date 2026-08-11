@@ -106,9 +106,11 @@ class SwinConfig(ModelConfig):
         to ``0.0``.
     drop_path_rate : float, optional
         Stochastic-depth maximum rate; linearly scheduled across all
-        blocks of the trunk (Liu et al., 2021, Appendix A).  The paper
-        uses ``0.2`` for Swin-T and ``0.3`` for Swin-S/B/L.  Defaults to
-        ``0.0``.
+        blocks of the trunk.  Appendix A2.1 gives ``0.2`` / ``0.3`` /
+        ``0.5`` for Swin-T / Swin-S / Swin-B on ImageNet-1k.  It gives no
+        from-scratch rate for Swin-L, which the paper only ever
+        pre-trains on ImageNet-22k (that fine-tune stage uses ``0.1``).
+        Defaults to ``0.0``.
 
     Attributes
     ----------

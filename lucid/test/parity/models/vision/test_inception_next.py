@@ -1,6 +1,8 @@
 """InceptionNeXt parity tests (Tiny vs timm inception_next_tiny).
 
-Slow tier.  100%% key mismatch — a key_transform is needed."""
+Slow tier.  The key map is the identity — the spec carries no
+``key_transform`` and the converter performs no rewrites — so no key
+mismatch is expected."""
 
 import pytest
 import lucid.models as M

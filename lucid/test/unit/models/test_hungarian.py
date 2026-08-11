@@ -9,6 +9,10 @@ this test module — production code never imports it.
 import random
 import unittest
 
+import lucid
+from lucid._tensor.tensor import Tensor
+from lucid.models.vision.detr._model import _hungarian_match
+
 import pytest
 
 # Skip the whole module if scipy isn't available (it's optional [test] extra)
@@ -116,6 +120,103 @@ class TestHungarianCorrectness(unittest.TestCase):
             _total_cost(cost, ref),
             places=4,
         )
+
+
+class TestDETRMatcher(unittest.TestCase):
+    """Pin DETR's matcher itself, not just the LAP solver underneath it.
+
+    ``solve_assignment`` is exercised above; what is DETR-specific — the
+    1/5/2 cost weighting, the (pred, gt) return order, and which query a
+    given ground-truth object claims — lives in ``_hungarian_match``.
+    """
+
+    @staticmethod
+    def _case() -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        """Two GT objects, three queries, with the answer built in.
+
+        Query 0 is placed exactly on GT 1 and confidently predicts its
+        class; query 2 is placed exactly on GT 0.  Query 1 is a decoy far
+        from both.  The only sane assignment is 0->1 and 2->0.
+        """
+        # 3 queries, 2 foreground classes + no-object
+        pred_logits = lucid.tensor(
+            [
+                [0.0, 8.0, 0.0],  # query 0 — confident class 1
+                [0.0, 0.0, 8.0],  # query 1 — confident no-object
+                [8.0, 0.0, 0.0],  # query 2 — confident class 0
+            ]
+        )
+        pred_boxes = lucid.tensor(
+            [
+                [0.70, 0.70, 0.20, 0.20],  # on GT 1
+                [0.10, 0.90, 0.05, 0.05],  # decoy
+                [0.25, 0.25, 0.30, 0.30],  # on GT 0
+            ]
+        )
+        gt_labels = lucid.tensor([0, 1]).long()
+        gt_boxes = lucid.tensor([[0.25, 0.25, 0.30, 0.30], [0.70, 0.70, 0.20, 0.20]])
+        return pred_logits, pred_boxes, gt_labels, gt_boxes
+
+    def test_returns_pred_then_gt_and_pairs_correctly(self) -> None:
+        pred_logits, pred_boxes, gt_labels, gt_boxes = self._case()
+        pred_idx, gt_idx = _hungarian_match(
+            pred_logits, pred_boxes, gt_labels, gt_boxes
+        )
+        # Order of the returned tuple is (pred, gt) — swapping them would
+        # still typecheck and still have length 2, so pin the pairing, which
+        # is the only thing that distinguishes them.  Query 2 sits on GT 0
+        # and query 0 sits on GT 1.
+        self.assertEqual(list(zip(pred_idx, gt_idx)), [(2, 0), (0, 1)])
+        # Rows of the cost matrix are ground truths, so pairs arrive in
+        # ascending GT order — not ascending query order.
+        self.assertEqual(gt_idx, sorted(gt_idx))
+
+    def test_no_ground_truth_matches_nothing(self) -> None:
+        pred_logits, pred_boxes, _, _ = self._case()
+        pred_idx, gt_idx = _hungarian_match(
+            pred_logits,
+            pred_boxes,
+            lucid.tensor([]).long(),
+            lucid.zeros(0, 4),
+        )
+        self.assertEqual((pred_idx, gt_idx), ([], []))
+
+    def test_cost_weights_are_one_five_two(self) -> None:
+        """The box terms outweigh the class term at DETR's default weights.
+
+        Query 1 is given the winning class logits for GT 0 but a box far
+        from it; query 2 keeps the right box and the wrong class.  With
+        cost_l1=5 and cost_giou=2 against cost_cls=1, geometry decides and
+        GT 0 goes to query 2.  Re-weighting so classification dominates
+        flips it — which is what makes this a test of the weights and not
+        just of the solver.
+        """
+        pred_logits = lucid.tensor([[0.0, 0.0, 8.0], [8.0, 0.0, 0.0], [0.0, 8.0, 0.0]])
+        pred_boxes = lucid.tensor(
+            [
+                [0.90, 0.90, 0.05, 0.05],
+                [0.10, 0.90, 0.05, 0.05],  # right class, wrong place
+                [0.25, 0.25, 0.30, 0.30],  # wrong class, right place
+            ]
+        )
+        gt_labels = lucid.tensor([0]).long()
+        gt_boxes = lucid.tensor([[0.25, 0.25, 0.30, 0.30]])
+
+        pred_idx, gt_idx = _hungarian_match(
+            pred_logits, pred_boxes, gt_labels, gt_boxes
+        )
+        self.assertEqual((pred_idx, gt_idx), ([2], [0]))
+
+        flipped_pred, flipped_gt = _hungarian_match(
+            pred_logits,
+            pred_boxes,
+            gt_labels,
+            gt_boxes,
+            cost_cls=100.0,
+            cost_l1=1.0,
+            cost_giou=0.0,
+        )
+        self.assertEqual((flipped_pred, flipped_gt), ([1], [0]))
 
 
 if __name__ == "__main__":

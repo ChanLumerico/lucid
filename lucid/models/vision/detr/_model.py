@@ -281,10 +281,17 @@ class _DETREncoderLayer(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
 
     @override
-    def forward(self, src: Tensor, pos: Tensor | None) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self,
+        src: Tensor,
+        pos: Tensor | None,
+        key_padding_mask: Tensor | None = None,
+    ) -> Tensor:
         q = _with_pos(src, pos)
         k = q
-        src2 = self.self_attn(q, k, value=src, need_weights=False)[0]
+        src2 = self.self_attn(
+            q, k, value=src, key_padding_mask=key_padding_mask, need_weights=False
+        )[0]
         src = cast(Tensor, self.norm1(src + cast(Tensor, self.dropout1(src2))))
         src2 = cast(
             Tensor,
@@ -326,6 +333,7 @@ class _DETRDecoderLayer(nn.Module):
         memory: Tensor,
         pos: Tensor | None,
         query_pos: Tensor | None,
+        memory_key_padding_mask: Tensor | None = None,
     ) -> Tensor:
         q = _with_pos(tgt, query_pos)
         k = q
@@ -335,6 +343,7 @@ class _DETRDecoderLayer(nn.Module):
             _with_pos(tgt, query_pos),
             _with_pos(memory, pos),
             value=memory,
+            key_padding_mask=memory_key_padding_mask,
             need_weights=False,
         )[0]
         tgt = cast(Tensor, self.norm2(tgt + cast(Tensor, self.dropout2(tgt2))))
@@ -361,10 +370,17 @@ class _DETREncoder(nn.Module):
         )
 
     @override
-    def forward(self, src: Tensor, pos: Tensor | None) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self,
+        src: Tensor,
+        pos: Tensor | None,
+        key_padding_mask: Tensor | None = None,
+    ) -> Tensor:
         output = src
         for layer in self.layers:
-            output = cast(Tensor, layer(output, pos=pos))
+            output = cast(
+                Tensor, layer(output, pos=pos, key_padding_mask=key_padding_mask)
+            )
         return output
 
 
@@ -372,8 +388,13 @@ class _DETREncoder(nn.Module):
 class _DETRDecoder(nn.Module):
     """Stack of decoder layers + a final ``norm`` (LayerNorm).
 
-    For inference only the last (norm-applied) decoder output matters, so
-    this returns the single final activation (no intermediate stack).
+    Inference needs only the last (norm-applied) activation, but training
+    needs every layer: the paper's auxiliary decoding losses apply the
+    prediction heads and the full set loss after each decoder layer, which
+    is what makes the intermediate layers learn to predict rather than
+    merely to pass features along.  ``return_intermediate`` selects between
+    the two; the final element of the stack is identical to what the
+    single-output path returns, so inference is unaffected either way.
     """
 
     def __init__(
@@ -392,11 +413,32 @@ class _DETRDecoder(nn.Module):
         memory: Tensor,
         pos: Tensor | None,
         query_pos: Tensor | None,
+        memory_key_padding_mask: Tensor | None = None,
+        return_intermediate: bool = False,
     ) -> Tensor:
         output = tgt
+        intermediate: list[Tensor] = []
         for layer in self.layers:
-            output = cast(Tensor, layer(output, memory, pos=pos, query_pos=query_pos))
-        return cast(Tensor, self.norm(output))
+            output = cast(
+                Tensor,
+                layer(
+                    output,
+                    memory,
+                    pos=pos,
+                    query_pos=query_pos,
+                    memory_key_padding_mask=memory_key_padding_mask,
+                ),
+            )
+            if return_intermediate:
+                intermediate.append(cast(Tensor, self.norm(output)))
+
+        normed = cast(Tensor, self.norm(output))
+        if not return_intermediate:
+            return normed
+        # The reference replaces the last collected entry with the same
+        # normalised output, so element -1 is exactly the single-output path.
+        intermediate[-1] = normed
+        return lucid.stack(intermediate, dim=0)  # (L, N, B, c)
 
 
 @final
@@ -427,10 +469,30 @@ class _DETRTransformer(nn.Module):
         self.decoder = _DETRDecoder(
             d_model, n_head, dim_feedforward, dropout, num_decoder_layers
         )
+        self._reset_parameters()
+
+    def _reset_parameters(self) -> None:
+        """Xavier-uniform every multi-dimensional parameter.
+
+        The reference transformer ends its constructor with exactly this
+        sweep, which overrides the per-module defaults across all twelve
+        encoder and decoder layers.  Without it the attention and
+        feed-forward weights keep Lucid's ``kaiming_uniform(a=sqrt(5))``,
+        a different distribution and gain from the one DETR's very long
+        schedule was tuned against.
+        """
+        for p in self.parameters():
+            if len(p.shape) > 1:
+                nn.init.xavier_uniform_(p)
 
     @override
     def forward(  # type: ignore[override]
-        self, src: Tensor, pos_embed: Tensor, query_embed: Tensor
+        self,
+        src: Tensor,
+        pos_embed: Tensor,
+        query_embed: Tensor,
+        key_padding_mask: Tensor | None = None,
+        return_intermediate: bool = False,
     ) -> Tensor:
         B = int(src.shape[0])
         c = int(src.shape[1])
@@ -444,10 +506,22 @@ class _DETRTransformer(nn.Module):
         query_pos = query_embed.unsqueeze(1).repeat(1, B, 1)
         tgt = lucid.zeros(query_pos.shape, device=src.device.type)
 
-        memory = cast(Tensor, self.encoder(src_flat, pos_flat))
+        memory = cast(
+            Tensor, self.encoder(src_flat, pos_flat, key_padding_mask=key_padding_mask)
+        )
         hs = cast(
-            Tensor, self.decoder(tgt, memory, pos=pos_flat, query_pos=query_pos)
-        )  # (N, B, c)
+            Tensor,
+            self.decoder(
+                tgt,
+                memory,
+                pos=pos_flat,
+                query_pos=query_pos,
+                memory_key_padding_mask=key_padding_mask,
+                return_intermediate=return_intermediate,
+            ),
+        )  # (N, B, c) or (L, N, B, c)
+        if return_intermediate:
+            return hs.permute(0, 2, 1, 3)  # (L, B, N, c)
         return hs.permute(1, 0, 2)  # (B, N, c)
 
 
@@ -496,7 +570,11 @@ def _hungarian_match(
     (O(N²M) greedy augmenting-path variant — N is small, typically 100).
 
     Returns:
-        (pred_indices, gt_indices) — matched pairs, in ascending pred order.
+        (pred_indices, gt_indices) — matched pairs, ``pred_indices[i]``
+        paired with ``gt_indices[i]``.  The cost matrix is built with
+        ground truths as rows, so the pairs come back in ascending *GT*
+        order; ``pred_indices`` is not sorted.  Callers zip the two, so
+        the order carries no meaning beyond the pairing.
     """
     N = int(pred_logits.shape[0])
     M = int(gt_labels.shape[0])
@@ -680,13 +758,26 @@ class DETRForObjectDetection(PretrainedModel):
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
+        pixel_mask: Tensor | None = None,
     ) -> ObjectDetectionOutput:
         """Run DETR.
 
         Args:
             x:       (B, C, H, W) image batch.
+            pixel_mask: Optional ``(B, H, W)`` bool/float mask, True on real
+                pixels and False on padding.  Supply it whenever images were
+                letter-boxed onto a common canvas, so queries do not attend to
+                the padded region.
             targets: Optional training targets (list of dicts with
-                     "boxes" (xyxy normalised) and "labels").
+                     "boxes" and "labels").  Divergence, deliberate:
+                     ``boxes`` are **xyxy** normalised to [0, 1], while
+                     the reference criterion takes cxcywh.  Lucid's other
+                     detection families all take xyxy targets, so DETR
+                     matches its siblings rather than its paper's code
+                     and converts internally for the L1 term — feeding
+                     cxcywh here trains against the wrong corners
+                     silently.  Ported reference training loops must
+                     convert their targets first.
 
         Returns:
             ``ObjectDetectionOutput``:
@@ -711,9 +802,36 @@ class DETRForObjectDetection(PretrainedModel):
 
         # 3. Transformer — returns (B, N, d)
         queries: Tensor = cast(Tensor, self.query_embed.weight)  # (N, d)
-        hs_bn = cast(Tensor, self.transformer(feat, pos_embed, queries))  # (B, N, d)
+        # The shipped eval preset pads every image onto a 1333x1333 canvas, so
+        # without a key-padding mask each query attends to zero padding as if it
+        # were image content.  ``pixel_mask`` is True on real pixels; it is
+        # nearest-down-sampled to the feature grid and flattened to (B, H*W).
+        kpm: Tensor | None = None
+        if pixel_mask is not None:
+            m = pixel_mask.to(feat.dtype)
+            if m.ndim == 3:
+                m = m.unsqueeze(1)
+            m = F.interpolate(m, size=(fH, fW), mode="nearest")
+            kpm = m.reshape(B, fH * fW) < 0.5  # True marks positions to ignore
 
-        # 4. Prediction heads
+        # Auxiliary decoding losses need every decoder layer, so the stack is
+        # only requested when it will actually be used.
+        want_aux = targets is not None and self._cfg.aux_loss
+        hs_out = cast(
+            Tensor,
+            self.transformer(
+                feat,
+                pos_embed,
+                queries,
+                key_padding_mask=kpm,
+                return_intermediate=want_aux,
+            ),
+        )  # (B, N, d), or (L, B, N, d) when want_aux
+
+        # 4. Prediction heads.  The heads are shared across decoder layers, as
+        # in the reference — the auxiliary losses supervise the same weights
+        # at every depth rather than adding per-layer heads.
+        hs_bn = hs_out[-1] if want_aux else hs_out
         logits: Tensor = cast(Tensor, self.class_embed(hs_bn))  # (B, N, K+1)
         pred_boxes: Tensor = F.sigmoid(
             cast(Tensor, self.bbox_embed(hs_bn))
@@ -723,6 +841,17 @@ class DETRForObjectDetection(PretrainedModel):
         loss: Tensor | None = None
         if targets is not None:
             loss = self._set_loss(logits, pred_boxes, targets, (iH, iW))
+            if want_aux:
+                # Every layer but the last, weighted identically to the final
+                # one — the reference simply sums the per-layer set losses.
+                n_layers = int(hs_out.shape[0])
+                for li in range(n_layers - 1):
+                    h_l = hs_out[li]
+                    aux_logits = cast(Tensor, self.class_embed(h_l))
+                    aux_boxes = F.sigmoid(cast(Tensor, self.bbox_embed(h_l)))
+                    loss = loss + self._set_loss(
+                        aux_logits, aux_boxes, targets, (iH, iW)
+                    )
 
         return ObjectDetectionOutput(
             logits=logits,
@@ -748,8 +877,12 @@ class DETRForObjectDetection(PretrainedModel):
         cls_losses: list[Tensor] = []
         l1_losses: list[Tensor] = []
         giou_losses: list[Tensor] = []
+        cls_num = 0.0  # sum of the selected CE weights, the reference denominator
+        num_boxes = 0  # batch-wide GT box count, the box-loss denominator
 
         bg_weight = 0.1  # down-weight "no object" in CE loss
+        # No-object occupies the last of the ``num_classes + 1`` logit columns.
+        bg_index = int(logits.shape[-1]) - 1
 
         for b in range(B):
             lg_b = logits[b]  # (N, K+1)
@@ -763,9 +896,22 @@ class DETRForObjectDetection(PretrainedModel):
             gt_boxes_cxcywh = box_xyxy_to_cxcywh(gt_boxes_xyxy)  # (M, 4)
 
             if M == 0:
-                # All queries should predict background
-                bg_tgt = lucid.zeros((N,))
-                cls_losses.append(F.cross_entropy(lg_b, bg_tgt, reduction="mean"))
+                # All queries should predict no-object.  That class is the LAST
+                # logit column (index ``num_classes``), matching the reference
+                # layout the shipped COCO checkpoint was trained with — index 0
+                # is a real foreground class, not background.
+                # The reference has no special case here: every query's target
+                # is the no-object class and ``empty_weight[-1] = eos_coef``
+                # applies to all of them.  An unweighted mean gave these queries
+                # full weight 1.0, i.e. 10x the weight an unmatched query gets
+                # in any image that *does* contain objects.
+                log_sm_e = F.log_softmax(lg_b, dim=-1)
+                ce_e = lucid.cat(
+                    [(-log_sm_e[n, bg_index] * bg_weight).reshape(1) for n in range(N)],
+                    dim=0,
+                )
+                cls_num += float(N) * bg_weight
+                cls_losses.append(ce_e.sum())
                 continue
 
             # Hungarian matching
@@ -779,8 +925,11 @@ class DETRForObjectDetection(PretrainedModel):
                 cost_giou=2.0,
             )
 
-            # Build per-query target labels (unmatched → background = 0)
-            cls_targets_data: list[int] = [0] * N
+            # Build per-query target labels (unmatched → no-object, the LAST
+            # column).  Foreground labels are used as-is: they are 0-indexed and
+            # address columns 0..num_classes-1 directly, which is what the
+            # matcher above already assumes.
+            cls_targets_data: list[int] = [bg_index] * N
             for pi, gi in zip(pred_idx, gt_idx):
                 cls_targets_data[pi] = int(gt_labels[gi].item())
 
@@ -789,7 +938,6 @@ class DETRForObjectDetection(PretrainedModel):
             for pi in pred_idx:
                 weight_data[pi] = 1.0
 
-            lucid.tensor(cls_targets_data)
             weight = lucid.tensor(weight_data)
 
             # Weighted CE (per-sample weight)
@@ -798,50 +946,65 @@ class DETRForObjectDetection(PretrainedModel):
             for n in range(N):
                 c = cls_targets_data[n]
                 ce_per_n.append(-log_sm[n, c] * weight[n])
-            cls_losses.append(lucid.cat([l.reshape(1) for l in ce_per_n]).mean())
+            # ``cross_entropy(..., weight=w)`` with reduction='mean' divides by
+            # ``sum_i w[target_i]``, not by N.  Accumulate the numerator and the
+            # weight sum separately so the batch-level division matches.
+            cls_num += float(sum(weight_data))
+            cls_losses.append(lucid.cat([l.reshape(1) for l in ce_per_n]).sum())
 
             if not pred_idx:
                 continue
 
-            # L1 loss on matched pairs
-            pred_matched_data = [
-                [float(pb_b[pi, d].item()) for d in range(4)] for pi in pred_idx
-            ]
+            # L1 loss on matched pairs.  The *predictions* have to be gathered
+            # by slicing: reading them out with ``.item()`` and rebuilding a
+            # tensor detaches the box head, and the 5·L1 + 2·GIoU terms would
+            # keep appearing in the reported loss while contributing no
+            # gradient at all.  The ground truth is a constant, so building it
+            # from floats is fine.
+            pred_matched = lucid.cat(
+                [pb_b[pi : pi + 1, :] for pi in pred_idx], dim=0
+            )  # (P, 4)
             gt_matched_data = [
                 [float(gt_boxes_cxcywh[gi, d].item()) for d in range(4)]
                 for gi in gt_idx
             ]
-            pred_matched = lucid.tensor(pred_matched_data)  # (P, 4)
             gt_matched = lucid.tensor(gt_matched_data)  # (P, 4)
-            l1_losses.append(lucid.abs(pred_matched - gt_matched).mean())
+            # sum over the 4 coordinates; the /num_boxes division happens
+            # once at batch level, not per image and not over coordinates.
+            l1_losses.append(lucid.abs(pred_matched - gt_matched).sum())
+            num_boxes += len(pred_idx)
 
-            # GIoU loss on matched pairs
+            # GIoU loss on matched pairs — the diagonal has to stay in the
+            # graph for the same reason.
             pred_xyxy = box_cxcywh_to_xyxy(pred_matched)  # (P, 4)
             gt_xyxy = box_cxcywh_to_xyxy(gt_matched)  # (P, 4)
             giou_mat = generalized_box_iou(pred_xyxy, gt_xyxy)  # (P, P)
-            giou_diag_data: list[float] = [
-                float(giou_mat[i, i].item()) for i in range(len(pred_idx))
-            ]
-            giou_diag = lucid.tensor(giou_diag_data)
-            giou_losses.append((1.0 - giou_diag).mean())
+            giou_diag = lucid.cat(
+                [giou_mat[i, i].reshape(1) for i in range(len(pred_idx))], dim=0
+            )
+            giou_losses.append((1.0 - giou_diag).sum())
 
+        denom_cls = max(cls_num, 1.0)
+        denom_box = float(max(num_boxes, 1))
         cls_l = (
-            lucid.cat([l.reshape(1) for l in cls_losses]).mean()
+            lucid.cat([l.reshape(1) for l in cls_losses]).sum() / denom_cls
             if cls_losses
-            else lucid.zeros((1,))
+            else lucid.zeros(())
         )
         l1_l = (
-            lucid.cat([l.reshape(1) for l in l1_losses]).mean()
+            lucid.cat([l.reshape(1) for l in l1_losses]).sum() / denom_box
             if l1_losses
-            else lucid.zeros((1,))
+            else lucid.zeros(())
         )
         giou_l = (
-            lucid.cat([l.reshape(1) for l in giou_losses]).mean()
+            lucid.cat([l.reshape(1) for l in giou_losses]).sum() / denom_box
             if giou_losses
-            else lucid.zeros((1,))
+            else lucid.zeros(())
         )
 
-        return 1.0 * cls_l + 5.0 * l1_l + 2.0 * giou_l
+        # Scalar in every branch — the zero fallbacks used to return shape (1,),
+        # so a batch with no boxes produced a differently-shaped loss.
+        return (1.0 * cls_l + 5.0 * l1_l + 2.0 * giou_l).reshape(())
 
     # ------------------------------------------------------------------
     # Post-processing
@@ -878,11 +1041,14 @@ class DETRForObjectDetection(PretrainedModel):
             keep_labels: list[Tensor] = []
 
             for n in range(N):
-                # Best non-background class
+                # Best foreground class.  No-object is the LAST column, so the
+                # foreground columns are 0..K-1 and their index *is* the label —
+                # treating column 0 as background would drop one real class and
+                # shift every reported id by one against the shipped checkpoint.
                 best_cls = 0
                 best_sc = -1.0
-                K_plus_1 = int(probs.shape[1])
-                for c in range(1, K_plus_1):
+                num_fg = int(probs.shape[1]) - 1
+                for c in range(num_fg):
                     sc = float(probs[n, c].item())
                     if sc > best_sc:
                         best_sc = sc

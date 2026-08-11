@@ -8,6 +8,7 @@ from lucid.models.vision.attention_unet._config import AttentionUNetConfig
 from lucid.models.vision.attention_unet._model import (
     AttentionUNetForSemanticSegmentation,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_BASE = AttentionUNetConfig(
     num_classes=2,
@@ -86,4 +87,6 @@ def attention_unet(
     >>> out.logits.shape
     (1, 4, 256, 256)
     """
+    if pretrained:
+        reject_unavailable_pretrained("attention_unet")
     return _build(_CFG_BASE, overrides)

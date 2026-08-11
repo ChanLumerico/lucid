@@ -1,12 +1,12 @@
 """Pretrained-weight declarations for the FCN family.
 
 Both paper-cited variants (Long et al., CVPR 2015) ship COCO-with-VOC
-semantic-segmentation checkpoints converted from torchvision:
+semantic-segmentation checkpoints converted from reference_vision:
 :class:`FCNResNet50Weights` and :class:`FCNResNet101Weights`.
 
 Each checkpoint is the 21-class (20 Pascal-VOC categories + background)
 segmenter trained on the COCO-val2017 images filtered to the VOC label
-set, using the torchvision segmentation eval pipeline: shorter-side 520
+set, using the reference_vision segmentation eval pipeline: shorter-side 520
 resize / bilinear interpolation / ImageNet normalisation, with masks
 riding along the geometric stages (the
 :class:`~lucid.utils.transforms.Segmentation` preset).
@@ -15,14 +15,16 @@ riding along the geometric stages (the
 from lucid.utils.transforms import Segmentation
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-_PRESET = Segmentation(crop_size=520, resize_size=520)
+# Reference ``FCN_ResNet{50,101}_Weights.COCO_WITH_VOC_LABELS_V1`` uses
+# ``SemanticSegmentation(resize_size=520)`` — a resize, no centre crop.
+_PRESET = Segmentation(crop_size=None, resize_size=520)
 
 
 @register_weights("fcn_resnet50")
 class FCNResNet50Weights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.fcn_resnet50`.
 
-    Single COCO-with-VOC-labels checkpoint converted from torchvision's
+    Single COCO-with-VOC-labels checkpoint converted from reference_vision's
     ``FCN_ResNet50_Weights.COCO_WITH_VOC_LABELS_V1`` (Long et al., 2015;
     ~35.3M params, 60.5 mIoU / 91.4 pixel acc).
     """
@@ -35,7 +37,7 @@ class FCNResNet50Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "COCO_WITH_VOC_LABELS_V1",
-            "source": "torchvision/FCN_ResNet50_Weights.COCO_WITH_VOC_LABELS_V1",
+            "source": "reference_vision/FCN_ResNet50_Weights.COCO_WITH_VOC_LABELS_V1",
             "license": "bsd-3-clause",
             "num_params": 35_322_218,
             "metrics": {"COCO-val2017-VOC-labels": {"mIoU": 60.5, "pixel acc": 91.4}},
@@ -48,7 +50,7 @@ class FCNResNet50Weights(WeightsEnum):
 class FCNResNet101Weights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.fcn_resnet101`.
 
-    Single COCO-with-VOC-labels checkpoint converted from torchvision's
+    Single COCO-with-VOC-labels checkpoint converted from reference_vision's
     ``FCN_ResNet101_Weights.COCO_WITH_VOC_LABELS_V1`` (Long et al., 2015;
     ~54.3M params, 63.7 mIoU / 91.9 pixel acc).
     """
@@ -61,7 +63,7 @@ class FCNResNet101Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "COCO_WITH_VOC_LABELS_V1",
-            "source": "torchvision/FCN_ResNet101_Weights.COCO_WITH_VOC_LABELS_V1",
+            "source": "reference_vision/FCN_ResNet101_Weights.COCO_WITH_VOC_LABELS_V1",
             "license": "bsd-3-clause",
             "num_params": 54_314_346,
             "metrics": {"COCO-val2017-VOC-labels": {"mIoU": 63.7, "pixel acc": 91.9}},

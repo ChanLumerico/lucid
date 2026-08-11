@@ -69,3 +69,13 @@ class VGGConfig(ModelConfig):
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "arch", tuple(self.arch))
+        # The paper fixes the macro topology at five conv blocks with widths
+        # (64, 128, 256, 512, 512), and ``_build_features`` zips ``arch``
+        # against that fixed 5-tuple.  A longer arch silently lost its tail
+        # blocks; a shorter one built a truncated net that only failed later,
+        # inside the classifier, with an unrelated-looking shape error.
+        if len(self.arch) != 5:
+            raise ValueError(
+                f"arch must have exactly 5 entries, one per conv block, got "
+                f"{len(self.arch)}: {self.arch!r}"
+            )

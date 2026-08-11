@@ -73,6 +73,10 @@ class ResNeXtConfig(ModelConfig):
     cardinality: int = 32
     width_per_group: int = 4
     dropout: float = 0.0
+    # Zero the last BN gamma of every bottleneck so each residual branch
+    # starts as an identity — the sibling ResNet config exposes the same
+    # switch, and this family's blocks have the identical ``bn3`` slot.
+    zero_init_residual: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "layers", tuple(self.layers))

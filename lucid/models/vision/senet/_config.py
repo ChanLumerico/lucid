@@ -85,6 +85,19 @@ class SENetConfig(ModelConfig):
     reduction: int = 16
     block_type: str = "bottleneck"
     legacy_pool: bool = False
+    # Original Caffe SENet bottleneck: stride on the 1x1 conv1, not the 3x3
+    # conv2.  The 101/152 checkpoints come from that lineage; the 50 comes
+    # from a modern v1.5 retrain, so this cannot be a global switch.
+    legacy_stride: bool = False
+    # Zero the last BN gamma of every residual branch (bn3 on bottlenecks,
+    # bn2 on basic blocks), as the sibling ResNet config already offers.  The
+    # shipped se_resnet_50 checkpoint was itself trained with it enabled.
+    zero_init_residual: bool = False
+    # Dropout before the classifier.  The reference's legacy SENet class
+    # defaults to 0.2 and its ``legacy_seresnet*`` entrypoints inherit that;
+    # the original authors' own port passed no dropout for the se_resnet
+    # line, so this defaults to 0.0 and is opt-in.
+    dropout: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "layers", tuple(self.layers))

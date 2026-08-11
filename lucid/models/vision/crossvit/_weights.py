@@ -20,12 +20,12 @@ _PRESET = ImageClassification(crop_size=240, resize_size=274, interpolation="bic
 class CrossViTTinyWeights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.crossvit_tiny_cls`.
 
-    Chen et al. ICCV 2021 dual-branch ViT (7.0 M params, top-1 72.6%).
+    Chen et al. ICCV 2021 dual-branch ViT (7.0 M params, top-1 73.4%).
 
     Attributes
     ----------
     IN1K : WeightEntry
-        ImageNet-1k checkpoint (top-1 72.6%), sourced from
+        ImageNet-1k checkpoint (top-1 73.4%), sourced from
         ``timm/crossvit_tiny_240.in1k``.
     DEFAULT : WeightEntry
         Alias for :attr:`IN1K`.
@@ -51,8 +51,8 @@ class CrossViTTinyWeights(WeightsEnum):
             "tag": "IN1K",
             "source": "timm/crossvit_tiny_240.in1k",
             "license": "apache-2.0",
-            "num_params": 7_010_400,
-            "metrics": {"ImageNet-1k": {"acc@1": 72.6}},
+            "num_params": 7_014_800,
+            "metrics": {"ImageNet-1k": {"acc@1": 73.4}},
         },
     )
     DEFAULT = IN1K
@@ -93,7 +93,7 @@ class CrossViTSmallWeights(WeightsEnum):
             "tag": "IN1K",
             "source": "timm/crossvit_small_240.in1k",
             "license": "apache-2.0",
-            "num_params": 26_855_192,
+            "num_params": 26_856_272,
             "metrics": {"ImageNet-1k": {"acc@1": 81.0}},
         },
     )
@@ -135,7 +135,7 @@ class CrossViTBaseWeights(WeightsEnum):
             "tag": "IN1K",
             "source": "timm/crossvit_base_240.in1k",
             "license": "apache-2.0",
-            "num_params": 105_028_344,
+            "num_params": 105_025_232,
             "metrics": {"ImageNet-1k": {"acc@1": 82.2}},
         },
     )
@@ -177,7 +177,7 @@ class CrossViT9Weights(WeightsEnum):
             "tag": "IN1K",
             "source": "timm/crossvit_9_240.in1k",
             "license": "apache-2.0",
-            "num_params": 8_553_600,
+            "num_params": 8_553_296,
             "metrics": {"ImageNet-1k": {"acc@1": 73.9}},
         },
     )
@@ -219,7 +219,7 @@ class CrossViT15Weights(WeightsEnum):
             "tag": "IN1K",
             "source": "timm/crossvit_15_240.in1k",
             "license": "apache-2.0",
-            "num_params": 27_528_120,
+            "num_params": 27_528_464,
             "metrics": {"ImageNet-1k": {"acc@1": 81.5}},
         },
     )
@@ -261,7 +261,7 @@ class CrossViT18Weights(WeightsEnum):
             "tag": "IN1K",
             "source": "timm/crossvit_18_240.in1k",
             "license": "apache-2.0",
-            "num_params": 43_270_648,
+            "num_params": 43_271_408,
             "metrics": {"ImageNet-1k": {"acc@1": 82.5}},
         },
     )

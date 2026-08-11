@@ -301,7 +301,7 @@ def test_fcn_weights_entry_fields() -> None:
         assert f"lucid-dl/{slug}" in e.url
         assert "/COCO_WITH_VOC_LABELS_V1/" in e.url
         meta = cls.COCO_WITH_VOC_LABELS_V1.meta
-        assert meta["source"] == f"torchvision/{src}.COCO_WITH_VOC_LABELS_V1"
+        assert meta["source"] == f"reference_vision/{src}.COCO_WITH_VOC_LABELS_V1"
         assert meta["license"] == "bsd-3-clause"
         assert meta["num_params"] == nparams
         assert meta["metrics"]["COCO-val2017-VOC-labels"]["mIoU"] == miou
@@ -312,7 +312,13 @@ def test_fcn_weights_segmentation_preset() -> None:
         tf = cls.COCO_WITH_VOC_LABELS_V1.transforms()
         d = tf.to_dict()
         assert d["preprocessor_type"] == "Segmentation"
-        assert d["init_kwargs"]["crop_size"] == 520
+        # The reference SemanticSegmentation preset only resizes the shortest
+        # side — it does NOT centre-crop.  Cropping to 520x520 discarded ~a
+        # quarter of every non-square image (a 500x375 VOC frame becomes
+        # 693x520 and then loses 173 columns), so the advertised mIoU was
+        # unreachable.  ``crop_size is None`` is the resize-only pipeline.
+        assert d["init_kwargs"]["crop_size"] is None
+        assert d["init_kwargs"]["resize_size"] == 520
 
 
 def test_fcn_weights_registry_discoverable() -> None:
@@ -425,7 +431,7 @@ _MASK2FORMER_SHIPPED = (
         "mask2former_swin_tiny",
         "mask2former-swin-tiny-ade",
         "facebook/mask2former-swin-tiny-ade-semantic",
-        47_441_169,
+        47_468_596,  # built + empty_weight + rel-pos index buffers
         47.7,
     ),
     (
@@ -440,7 +446,7 @@ _MASK2FORMER_SHIPPED = (
         "mask2former-swin-base-ade",
         "facebook/mask2former-swin-base-ade-semantic",
         107_420_006,
-        53.9,
+        52.4,  # MODEL_ZOO.md Swin-B; 53.9 is the IN21k row
     ),
     (
         "mask2former_swin_large",
@@ -489,11 +495,23 @@ class TestMask2FormerWeightsEnums:
             assert meta["metrics"]["ADE20K"]["mIoU"] == miou
 
     def test_segmentation_preset(self) -> None:
+        # The upstream processor is configured with an explicit
+        # size={"height": 384, "width": 384}, so it resizes straight to
+        # 384x384 with no crop -- hence stretch, and crop_size unset.
         for cls in _mask2former_enums():
             tf = cls.ADE20K.transforms()
             d = tf.to_dict()
             assert d["preprocessor_type"] == "Segmentation"
-            assert d["init_kwargs"]["crop_size"] == 384
+            assert d["init_kwargs"]["resize_size"] == 384
+            assert d["init_kwargs"]["stretch"] is True
+            assert d["init_kwargs"]["crop_size"] is None
+
+    def test_preset_output_is_exactly_384_square(self) -> None:
+        import lucid
+
+        for cls in _mask2former_enums():
+            out = cls.ADE20K.transforms()(lucid.rand(3, 500, 375))
+            assert tuple(out.shape)[1:] == (384, 384)
 
     def test_registry_discoverable(self) -> None:
         from lucid.weights import list_pretrained

@@ -90,6 +90,14 @@ class _MBConvBlock(nn.Module):
         expand_ratio: int,
         se_ratio: float,
         drop_connect_rate: float,
+        # Section 5.2 / the official TPU builder use TF's batch-norm
+        # constants: decay 0.99 (momentum 0.01 in this convention) and
+        # epsilon 1e-3.  The B0-B4 checkpoints Lucid ships were converted
+        # from the reference port, which kept the framework defaults, so
+        # those are the defaults here -- ``bn_eps`` / ``bn_momentum`` on the
+        # config let a caller ask for the paper's constants instead.
+        bn_eps: float = 1e-5,
+        bn_momentum: float = 0.1,
     ) -> None:
         super().__init__()
         self._has_residual = (stride == 1) and (in_channels == out_channels)
@@ -102,7 +110,7 @@ class _MBConvBlock(nn.Module):
         if expand_ratio != 1:
             layers += [
                 nn.Conv2d(in_channels, expanded, 1, bias=False),
-                nn.BatchNorm2d(expanded),
+                nn.BatchNorm2d(expanded, eps=bn_eps, momentum=bn_momentum),
                 nn.SiLU(inplace=True),
             ]
         # Depthwise
@@ -116,23 +124,32 @@ class _MBConvBlock(nn.Module):
                 groups=expanded,
                 bias=False,
             ),
-            nn.BatchNorm2d(expanded),
+            nn.BatchNorm2d(expanded, eps=bn_eps, momentum=bn_momentum),
             nn.SiLU(inplace=True),
         ]
         self.conv = nn.Sequential(*layers)
 
-        # SE
-        se_channels = max(1, int(in_channels * se_ratio))
-        self.se = _SEBlock(expanded, se_channels)
+        # SE — the reference gates the block on ``0 < se_ratio <= 1`` and
+        # omits it entirely otherwise.  ``max(1, ...)`` floored the reduction
+        # width at 1, so ``se_ratio=0`` still built an SE that gated every
+        # activation through a single scalar-per-image sigmoid — the opposite
+        # of disabling it.
+        self.se: nn.Module | None
+        if 0.0 < se_ratio <= 1.0:
+            se_channels = max(1, int(in_channels * se_ratio))
+            self.se = _SEBlock(expanded, se_channels)
+        else:
+            self.se = None
 
         # Projection
         self.project_conv = nn.Conv2d(expanded, out_channels, 1, bias=False)
-        self.project_bn = nn.BatchNorm2d(out_channels)
+        self.project_bn = nn.BatchNorm2d(out_channels, eps=bn_eps, momentum=bn_momentum)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out = cast(Tensor, self.conv(x))
-        out = cast(Tensor, self.se(out))
+        if self.se is not None:
+            out = cast(Tensor, self.se(out))
         out = cast(Tensor, self.project_bn(cast(Tensor, self.project_conv(out))))
         if self._has_residual:
             # Stochastic depth (Tan & Le 2019 §3.3) — applied only when the
@@ -174,8 +191,15 @@ def _build_features(cfg: EfficientNetConfig) -> tuple[nn.Sequential, int]:
 
     stem_ch = _round_channels(32, w)
     stem = [
+        # Divergence, deliberate: the official TPU implementation builds
+        # every conv with TF 'SAME' padding, which for a stride-2 even input
+        # pads one more row/column on the bottom-right than the top-left and
+        # so shifts the sampling grid by a pixel.  The reference reproduces
+        # that only under its ``tf_efficientnet_*`` entrypoints; the
+        # checkpoints this family loads come from the symmetric-padding
+        # entrypoints, so symmetric padding is what makes them correct here.
         nn.Conv2d(cfg.in_channels, stem_ch, 3, stride=2, padding=1, bias=False),
-        nn.BatchNorm2d(stem_ch),
+        nn.BatchNorm2d(stem_ch, eps=cfg.bn_eps, momentum=cfg.bn_momentum),
         nn.SiLU(inplace=True),
     ]
 
@@ -190,7 +214,11 @@ def _build_features(cfg: EfficientNetConfig) -> tuple[nn.Sequential, int]:
         out_ch = _round_channels(base_out, w)
         n = _round_layers(base_n, d)
         for i in range(n):
-            dc = cfg.drop_connect_rate * block_idx / max(1, total_blocks - 1)
+            # Every reference divides by ``total_blocks``, not
+            # ``total_blocks - 1``: the schedule is meant to *approach* the
+            # configured rate over the trunk, not reach it at the last block.
+            # Dividing by N-1 made every non-zero block ~6.7% over on B0.
+            dc = cfg.drop_connect_rate * block_idx / max(1, total_blocks)
             layers.append(
                 _MBConvBlock(
                     in_ch,
@@ -200,6 +228,8 @@ def _build_features(cfg: EfficientNetConfig) -> tuple[nn.Sequential, int]:
                     expand_ratio=expand,
                     se_ratio=cfg.se_ratio,
                     drop_connect_rate=dc,
+                    bn_eps=cfg.bn_eps,
+                    bn_momentum=cfg.bn_momentum,
                 )
             )
             in_ch = out_ch
@@ -208,7 +238,7 @@ def _build_features(cfg: EfficientNetConfig) -> tuple[nn.Sequential, int]:
     head_ch = _round_channels(1280, w)
     layers += [
         nn.Conv2d(in_ch, head_ch, 1, bias=False),
-        nn.BatchNorm2d(head_ch),
+        nn.BatchNorm2d(head_ch, eps=cfg.bn_eps, momentum=cfg.bn_momentum),
         nn.SiLU(inplace=True),
     ]
     return nn.Sequential(*layers), head_ch
@@ -307,7 +337,9 @@ class EfficientNet(PretrainedModel, BackboneMixin):
         self._num_features = num_features
 
         w = config.width_mult
-        cumulative = 1
+        # Stem is a stride-2 conv — count it, or every reduction comes out a
+        # factor of two too small.
+        cumulative = 2
         fi: list[FeatureInfo] = []
         for i, (_, _, base_out, _, stride, _) in enumerate(_BASE_SPECS):
             cumulative *= stride

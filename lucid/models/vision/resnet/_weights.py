@@ -29,7 +29,7 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 _PRESET = ImageClassification(crop_size=224, resize_size=256)
 
 
-@register_weights("resnet_18")
+@register_weights("resnet_18_cls")
 class ResNet18Weights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.resnet_18_cls`.
 
@@ -42,7 +42,7 @@ class ResNet18Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 69.758% / top-5 89.078%),
-        sourced from ``torchvision/ResNet18_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/ResNet18_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -64,7 +64,7 @@ class ResNet18Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ResNet18_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/ResNet18_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             # Full provenance (training recipe URL etc.) lives in the
             # Hub config.json; kept out of runtime source per H5.
@@ -87,7 +87,7 @@ class ResNet34Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 73.314% / top-5 91.420%),
-        sourced from ``torchvision/ResNet34_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/ResNet34_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -109,7 +109,7 @@ class ResNet34Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ResNet34_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/ResNet34_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 21_797_672,
             "gflops": 3.664,
@@ -129,7 +129,7 @@ class ResNet50Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 76.130% / top-5 92.862%),
-        sourced from ``torchvision/ResNet50_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/ResNet50_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -151,7 +151,7 @@ class ResNet50Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ResNet50_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/ResNet50_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 25_557_032,
             "gflops": 4.089,
@@ -171,7 +171,7 @@ class ResNet101Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 77.374% / top-5 93.546%),
-        sourced from ``torchvision/ResNet101_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/ResNet101_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -193,7 +193,7 @@ class ResNet101Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ResNet101_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/ResNet101_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 44_549_160,
             "gflops": 7.801,
@@ -213,7 +213,7 @@ class ResNet152Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 78.312% / top-5 94.046%),
-        sourced from ``torchvision/ResNet152_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/ResNet152_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -235,7 +235,7 @@ class ResNet152Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ResNet152_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/ResNet152_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 60_192_808,
             "gflops": 11.514,
@@ -256,7 +256,7 @@ class WideResNet50Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 78.468% / top-5 94.086%),
-        sourced from ``torchvision/Wide_ResNet50_2_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/Wide_ResNet50_2_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -278,7 +278,7 @@ class WideResNet50Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/Wide_ResNet50_2_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/Wide_ResNet50_2_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 68_883_240,
             "gflops": 11.398,
@@ -299,7 +299,7 @@ class WideResNet101Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 78.848% / top-5 94.284%),
-        sourced from ``torchvision/Wide_ResNet101_2_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/Wide_ResNet101_2_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -321,7 +321,7 @@ class WideResNet101Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/Wide_ResNet101_2_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/Wide_ResNet101_2_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 126_886_696,
             "gflops": 22.753,

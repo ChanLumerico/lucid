@@ -36,7 +36,13 @@ from lucid.models.vision.mobilenet._config import MobileNetV1Config
 
 
 def _dw_pw(in_ch: int, out_ch: int, stride: int) -> nn.Sequential:
-    """Depthwise + pointwise block with BN and ReLU6."""
+    """Depthwise + pointwise block with BN and ReLU6.
+
+    Section 3.1 of the paper says plain ReLU; both canonical references
+    (TF-Slim's ``mobilenet_v1_arg_scope`` and timm's ``_gen_mobilenet_v1``)
+    use ReLU6, and the converted checkpoint was trained with it, so ReLU6
+    is what is built here.
+    """
     return nn.Sequential(
         # Depthwise
         nn.Conv2d(in_ch, in_ch, 3, stride=stride, padding=1, groups=in_ch, bias=False),
@@ -149,7 +155,9 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
     where :math:`\mathrm{DW}_{3\times3}` is the per-channel
     :math:`3 \times 3` spatial filter (``groups=in_channels``),
     :math:`\mathrm{PW}` is the :math:`1 \times 1` channel-mixing
-    convolution, and :math:`\sigma` is ReLU.  The width multiplier
+    convolution, and :math:`\sigma` is ReLU6 (see ``_dw_pw`` for why the
+    references diverge from the paper's plain ReLU here).  The width
+    multiplier
     :math:`\alpha \in (0, 1]` uniformly scales every channel count
     so that the same architecture can target sub-mW edge devices
     (:math:`\alpha = 0.25`) up to full desktop deployment
@@ -205,7 +213,12 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
     @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.features(x))
-        return cast(Tensor, self.avgpool(x))
+        # ``feature_info`` describes the pre-pool pyramid, and the mixin
+        # documents this as returning the deepest stage's *feature map*.
+        # Pooling here collapsed it to 1x1, so the declared reduction was
+        # wrong by the input size and no consumer could reach a spatial map.
+        # The classifier applies its own pooling.
+        return x
 
     @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]

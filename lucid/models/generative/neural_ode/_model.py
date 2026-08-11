@@ -27,6 +27,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import GenerationOutput, NormalizingFlowOutput
 from lucid.models._utils._generative import (
+    resolve_generation_device,
     exact_divergence,
     flow_prior_log_prob,
     flow_prior_sample,
@@ -81,6 +82,50 @@ class _GatedBlock(nn.Module):
         # batch — three elementwise ops in place of two matrix products.
         gate = lucid.sigmoid(self.gate_weight * t + self.gate_bias)
         return cast(Tensor, self.linear(z)) * gate + self.shift_weight * t
+
+
+@final
+class _PlanarField(nn.Module):
+    r"""Paper eq. (9) + (10): a gated sum of planar units.
+
+    Equation 9 gives one unit as
+    :math:`\mathbf{u}\, h(\mathbf{w}^{\top}\mathbf{z} + b)` — note the
+    nonlinearity takes a *scalar*.  Equation 10 sums :math:`M` of them,
+    each scaled by its own time gate :math:`\sigma_n(t) \in (0, 1)`:
+
+    .. math::
+
+        \frac{d\mathbf{z}}{dt}
+            = \sum_{n=1}^{M} \sigma_n(t)\,
+              \mathbf{u}_n\, h(\mathbf{w}_n^{\top}\mathbf{z} + b_n).
+
+    The whole layer is two matrix products against ``(M, D)`` parameter
+    blocks, so the ``M`` units cost one GEMM rather than ``M`` of them.
+    Following the authors' ``examples/cnf.py``, the units are averaged
+    rather than summed — the same field up to a constant, but it keeps the
+    magnitude independent of ``M``.
+    """
+
+    def __init__(self, config: NeuralODEConfig) -> None:
+        super().__init__()
+        self._act_name = config.act_fn
+        d, m = config.data_dim, config.hidden_dim
+        bound = 1.0 / math.sqrt(d)
+        self.w = nn.Parameter(lucid.rand((m, d)) * 2 * bound - bound)
+        self.b = nn.Parameter(lucid.rand((1, m)) * 2 * bound - bound)
+        self.u = nn.Parameter(lucid.rand((m, d)) * 2 * bound - bound)
+        # One gate per unit, driven by t.  Scalar-input dense layers would be
+        # two tiny GEMMs on the solver's hot path; broadcasting is the same
+        # arithmetic without the dispatch.
+        self.gate_weight = nn.Parameter(lucid.rand((1, m)) * 2 - 1.0)
+        self.gate_bias = nn.Parameter(lucid.rand((1, m)) * 2 - 1.0)
+
+    @override
+    def forward(self, t: Tensor, z: Tensor) -> Tensor:  # type: ignore[override]
+        pre: Tensor = z @ self.w.mT + self.b  # (B, M)
+        act: Tensor = generative_activation(self._act_name, pre)
+        gate: Tensor = lucid.sigmoid(self.gate_weight * t + self.gate_bias)
+        return (act * gate) @ self.u / float(self.w.shape[0])
 
 
 @final
@@ -159,7 +204,9 @@ class _CNFDynamics(nn.Module):
 
     def __init__(self, config: NeuralODEConfig) -> None:
         super().__init__()
-        self.field = _VectorField(config)
+        self.field = (
+            _PlanarField(config) if config.field == "planar" else _VectorField(config)
+        )
         self._dim = config.data_dim
         self._trace_method = config.resolved_trace_method
         self._trace_noise = config.trace_noise
@@ -223,8 +270,17 @@ class _CNFDynamics(nn.Module):
         return dz, divergence
 
     def _divergence(self, dz: Tensor, z: Tensor) -> Tensor:
+        # ``create_graph`` is only worth its cost when the trace itself has to
+        # be differentiated — i.e. when the density is part of a training
+        # objective.  Under ``no_grad`` (scoring: ``log_prob``,
+        # ``bits_per_dim``, plain ``forward``) it demands a second derivative
+        # of the field for a number nobody will backprop through, which is
+        # what stops a convolutional field being scored at all.
+        create_graph = lucid.is_grad_enabled()
         if self._trace_method == "exact":
-            return exact_divergence(dz, z, self._exact_seeds(dz))
+            return exact_divergence(
+                dz, z, self._exact_seeds(dz), create_graph=create_graph
+            )
         eps = self._eps
         if eps is None:
             # A caller that reached the dynamics without going through
@@ -232,7 +288,7 @@ class _CNFDynamics(nn.Module):
             # draw here and holds it for the rest of the solve.
             eps = self.sample_noise(z)
             self._eps = eps
-        return hutchinson_divergence(dz, z, eps)
+        return hutchinson_divergence(dz, z, eps, create_graph=create_graph)
 
     def _exact_seeds(self, dz: Tensor) -> list[Tensor]:
         """Identity rows broadcast over the batch, built once per solve.
@@ -328,6 +384,7 @@ class NeuralODEModel(PretrainedModel):
     def __init__(self, config: NeuralODEConfig) -> None:
         super().__init__(config)
         self.dynamics = _CNFDynamics(config)
+        self._nfe_forward = 0
 
         size = config.sample_size
         height, width = size if isinstance(size, tuple) else (size, size)
@@ -367,8 +424,14 @@ class NeuralODEModel(PretrainedModel):
         A continuous flow has no layer count to report, so this is the
         closest thing to one — and it grows as the field stiffens during
         training, which the paper documents.
+
+        This is the *forward* count, snapshotted when the solve returns.
+        Reading the live counter instead let the adjoint's backward sweep
+        keep incrementing it after the fact, so the number changed depending
+        on whether ``.backward()`` had run yet — and §3 (Fig. 3c/3d) treats
+        forward and backward NFE as two separate quantities.
         """
-        return self.dynamics.nfe
+        return self._nfe_forward
 
     def _check_image(self, x: Tensor) -> None:
         channels, height, width = self._image_shape
@@ -411,10 +474,12 @@ class NeuralODEModel(PretrainedModel):
             )
             # The adjoint always reports the trajectory; the flow only ever
             # wants where it ended up.
+            # Snapshot before any backward sweep can add to the live counter.
+            self._nfe_forward = self.dynamics.nfe
             if isinstance(out, Tensor):
                 return out[-1]
             return tuple(part[-1] for part in out)
-        return cast(
+        direct = cast(
             _State,
             lucid.diffeq.odeint(
                 func,
@@ -426,6 +491,8 @@ class NeuralODEModel(PretrainedModel):
                 return_trajectory=False,
             ),
         )
+        self._nfe_forward = self.dynamics.nfe
+        return direct
 
     def encode(self, x: Tensor) -> tuple[Tensor, Tensor]:
         r"""Map samples to the latent space, accumulating the log-determinant.
@@ -630,7 +697,7 @@ class NeuralODEForImageGeneration(PretrainedModel):
         n_samples: int = 1,
         *,
         temperature: float = 1.0,
-        device: str = "cpu",
+        device: str | None = None,
     ) -> GenerationOutput:
         """Sample by integrating a prior draw back to ``t = 0``.
 
@@ -655,6 +722,7 @@ class NeuralODEForImageGeneration(PretrainedModel):
         Costs one solve, not one per step: the reverse direction carries no
         density term, so it is the cheaper of the two passes.
         """
+        device = resolve_generation_device(self, device)
         if temperature <= 0.0:
             raise ValueError(f"temperature must be positive, got {temperature}")
         z = flow_prior_sample(self._prior, (n_samples, self._input_dim), device=device)

@@ -20,6 +20,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._classification import DropPath
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -59,7 +60,7 @@ class _MBConv(nn.Module):
     Squeeze-and-Excitation is applied between DWConv and projection, with
     se_ch = max(1, round(out_ch * se_ratio)).
 
-    Downsampling: stride=2 on the depthwise conv; shortcut uses AvgPool2d+Conv1×1.
+    Downsampling: stride=2 on the expansion conv (Eqn 5); shortcut pools then projects.
     """
 
     def __init__(
@@ -69,20 +70,28 @@ class _MBConv(nn.Module):
         expand: int = 4,
         stride: int = 1,
         se_ratio: float = 0.25,
+        drop_path_rate: float = 0.0,
     ) -> None:
         super().__init__()
+        # Table 10 lists stochastic depth for every CoAtNet variant; the
+        # reference wires it through both block types.
+        self.drop_path = DropPath(drop_path_rate)
         mid_ch = out_ch * expand
         se_ch = max(1, round(out_ch * se_ratio))
         self.stride = stride
 
         self.bn_pre = nn.BatchNorm2d(in_ch)
-        self.expand = nn.Conv2d(in_ch, mid_ch, 1, bias=False)
+        # Eqn (5) puts the stride on the expansion conv:
+        # ``Conv(DepthConv(Conv(Norm(x), stride=2)))``.  Striding the
+        # depthwise instead is the paper's "Strided DConv" *alternative*
+        # (Table 9), not the configuration its reported numbers use.
+        self.expand = nn.Conv2d(in_ch, mid_ch, 1, stride=stride, bias=False)
         self.bn_exp = nn.BatchNorm2d(mid_ch)
         self.dw = nn.Conv2d(
             mid_ch,
             mid_ch,
             3,
-            stride=stride,
+            stride=1,
             padding=1,
             groups=mid_ch,
             bias=False,
@@ -105,17 +114,26 @@ class _MBConv(nn.Module):
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = cast(Tensor, self.shortcut(x))
 
-        out = F.gelu(cast(Tensor, self.bn_pre(x)))
+        # Pre-activation form is ``x + Module(Norm(x))`` — Norm only; the
+        # reference's pre_norm is built with apply_act=False.
+        out = cast(Tensor, self.bn_pre(x))
         out = F.gelu(cast(Tensor, self.bn_exp(cast(Tensor, self.expand(out)))))
         out = F.gelu(cast(Tensor, self.bn_dw(cast(Tensor, self.dw(out)))))
         out = cast(Tensor, self.se(out))
         out = cast(Tensor, self.project(out))
-        return out + shortcut
+        return cast(Tensor, self.drop_path(out)) + shortcut
 
 
 # ---------------------------------------------------------------------------
 # Relative-position self-attention block (used in Transformer stages)
 # ---------------------------------------------------------------------------
+
+
+# The reference runs CoAtNet's transformer LayerNorms at 1e-6, not the
+# framework default of 1e-5.  The gap only matters where the normalised
+# variance is small, which is exactly where a deep transformer stack
+# spends its time.
+_LN_EPS: float = 1e-6
 
 
 @final
@@ -136,27 +154,49 @@ class _RelAttnBlock(nn.Module):
         grid_h: int,
         grid_w: int,
         mlp_ratio: int = 4,
+        drop_path_rate: float = 0.0,
+        out_dim: int | None = None,
+        downsample: bool = False,
     ) -> None:
         super().__init__()
+        out_dim = dim if out_dim is None else out_dim
+        self.drop_path1 = DropPath(drop_path_rate)
+        self.drop_path2 = DropPath(drop_path_rate)
         self.dim = dim
+        self.out_dim = out_dim
+        self.downsample = downsample
         self.num_heads = num_heads
-        self.head_dim = dim // num_heads
+        self.head_dim = out_dim // num_heads
         self.scale = self.head_dim**-0.5
+        # The bias table is indexed on the *post*-pool grid, which is what
+        # attention runs on.
         self.grid_h = grid_h
         self.grid_w = grid_w
+        # Pre-pool grid, needed to fold the sequence back to 2-D for pooling.
+        self._downsample = downsample
+        self.in_h = grid_h * 2 if downsample else grid_h
+        self.in_w = grid_w * 2 if downsample else grid_w
 
         # Relative position bias: table is (2H-1) × (2W-1) per head
         self.rel_bias = nn.Parameter(
             lucid.zeros(num_heads, (2 * grid_h - 1) * (2 * grid_w - 1))
         )
 
-        self.norm1 = nn.LayerNorm(dim)
-        self.qkv = nn.Linear(dim, dim * 3)
-        self.proj = nn.Linear(dim, dim)
-        self.norm2 = nn.LayerNorm(dim)
-        mlp_dim = dim * mlp_ratio
-        self.fc1 = nn.Linear(dim, mlp_dim)
-        self.fc2 = nn.Linear(mlp_dim, dim)
+        # Eqn (4): ``x <- Proj(Pool(x)) + Attention(Pool(Norm(x)))``.  The
+        # identity branch projects the pooled input to the new width, and the
+        # residual branch normalises at the *input* width before pooling — so
+        # the widening happens inside attention, not in a stage-level
+        # projection applied before any block.
+        self.norm1 = nn.LayerNorm(dim, eps=_LN_EPS)
+        self.qkv = nn.Linear(dim, out_dim * 3)
+        self.proj = nn.Linear(out_dim, out_dim)
+        self.shortcut: nn.Module = (
+            nn.Linear(dim, out_dim) if dim != out_dim else nn.Identity()
+        )
+        self.norm2 = nn.LayerNorm(out_dim, eps=_LN_EPS)
+        mlp_dim = out_dim * mlp_ratio
+        self.fc1 = nn.Linear(out_dim, mlp_dim)
+        self.fc2 = nn.Linear(mlp_dim, out_dim)
 
         self._init_rel_idx()
 
@@ -181,6 +221,41 @@ class _RelAttnBlock(nn.Module):
         # moves it alongside parameters and Metal forward stays on-device.
         self.register_buffer("_rel_idx", rel_idx, persistent=False)
 
+    def resample_rel_pos(self, grid_h: int, grid_w: int) -> None:
+        """Resize the relative-position table to a new attention grid.
+
+        Section A.1: "When finetuned on a larger resolution, we simply use
+        bi-linear interpolation to increase the size
+        :math:`(2H-1) \times (2W-1)` to the desired size
+        :math:`(2H'-1) \times (2W'-1)`."  Every headline CoAtNet result
+        depends on this — CoAtNet-3/-4 pre-train at 224 and fine-tune at
+        384/512 — so without it a checkpoint is welded to the resolution it
+        was built at.  Rebuilding the model at the new ``image_size`` gives
+        correctly *shaped* tables but throws the learned ones away.
+
+        Args:
+            grid_h: New attention-grid height.
+            grid_w: New attention-grid width.
+        """
+        if (grid_h, grid_w) == (self.grid_h, self.grid_w):
+            return
+        old_h = 2 * self.grid_h - 1
+        old_w = 2 * self.grid_w - 1
+        table = self.rel_bias.reshape(1, self.num_heads, old_h, old_w)
+        resized = F.interpolate(
+            table,
+            size=(2 * grid_h - 1, 2 * grid_w - 1),
+            mode="bilinear",
+            align_corners=False,
+        )
+        self.rel_bias = nn.Parameter(
+            resized.reshape(self.num_heads, (2 * grid_h - 1) * (2 * grid_w - 1))
+        )
+        self.grid_h, self.grid_w = grid_h, grid_w
+        self.in_h = grid_h * 2 if self._downsample else grid_h
+        self.in_w = grid_w * 2 if self._downsample else grid_w
+        self._init_rel_idx()
+
     def _rel_pos_bias(self) -> Tensor:
         # rel_idx: (N, N), rel_bias: (num_heads, (2H-1)*(2W-1))
         # Returns (num_heads, N, N)
@@ -192,8 +267,8 @@ class _RelAttnBlock(nn.Module):
         return bias.reshape(self.num_heads, N, N)
 
     def _attn(self, x: Tensor) -> Tensor:
-        B, N, C = x.shape
-        qkv = cast(Tensor, self.qkv(x))  # (B, N, 3*C)
+        B, N, _C = x.shape
+        qkv = cast(Tensor, self.qkv(x))  # (B, N, 3 * out_dim)
         qkv = qkv.reshape(B, N, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, heads, N, head_dim)
         q, k, v = qkv[0], qkv[1], qkv[2]  # each (B, heads, N, head_dim)
@@ -202,18 +277,38 @@ class _RelAttnBlock(nn.Module):
         # softmax((q·kᵀ)·scale + bias)·v, never forming the (B,H,N,N) scores.
         bias = self._rel_pos_bias().reshape(1, self.num_heads, N, N)
         out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias, scale=self.scale)
-        out = out.permute(0, 2, 1, 3).reshape(B, N, C)
+        out = out.permute(0, 2, 1, 3).reshape(B, N, self.out_dim)
         return cast(Tensor, self.proj(out))
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, N, C)
-        x = x + self._attn(cast(Tensor, self.norm1(x)))
+        identity = self._pool(x)
+        shortcut = cast(Tensor, self.shortcut(identity))
+        h = self._pool(cast(Tensor, self.norm1(x)))
+        x = shortcut + cast(Tensor, self.drop_path1(self._attn(h)))
         x = x + cast(
             Tensor,
-            self.fc2(F.gelu(cast(Tensor, self.fc1(cast(Tensor, self.norm2(x)))))),
+            self.drop_path2(
+                cast(
+                    Tensor,
+                    self.fc2(
+                        F.gelu(cast(Tensor, self.fc1(cast(Tensor, self.norm2(x)))))
+                    ),
+                )
+            ),
         )
         return x
+
+    def _pool(self, seq: Tensor) -> Tensor:
+        """Max-pool a ``(B, N, C)`` sequence on its 2-D grid, per Eqn (4)."""
+        if not self.downsample:
+            return seq
+        b = int(seq.shape[0])
+        c = int(seq.shape[2])
+        grid = seq.permute(0, 2, 1).reshape(b, c, self.in_h, self.in_w)
+        grid = F.max_pool2d(grid, 2, stride=2)
+        return grid.reshape(b, c, self.grid_h * self.grid_w).permute(0, 2, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +318,7 @@ class _RelAttnBlock(nn.Module):
 
 @final
 class _TransformerStage(nn.Module):
-    """Transformer stage: optional AvgPool2d(2) → linear channel proj → N×RelAttnBlock.
+    """Transformer stage: optional MaxPool2d(2) → linear channel proj → N×RelAttnBlock.
 
     When ``downsample=True`` (default — what S3 and S4 use in CoAtNet-0..5)
     the stage spatially halves via AvgPool2d before the first block.  When
@@ -242,6 +337,7 @@ class _TransformerStage(nn.Module):
         num_heads: int,
         input_grid: tuple[int, int],
         downsample: bool = True,
+        dpr: list[float] | None = None,
     ) -> None:
         super().__init__()
         # Grid after optional 2× pooling.
@@ -252,31 +348,46 @@ class _TransformerStage(nn.Module):
             grid_h = input_grid[0]
             grid_w = input_grid[1]
 
+        self.grid_h, self.grid_w = grid_h, grid_w
         self.pool: nn.Module = (
-            nn.AvgPool2d(2, stride=2) if downsample else nn.Identity()
+            # Eqn (4): "the standard max pooling of stride 2 is directly
+            # applied to the input states of both branches".
+            nn.MaxPool2d(2, stride=2)
+            if downsample
+            else nn.Identity()
         )
-        self.proj = nn.Linear(in_ch, out_ch)
+        rates = dpr if dpr is not None else [0.0] * num_blocks
+        # Eqn (4) makes the down-sample part of the *first block's* residual
+        # structure, not a stage-level step: pooling once up front and then
+        # running plain blocks gives a different function, because the
+        # identity branch never sees the projection paired with its own pool.
         self.blocks = nn.ModuleList(
             [
-                _RelAttnBlock(out_ch, num_heads, grid_h, grid_w)
-                for _ in range(num_blocks)
+                _RelAttnBlock(
+                    in_ch if i == 0 else out_ch,
+                    num_heads,
+                    grid_h,
+                    grid_w,
+                    drop_path_rate=rates[i],
+                    out_dim=out_ch,
+                    downsample=(downsample and i == 0),
+                )
+                for i in range(num_blocks)
             ]
         )
         self.norm = nn.LayerNorm(out_ch)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        # x: (B, C, H, W)
-        x = cast(Tensor, self.pool(x))
+        # x: (B, C, H, W) — flattened once; the first block pools if needed.
         B, C, H, W = x.shape
-        x = x.reshape(B, C, H * W).permute(0, 2, 1)  # (B, N, C)
-        x = cast(Tensor, self.proj(x))  # (B, N, out_ch)
+        seq = x.reshape(B, C, H * W).permute(0, 2, 1)  # (B, N, C)
         for blk in self.blocks:
-            x = cast(Tensor, blk(x))
-        x = cast(Tensor, self.norm(x))
-        D = x.shape[2]
-        x = x.permute(0, 2, 1).reshape(B, D, H, W)  # (B, out_ch, H, W)
-        return x
+            seq = cast(Tensor, blk(seq))
+        seq = cast(Tensor, self.norm(seq))
+        D = int(seq.shape[2])
+        out_h, out_w = self.grid_h, self.grid_w
+        return seq.permute(0, 2, 1).reshape(B, D, out_h, out_w)
 
 
 # ---------------------------------------------------------------------------
@@ -303,29 +414,59 @@ def _build_body(
     # ------------------------------------------------------------------ stem
     # Two conv layers, total stride 2:  3→stem_ch→stem_ch (s=2, then s=1)
     stem_ch = config.stem_width
+    # No norm/activation after the second conv: the first MBConv's pre-norm
+    # supplies it immediately, and §A.1 is explicit that the architecture is
+    # pre-activation throughout ("x <- x + Module(Norm(x))").  Normalising
+    # here as well ran BN -> GELU -> BN -> GELU back to back, which is not a
+    # no-op — the second BN renormalises an already-rectified distribution —
+    # and left a dead stem_ch-sized affine pair.  timm's Stem is
+    # conv1 -> norm_act -> conv2 for the same reason.
     stem = nn.Sequential(
         nn.Conv2d(config.in_channels, stem_ch, 3, stride=2, padding=1, bias=False),
         nn.BatchNorm2d(stem_ch),
         nn.GELU(),
         nn.Conv2d(stem_ch, stem_ch, 3, stride=1, padding=1, bias=False),
-        nn.BatchNorm2d(stem_ch),
-        nn.GELU(),
     )
+    # Stochastic depth ramps linearly with the global block index (Table 10
+    # lists a per-variant rate); a dispenser keeps the cursor correct across
+    # the branching S3 layouts below.
+    _total_blocks = sum(n) + (
+        config.mixed_s3[0] + config.mixed_s3[1] if config.mixed_s3 is not None else 0
+    )
+    _dpr = [
+        config.drop_path_rate * k / max(_total_blocks - 1, 1)
+        for k in range(_total_blocks)
+    ]
+    _cursor = [0]
+
+    def _next_dp() -> float:
+        rate = _dpr[_cursor[0]] if _cursor[0] < len(_dpr) else 0.0
+        _cursor[0] += 1
+        return rate
+
     # After stem: H/2 × W/2
 
     # ------------------------------------------------------------------ S1
     s1_layers: list[nn.Module] = []
-    s1_layers.append(_MBConv(stem_ch, d[0], expand=exp, stride=2))
+    s1_layers.append(
+        _MBConv(stem_ch, d[0], expand=exp, stride=2, drop_path_rate=_next_dp())
+    )
     for _ in range(1, n[0]):
-        s1_layers.append(_MBConv(d[0], d[0], expand=exp, stride=1))
+        s1_layers.append(
+            _MBConv(d[0], d[0], expand=exp, stride=1, drop_path_rate=_next_dp())
+        )
     s1 = nn.Sequential(*s1_layers)
     # After S1: H/4 × W/4
 
     # ------------------------------------------------------------------ S2
     s2_layers: list[nn.Module] = []
-    s2_layers.append(_MBConv(d[0], d[1], expand=exp, stride=2))
+    s2_layers.append(
+        _MBConv(d[0], d[1], expand=exp, stride=2, drop_path_rate=_next_dp())
+    )
     for _ in range(1, n[1]):
-        s2_layers.append(_MBConv(d[1], d[1], expand=exp, stride=1))
+        s2_layers.append(
+            _MBConv(d[1], d[1], expand=exp, stride=1, drop_path_rate=_next_dp())
+        )
     s2 = nn.Sequential(*s2_layers)
     # After S2: H/8 × W/8
 
@@ -338,15 +479,26 @@ def _build_body(
     s3: nn.Module
     s3_out_ch: int
     if config.mixed_s3 is None:
-        s3 = _TransformerStage(d[1], d[2], n[2], heads[0], input_grid=s3_grid)
+        s3 = _TransformerStage(
+            d[1],
+            d[2],
+            n[2],
+            heads[0],
+            input_grid=s3_grid,
+            dpr=[_next_dp() for _ in range(n[2])],
+        )
         s3_out_ch = d[2]
     else:
         L_mb, L_attn, D_attn = config.mixed_s3
         # MBConv sub-stage: d[1] → d[2] with stride-2 in the first block,
         # then L_mb − 1 more isotropic blocks at d[2].  Mirrors S1/S2 layout.
-        s3_mb_layers: list[nn.Module] = [_MBConv(d[1], d[2], expand=exp, stride=2)]
+        s3_mb_layers: list[nn.Module] = [
+            _MBConv(d[1], d[2], expand=exp, stride=2, drop_path_rate=_next_dp())
+        ]
         for _ in range(1, L_mb):
-            s3_mb_layers.append(_MBConv(d[2], d[2], expand=exp, stride=1))
+            s3_mb_layers.append(
+                _MBConv(d[2], d[2], expand=exp, stride=1, drop_path_rate=_next_dp())
+            )
         # 1×1 channel-expand transition: d[2] → D_attn (no spatial change).
         # Paper §A.2 only says "double the hidden dimension"; we realise it
         # as the standard 1×1 conv + BN + GELU used elsewhere in CoAtNet.
@@ -367,6 +519,7 @@ def _build_body(
             heads[0],
             input_grid=s3_attn_grid,
             downsample=False,
+            dpr=[_next_dp() for _ in range(L_attn)],
         )
         s3 = nn.Sequential(*s3_mb_layers, s3_expand, s3_attn)
         s3_out_ch = D_attn
@@ -374,7 +527,14 @@ def _build_body(
 
     # ------------------------------------------------------------------ S4
     s4_grid = (img_size // 16, img_size // 16)  # input to S4
-    s4 = _TransformerStage(s3_out_ch, d[3], n[3], heads[1], input_grid=s4_grid)
+    s4 = _TransformerStage(
+        s3_out_ch,
+        d[3],
+        n[3],
+        heads[1],
+        input_grid=s4_grid,
+        dpr=[_next_dp() for _ in range(n[3])],
+    )
     # After S4: H/32 × W/32
 
     feature_info = [
@@ -581,6 +741,15 @@ class CoAtNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.s4 = s4
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         feat_dim = config.dims[-1]
+        # Three pieces here are reference-faithful but *not* described in the
+        # paper: this head LayerNorm, the pre-logits Linear+Tanh below, and
+        # the per-stage LayerNorm in ``_Stage``.  They come from timm's
+        # ``NormMlpClassifierHead`` (pool -> norm -> fc1 -> tanh -> fc2) and
+        # from the ``head_hidden_size=768`` its paper-matching ``coatnet_0``
+        # entry carries.  The cost is measurable — 24.79M for the backbone
+        # against 26.15M with the head, so ~1.36M of it, versus the paper's
+        # 25M total in Table 4.  Kept because the converted checkpoints have
+        # these tensors; removing them would strand every shipped weight.
         self.norm = nn.LayerNorm(feat_dim)
         # Optional hidden layer (timm head_hidden_size=768 for coatnet_0)
         if config.head_hidden_size is not None:

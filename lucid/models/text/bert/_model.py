@@ -28,10 +28,43 @@ from lucid.models._output import (
     BaseModelOutputWithPooling,
     CausalLMOutput,
     MaskedLMOutput,
+    QuestionAnsweringOutput,
+    SequenceClassificationOutput,
+    TokenClassificationOutput,
     ModelOutput,
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
 from lucid.models.text.bert._config import BERTConfig
+
+
+def _init_weights(model: nn.Module, std: float) -> None:
+    """Initialise every Linear and Embedding from a ``N(0, std²)`` draw.
+
+    BERT's reference initialiser is a truncated normal at
+    ``initializer_range = 0.02`` applied to every dense and embedding kernel,
+    with biases zeroed, LayerNorm left at unit weight / zero bias, and any
+    ``padding_idx`` row re-zeroed after the draw.  Without
+    this pass ``config.initializer_range`` was dead config: embeddings came out
+    at the framework's fan-in default (std ≈ 1, fifty times too wide), which
+    degrades and can destabilise any from-scratch pre-training run.
+    """
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            # The reference re-zeroes the padding row after the draw.  Leaving
+            # it random gives the pad token a real embedding, which the
+            # ``padding_idx`` contract says it must not have.
+            if module.padding_idx is not None:
+                with lucid.no_grad():
+                    module.weight[module.padding_idx] = lucid.zeros(
+                        (int(module.weight.shape[1]),),
+                        device=module.weight.device.type,
+                    )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Embeddings
@@ -67,14 +100,40 @@ class _BERTEmbeddings(nn.Module):
     @override
     def forward(  # type: ignore[override]
         self,
-        input_ids: Tensor,
+        input_ids: Tensor | None = None,
         token_type_ids: Tensor | None = None,
+        position_ids: Tensor | None = None,
+        inputs_embeds: Tensor | None = None,
     ) -> Tensor:
-        B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
-        dev = input_ids.device.type
+        """Sum the word, position and token-type embeddings.
 
-        words = cast(Tensor, self.word_embeddings(input_ids))
-        pos_ids = self.position_ids[:, :T]
+        Exactly one of ``input_ids`` and ``inputs_embeds`` is required.
+        ``inputs_embeds`` skips the word-embedding lookup, which is what a
+        caller doing soft prompts or adapter tuning needs; ``position_ids``
+        overrides the default ``0..T-1``, which packed or shifted sequences
+        need.
+        """
+        if (input_ids is None) == (inputs_embeds is None):
+            raise ValueError(
+                "pass exactly one of input_ids and inputs_embeds; got "
+                f"input_ids={'a tensor' if input_ids is not None else None} "
+                f"and inputs_embeds="
+                f"{'a tensor' if inputs_embeds is not None else None}."
+            )
+        if inputs_embeds is not None:
+            B, T = int(inputs_embeds.shape[0]), int(inputs_embeds.shape[1])
+            dev = inputs_embeds.device.type
+            words = inputs_embeds
+        else:
+            assert input_ids is not None
+            B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
+            dev = input_ids.device.type
+            words = cast(Tensor, self.word_embeddings(input_ids))
+
+        if position_ids is None:
+            pos_ids = self.position_ids[:, :T]
+        else:
+            pos_ids = position_ids
         positions = cast(Tensor, self.position_embeddings(pos_ids))
 
         if token_type_ids is None:
@@ -360,6 +419,7 @@ class BERTModel(PretrainedModel):
         self.embeddings = _BERTEmbeddings(config)
         self.encoder = _BERTEncoder(config)
         self.pooler = _BERTPooler(config)
+        _init_weights(self, config.initializer_range)
 
     @override
     def get_input_embeddings(self) -> nn.Module:
@@ -376,15 +436,42 @@ class BERTModel(PretrainedModel):
     @override
     def forward(  # type: ignore[override]
         self,
-        input_ids: Tensor,
+        input_ids: Tensor | None = None,
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
+        position_ids: Tensor | None = None,
+        inputs_embeds: Tensor | None = None,
     ) -> BaseModelOutputWithPooling:
-        B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
+        """Encode a batch and return the sequence output plus the pooled CLS.
+
+        ``position_ids`` and ``inputs_embeds`` are forwarded to the embedding
+        layer; see :meth:`_BERTEmbeddings.forward`.
+
+        Not accepted: ``head_mask``, ``output_hidden_states`` and
+        ``output_attentions``.  All three require the encoder stack to hand
+        back its per-layer internals, which is a property of
+        :class:`lucid.nn.TransformerEncoder` rather than of BERT — adding
+        them here would mean changing that shared module's return type for
+        every model built on it.
+        """
+        if inputs_embeds is not None:
+            B, T = int(inputs_embeds.shape[0]), int(inputs_embeds.shape[1])
+        else:
+            if input_ids is None:
+                raise ValueError("pass either input_ids or inputs_embeds.")
+            B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
 
         ext_mask = extended_attention_mask(attention_mask, (B, T))
 
-        hidden = cast(Tensor, self.embeddings(input_ids, token_type_ids=token_type_ids))
+        # ``Module.__call__`` is typed for Tensor positionals, so reach the
+        # embedding's own signature — which accepts ``input_ids=None`` when
+        # ``inputs_embeds`` is supplied — directly.
+        hidden = self.embeddings.forward(
+            input_ids,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+        )
         sequence_output = cast(Tensor, self.encoder(hidden, attention_mask=ext_mask))
         pooled_output = cast(Tensor, self.pooler(sequence_output))
 
@@ -584,8 +671,10 @@ class BERTForSequenceClassification(PretrainedModel):
     The pooled representation is
     :math:`p = \tanh(W_{\mathrm{pool}}\, h_{[\mathrm{CLS}]} + b_{\mathrm{pool}})`,
     and the final logits are :math:`z = W_{\mathrm{cls}}\,\mathrm{Dropout}(p) + b_{\mathrm{cls}}`.
-    When ``labels`` is provided, cross-entropy over ``num_labels`` classes is
-    computed and exposed as ``output.loss``.
+    When ``labels`` is provided the loss is exposed as ``output.loss``:
+    cross-entropy over ``num_labels`` classes, or — when ``num_labels == 1``,
+    the single-output regression setting GLUE's STS-B uses — mean squared
+    error against the float targets.
 
     Examples
     --------
@@ -612,6 +701,7 @@ class BERTForSequenceClassification(PretrainedModel):
             else config.hidden_dropout
         )
         self.dropout = nn.Dropout(p=drop)
+        self.num_labels = config.num_labels
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
     @override
@@ -621,7 +711,7 @@ class BERTForSequenceClassification(PretrainedModel):
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> SequenceClassificationOutput:
         outputs = cast(
             BaseModelOutputWithPooling,
             self.bert(
@@ -635,12 +725,15 @@ class BERTForSequenceClassification(PretrainedModel):
 
         loss: Tensor | None = None
         if labels is not None:
-            loss = F.cross_entropy(logits, labels)
+            if self.num_labels == 1:
+                # Single output unit means regression (GLUE's STS-B).  Softmax
+                # cross-entropy over one class is identically zero, so the
+                # gradient would vanish and the head would never train.
+                loss = F.mse_loss(logits.reshape(-1), labels.float().reshape(-1))
+            else:
+                loss = F.cross_entropy(logits, labels)
 
-        # We reuse MaskedLMOutput here since it only carries logits + loss; a
-        # dedicated SequenceClassificationOutput can be added later if any
-        # caller actually needs the extra metadata.
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return SequenceClassificationOutput(logits=logits, loss=loss)
 
 
 class BERTForTokenClassification(PretrainedModel, MaskedLMMixin):
@@ -718,7 +811,7 @@ class BERTForTokenClassification(PretrainedModel, MaskedLMMixin):
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> TokenClassificationOutput:
         outputs = cast(
             BaseModelOutputWithPooling,
             self.bert(
@@ -734,7 +827,7 @@ class BERTForTokenClassification(PretrainedModel, MaskedLMMixin):
         if labels is not None:
             loss = self.compute_lm_loss(logits, labels)
 
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return TokenClassificationOutput(logits=logits, loss=loss)
 
 
 class BERTForQuestionAnswering(PretrainedModel):
@@ -776,8 +869,8 @@ class BERTForQuestionAnswering(PretrainedModel):
           + \mathrm{CE}(z^{\mathrm{end}},   y^{\mathrm{end}})
         \right).
 
-    The returned ``logits`` tensor has shape ``(B, T, 2)``; index ``[..., 0]``
-    for start scores and ``[..., 1]`` for end scores.
+    The forward returns a :class:`QuestionAnsweringOutput` carrying
+    ``start_logits`` and ``end_logits``, each of shape ``(B, T)``.
 
     Examples
     --------
@@ -788,8 +881,8 @@ class BERTForQuestionAnswering(PretrainedModel):
     >>> model = BERTForQuestionAnswering(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 2040, 2003, 102, 1045, 2572, 102]])
     >>> out = model(input_ids)
-    >>> out.logits.shape   # (B=1, T=7, 2)
-    (1, 7, 2)
+    >>> out.start_logits.shape, out.end_logits.shape
+    ((1, 7), (1, 7))
     """
 
     config_class: ClassVar[type[BERTConfig]] = BERTConfig
@@ -808,7 +901,7 @@ class BERTForQuestionAnswering(PretrainedModel):
         token_type_ids: Tensor | None = None,
         start_positions: Tensor | None = None,
         end_positions: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> QuestionAnsweringOutput:
         outputs = cast(
             BaseModelOutputWithPooling,
             self.bert(
@@ -818,21 +911,38 @@ class BERTForQuestionAnswering(PretrainedModel):
             ),
         )
         logits = cast(Tensor, self.qa_outputs(outputs.last_hidden_state))
-        # ``logits`` is (B, T, 2); split along the last dim into start / end.
-        # We stack them along a new dim so downstream code can index ``[..., 0]``
-        # for start and ``[..., 1]`` for end while keeping a single return.
+        # ``logits`` is (B, T, 2); split along the last dim into start / end
+        # and return them as named fields rather than making every caller
+        # remember which trailing index is which.
+        start_logits = logits[..., 0]  # (B, T)
+        end_logits = logits[..., 1]  # (B, T)
 
         loss: Tensor | None = None
         if start_positions is not None and end_positions is not None:
-            start_logits = logits[..., 0]  # (B, T)
-            end_logits = logits[..., 1]  # (B, T)
             # Callers are responsible for keeping span positions inside [0, T).
-            loss = (
-                F.cross_entropy(start_logits, start_positions.long())
-                + F.cross_entropy(end_logits, end_positions.long())
-            ) / 2.0
+            # SQuAD's sliding window (§4.2) puts some answers outside the
+            # current doc-stride span.  The reference clamps those positions
+            # to a sentinel at the sequence end and ignores that index in the
+            # loss, so an unanswerable window contributes zero rather than
+            # training the model towards an arbitrary in-window token.
+            ignored = int(start_logits.shape[1])
+            start_t = start_positions.long().clip(min=0, max=ignored)
+            end_t = end_positions.long().clip(min=0, max=ignored)
+            # A batch in which *every* window is unanswerable leaves the mean
+            # with no terms to average, which surfaces as NaN and would poison
+            # the whole step.  Zero is the honest value: nothing was asked.
+            n_valid = float((start_t != ignored).float().sum().item())
+            if n_valid == 0.0:
+                loss = lucid.zeros((), device=start_logits.device.type)
+            else:
+                loss = (
+                    F.cross_entropy(start_logits, start_t, ignore_index=ignored)
+                    + F.cross_entropy(end_logits, end_t, ignore_index=ignored)
+                ) / 2.0
 
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return QuestionAnsweringOutput(
+            start_logits=start_logits, end_logits=end_logits, loss=loss
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1108,7 +1218,7 @@ class BERTForNextSentencePrediction(PretrainedModel):
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> SequenceClassificationOutput:
         outputs = cast(
             BaseModelOutputWithPooling,
             self.bert(
@@ -1123,7 +1233,7 @@ class BERTForNextSentencePrediction(PretrainedModel):
         if labels is not None:
             loss = F.cross_entropy(seq_relationship_score, labels.long())
 
-        return MaskedLMOutput(logits=seq_relationship_score, loss=loss)
+        return SequenceClassificationOutput(logits=seq_relationship_score, loss=loss)
 
 
 class BERTForCausalLM(PretrainedModel):

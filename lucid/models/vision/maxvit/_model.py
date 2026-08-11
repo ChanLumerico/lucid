@@ -50,6 +50,8 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_transformer_trunc_normal
+from lucid.models._utils._classification import DropPath
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -65,6 +67,13 @@ _SE_RATIO: int = 16  # SE squeeze ratio relative to expanded dim
 # ---------------------------------------------------------------------------
 # Window partition / reverse
 # ---------------------------------------------------------------------------
+
+
+# The official MaxViT sets ``bn_momentum = 0.99`` in the TF sense — the
+# fraction of the *old* running estimate kept — which is 0.01 in this
+# convention.  The eps was already carried over as 1e-3; the momentum was
+# left at the framework default of 0.1, ten times too fast.
+_BN_MOMENTUM: float = 0.01
 
 
 def _window_partition(x: Tensor, ws: int) -> tuple[Tensor, int, int]:
@@ -153,14 +162,20 @@ def _pad_to_multiple(x_cl: Tensor, ws: int) -> tuple[Tensor, int, int]:
     Returns padded tensor and original (H, W) for later cropping.
     """
     B, H, W, C = x_cl.shape
+    # The pad has to be born on the same device as the tensor it is
+    # concatenated to.  Allocating on the default device meant any input whose
+    # spatial size is not a multiple of the window (so any non-224 resolution,
+    # which the config explicitly documents as supported) raised
+    # ``DeviceMismatch (concatenate)`` on Metal.
+    dev = x_cl.device.type
     pH = (ws - H % ws) % ws
     pW = (ws - W % ws) % ws
     if pH > 0:
-        pad_h = lucid.zeros(B, pH, W, C)
+        pad_h = lucid.zeros(B, pH, W, C, device=dev)
         x_cl = lucid.cat([x_cl, pad_h], dim=1)
     if pW > 0:
         Hp = x_cl.shape[1]
-        pad_w = lucid.zeros(B, Hp, pW, C)
+        pad_w = lucid.zeros(B, Hp, pW, C, device=dev)
         x_cl = lucid.cat([x_cl, pad_w], dim=2)
     return x_cl, H, W
 
@@ -178,8 +193,7 @@ class _RelPosBias(nn.Module):
     col_offset) in [-ws+1, ws-1] range.  We store as ``relative_position_bias_table``
     so the key name matches timm exactly.
 
-    At forward, we gather from the table using pre-built Python index lists so
-    we don't need fancy integer-tensor indexing in Lucid.
+    At forward the bias is one gather with a pre-built flat index tensor.
     """
 
     def __init__(self, num_heads: int, window_size: int) -> None:
@@ -190,6 +204,10 @@ class _RelPosBias(nn.Module):
         self.relative_position_bias_table = nn.Parameter(
             lucid.zeros(num_heads, table_size, table_size)
         )
+        # Both references draw this table from N(0, 0.02^2).  Left at exactly
+        # zero every head's relative-position bias starts identical and the
+        # term contributes nothing to break the symmetry between positions.
+        nn.init.normal_(self.relative_position_bias_table, mean=0.0, std=0.02)
         # Build flat Python index lists for the gather at forward time.
         # coords: list of (row, col) for each of the ws² positions
         coords = [(i, j) for i in range(window_size) for j in range(window_size)]
@@ -205,8 +223,18 @@ class _RelPosBias(nn.Module):
                 row_flat.append(cj[0] - ci[0] + (window_size - 1))
                 col_flat.append(cj[1] - ci[1] + (window_size - 1))
         self._n = n
-        self._row_flat = row_flat
-        self._col_flat = col_flat
+        # One flat index into the (T, T) table, so the gather is a single op
+        # instead of ws^4 scalar reads followed by a ws^4-way stack.  The
+        # index is constant for the module's lifetime; registering it
+        # non-persistently keeps it off the state dict and lets ``.to()``
+        # move it with the module.
+        self.register_buffer(
+            "_flat_index",
+            lucid.tensor(
+                [r * table_size + c for r, c in zip(row_flat, col_flat)]
+            ).long(),
+            persistent=False,
+        )
 
     @override
     def forward(self) -> Tensor:  # type: ignore[override]
@@ -214,19 +242,10 @@ class _RelPosBias(nn.Module):
         table = self.relative_position_bias_table  # (H, T, T)
         n = self._n
         H = self.num_heads
-        # Gather: for each (i,j) pair, pick table[h, row, col]
-        # Build (H, n*n) bias by stacking slices
-        flat_len = len(self._row_flat)
-        # Collect column slices from table for each pair position
-        # table shape: (H, T, T); we gather flat_len entries
-        bias_list: list[Tensor] = []
-        for k in range(flat_len):
-            r, c = self._row_flat[k], self._col_flat[k]
-            bias_list.append(table[:, r, c])  # (H,)
-        # Stack to (flat_len, H) then transpose to (H, flat_len)
-        bias_flat = lucid.stack(bias_list, dim=1)  # (H, flat_len)
-        bias = bias_flat.reshape(H, n, n)  # (H, ws², ws²)
-        return bias.unsqueeze(0)  # (1, H, ws², ws²)
+        T = int(table.shape[-1])
+        # (H, T*T) → gather n*n columns → (H, ws², ws²)
+        bias = table.reshape(H, T * T)[:, self._flat_index]
+        return bias.reshape(H, n, n).unsqueeze(0)
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +276,9 @@ class _AttnCl(nn.Module):
         self.proj = nn.Linear(dim, dim)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self, x: Tensor, key_valid: Tensor | None = None
+    ) -> Tensor:
         # x: (B, N, C)  where B may be a compound batch
         B, N, C = x.shape
         H = self.num_heads
@@ -269,6 +290,16 @@ class _AttnCl(nn.Module):
 
         # Fused SDPA with the relative-position bias as an additive mask.
         bias = cast(Tensor, self.rel_pos())  # (1, H, N, N)
+        if key_valid is not None:
+            # Non-divisible feature maps are zero-padded before partitioning,
+            # and a zero row is not "absent" — it is a key with a real
+            # embedding that every query then attends to.  Both references
+            # refuse the non-divisible case outright; since padding is used
+            # here as an extension, the pad columns must at least be driven
+            # out of the softmax, which is what the official Attention's
+            # ``attn_mask`` exists for.
+            pad_bias = (1.0 - key_valid.reshape(-1, 1, 1, N)) * -1e4
+            bias = bias + pad_bias
         out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias, scale=self.scale)
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)
         return cast(Tensor, self.proj(out))
@@ -311,7 +342,12 @@ class _PartitionAttn(nn.Module):
     """
 
     def __init__(
-        self, dim: int, num_heads: int, mlp_ratio: float, window_size: int
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float,
+        window_size: int,
+        drop_path_rate: float = 0.0,
     ) -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
@@ -319,11 +355,21 @@ class _PartitionAttn(nn.Module):
         self.norm2 = nn.LayerNorm(dim)
         hidden = int(dim * mlp_ratio)
         self.mlp = _MLP(dim, hidden)
+        # Stochastic depth on each residual branch separately, matching the
+        # reference's drop_path1 / drop_path2.  Parameter-free, so the
+        # state-dict layout this family mirrors is unaffected.
+        self.drop_path1 = DropPath(drop_path_rate)
+        self.drop_path2 = DropPath(drop_path_rate)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = x + cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))
-        x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+    def forward(  # type: ignore[override]
+        self, x: Tensor, key_valid: Tensor | None = None
+    ) -> Tensor:
+        attended = self.attn.forward(cast(Tensor, self.norm1(x)), key_valid)
+        x = x + cast(Tensor, self.drop_path1(attended))
+        x = x + cast(
+            Tensor, self.drop_path2(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)))))
+        )
         return x
 
 
@@ -375,6 +421,7 @@ class _Shortcut(nn.Module):
 
     def __init__(self, in_dim: int, out_dim: int, stride: int) -> None:
         super().__init__()
+        self._stride = stride
         if stride > 1:
             self.pool: nn.Module = nn.AvgPool2d(stride, stride=stride)
         else:
@@ -386,6 +433,13 @@ class _Shortcut(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        if self._stride > 1:
+            # timm's Downsample2d pools with TF-SAME geometry, matching the
+            # main branch's Conv2dSame.  A plain floor-mode AvgPool loses the
+            # trailing row/column on odd sizes, so the residual add hit
+            # 12x12 + 13x13 for any input that is not a multiple of the window
+            # grid — every resolution except the 224 the tests happen to use.
+            x = _tf_same_pad2d(x, kernel_size=self._stride, stride=self._stride)
         x = cast(Tensor, self.pool(x))
         return cast(Tensor, self.expand(x))
 
@@ -407,19 +461,27 @@ class _MBConv(nn.Module):
     """
 
     def __init__(
-        self, in_dim: int, out_dim: int, stride: int = 1, expand_ratio: int = 4
+        self,
+        in_dim: int,
+        out_dim: int,
+        stride: int = 1,
+        expand_ratio: int = 4,
+        drop_path_rate: float = 0.0,
     ) -> None:
         super().__init__()
         mid = out_dim * expand_ratio
+        # Stochastic depth on the residual branch (reference: MbConvBlock ends
+        # with ``x = self.drop_path(x) + shortcut``).
+        self.drop_path = DropPath(drop_path_rate)
 
         # Shortcut: always create when in_dim != out_dim or stride > 1
         if in_dim != out_dim or stride > 1:
             self.shortcut = _Shortcut(in_dim, out_dim, stride)
         # If same dim and stride=1, no shortcut attribute (identity skip)
 
-        self.pre_norm = nn.BatchNorm2d(in_dim, eps=1e-3)
+        self.pre_norm = nn.BatchNorm2d(in_dim, eps=1e-3, momentum=_BN_MOMENTUM)
         self.conv1_1x1 = nn.Conv2d(in_dim, mid, 1, bias=False)
-        self.norm1 = nn.BatchNorm2d(mid, eps=1e-3)
+        self.norm1 = nn.BatchNorm2d(mid, eps=1e-3, momentum=_BN_MOMENTUM)
         # DW conv with stride; when stride=2 timm uses Conv2dSame (TF-same padding),
         # so we store padding=0 and apply _tf_same_pad2d manually in forward.
         self._conv2_stride = stride
@@ -432,7 +494,7 @@ class _MBConv(nn.Module):
             groups=mid,
             bias=False,
         )
-        self.norm2 = nn.BatchNorm2d(mid, eps=1e-3)
+        self.norm2 = nn.BatchNorm2d(mid, eps=1e-3, momentum=_BN_MOMENTUM)
         self.se = _SE(mid)
         self.conv3_1x1 = nn.Conv2d(mid, out_dim, 1, bias=True)
 
@@ -454,7 +516,7 @@ class _MBConv(nn.Module):
         out = F.gelu(cast(Tensor, self.norm2(out)), approximate="tanh")
         out = cast(Tensor, self.se(out))
         out = cast(Tensor, self.conv3_1x1(out))
-        return shortcut + out
+        return shortcut + cast(Tensor, self.drop_path(out))
 
 
 # ---------------------------------------------------------------------------
@@ -481,12 +543,21 @@ class _MaxViTBlock(nn.Module):
         window_size: int,
         mlp_ratio: float,
         stride: int = 1,
+        drop_path_rate: float = 0.0,
     ) -> None:
         super().__init__()
         self.ws = window_size
-        self.conv = _MBConv(in_dim, out_dim, stride=stride)
-        self.attn_block = _PartitionAttn(out_dim, num_heads, mlp_ratio, window_size)
-        self.attn_grid = _PartitionAttn(out_dim, num_heads, mlp_ratio, window_size)
+        # One block-level rate shared by the MBConv and both attention
+        # branches, as the reference does.
+        self.conv = _MBConv(
+            in_dim, out_dim, stride=stride, drop_path_rate=drop_path_rate
+        )
+        self.attn_block = _PartitionAttn(
+            out_dim, num_heads, mlp_ratio, window_size, drop_path_rate=drop_path_rate
+        )
+        self.attn_grid = _PartitionAttn(
+            out_dim, num_heads, mlp_ratio, window_size, drop_path_rate=drop_path_rate
+        )
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -500,20 +571,37 @@ class _MaxViTBlock(nn.Module):
         x_cl = x.permute(0, 2, 3, 1)  # (B, H, W, C)
 
         # Pad to multiple of ws
+        pre_H, pre_W = int(x_cl.shape[1]), int(x_cl.shape[2])
         x_cl, orig_H, orig_W = _pad_to_multiple(x_cl, ws)
         _Hp, _Wp = x_cl.shape[1], x_cl.shape[2]
+
+        # A validity plane marking the real positions.  It rides through the
+        # exact same partitioning as the features, so each attention window
+        # learns which of its tokens are padding.
+        valid_cl: Tensor | None = None
+        if int(_Hp) != pre_H or int(_Wp) != pre_W:
+            ones = lucid.ones(1, pre_H, pre_W, 1, device=x_cl.device.type)
+            valid_cl, _, _ = _pad_to_multiple(ones, ws)
 
         # 2. Block (window) attention — local within ws×ws windows
         wins, nH, nW = _window_partition(x_cl, ws)  # (B*nH*nW, ws, ws, C)
         wins_seq = wins.reshape(-1, ws * ws, C)
-        wins_seq = cast(Tensor, self.attn_block(wins_seq))
+        win_valid: Tensor | None = None
+        if valid_cl is not None:
+            vw, _, _ = _window_partition(valid_cl, ws)
+            win_valid = vw.reshape(-1, ws * ws)
+        wins_seq = self.attn_block.forward(wins_seq, win_valid)
         wins = wins_seq.reshape(-1, ws, ws, C)
         x_cl = _window_reverse(wins, ws, nH, nW)  # (B, Hp, Wp, C)
 
         # 3. Grid attention — (B*nH*nW, ws², C) like window attention
         grids, gH, gW = _grid_partition(x_cl, ws)  # (B*nH*nW, ws, ws, C)
         grids_seq = grids.reshape(-1, ws * ws, C)  # (B*nH*nW, ws², C)
-        grids_seq = cast(Tensor, self.attn_grid(grids_seq))
+        grid_valid: Tensor | None = None
+        if valid_cl is not None:
+            vg, _, _ = _grid_partition(valid_cl, ws)
+            grid_valid = vg.reshape(-1, ws * ws)
+        grids_seq = self.attn_grid.forward(grids_seq, grid_valid)
         grids = grids_seq.reshape(-1, ws, ws, C)
         x_cl = _grid_reverse(grids, ws, gH, gW, B)  # (B, Hp, Wp, C)
 
@@ -544,8 +632,10 @@ class _MaxViTStage(nn.Module):
         num_heads: int,
         window_size: int,
         mlp_ratio: float,
+        dpr: list[float] | None = None,
     ) -> None:
         super().__init__()
+        rates = dpr if dpr is not None else [0.0] * depth
         block_list: list[nn.Module] = []
         for i in range(depth):
             # First block does spatial downsampling (stride=2) and dim expansion
@@ -559,6 +649,7 @@ class _MaxViTStage(nn.Module):
                     window_size=window_size,
                     mlp_ratio=mlp_ratio,
                     stride=blk_stride,
+                    drop_path_rate=rates[i],
                 )
             )
         self.blocks = nn.Sequential(*block_list)
@@ -591,7 +682,9 @@ class _PreLogits(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def _build_maxvit(cfg: MaxViTConfig) -> tuple[
+def _build_maxvit(
+    cfg: MaxViTConfig,
+) -> tuple[
     nn.Module,
     nn.ModuleList,
     list[FeatureInfo],
@@ -613,7 +706,7 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
             super().__init__()
             # padding=0: TF-same is applied manually in forward before conv1
             self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=2, padding=0, bias=True)
-            self.norm1 = nn.BatchNorm2d(out_ch, eps=1e-3)
+            self.norm1 = nn.BatchNorm2d(out_ch, eps=1e-3, momentum=_BN_MOMENTUM)
             # conv2 is stride=1 so symmetric padding=1 matches TF-same exactly
             self.conv2 = nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1, bias=True)
 
@@ -633,8 +726,16 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
     )
 
     prev_dim = stem_out
+    # Stochastic depth ramps linearly with the *global* block index and is then
+    # split per stage, so deeper blocks are dropped more often; a flat rate is
+    # a different regulariser.
+    total_blocks = sum(cfg.depths)
+    dpr_all = [
+        cfg.drop_path_rate * k / max(total_blocks - 1, 1) for k in range(total_blocks)
+    ]
+    cursor = 0
     for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims)):
-        num_heads = dim // _HEAD_DIM
+        num_heads = dim // cfg.head_dim
         stages_list.append(
             _MaxViTStage(
                 in_dim=prev_dim,
@@ -643,8 +744,10 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
                 num_heads=num_heads,
                 window_size=cfg.window_size,
                 mlp_ratio=cfg.mlp_ratio,
+                dpr=dpr_all[cursor : cursor + depth],
             )
         )
+        cursor += depth
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
         prev_dim = dim
         reduction *= 2
@@ -699,7 +802,7 @@ class MaxViT(PretrainedModel, BackboneMixin):
         Four MaxViT stages, each containing a stack of MaxViT blocks.
     head : _HeadNorm
         Pre-classification head: LayerNorm → ``Linear + Tanh`` → final
-        Linear (also present on the backbone for parameter sharing).
+        Linear.  Built only on the classifier — the backbone carries no head.
     feature_info : list[FeatureInfo]
         Four-stage feature description with reductions
         :math:`(4, 8, 16, 32)`.
@@ -732,8 +835,19 @@ class MaxViT(PretrainedModel, BackboneMixin):
         self.stem = stem
         self.stages = stages
         self._feature_info = fi
+
+        # Reference initialisation: trunc_normal_(0.02) on Linear / patch-embed
+        # convs with zero bias, unit LayerNorms, and the same draw for the
+        # class token and positional table (bare Parameters the framework
+        # default never touches — they were sitting at exact zeros).
+        init_transformer_trunc_normal(self)
         self._out_dim = out_dim
-        self.head = _HeadNorm(out_dim, out_dim, config.num_classes)
+        # No classifier here: this is the ``BackboneMixin`` half, and neither
+        # ``forward_features`` nor ``forward`` ever called the head.  The
+        # docstring justified it as "parameter sharing", but the classifier
+        # class builds its own independent trunk *and* head — nothing was
+        # shared, so a 1000-class projection was just dead weight on every
+        # backbone instance.
 
     @override
     @property
@@ -850,6 +964,17 @@ class MaxViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.stem = stem
         self.stages = stages
         self.head = _HeadNorm(out_dim, out_dim, config.num_classes)
+
+    @override
+    def reset_classifier(self, num_classes: int) -> None:
+        """Replace the final projection of the norm-MLP head.
+
+        The head is a ``_HeadNorm`` (matching timm's ``NormMlpClassifierHead``
+        layout), so only its inner ``fc`` is class-dependent; the norm and
+        pre-logits stages carry over.  The mixin's default looks for
+        ``self.classifier`` and raised ``AttributeError`` here.
+        """
+        self.head.fc = nn.Linear(self.head.fc.in_features, num_classes)
 
     @override
     def forward(  # type: ignore[override]

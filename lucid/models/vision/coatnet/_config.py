@@ -163,6 +163,10 @@ class CoAtNetConfig(ModelConfig):
     # comparable to a deeper homogeneous backbone while halving the memory
     # footprint of the deep transformer stack.
     mixed_s3: tuple[int, int, int] | None = None
+    # Table 10 lists stochastic depth for every variant (0.2/0.3/0.5/0.7
+    # for CoAtNet-0..3 on ImageNet-1k).  Default 0.0 leaves eval and
+    # weight transfer untouched; set it to reproduce the recipe.
+    drop_path_rate: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "blocks_per_stage", tuple(self.blocks_per_stage))

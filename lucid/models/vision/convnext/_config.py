@@ -132,7 +132,7 @@ class ConvNeXtConfig(ModelConfig):
     layer_scale_init: float = 1e-6
     # Every LayerNorm in the trunk uses ``eps=1e-6`` per the reference
     # ConvNeXt recipe (matches Facebook AI Research's official repo + the
-    # torchvision implementation).  Lucid's default LayerNorm eps is
+    # reference_vision implementation).  Lucid's default LayerNorm eps is
     # ``1e-5`` which is fine for from-scratch training but diverges
     # numerically from pretrained checkpoints; setting it here keeps the
     # surface-level model match exact when loading converted weights.

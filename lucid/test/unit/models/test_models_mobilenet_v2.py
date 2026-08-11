@@ -48,6 +48,18 @@ class TestMobileNetV2ParamCounts(unittest.TestCase):
             mobilenet_v2_075().num_parameters(),
         )
 
+    def test_exact_param_counts(self) -> None:
+        """Pin the counts, not just their ordering.
+
+        An inequality passes for any two wrong models.  These are the
+        values the factories declare to the registry, so drifting from
+        them means the docs site is now wrong too.
+        """
+        self.assertEqual(mobilenet_v2().num_parameters(), 2_223_872)
+        self.assertEqual(mobilenet_v2_075().num_parameters(), 1_355_424)
+        self.assertEqual(models.mobilenet_v2_cls().num_parameters(), 3_504_872)
+        self.assertEqual(models.mobilenet_v2_075_cls().num_parameters(), 2_636_424)
+
 
 class TestMobileNetV2Backbone(unittest.TestCase):
 
@@ -56,9 +68,23 @@ class TestMobileNetV2Backbone(unittest.TestCase):
         self.model.eval()
 
     def test_forward_features_shape(self) -> None:
+        # Pin every axis: asserting only the batch dimension passes for any
+        # backbone that preserves it, which is all of them.
         x = lucid.randn(1, 3, 224, 224)
         feat = self.model.forward_features(x)
-        self.assertEqual(feat.shape[0], 1)
+        self.assertEqual(tuple(feat.shape), (1, 1280, 1, 1))
+
+    def test_feature_info_reductions(self) -> None:
+        """The advertised pyramid must describe the strides actually built."""
+        info = self.model.feature_info
+        # Seven entries, not five: v2 exposes both halves of the two stages
+        # that change width without changing stride.
+        self.assertEqual([f.reduction for f in info], [2, 4, 8, 16, 16, 32, 32])
+        self.assertEqual([f.stage for f in info], list(range(1, 8)))
+        # Reductions must be non-decreasing — a stride can repeat but never
+        # go backwards.
+        reds = [f.reduction for f in info]
+        self.assertEqual(reds, sorted(reds))
 
     def test_forward_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput

@@ -2,15 +2,15 @@
 
 Eight paper-cited variants (Simonyan & Zisserman, ICLR 2015 —
 configurations A/B/D/E ≡ VGG-11/13/16/19, each with and without
-BatchNorm) — all converted from torchvision's
+BatchNorm) — all converted from reference_vision's
 ``VGG{11,13,16,19}[_BN]_Weights.IMAGENET1K_V1`` tag.  The BatchNorm
 variants are not in the original paper; they were added in the
-torchvision / timm reimplementations and converge faster with higher
+reference_vision / timm reimplementations and converge faster with higher
 final accuracy.
 
 Every checkpoint uses the standard ImageNet eval pipeline (224 crop /
 256 resize / bilinear / ImageNet stats).  Reported ``acc@1`` are the
-official torchvision validation top-1 figures (the paper itself only
+official reference_vision validation top-1 figures (the paper itself only
 tabulates top-5 error).
 """
 
@@ -30,7 +30,7 @@ class VGG11Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 69.020% / top-5 88.628%),
-        sourced from ``torchvision/VGG11_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/VGG11_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -52,7 +52,7 @@ class VGG11Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/VGG11_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/VGG11_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 132_863_336,
             "gflops": 7.609,
@@ -72,7 +72,7 @@ class VGG13Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 69.928% / top-5 89.246%),
-        sourced from ``torchvision/VGG13_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/VGG13_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -94,7 +94,7 @@ class VGG13Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/VGG13_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/VGG13_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 133_047_848,
             "gflops": 11.308,
@@ -114,7 +114,7 @@ class VGG16Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 71.592% / top-5 90.382%),
-        sourced from ``torchvision/VGG16_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/VGG16_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -136,7 +136,7 @@ class VGG16Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/VGG16_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/VGG16_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 138_357_544,
             "gflops": 15.470,
@@ -156,7 +156,7 @@ class VGG19Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 72.376% / top-5 90.876%),
-        sourced from ``torchvision/VGG19_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/VGG19_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -178,7 +178,7 @@ class VGG19Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/VGG19_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/VGG19_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 143_667_240,
             "gflops": 19.632,
@@ -198,7 +198,7 @@ class VGG11BNWeights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 70.370% / top-5 89.810%),
-        sourced from ``torchvision/VGG11_BN_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/VGG11_BN_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -206,7 +206,7 @@ class VGG11BNWeights(WeightsEnum):
     -----
     Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
     for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
-    BatchNorm added in the torchvision reimplementation (not in the
+    BatchNorm added in the reference_vision reimplementation (not in the
     original paper).
 
     Examples
@@ -222,7 +222,7 @@ class VGG11BNWeights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/VGG11_BN_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/VGG11_BN_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 132_868_840,
             "gflops": 7.609,
@@ -242,7 +242,7 @@ class VGG13BNWeights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 71.586% / top-5 90.374%),
-        sourced from ``torchvision/VGG13_BN_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/VGG13_BN_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -250,7 +250,7 @@ class VGG13BNWeights(WeightsEnum):
     -----
     Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
     for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
-    BatchNorm added in the torchvision reimplementation (not in the
+    BatchNorm added in the reference_vision reimplementation (not in the
     original paper).
 
     Examples
@@ -266,7 +266,7 @@ class VGG13BNWeights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/VGG13_BN_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/VGG13_BN_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 133_053_736,
             "gflops": 11.308,
@@ -286,7 +286,7 @@ class VGG16BNWeights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 73.360% / top-5 91.516%),
-        sourced from ``torchvision/VGG16_BN_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/VGG16_BN_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -294,7 +294,7 @@ class VGG16BNWeights(WeightsEnum):
     -----
     Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
     for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
-    BatchNorm added in the torchvision reimplementation (not in the
+    BatchNorm added in the reference_vision reimplementation (not in the
     original paper).
 
     Examples
@@ -310,7 +310,7 @@ class VGG16BNWeights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/VGG16_BN_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/VGG16_BN_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 138_365_992,
             "gflops": 15.470,
@@ -330,7 +330,7 @@ class VGG19BNWeights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 74.218% / top-5 91.842%),
-        sourced from ``torchvision/VGG19_BN_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/VGG19_BN_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -338,7 +338,7 @@ class VGG19BNWeights(WeightsEnum):
     -----
     Reference: Simonyan, Zisserman, *"Very Deep Convolutional Networks
     for Large-Scale Image Recognition"*, ICLR 2015 (arXiv:1409.1556).
-    BatchNorm added in the torchvision reimplementation (not in the
+    BatchNorm added in the reference_vision reimplementation (not in the
     original paper).
 
     Examples
@@ -354,7 +354,7 @@ class VGG19BNWeights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/VGG19_BN_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/VGG19_BN_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 143_678_248,
             "gflops": 19.632,

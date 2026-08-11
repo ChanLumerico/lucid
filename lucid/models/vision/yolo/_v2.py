@@ -27,17 +27,25 @@ Architecture (Darknet-19)
   512→1024 (3×3), 1024→512 (1×1), 512→1024 (3×3),
                   1024→512 (1×1), 512→1024 (3×3)
 
-Detection head
---------------
+Detection head (darknet yolov2.cfg layer stack)
+-----------------------------------------------
   1024→1024 (3×3) × 2
-  Passthrough: space_to_depth(26×26, s=2) → 2048ch; cat → 3072ch
-  3072→1024 (1×1)
+  Route reduce: 512→64 (1×1, BN+leaky)
+  Passthrough: space_to_depth(26×26×64, s=2) → 256ch; cat → 1280ch
+  1280→1024 (3×3)
   1024 → num_anchors × (5 + num_classes) (1×1, no BN/act)
+
+  NB: the paper's prose describes reorganising the full 512-channel route
+  into 2048 channels and concatenating that (→3072) instead.  The cfg —
+  which is what the released weights were trained with — inserts the
+  64-channel reduction first, and that is what is implemented here.
 
 Output: (B, A*(5+C), H, W) → (B, H*W*A, 5+C)
   Per anchor: [tx, ty, tw, th, conf, cls_0, …, cls_C-1]
   Decoded:    [sigmoid(tx)+c, sigmoid(ty)+r, pw·exp(tw), ph·exp(th)]
-              conf = sigmoid(conf_raw), classes = raw (softmax at inference)
+              conf = sigmoid(conf_raw), classes = softmax(cls_raw)
+              (softmax at inference *and* in the class loss — they must
+              agree, see ``_compute_loss``)
 
 Losses (training)
 -----------------
@@ -72,8 +80,28 @@ if TYPE_CHECKING:
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Default COCO anchor clusters (relative to 32-pixel cells)
+# yolov2.cfg [region] thresh: an unmatched predictor whose best IoU against a
+# ground-truth box exceeds this is excluded from the no-object loss, so a
+# near-duplicate good box is not trained toward zero confidence.
+_NOOBJ_IOU_THRESH: float = 0.6
+
+# Dimension-cluster anchors, in units of 32-pixel cells.
+#
+# These are per-dataset: the k-means clustering runs on the training set's
+# boxes, so VOC and COCO produce different priors.  The default head here is
+# 80-class (COCO), so it takes the COCO clusters — the VOC set below was
+# previously used under a "COCO" label, pairing 20-class priors with an
+# 80-class head.
 _COCO_ANCHORS: tuple[tuple[float, float], ...] = (
+    (0.57273, 0.677385),
+    (1.87446, 2.06253),
+    (3.33843, 5.47434),
+    (7.88282, 3.52778),
+    (9.77052, 9.16828),
+)
+
+# The 20-class clustering, for a VOC-configured head.
+_VOC_ANCHORS: tuple[tuple[float, float], ...] = (
     (1.3221, 1.73145),
     (3.19275, 4.00944),
     (5.05587, 8.09892),
@@ -135,7 +163,6 @@ class YOLOV2Config(ModelConfig):
         nms_thresh:   IoU threshold for NMS at inference.
         lambda_coord: Up-weighting for box regression loss.
         lambda_noobj: Down-weighting for no-object confidence loss.
-        tiny:         Use the tiny Darknet backbone.
     """
 
     model_type: ClassVar[str] = "yolo_v2"
@@ -148,7 +175,6 @@ class YOLOV2Config(ModelConfig):
     nms_thresh: float = 0.5
     lambda_coord: float = 5.0
     lambda_noobj: float = 0.5
-    tiny: bool = False
 
     def __post_init__(self) -> None:
         if len(self.anchors) != self.num_anchors:
@@ -250,69 +276,6 @@ class _Darknet19(nn.Module):
         return route, out
 
 
-@final
-class _Darknet19Tiny(nn.Module):
-    """Lightweight Darknet-19 backbone without bottleneck layers in stages 3–5.
-
-    The structure is designed so that:
-      - ``route`` is captured at stride-16 (H/16 × W/16) with 512 channels,
-        matching the passthrough expectation of the full Darknet-19.
-      - ``out`` is at stride-32 (H/32 × W/32) with 1024 channels.
-
-    Returns:
-        (route, out):
-            route: (B, 512, H/16, W/16)
-            out:   (B, 1024, H/32, W/32)
-    """
-
-    def __init__(self, in_channels: int) -> None:
-        super().__init__()
-        # Four pooling stages → stride-16 (H/16, W/16) entering stage5
-        self.stage1 = nn.Sequential(
-            _conv_bn_lrelu(in_channels, 16, 3, padding=1),
-            nn.MaxPool2d(2, stride=2),
-        )
-        self.stage2 = nn.Sequential(
-            _conv_bn_lrelu(16, 32, 3, padding=1),
-            nn.MaxPool2d(2, stride=2),
-        )
-        self.stage3 = nn.Sequential(
-            _conv_bn_lrelu(32, 64, 3, padding=1),
-            nn.MaxPool2d(2, stride=2),
-        )
-        self.stage4 = nn.Sequential(
-            _conv_bn_lrelu(64, 128, 3, padding=1),
-            nn.MaxPool2d(2, stride=2),
-        )
-        # Stage 5 at stride-16: 128→256→512 (passthrough route hook)
-        self.stage5 = nn.Sequential(
-            _conv_bn_lrelu(128, 256, 3, padding=1),
-            _conv_bn_lrelu(256, 512, 3, padding=1),
-        )
-        # Pool56: stride-16 → stride-32
-        self.pool56 = nn.MaxPool2d(2, stride=2)
-        # Stage 6 at stride-32: 512→1024 (main output)
-        self.stage6 = nn.Sequential(
-            _conv_bn_lrelu(512, 1024, 3, padding=1),
-        )
-
-    @override
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
-        x = cast(Tensor, self.stage1(x))  # stride-2
-        x = cast(Tensor, self.stage2(x))  # stride-4
-        x = cast(Tensor, self.stage3(x))  # stride-8
-        x = cast(Tensor, self.stage4(x))  # stride-16
-        route = cast(Tensor, self.stage5(x))  # stride-16, 512ch  ← passthrough
-        x = cast(Tensor, self.pool56(route))  # stride-32
-        out = cast(Tensor, self.stage6(x))  # stride-32, 1024ch
-        return route, out
-
-
-# ---------------------------------------------------------------------------
-# Space-to-depth (passthrough layer)
-# ---------------------------------------------------------------------------
-
-
 def _space_to_depth(x: Tensor, block_size: int) -> Tensor:
     """Rearrange spatial blocks into the channel dimension (passthrough).
 
@@ -338,6 +301,14 @@ def _space_to_depth(x: Tensor, block_size: int) -> Tensor:
 
     # (B, C, H, W)
     # → (B, C, new_h, bs, new_w, bs)
+    # Divergence, deliberate: this is the textbook pixel-unshuffle
+    # (tf.nn.space_to_depth).  darknet's reorg_layer is *not* — its
+    # ``reorg_cpu`` branch indexes as if the input were a
+    # (w*stride, h*stride, c/stride^2) tensor, which scrambles channels
+    # against spatial position.  The two agree on shape and on the
+    # multiset of values, so training from scratch is unaffected, but a
+    # port of darknet weights would have to reproduce the quirk exactly
+    # — no YOLOv2 checkpoint ships here, so the readable form is used.
     x = x.reshape(B, C, new_h, bs, new_w, bs)
     # → (B, new_h, new_w, C, bs, bs)
     x = x.permute(0, 2, 4, 1, 3, 5)
@@ -373,14 +344,13 @@ class YOLOV2ForObjectDetection(PretrainedModel):
     Parameters
     ----------
     config : YOLOV2Config
-        Frozen architecture spec.  Use :func:`yolo_v2` or
-        :func:`yolo_v2_tiny` for the standard variants.
+        Frozen architecture spec.  Use :func:`yolo_v2`.
 
     Attributes
     ----------
     config : YOLOV2Config
         Stored copy of the config that built this model.
-    backbone : _Darknet19 or _Darknet19Tiny
+    backbone : _Darknet19
         Darknet-19 trunk producing a 512-channel stride-16 route feature
         and a 1024-channel stride-32 trunk feature.
     det1, det2, det3 : _conv_bn_lrelu
@@ -432,24 +402,26 @@ class YOLOV2ForObjectDetection(PretrainedModel):
         C = config.num_classes
 
         # Backbone
-        if config.tiny:
-            self.backbone: _Darknet19 | _Darknet19Tiny = _Darknet19Tiny(
-                config.in_channels
-            )
-            route_ch = 512
-        else:
-            self.backbone = _Darknet19(config.in_channels)
-            route_ch = 512
+        self.backbone = _Darknet19(config.in_channels)
+        route_ch = 512
 
         # Detection head conv layers (applied to stride-32 feature map)
         self.det1 = _conv_bn_lrelu(1024, 1024, 3, padding=1)
         self.det2 = _conv_bn_lrelu(1024, 1024, 3, padding=1)
 
-        # Passthrough: route_ch * 4 (space-to-depth s=2) + 1024
-        pt_ch = route_ch * 4  # 512 * 4 = 2048
-        merged_ch = pt_ch + 1024  # 3072
+        # Passthrough, per darknet's yolov2.cfg:
+        #     [route] -9  →  conv 64 1x1 (BN+leaky)  →  [reorg] stride 2 (→256)
+        #     [route] -1,-4  →  1280 ch  →  conv 1024 3x3
+        # The paper's prose instead describes reorganising the full 26x26x512
+        # route straight into 13x13x2048 and concatenating that.  The two
+        # disagree; the cfg is what every released YOLOv2 weight file was
+        # trained with, so the cfg wins here and the divergence is called out
+        # in the module docstring.
+        self.route_reduce = _conv_bn_lrelu(route_ch, 64, 1)
+        pt_ch = 64 * 4  # space-to-depth s=2 on the reduced route → 256
+        merged_ch = pt_ch + 1024  # 1280
 
-        self.det3 = _conv_bn_lrelu(merged_ch, 1024, 1)
+        self.det3 = _conv_bn_lrelu(merged_ch, 1024, 3, padding=1)
         # Final prediction conv: no BN, no activation
         self.pred = nn.Conv2d(1024, A * (5 + C), 1)
 
@@ -463,11 +435,12 @@ class YOLOV2ForObjectDetection(PretrainedModel):
         feat = cast(Tensor, self.det1(feat))  # (B, 1024, H/32, W/32)
         feat = cast(Tensor, self.det2(feat))
 
-        # Passthrough: space_to_depth on route → (B, 2048, H/32, W/32)
+        # Passthrough: 1x1 reduce to 64 ch, then space_to_depth → (B, 256, ...)
+        route = cast(Tensor, self.route_reduce(route))
         passthrough = _space_to_depth(route, 2)
 
         # Concatenate along channel axis
-        feat = lucid.cat([passthrough, feat], dim=1)  # (B, 3072, H/32, W/32)
+        feat = lucid.cat([passthrough, feat], dim=1)  # (B, 1280, H/32, W/32)
         feat = cast(Tensor, self.det3(feat))  # (B, 1024, H/32, W/32)
         return cast(Tensor, self.pred(feat))  # (B, A*(5+C), H/32, W/32)
 
@@ -475,7 +448,7 @@ class YOLOV2ForObjectDetection(PretrainedModel):
         self,
         raw: Tensor,
         image_size: tuple[int, int],
-    ) -> tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor]:
         """Decode raw anchor predictions to flat predictions.
 
         Args:
@@ -560,7 +533,12 @@ class YOLOV2ForObjectDetection(PretrainedModel):
         # Class logits: (B, fH, fW, A, C) → (B, fH*fW*A, C)
         logits = raw_cls.reshape(B_batch, fH * fW * A, C)
 
-        return logits, pred_boxes
+        # Objectness σ(t_o) — Pr(object)·IOU.  darknet's region layer scores a
+        # detection as σ(t_o)·softmax(class); dropping it lets every empty-cell
+        # anchor compete on class probability alone.
+        conf = F.sigmoid(raw[..., 4]).reshape(B_batch, fH * fW * A)
+
+        return logits, pred_boxes, conf
 
     def _compute_loss(
         self,
@@ -619,8 +597,13 @@ class YOLOV2ForObjectDetection(PretrainedModel):
             # Responsible cell: floor(cx/stride_w), floor(cy/stride_h)
             # responsible anchor: highest IoU between GT wh and anchor wh (both centred)
 
+            # A dict keyed by (row, col, anchor) silently dropped an earlier
+            # object whenever a second one landed on the same predictor — and
+            # the loser's slot was not even excluded from the no-object
+            # penalty.  Keep every claimant; darknet accumulates deltas for
+            # all of them.
             assigned: dict[
-                tuple[int, int, int], tuple[float, float, float, float, int]
+                tuple[int, int, int], list[tuple[float, float, float, float, int]]
             ] = {}
 
             for m in range(M):
@@ -649,7 +632,51 @@ class YOLOV2ForObjectDetection(PretrainedModel):
                         best_iou = wh_iou
                         best_a = a
 
-                assigned[(row, col, best_a)] = (cx_m, cy_m, w_m, h_m, cls_m)
+                assigned.setdefault((row, col, best_a), []).append(
+                    (cx_m, cy_m, w_m, h_m, cls_m)
+                )
+
+            # Per-predictor best IoU against every GT in this image.  darknet's
+            # region layer needs it twice: the objectness target is the IoU
+            # itself (cfg ``rescore=1``), and an unmatched predictor whose IoU
+            # already exceeds ``thresh`` is *skipped* rather than pushed to
+            # zero — otherwise a near-duplicate good box is trained as
+            # background.
+            gt_boxes_px = [
+                (
+                    float(gt_cx[m].item()),
+                    float(gt_cy[m].item()),
+                    float(gt_w[m].item()),
+                    float(gt_h[m].item()),
+                )
+                for m in range(M)
+            ]
+
+            def _pred_box(
+                row: int, col: int, a: int
+            ) -> tuple[float, float, float, float]:
+                cell = raw_r[bi, row, col, a, :]
+                bx = (1.0 / (1.0 + math.exp(-float(cell[0].item()))) + col) * stride_w
+                by = (1.0 / (1.0 + math.exp(-float(cell[1].item()))) + row) * stride_h
+                bw = anchors[a][0] * stride_w * math.exp(float(cell[2].item()))
+                bh = anchors[a][1] * stride_h * math.exp(float(cell[3].item()))
+                return bx, by, bw, bh
+
+            def _best_gt_iou(row: int, col: int, a: int) -> float:
+                if not gt_boxes_px:
+                    return 0.0
+                bx, by, bw, bh = _pred_box(row, col, a)
+                px1, py1, px2, py2 = bx - bw / 2, by - bh / 2, bx + bw / 2, by + bh / 2
+                best = 0.0
+                for gcx, gcy, gw, gh in gt_boxes_px:
+                    gx1, gy1 = gcx - gw / 2, gcy - gh / 2
+                    gx2, gy2 = gcx + gw / 2, gcy + gh / 2
+                    iw = max(0.0, min(px2, gx2) - max(px1, gx1))
+                    ih = max(0.0, min(py2, gy2) - max(py1, gy1))
+                    inter = iw * ih
+                    union = bw * bh + gw * gh - inter
+                    best = max(best, inter / max(union, 1e-6))
+                return best
 
             xy_terms: list[Tensor] = []
             wh_terms: list[Tensor] = []
@@ -670,50 +697,81 @@ class YOLOV2ForObjectDetection(PretrainedModel):
                         raw_cls = raw_cell[5:]  # (C,)
 
                         if (row, col, a) in assigned:
-                            cx_m, cy_m, w_m, h_m, cls_m = assigned[(row, col, a)]
+                            # Every object that claimed this predictor
+                            # contributes; a collision used to erase all but
+                            # the last.
+                            for cx_m, cy_m, w_m, h_m, cls_m in assigned[(row, col, a)]:
 
-                            # tx, ty targets: inverse sigmoid of fractional cell offset
-                            tgt_tx_rel = cx_m / stride_w - float(col)
-                            tgt_ty_rel = cy_m / stride_h - float(row)
-                            tgt_tx_rel = max(1e-6, min(1.0 - 1e-6, tgt_tx_rel))
-                            tgt_ty_rel = max(1e-6, min(1.0 - 1e-6, tgt_ty_rel))
+                                # tx, ty targets: inverse sigmoid of fractional cell offset
+                                tgt_tx_rel = cx_m / stride_w - float(col)
+                                tgt_ty_rel = cy_m / stride_h - float(row)
+                                tgt_tx_rel = max(1e-6, min(1.0 - 1e-6, tgt_tx_rel))
+                                tgt_ty_rel = max(1e-6, min(1.0 - 1e-6, tgt_ty_rel))
 
-                            sig_tx = F.sigmoid(raw_tx)
-                            sig_ty = F.sigmoid(raw_ty)
-                            xy_terms.append(
-                                (sig_tx - lucid.tensor([tgt_tx_rel])[0]) ** 2
-                            )
-                            xy_terms.append(
-                                (sig_ty - lucid.tensor([tgt_ty_rel])[0]) ** 2
-                            )
+                                sig_tx = F.sigmoid(raw_tx)
+                                sig_ty = F.sigmoid(raw_ty)
+                                xy_terms.append(
+                                    (sig_tx - lucid.tensor([tgt_tx_rel])[0]) ** 2
+                                )
+                                xy_terms.append(
+                                    (sig_ty - lucid.tensor([tgt_ty_rel])[0]) ** 2
+                                )
 
-                            # tw, th targets: log(gt / anchor)
-                            aw = anchors[a][0] * stride_w
-                            ah = anchors[a][1] * stride_h
-                            tgt_tw = math.log(max(w_m, 1e-6) / max(aw, 1e-6))
-                            tgt_th = math.log(max(h_m, 1e-6) / max(ah, 1e-6))
-                            wh_terms.append((raw_tw - lucid.tensor([tgt_tw])[0]) ** 2)
-                            wh_terms.append((raw_th - lucid.tensor([tgt_th])[0]) ** 2)
+                                # tw, th targets: log(gt / anchor)
+                                aw = anchors[a][0] * stride_w
+                                ah = anchors[a][1] * stride_h
+                                tgt_tw = math.log(max(w_m, 1e-6) / max(aw, 1e-6))
+                                tgt_th = math.log(max(h_m, 1e-6) / max(ah, 1e-6))
+                                wh_terms.append(
+                                    (raw_tw - lucid.tensor([tgt_tw])[0]) ** 2
+                                )
+                                wh_terms.append(
+                                    (raw_th - lucid.tensor([tgt_th])[0]) ** 2
+                                )
 
-                            # Confidence target = 1.0
-                            sig_conf = F.sigmoid(raw_conf)
-                            conf_obj.append((sig_conf - lucid.ones((1,))[0]) ** 2)
+                                # Objectness regresses Pr(object) x IoU, which is
+                                # what the paper defines sigma(t_o) to be and what
+                                # ``rescore=1`` selects in darknet.  A constant 1.0
+                                # target makes confidence uninformative for ranking.
+                                sig_conf = F.sigmoid(raw_conf)
+                                tgt_conf = _best_gt_iou(row, col, a)
+                                conf_obj.append(
+                                    (sig_conf - lucid.tensor([tgt_conf])[0]) ** 2
+                                )
 
-                            # Class loss: MSE vs one-hot
-                            tgt_cls_list = [0.0] * C
-                            tgt_cls_list[cls_m] = 1.0
-                            tgt_cls_t = lucid.tensor(tgt_cls_list)
-                            cls_terms.append(((raw_cls - tgt_cls_t) ** 2).sum())
+                                # Class loss: MSE vs one-hot on the SOFTMAX
+                                # probabilities — the same quantity postprocess
+                                # thresholds.  Training the raw logits instead
+                                # drives them to a one-hot *logit* row, whose
+                                # softmax peak is only 1/(C-1+e) ≈ 0.03 for C=80,
+                                # so a perfectly fitted model would emit no
+                                # detections at all.  Darknet's region layer
+                                # likewise takes the delta against the softmax.
+                                tgt_cls_list = [0.0] * C
+                                tgt_cls_list[cls_m] = 1.0
+                                tgt_cls_t = lucid.tensor(tgt_cls_list)
+                                cls_prob = F.softmax(raw_cls, dim=-1)
+                                cls_terms.append(((cls_prob - tgt_cls_t) ** 2).sum())
 
                         else:
-                            # No-object: confidence should be 0
+                            # cfg [region] thresh = .6 — an unmatched predictor
+                            # that already overlaps a GT well is left alone.
+                            if _best_gt_iou(row, col, a) > _NOOBJ_IOU_THRESH:
+                                continue
                             sig_conf = F.sigmoid(raw_conf)
                             conf_noobj.append(sig_conf**2)
 
             def _mean_or_zero(parts: list[Tensor]) -> Tensor:
+                # darknet's region layer is a SUM of squared errors over all cells and
+                # predictors, not a per-group mean.  Averaging each group
+                # separately renormalises the ~S²·B background confidence
+                # terms against the handful of object terms, which is exactly
+                # what lambda_noobj exists to control — so the mean form
+                # silently cancels it and makes the balance drift with grid
+                # size and object count.
                 if not parts:
                     return lucid.zeros((1,))
-                return lucid.cat([t.reshape(1) for t in parts]).mean()
+                return lucid.cat([t.reshape(1) for t in parts]).sum()
 
             loss_xy = lc * _mean_or_zero(xy_terms)
             loss_wh = lc * _mean_or_zero(wh_terms)
@@ -731,7 +789,7 @@ class YOLOV2ForObjectDetection(PretrainedModel):
         self,
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
-        image_size: tuple[int, int] = (416, 416),
+        image_size: tuple[int, int] | None = None,
     ) -> ObjectDetectionOutput:
         """Run YOLOv2 forward pass.
 
@@ -741,7 +799,12 @@ class YOLOV2ForObjectDetection(PretrainedModel):
                         Each dict has:
                         - ``"boxes"``:  (M_i, 4) xyxy boxes normalised to [0,1].
                         - ``"labels"``: (M_i,) integer class indices.
-            image_size: (H, W) of the input image in pixels (default 416×416).
+            image_size: (H, W) of the input image in pixels.  Defaults to
+                        ``x``'s own spatial size; pass it only to assert
+                        the resolution you expect.  Boxes are decoded in
+                        pixels of this size, so a value that disagrees
+                        with ``x`` is rejected rather than silently
+                        rescaling every box.
 
         Returns:
             :class:`~lucid.models._output.ObjectDetectionOutput` with:
@@ -749,14 +812,31 @@ class YOLOV2ForObjectDetection(PretrainedModel):
             - ``pred_boxes``: (B, fH*fW*A, 4) decoded xyxy pixel boxes
             - ``loss``:       scalar tensor when targets are provided, else None
         """
+        actual = (int(x.shape[2]), int(x.shape[3]))
+        if image_size is not None and tuple(image_size) != actual:
+            raise ValueError(
+                f"image_size={tuple(image_size)} does not match the input, "
+                f"which is {actual}.  Decoded boxes are in pixels of "
+                "image_size, so a mismatch would rescale every box by "
+                f"{actual[0] / image_size[0]:.3g}x vertically and "
+                f"{actual[1] / image_size[1]:.3g}x horizontally.  Omit "
+                "image_size to use the input's own resolution."
+            )
+        image_size = actual
+
         raw = self._forward_raw(x)
-        logits, pred_boxes = self._decode_predictions(raw, image_size)
+        logits, pred_boxes, objectness = self._decode_predictions(raw, image_size)
 
         loss: Tensor | None = None
         if targets is not None:
             loss = self._compute_loss(raw, targets, image_size)
 
-        return ObjectDetectionOutput(logits=logits, pred_boxes=pred_boxes, loss=loss)
+        return ObjectDetectionOutput(
+            logits=logits,
+            pred_boxes=pred_boxes,
+            loss=loss,
+            objectness=objectness,
+        )
 
     def postprocess(
         self,
@@ -784,6 +864,8 @@ class YOLOV2ForObjectDetection(PretrainedModel):
 
             # Class probabilities via softmax
             sc_b = F.softmax(lg_b, dim=-1)  # (N, C)
+            if output.objectness is not None:
+                sc_b = sc_b * output.objectness[b][:, None]
 
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
@@ -844,19 +926,6 @@ _CFG_V2 = YOLOV2Config(
     nms_thresh=0.5,
     lambda_coord=5.0,
     lambda_noobj=0.5,
-    tiny=False,
-)
-
-_CFG_V2_TINY = YOLOV2Config(
-    num_classes=80,
-    in_channels=3,
-    num_anchors=5,
-    anchors=_COCO_ANCHORS,
-    score_thresh=0.5,
-    nms_thresh=0.5,
-    lambda_coord=5.0,
-    lambda_noobj=0.5,
-    tiny=True,
 )
 
 
@@ -920,52 +989,3 @@ def yolo_v2(
     1
     """
     return _make_v2(_CFG_V2, overrides)
-
-
-@register_model(
-    task="object-detection",
-    family="yolo",
-    model_type="yolo_v2",
-    model_class=YOLOV2ForObjectDetection,
-    default_config=_CFG_V2_TINY,
-)
-def yolo_v2_tiny(
-    pretrained: bool = False,
-    **overrides: object,
-) -> YOLOV2ForObjectDetection:
-    r"""YOLOv2-Tiny — lightweight Darknet variant of YOLOv2.
-
-    Builds a compact YOLOv2 detector with a slimmer Darknet backbone
-    (no bottleneck stages); same anchor priors and detection head shape
-    as :func:`yolo_v2`.  Used as the speed-optimised reference variant
-    in the YOLO9000 release notes.
-
-    Parameters
-    ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
-    **overrides
-        Keyword overrides forwarded into :class:`YOLOV2Config`.
-
-    Returns
-    -------
-    YOLOV2ForObjectDetection
-        Detector with the YOLOv2-Tiny configuration applied (or with
-        ``overrides`` merged on top of it).
-
-    Notes
-    -----
-    Lighter backbone alternative to :func:`yolo_v2`; head topology is
-    unchanged.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.yolo._v2 import yolo_v2_tiny
-    >>> model = yolo_v2_tiny()
-    >>> x = lucid.randn(1, 3, 416, 416)
-    >>> out = model(x)
-    >>> out.logits.shape[0]
-    1
-    """
-    return _make_v2(_CFG_V2_TINY, overrides)

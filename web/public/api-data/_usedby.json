@@ -2711,6 +2711,10 @@
     {
       "kind": "module",
       "module": "lucid.models.text.gpt2._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.transformer._model"
     }
   ],
   "lucid.models._output.NormalizingFlowOutput": [
@@ -2773,6 +2777,16 @@
       "module": "lucid.models.vision.yolo._v4"
     }
   ],
+  "lucid.models._output.QuestionAnsweringOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._model"
+    }
+  ],
   "lucid.models._output.SemanticSegmentationOutput": [
     {
       "kind": "module",
@@ -2807,6 +2821,26 @@
     {
       "kind": "module",
       "module": "lucid.models.text.transformer._model"
+    }
+  ],
+  "lucid.models._output.SequenceClassificationOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._model"
+    }
+  ],
+  "lucid.models._output.TokenClassificationOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._model"
     }
   ],
   "lucid.models._output.VAEOutput": [
@@ -4719,6 +4753,12 @@
     {
       "kind": "module",
       "module": "lucid.models.text.transformer._pretrained"
+    }
+  ],
+  "lucid.models.text.transformer._model.TransformerModelOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.transformer"
     }
   ],
   "lucid.models.text.transformer._pretrained.transformer_base": [
@@ -7025,6 +7065,12 @@
       "module": "lucid.models.vision.maskformer._pretrained"
     }
   ],
+  "lucid.models.vision.maskformer._model.MaskFormerOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.maskformer"
+    }
+  ],
   "lucid.models.vision.maskformer._pretrained.maskformer_resnet101": [
     {
       "kind": "module",
@@ -7533,18 +7579,6 @@
       "module": "lucid.models.vision.pvt._pretrained"
     }
   ],
-  "lucid.models.vision.pvt._pretrained.pvt_tiny": [
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.pvt"
-    }
-  ],
-  "lucid.models.vision.pvt._pretrained.pvt_tiny_cls": [
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.pvt"
-    }
-  ],
   "lucid.models.vision.pvt._pretrained.pvt_v2_b0": [
     {
       "kind": "module",
@@ -7576,6 +7610,12 @@
     }
   ],
   "lucid.models.vision.pvt._pretrained.pvt_v2_b2_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.pvt"
+    }
+  ],
+  "lucid.models.vision.pvt._pretrained.pvt_v2_b2_li": [
     {
       "kind": "module",
       "module": "lucid.models.vision.pvt"
@@ -8210,6 +8250,18 @@
     }
   ],
   "lucid.models.vision.resnext._pretrained.resnext_101_32x8d_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext"
+    }
+  ],
+  "lucid.models.vision.resnext._pretrained.resnext_101_64x4d": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.resnext"
+    }
+  ],
+  "lucid.models.vision.resnext._pretrained.resnext_101_64x4d_cls": [
     {
       "kind": "module",
       "module": "lucid.models.vision.resnext"
@@ -9289,12 +9341,6 @@
       "module": "lucid.models.vision.yolo"
     }
   ],
-  "lucid.models.vision.yolo._v2.yolo_v2_tiny": [
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.yolo"
-    }
-  ],
   "lucid.models.vision.yolo._v3.YOLOV3Config": [
     {
       "kind": "module",
@@ -9412,7 +9458,15 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models._utils._common"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models._utils._detection"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models._utils._generative"
     },
     {
       "kind": "module",
@@ -9525,6 +9579,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.googlenet._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.googlenet._pretrained"
     },
     {
       "kind": "module",
@@ -9962,10 +10020,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.vision.yolo._v1"
-    },
-    {
-      "kind": "module",
       "module": "lucid.models.vision.yolo._v2"
     },
     {
@@ -10362,6 +10416,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.functional.attention"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.modules.activation"
     },
     {
@@ -10535,6 +10593,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional.attention"
     },
     {
       "kind": "module",
@@ -15183,6 +15245,20 @@
     {
       "kind": "module",
       "module": "lucid.utils.transforms._misc"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
+    }
+  ],
+  "lucid.utils.transforms._geometric.ResizeShortestEdge": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._presets"
     }
   ],
   "lucid.utils.transforms._geometric.SmallestMaxSize": [

@@ -20,10 +20,9 @@ timm                            Lucid
 ``head.{weight,bias}``          ``classifier.{weight,bias}``
 ==============================  =========================
 
-PVT v2-B1 is intentionally *not* shipped here: Lucid's ``_CFG_B1`` uses
-``depths=(2, 2, 4, 2)`` (~17.3M params) whereas the paper / timm
-``pvt_v2_b1`` is ``depths=(2, 2, 2, 2)`` (~14.0M).  Converting B1 would
-require a config edit, which is out of scope for a key-mapping converter.
+The B1 note this file used to carry is obsolete: ``_CFG_B1`` is
+``depths=(2, 2, 2, 2)``, matching the paper and timm's ``pvt_v2_b1``, so
+the config edit it said would be required has already happened.
 """
 
 import dataclasses

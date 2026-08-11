@@ -10,10 +10,7 @@ import importlib
 
 # (test file → list of model modules it imports at the top)
 _PENDING_MODULES = {
-    "test_models_inception.py": (
-        "lucid.models.vision.inception_v4",
-        "lucid.models.vision.inception_resnet",
-    ),
+    "test_models_inception_v4.py": ("lucid.models.vision.inception_v4",),
     "test_models_mobilenet_v4.py": ("lucid.models.vision.mobilenet_v4",),
 }
 

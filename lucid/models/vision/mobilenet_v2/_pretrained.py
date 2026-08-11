@@ -11,6 +11,7 @@ from lucid.models.vision.mobilenet_v2._model import (
     MobileNetV2ForImageClassification,
 )
 from lucid.models.vision.mobilenet_v2._weights import MobileNetV2Weights
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_100 = MobileNetV2Config(width_mult=1.0)
 _CFG_075 = MobileNetV2Config(width_mult=0.75)
@@ -25,6 +26,7 @@ _CFG_075 = MobileNetV2Config(width_mult=0.75)
     model_type="mobilenet_v2",
     model_class=MobileNetV2,
     default_config=_CFG_100,
+    params=2223872,
 )
 def mobilenet_v2(pretrained: bool = False, **overrides: object) -> MobileNetV2:
     r"""MobileNet-v2 backbone at width multiplier :math:`\alpha = 1.0`.
@@ -67,6 +69,8 @@ def mobilenet_v2(pretrained: bool = False, **overrides: object) -> MobileNetV2:
     >>> out.last_hidden_state.shape
     (1, 1280, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("mobilenet_v2", alternative="mobilenet_v2_cls")
     cfg = (
         replace(_CFG_100, **cast(dict[str, Any], overrides)) if overrides else _CFG_100
     )
@@ -79,15 +83,21 @@ def mobilenet_v2(pretrained: bool = False, **overrides: object) -> MobileNetV2:
     model_type="mobilenet_v2",
     model_class=MobileNetV2,
     default_config=_CFG_075,
+    params=1355424,
 )
 def mobilenet_v2_075(pretrained: bool = False, **overrides: object) -> MobileNetV2:
     r"""MobileNet-v2 backbone at width multiplier :math:`\alpha = 0.75`.
 
     Builds a :class:`MobileNetV2` with every channel count multiplied
-    by 0.75 — approximately 2.6M parameters.  Sandler et al., 2018
-    (Table 4) report 69.8% ImageNet-1k top-1 accuracy with this
-    configuration, at roughly 60% of the FLOPs of the full-width
-    model.
+    by 0.75 — 1.36M parameters headless (2.64M with the classifier
+    head).
+
+    Sandler et al., 2018 has no :math:`\alpha = 0.75` row: Table 4
+    tabulates only 1.0 and 1.4, and 0.75 appears solely in Figure 5's
+    caption as a point on a curve.  The often-quoted 69.8% top-1 is
+    the TF model-zoo figure for ``mobilenet_v2_0.75_224``, not a paper
+    result, and the paper's 300M MAdds is for :math:`\alpha = 1.0`
+    only — it supports no FLOP ratio for this width.
 
     Parameters
     ----------
@@ -121,6 +131,8 @@ def mobilenet_v2_075(pretrained: bool = False, **overrides: object) -> MobileNet
     >>> out.last_hidden_state.shape
     (1, 1280, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("mobilenet_v2_075")
     cfg = (
         replace(_CFG_075, **cast(dict[str, Any], overrides)) if overrides else _CFG_075
     )
@@ -139,6 +151,7 @@ def mobilenet_v2_075(pretrained: bool = False, **overrides: object) -> MobileNet
     model_type="mobilenet_v2",
     model_class=MobileNetV2ForImageClassification,
     default_config=_CFG_100,
+    params=3504872,
 )
 def mobilenet_v2_cls(
     pretrained: bool | str = False,
@@ -186,7 +199,7 @@ def mobilenet_v2_cls(
     -----
     See Sandler et al., "MobileNetV2: Inverted Residuals and Linear
     Bottlenecks", CVPR 2018 (arXiv:1801.04381), Table 4.  Pretrained
-    weights are converted from torchvision's ``MobileNet_V2_Weights``
+    weights are converted from reference_vision's ``MobileNet_V2_Weights``
     and hosted on the Hugging Face Hub under ``lucid-dl/mobilenet-v2``.
 
     Examples
@@ -221,6 +234,7 @@ def mobilenet_v2_cls(
     model_type="mobilenet_v2",
     model_class=MobileNetV2ForImageClassification,
     default_config=_CFG_075,
+    params=2636424,
 )
 def mobilenet_v2_075_cls(
     pretrained: bool = False, **overrides: object
@@ -228,8 +242,9 @@ def mobilenet_v2_075_cls(
     r"""MobileNet-v2 image classifier at width multiplier :math:`\alpha = 0.75`.
 
     Builds a :class:`MobileNetV2ForImageClassification` with the
-    paper-cited 0.75-width topology — approximately 2.6M parameters
-    and 69.8% ImageNet-1k top-1 in Sandler et al., 2018 (Table 4).
+    0.75-width topology — 2.64M parameters.  The 69.8% top-1 usually
+    quoted for this width comes from the TF model zoo, not from
+    Sandler et al., which tabulates only 1.0 and 1.4.
 
     Parameters
     ----------
@@ -261,6 +276,8 @@ def mobilenet_v2_075_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("mobilenet_v2_075_cls")
     cfg = (
         replace(_CFG_075, **cast(dict[str, Any], overrides)) if overrides else _CFG_075
     )

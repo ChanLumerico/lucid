@@ -714,6 +714,57 @@ def _gather_corner(
     return feat_flat[:, flat].reshape(C, ny, nx)
 
 
+def paste_masks_in_image(
+    masks: Tensor,
+    boxes: Tensor,
+    image_size: tuple[int, int],
+    threshold: float = 0.5,
+) -> Tensor:
+    """Resize each RoI mask onto its box and paste it into a full-image canvas.
+
+    A mask head predicts on a fixed ``m x m`` grid in *RoI* coordinates.  That
+    grid means nothing to a consumer until it is stretched back onto the box
+    it came from and placed in the image — which is what the reference's
+    ``paste_masks_in_image`` does, and what makes the configured binarisation
+    threshold meaningful.
+
+    Args:
+        masks:      ``(D, 1, m, m)`` sigmoid probabilities in RoI space.
+        boxes:      ``(D, 4)`` xyxy boxes in image coordinates.
+        image_size: ``(H, W)`` of the image to paste into.
+        threshold:  Probabilities strictly above this become 1.
+
+    Returns:
+        ``(D, 1, H, W)`` binary masks.  A degenerate box yields an all-zero
+        plane rather than an error.
+    """
+    H, W = image_size
+    D = int(masks.shape[0])
+    if D == 0:
+        return lucid.zeros((0, 1, H, W), device=masks.device.type)
+
+    planes: list[Tensor] = []
+    for i in range(D):
+        x1 = int(math.floor(float(boxes[i, 0].item())))
+        y1 = int(math.floor(float(boxes[i, 1].item())))
+        x2 = int(math.ceil(float(boxes[i, 2].item())))
+        y2 = int(math.ceil(float(boxes[i, 3].item())))
+        # Clamp to the canvas; the reference keeps a minimum extent of 1.
+        x1, y1 = max(0, min(x1, W - 1)), max(0, min(y1, H - 1))
+        x2, y2 = max(x1 + 1, min(x2, W)), max(y1 + 1, min(y2, H))
+
+        resized: Tensor = F.interpolate(
+            masks[i : i + 1],
+            size=(y2 - y1, x2 - x1),
+            mode="bilinear",
+            align_corners=False,
+        )
+        binary: Tensor = (resized > threshold).float()  # (1, 1, bh, bw)
+        planes.append(F.pad(binary, (x1, W - x2, y1, H - y2)))
+
+    return lucid.cat(planes, dim=0)
+
+
 def roi_pool(
     input: Tensor,
     boxes: list[Tensor],
@@ -723,7 +774,11 @@ def roi_pool(
     """RoI Pool (max-pool variant used in R-CNN / Fast R-CNN).
 
     Quantises RoI boundaries to integer pixels then adaptively
-    average-pools each bin to ``output_size``.
+    **max**-pools each bin to ``output_size``.  Max — not average — is
+    the operation Fast R-CNN §2.1 defines: "RoI max pooling works by
+    dividing the h x w RoI window into an H x W grid of sub-windows ...
+    and max-pooling the values in each sub-window into the corresponding
+    output grid cell".
 
     Args:
         input:        (B, C, H, W) feature map.
@@ -743,7 +798,7 @@ def roi_pool(
     feat_W = int(input.shape[3])
     C = int(input.shape[1])
 
-    pool = nn.AdaptiveAvgPool2d((out_h, out_w))
+    pool = nn.AdaptiveMaxPool2d((out_h, out_w))
     results: list[Tensor] = []
 
     for b_idx, roi_boxes in enumerate(boxes):
@@ -758,10 +813,16 @@ def roi_pool(
             x2 = int(round(float(roi_boxes[n, 2].item()) * spatial_scale))
             y2 = int(round(float(roi_boxes[n, 3].item()) * spatial_scale))
 
+            # Both the Caffe original and reference_vision treat the rounded end
+            # coordinate as *inclusive*:
+            #     roi_width = max(roi_end_w - roi_start_w + 1, 1)
+            # Python slicing is exclusive, so the window was one column and one
+            # row short — a RoI rounding to columns 2..5 pooled 2,3,4 instead of
+            # 2,3,4,5.  Add the +1 back when converting to a slice bound.
             x1 = max(0, min(x1, feat_W - 1))
             y1 = max(0, min(y1, feat_H - 1))
-            x2 = max(x1 + 1, min(x2, feat_W))
-            y2 = max(y1 + 1, min(y2, feat_H))
+            x2 = max(x1 + 1, min(x2 + 1, feat_W))
+            y2 = max(y1 + 1, min(y2 + 1, feat_H))
 
             crop: Tensor = feat[:, y1:y2, x1:x2]  # (C, rH, rW)
             pooled = cast(Tensor, pool(crop.unsqueeze(0))).squeeze(0)
@@ -1162,7 +1223,15 @@ def solve_assignment(
     if nr == 0:
         return [], []
     nc = len(cost[0])
-    assert nr <= nc, "solve_assignment expects n_rows <= n_cols"
+    if nr > nc:
+        # The reference matcher hands scipy either orientation and gets back
+        # ``min(n_rows, n_cols)`` pairs.  A bare assert here turned "more
+        # ground-truth objects than queries" — a legitimate image, and what
+        # ``num_queries=20`` produces on a crowded scene — into a crash.
+        # Solve the transpose and swap the result back.
+        transposed = [[cost[r][c] for r in range(nr)] for c in range(nc)]
+        cols, rows = solve_assignment(transposed)
+        return rows, cols
 
     INF = float("inf")
     u = [0.0] * (nr + 1)
@@ -1213,7 +1282,7 @@ def solve_assignment(
 
 
 # ---------------------------------------------------------------------------
-# §6  Reference ResNet-50-FPN building blocks (torchvision-exact key layout)
+# §6  Reference ResNet-50-FPN building blocks (reference_vision-exact key layout)
 # ---------------------------------------------------------------------------
 #
 # The blocks below mirror the reference ``fasterrcnn_resnet50_fpn`` submodule
@@ -1480,9 +1549,16 @@ def _fpn_level_for_boxes(
     """
     eps = 1e-6
     area = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
-    s = area.clamp(0.0, 1e18).sqrt()
+    # ``eps`` belongs *outside* the log, as Eq. 1 and the docstring above
+    # both write it and as the reference's ``LevelMapper`` applies it: its
+    # job is to stop a box that lands exactly on a level boundary from
+    # floor()-ing down, not to regularise the logarithm.  Inside the log it
+    # instead shifts every box's scale slightly, which changes the boundary
+    # itself.  The lower clamp keeps a degenerate (zero-area) box out of
+    # log2(0) now that eps no longer covers for it.
+    s = area.clamp(0.0, 1e18).sqrt().clamp(min=1e-12)
     lvl = lucid.floor(
-        float(canonical_level) + lucid.log2(s / float(canonical_scale) + eps)
+        float(canonical_level) + lucid.log2(s / float(canonical_scale)) + eps
     )
     lvl = lvl.clamp(float(k_min), float(k_max))
     return (lvl - float(k_min)).long()
@@ -1547,12 +1623,19 @@ def multiscale_roi_align(
     all_boxes = lucid.cat(flat_boxes, dim=0)  # (R, 4)
     R = int(all_boxes.shape[0])
 
+    # Source image of every row of ``all_boxes``.  ``roi_align`` selects the
+    # feature map by *list position*, so a flattened box list would silently
+    # pool every RoI from image 0; the batch index has to survive the flatten.
+    img_of: list[int] = []
+    for b_idx, b in enumerate(boxes):
+        img_of.extend([b_idx] * int(b.shape[0]))
+
     # NB: the reference ``MultiScaleRoIAlign`` calls ``roi_align`` with the
     # default ``aligned=False`` (no half-pixel offset) — NOT ``aligned=True``.
     if num_levels == 1:
         return roi_align(
             features[0],
-            [all_boxes],
+            list(boxes),
             output_size=output_size,
             spatial_scale=spatial_scales[0],
             sampling_ratio=sampling_ratio,
@@ -1567,22 +1650,35 @@ def multiscale_roi_align(
     )  # (R,) 0-based
     lvl_list: list[int] = [int(levels[i].item()) for i in range(R)]
 
+    n_img = len(boxes)
     out_rows: list[Tensor | None] = [None] * R
     for level in range(num_levels):
         idx = [i for i in range(R) if lvl_list[i] == level]
         if not idx:
             continue
-        idx_t = lucid.tensor(idx, device=dev).long()
-        boxes_lvl = all_boxes[idx_t]
+        # Regroup this level's rows per source image so ``roi_align`` reads
+        # each RoI from the feature map it actually came from.  ``roi_align``
+        # emits image-major and skips empty entries, so ``order`` — built the
+        # same way — maps its rows back to their original flat positions.
+        per_img: list[Tensor] = []
+        order: list[int] = []
+        for b_idx in range(n_img):
+            sel = [i for i in idx if img_of[i] == b_idx]
+            if sel:
+                sel_t = lucid.tensor(sel, device=dev).long()
+                per_img.append(all_boxes[sel_t])
+            else:
+                per_img.append(lucid.zeros((0, 4), device=dev))
+            order.extend(sel)
         pooled = roi_align(
             features[level],
-            [boxes_lvl],
+            per_img,
             output_size=output_size,
             spatial_scale=spatial_scales[level],
             sampling_ratio=sampling_ratio,
             aligned=False,
         )  # (len(idx), C, o, o)
-        for j, orig in enumerate(idx):
+        for j, orig in enumerate(order):
             out_rows[orig] = pooled[j : j + 1]
 
     parts: list[Tensor] = [r for r in out_rows if r is not None]

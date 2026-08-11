@@ -16,10 +16,19 @@ units and a logistic prior) and differ only in the reported likelihood and
 the paper's preprocessing, so both names are kept for discoverability.
 
 The configs here follow the *paper*, which is what the reported
-likelihoods belong to.  The released reference configs diverge: 8 coupling
-layers for TFD / CIFAR-10, a normal prior for SVHN / CIFAR-10, no input
-reordering outside MNIST / TFD, and 2400 units for CIFAR-10.  Layer count,
-prior, reordering and width are all reachable through overrides — e.g.
+likelihoods belong to.  The released reference configs diverge from it in
+more places than one:
+
+* TFD — 8 coupling layers of 2000 units with a logistic prior, against
+  Figure 3's 4 layers of 5000 with a gaussian one.
+* SVHN — 3 hidden layers per coupling network, against Figure 3's 4.
+* CIFAR-10 — 8 coupling layers, 2400 units, a normal prior, and a
+  learning rate of 2e-4 where the others use 1e-3.
+* Input reordering is used only for MNIST and TFD.
+* All four train with RMSProp + momentum, not the AdaM of §5.1.
+
+Layer count, prior, reordering and width are all reachable through
+overrides — e.g.
 ``create_model("nice_cifar", num_coupling_layers=8, hidden_dim=2400,
 prior="gaussian", input_reorder="none")`` — with one exception: those
 configs give each coupling network a *different* depth (CIFAR-10 runs
@@ -40,6 +49,7 @@ from typing import Any, cast
 from lucid.models._registry import register_model
 from lucid.models.generative.nice._config import NICEConfig
 from lucid.models.generative.nice._model import NICEForImageGeneration, NICEModel
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # Paper Figure 3 — MNIST: 784 dims, 5 hidden layers of 1000, logistic prior.
 _CFG_MNIST = NICEConfig(
@@ -91,6 +101,7 @@ def _apply(cfg: NICEConfig, overrides: dict[str, object]) -> NICEConfig:
     model_type="nice",
     model_class=NICEModel,
     default_config=_CFG_MNIST,
+    params=19158352,
 )
 def nice_mnist(pretrained: bool = False, **overrides: object) -> NICEModel:
     r"""Construct the NICE flow for the MNIST setup.
@@ -125,12 +136,14 @@ def nice_mnist(pretrained: bool = False, **overrides: object) -> NICEModel:
     --------
     >>> import lucid
     >>> from lucid.models.generative.nice import nice_mnist
-    >>> model = nice_mnist().eval()
-    >>> x = lucid.rand((1, 784))
+    >>> model = nice_mnist(input_dim=64, hidden_dim=16).eval()
+    >>> x = lucid.rand((1, 64))
     >>> h, log_det = model.encode(x)
     >>> h.shape, log_det.shape
-    ((1, 784), (1,))
+    ((1, 64), (1,))
     """
+    if pretrained:
+        reject_unavailable_pretrained("nice_mnist")
     return NICEModel(_apply(_CFG_MNIST, overrides))
 
 
@@ -140,6 +153,7 @@ def nice_mnist(pretrained: bool = False, **overrides: object) -> NICEModel:
     model_type="nice",
     model_class=NICEModel,
     default_config=_CFG_TFD,
+    params=346166912,
 )
 def nice_tfd(pretrained: bool = False, **overrides: object) -> NICEModel:
     r"""Construct the NICE flow for the Toronto Face Database setup.
@@ -174,12 +188,14 @@ def nice_tfd(pretrained: bool = False, **overrides: object) -> NICEModel:
     --------
     >>> import lucid
     >>> from lucid.models.generative.nice import nice_tfd
-    >>> model = nice_tfd().eval()
+    >>> model = nice_tfd(input_dim=64, hidden_dim=16).eval()
     >>> model.prior
     'gaussian'
     >>> model.input_dim
-    2304
+    64
     """
+    if pretrained:
+        reject_unavailable_pretrained("nice_tfd")
     return NICEModel(_apply(_CFG_TFD, overrides))
 
 
@@ -189,6 +205,7 @@ def nice_tfd(pretrained: bool = False, **overrides: object) -> NICEModel:
     model_type="nice",
     model_class=NICEModel,
     default_config=_CFG_SVHN,
+    params=72617216,
 )
 def nice_svhn(pretrained: bool = False, **overrides: object) -> NICEModel:
     r"""Construct the NICE flow for the SVHN setup.
@@ -225,10 +242,12 @@ def nice_svhn(pretrained: bool = False, **overrides: object) -> NICEModel:
     --------
     >>> import lucid
     >>> from lucid.models.generative.nice import nice_svhn
-    >>> model = nice_svhn().eval()
+    >>> model = nice_svhn(input_dim=64, hidden_dim=16).eval()
     >>> model.input_dim
-    3072
+    64
     """
+    if pretrained:
+        reject_unavailable_pretrained("nice_svhn")
     return NICEModel(_apply(_CFG_SVHN, overrides))
 
 
@@ -238,6 +257,7 @@ def nice_svhn(pretrained: bool = False, **overrides: object) -> NICEModel:
     model_type="nice",
     model_class=NICEModel,
     default_config=_CFG_CIFAR,
+    params=72617216,
 )
 def nice_cifar(pretrained: bool = False, **overrides: object) -> NICEModel:
     r"""Construct the NICE flow for the CIFAR-10 setup.
@@ -276,11 +296,13 @@ def nice_cifar(pretrained: bool = False, **overrides: object) -> NICEModel:
     --------
     >>> import lucid
     >>> from lucid.models.generative.nice import nice_cifar
-    >>> model = nice_cifar().eval()
-    >>> x = lucid.rand((1, 3072)) * 2.0 - 1.0
+    >>> model = nice_cifar(input_dim=64, hidden_dim=16).eval()
+    >>> x = lucid.rand((1, 64)) * 2.0 - 1.0
     >>> model.log_prob(x).shape
     (1,)
     """
+    if pretrained:
+        reject_unavailable_pretrained("nice_cifar")
     return NICEModel(_apply(_CFG_CIFAR, overrides))
 
 
@@ -293,6 +315,7 @@ def nice_cifar(pretrained: bool = False, **overrides: object) -> NICEModel:
     model_type="nice",
     model_class=NICEForImageGeneration,
     default_config=_CFG_MNIST,
+    params=19158352,
 )
 def nice_mnist_gen(
     pretrained: bool = False, **overrides: object
@@ -327,10 +350,12 @@ def nice_mnist_gen(
     Examples
     --------
     >>> from lucid.models.generative.nice import nice_mnist_gen
-    >>> model = nice_mnist_gen().eval()
+    >>> model = nice_mnist_gen(input_dim=64, hidden_dim=16).eval()
     >>> model.generate(n_samples=4).samples.shape
-    (4, 784)
+    (4, 64)
     """
+    if pretrained:
+        reject_unavailable_pretrained("nice_mnist_gen")
     return NICEForImageGeneration(_apply(_CFG_MNIST, overrides))
 
 
@@ -340,6 +365,7 @@ def nice_mnist_gen(
     model_type="nice",
     model_class=NICEForImageGeneration,
     default_config=_CFG_TFD,
+    params=346166912,
 )
 def nice_tfd_gen(
     pretrained: bool = False, **overrides: object
@@ -374,10 +400,12 @@ def nice_tfd_gen(
     Examples
     --------
     >>> from lucid.models.generative.nice import nice_tfd_gen
-    >>> model = nice_tfd_gen().eval()
+    >>> model = nice_tfd_gen(input_dim=64, hidden_dim=16).eval()
     >>> model.generate(n_samples=2).samples.shape
-    (2, 2304)
+    (2, 64)
     """
+    if pretrained:
+        reject_unavailable_pretrained("nice_tfd_gen")
     return NICEForImageGeneration(_apply(_CFG_TFD, overrides))
 
 
@@ -387,6 +415,7 @@ def nice_tfd_gen(
     model_type="nice",
     model_class=NICEForImageGeneration,
     default_config=_CFG_SVHN,
+    params=72617216,
 )
 def nice_svhn_gen(
     pretrained: bool = False, **overrides: object
@@ -423,6 +452,8 @@ def nice_svhn_gen(
     >>> model.generate(n_samples=2).samples.shape
     (2, 3072)
     """
+    if pretrained:
+        reject_unavailable_pretrained("nice_svhn_gen")
     return NICEForImageGeneration(_apply(_CFG_SVHN, overrides))
 
 
@@ -432,6 +463,7 @@ def nice_svhn_gen(
     model_type="nice",
     model_class=NICEForImageGeneration,
     default_config=_CFG_CIFAR,
+    params=72617216,
 )
 def nice_cifar_gen(
     pretrained: bool = False, **overrides: object
@@ -472,4 +504,6 @@ def nice_cifar_gen(
     >>> out.samples.shape
     (2, 3072)
     """
+    if pretrained:
+        reject_unavailable_pretrained("nice_cifar_gen")
     return NICEForImageGeneration(_apply(_CFG_CIFAR, overrides))

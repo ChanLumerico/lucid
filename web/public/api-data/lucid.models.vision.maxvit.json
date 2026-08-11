@@ -3,7 +3,7 @@
   "name": "maxvit",
   "path": "lucid.models.vision.maxvit",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/__init__.py#L1",
   "members": [
     {
       "name": "MaxViTConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "MaxViTConfig(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (2, 2, 5, 2), dims: tuple[int, ...] = (64, 128, 256, 512), window_size: int = 7, num_heads: int = 32, mlp_ratio: float = 4.0, stem_width: int | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_config.py#L10",
+      "signature": "MaxViTConfig(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (2, 2, 5, 2), dims: tuple[int, ...] = (64, 128, 256, 512), window_size: int = 7, head_dim: int = 32, mlp_ratio: float = 4.0, stem_width: int | None = None, drop_path_rate: float = 0.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.maxvit._config.MaxViTConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (2, 2, 5, 2), dims: tuple[int, ...] = (64, 128, 256, 512), window_size: int = 7, num_heads: int = 32, mlp_ratio: float = 4.0, stem_width: int | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_config.py#L1",
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, depths: tuple[int, ...] = (2, 2, 5, 2), dims: tuple[int, ...] = (64, 128, 256, 512), window_size: int = 7, head_dim: int = 32, mlp_ratio: float = 4.0, stem_width: int | None = None, drop_path_rate: float = 0.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -75,9 +75,9 @@
           "default": "7"
         },
         {
-          "name": "num_heads",
+          "name": "head_dim",
           "annotation": "int",
-          "description": "Number of attention heads used by both block and grid\nattention.  In practice the reference recipe fixes `head_dim`\nto 32 and derives `num_heads = dim / 32` per stage; this\nfield is informational.  Defaults to `32`.",
+          "description": "Size of each attention head.  Table 11 fixes this at 32 and\nderives the head count per stage as `dim // head_dim`, so this\nis the knob that actually sets attention granularity.  Defaults\nto `32`.",
           "default": "32"
         },
         {
@@ -122,7 +122,7 @@
       ],
       "labels": [],
       "signature": "MaxViT(config: MaxViTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_model.py#L660",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_model.py#L763",
       "subcategory": "model",
       "methods": [
         {
@@ -131,7 +131,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MaxViTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_model.py#L729",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_model.py#L832",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -155,7 +155,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_model.py#L740",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_model.py#L854",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -176,7 +176,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_model.py#L743",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_model.py#L857",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -198,7 +198,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_model.py#L752",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_model.py#L866",
           "subcategory": "model",
           "summary": "Return bias tensor of shape (1, num_heads, ws², ws²).",
           "extended": null,
@@ -247,7 +247,7 @@
         {
           "name": "head",
           "annotation": "_HeadNorm",
-          "description": "Pre-classification head: LayerNorm → `Linear + Tanh` → final\nLinear (also present on the backbone for parameter sharing)."
+          "description": "Pre-classification head: LayerNorm → `Linear + Tanh` → final\nLinear.  Built only on the classifier — the backbone carries no head."
         },
         {
           "name": "feature_info",
@@ -269,7 +269,7 @@
       ],
       "labels": [],
       "signature": "MaxViTForImageClassification(config: MaxViTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_model.py#L790",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_model.py#L904",
       "subcategory": "model",
       "methods": [
         {
@@ -278,10 +278,32 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MaxViTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_model.py#L847",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_model.py#L961",
           "subcategory": "model",
           "summary": null,
           "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reset_classifier",
+          "path": "lucid.models.vision.maxvit._model.MaxViTForImageClassification.reset_classifier",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset_classifier(num_classes: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_model.py#L968",
+          "subcategory": "model",
+          "summary": "Replace the final projection of the norm-MLP head.",
+          "extended": "The head is a `_HeadNorm` (matching timm's `NormMlpClassifierHead`\nlayout), so only its inner `fc` is class-dependent; the norm and\npre-logits stages carry over.  The mixin's default looks for\n`self.classifier` and raised `AttributeError` here.",
           "parameters": [],
           "returns": {
             "annotation": "None",
@@ -300,7 +322,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_model.py#L854",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_model.py#L979",
           "subcategory": "model",
           "summary": "Return bias tensor of shape (1, num_heads, ws², ws²).",
           "extended": null,
@@ -361,7 +383,7 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_tiny(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L73",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L74",
       "subcategory": "pretrained",
       "summary": "MaxViT-Tiny backbone (Tu et al., 2022).",
       "extended": "Builds the canonical *MaxViT-Tiny* configuration:\n`depths=(2, 2, 5, 2)`, `dims=(64, 128, 256, 512)`,\n`window_size=7`.  Approximately **31M parameters**.",
@@ -393,6 +415,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 30139848,
       "model_summary": {
         "name": "MaxViT",
         "type": "MaxViT",
@@ -1867,7 +1890,7 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_tiny_cls(pretrained: bool | str = False, weights: MaxViTTinyWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L310",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L330",
       "subcategory": "pretrained",
       "summary": "MaxViT-Tiny image classifier (Tu et al., 2022).",
       "extended": "Combines the `maxvit_tiny` backbone with the reference\nNormMLP classifier head (LayerNorm → `Linear + Tanh` → final\nLinear).  Default output is `num_classes=1000` (ImageNet-1k).\n~31M parameters.",
@@ -1905,6 +1928,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 30916528,
       "model_summary": {
         "name": "MaxViTForImageClassification",
         "type": "MaxViTForImageClassification",
@@ -3379,10 +3403,10 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_small(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L121",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L125",
       "subcategory": "pretrained",
       "summary": "MaxViT-Small backbone (Tu et al., 2022).",
-      "extended": "Builds the canonical *MaxViT-Small* configuration: same depths\nas MaxViT-Tiny (`depths=(2, 2, 5, 2)`) but wider —\n`dims=(96, 192, 384, 768)`.  Approximately **55.8M parameters**.",
+      "extended": "Builds the canonical *MaxViT-Small* configuration: same depths\nas MaxViT-Tiny (`depths=(2, 2, 5, 2)`) but wider —\n`dims=(96, 192, 384, 768)`.  **67.6M parameters** headless\n(68.9M with the classifier head; paper Table 1 lists 69M).",
       "parameters": [
         {
           "name": "pretrained",
@@ -3411,6 +3435,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 67566828,
       "model_summary": {
         "name": "MaxViT",
         "type": "MaxViT",
@@ -4885,7 +4910,7 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_small_cls(pretrained: bool | str = False, weights: MaxViTSmallWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L375",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L396",
       "subcategory": "pretrained",
       "summary": "MaxViT-Small image classifier (Tu et al., 2022).",
       "extended": "Combines the `maxvit_small` backbone (`depths=(2, 2, 5, 2)`,\n`dims=(96, 192, 384, 768)`) with the reference NormMLP head.\n~68.9M parameters.",
@@ -4923,6 +4948,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 68927956,
       "model_summary": {
         "name": "MaxViTForImageClassification",
         "type": "MaxViTForImageClassification",
@@ -6397,10 +6423,10 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_base(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L166",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L174",
       "subcategory": "pretrained",
       "summary": "MaxViT-Base backbone (Tu et al., 2022).",
-      "extended": "Builds the canonical *MaxViT-Base* configuration:\n`depths=(2, 6, 14, 2)`, `dims=(96, 192, 384, 768)`.\nApproximately **96.6M parameters**.",
+      "extended": "Builds the canonical *MaxViT-Base* configuration:\n`depths=(2, 6, 14, 2)`, `dims=(96, 192, 384, 768)`.\n**118.1M parameters** headless (119.5M with the classifier\nhead; paper Table 1 lists 119M).",
       "parameters": [
         {
           "name": "pretrained",
@@ -6429,6 +6455,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 118106580,
       "model_summary": {
         "name": "MaxViT",
         "type": "MaxViT",
@@ -7904,7 +7931,7 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_base_cls(pretrained: bool | str = False, weights: MaxViTBaseWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L438",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L460",
       "subcategory": "pretrained",
       "summary": "MaxViT-Base image classifier (Tu et al., 2022).",
       "extended": "Combines the `maxvit_base` backbone (`depths=(2, 6, 14, 2)`,\n`dims=(96, 192, 384, 768)`) with the reference NormMLP head.\n~119.5M parameters.",
@@ -7942,6 +7969,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 119467708,
       "model_summary": {
         "name": "MaxViTForImageClassification",
         "type": "MaxViTForImageClassification",
@@ -9417,10 +9445,10 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_large(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L211",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L223",
       "subcategory": "pretrained",
       "summary": "MaxViT-Large backbone (Tu et al., 2022).",
-      "extended": "Builds the canonical *MaxViT-Large* configuration:\n`depths=(2, 6, 14, 2)`, `dims=(128, 256, 512, 1024)`.\nApproximately **171.2M parameters**.",
+      "extended": "Builds the canonical *MaxViT-Large* configuration:\n`depths=(2, 6, 14, 2)`, `dims=(128, 256, 512, 1024)`.\n**209.7M parameters** headless (211.8M with the classifier\nhead; paper Table 1 lists 212M).",
       "parameters": [
         {
           "name": "pretrained",
@@ -9449,6 +9477,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 209708912,
       "model_summary": {
         "name": "MaxViT",
         "type": "MaxViT",
@@ -10924,7 +10953,7 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_large_cls(pretrained: bool | str = False, weights: MaxViTLargeWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L501",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L524",
       "subcategory": "pretrained",
       "summary": "MaxViT-Large image classifier (Tu et al., 2022).",
       "extended": "Combines the `maxvit_large` backbone (`depths=(2, 6, 14, 2)`,\n`dims=(128, 256, 512, 1024)`) with the reference NormMLP head.\n~211.8M parameters.",
@@ -10962,6 +10991,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 211785560,
       "model_summary": {
         "name": "MaxViTForImageClassification",
         "type": "MaxViTForImageClassification",
@@ -12437,10 +12467,10 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_xlarge(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L256",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L272",
       "subcategory": "pretrained",
       "summary": "MaxViT-XLarge backbone (Tu et al., 2022).",
-      "extended": "Builds the canonical *MaxViT-XLarge* configuration:\n`depths=(2, 6, 14, 2)`, `dims=(192, 384, 768, 1536)`.\nApproximately **383.7M parameters** — the largest variant in the\npaper.",
+      "extended": "Builds the canonical *MaxViT-XLarge* configuration:\n`depths=(2, 6, 14, 2)`, `dims=(192, 384, 768, 1536)`.\n**471.1M parameters** headless (475.0M with the classifier head,\nwhich is the paper's 475M figure) — the largest variant in the\npaper.",
       "parameters": [
         {
           "name": "pretrained",
@@ -12469,6 +12499,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 471051048,
       "model_summary": {
         "name": "MaxViT",
         "type": "MaxViT",
@@ -13944,10 +13975,10 @@
       "kind": "function",
       "labels": [],
       "signature": "maxvit_xlarge_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_pretrained.py#L561",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_pretrained.py#L585",
       "subcategory": "pretrained",
       "summary": "MaxViT-XLarge image classifier (Tu et al., 2022).",
-      "extended": "Combines the `maxvit_xlarge` backbone (`depths=(2, 6, 14, 2)`,\n`dims=(192, 384, 768, 1536)`) with the reference NormMLP head.\n~383.7M parameters — the largest MaxViT variant.",
+      "extended": "Combines the `maxvit_xlarge` backbone (`depths=(2, 6, 14, 2)`,\n`dims=(192, 384, 768, 1536)`) with the reference NormMLP head.\n~475.0M parameters — the largest MaxViT variant.",
       "parameters": [
         {
           "name": "pretrained",
@@ -13976,6 +14007,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 474951952,
       "model_summary": {
         "name": "MaxViTForImageClassification",
         "type": "MaxViTForImageClassification",
@@ -15455,7 +15487,7 @@
       ],
       "labels": [],
       "signature": "MaxViTBaseWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_weights.py#L73",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_weights.py#L73",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.maxvit_base_cls`.",
@@ -15479,7 +15511,7 @@
       ],
       "labels": [],
       "signature": "MaxViTLargeWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_weights.py#L98",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_weights.py#L98",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.maxvit_large_cls`.",
@@ -15503,7 +15535,7 @@
       ],
       "labels": [],
       "signature": "MaxViTSmallWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_weights.py#L48",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_weights.py#L48",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.maxvit_small_cls`.",
@@ -15527,7 +15559,7 @@
       ],
       "labels": [],
       "signature": "MaxViTTinyWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maxvit/_weights.py#L23",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maxvit/_weights.py#L23",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.maxvit_tiny_cls`.",

@@ -19,6 +19,7 @@ from lucid.models.vision.cspnet._weights import (
     CSPResNet50Weights,
     CSPResNeXt50Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Per-variant configs (timm ``model_cfgs`` values, paper-faithful).
@@ -36,7 +37,9 @@ _CFG_CSPRESNET_50 = CSPNetConfig(
     expand_ratio=(2.0, 2.0, 2.0, 2.0),
     bottle_ratio=(0.5, 0.5, 0.5, 0.5),
     block_ratio=(1.0, 1.0, 1.0, 1.0),
-    cross_linear=(True, True, True, True),
+    # csresnet50.cfg / csresnext50.cfg: the split convs are
+    # activation=leaky in stages 1 and 4, activation=linear in 2 and 3.
+    cross_linear=(False, True, True, False),
     down_growth=(False, False, False, False),
     block_type=("bottle", "bottle", "bottle", "bottle"),
 )
@@ -53,7 +56,9 @@ _CFG_CSPRESNEXT_50 = CSPNetConfig(
     expand_ratio=(1.0, 1.0, 1.0, 1.0),
     bottle_ratio=(1.0, 1.0, 1.0, 1.0),
     block_ratio=(0.5, 0.5, 0.5, 0.5),
-    cross_linear=(True, True, True, True),
+    # csresnet50.cfg / csresnext50.cfg: the split convs are
+    # activation=leaky in stages 1 and 4, activation=linear in 2 and 3.
+    cross_linear=(False, True, True, False),
     down_growth=(False, False, False, False),
     block_type=("bottle", "bottle", "bottle", "bottle"),
 )
@@ -109,6 +114,8 @@ def cspresnet_50(pretrained: bool = False, **overrides: object) -> CSPNet:
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
     """
+    if pretrained:
+        reject_unavailable_pretrained("cspresnet_50", alternative="cspresnet_50_cls")
     return _b(_CFG_CSPRESNET_50, overrides)
 
 
@@ -130,6 +137,8 @@ def cspresnext_50(pretrained: bool = False, **overrides: object) -> CSPNet:
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
     """
+    if pretrained:
+        reject_unavailable_pretrained("cspresnext_50", alternative="cspresnext_50_cls")
     return _b(_CFG_CSPRESNEXT_50, overrides)
 
 
@@ -152,6 +161,8 @@ def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
     """
+    if pretrained:
+        reject_unavailable_pretrained("cspdarknet_53", alternative="cspdarknet_53_cls")
     return _b(_CFG_CSPDARKNET_53, overrides)
 
 

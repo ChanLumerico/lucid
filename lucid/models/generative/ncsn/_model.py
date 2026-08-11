@@ -19,7 +19,10 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import DiffusionModelOutput, GenerationOutput
-from lucid.models._utils._generative import make_sigma_schedule
+from lucid.models._utils._generative import (
+    make_sigma_schedule,
+    resolve_generation_device,
+)
 from lucid.models.generative.ddpm._config import DDPMConfig
 from lucid.models.generative.ddpm._model import DDPMUNet
 from lucid.models.generative.ncsn._config import NCSNConfig
@@ -68,8 +71,16 @@ class NCSNModel(PretrainedModel):
     Reuses :class:`DDPMUNet` as the score backbone — modern NCSN variants
     converged on the same U-Net architecture as diffusion — but feeds the
     integer noise-level index :math:`i \in [0, L)` rather than a raw
-    :math:`\sigma` value through the timestep embedding (matching the
-    NCSNv2 / NCSN++ recipe).  The geometric :math:`\sigma` table itself is
+    :math:`\sigma` value through the timestep embedding.  Divergence,
+    deliberate: this matches none of the three published recipes exactly.
+    NCSN v1 also conditions on the index, but through
+    CondInstanceNorm++ per-:math:`\sigma` gain/bias rather than an
+    additive MLP; NCSNv2's Technique 3 drops noise conditioning entirely
+    and divides the output by :math:`\sigma`; NCSN++ conditions on
+    *continuous* :math:`\sigma` via Fourier features of
+    :math:`\log \sigma`.  Feeding the index through the timestep MLP
+    keeps :class:`DDPMUNet` reusable unchanged, which is what makes one
+    backbone serve both families here.  The geometric :math:`\sigma` table itself is
     held as a non-persistent buffer so it travels with ``.to(device=...)``.
 
     Parameters
@@ -129,6 +140,15 @@ class NCSNModel(PretrainedModel):
 
     def __init__(self, config: NCSNConfig) -> None:
         super().__init__(config)
+        # Divergence, deliberate: NCSN v1 §4.1 and NCSNv2 both specify a
+        # RefineNet — a 4-cascade U-Net with CondInstanceNorm++ (v1) or
+        # InstanceNorm++ (v2), ELU throughout, and dilated convolutions in
+        # place of subsampling.  This uses the DDPM U-Net (GroupNorm, SiLU,
+        # self-attention, sinusoidal timestep embedding), which is what
+        # NCSN++ later moved to.  Reusing one backbone across both families
+        # is the reason; the consequence is that no released NCSN v1/v2
+        # checkpoint will load here, and the score network's inductive bias
+        # is NCSN++'s rather than the original's.
         self.unet = DDPMUNet(_to_unet_config(config))
         sigmas = make_sigma_schedule(
             config.num_noise_levels,
@@ -137,6 +157,7 @@ class NCSNModel(PretrainedModel):
         )
         self.register_buffer("sigmas", sigmas, persistent=False)
         self._num_levels = config.num_noise_levels
+        self._scale_by_sigma = config.scale_by_sigma
 
     @property
     def num_noise_levels(self) -> int:
@@ -158,8 +179,23 @@ class NCSNModel(PretrainedModel):
             :class:`DiffusionModelOutput` whose ``sample`` field is the raw
             score prediction (same shape as ``sample``).
         """
-        score = cast(Tensor, self.unet(sample, sigma_idx))
-        return DiffusionModelOutput(sample=score)
+        raw = cast(Tensor, self.unet(sample, sigma_idx))
+        if not self._scale_by_sigma:
+            return DiffusionModelOutput(sample=raw)
+
+        # NCSNv2 Technique 3: s_theta(x, sigma) = s_theta(x) / sigma.
+        #
+        # The true score norm scales like 1/sigma, and every factory here runs
+        # sigma from 50 down to 0.01 — a 5000x dynamic range.  Returning the
+        # trunk output unscaled makes the network learn that range through a
+        # shared conv stack fed only an additive level embedding, which is the
+        # exact failure NCSNv2 sec. 3 identifies.  Dividing here also makes the
+        # DSM residual ``sigma * score + z`` collapse to ``raw + z``, so the
+        # regression target stops depending on sigma at all.
+        used_sigmas = self.sigmas[sigma_idx].reshape(
+            -1, *([1] * (len(sample.shape) - 1))
+        )
+        return DiffusionModelOutput(sample=raw / used_sigmas)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -260,6 +296,7 @@ class NCSNForImageGeneration(PretrainedModel):
         self._sigma_min = config.sigma_min
         self._langevin_steps = config.langevin_steps
         self._langevin_eps = config.langevin_eps
+        self._denoise = config.denoise
         self._in_channels = config.in_channels
         if isinstance(config.sample_size, tuple):
             self._h = int(config.sample_size[0])
@@ -299,7 +336,12 @@ class NCSNForImageGeneration(PretrainedModel):
         ).sample  # ŝ_θ(x̃, i)
 
         residual = sigma * score + z  # (B, C, H, W)
-        loss = 0.5 * (residual * residual).mean()
+        # The objective is a squared L2 *norm* — a sum over C.H.W — with the
+        # mean taken over the batch only.  Reducing with .mean() over every
+        # axis divides the paper's loss by C.H.W, which rescales the gradient
+        # relative to any published learning rate by the same factor.
+        per_sample = (residual * residual).reshape(B, -1).sum(dim=-1)
+        loss = 0.5 * per_sample.mean()
         return DiffusionModelOutput(sample=score, loss=loss)
 
     # ── Sampling ────────────────────────────────────────────────────────────
@@ -311,7 +353,7 @@ class NCSNForImageGeneration(PretrainedModel):
         *,
         langevin_steps: int | None = None,
         return_intermediates: bool = False,
-        device: str = "cpu",
+        device: str | None = None,
     ) -> GenerationOutput:
         """Annealed Langevin dynamics — Song 2019 Algorithm 1.
 
@@ -334,12 +376,16 @@ class NCSNForImageGeneration(PretrainedModel):
             :class:`GenerationOutput` with the final ``(n_samples, C, H, W)``
             samples and optional per-level intermediates.
         """
+        device = resolve_generation_device(self, device)
         T = langevin_steps if langevin_steps is not None else self._langevin_steps
 
         shape = (n_samples, self._in_channels, self._h, self._w)
-        # Initial sample at the largest σ (Song 2019 §4.3 — "uniform noise"
-        # over [0, 1] also works; we follow NCSNv2's Gaussian init).
-        x = lucid.randn(shape, device=device) * float(self.sigmas[0].item())
+        # Algorithm 1 initialises from "some fixed prior (e.g. uniform
+        # noise)", and both official repos seed annealed Langevin with
+        # ``rand``.  The Gaussian N(0, sigma_1^2) start belongs to the later
+        # VE-SDE formulation, not to NCSN or NCSNv2 — the previous comment
+        # attributed it to NCSNv2, which is where the mix-up came from.
+        x = lucid.rand(shape, device=device)
 
         intermediates: list[Tensor] = []
         sigma_min_sq = self._sigma_min**2
@@ -356,6 +402,18 @@ class NCSNForImageGeneration(PretrainedModel):
                 x = x + (alpha_i / 2.0) * score + sqrt_alpha * z
             if return_intermediates:
                 intermediates.append(x)
+
+        if self._denoise:
+            # NCSNv2 Technique 5: one noiseless correction at the end,
+            # ``x_T + sigma_T^2 * s_theta(x_T, sigma_T)``.  Both released
+            # configs set ``denoise: true``, and Table 1 reports FID with and
+            # without it — the last Langevin step still leaves sigma_L-scale
+            # noise on the sample otherwise.
+            last = self._num_levels - 1
+            sigma_last = float(self.sigmas[last].item())
+            idx_last = lucid.tensor([last] * n_samples, device=device).long()
+            score_last = cast(DiffusionModelOutput, self.ncsn(x, idx_last)).sample
+            x = x + (sigma_last**2) * score_last
 
         return GenerationOutput(
             samples=x,

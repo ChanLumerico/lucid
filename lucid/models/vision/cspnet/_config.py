@@ -50,8 +50,9 @@ from lucid.models._meta import model_family_meta
 
     Lucid ships the three paper-cited base variants from Wang 2020:
     :func:`cspresnet_50`, :func:`cspresnext_50`, :func:`cspdarknet_53`.
-    The first two use ``CrossStage`` (CSP-wrapped residual bottleneck);
-    the last uses ``DarkStage`` (sequential Darknet block).
+    All three are built from ``CrossStage``; they differ only in the
+    block placed inside it — a residual bottleneck for the first two,
+    a Darknet block for :func:`cspdarknet_53`.
     """,
 )
 @dataclass(frozen=True)
@@ -77,9 +78,6 @@ class CSPNetConfig(ModelConfig):
         Per-stage block flavour: ``"bottle"`` = residual bottleneck
         (CSPResNet / CSPResNeXt), ``"dark"`` = Darknet block
         (CSPDarknet).
-    stage_layout : str, optional, default="cross"
-        ``"cross"`` = CSP-wrapped (CrossStage), ``"dark"`` = plain
-        sequential (DarkStage).
     depths : tuple of int, optional
         Block counts per stage.
     out_chs : tuple of int, optional
@@ -94,7 +92,7 @@ class CSPNetConfig(ModelConfig):
         Bottleneck reduction inside each block.
     block_ratio : float, optional, default=1.0
         Branch-output reduction inside CrossStage transitions.
-    cross_linear : bool, optional, default=True
+    cross_linear : tuple of bool, optional, default=(False, True, True, False)
         Whether the ``conv_exp`` of CrossStage skips its activation
         (paper-cited variants do skip).
     down_growth : bool, optional, default=False
@@ -127,11 +125,19 @@ class CSPNetConfig(ModelConfig):
     expand_ratio: tuple[float, ...] = (2.0, 2.0, 2.0, 2.0)
     bottle_ratio: tuple[float, ...] = (0.5, 0.5, 0.5, 0.5)
     block_ratio: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0)
-    cross_linear: tuple[bool, ...] = (True, True, True, True)
+    # csresnet50.cfg / csresnext50.cfg: the stage-1 and stage-4 split convs
+    # are ``activation=leaky``; only stages 2 and 3 are ``activation=linear``.
+    # The registered factories already override to this pattern, but a caller
+    # building CSPNetConfig() directly got linear splits everywhere.
+    cross_linear: tuple[bool, ...] = (False, True, True, False)
     down_growth: tuple[bool, ...] = (False, False, False, False)
     block_type: tuple[str, ...] = ("bottle", "bottle", "bottle", "bottle")
 
     dropout: float = 0.0
+    # The reference ends its constructor with a zero-init of the last BN in
+    # each block and defaults it to *on*, so the residual branches start as
+    # identities.
+    zero_init_last: bool = True
 
     def __post_init__(self) -> None:
         for f in (

@@ -35,6 +35,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -291,7 +292,7 @@ class _MultiScaleBlock(nn.Module):
         qkv_bias: bool = True,
         drop: float = 0.0,
         attn_drop: float = 0.0,
-        drop_path: tuple[list[float], list[float], list[float]] | None = None,
+        drop_path: list[float] | None = None,
         layer_norm_eps: float = 1e-6,
     ) -> None:
         super().__init__()
@@ -308,7 +309,9 @@ class _MultiScaleBlock(nn.Module):
                             qkv_bias=qkv_bias,
                             drop=drop,
                             attn_drop=attn_drop,
-                            drop_path=(drop_path[d][i] if drop_path else 0.0),
+                            # Both branches index the *same* stage slice
+                            # from 0, as the reference does.
+                            drop_path=(drop_path[i] if drop_path else 0.0),
                             layer_norm_eps=layer_norm_eps,
                         )
                         for i in range(depth[d])
@@ -340,7 +343,9 @@ class _MultiScaleBlock(nn.Module):
                     qkv_bias=qkv_bias,
                     drop=drop,
                     attn_drop=attn_drop,
-                    drop_path=(drop_path[2][0] if drop_path else 0.0),
+                    # The fusion block takes the last element of the stage
+                    # slice, shared with the deepest large-branch block.
+                    drop_path=(drop_path[-1] if drop_path else 0.0),
                     layer_norm_eps=layer_norm_eps,
                 )
                 for d in range(self.num_branches)
@@ -484,9 +489,12 @@ def _scale_image(x: Tensor, target: int, crop_scale: bool) -> Tensor:
     if H == target and W == target:
         return x
     if crop_scale and target <= H and target <= W:
-        # Center crop to ``(B, C, target, target)``.
-        top = (H - target) // 2
-        left = (W - target) // 2
+        # Center crop to ``(B, C, target, target)``.  The reference rounds
+        # the offset rather than flooring it, so an odd size difference puts
+        # the crop one pixel lower/right than ``//`` would — enough to shift
+        # every patch against the positional table it was trained with.
+        top = int(round((H - target) / 2.0))
+        left = int(round((W - target) / 2.0))
         return x[:, :, top : top + target, left : left + target]
     # Bicubic interpolation matches timm's ``scale_image`` exactly.
     return _bicubic_2d(x, target, target)
@@ -541,9 +549,13 @@ class CrossViT(PretrainedModel, BackboneMixin):
         self.pos_embed_1 = nn.Parameter(lucid.zeros(1, num_patches[1] + 1, D[1]))
         self.pos_drop = nn.Dropout(cfg.dropout)
 
-        # Stochastic-depth schedule across all blocks in all stages.
-        n_cross_total = sum(max(1, d[2] if d[2] > 0 else 1) for d in cfg.depths)
-        dpr_total = sum(d[0] + d[1] for d in cfg.depths) + n_cross_total
+        # Stochastic-depth schedule.  Both references count only the large
+        # branch and the cross-attention blocks (``sum(x[-2:])``), slice each
+        # stage by ``max(n_small, n_large) + n_cross``, and hand that one
+        # slice to *both* branches indexed from 0 -- the small branch shares
+        # the large branch's rates rather than getting its own stretch of the
+        # schedule.  Counting every block separately shifted every rate.
+        dpr_total = sum(d[1] + d[2] for d in cfg.depths)
         dpr = (
             [cfg.drop_path_rate * i / max(1, dpr_total - 1) for i in range(dpr_total)]
             if cfg.drop_path_rate > 0.0
@@ -553,12 +565,8 @@ class CrossViT(PretrainedModel, BackboneMixin):
         stages: list[nn.Module] = []
         for stage_depth in cfg.depths:
             n_s, n_l, n_c = stage_depth
-            n_c_eff = max(1, n_c if n_c > 0 else 1)
-            stage_dpr = (
-                dpr[cursor : cursor + n_s],
-                dpr[cursor + n_s : cursor + n_s + n_l],
-                dpr[cursor + n_s + n_l : cursor + n_s + n_l + n_c_eff],
-            )
+            curr_depth = max(n_s, n_l) + n_c
+            stage_dpr = dpr[cursor : cursor + curr_depth]
             stages.append(
                 _MultiScaleBlock(
                     dim=D,
@@ -572,7 +580,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
                     layer_norm_eps=eps,
                 )
             )
-            cursor += n_s + n_l + n_c_eff
+            cursor += curr_depth
         self.stages = nn.ModuleList(stages)
 
         # Final per-branch LayerNorm.
@@ -582,6 +590,12 @@ class CrossViT(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=1, num_channels=D[0], reduction=P[0]),
             FeatureInfo(stage=2, num_channels=D[1], reduction=P[1]),
         ]
+
+        # Reference initialisation: trunc_normal_(0.02) on Linear / patch-embed
+        # convs with zero bias, unit LayerNorms, and the same draw for the
+        # class token and positional table (bare Parameters the framework
+        # default never touches — they were sitting at exact zeros).
+        init_transformer_trunc_normal(self)
 
     @override
     @property
@@ -661,8 +675,13 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.pos_embed_1 = nn.Parameter(lucid.zeros(1, num_patches[1] + 1, D[1]))
         self.pos_drop = nn.Dropout(cfg.dropout)
 
-        n_cross_total = sum(max(1, d[2] if d[2] > 0 else 1) for d in cfg.depths)
-        dpr_total = sum(d[0] + d[1] for d in cfg.depths) + n_cross_total
+        # Stochastic-depth schedule.  Both references count only the large
+        # branch and the cross-attention blocks (``sum(x[-2:])``), slice each
+        # stage by ``max(n_small, n_large) + n_cross``, and hand that one
+        # slice to *both* branches indexed from 0 -- the small branch shares
+        # the large branch's rates rather than getting its own stretch of the
+        # schedule.  Counting every block separately shifted every rate.
+        dpr_total = sum(d[1] + d[2] for d in cfg.depths)
         dpr = (
             [cfg.drop_path_rate * i / max(1, dpr_total - 1) for i in range(dpr_total)]
             if cfg.drop_path_rate > 0.0
@@ -672,12 +691,8 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         stages: list[nn.Module] = []
         for stage_depth in cfg.depths:
             n_s, n_l, n_c = stage_depth
-            n_c_eff = max(1, n_c if n_c > 0 else 1)
-            stage_dpr = (
-                dpr[cursor : cursor + n_s],
-                dpr[cursor + n_s : cursor + n_s + n_l],
-                dpr[cursor + n_s + n_l : cursor + n_s + n_l + n_c_eff],
-            )
+            curr_depth = max(n_s, n_l) + n_c
+            stage_dpr = dpr[cursor : cursor + curr_depth]
             stages.append(
                 _MultiScaleBlock(
                     dim=D,
@@ -691,7 +706,7 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
                     layer_norm_eps=eps,
                 )
             )
-            cursor += n_s + n_l + n_c_eff
+            cursor += curr_depth
         self.stages = nn.ModuleList(stages)
         self.norm = nn.ModuleList([nn.LayerNorm(D[d], eps=eps) for d in range(2)])
 
@@ -707,6 +722,22 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         pos = self.pos_embed_0 if branch == 0 else self.pos_embed_1
         x = x + pos
         return cast(Tensor, self.pos_drop(x))
+
+    @override
+    def reset_classifier(self, num_classes: int) -> None:
+        """Replace *both* branch heads.
+
+        CrossViT predicts from two branches and averages their logits, so the
+        head is a two-entry ``ModuleList``; resetting one would leave the model
+        emitting a mixture of old and new label spaces.  The mixin's default
+        looks for a single ``self.classifier`` and raised ``AttributeError``.
+        """
+        self.head = nn.ModuleList(
+            [
+                nn.Linear(cast(nn.Linear, lin).in_features, num_classes)
+                for lin in self.head
+            ]
+        )
 
     @override
     def forward(  # type: ignore[override]

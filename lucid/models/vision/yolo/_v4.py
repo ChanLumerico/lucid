@@ -48,8 +48,8 @@ Loss (training)
 """
 
 import math
-from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from dataclasses import dataclass, replace
+from typing import Any, ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -63,6 +63,12 @@ from lucid.models._utils._detection import (
     batched_nms,
     clip_boxes_to_image,
 )
+
+# v4 reuses v3's anchor-ignore rule verbatim; only the threshold differs
+# (yolov4.cfg says .7, yolov3's paper text says .5).
+from lucid.models.vision.yolo._v3 import _ignore_mask
+
+_IGNORE_IOU_THRESH = 0.7
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -111,12 +117,18 @@ from lucid.models._utils._detection import (
     deepest prediction head.
 
     **Improved heads + losses.**  The same three-scale anchored
-    head as v3, trained with CIoU regression loss, Mosaic data
-    augmentation, DropBlock regularisation, label smoothing, cosine
-    LR schedule, and class-balanced sampling.  The result is the
+    head as v3, trained with CIoU regression loss.  The result is the
     new Pareto frontier on COCO at the time of release (≈43 AP at
     65 fps on a V100) and a template that the v5/v6/v7/v8 lines
     extend further.
+
+    Of the paper's bag-of-freebies, only **CIoU** lives in this
+    module — it is a loss term, so it belongs to the model.  Mosaic
+    augmentation, self-adversarial training, DropBlock, label
+    smoothing, cosine LR and cross-mini-batch normalisation are
+    properties of a *training recipe*, not of the architecture, and
+    none of them is implemented here.  A caller reproducing the
+    paper's AP supplies them from the data pipeline and optimiser.
     """,
 )
 @dataclass(frozen=True, slots=True)
@@ -142,19 +154,21 @@ class YOLOV4Config(ModelConfig):
     num_classes: int = 80
     in_channels: int = 3
 
+    # Re-clustered for v4's 608x608 training resolution — these are not
+    # YOLOv3's priors, which is what this field previously held.
     anchors: tuple[tuple[float, float], ...] = (
         # P3 (stride 8) — small objects
-        (10.0, 13.0),
-        (16.0, 30.0),
-        (33.0, 23.0),
+        (12.0, 16.0),
+        (19.0, 36.0),
+        (40.0, 28.0),
         # P4 (stride 16) — medium objects
-        (30.0, 61.0),
-        (62.0, 45.0),
-        (59.0, 119.0),
+        (36.0, 75.0),
+        (76.0, 55.0),
+        (72.0, 146.0),
         # P5 (stride 32) — large objects
-        (116.0, 90.0),
-        (156.0, 198.0),
-        (373.0, 326.0),
+        (142.0, 110.0),
+        (192.0, 243.0),
+        (459.0, 401.0),
     )
 
     strides: tuple[int, int, int] = (8, 16, 32)
@@ -242,11 +256,19 @@ class _CSPBottleneck(nn.Module):
     Lives inside the CSPDarknet-53 backbone → uses Mish activation per paper §3.4.
     """
 
-    def __init__(self, ch: int) -> None:
+    def __init__(self, ch: int, act: str = "mish", mid: int | None = None) -> None:
         super().__init__()
-        mid = ch // 2
-        self.conv1 = _ConvBnMish(ch, mid, 1)
-        self.conv2 = _ConvBnMish(mid, ch, 3)
+        # The cfg's residual unit is ``conv 1x1 (branch width)`` ->
+        # ``conv 3x3 (branch width)``: the 1x1 does NOT halve.  Stage 1 is the
+        # one exception (64-wide branch, 32-wide bottleneck), which is what
+        # ``mid`` is for.
+        inner = ch if mid is None else mid
+        # The comment below used to claim the bottleneck follows the
+        # surrounding block; it did not — both convs were hardcoded to Mish,
+        # so a neck block built with act="leaky" still ran Mish inside.
+        Conv = _ConvBnMish if act == "mish" else _ConvBnLeaky
+        self.conv1 = Conv(ch, inner, 1)
+        self.conv2 = Conv(inner, ch, 3)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -257,9 +279,13 @@ class _CSPBottleneck(nn.Module):
 class _CSPBlock(nn.Module):
     """CSP block: split input into two routes, apply residuals to one, concat.
 
-    Route 1 (skip): Conv(in_ch, in_ch//2, 1) — direct pass-through.
-    Route 2 (main): Conv(in_ch, in_ch//2, 1) → n_repeats × _CSPBottleneck.
-    Merge: concat(route1, route2) → Conv(in_ch, in_ch, 1).
+    Route 1 (skip): Conv(in_ch, branch, 1) — direct pass-through.
+    Route 2 (main): Conv(in_ch, branch, 1) → n_repeats × _CSPBottleneck
+                    → Conv(branch, branch, 1) transition.
+    Merge: concat(route1, route2) → Conv(2*branch, in_ch, 1).
+
+    ``branch`` is ``in_ch // 2`` except in stage 1, where the cfg keeps both
+    routes at the full width.
 
     All convs inside the backbone use Mish; the same primitive is reused by
     the neck (PANet, SPP) where it's instantiated with ``act="leaky"``.
@@ -270,23 +296,37 @@ class _CSPBlock(nn.Module):
         act:        ``"mish"`` for the backbone, ``"leaky"`` for the neck.
     """
 
-    def __init__(self, in_ch: int, n_repeats: int, act: str = "mish") -> None:
+    def __init__(
+        self,
+        in_ch: int,
+        n_repeats: int,
+        act: str = "mish",
+        first_stage: bool = False,
+    ) -> None:
         super().__init__()
-        half = in_ch // 2
+        # Stage 1 of yolov4.cfg keeps both routes at the *full* 64 channels
+        # and bottlenecks to 32; stages 2-5 halve each route and keep the
+        # bottleneck at the branch width.
+        branch = in_ch if first_stage else in_ch // 2
+        bmid = in_ch // 2 if first_stage else branch
         Conv = _ConvBnMish if act == "mish" else _ConvBnLeaky
-        self.route1 = Conv(in_ch, half, 1)  # skip branch
-        self.route2 = Conv(in_ch, half, 1)  # main branch
-        # Bottlenecks always use the same activation as the surrounding block.
+        self.route1 = Conv(in_ch, branch, 1)  # skip branch
+        self.route2 = Conv(in_ch, branch, 1)  # main branch
+        # Bottlenecks follow the surrounding block's activation.
         self.bottlenecks = nn.Sequential(
-            *[_CSPBottleneck(half) for _ in range(n_repeats)]
+            *[_CSPBottleneck(branch, act=act, mid=bmid) for _ in range(n_repeats)]
         )
-        self.merge = Conv(in_ch, in_ch, 1)  # after concat
+        # Every cfg stage closes its main branch with a 1x1 transition before
+        # the route concat (layers 8 / 18 / 21 / 31).
+        self.transition = Conv(branch, branch, 1)
+        self.merge = Conv(branch * 2, in_ch, 1)  # after concat
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r1 = cast(Tensor, self.route1(x))
         r2 = cast(Tensor, self.bottlenecks(cast(Tensor, self.route2(x))))
-        merged = lucid.cat([r1, r2], dim=1)  # (B, in_ch, H, W)
+        r2 = cast(Tensor, self.transition(r2))
+        merged = lucid.cat([r1, r2], dim=1)
         return cast(Tensor, self.merge(merged))
 
 
@@ -312,7 +352,7 @@ class _CSPDarknet53(nn.Module):
 
         # Stage 1: stride-2 → 64ch, 1×CSP
         self.down1 = _ConvBnMish(32, 64, 3, stride=2)
-        self.csp1 = _CSPBlock(64, 1, act="mish")
+        self.csp1 = _CSPBlock(64, 1, act="mish", first_stage=True)
 
         # Stage 2: stride-2 → 128ch, 2×CSP
         self.down2 = _ConvBnMish(64, 128, 3, stride=2)
@@ -375,11 +415,14 @@ class _SPP(nn.Module):
         self.pool5 = nn.MaxPool2d(5, stride=1, padding=2)
         self.pool9 = nn.MaxPool2d(9, stride=1, padding=4)
         self.pool13 = nn.MaxPool2d(13, stride=1, padding=6)
-        # Post-SPP: 4×half → out_ch
+        # Post-SPP: the cfg's layers 114-116 are 512(1x1) / 1024(3x3) /
+        # 512(1x1) — the 1x1 compresses the 2048-wide concat straight to
+        # ``out_ch`` and the 3x3 expands to ``2*out_ch``, rather than routing
+        # the whole thing through ``in_ch`` first.
         self.post = nn.Sequential(
-            _ConvBnLeaky(half * 4, in_ch, 1),
-            _ConvBnLeaky(in_ch, out_ch, 3),
-            _ConvBnLeaky(out_ch, out_ch, 1),
+            _ConvBnLeaky(half * 4, out_ch, 1),
+            _ConvBnLeaky(out_ch, out_ch * 2, 3),
+            _ConvBnLeaky(out_ch * 2, out_ch, 1),
         )
 
     @override
@@ -390,6 +433,22 @@ class _SPP(nn.Module):
         p13 = cast(Tensor, self.pool13(x))
         concat = lucid.cat([x, p5, p9, p13], dim=1)  # (B, 4*half, H, W)
         return cast(Tensor, self.post(concat))  # (B, out_ch, H, W)
+
+
+def _five_conv(in_ch: int, mid: int) -> nn.Sequential:
+    """The cfg's alternating 1x1/3x3 five-convolution set.
+
+    ``yolov4.cfg``'s neck is built entirely from these; it contains no CSP
+    blocks at all.  Each set compresses to ``mid``, expands to ``2*mid`` and
+    back, twice, ending at ``mid``.
+    """
+    return nn.Sequential(
+        _ConvBnLeaky(in_ch, mid, 1),
+        _ConvBnLeaky(mid, mid * 2, 3),
+        _ConvBnLeaky(mid * 2, mid, 1),
+        _ConvBnLeaky(mid, mid * 2, 3),
+        _ConvBnLeaky(mid * 2, mid, 1),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -403,8 +462,11 @@ class _PANetNeck(nn.Module):
 
     Connects the CSPDarknet-53 backbone outputs (P3, P4, P5) through:
       1. SPP at P5.
-      2. Top-down pathway: P5→P4'→P3' (FPN-style, with CSP blocks).
-      3. Bottom-up pathway: P3'→P4''→P5'' (PAN-style, with CSP blocks).
+      2. Top-down pathway: P5→P4'→P3' (FPN-style).
+      3. Bottom-up pathway: P3'→P4''→P5'' (PAN-style).
+
+    Every stage is one of the cfg's alternating five-convolution sets; the
+    reference neck contains no CSP blocks.
 
     Output channels:
       P3'' : 128ch
@@ -414,28 +476,30 @@ class _PANetNeck(nn.Module):
 
     def __init__(self) -> None:
         super().__init__()
-        # SPP at P5 (1024→512ch)
+        # SPP at P5 (1024→512ch) — cfg layer 116.
         self.spp = _SPP(1024, 512)
 
-        # Top-down: P5(512) → upsample → concat P4(512) → P4'(512)
-        # Lateral compress on P5 to 256ch before upsampling
+        # Top-down: SPP(512) -1x1-> 256, upsample, concat P4 lateral(256)
         self.p5_lateral = _ConvBnLeaky(512, 256, 1)
-        # Lateral compress on P4 from 512 to 256ch so concat = 512ch
         self.p4_lateral = _ConvBnLeaky(512, 256, 1)
-        self.p4_csp_td = _CSPBlock(512, 2)  # 256+256 concat → 512ch, out=512ch
-        self.p4_td_lat = _ConvBnLeaky(512, 128, 1)
+        self.p4_td = _five_conv(512, 256)  # cfg layer 126, 256ch out
+        self.p4_td_lat = _ConvBnLeaky(256, 128, 1)
 
-        # Top-down: P4'(512→128) → upsample → concat P3(256→128) → P3'(256)
-        self.p3_lateral = _ConvBnLeaky(256, 128, 1)  # compress P3 from 256 to 128
-        self.p3_csp_td = _CSPBlock(256, 2)  # 128+128 concat → 256ch, out=256ch
+        # Top-down: P4'(256) -1x1-> 128, upsample, concat P3 lateral(128)
+        self.p3_lateral = _ConvBnLeaky(256, 128, 1)
+        self.p3_td = _five_conv(256, 128)  # cfg layer 136, 128ch out
 
-        # Bottom-up: P3'(256) → stride-2 conv → concat P4'(128) → P4''(256)
-        self.p3_down = _ConvBnLeaky(256, 128, 3, stride=2)
-        self.p4_csp_bu = _CSPBlock(256, 2)  # 128+128 → 256ch
+        # Bottom-up.  The cfg's routes are ``-1,-16`` and ``-1,-37``: the P4
+        # concat takes the *top-down P4 output* (layer 126) and the P5 concat
+        # takes the *SPP output* (layer 116).  Aggregating the compressed
+        # laterals instead re-used tensors that had already been narrowed for
+        # upsampling, so the bottom-up path never saw the top-down result it
+        # is supposed to refine.
+        self.p3_down = _ConvBnLeaky(128, 256, 3, stride=2)
+        self.p4_bu = _five_conv(512, 256)  # cfg layer 147, 256ch out
 
-        # Bottom-up: P4''(256) → stride-2 conv → concat P5(256) → P5''(512)
-        self.p4_down = _ConvBnLeaky(256, 256, 3, stride=2)
-        self.p5_csp_bu = _CSPBlock(512, 2)  # 256+256 → 512ch
+        self.p4_down = _ConvBnLeaky(256, 512, 3, stride=2)
+        self.p5_bu = _five_conv(1024, 512)  # cfg layer 158, 512ch out
 
     @override
     def forward(  # type: ignore[override]
@@ -454,7 +518,7 @@ class _PANetNeck(nn.Module):
         Returns:
             (p3_out, p4_out, p5_out) — feature maps for detection heads.
         """
-        # SPP at P5
+        # SPP at P5 — cfg layer 116, the tensor the bottom-up P5 route reads.
         p5_spp = cast(Tensor, self.spp(p5))  # (B, 512, H/32, W/32)
 
         # Top-down P5→P4'
@@ -466,10 +530,10 @@ class _PANetNeck(nn.Module):
         )  # (B, 256, H/16, W/16)
         p4_comp = cast(Tensor, self.p4_lateral(p4))  # (B, 256, H/16, W/16)
         p4_cat = lucid.cat([p5_up, p4_comp], dim=1)  # (B, 512, H/16, W/16)
-        p4_td = cast(Tensor, self.p4_csp_td(p4_cat))  # (B, 512, H/16, W/16)
+        p4_td_out = cast(Tensor, self.p4_td(p4_cat))  # (B, 256, H/16, W/16)
 
         # Top-down P4'→P3'
-        p4_lat = cast(Tensor, self.p4_td_lat(p4_td))  # (B, 128, H/16, W/16)
+        p4_lat = cast(Tensor, self.p4_td_lat(p4_td_out))  # (B, 128, H/16, W/16)
         fH3 = int(p3.shape[2])
         fW3 = int(p3.shape[3])
         p4_up = F.interpolate(
@@ -477,24 +541,31 @@ class _PANetNeck(nn.Module):
         )  # (B, 128, H/8, W/8)
         p3_lat = cast(Tensor, self.p3_lateral(p3))  # (B, 128, H/8, W/8)
         p3_cat = lucid.cat([p4_up, p3_lat], dim=1)  # (B, 256, H/8, W/8)
-        p3_td = cast(Tensor, self.p3_csp_td(p3_cat))  # (B, 256, H/8, W/8)
+        p3_td_out = cast(Tensor, self.p3_td(p3_cat))  # (B, 128, H/8, W/8)
 
-        # Bottom-up P3'→P4''
-        p3_down_feat = cast(Tensor, self.p3_down(p3_td))  # (B, 128, H/16, W/16)
-        p4_bu_cat = lucid.cat([p3_down_feat, p4_lat], dim=1)  # (B, 256, H/16, W/16)
-        p4_bu = cast(Tensor, self.p4_csp_bu(p4_bu_cat))  # (B, 256, H/16, W/16)
+        # Bottom-up P3'→P4'': route ``-1,-16`` joins the top-down P4 output.
+        p3_down_feat = cast(Tensor, self.p3_down(p3_td_out))  # (B, 256, H/16, W/16)
+        p4_bu_cat = lucid.cat([p3_down_feat, p4_td_out], dim=1)  # (B, 512, ...)
+        p4_bu_out = cast(Tensor, self.p4_bu(p4_bu_cat))  # (B, 256, H/16, W/16)
 
-        # Bottom-up P4''→P5''
-        p4_down_feat = cast(Tensor, self.p4_down(p4_bu))  # (B, 256, H/32, W/32)
-        p5_bu_cat = lucid.cat([p4_down_feat, p5_lat], dim=1)  # (B, 512, H/32, W/32)
-        p5_bu = cast(Tensor, self.p5_csp_bu(p5_bu_cat))  # (B, 512, H/32, W/32)
+        # Bottom-up P4''→P5'': route ``-1,-37`` joins the SPP output.
+        p4_down_feat = cast(Tensor, self.p4_down(p4_bu_out))  # (B, 512, H/32, W/32)
+        p5_bu_cat = lucid.cat([p4_down_feat, p5_spp], dim=1)  # (B, 1024, ...)
+        p5_bu_out = cast(Tensor, self.p5_bu(p5_bu_cat))  # (B, 512, H/32, W/32)
 
-        return p3_td, p4_bu, p5_bu
+        return p3_td_out, p4_bu_out, p5_bu_out
 
 
 # ---------------------------------------------------------------------------
 # Box decoding helper (shared with YOLOv3 style)
 # ---------------------------------------------------------------------------
+
+
+# yolov4.cfg's per-scale grid-sensitivity factors, keyed by stride.  The BoF
+# item "eliminate grid sensitivity" scales the sigmoid by >1 so a box centre
+# can actually reach a cell boundary — with a plain sigmoid it needs an
+# infinite logit to land exactly on the grid line.
+_SCALE_X_Y: dict[int, float] = {8: 1.2, 16: 1.1, 32: 1.05}
 
 
 def _decode_predictions(
@@ -536,8 +607,11 @@ def _decode_predictions(
     col_t = lucid.tensor(col_data, device=device)
     row_t = lucid.tensor(row_data, device=device)
 
-    px = (F.sigmoid(tx) + col_t) * float(stride)
-    py = (F.sigmoid(ty) + row_t) * float(stride)
+    # bx = scale * sigmoid(tx) - 0.5 * (scale - 1) + cx
+    scale = _SCALE_X_Y.get(stride, 1.0)
+    bias = 0.5 * (scale - 1.0)
+    px = (scale * F.sigmoid(tx) - bias + col_t) * float(stride)
+    py = (scale * F.sigmoid(ty) - bias + row_t) * float(stride)
 
     aw_data: list[list[list[list[float]]]] = []
     ah_data: list[list[list[list[float]]]] = []
@@ -596,59 +670,35 @@ def _ciou_loss(pred_boxes: Tensor, gt_boxes: Tensor) -> Tensor:
     if N == 0:
         return lucid.zeros((1,))
 
-    losses: list[Tensor] = []
-    for i in range(N):
-        px1 = float(pred_boxes[i, 0].item())
-        py1 = float(pred_boxes[i, 1].item())
-        px2 = float(pred_boxes[i, 2].item())
-        py2 = float(pred_boxes[i, 3].item())
-        gx1 = float(gt_boxes[i, 0].item())
-        gy1 = float(gt_boxes[i, 1].item())
-        gx2 = float(gt_boxes[i, 2].item())
-        gy2 = float(gt_boxes[i, 3].item())
+    # Vectorised and differentiable.  The previous per-box Python-float form
+    # rebuilt each term with ``lucid.tensor``, so the box-regression channels
+    # received exactly zero gradient while the loss value still looked right.
+    px1, py1, px2, py2 = (pred_boxes[:, i] for i in range(4))
+    gx1, gy1, gx2, gy2 = (gt_boxes[:, i] for i in range(4))
 
-        pw = max(px2 - px1, 0.0)
-        ph = max(py2 - py1, 0.0)
-        gw = max(gx2 - gx1, 0.0)
-        gh = max(gy2 - gy1, 0.0)
+    pw, ph = px2 - px1, py2 - py1
+    gw, gh = gx2 - gx1, gy2 - gy1
+    pcx, pcy = (px1 + px2) * 0.5, (py1 + py2) * 0.5
+    gcx, gcy = (gx1 + gx2) * 0.5, (gy1 + gy2) * 0.5
 
-        pcx = (px1 + px2) / 2.0
-        pcy = (py1 + py2) / 2.0
-        gcx = (gx1 + gx2) / 2.0
-        gcy = (gy1 + gy2) / 2.0
+    inter_w = lucid.clip(lucid.minimum(px2, gx2) - lucid.maximum(px1, gx1), 0.0, None)
+    inter_h = lucid.clip(lucid.minimum(py2, gy2) - lucid.maximum(py1, gy1), 0.0, None)
+    inter = inter_w * inter_h
+    iou = inter / (pw * ph + gw * gh - inter + 1e-9)
 
-        inter_x1 = max(px1, gx1)
-        inter_y1 = max(py1, gy1)
-        inter_x2 = min(px2, gx2)
-        inter_y2 = min(py2, gy2)
-        inter_w = max(inter_x2 - inter_x1, 0.0)
-        inter_h = max(inter_y2 - inter_y1, 0.0)
-        inter = inter_w * inter_h
-        union = pw * ph + gw * gh - inter + 1e-9
-        iou = inter / union
+    enc_w = lucid.maximum(px2, gx2) - lucid.minimum(px1, gx1)
+    enc_h = lucid.maximum(py2, gy2) - lucid.minimum(py1, gy1)
+    c_sq = enc_w * enc_w + enc_h * enc_h + 1e-9
+    d_sq = (pcx - gcx) ** 2 + (pcy - gcy) ** 2
 
-        # Smallest enclosing box diagonal²
-        enc_x1 = min(px1, gx1)
-        enc_y1 = min(py1, gy1)
-        enc_x2 = max(px2, gx2)
-        enc_y2 = max(py2, gy2)
-        enc_w = enc_x2 - enc_x1
-        enc_h = enc_y2 - enc_y1
-        c_sq = enc_w * enc_w + enc_h * enc_h + 1e-9
+    v = (4.0 / (math.pi**2)) * (
+        lucid.arctan(gw / (gh + 1e-9)) - lucid.arctan(pw / (ph + 1e-9))
+    ) ** 2
+    # α is a weighting coefficient, not a path to differentiate through —
+    # detached exactly as in the reference CIoU implementation.
+    alpha = (v / (1.0 - iou + v + 1e-9)).detach()
 
-        # Centre distance²
-        d_sq = (pcx - gcx) ** 2 + (pcy - gcy) ** 2
-
-        # Aspect ratio penalty
-        v = (4.0 / (math.pi**2)) * (
-            math.atan(gw / (gh + 1e-9)) - math.atan(pw / (ph + 1e-9))
-        ) ** 2
-        alpha = v / (1.0 - iou + v + 1e-9)
-
-        ciou = iou - d_sq / c_sq - alpha * v
-        losses.append(lucid.tensor([[1.0 - ciou]]))
-
-    return lucid.cat(losses).mean()
+    return (1.0 - (iou - d_sq / c_sq - alpha * v)).mean()
 
 
 # ---------------------------------------------------------------------------
@@ -705,8 +755,12 @@ def _yolov4_loss(
                 [[0.0] * fW for _ in range(fH)] for _ in range(nA)
             ]
 
-            # Collect positive (pred_box, gt_box) pairs for CIoU
-            pos_pred_boxes: list[list[float]] = []
+            # Collect positive assignments for CIoU.  Only *indices* and the
+            # matched anchor sizes are recorded here — the predicted box itself
+            # is decoded from ``pred_b`` with tensor ops after the loop, so the
+            # box-regression channels stay connected to the loss.
+            pos_cells: list[tuple[int, int, int]] = []
+            pos_anchor_wh: list[tuple[float, float]] = []
             pos_gt_boxes: list[list[float]] = []
 
             pred_b = raw_r[b]  # (nA, fH, fW, 5+C)
@@ -745,29 +799,14 @@ def _yolov4_loss(
                     if 0 <= cls_id < C:
                         cls_arr[best_a][row_idx][col_idx][cls_id] = 1.0
 
-                    # Decode predicted box at (best_a, row_idx, col_idx)
-                    ptx = float(pred_b[best_a, row_idx, col_idx, 0].item())
-                    pty = float(pred_b[best_a, row_idx, col_idx, 1].item())
-                    ptw = float(pred_b[best_a, row_idx, col_idx, 2].item())
-                    pth = float(pred_b[best_a, row_idx, col_idx, 3].item())
-
-                    pcx = (1.0 / (1.0 + math.exp(-ptx)) + float(col_idx)) * float(
-                        stride
-                    )
-                    pcy = (1.0 / (1.0 + math.exp(-pty)) + float(row_idx)) * float(
-                        stride
-                    )
-                    pw = math.exp(ptw) * aw_best
-                    ph = math.exp(pth) * ah_best
-
-                    pos_pred_boxes.append(
-                        [pcx - pw / 2.0, pcy - ph / 2.0, pcx + pw / 2.0, pcy + ph / 2.0]
-                    )
+                    pos_cells.append((best_a, row_idx, col_idx))
+                    pos_anchor_wh.append((aw_best, ah_best))
                     pos_gt_boxes.append([x1g, y1g, x2g, y2g])
 
-            tgt_obj = lucid.tensor(obj_arr)
-            tgt_cls = lucid.tensor(cls_arr)
-            obj_mask = lucid.tensor(mask_arr)
+            dev = raw.device.type
+            tgt_obj = lucid.tensor(obj_arr, device=dev)
+            tgt_cls = lucid.tensor(cls_arr, device=dev)
+            obj_mask = lucid.tensor(mask_arr, device=dev)
 
             pred_tc = pred_b[..., 4]  # (nA, fH, fW)
             pred_cls_logits = pred_b[..., 5:]  # (nA, fH, fW, C)
@@ -776,7 +815,13 @@ def _yolov4_loss(
             obj_bce = F.binary_cross_entropy_with_logits(
                 pred_tc, tgt_obj, reduction="none"
             )
-            noobj_mask = 1.0 - obj_mask
+            # yolov4.cfg sets ``ignore_thresh = .7`` on every [yolo] layer:
+            # a non-assigned anchor that already overlaps a GT well is excluded
+            # from the background term rather than pushed toward zero.
+            ignore = _ignore_mask(
+                pred_b, anchors_wh, stride, gt_boxes, fH, fW, nA, _IGNORE_IOU_THRESH
+            )
+            noobj_mask = (1.0 - obj_mask) * (1.0 - ignore)
             obj_loss = (
                 obj_bce * obj_mask + obj_bce * noobj_mask * config.lambda_noobj
             ).sum()
@@ -787,13 +832,41 @@ def _yolov4_loss(
             )
             cls_loss = (cls_bce * obj_mask[..., None]).sum()
 
-            # CIoU loss for positive anchors
-            if pos_pred_boxes:
-                p_boxes = lucid.tensor(pos_pred_boxes)  # (P, 4)
-                g_boxes = lucid.tensor(pos_gt_boxes)  # (P, 4)
+            # CIoU loss for positive anchors.  Decode σ(t_x)/σ(t_y)/exp(t_w)/
+            # exp(t_h) with tensor ops so the gradient reaches the box channels.
+            if pos_cells:
+
+                def _chan(j: int) -> Tensor:
+                    return lucid.cat(
+                        [pred_b[a, r, c, j].reshape(1) for (a, r, c) in pos_cells]
+                    )
+
+                tx, ty, tw, th = _chan(0), _chan(1), _chan(2), _chan(3)
+                cols = lucid.tensor([float(c) for (_, _, c) in pos_cells], device=dev)
+                rows = lucid.tensor([float(r) for (_, r, _) in pos_cells], device=dev)
+                anc_w = lucid.tensor([w for (w, _) in pos_anchor_wh], device=dev)
+                anc_h = lucid.tensor([h for (_, h) in pos_anchor_wh], device=dev)
+
+                _sc = _SCALE_X_Y.get(stride, 1.0)
+                _bias = 0.5 * (_sc - 1.0)
+                pcx = (_sc * lucid.sigmoid(tx) - _bias + cols) * float(stride)
+                pcy = (_sc * lucid.sigmoid(ty) - _bias + rows) * float(stride)
+                p_w = lucid.exp(tw) * anc_w
+                p_h = lucid.exp(th) * anc_h
+
+                p_boxes = lucid.stack(
+                    [
+                        pcx - p_w / 2.0,
+                        pcy - p_h / 2.0,
+                        pcx + p_w / 2.0,
+                        pcy + p_h / 2.0,
+                    ],
+                    dim=1,
+                )  # (P, 4)
+                g_boxes = lucid.tensor(pos_gt_boxes, device=dev)  # (P, 4)
                 ciou_l = _ciou_loss(p_boxes, g_boxes)
             else:
-                ciou_l = lucid.zeros((1,))
+                ciou_l = lucid.zeros((1,), device=dev)
 
             scale_loss = ciou_l.sum() + obj_loss + cls_loss
             total_loss.append(scale_loss.reshape(1))
@@ -899,24 +972,21 @@ class YOLOV4ForObjectDetection(PretrainedModel):
         # PANet neck
         self.neck = _PANetNeck()
 
-        # Detection heads:
-        # P3'' output = 256ch (from p3_td in neck)
-        # P4'' output = 256ch (from p4_bu in neck)
-        # P5'' output = 512ch (from p5_bu in neck)
+        # Detection heads.  Each scale's five-conv set already did the
+        # compressing, so the cfg's head is just ``conv 3x3`` then the linear
+        # ``conv 1x1`` predictor.
+        #   P3'' = 128ch, P4'' = 256ch, P5'' = 512ch
         self.p3_head = nn.Sequential(
-            _ConvBnLeaky(256, 128, 1),
             _ConvBnLeaky(128, 256, 3),
             nn.Conv2d(256, nA * (5 + C), 1, bias=True),
         )
         self.p4_head = nn.Sequential(
-            _ConvBnLeaky(256, 256, 1),
             _ConvBnLeaky(256, 512, 3),
             nn.Conv2d(512, nA * (5 + C), 1, bias=True),
         )
         self.p5_head = nn.Sequential(
-            _ConvBnLeaky(512, 256, 1),
-            _ConvBnLeaky(256, 512, 3),
-            nn.Conv2d(512, nA * (5 + C), 1, bias=True),
+            _ConvBnLeaky(512, 1024, 3),
+            nn.Conv2d(1024, nA * (5 + C), 1, bias=True),
         )
 
     @override
@@ -963,14 +1033,17 @@ class YOLOV4ForObjectDetection(PretrainedModel):
 
         all_logits: list[Tensor] = []
         all_boxes: list[Tensor] = []
+        all_conf: list[Tensor] = []
 
         for raw_pred, anch_wh, stride in zip(raw_preds, scale_anchors, scale_strides):
-            logits_s, boxes_s, _ = _decode_predictions(raw_pred, anch_wh, stride)
+            logits_s, boxes_s, conf_s = _decode_predictions(raw_pred, anch_wh, stride)
             all_logits.append(logits_s)
             all_boxes.append(boxes_s)
+            all_conf.append(conf_s)
 
         logits = lucid.cat(all_logits, dim=1)
         pred_boxes = lucid.cat(all_boxes, dim=1)
+        objectness = lucid.cat(all_conf, dim=1)
 
         loss: Tensor | None = None
         if targets is not None:
@@ -980,6 +1053,7 @@ class YOLOV4ForObjectDetection(PretrainedModel):
             logits=logits,
             pred_boxes=pred_boxes,
             loss=loss,
+            objectness=objectness,
         )
 
     def postprocess(
@@ -1004,7 +1078,12 @@ class YOLOV4ForObjectDetection(PretrainedModel):
             boxes = output.pred_boxes[b]
             iH, iW = image_sizes[b]
 
+            # score = sigmoid(objectness) * sigmoid(class), as darknet's
+            # ``get_yolo_detections`` does — objectness is the only head in v4
+            # that receives box-quality supervision.
             cls_probs = F.sigmoid(cls_logits)
+            if output.objectness is not None:
+                cls_probs = cls_probs * output.objectness[b][:, None]
             N_anc = int(cls_probs.shape[0])
             C = int(cls_probs.shape[1])
 
@@ -1068,11 +1147,16 @@ class YOLOV4ForObjectDetection(PretrainedModel):
 # ---------------------------------------------------------------------------
 
 
+_CFG_V4 = YOLOV4Config()
+
+
 @register_model(
     task="object-detection",
     family="yolo",
     model_type="yolo_v4",
     model_class=YOLOV4ForObjectDetection,
+    default_config=_CFG_V4,
+    params=64363101,
 )
 def yolo_v4(
     pretrained: bool = False,
@@ -1118,7 +1202,9 @@ def yolo_v4(
     >>> out.logits.shape[0]
     1
     """
-    config = YOLOV4Config(**{k: v for k, v in overrides.items()})  # type: ignore[arg-type]
+    config = (
+        replace(_CFG_V4, **cast(dict[str, Any], overrides)) if overrides else _CFG_V4
+    )
     model = YOLOV4ForObjectDetection(config)
     if pretrained:
         raise NotImplementedError("Pretrained YOLOv4 weights are not yet available.")

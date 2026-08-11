@@ -24,7 +24,9 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._base import PretrainedModel
+from lucid.models._utils._classification import DropPath
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.cvt._config import CvTConfig
@@ -145,10 +147,16 @@ class _CvTAttention(nn.Module):
         num_heads: int,
         stride_kv: int = 1,
         with_cls_token: bool = False,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.with_cls_token = with_cls_token
+        # ``config.dropout`` reached only the MLP: the reference also drops on
+        # the attention probabilities and on the output projection.
+        self.attn_drop_p = attn_drop
+        self.proj_drop = nn.Dropout(p=proj_drop)
         # CvT scales attention logits by the *full* embedding dim, not the
         # per-head dim (an unusual but deliberate choice — see the
         # reference ``CvtSelfAttention.scale = embed_dim ** -0.5``).  This
@@ -191,10 +199,18 @@ class _CvTAttention(nn.Module):
         v = v.reshape(B, Nkv, self.num_heads, head_dim).permute(0, 2, 1, 3)
 
         # Fused SDPA — ``scale=self.scale`` is CvT's non-standard ``dim**-0.5``
-        # (not the per-head default), so it must be passed explicitly.
-        out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
+        # (not the per-head default), so it must be passed explicitly.  The
+        # fused kernel has no dropout, so attention dropout takes the explicit
+        # path; at p = 0 (the default) the fused kernel still runs.
+        if self.training and self.attn_drop_p > 0.0:
+            scores = q @ k.permute(0, 1, 3, 2) * self.scale
+            probs = F.softmax(scores, dim=-1)
+            probs = F.dropout(probs, self.attn_drop_p, self.training)
+            out = probs @ v
+        else:
+            out = F.scaled_dot_product_attention(q, k, v, scale=self.scale)
         out = out.permute(0, 2, 1, 3).reshape(B, Nq, C)
-        return cast(Tensor, self.out_proj(out))
+        return cast(Tensor, self.proj_drop(cast(Tensor, self.out_proj(out))))
 
 
 # ---------------------------------------------------------------------------
@@ -233,21 +249,31 @@ class _CvTBlock(nn.Module):
         mlp_ratio: float,
         dropout: float,
         with_cls_token: bool = False,
+        drop_path: float = 0.0,
     ) -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
         self.attn = _CvTAttention(
-            dim, num_heads, stride_kv=stride_kv, with_cls_token=with_cls_token
+            dim,
+            num_heads,
+            stride_kv=stride_kv,
+            with_cls_token=with_cls_token,
+            attn_drop=dropout,
+            proj_drop=dropout,
         )
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = _MLP(dim, mlp_ratio, dropout)
+        self.drop_path = DropPath(drop_path)
 
     @override
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
         # x: (B, N, C)
         n = cast(Tensor, self.norm1(x))
-        x = x + cast(Tensor, self.attn(n, H, W))  # type: ignore[arg-type]
-        x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+        attended = cast(Tensor, self.attn(n, H, W))  # type: ignore[arg-type]
+        x = x + cast(Tensor, self.drop_path(attended))
+        x = x + cast(
+            Tensor, self.drop_path(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)))))
+        )
         return x
 
 
@@ -274,6 +300,7 @@ class _CvTStage(nn.Module):
         mlp_ratio: float,
         dropout: float,
         with_cls_token: bool = False,
+        drop_path_rates: tuple[float, ...] = (),
     ) -> None:
         super().__init__()
         # kernel=7 for stage 0 (large receptive field), kernel=3 for subsequent.
@@ -293,6 +320,8 @@ class _CvTStage(nn.Module):
         # makes CvT attention cheaper than ViT's O(N²).
         stride_kv = 2
         self.with_cls_token = with_cls_token
+        # Dropout on the embedded token sequence, as the reference applies.
+        self.pos_drop = nn.Dropout(p=dropout)
         # Learnable CLS token, only on the stage(s) flagged in the config
         # (the last stage for paper-cited CvT).  Prepended to the token
         # sequence so it gathers global context through attention.
@@ -308,8 +337,9 @@ class _CvTStage(nn.Module):
                     mlp_ratio,
                     dropout,
                     with_cls_token=with_cls_token,
+                    drop_path=(drop_path_rates[i] if i < len(drop_path_rates) else 0.0),
                 )
-                for _ in range(depth)
+                for i in range(depth)
             ]
         )
         # No stage-level LayerNorm.  The reference HF / Microsoft CvT
@@ -326,6 +356,7 @@ class _CvTStage(nn.Module):
         # Flatten to sequence: (B, H*W, C)
         B, C, _H, _W = x_spatial.shape
         tokens = x_spatial.reshape(B, C, H * W).permute(0, 2, 1)
+        tokens = cast(Tensor, self.pos_drop(tokens))
         # Prepend the CLS token (if this stage owns one).
         if self.cls_token is not None:
             cls = self.cls_token.expand(B, 1, C)
@@ -352,10 +383,17 @@ def _build_stages(config: CvTConfig) -> tuple[list[_CvTStage], list[FeatureInfo]
     in_ch = config.in_channels
     cum_stride = 1
     fi: list[FeatureInfo] = []
+    # The reference schedules stochastic depth *per stage*: each stage runs its
+    # own linspace(0, drop_path_rate, depth), rather than one schedule spanning
+    # the whole trunk.
     for i, (dim, depth, heads, stride) in enumerate(
         zip(config.dims, config.depths, config.num_heads, config.embed_strides)
     ):
         with_cls = bool(config.cls_token[i]) if i < len(config.cls_token) else False
+        if depth > 1:
+            rates = tuple(config.drop_path_rate * j / (depth - 1) for j in range(depth))
+        else:
+            rates = (0.0,) * depth
         stages.append(
             _CvTStage(
                 in_ch,
@@ -366,6 +404,7 @@ def _build_stages(config: CvTConfig) -> tuple[list[_CvTStage], list[FeatureInfo]
                 config.mlp_ratio,
                 config.dropout,
                 with_cls_token=with_cls,
+                drop_path_rates=rates,
             )
         )
         in_ch = dim
@@ -447,7 +486,16 @@ class CvT(PretrainedModel, BackboneMixin):
         super().__init__(config)
         stage_list, fi = _build_stages(config)
         self.stages = nn.ModuleList(stage_list)  # type: ignore[arg-type]
+        # Trunk LayerNorm -- the reference's ``forward_features`` ends with
+        # it, so the backbone's advertised feature is the normalised one.
+        self.norm = nn.LayerNorm(config.dims[-1])
         self._feature_info = fi
+
+        # Reference initialisation: trunc_normal_(0.02) on Linear / patch-embed
+        # convs with zero bias, unit LayerNorms, and the same draw for the
+        # class token and positional table (bare Parameters the framework
+        # default never touches — they were sitting at exact zeros).
+        init_transformer_trunc_normal(self)
 
     @override
     @property
@@ -462,9 +510,15 @@ class CvT(PretrainedModel, BackboneMixin):
             x, cls = out[0], out[1]
         # Prefer the CLS token from the last stage that produced one;
         # fall back to spatial mean-pool for cls-token-free configs.
+        #
+        # The reference's ``forward_features`` ends with the trunk LayerNorm,
+        # so the backbone's own output is normalised.  Omitting it here handed
+        # downstream consumers of ``task="base"`` a differently-scaled feature
+        # than the classifier head sees.
         if cls is not None:
-            return cls[:, 0]
-        return x.flatten(2).mean(dim=2)
+            return cast(Tensor, self.norm(cls[:, 0]))
+        tokens = x.flatten(2).permute(0, 2, 1)  # (B, N, C)
+        return cast(Tensor, self.norm(tokens)).mean(dim=1)
 
     @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
@@ -558,7 +612,13 @@ class CvTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         if cls is not None:
             feat = cast(Tensor, self.head_norm(cls)).mean(dim=1)
         else:
-            feat = cast(Tensor, self.head_norm(x.flatten(2).mean(dim=2)))
+            # Normalise *then* pool, matching the CLS branch directly above
+            # and the reference.  Pooling first hands LayerNorm a single
+            # already-averaged vector, so it normalises across channels of a
+            # mean instead of normalising each token — a different statistic,
+            # and the two branches disagreed with each other.
+            tokens = x.flatten(2).permute(0, 2, 1)  # (B, N, C)
+            feat = cast(Tensor, self.head_norm(tokens)).mean(dim=1)
         logits = cast(Tensor, self.classifier(feat))
 
         loss: Tensor | None = None

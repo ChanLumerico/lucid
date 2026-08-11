@@ -19,13 +19,19 @@ Split-Attention convolution (SplitAttn):
 
 from typing import ClassVar, cast, final, override
 
+import math
+
+import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
-from lucid.models._utils._common import make_divisible as _make_divisible
+from lucid.models._utils._common import (
+    zero_init_last_bn,
+    make_divisible as _make_divisible,
+)
 from lucid.models.vision.resnest._config import ResNeStConfig
 
 # ---------------------------------------------------------------------------
@@ -161,6 +167,51 @@ class _SplitAttn(nn.Module):
 
 
 @final
+class _DropBlock2d(nn.Module):
+    r"""Structured spatial dropout (Ghiasi et al., 2018).
+
+    Section 4.2 applies this to the last two stages: "As a structured
+    variant of dropout, DropBlock randomly masks out local block regions,
+    and is more effective than dropout for specifically regularizing
+    convolutional layers."  Dropping isolated activations barely dents a
+    convolutional feature map — the neighbours carry the same information —
+    so the mask has to remove contiguous ``block_size x block_size``
+    regions to actually withhold anything.
+
+    Identity at inference and at ``drop_prob == 0``.
+    """
+
+    def __init__(self, drop_prob: float = 0.0, block_size: int = 3) -> None:
+        super().__init__()
+        self.drop_prob = drop_prob
+        self.block_size = block_size
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        if not self.training or self.drop_prob == 0.0:
+            return x
+        _B, _C, H, W = (int(v) for v in x.shape)
+        bs = min(self.block_size, H, W)
+        if bs < 1:
+            return x
+        # gamma is set so the *expected* fraction of zeroed units matches
+        # drop_prob once each seed has been dilated to a bs x bs block.
+        valid = float((H - bs + 1) * (W - bs + 1))
+        gamma = self.drop_prob * H * W / (bs * bs * valid)
+        seeds = (lucid.rand(*x.shape, device=x.device.type) < gamma).float()
+        # Dilate each seed into its block: max-pool with a bs window.
+        pad = bs // 2
+        mask = F.max_pool2d(seeds, bs, stride=1, padding=pad)
+        if int(mask.shape[2]) != H or int(mask.shape[3]) != W:
+            mask = mask[:, :, :H, :W]
+        keep = 1.0 - mask
+        # Renormalise so the expected activation magnitude is unchanged.
+        n_elems = float(math.prod(int(v) for v in keep.shape))
+        scale = n_elems / keep.sum().clip(min=1.0)
+        return x * keep * scale
+
+
+@final
 class _ResNeStBottleneck(nn.Module):
     """ResNeSt Bottleneck block.
 
@@ -193,10 +244,14 @@ class _ResNeStBottleneck(nn.Module):
         avd_first: bool = False,
         is_first: bool = False,
         dilation: int = 1,
+        bottleneck_width: int = 64,
+        drop_block_rate: float = 0.0,
+        drop_block_size: int = 3,
     ) -> None:
         super().__init__()
         self.downsample = downsample
-        group_width = int(planes * groups)
+        # Both references: ``int(planes * (bottleneck_width / 64.)) * groups``.
+        group_width = int(planes * (bottleneck_width / 64.0)) * groups
 
         # Determine avd pooling stride
         if avd and (stride > 1 or is_first):
@@ -229,8 +284,9 @@ class _ResNeStBottleneck(nn.Module):
             groups=groups,
             radix=radix,
         )
-        # bn2 is Identity — SplitAttn already contains bn0 after its conv
-        self.bn2: nn.Module = nn.Identity()
+        # bn2 is Identity — SplitAttn already contains bn0 after its conv.
+        # Both references reserve this slot for DropBlock.
+        self.bn2: nn.Module = _DropBlock2d(drop_block_rate, drop_block_size)
         self.act2: nn.Module = nn.Identity()
 
         # AVD pool after SplitAttn (avd_first=False, default)
@@ -302,6 +358,9 @@ def _make_layer(
     avg_down: bool,
     dilation: int = 1,
     is_first_stage: bool = False,
+    bottleneck_width: int = 64,
+    drop_block_rate: float = 0.0,
+    drop_block_size: int = 3,
 ) -> tuple[nn.Sequential, int]:
     """Build one stage of ResNeSt blocks.
 
@@ -337,6 +396,9 @@ def _make_layer(
             # a per-block override but no stage enables it by default.
             is_first=is_first_stage,
             dilation=dilation,
+            bottleneck_width=bottleneck_width,
+            drop_block_rate=drop_block_rate,
+            drop_block_size=drop_block_size,
         )
     ]
     for _ in range(1, num_blocks):
@@ -350,6 +412,9 @@ def _make_layer(
                 avd=avd,
                 avd_first=avd_first,
                 dilation=dilation,
+                bottleneck_width=bottleneck_width,
+                drop_block_rate=drop_block_rate,
+                drop_block_size=drop_block_size,
             )
         )
 
@@ -380,12 +445,17 @@ def _make_stem(
         conv1.6  Conv(sw→2sw, k=3, s=1)
         bn1      BN(2sw)          ← top-level model attribute
 
-    timm flat-stem layout::
+    timm flat-stem layout (fixed 64 channels, independent of ``sw``)::
 
-        conv1.0  Conv(in→2sw, k=7, s=2)
-        bn1      BN(2sw)          ← top-level model attribute
+        conv1.0  Conv(in→64, k=7, s=2)
+        bn1      BN(64)           ← top-level model attribute
     """
-    out = stem_width * 2
+    # ``stem_width`` is a *deep*-stem parameter: the official repo's flat
+    # branch is literally ``conv_layer(3, 64, kernel_size=7, ...)`` and timm
+    # only computes ``stem_width * 2`` when the stem type contains 'deep'.
+    # Deriving the flat width from stem_width made a non-default stem_width
+    # silently resize the whole trunk's entry.
+    out = stem_width * 2 if deep_stem else 64
     if deep_stem:
         conv1 = nn.Sequential(
             nn.Conv2d(in_channels, stem_width, 3, stride=2, padding=1, bias=False),
@@ -428,6 +498,10 @@ def _build_resnest_body(config: ResNeStConfig) -> tuple[
     layers_cfg = config.layers
     radix = config.radix
     groups = config.groups
+    bottleneck_width = config.bottleneck_width
+    # Section 4.2 applies DropBlock to the last two stages only.
+    db_rate = config.drop_block_rate
+    db_size = config.drop_block_size
     avd = config.avd
     avd_first = config.avd_first
     avg_down = config.avg_down
@@ -445,6 +519,7 @@ def _build_resnest_body(config: ResNeStConfig) -> tuple[
         avd,
         avd_first,
         avg_down,
+        bottleneck_width=bottleneck_width,
     )
     fi.append(FeatureInfo(stage=1, num_channels=widths[0] * 4, reduction=4))
     layer2, cur = _make_layer(
@@ -457,6 +532,7 @@ def _build_resnest_body(config: ResNeStConfig) -> tuple[
         avd,
         avd_first,
         avg_down,
+        bottleneck_width=bottleneck_width,
     )
     fi.append(FeatureInfo(stage=2, num_channels=widths[1] * 4, reduction=8))
     layer3, cur = _make_layer(
@@ -469,6 +545,9 @@ def _build_resnest_body(config: ResNeStConfig) -> tuple[
         avd,
         avd_first,
         avg_down,
+        bottleneck_width=bottleneck_width,
+        drop_block_rate=db_rate,
+        drop_block_size=db_size,
     )
     fi.append(FeatureInfo(stage=3, num_channels=widths[2] * 4, reduction=16))
     layer4, cur = _make_layer(
@@ -481,6 +560,9 @@ def _build_resnest_body(config: ResNeStConfig) -> tuple[
         avd,
         avd_first,
         avg_down,
+        bottleneck_width=bottleneck_width,
+        drop_block_rate=db_rate,
+        drop_block_size=db_size,
     )
     fi.append(FeatureInfo(stage=4, num_channels=widths[3] * 4, reduction=32))
 
@@ -584,6 +666,13 @@ class ResNeSt(PretrainedModel, BackboneMixin):
         self.layer3 = l3
         self.layer4 = l4
         self._feature_info = fi
+
+        if config.zero_init_residual:
+            # "Zero-initialize the last BN in each residual branch, so the
+            # block starts as an identity" — the paper's training recipe and
+            # what this config field has always advertised.  It was declared
+            # and then never read.
+            zero_init_last_bn(self, (_ResNeStBottleneck,), attr="bn3")
 
     @override
     @property

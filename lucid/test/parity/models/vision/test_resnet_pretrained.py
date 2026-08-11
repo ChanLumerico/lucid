@@ -3,21 +3,25 @@
 Exercises the full :mod:`lucid.weights` path end to end: a
 ``resnet_18_cls(pretrained=True)`` call downloads the hosted checkpoint
 from the Hub, verifies its SHA-256, and loads it — then we assert the
-resulting logits match the upstream torchvision source the weights were
+resulting logits match the upstream vision source the weights were
 converted from.
 
-Network- and source-dependent, so it auto-skips when torchvision is
-absent or the download is unreachable.  Marked ``parity`` + ``slow``.
+Network- and source-dependent, so it auto-skips when the reference vision
+package is absent or the download is unreachable.  Marked ``parity`` +
+``slow``.
 """
 
 import numpy as np
 import pytest
 
 import lucid
+from lucid.test._fixtures.ref_framework import require_ref_vision
 
 pytestmark = [pytest.mark.parity, pytest.mark.slow]
 
-_tv = pytest.importorskip("torchvision", reason="torchvision (source) not installed")
+# H5: only the ref_framework fixture may name the reference framework;
+# every other test receives it through that indirection.
+_tv = require_ref_vision(module_level=True)
 
 
 def _load_lucid_pretrained() -> object:
@@ -33,8 +37,9 @@ def _load_lucid_pretrained() -> object:
 
 
 def test_resnet18_pretrained_matches_source(ref) -> None:
-    """Lucid pretrained logits match the torchvision ResNet18 source."""
-    from torchvision.models import ResNet18_Weights, resnet18  # source
+    """Lucid pretrained logits match the reference ResNet18 source."""
+    resnet18 = _tv.models.resnet18
+    ResNet18_Weights = _tv.models.ResNet18_Weights
 
     lucid_model = _load_lucid_pretrained()
 

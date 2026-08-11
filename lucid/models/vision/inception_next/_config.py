@@ -89,10 +89,13 @@ class InceptionNeXtConfig(ModelConfig):
         Kernel length :math:`K` of the horizontal :math:`1 \times K`
         and vertical :math:`K \times 1` *band* depthwise convolutions
         inside the Inception token mixer.  Defaults to ``11``.
-    mlp_ratios : tuple of int, optional
-        Per-stage MLP expansion ratios.  Defaults to ``(4, 4, 4, 3)``
+    mlp_ratios : int or tuple of int, optional
+        Per-stage MLP expansion ratios; a scalar is broadcast across all
+        stages, as the reference does.  Defaults to ``(4, 4, 4, 3)``
         — the reference recipe uses ratio 3 in the final stage to
-        match the head's compute budget.
+        match the head's compute budget.  A tuple whose length differs
+        from ``len(depths)`` is rejected here rather than failing later
+        inside the builder.
 
     Attributes
     ----------
@@ -122,11 +125,39 @@ class InceptionNeXtConfig(ModelConfig):
     depths: tuple[int, ...] = (3, 3, 9, 3)
     dims: tuple[int, ...] = (96, 192, 384, 768)
     band_kernel: int = 11
+    # Token-mixer geometry.  The reference exposes both as ``InceptionDWConv2d``
+    # arguments; hard-wiring them made the paper's Atto variant (which uses a
+    # different branch ratio) unbuildable through ``create_model`` overrides.
+    square_kernel: int = 3
+    branch_ratio: float = 0.125
     # Per-stage MLP expansion ratios.  When None, defaults to (4, 4, 4, 3) which
     # matches timm inception_next_tiny / small / base (final stage uses 3×).
-    mlp_ratios: tuple[int, ...] = (4, 4, 4, 3)
+    mlp_ratios: int | tuple[int, ...] = (4, 4, 4, 3)
+    # Stochastic depth.  The reference ramps the drop probability linearly
+    # with the *global* block index, so deeper blocks are dropped more
+    # often; a single flat rate is not the same regulariser.
+    drop_path_rate: float = 0.0
+    # Head dropout, applied between the head's norm and its final
+    # projection — the reference's ``MlpHead(drop=...)``.
+    drop_rate: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "depths", tuple(self.depths))
         object.__setattr__(self, "dims", tuple(self.dims))
-        object.__setattr__(self, "mlp_ratios", tuple(self.mlp_ratios))
+        # The reference broadcasts a scalar across the stages
+        # (``if not isinstance(mlp_ratios, (list, tuple)): [mlp_ratios] * n``)
+        # and always has one entry per stage.  Accepting only a tuple made
+        # ``mlp_ratios=4`` a TypeError, and a short/long tuple failed later
+        # with an IndexError from inside the builder instead of here.
+        n_stages = len(self.depths)
+        ratios: tuple[int, ...] = (
+            (self.mlp_ratios,) * n_stages
+            if isinstance(self.mlp_ratios, int)
+            else tuple(self.mlp_ratios)
+        )
+        if len(ratios) != n_stages:
+            raise ValueError(
+                f"mlp_ratios must have one entry per stage: got "
+                f"{len(ratios)} for {n_stages} stages (depths={self.depths})"
+            )
+        object.__setattr__(self, "mlp_ratios", ratios)

@@ -259,6 +259,12 @@ class ObjectDetectionOutput(ModelOutput):
         Per-image RoI proposals for two-stage detectors (R-CNN / Fast
         R-CNN / Faster R-CNN).  Lets downstream ``postprocess()`` run
         from the output alone, without re-running the proposal stage.
+    objectness : Tensor or None, optional
+        ``(B, num_anchors)`` per-anchor objectness probability for the
+        single-stage YOLO family.  A YOLO detection score is
+        :math:`\Pr(\text{object}) \cdot \Pr(\text{class} \mid \text{object})`,
+        so ``postprocess`` needs this alongside ``logits``; without it the
+        class score alone would rank and threshold every background anchor.
 
     Notes
     -----
@@ -282,6 +288,7 @@ class ObjectDetectionOutput(ModelOutput):
     # *per RoI*; ``proposals`` carries the per-image RoI list so downstream
     # ``postprocess()`` can be called against the output alone.
     proposals: tuple[Tensor, ...] | None = None
+    objectness: Tensor | None = None
 
 
 @dataclass(slots=True)
@@ -302,6 +309,12 @@ class InstanceSegmentationOutput(ModelOutput):
         Total loss (cls + box + mask) when targets were supplied.
     hidden_states : tuple[Tensor, ...] or None, optional
         Optional intermediate feature maps.
+    proposals : tuple[Tensor, ...] or None, optional
+        Per-image RoI proposals used by ``forward``.  Carried out for the
+        same reason Faster R-CNN carries them: ``postprocess`` needs the
+        proposal boxes to map rows of ``pred_boxes`` / ``pred_masks`` back
+        to images, and when ``forward`` generated the proposals itself the
+        caller has no other way to supply them.
 
     Notes
     -----
@@ -321,6 +334,7 @@ class InstanceSegmentationOutput(ModelOutput):
     pred_masks: Tensor
     loss: Tensor | None = None
     hidden_states: tuple[Tensor, ...] | None = None
+    proposals: tuple[Tensor, ...] | None = None
 
 
 @dataclass(slots=True)
@@ -658,3 +672,115 @@ class GenerationOutput(ModelOutput):
 
     samples: Tensor
     intermediates: tuple[Tensor, ...] | None = None
+
+
+@dataclass(slots=True)
+class SequenceClassificationOutput(ModelOutput):
+    r"""Output of any whole-sequence classification head.
+
+    Attributes
+    ----------
+    logits : Tensor
+        Per-sequence class logits, shape ``(B, num_labels)``.  A
+        ``num_labels`` of 1 marks a regression head, whose loss is MSE
+        rather than cross-entropy.
+    loss : Tensor or None, optional
+        Scalar loss when ``labels`` were supplied.
+    hidden_states : tuple[Tensor, ...] or None, optional
+        Per-layer hidden states.
+    attentions : tuple[Tensor, ...] or None, optional
+        Per-layer attention weights.
+
+    Notes
+    -----
+    Returned by every ``{Family}ForSequenceClassification`` head.  It
+    exists so a caller can tell a ``(B, num_labels)`` sentence logit
+    apart from a ``(B, T, vocab_size)`` masked-LM logit by type rather
+    than by inspecting shapes.
+
+    Examples
+    --------
+    >>> out = model(input_ids, labels=labels)
+    >>> out.logits.shape
+    (8, 2)
+    """
+
+    logits: Tensor
+    loss: Tensor | None = None
+    hidden_states: tuple[Tensor, ...] | None = None
+    attentions: tuple[Tensor, ...] | None = None
+
+
+@dataclass(slots=True)
+class TokenClassificationOutput(ModelOutput):
+    r"""Output of any per-token classification head (NER, POS, chunking).
+
+    Attributes
+    ----------
+    logits : Tensor
+        Per-token class logits, shape ``(B, T, num_labels)``.
+    loss : Tensor or None, optional
+        Scalar cross-entropy loss over the non-ignored positions.
+    hidden_states : tuple[Tensor, ...] or None, optional
+        Per-layer hidden states.
+    attentions : tuple[Tensor, ...] or None, optional
+        Per-layer attention weights.
+
+    Notes
+    -----
+    Returned by every ``{Family}ForTokenClassification`` head.  The
+    logits have the same rank as a masked-LM head's, but the last axis
+    is a label set rather than a vocabulary — the distinct type keeps
+    the two from being confused.
+
+    Examples
+    --------
+    >>> out = model(input_ids, labels=labels)
+    >>> out.logits.shape
+    (8, 128, 9)
+    """
+
+    logits: Tensor
+    loss: Tensor | None = None
+    hidden_states: tuple[Tensor, ...] | None = None
+    attentions: tuple[Tensor, ...] | None = None
+
+
+@dataclass(slots=True)
+class QuestionAnsweringOutput(ModelOutput):
+    r"""Output of any extractive span-prediction head.
+
+    Attributes
+    ----------
+    start_logits : Tensor
+        Per-position start-of-span logits, shape ``(B, T)``.
+    end_logits : Tensor
+        Per-position end-of-span logits, shape ``(B, T)``.
+    loss : Tensor or None, optional
+        Mean of the start and end cross-entropy terms when both
+        ``start_positions`` and ``end_positions`` were supplied.
+    hidden_states : tuple[Tensor, ...] or None, optional
+        Per-layer hidden states.
+    attentions : tuple[Tensor, ...] or None, optional
+        Per-layer attention weights.
+
+    Notes
+    -----
+    Returned by every ``{Family}ForQuestionAnswering`` head.  The two
+    logit tensors are kept separate rather than fused into a single
+    ``(B, T, 2)`` tensor: a caller that wants the best span argmaxes
+    each independently, and a fused tensor forces every one of them to
+    remember which trailing index means "start".
+
+    Examples
+    --------
+    >>> out = model(input_ids)
+    >>> out.start_logits.shape, out.end_logits.shape
+    ((8, 128), (8, 128))
+    """
+
+    start_logits: Tensor
+    end_logits: Tensor
+    loss: Tensor | None = None
+    hidden_states: tuple[Tensor, ...] | None = None
+    attentions: tuple[Tensor, ...] | None = None

@@ -1,6 +1,6 @@
 """Numerical parity for Lucid's AutoAugment-family policy classes + apply_op.
 
-Opt-in tier — auto-skips when the reference framework + torchvision
+Opt-in tier — auto-skips when the reference framework and its vision library
 aren't installed.  Run with::
 
     pytest -m parity lucid/test/parity/transforms/test_autoaugment_family_parity.py

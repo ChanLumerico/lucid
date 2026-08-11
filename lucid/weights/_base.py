@@ -11,7 +11,7 @@ declaration is built from:
   *are* :class:`WeightEntry` values.  Each architecture declares one
   ``WeightsEnum`` (e.g. ``ResNet18Weights``) listing its tagged
   variants (``IMAGENET1K_V1``, ``IMAGENET1K_V2``, …) plus a ``DEFAULT``
-  alias.  This mirrors the torchvision ``Weights`` enum convention so
+  alias.  This mirrors the reference_vision ``Weights`` enum convention so
   the call-site ergonomics are familiar.
 
 Deliberately, :class:`WeightEntry` does **not** carry the Lucid model
@@ -63,7 +63,7 @@ class WeightEntry:
         :class:`~lucid.utils.transforms.ImageClassification`).
     meta : dict
         Free-form provenance + metrics.  Conventional keys: ``source``
-        (e.g. ``"torchvision/ResNet18_Weights.IMAGENET1K_V1"``),
+        (e.g. ``"reference_vision/ResNet18_Weights.IMAGENET1K_V1"``),
         ``license``, ``recipe``, ``metrics`` (nested
         ``{dataset: {metric: value}}``), ``num_params``, ``gflops``,
         ``file_size_mb``.  Rendered into the Hub ``config.json`` +
@@ -100,7 +100,7 @@ class WeightsEnum(enum.Enum):
     (``.tag``), so call sites read naturally.  Assigning
     ``DEFAULT = IMAGENET1K_V1`` makes ``DEFAULT`` an *alias* of the
     canonical member (standard :mod:`enum` behaviour for duplicate
-    values), exactly mirroring the torchvision convention where
+    values), exactly mirroring the reference_vision convention where
     ``DEFAULT`` tracks the strongest available weights.
 
     Notes

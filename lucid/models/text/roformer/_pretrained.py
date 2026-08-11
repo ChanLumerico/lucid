@@ -60,7 +60,10 @@ def roformer(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        If ``True``, resolves and loads the ``DEFAULT`` pretrained
+        checkpoint; a tag string selects a specific one.  (This was
+        documented as a no-op while the body already downloaded and
+        loaded weights.)
     weights : RoFormerWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
@@ -138,7 +141,10 @@ def roformer_mlm(
     Parameters
     ----------
     pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+        If ``True``, resolves and loads the ``DEFAULT`` pretrained
+        checkpoint; a tag string selects a specific one.  (This was
+        documented as a no-op while the body already downloaded and
+        loaded weights.)
     weights : RoFormerMLMWeights, optional, keyword-only
         Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object

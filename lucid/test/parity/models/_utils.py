@@ -74,6 +74,48 @@ def _spec_param(spec: ParitySpec) -> pytest.param:
 # ── Registry-driven runners ───────────────────────────────────────────────────
 
 
+def _randomise_norm_buffers(model: object, ref: object, seed: int = 0) -> None:
+    """Give normalisation layers running statistics that keep signal alive.
+
+    ``timm.create_model(pretrained=False)`` leaves every BatchNorm at
+    ``running_mean = 0`` / ``running_var = 1``.  In eval mode that makes the
+    layer a pure ``1 / sqrt(1 + eps)`` scale: it never restores variance.
+    Stacked deep enough it is a vanishing map — MobileNet-v3's feature stack
+    attenuated ~20-45x per non-residual block, so the *entire* backbone
+    contributed 1.5e-8 to the logits against an ``atol`` of 1e-3.  Whatever
+    the blocks computed, the comparison passed.
+
+    Filling the buffers with plausible statistics restores that signal
+    (measured on mobilenet_v3_large: 1.5e-8 -> 4.3), so a wrong SE gate, a
+    swapped activation row, a dropped residual or a mis-ordered SE placement
+    now actually reaches the assertion.  A few train-mode calibration batches
+    were tried first and recovered far less (1.2e-2), because momentum only
+    moves the buffers a fraction of the way and the statistics it collects
+    are themselves measured on already-attenuating activations.
+
+    Seeded, so the check stays deterministic — and applied before the
+    transfer, so the Lucid side receives the same buffers.
+    """
+    rng = np.random.default_rng(seed)
+    for module in model.modules():  # type: ignore[attr-defined]
+        mean = getattr(module, "running_mean", None)
+        var = getattr(module, "running_var", None)
+        if mean is None or var is None:
+            continue
+        n = int(mean.numel())
+        with ref.no_grad():  # type: ignore[attr-defined]
+            mean.copy_(
+                ref.from_numpy(  # type: ignore[attr-defined]
+                    rng.normal(0.0, 0.25, n).astype(np.float32)
+                ).reshape(mean.shape)
+            )
+            var.copy_(
+                ref.from_numpy(  # type: ignore[attr-defined]
+                    rng.uniform(0.5, 1.5, n).astype(np.float32)
+                ).reshape(var.shape)
+            )
+
+
 def _run_parity(spec: ParitySpec) -> None:
     """Execute one full parity check from a ParitySpec.
 
@@ -106,6 +148,8 @@ def _run_parity(spec: ParitySpec) -> None:
 
     timm_model = timm.create_model(spec.timm_name, pretrained=False, num_classes=1000)
     timm_model.eval()
+    # Before the transfer, so both sides get the same statistics.
+    _randomise_norm_buffers(timm_model, _ref)
 
     result = transfer(lucid_model, timm_model, spec.key_remap, spec.key_transform)
 

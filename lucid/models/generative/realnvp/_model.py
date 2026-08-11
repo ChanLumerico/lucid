@@ -27,6 +27,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import GenerationOutput, NormalizingFlowOutput
 from lucid.models._utils._generative import (
+    resolve_generation_device,
     flow_prior_log_prob,
     flow_prior_sample,
     generative_activation,
@@ -78,17 +79,33 @@ def _channel_mask(channels: int, parity: int) -> Tensor:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _maybe_weight_norm(conv: nn.Conv2d, enabled: bool) -> nn.Conv2d:
+    r"""Wrap ``conv`` in weight normalisation when the config asks for it.
+
+    Section 4.1 uses weight normalisation throughout the coupling
+    networks; it reparametrises each filter as :math:`g\,v/\lVert v\rVert`
+    so the direction and the magnitude are learned separately.
+    """
+    return cast(nn.Conv2d, nn.utils.weight_norm(conv)) if enabled else conv
+
+
 @final
 class _ResBlock(nn.Module):
     """Pre-activation residual block (ReLU + skip, paper §4.1)."""
 
-    def __init__(self, dim: int, act_fn: str, use_batch_norm: bool) -> None:
+    def __init__(
+        self, dim: int, act_fn: str, use_batch_norm: bool, use_weight_norm: bool = False
+    ) -> None:
         super().__init__()
         self._act_name = act_fn
         self.norm1 = nn.BatchNorm2d(dim) if use_batch_norm else None
-        self.conv1 = nn.Conv2d(dim, dim, kernel_size=3, padding=1)
+        self.conv1 = _maybe_weight_norm(
+            nn.Conv2d(dim, dim, kernel_size=3, padding=1), use_weight_norm
+        )
         self.norm2 = nn.BatchNorm2d(dim) if use_batch_norm else None
-        self.conv2 = nn.Conv2d(dim, dim, kernel_size=3, padding=1)
+        self.conv2 = _maybe_weight_norm(
+            nn.Conv2d(dim, dim, kernel_size=3, padding=1), use_weight_norm
+        )
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -113,20 +130,36 @@ class _CouplingNet(nn.Module):
     def __init__(self, channels: int, dim: int, config: RealNVPConfig) -> None:
         super().__init__()
         self._act_name = config.act_fn
-        self.stem = nn.Conv2d(channels, dim, kernel_size=3, padding=1)
+        wn = config.use_weight_norm
+        self.stem = _maybe_weight_norm(
+            nn.Conv2d(channels, dim, kernel_size=3, padding=1), wn
+        )
         self.blocks = nn.ModuleList(
             [
-                _ResBlock(dim, config.act_fn, config.use_batch_norm)
+                _ResBlock(dim, config.act_fn, config.use_batch_norm, wn)
                 for _ in range(config.residual_blocks)
             ]
         )
         self.norm_out = nn.BatchNorm2d(dim) if config.use_batch_norm else None
+        # The head stays un-normalised: weight norm's ``g`` would fight the
+        # zero initialisation below that makes step 0 the identity flow.
         self.head = nn.Conv2d(dim, 2 * channels, kernel_size=3, padding=1)
-        # Zero head + zero rescaling ⇒ identity flow at step 0.
+        # Zero head ⇒ s = t = 0 ⇒ identity flow at step 0.
         nn.init.zeros_(self.head.weight)
         if self.head.bias is not None:
             nn.init.zeros_(self.head.bias)
-        self.rescale = nn.Parameter(lucid.zeros(1))
+        # ``rescale`` must NOT also start at zero.  With s = rescale·tanh(head),
+        # zeroing both makes an exact saddle: ∂s/∂rescale = tanh(0) = 0 and
+        # ∂s/∂head = rescale·(1−tanh²) = 0, so neither can ever move and every
+        # coupling stays additive — the model silently degrades to NICE, losing
+        # the affine scaling that is Real NVP's whole contribution.  One is the
+        # reference initialisation (``Rescale``'s weight is ones), and it keeps
+        # the step-0 identity because tanh(0) is still 0.
+        # One scale *per channel*, as the reference's ``Rescale(num_channels)``
+        # does.  A single global scalar forces every channel of the coupling
+        # to share one saturation point on the tanh, so a channel that needs a
+        # wide log-scale and one that needs a narrow one cannot both be served.
+        self.rescale = nn.Parameter(lucid.ones(1, channels, 1, 1))
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
@@ -226,15 +259,33 @@ class _FlowBatchNorm(nn.Module):
         self.register_buffer("running_var", lucid.ones(1, channels, 1, 1))
 
     def _stats(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        """Normalisation statistics for the current pass.
+
+        Divergence, deliberate: §3.7 / Appendix E describe a batch-norm
+        variant whose *training-time* statistics are a running average
+        over recent minibatches, for robustness at very small batch
+        sizes.  This uses the current minibatch, as ordinary batch norm
+        does — the running buffers below are kept for evaluation only.
+        The two agree in the large-batch limit and differ most where the
+        paper's variant was aimed, so a caller training at batch sizes in
+        the single digits should expect noisier log-likelihoods here.
+        """
         if not self.training:
             return self.running_mean, self.running_var
         mean = x.mean(dim=(0, 2, 3), keepdim=True)
         var = ((x - mean) ** 2).mean(dim=(0, 2, 3), keepdim=True)
         with lucid.no_grad():
-            self.running_mean = (
+            # Write through ``_buffers`` — a plain attribute assignment makes
+            # ``Module.__setattr__`` drop the name from the buffer registry
+            # (a bare Tensor is neither Parameter nor Module), so the running
+            # statistics would silently vanish from ``state_dict()`` on the
+            # first training step and the flow would be non-invertible after
+            # a save/load round-trip.  ``nn.BatchNorm2d`` writes through for
+            # the same reason.
+            self._buffers["running_mean"] = (
                 1.0 - self._momentum
             ) * self.running_mean + self._momentum * mean
-            self.running_var = (
+            self._buffers["running_var"] = (
                 1.0 - self._momentum
             ) * self.running_var + self._momentum * var
         return mean, var
@@ -264,14 +315,28 @@ class _LogitTransform(nn.Module):
     itself; ``alpha = (1 - c) / 2`` for the configured constraint ``c``.
     Its log-determinant belongs to the reported likelihood, which is why
     it lives inside the model instead of in a transform pipeline.
+
+    In training mode the input is first *dequantised* — one sample of
+    uniform noise spread over each quantisation bin — so the continuous
+    density being fitted has a finite optimum.  Evaluation leaves ``x``
+    alone, keeping ``encode``/``decode`` an exact round-trip.
     """
 
-    def __init__(self, data_constraint: float) -> None:
+    def __init__(self, data_constraint: float, num_bits: int = 8) -> None:
         super().__init__()
         self._c = data_constraint
+        self._levels = float(2**num_bits)
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+        if self.training:
+            # Uniform dequantisation (§4.1).  Without it the flow is fitted to
+            # a discrete measure it can drive to unbounded density, so the
+            # likelihood improves without bound and the reported bits/dim is
+            # meaningless.  ``bits_per_dim`` already adds back the num_bits
+            # term this scaling costs.
+            noise = lucid.rand(*x.shape, device=x.device.type)
+            x = (x * (self._levels - 1.0) + noise) / self._levels
         s = (x - 0.5) * self._c + 0.5
         y = s.log() - (1.0 - s).log()
         # d/dx logit(s(x)) = c / (s (1 - s)); written with softplus for range.
@@ -346,10 +411,11 @@ class RealNVPModel(PretrainedModel):
         self._prior = config.prior
         self._image_shape = config.image_shape
         self._input_dim = config.input_dim
+        self._num_bits = config.num_bits
         self._num_scales = config.num_scales
         self._use_batch_norm = config.use_batch_norm
 
-        self.logit = _LogitTransform(config.data_constraint)
+        self.logit = _LogitTransform(config.data_constraint, config.num_bits)
 
         _c, height, width = config.image_shape
         scales: list[nn.Module] = []
@@ -381,13 +447,19 @@ class RealNVPModel(PretrainedModel):
             self._scale_shapes.append((channels, height, width))
             if not last:
                 # Squeeze, then three channel-wise couplings on 4C channels.
+                # The squeeze quadruples the channel count, and the reference
+                # doubles the coupling net's width to match (``2 * mid_channels``
+                # for the channel-wise stack).  Reusing the pre-squeeze ``dim``
+                # left those couplings modelling 4C channels with the capacity
+                # sized for C.
                 height, width = height // 2, width // 2
                 squeezed = channels * 4
+                channel_dim = dim * 2
                 for step in range(3):
                     stages.append(
                         _AffineCoupling(
                             squeezed,
-                            dim,
+                            channel_dim,
                             config,
                             mask_kind="channel",
                             parity=step % 2,
@@ -457,6 +529,13 @@ class RealNVPModel(PretrainedModel):
                 h, inc = cast(tuple[Tensor, Tensor], stage(h))
                 log_det = log_det + inc
 
+            # Reference divergence, not a paper violation: §3.6 / Fig. 4b
+            # only say half the dimensions are factored out and do not fix
+            # the partition.  The reference un-squeezes after the channel
+            # couplings and re-squeezes with a checkerboard-derived ordering
+            # before chunking, so its two halves interleave differently from
+            # this raw squeezed-order split.  The flow is a valid bijection
+            # either way; what differs is which dimensions travel together.
             split = int(h.shape[1]) // 2
             parts.append(h[:, :split].reshape(batch, -1))
             h = h[:, split:]
@@ -522,8 +601,19 @@ class RealNVPModel(PretrainedModel):
         return flow_prior_log_prob(self._prior, z).sum(dim=-1) + log_det
 
     def bits_per_dim(self, x: Tensor) -> Tensor:
-        """Per-sample bits/dim — the metric the paper reports in Table 1."""
-        return -self.log_prob(x) / (self._input_dim * math.log(2.0))
+        r"""Per-sample bits/dim — the metric the paper reports in Table 1.
+
+        :meth:`log_prob` is the exact density over the model's own input
+        space, ``[0, 1]^D``.  The paper's number is measured against the
+        *discrete* 8-bit data, and the ``x / 256`` inside its squash is
+        precisely that change of variables — worth
+        :math:`-D \log 256` in nats, i.e. ``num_bits`` in bits/dim.  The
+        canonical implementation applies the same offset in its loss.
+        Without it the reported figure sits a full 8 bits/dim below Table 1
+        and is not comparable to any published result.
+        """
+        nats = -self.log_prob(x) / (self._input_dim * math.log(2.0))
+        return nats + float(self._num_bits)
 
     @override
     def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
@@ -594,11 +684,15 @@ class RealNVPForImageGeneration(PretrainedModel):
         self.realnvp = RealNVPModel(config)
         self._prior = config.prior
         self._input_dim = config.input_dim
+        self._num_bits = config.num_bits
 
     @override
     def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
         out = cast(NormalizingFlowOutput, self.realnvp(x))
-        bits = -out.log_prob / (self._input_dim * math.log(2.0))
+        # Same 8-bit discretisation offset ``bits_per_dim`` applies — a
+        # constant, so gradients are untouched, but the reported loss is now
+        # on the paper's scale.
+        bits = -out.log_prob / (self._input_dim * math.log(2.0)) + float(self._num_bits)
         return NormalizingFlowOutput(
             latent=out.latent,
             log_det_jacobian=out.log_det_jacobian,
@@ -612,7 +706,7 @@ class RealNVPForImageGeneration(PretrainedModel):
         n_samples: int = 1,
         *,
         temperature: float = 1.0,
-        device: str = "cpu",
+        device: str | None = None,
     ) -> GenerationOutput:
         """Sample images by inverting a prior draw.
 
@@ -635,6 +729,7 @@ class RealNVPForImageGeneration(PretrainedModel):
             saturating, so values land just outside ``[0, 1]`` (within
             ``±(1 - c) / 2c``); clip before display.
         """
+        device = resolve_generation_device(self, device)
         if temperature <= 0.0:
             raise ValueError(f"temperature must be positive, got {temperature}")
         z = flow_prior_sample(self._prior, (n_samples, self._input_dim), device=device)

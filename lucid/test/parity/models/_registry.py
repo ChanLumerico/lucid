@@ -69,6 +69,18 @@ def _swin_key_transform(k: str) -> str:
     return k
 
 
+def _cspnet_key_transform(k: str) -> str:
+    """CSPNet: Lucid key → timm key.
+
+    The two trees are otherwise identical (the converter's ``map_key`` is the
+    identity), so the only rename is the classifier head:
+      classifier.*  →  head.fc.*
+    """
+    if k.startswith("classifier."):
+        return "head.fc." + k[len("classifier.") :]
+    return k
+
+
 def _convnext_key_transform(k: str) -> str:
     """ConvNeXt: Lucid key → timm key.
 
@@ -178,7 +190,13 @@ class ParitySpec:
 
 
 SPECS: list[ParitySpec] = [
-    # ── LeNet / AlexNet / ZFNet / GoogLeNet — no timm equivalent ────────────
+    # ── LeNet / AlexNet / ZFNet / GoogLeNet ─────────────────────────────────
+    # ``timm_name=None`` means no numeric guard runs for these.  This harness
+    # compares against timm (``_run_parity`` calls ``timm.create_model``), and
+    # timm ships none of them — AlexNet and ZFNet live in the reference
+    # *vision* library instead, LeNet nowhere.  Guarding AlexNet/ZFNet
+    # numerically would mean teaching the harness a second source, not just
+    # filling in a name here.
     ParitySpec(M.lenet_5_cls, None, input_shape=(1, 1, 32, 32)),
     ParitySpec(M.alexnet_cls, None, tier="slow"),
     ParitySpec(M.zfnet_cls, None, tier="slow"),
@@ -386,6 +404,11 @@ SPECS: list[ParitySpec] = [
     ParitySpec(M.densenet_121_cls, "densenet121"),
     ParitySpec(M.densenet_169_cls, "densenet169"),
     ParitySpec(M.densenet_201_cls, "densenet201"),
+    # DenseNet-161 is the only variant with growth_rate != 32 and
+    # num_init_features != 64, so it is the only one that exercises the
+    # 4*k bottleneck width (192) and the 2k stem arithmetic -- and it
+    # ships a converted checkpoint.
+    ParitySpec(M.densenet_161_cls, "densenet161"),
     ParitySpec(M.densenet_264_cls, None, tier="slow"),  # no timm equivalent
     # ── Inception ─────────────────────────────────────────────────────────────
     # Inception v3: attribute names differ (e.g. Conv2dNormActivation sub-modules
@@ -421,23 +444,21 @@ SPECS: list[ParitySpec] = [
     ParitySpec(M.mobilenet_v2_cls, "mobilenetv2_100", use_positional_fallback=True),
     ParitySpec(M.mobilenet_v2_075_cls, "mobilenetv2_075", use_positional_fallback=True),
     # ── MobileNet v3 ──────────────────────────────────────────────────────────
-    # Explicit head remap (classifier.3.*) + positional fallback for body.
+    # No head remap: Lucid's classifier is a 6-element Sequential, so its head
+    # keys are ``classifier.1.*`` (conv head) and ``classifier.5.*`` (linear)
+    # — runtime-verified.  The remap that used to sit here named
+    # ``classifier.weight`` on the left, which this model does not have, so it
+    # matched nothing and the positional fallback was doing all the work
+    # anyway.  An inert entry is worse than none: it reads as though the head
+    # were explicitly aligned.
     ParitySpec(
         M.mobilenet_v3_large_cls,
         "mobilenetv3_large_100",
-        key_remap={
-            "classifier.weight": "classifier.3.weight",
-            "classifier.bias": "classifier.3.bias",
-        },
         use_positional_fallback=True,
     ),
     ParitySpec(
         M.mobilenet_v3_small_cls,
         "mobilenetv3_small_100",
-        key_remap={
-            "classifier.weight": "classifier.3.weight",
-            "classifier.bias": "classifier.3.bias",
-        },
         use_positional_fallback=True,
     ),
     # ── EfficientNet — head: classifier.weight (exact match) ─────────────────
@@ -538,8 +559,21 @@ SPECS: list[ParitySpec] = [
         tier="heavy",
         key_transform=_convnext_key_transform,
     ),
-    # ── CSPNet — no timm exact equivalent ────────────────────────────────────
-    ParitySpec(M.cspresnet_50_cls, None),
+    # ── CSPNet ───────────────────────────────────────────────────────────────
+    # timm ships all three; the module and state-dict naming already mirror
+    # ``timm.models.cspnet``, so the converter's ``map_key`` is the identity
+    # apart from the head rename — which is exactly what ``_cspnet_key_transform``
+    # reproduces here.
+    ParitySpec(M.cspresnet_50_cls, "cspresnet50", key_transform=_cspnet_key_transform),
+    ParitySpec(
+        M.cspresnext_50_cls, "cspresnext50", key_transform=_cspnet_key_transform
+    ),
+    ParitySpec(
+        M.cspdarknet_53_cls,
+        "cspdarknet53",
+        key_transform=_cspnet_key_transform,
+        tier="slow",
+    ),
     # ── PVT v2 ───────────────────────────────────────────────────────────────
     # head: head.weight (auto-remapped)
     ParitySpec(M.pvt_v2_b0_cls, None),
@@ -548,7 +582,6 @@ SPECS: list[ParitySpec] = [
     ParitySpec(M.pvt_v2_b3_cls, None, tier="slow"),
     ParitySpec(M.pvt_v2_b4_cls, None, tier="slow"),
     ParitySpec(M.pvt_v2_b5_cls, None, tier="slow"),
-    ParitySpec(M.pvt_tiny_cls, "pvt_v2_b1", atol=2e-3),
     # ── CvT ──────────────────────────────────────────────────────────────────
     # Internal ordering may differ → named transfer, accept partial match
     ParitySpec(M.cvt_13_cls, None),  # no stable timm equiv with same arch

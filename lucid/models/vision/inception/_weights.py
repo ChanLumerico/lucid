@@ -1,7 +1,7 @@
 """Pretrained-weight declarations for the Inception v3 family.
 
 A single paper-cited architecture (Szegedy et al., CVPR 2016) converted
-from torchvision's ``Inception_V3_Weights.IMAGENET1K_V1`` tag.  Unlike
+from reference_vision's ``Inception_V3_Weights.IMAGENET1K_V1`` tag.  Unlike
 the standard 224/256 ImageNet preset, Inception v3 evaluates at a
 299-pixel centre crop resized from 342 (still ImageNet mean/std,
 bilinear), so the transform is spelled out explicitly here to match the
@@ -17,7 +17,7 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
 # Inception v3 evaluation preset: 299 centre crop resized from 342, with
 # the standard ImageNet mean/std and bilinear interpolation (sourced from
-# torchvision's ``Inception_V3_Weights.IMAGENET1K_V1.transforms()``).
+# reference_vision's ``Inception_V3_Weights.IMAGENET1K_V1.transforms()``).
 _PRESET = ImageClassification(crop_size=299, resize_size=342)
 
 
@@ -31,7 +31,7 @@ class InceptionV3Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 77.294% / top-5 93.450%),
-        sourced from ``torchvision/Inception_V3_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/Inception_V3_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -54,7 +54,7 @@ class InceptionV3Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/Inception_V3_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/Inception_V3_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 23_834_568,
             "metrics": {"ImageNet-1k": {"acc@1": 77.294, "acc@5": 93.450}},

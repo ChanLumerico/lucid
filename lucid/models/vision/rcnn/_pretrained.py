@@ -6,6 +6,7 @@ from typing import Any, cast
 from lucid.models._registry import register_model
 from lucid.models.vision.rcnn._config import RCNNConfig
 from lucid.models.vision.rcnn._model import RCNNForObjectDetection
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Base configurations (matching original paper)
@@ -18,7 +19,8 @@ _CFG_ALEXNET = RCNNConfig(
     roi_size=227,
     dropout=0.5,
     score_thresh=0.05,
-    nms_thresh=0.5,
+    # The released code uses 0.3; 0.5 is the Faster R-CNN convention.
+    nms_thresh=0.3,
     max_detections=300,
 )
 
@@ -104,4 +106,6 @@ def rcnn(
     >>> out.logits.shape
     (2, 21)
     """
+    if pretrained:
+        reject_unavailable_pretrained("rcnn")
     return _det(_CFG_ALEXNET, overrides)

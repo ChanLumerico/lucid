@@ -11,6 +11,7 @@ from lucid.models.vision.xception._model import (
     XceptionForImageClassification,
 )
 from lucid.models.vision.xception._weights import XceptionWeights
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG = XceptionConfig()
 
@@ -21,6 +22,7 @@ _CFG = XceptionConfig()
     model_type="xception",
     model_class=Xception,
     default_config=_CFG,
+    params=20806952,
 )
 def xception(pretrained: bool = False, **overrides: object) -> Xception:
     r"""Xception feature-extracting backbone (no classification head).
@@ -31,7 +33,9 @@ def xception(pretrained: bool = False, **overrides: object) -> Xception:
     progression 64 → 128 → 256 → 728), eight middle-flow blocks at
     728 channels, one exit-flow transition block (728 → 1024),
     and two final separable convolutions expanding to 1536 → 2048
-    channels.  Approximately 22.9M parameters — the same budget as
+    channels.  20.8M parameters without a classifier head
+    (:func:`xception_cls` adds 2.05M more for the 1000-way head,
+    reaching the 22,855,952 the paper reports) — the same budget as
     Inception-v3 but with depthwise separable convolutions
     throughout.
 
@@ -66,8 +70,10 @@ def xception(pretrained: bool = False, **overrides: object) -> Xception:
     >>> x = lucid.randn(1, 3, 299, 299)
     >>> out = model(x)
     >>> out.last_hidden_state.shape
-    (1, 2048, 1, 1)
+    (1, 2048, 10, 10)
     """
+    if pretrained:
+        reject_unavailable_pretrained("xception", alternative="xception_cls")
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return Xception(cfg)
 
@@ -80,6 +86,7 @@ def xception(pretrained: bool = False, **overrides: object) -> Xception:
     model_type="xception",
     model_class=XceptionForImageClassification,
     default_config=_CFG,
+    params=22855952,
 )
 def xception_cls(
     pretrained: bool | str = False,
@@ -93,9 +100,9 @@ def xception_cls(
     canonical Xception backbone (Chollet, 2017) followed by
     dropout (:math:`p = 0.5`) and a linear projection to
     ``config.num_classes`` (default 1000 for ImageNet-1k).
-    Approximately 22.9M parameters and 79.0% ImageNet-1k top-1
-    accuracy at 299×299 (paper, Table 5) — outperforming
-    Inception-v3 at the same parameter budget.
+    22,855,952 parameters, exactly the count Chollet reports for
+    Xception, and 79.0% ImageNet-1k top-1 accuracy at 299×299 —
+    outperforming Inception-v3 at the same parameter budget.
 
     Parameters
     ----------
@@ -123,7 +130,7 @@ def xception_cls(
     Notes
     -----
     See Chollet, "Xception: Deep Learning with Depthwise Separable
-    Convolutions", CVPR 2017 (arXiv:1610.02357), Table 5.  Pretrained
+    Convolutions", CVPR 2017 (arXiv:1610.02357).  Pretrained
     weights are converted from timm's ``legacy_xception.tf_in1k`` and
     hosted on the Hugging Face Hub under ``lucid-dl/xception``.  The
     eval preset is 299 crop / 333 resize / bicubic / mean=std=0.5 (not

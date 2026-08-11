@@ -85,14 +85,18 @@ class FasterRCNNConfig(ModelConfig):
         rpn_min_size:        Minimum proposal side length (pixels).
         rpn_score_thresh:    Minimum RPN objectness score.
         rpn_fg_iou_thresh:   Anchor→GT IoU for foreground assignment.
+                             **Inert** — see the note on the field.
         rpn_bg_iou_thresh:   Anchor→GT IoU upper bound for background.
+                             **Inert** — see the note on the field.
 
         -- RoI head hyper-parameters --
         roi_size:               RoI Align output spatial size (7 → 7×7).
         roi_sampling_ratio:     RoI Align sub-bin sampling ratio (2).
         roi_representation_size: TwoMLPHead hidden width (1024).
         roi_fg_iou_thresh:      Proposal→GT IoU for fg assignment.
+                                **Inert** — see the note on the field.
         roi_bg_iou_thresh:      Proposal→GT IoU upper bound for bg.
+                                **Inert** — see the note on the field.
         bbox_reg_weights:       Per-component bbox delta scale (10,10,5,5).
         canonical_scale:        FPN level-assignment canonical scale (224).
         canonical_level:        FPN level-assignment canonical level (4).
@@ -101,6 +105,16 @@ class FasterRCNNConfig(ModelConfig):
         score_thresh:     Minimum final class score (0.05).
         nms_thresh:       Per-class NMS IoU threshold (0.5).
         max_detections:   Maximum detections returned per image (100).
+
+    .. note::
+
+       **Inference only.**  §3.1.2's anchor assignment (highest-IoU anchor
+       per ground truth plus any anchor over IoU 0.7 as positive, under
+       0.3 as negative, cross-boundary anchors ignored), the 256-anchor
+       1:1 sampler, and the RPN and RoI losses are all unimplemented.
+       ``forward`` returns ``loss=None`` unconditionally.  The declared
+       assignment thresholds are refused by ``__post_init__`` rather than
+       silently ignored.
     """
 
     model_type: ClassVar[str] = "faster_rcnn"
@@ -121,6 +135,11 @@ class FasterRCNNConfig(ModelConfig):
     rpn_nms_thresh: float = 0.7
     rpn_min_size: float = 1e-3
     rpn_score_thresh: float = 0.0
+    # NOTE: the four assignment thresholds below are declared but INERT.
+    # They describe §3.1.2's label-assignment rule, which lives entirely in
+    # the training path -- and this family has no training path yet, so
+    # nothing reads them.  Rather than let a caller believe a value took
+    # effect, __post_init__ refuses any non-default setting.
     rpn_fg_iou_thresh: float = 0.7
     rpn_bg_iou_thresh: float = 0.3
 
@@ -144,3 +163,21 @@ class FasterRCNNConfig(ModelConfig):
         object.__setattr__(self, "rpn_anchor_sizes", tuple(self.rpn_anchor_sizes))
         object.__setattr__(self, "rpn_anchor_ratios", tuple(self.rpn_anchor_ratios))
         object.__setattr__(self, "bbox_reg_weights", tuple(self.bbox_reg_weights))
+
+        # Refuse silently-ignored assignment thresholds.  Accepting a value
+        # that nothing reads is worse than refusing it: the caller walks away
+        # believing the model was configured.
+        inert = {
+            "rpn_fg_iou_thresh": 0.7,
+            "rpn_bg_iou_thresh": 0.3,
+            "roi_fg_iou_thresh": 0.5,
+            "roi_bg_iou_thresh": 0.5,
+        }
+        for field_name, default in inert.items():
+            if getattr(self, field_name) != default:
+                raise ValueError(
+                    f"{field_name} is not implemented: Faster R-CNN's label "
+                    "assignment lives in the training path, which this family "
+                    f"does not have yet, so {field_name} would be ignored. "
+                    f"Leave it at its documented default ({default})."
+                )

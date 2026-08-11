@@ -3,7 +3,7 @@
   "name": "googlenet",
   "path": "lucid.models.vision.googlenet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/__init__.py#L1",
   "members": [
     {
       "name": "GoogLeNetConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "GoogLeNetConfig(num_classes: int = 1000, in_channels: int = 3, aux_logits: bool = True, dropout: float = 0.4, aux_dropout: float = 0.7)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_config.py#L10",
+      "signature": "GoogLeNetConfig(num_classes: int = 1000, in_channels: int = 3, aux_logits: bool = True, transform_input: bool = False, dropout: float = 0.4, aux_dropout: float = 0.7)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.googlenet._config.GoogLeNetConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, aux_logits: bool = True, dropout: float = 0.4, aux_dropout: float = 0.7)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_config.py#L1",
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, aux_logits: bool = True, transform_input: bool = False, dropout: float = 0.4, aux_dropout: float = 0.7)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "GoogLeNet(config: GoogLeNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L300",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L274",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: GoogLeNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L384",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L358",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L418",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L394",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L421",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L397",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L441",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L424",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -187,7 +187,7 @@
         },
         {
           "name": "maxpool1, maxpool2",
-          "annotation": "_CeilMaxPool2d",
+          "annotation": "nn.MaxPool2d",
           "description": "Stem $3\\times3$ stride-2 ceil-mode max-pools."
         },
         {
@@ -207,7 +207,7 @@
         },
         {
           "name": "maxpool3, maxpool4",
-          "annotation": "_CeilMaxPool2d",
+          "annotation": "nn.MaxPool2d",
           "description": "Ceil-mode max-pools between Inception stages\n($3\\times3$ stride-2 and $2\\times2$ stride-2)."
         },
         {
@@ -235,7 +235,7 @@
       ],
       "labels": [],
       "signature": "GoogLeNetForImageClassification(config: GoogLeNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L451",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L434",
       "subcategory": "model",
       "methods": [
         {
@@ -244,7 +244,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: GoogLeNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L534",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L517",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -266,7 +266,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L575",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L560",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -349,7 +349,7 @@
       "bases": [],
       "labels": [],
       "signature": "GoogLeNetOutput(logits: Tensor, aux_logits1: Tensor | None = None, aux_logits2: Tensor | None = None, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L213",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L165",
       "subcategory": "model",
       "methods": [
         {
@@ -358,7 +358,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, aux_logits1: Tensor | None = None, aux_logits2: Tensor | None = None, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -421,10 +421,10 @@
       "kind": "function",
       "labels": [],
       "signature": "googlenet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_pretrained.py#L19",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_pretrained.py#L21",
       "subcategory": "pretrained",
       "summary": "GoogLeNet (Inception v1) feature-extracting backbone.",
-      "extended": "Builds a `GoogLeNet` with the paper-cited Szegedy 2015\ntopology: a Conv-MaxPool stem followed by nine\n`_InceptionModule` blocks at three resolutions\n(28×28 → 14×14 → 7×7) and a final\n`lucid.nn.AdaptiveAvgPool2d` to $1\\times1$.\nApproximately 6.8 M parameters in the backbone — roughly **12×\nfewer** than AlexNet despite being substantially deeper.",
+      "extended": "Builds a `GoogLeNet` with the paper-cited Szegedy 2015\ntopology: a Conv-MaxPool stem followed by nine\n`_InceptionModule` blocks at three resolutions\n(28×28 → 14×14 → 7×7) and a final\n`lucid.nn.AdaptiveAvgPool2d` to $1\\times1$.\n5.60 M parameters in the backbone; `googlenet_cls` adds the\n1000-way head and the two auxiliary classifiers for 13.00 M total,\nor 6.62 M with `aux_logits=False` — the figure the reference\npublishes, since its builder drops the aux heads after loading.\nEither way, far fewer than AlexNet despite being substantially\ndeeper.",
       "parameters": [
         {
           "name": "pretrained",
@@ -2108,7 +2108,7 @@
       "kind": "function",
       "labels": [],
       "signature": "googlenet_cls(pretrained: bool | str = False, weights: GoogLeNetWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_pretrained.py#L76",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_pretrained.py#L84",
       "subcategory": "pretrained",
       "summary": "GoogLeNet (Inception v1) image classifier with auxiliary heads.",
       "extended": "Builds a `GoogLeNetForImageClassification` with the\npaper-cited Szegedy 2015 configuration: 22-layer Inception backbone\n+ global-average-pool + dropout (`p=0.4`) + linear projection to\n`config.num_classes`, plus two auxiliary classifiers attached at\nInception 4a and 4d (enabled by default via `aux_logits=True`).\nApproximately 13.0 M parameters total when auxiliary heads are\nincluded.  Reaches **69.778% top-1 on ImageNet-1k**.",
@@ -2141,7 +2141,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.googlenet import googlenet_cls\n>>> model = googlenet_cls().eval()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 1000)"
       ],
       "notes": [
-        "See Szegedy et al., \"Going Deeper with Convolutions\", CVPR 2015,\n§5.  Auxiliary classifiers were introduced specifically to combat\nvanishing gradients in this 22-layer network without the benefit of\nresidual connections; they contribute to the loss with weight\n$0.3$ each during training and are discarded at inference.\nPretrained weights are converted from torchvision's\n`GoogLeNet_Weights.IMAGENET1K_V1` and hosted under\n`lucid-dl/googlenet`."
+        "See Szegedy et al., \"Going Deeper with Convolutions\", CVPR 2015,\n§5.  Auxiliary classifiers were introduced specifically to combat\nvanishing gradients in this 22-layer network without the benefit of\nresidual connections; they contribute to the loss with weight\n$0.3$ each during training and are discarded at inference.\nPretrained weights are converted from reference_vision's\n`GoogLeNet_Weights.IMAGENET1K_V1` and hosted under\n`lucid-dl/googlenet`."
       ],
       "attributes": [],
       "warns": [],
@@ -3921,11 +3921,11 @@
       ],
       "labels": [],
       "signature": "GoogLeNetWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/googlenet/_weights.py#L17",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/googlenet/_weights.py#L17",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.googlenet_cls`.",
-      "extended": "Single ImageNet-1k checkpoint converted from torchvision's\n`GoogLeNet_Weights.IMAGENET1K_V1` (Szegedy et al., 2015; ~13.0M\nparams with auxiliary heads, 69.778% top-1).",
+      "extended": "Single ImageNet-1k checkpoint converted from reference_vision's\n`GoogLeNet_Weights.IMAGENET1K_V1` (Szegedy et al., 2015; ~13.0M\nparams with auxiliary heads, 69.778% top-1).",
       "parameters": [],
       "returns": null,
       "raises": [],
@@ -3948,7 +3948,7 @@
   "see_also": [],
   "canonical_name": "GoogLeNet",
   "citation": "Szegedy, Christian, et al. \"Going Deeper with Convolutions.\" Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2015, pp. 1–9.",
-  "theory": "GoogLeNet (Inception v1) is the ILSVRC-2014 classification winner\nand introduced the *Inception module* — a multi-branch building\nblock that lets a single layer apply convolutions at several\nreceptive-field scales in parallel and concatenate their outputs.\nThe motivation is that natural images contain salient structure at\nmultiple sizes, and forcing the network to commit to a single\nkernel per layer wastes capacity.\n\nEach Inception module computes, in parallel, a $1\\times1$\nconvolution, a $3\\times3$ convolution, a $5\\times5$\nconvolution, and a $3\\times3$ max-pool branch.  To keep the\ncomputation tractable, *cheap* $1\\times1$ bottlenecks are\nplaced before the larger spatial convolutions and after the\npooling branch.  Concatenating along the channel axis gives the\nnext layer an enriched, multi-scale feature representation.\nFormally, an Inception block produces\n\n\n\n$$\ny = \\mathrm{concat}\\bigl(\n    f_{1\\times1}(x),\\; f_{3\\times3}(g_{1\\times1}(x)),\\;\n    f_{5\\times5}(h_{1\\times1}(x)),\\; p_{1\\times1}(\\mathrm{pool}(x))\n\\bigr),\n$$\n\nwhere each $f$ is a learned convolution and each\n$g, h, p_{1\\times1}$ is a dimensionality-reducing\n$1\\times1$ projection.\n\nGoogLeNet stacks nine such modules into a 22-layer network with\nonly 5 M parameters — roughly **12×** fewer than AlexNet — while\nachieving a top-5 error of 6.67%.  Two auxiliary classifiers were\nattached to intermediate layers during training to combat\nvanishing gradients and add a regularising effect; they are\ndiscarded at inference.  The Inception family launched here led to\nInception v2/v3 (factorised convolutions, label smoothing) and\neventually Inception-ResNet.",
+  "theory": "GoogLeNet (Inception v1) is the ILSVRC-2014 classification winner\nand introduced the *Inception module* — a multi-branch building\nblock that lets a single layer apply convolutions at several\nreceptive-field scales in parallel and concatenate their outputs.\nThe motivation is that natural images contain salient structure at\nmultiple sizes, and forcing the network to commit to a single\nkernel per layer wastes capacity.\n\nEach Inception module computes four branches in parallel and\nconcatenates them along the channel axis, giving the next layer an\nenriched, multi-scale representation.  To keep the computation\ntractable, *cheap* $1\\times1$ bottlenecks sit before the\nlarger spatial convolutions and after the pooling branch:\n\n\n\n$$\ny = \\mathrm{concat}\\bigl(\n    f_{1\\times1}(x),\\; f_{3\\times3}(g_{1\\times1}(x)),\\;\n    f'_{3\\times3}(h_{1\\times1}(x)),\\; p_{1\\times1}(\\mathrm{pool}(x))\n\\bigr),\n$$\n\nwhere each $f$ is a learned convolution and each\n$g, h, p_{1\\times1}$ is a dimensionality-reducing\n$1\\times1$ projection.\n\nDivergence, deliberate: the paper's third branch is a\n$5\\times5$ convolution.  The reference implementation the\nshipped weights come from uses a $3\\times3$ there instead —\na documented deviation on its side — and this build follows the\nweights, so the third branch is $3\\times3$ in the code and in\nthe equation above.\n\nGoogLeNet stacks nine such modules into a 22-layer network with\nonly 5 M parameters — roughly **12×** fewer than AlexNet — while\nachieving a top-5 error of 6.67%.  Two auxiliary classifiers were\nattached to intermediate layers during training to combat\nvanishing gradients and add a regularising effect; they are\ndiscarded at inference.  The Inception family launched here led to\nInception v2/v3 (factorised convolutions, label smoothing) and\neventually Inception-ResNet.",
   "tasks": [
     "image-classification"
   ]

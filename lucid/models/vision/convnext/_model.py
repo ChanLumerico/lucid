@@ -31,6 +31,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -58,7 +59,17 @@ class _ConvNeXtBlock(nn.Module):
         self.norm = nn.LayerNorm(dim, eps=layer_norm_eps)
         self.fc1 = nn.Linear(dim, 4 * dim)
         self.fc2 = nn.Linear(4 * dim, dim)
-        self.gamma = nn.Parameter(lucid.full((dim,), layer_scale_init))
+        # Layer scale is *optional*: the reference allocates gamma only when
+        # the init value is positive and skips the multiply otherwise (the
+        # paper disables it for the isotropic variants).  Allocating it
+        # unconditionally turned ``layer_scale_init=0.0`` into a residual
+        # branch multiplied by exactly zero — a permanently dead block, not a
+        # disabled layer scale.
+        self.gamma: nn.Parameter | None = (
+            nn.Parameter(lucid.full((dim,), layer_scale_init))
+            if layer_scale_init > 0.0
+            else None
+        )
         self.drop_path = DropPath(drop_path_rate)
 
     @override
@@ -69,7 +80,8 @@ class _ConvNeXtBlock(nn.Module):
         x = cast(Tensor, self.norm(x))
         x = F.gelu(cast(Tensor, self.fc1(x)))
         x = cast(Tensor, self.fc2(x))
-        x = x * self.gamma  # layer scale
+        if self.gamma is not None:
+            x = x * self.gamma  # layer scale
         x = x.permute(0, 3, 1, 2)  # (B, C, H, W)
         return shortcut + cast(Tensor, self.drop_path(x))
 
@@ -272,7 +284,19 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
         self.downsamplers = downs
         self.head_norm = hn
         self._feature_info = fi
+
+        # Reference initialisation: trunc_normal_(0.02) on Linear / patch-embed
+        # convs with zero bias, unit LayerNorms, and the same draw for the
+        # class token and positional table (bare Parameters the framework
+        # default never touches — they were sitting at exact zeros).
+        init_transformer_trunc_normal(self)
         self.avgpool = nn.AdaptiveAvgPool2d(1)
+        # Per-stage maps from the most recent ``forward_features``.  The
+        # mixin documents this as the way a backbone exposes the stages its
+        # ``feature_info`` advertises; ConvNeXt pools before returning, so
+        # without it the four entries at reductions 4/8/16/32 named nothing
+        # a caller could actually obtain.
+        self._stage_features: list[Tensor] = []
 
     @override
     @property
@@ -281,17 +305,35 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
+        """Pooled ``(B, C)`` feature vector, post head-norm.
+
+        The per-stage maps this backbone's :attr:`feature_info` describes
+        are left on :attr:`stage_features` for pyramid consumers.
+        """
         x = cast(Tensor, self.stem(x))
+        stages: list[Tensor] = []
         for i, stage in enumerate(self.stages):
             x = cast(Tensor, stage(x))
+            stages.append(x)
             if i < len(self.downsamplers):
                 x = cast(Tensor, self.downsamplers[i](x))
+        self._stage_features = stages
         x = cast(Tensor, self.avgpool(x)).flatten(1)  # (B, C)
         x = x.unsqueeze(-1).unsqueeze(-1)  # keep (B,C,1,1) for consistency
         # Apply head norm in channel-last
         x = x.permute(0, 2, 3, 1)
         x = cast(Tensor, self.head_norm(x))
         return x.permute(0, 3, 1, 2).flatten(1)  # (B, C)
+
+    @property
+    def stage_features(self) -> list[Tensor]:
+        """The four stage outputs from the last :meth:`forward_features`.
+
+        Ordered stem-to-deepest, so entry ``i`` corresponds to
+        ``feature_info[i]`` — reductions 4, 8, 16 and 32.  Empty until a
+        forward pass has run.
+        """
+        return list(self._stage_features)
 
     @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
@@ -347,9 +389,12 @@ class ConvNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
     Notes
     -----
     Reference: Zhuang Liu *et al.*, *"A ConvNet for the 2020s"*,
-    CVPR 2022.  ConvNeXt-T / S / B / L / XL reach **82.1 / 83.1 /
-    83.8 / 84.3 / 85.5 % top-1 on ImageNet-1k** (Table 1 of the paper,
-    224x224 input) — matching or exceeding Swin at equal FLOPs.
+    CVPR 2022.  ConvNeXt-T / S / B / L reach **82.1 / 83.1 / 83.8 /
+    84.3 % top-1 on ImageNet-1k** (Table 1 upper block, 224x224) —
+    matching or exceeding Swin at equal FLOPs.  There is no
+    ImageNet-1k-only XL row: XL appears only among the 22k-pretrained
+    models (87.0 at 224x224).  The 85.5 previously attributed to XL is
+    ConvNeXt-L at 384x384.
 
     Examples
     --------

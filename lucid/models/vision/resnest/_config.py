@@ -81,12 +81,24 @@ class ResNeStConfig(ModelConfig):
     layers: tuple[int, ...] = (3, 4, 6, 3)
     radix: int = 2
     groups: int = 1
+    # Section 5.2 adjusts the width alongside cardinality "so that its overall
+    # computational cost remains similar to the ResNet variants" — which is
+    # what Table 1's ``2s2x40d`` (radix 2, cardinality 2, width 40) means, and
+    # what timm's ``resnest50d_4s2x40d`` / ``resnest50d_1s4x24d`` express.
+    # Without it the group width was ``planes * cardinality``, so raising
+    # cardinality could only make the network wider.
+    bottleneck_width: int = 64
     avg_down: bool = True
     avd: bool = True
     avd_first: bool = False
     stem_width: int = 32
     deep_stem: bool = True
     dropout: float = 0.0
+    # Section 4.2: "We also apply DropBlock layers to the convolutional layers
+    # at the last two stages of the network."  Training-time only, so 0.0
+    # leaves every existing model numerically identical.
+    drop_block_rate: float = 0.0
+    drop_block_size: int = 3
     zero_init_residual: bool = False
 
     def __post_init__(self) -> None:

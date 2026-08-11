@@ -22,6 +22,7 @@ local implementation.
 """
 
 import math
+from dataclasses import dataclass
 from typing import ClassVar, cast, override
 
 import lucid
@@ -31,6 +32,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import MaskedLMMixin
 from lucid.models._output import (
+    ModelOutput,
     MaskedLMOutput,
     Seq2SeqLMOutput,
 )
@@ -67,6 +69,37 @@ def _key_padding_to_kpm(mask: Tensor | None) -> Tensor | None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Bare encoder-decoder trunk
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(slots=True)
+class TransformerModelOutput(ModelOutput):
+    r"""Output of the bare encoder-decoder trunk (no LM head).
+
+    Attributes
+    ----------
+    last_hidden_state : Tensor
+        Decoder hidden states, shape ``(B, T_dec, d_model)``.
+    encoder_last_hidden_state : Tensor
+        Encoder memory, shape ``(B, T_src, d_model)``.
+
+    Notes
+    -----
+    The trunk used to return :class:`Seq2SeqLMOutput` with the decoder
+    hidden states parked in its ``logits`` field.  Those are activations
+    of width ``d_model``, not scores over a vocabulary, and a caller that
+    softmaxed them — as the name invites — got a distribution over
+    hidden units.  :class:`TransformerForSeq2SeqLM` is the model that
+    produces real logits.
+
+    Examples
+    --------
+    ``TransformerModel(cfg)(input_ids, decoder_input_ids)`` returns this
+    type; for the base config ``last_hidden_state`` is ``(B, T_dec, 512)``
+    and ``encoder_last_hidden_state`` is ``(B, T_src, 512)``.
+    """
+
+    last_hidden_state: Tensor
+    encoder_last_hidden_state: Tensor
 
 
 class TransformerModel(PretrainedModel):
@@ -138,7 +171,7 @@ class TransformerModel(PretrainedModel):
     >>> src = lucid.tensor([[1, 234, 567, 2]])
     >>> tgt = lucid.tensor([[1, 100, 200]])
     >>> out = model(src, decoder_input_ids=tgt)
-    >>> out.logits.shape   # decoder hidden (B=1, T_tgt=3, d_model=64)
+    >>> out.last_hidden_state.shape   # (B=1, T_tgt=3, d_model=64)
     (1, 3, 64)
     >>> out.encoder_last_hidden_state.shape
     (1, 4, 64)
@@ -147,16 +180,22 @@ class TransformerModel(PretrainedModel):
     config_class: ClassVar[type[TransformerConfig]] = TransformerConfig
     base_model_prefix: ClassVar[str] = "transformer"
 
-    def __init__(self, config: TransformerConfig) -> None:
+    def __init__(
+        self, config: TransformerConfig, *, encoder_only: bool = False
+    ) -> None:
         super().__init__(config)
         self._max_pos = config.max_position_embeddings
         self._d_model = config.hidden_size
+        self._encoder_only = encoder_only
         tgt_vocab = config.effective_decoder_vocab_size
 
         # Token embeddings.  When ``share_embeddings`` is True the two tables
         # are the same parameter (saves memory, requires identical vocabs).
+        # ``encoder_only`` consumers (the classification heads) never touch
+        # the target side either, so they alias it rather than allocating a
+        # second table nothing will read.
         self.src_tok_emb = nn.Embedding(config.vocab_size, config.hidden_size)
-        if config.share_embeddings:
+        if config.share_embeddings or encoder_only:
             self.tgt_tok_emb = self.src_tok_emb
         else:
             self.tgt_tok_emb = nn.Embedding(tgt_vocab, config.hidden_size)
@@ -174,11 +213,18 @@ class TransformerModel(PretrainedModel):
             d_model=config.hidden_size,
             nhead=config.num_attention_heads,
             num_encoder_layers=config.num_hidden_layers,
-            num_decoder_layers=config.num_decoder_layers,
+            # A classification head consumes ``encode()`` only, so building
+            # the decoder stack allocates -- and checkpoints, and moves to
+            # device -- roughly half the model as permanently dead weight.
+            num_decoder_layers=0 if encoder_only else config.num_decoder_layers,
             dim_feedforward=config.intermediate_size,
             dropout=config.hidden_dropout,
+            # Declared and set to 0.3 by _CFG_LARGE, but nn.Transformer used
+            # to drive both dropouts off one knob, so it never applied.
+            attention_dropout=config.attention_dropout,
             activation=act,
             batch_first=True,
+            layer_norm_eps=config.layer_norm_eps,
         )
 
     @override
@@ -260,6 +306,11 @@ class TransformerModel(PretrainedModel):
             ``(B, T, d_model)`` decoder hidden states (the ``ForSeq2SeqLM``
             wrapper projects these through the LM head).
         """
+        if self._encoder_only:
+            raise RuntimeError(
+                "This TransformerModel was built encoder-only; it has no decoder "
+                "stack to run.  Construct it without encoder_only=True for seq2seq use."
+            )
         T = int(tgt_ids.shape[1])
         dev = tgt_ids.device.type
         past_len = (
@@ -293,7 +344,7 @@ class TransformerModel(PretrainedModel):
         decoder_input_ids: Tensor,
         attention_mask: Tensor | None = None,
         decoder_attention_mask: Tensor | None = None,
-    ) -> Seq2SeqLMOutput:
+    ) -> TransformerModelOutput:
         """Full encode + decode pass.
 
         Args:
@@ -303,9 +354,9 @@ class TransformerModel(PretrainedModel):
             decoder_attention_mask: Optional ``(B, T)`` HF-style padding mask.
 
         Returns:
-            :class:`Seq2SeqLMOutput` carrying decoder hidden states as
-            ``logits`` placeholder (no head yet) plus encoder memory.  The
-            ``ForSeq2SeqLM`` wrapper above this projects into the LM head.
+            :class:`TransformerModelOutput` carrying the decoder hidden
+            states and the encoder memory.  This trunk has no LM head —
+            :class:`TransformerForSeq2SeqLM` projects these into logits.
         """
         memory = self.encode(input_ids, attention_mask)
         decoded = self.decode(
@@ -314,8 +365,8 @@ class TransformerModel(PretrainedModel):
             tgt_attention_mask=decoder_attention_mask,
             memory_attention_mask=attention_mask,
         )
-        return Seq2SeqLMOutput(
-            logits=decoded,
+        return TransformerModelOutput(
+            last_hidden_state=decoded,
             encoder_last_hidden_state=memory,
         )
 
@@ -405,7 +456,7 @@ class TransformerForSeq2SeqLM(PretrainedModel):
         labels: Tensor | None = None,
     ) -> Seq2SeqLMOutput:
         outputs = cast(
-            Seq2SeqLMOutput,
+            TransformerModelOutput,
             self.transformer(
                 input_ids,
                 decoder_input_ids,
@@ -413,7 +464,8 @@ class TransformerForSeq2SeqLM(PretrainedModel):
                 decoder_attention_mask=decoder_attention_mask,
             ),
         )
-        logits = cast(Tensor, self.lm_head(outputs.logits))  # decoder hidden → vocab
+        # decoder hidden → vocab
+        logits = cast(Tensor, self.lm_head(outputs.last_hidden_state))
 
         loss: Tensor | None = None
         if labels is not None:
@@ -422,6 +474,10 @@ class TransformerForSeq2SeqLM(PretrainedModel):
                 logits.reshape(B * T, V),
                 labels.reshape(B * T).long(),
                 ignore_index=-100,
+                # Section 5.4 / Table 3: both the base and big rows train with
+                # eps_ls = 0.1.  It "hurts perplexity but improves accuracy and
+                # BLEU", so omitting it changes what the model optimises.
+                label_smoothing=cast(TransformerConfig, self.config).label_smoothing,
             )
 
         return Seq2SeqLMOutput(
@@ -607,7 +663,7 @@ class TransformerForSequenceClassification(PretrainedModel):
 
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__(config)
-        self.transformer = TransformerModel(config)
+        self.transformer = TransformerModel(config, encoder_only=True)
         drop = (
             config.classifier_dropout
             if config.classifier_dropout is not None
@@ -695,7 +751,7 @@ class TransformerForTokenClassification(PretrainedModel, MaskedLMMixin):
 
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__(config)
-        self.transformer = TransformerModel(config)
+        self.transformer = TransformerModel(config, encoder_only=True)
         drop = (
             config.classifier_dropout
             if config.classifier_dropout is not None

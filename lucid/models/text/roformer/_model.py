@@ -104,13 +104,12 @@ class _RoFormerRotaryEmbedding(Module):
 class _RoFormerEmbeddings(nn.Module):
     def __init__(self, config: RoFormerConfig) -> None:
         super().__init__()
+        emb_dim = config.embedding_size or config.hidden_size
         self.word_embeddings = nn.Embedding(
-            config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id
+            config.vocab_size, emb_dim, padding_idx=config.pad_token_id
         )
-        self.token_type_embeddings = nn.Embedding(
-            config.type_vocab_size, config.hidden_size
-        )
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, emb_dim)
+        self.LayerNorm = nn.LayerNorm(emb_dim, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(p=config.hidden_dropout)
 
     @override
@@ -150,6 +149,7 @@ class _RoFormerSelfAttention(nn.Module):
         self.key = nn.Linear(config.hidden_size, config.hidden_size, bias=True)
         self.value = nn.Linear(config.hidden_size, config.hidden_size, bias=True)
         self.dropout = nn.Dropout(p=config.attention_dropout)
+        self.rotary_value = config.rotary_value
 
     def _shape(self, x: Tensor, B: int, T: int) -> Tensor:
         return x.reshape(B, T, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
@@ -167,9 +167,14 @@ class _RoFormerSelfAttention(nn.Module):
         k = self._shape(cast(Tensor, self.key(hidden)), B, T)
         v = self._shape(cast(Tensor, self.value(hidden)), B, T)
 
-        # Rotate Q / K by the absolute position phase (values stay un-rotated).
-        # RoFormer uses the original interleaved RoPE pairing (x_2i, x_2i+1).
+        # Rotate Q / K by the absolute position phase.  RoFormer uses the
+        # original interleaved RoPE pairing (x_2i, x_2i+1).
         q, k = apply_rotary_emb(q, k, cos, sin, interleaved=True)
+        if self.rotary_value:
+            # ``rotary_value``: the reference optionally rotates V by the same
+            # phase.  ``apply_rotary_emb`` rotates a pair, so V is passed
+            # twice and only the first result is kept.
+            v, _ = apply_rotary_emb(v, v, cos, sin, interleaved=True)
 
         # Fused SDPA on the memory-heavy path; keep the explicit-weights path
         # only when attention dropout is active in training (fused kernel has
@@ -396,6 +401,14 @@ class RoFormerModel(PretrainedModel):
         head_dim = config.hidden_size // config.num_attention_heads
         self._max_pos = config.max_position_embeddings
         self.embeddings = _RoFormerEmbeddings(config)
+        # Only present when the embedding is factorised, matching the
+        # reference's ``if config.embedding_size != config.hidden_size``.
+        emb_dim = config.embedding_size or config.hidden_size
+        self.embeddings_project: nn.Module | None = (
+            nn.Linear(emb_dim, config.hidden_size)
+            if emb_dim != config.hidden_size
+            else None
+        )
         self.rotary = _RoFormerRotaryEmbedding(
             head_dim=head_dim,
             max_position_embeddings=config.max_position_embeddings,
@@ -437,6 +450,8 @@ class RoFormerModel(PretrainedModel):
         sin = sin[:T]
 
         hidden = cast(Tensor, self.embeddings(input_ids, token_type_ids=token_type_ids))
+        if self.embeddings_project is not None:
+            hidden = cast(Tensor, self.embeddings_project(hidden))
         ext_mask = extended_attention_mask(attention_mask, (B, T))
         sequence_output = cast(
             Tensor, self.encoder(hidden, cos, sin, attention_mask=ext_mask)
@@ -591,9 +606,10 @@ class RoFormerForMaskedLM(PretrainedModel, MaskedLMMixin):
 class RoFormerForSequenceClassification(PretrainedModel):
     r"""RoFormer with a pooled-CLS sequence-classification head.
 
-    Wraps :class:`RoFormerModel` with a dropout-regularised linear
-    classifier operating on the pooled first-token embedding.  Pattern
-    mirrors :class:`BERTForSequenceClassification`; use for GLUE-style
+    Wraps :class:`RoFormerModel` with the reference's own classification
+    head: the raw CLS hidden state passes through dropout, a
+    ``hidden_size -> hidden_size`` dense, the configured activation, dropout
+    again, and finally the ``num_labels`` projection.  Use for GLUE-style
     fine-tunes when the RoPE-based relative position bias is preferred.
 
     Parameters
@@ -608,7 +624,9 @@ class RoFormerForSequenceClassification(PretrainedModel):
     roformer : RoFormerModel
         Underlying RoPE encoder trunk.
     dropout : nn.Dropout
-        Dropout layer applied to the pooled first-token embedding.
+        Dropout applied both before and after the dense stage.
+    dense : nn.Linear
+        ``(hidden_size, hidden_size)`` stage in front of the activation.
     classifier : nn.Linear
         Final linear of shape ``(hidden_size, num_labels)`` producing
         per-class logits.
@@ -655,6 +673,12 @@ class RoFormerForSequenceClassification(PretrainedModel):
             else config.hidden_dropout
         )
         self.dropout = nn.Dropout(p=drop)
+        # RoFormer's own classification head, not BERT's.  The reference reads
+        # the *raw* CLS hidden state and puts a full dense + activation stage
+        # in front of the projection; routing through the tanh pooler instead
+        # drops that stage and squashes the feature into [-1, 1] first.
+        self._act_name = config.hidden_act
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
     @override
@@ -673,8 +697,11 @@ class RoFormerForSequenceClassification(PretrainedModel):
                 token_type_ids=token_type_ids,
             ),
         )
-        pooled = cast(Tensor, self.dropout(outputs.pooler_output))
-        logits = cast(Tensor, self.classifier(pooled))
+        cls_state: Tensor = outputs.last_hidden_state[:, 0, :]
+        h = cast(Tensor, self.dropout(cls_state))
+        h = text_activation(self._act_name, cast(Tensor, self.dense(h)))
+        h = cast(Tensor, self.dropout(h))
+        logits = cast(Tensor, self.classifier(h))
 
         loss: Tensor | None = None
         if labels is not None:
@@ -885,7 +912,23 @@ class RoFormerForMultipleChoice(PretrainedModel):
                 token_type_ids=flat_tt,
             ),
         )
-        pooled = cast(Tensor, self.dropout(outputs.pooler_output))  # (N*C, H)
+        # The reference multiple-choice head reads the *last* token's hidden
+        # state directly, with no pooler projection — pooling the CLS token
+        # through the tanh pooler puts a trained-elsewhere projection between
+        # the encoder and the scorer, and reads the wrong position besides.
+        hidden = outputs.last_hidden_state  # (N*C, L, H)
+        if flat_mask is None:
+            last = hidden[:, -1, :]
+        else:
+            rows = cast(list[list[float]], flat_mask.float().tolist())
+            idx: list[int] = []
+            for row in rows:
+                kept = [i for i, v in enumerate(row) if v > 0.5]
+                idx.append(kept[-1] if kept else 0)
+            last = lucid.stack(
+                [hidden[b, idx[b], :] for b in range(int(hidden.shape[0]))], dim=0
+            )
+        pooled = cast(Tensor, self.dropout(last))  # (N*C, H)
         logits_flat = cast(Tensor, self.classifier(pooled))  # (N*C, 1)
         logits = logits_flat.reshape(N, C)  # (N, C)
 
@@ -983,9 +1026,22 @@ class RoFormerForQuestionAnswering(PretrainedModel):
         if start_positions is not None and end_positions is not None:
             start_logits = logits[..., 0]
             end_logits = logits[..., 1]
-            loss = (
-                F.cross_entropy(start_logits, start_positions.long())
-                + F.cross_entropy(end_logits, end_positions.long())
-            ) / 2.0
+            # Same contract as BERT's QA head: SQuAD's sliding window puts
+            # some answers outside the current doc-stride span, so the
+            # reference clamps those to a sentinel at the sequence end and
+            # ignores that index.  Without it an unanswerable window trains
+            # the model towards an arbitrary in-window token.
+            ignored = int(start_logits.shape[1])
+            start_t = start_positions.long().clip(min=0, max=ignored)
+            end_t = end_positions.long().clip(min=0, max=ignored)
+            # A batch where *every* window is unanswerable leaves the mean
+            # with no terms and surfaces as NaN, poisoning the step.
+            if float((start_t != ignored).float().sum().item()) == 0.0:
+                loss = lucid.zeros((), device=start_logits.device.type)
+            else:
+                loss = (
+                    F.cross_entropy(start_logits, start_t, ignore_index=ignored)
+                    + F.cross_entropy(end_logits, end_t, ignore_index=ignored)
+                ) / 2.0
 
         return MaskedLMOutput(logits=logits, loss=loss)

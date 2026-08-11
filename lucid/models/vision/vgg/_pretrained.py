@@ -17,6 +17,7 @@ from lucid.models.vision.vgg._weights import (
     VGG19BNWeights,
     VGG19Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_11 = VGGConfig(arch=(1, 1, 2, 2, 2))
 _CFG_13 = VGGConfig(arch=(2, 2, 2, 2, 2))
@@ -46,7 +47,12 @@ def _classifier(
 
 
 @register_model(
-    task="base", family="vgg", model_type="vgg", model_class=VGG, default_config=_CFG_11
+    task="base",
+    family="vgg",
+    model_type="vgg",
+    model_class=VGG,
+    default_config=_CFG_11,
+    params=9220480,
 )
 def vgg_11(pretrained: bool = False, **overrides: object) -> VGG:
     r"""VGG-11 feature-extracting backbone (config A, no BatchNorm).
@@ -56,8 +62,9 @@ def vgg_11(pretrained: bool = False, **overrides: object) -> VGG:
     blocks of widths ``(64, 128, 256, 512, 512)``.  Approximately
     132.9 M parameters in the full classifier variant (≈9.2 M in the
     convolutional trunk alone).  Reaches a top-5 ImageNet validation
-    error of 9.4% in Simonyan & Zisserman, ICLR 2015 (Table 3,
-    configuration A).
+    error of 10.4% in Simonyan & Zisserman, ICLR 2015 (Table 3,
+    configuration A, single test scale S = Q = 256).  9.4% belongs to
+    configuration C, not A.
 
     Parameters
     ----------
@@ -90,11 +97,18 @@ def vgg_11(pretrained: bool = False, **overrides: object) -> VGG:
     >>> out.last_hidden_state.shape   # (B, 512, 7, 7)
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vgg_11", alternative="vgg_11_cls")
     return _backbone(_CFG_11, overrides)
 
 
 @register_model(
-    task="base", family="vgg", model_type="vgg", model_class=VGG, default_config=_CFG_13
+    task="base",
+    family="vgg",
+    model_type="vgg",
+    model_class=VGG,
+    default_config=_CFG_13,
+    params=9404992,
 )
 def vgg_13(pretrained: bool = False, **overrides: object) -> VGG:
     r"""VGG-13 feature-extracting backbone (config B, no BatchNorm).
@@ -102,8 +116,9 @@ def vgg_13(pretrained: bool = False, **overrides: object) -> VGG:
     Builds a :class:`VGG` with the paper-cited VGG-13 topology:
     per-block convolution counts ``(2, 2, 2, 2, 2)``.  Approximately
     133.0 M parameters in the full classifier variant.  Reaches a top-5
-    ImageNet validation error of 8.8% (Simonyan & Zisserman, ICLR 2015,
-    Table 3, configuration B).
+    ImageNet validation error of 9.9% (Simonyan & Zisserman, ICLR 2015,
+    Table 3, configuration B, single test scale S = Q = 256).  8.8% is
+    configuration D.
 
     Parameters
     ----------
@@ -133,11 +148,18 @@ def vgg_13(pretrained: bool = False, **overrides: object) -> VGG:
     >>> out.last_hidden_state.shape   # (B, 512, 7, 7)
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vgg_13", alternative="vgg_13_cls")
     return _backbone(_CFG_13, overrides)
 
 
 @register_model(
-    task="base", family="vgg", model_type="vgg", model_class=VGG, default_config=_CFG_16
+    task="base",
+    family="vgg",
+    model_type="vgg",
+    model_class=VGG,
+    default_config=_CFG_16,
+    params=14714688,
 )
 def vgg_16(pretrained: bool = False, **overrides: object) -> VGG:
     r"""VGG-16 feature-extracting backbone (config D, no BatchNorm).
@@ -147,9 +169,11 @@ def vgg_16(pretrained: bool = False, **overrides: object) -> VGG:
     :math:`3\times3` convolution to each of the deeper blocks 3/4/5.
     Approximately 138.4 M parameters in the full classifier variant
     (≈14.7 M in the convolutional trunk alone).  Reaches a top-5
-    ImageNet validation error of 7.3% (Simonyan & Zisserman, ICLR 2015,
-    Table 3, configuration D) — VGG-16 was the most widely deployed
-    variant of the family.
+    ImageNet validation error of 8.8% (Simonyan & Zisserman, ICLR 2015,
+    Table 3, configuration D, single test scale S = Q = 256) — VGG-16
+    was the most widely deployed variant of the family.  The often-quoted
+    7.3% is the ILSVRC-2014 submission *test* error of an ensemble of
+    seven nets (Table 6), not a single-model number.
 
     Parameters
     ----------
@@ -179,11 +203,18 @@ def vgg_16(pretrained: bool = False, **overrides: object) -> VGG:
     >>> out.last_hidden_state.shape   # (B, 512, 7, 7)
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vgg_16", alternative="vgg_16_cls")
     return _backbone(_CFG_16, overrides)
 
 
 @register_model(
-    task="base", family="vgg", model_type="vgg", model_class=VGG, default_config=_CFG_19
+    task="base",
+    family="vgg",
+    model_type="vgg",
+    model_class=VGG,
+    default_config=_CFG_19,
+    params=20024384,
 )
 def vgg_19(pretrained: bool = False, **overrides: object) -> VGG:
     r"""VGG-19 feature-extracting backbone (config E, no BatchNorm).
@@ -192,10 +223,12 @@ def vgg_19(pretrained: bool = False, **overrides: object) -> VGG:
     per-block convolution counts ``(2, 2, 4, 4, 4)`` — four
     :math:`3\times3` convolutions in each of the deeper blocks.
     Approximately 143.7 M parameters in the full classifier variant.
-    Reaches a top-5 ImageNet validation error of 7.5% (Simonyan &
-    Zisserman, ICLR 2015, Table 3, configuration E) — slightly worse
-    than VGG-16 due to optimisation difficulty at this depth without
-    residual connections.
+    Reaches a top-5 ImageNet validation error of 9.0% (Simonyan &
+    Zisserman, ICLR 2015, Table 3, configuration E, single test scale
+    S = Q = 256).  7.5% is Table 4's multi-scale figure, which D and E
+    share.  E is not worse than D: at multiple scales they tie, and the
+    paper's best single model is E at 7.1% (Table 5, multi-crop and
+    dense evaluation).
 
     Parameters
     ----------
@@ -225,6 +258,8 @@ def vgg_19(pretrained: bool = False, **overrides: object) -> VGG:
     >>> out.last_hidden_state.shape   # (B, 512, 7, 7)
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vgg_19", alternative="vgg_19_cls")
     return _backbone(_CFG_19, overrides)
 
 
@@ -234,17 +269,18 @@ def vgg_19(pretrained: bool = False, **overrides: object) -> VGG:
     model_type="vgg",
     model_class=VGG,
     default_config=_CFG_11_BN,
+    params=9225984,
 )
 def vgg_11_bn(pretrained: bool = False, **overrides: object) -> VGG:
     r"""VGG-11 with BatchNorm — feature-extracting backbone.
 
     Builds a :class:`VGG` with the VGG-11 topology
     ``arch=(1, 1, 2, 2, 2)`` and a :class:`~lucid.nn.BatchNorm2d` layer
-    after each Conv + ReLU pair.  BatchNorm was added in the
+    between each Conv and its ReLU.  BatchNorm was added in the
     timm / reference-framework reimplementations of VGG (not in the
     original paper) and substantially improves convergence speed and
     final accuracy; the topology is otherwise identical to
-    :func:`vgg_11`.  Approximately 132.9 M parameters.
+    :func:`vgg_11`.  9.22 M parameters without the FC head (:func:`vgg_11_cls` adds it for 132.9 M).
 
     Parameters
     ----------
@@ -270,6 +306,8 @@ def vgg_11_bn(pretrained: bool = False, **overrides: object) -> VGG:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vgg_11_bn", alternative="vgg_11_bn_cls")
     return _backbone(_CFG_11_BN, overrides)
 
 
@@ -279,13 +317,14 @@ def vgg_11_bn(pretrained: bool = False, **overrides: object) -> VGG:
     model_type="vgg",
     model_class=VGG,
     default_config=_CFG_13_BN,
+    params=9410880,
 )
 def vgg_13_bn(pretrained: bool = False, **overrides: object) -> VGG:
     r"""VGG-13 with BatchNorm — feature-extracting backbone.
 
     Builds a :class:`VGG` with the VGG-13 topology
-    ``arch=(2, 2, 2, 2, 2)`` and :class:`~lucid.nn.BatchNorm2d` after
-    each Conv + ReLU pair.  Approximately 133.0 M parameters.
+    ``arch=(2, 2, 2, 2, 2)`` and :class:`~lucid.nn.BatchNorm2d` between
+    each Conv and its ReLU.  9.41 M parameters without the FC head (:func:`vgg_13_bn_cls` adds it for 133.1 M).
 
     Parameters
     ----------
@@ -311,6 +350,8 @@ def vgg_13_bn(pretrained: bool = False, **overrides: object) -> VGG:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vgg_13_bn", alternative="vgg_13_bn_cls")
     return _backbone(_CFG_13_BN, overrides)
 
 
@@ -320,13 +361,14 @@ def vgg_13_bn(pretrained: bool = False, **overrides: object) -> VGG:
     model_type="vgg",
     model_class=VGG,
     default_config=_CFG_16_BN,
+    params=14723136,
 )
 def vgg_16_bn(pretrained: bool = False, **overrides: object) -> VGG:
     r"""VGG-16 with BatchNorm — feature-extracting backbone.
 
     Builds a :class:`VGG` with the VGG-16 topology
-    ``arch=(2, 2, 3, 3, 3)`` and :class:`~lucid.nn.BatchNorm2d` after
-    each Conv + ReLU pair.  Approximately 138.4 M parameters.  Often
+    ``arch=(2, 2, 3, 3, 3)`` and :class:`~lucid.nn.BatchNorm2d` between
+    each Conv and its ReLU.  14.72 M parameters without the FC head (:func:`vgg_16_bn_cls` adds it for 138.4 M).  Often
     preferred over plain :func:`vgg_16` for downstream fine-tuning
     because BatchNorm stabilises gradient statistics in the early conv
     stack.
@@ -355,6 +397,8 @@ def vgg_16_bn(pretrained: bool = False, **overrides: object) -> VGG:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vgg_16_bn", alternative="vgg_16_bn_cls")
     return _backbone(_CFG_16_BN, overrides)
 
 
@@ -364,13 +408,14 @@ def vgg_16_bn(pretrained: bool = False, **overrides: object) -> VGG:
     model_type="vgg",
     model_class=VGG,
     default_config=_CFG_19_BN,
+    params=20035392,
 )
 def vgg_19_bn(pretrained: bool = False, **overrides: object) -> VGG:
     r"""VGG-19 with BatchNorm — feature-extracting backbone.
 
     Builds a :class:`VGG` with the VGG-19 topology
-    ``arch=(2, 2, 4, 4, 4)`` and :class:`~lucid.nn.BatchNorm2d` after
-    each Conv + ReLU pair.  Approximately 143.7 M parameters.  The
+    ``arch=(2, 2, 4, 4, 4)`` and :class:`~lucid.nn.BatchNorm2d` between
+    each Conv and its ReLU.  20.04 M parameters without the FC head (:func:`vgg_19_bn_cls` adds it for 143.7 M).  The
     deepest VGG variant; BatchNorm is particularly helpful at this
     depth.
 
@@ -398,6 +443,8 @@ def vgg_19_bn(pretrained: bool = False, **overrides: object) -> VGG:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vgg_19_bn", alternative="vgg_19_bn_cls")
     return _backbone(_CFG_19_BN, overrides)
 
 
@@ -412,6 +459,7 @@ def vgg_19_bn(pretrained: bool = False, **overrides: object) -> VGG:
     model_type="vgg",
     model_class=VGGForImageClassification,
     default_config=_CFG_11,
+    params=132863336,
 )
 def vgg_11_cls(
     pretrained: bool | str = False,
@@ -426,7 +474,7 @@ def vgg_11_cls(
     4096-dim fully-connected layers and a final linear projection to
     ``config.num_classes``.  Approximately 132.9 M parameters total
     (≈124 M of which sit in the two large FC layers).  Reaches a top-1
-    ImageNet validation accuracy of 69.02% (torchvision eval).
+    ImageNet validation accuracy of 69.02% (reference_vision eval).
 
     Parameters
     ----------
@@ -451,7 +499,7 @@ def vgg_11_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's ``VGG11_Weights``
+    Pretrained weights are converted from reference_vision's ``VGG11_Weights``
     and hosted on the Hugging Face Hub under ``lucid-dl/vgg-11``.
 
     Examples
@@ -479,6 +527,7 @@ def vgg_11_cls(
     model_type="vgg",
     model_class=VGGForImageClassification,
     default_config=_CFG_13,
+    params=133047848,
 )
 def vgg_13_cls(
     pretrained: bool | str = False,
@@ -492,7 +541,7 @@ def vgg_13_cls(
     VGG-13 topology (``arch=(2, 2, 2, 2, 2)``) followed by the standard
     4096 → 4096 → ``num_classes`` FC head.  Approximately 133.0 M
     parameters total.  Reaches a top-1 ImageNet validation accuracy of
-    69.93% (torchvision eval).
+    69.93% (reference_vision eval).
 
     Parameters
     ----------
@@ -516,7 +565,7 @@ def vgg_13_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's ``VGG13_Weights``
+    Pretrained weights are converted from reference_vision's ``VGG13_Weights``
     and hosted on the Hugging Face Hub under ``lucid-dl/vgg-13``.
 
     Examples
@@ -544,6 +593,7 @@ def vgg_13_cls(
     model_type="vgg",
     model_class=VGGForImageClassification,
     default_config=_CFG_16,
+    params=138357544,
 )
 def vgg_16_cls(
     pretrained: bool | str = False,
@@ -557,7 +607,7 @@ def vgg_16_cls(
     VGG-16 topology (``arch=(2, 2, 3, 3, 3)``) followed by the standard
     4096 → 4096 → ``num_classes`` FC head.  Approximately 138.4 M
     parameters total and a top-1 ImageNet validation accuracy of 71.59%
-    (torchvision eval) — the most widely used VGG variant.
+    (reference_vision eval) — the most widely used VGG variant.
 
     Parameters
     ----------
@@ -581,7 +631,7 @@ def vgg_16_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's ``VGG16_Weights``
+    Pretrained weights are converted from reference_vision's ``VGG16_Weights``
     and hosted on the Hugging Face Hub under ``lucid-dl/vgg-16``.
 
     Examples
@@ -609,6 +659,7 @@ def vgg_16_cls(
     model_type="vgg",
     model_class=VGGForImageClassification,
     default_config=_CFG_19,
+    params=143667240,
 )
 def vgg_19_cls(
     pretrained: bool | str = False,
@@ -622,7 +673,7 @@ def vgg_19_cls(
     VGG-19 topology (``arch=(2, 2, 4, 4, 4)``) followed by the standard
     4096 → 4096 → ``num_classes`` FC head.  Approximately 143.7 M
     parameters total.  Reaches a top-1 ImageNet validation accuracy of
-    72.38% (torchvision eval).
+    72.38% (reference_vision eval).
 
     Parameters
     ----------
@@ -646,7 +697,7 @@ def vgg_19_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's ``VGG19_Weights``
+    Pretrained weights are converted from reference_vision's ``VGG19_Weights``
     and hosted on the Hugging Face Hub under ``lucid-dl/vgg-19``.
 
     Examples
@@ -674,6 +725,7 @@ def vgg_19_cls(
     model_type="vgg",
     model_class=VGGForImageClassification,
     default_config=_CFG_11_BN,
+    params=132868840,
 )
 def vgg_11_bn_cls(
     pretrained: bool | str = False,
@@ -684,12 +736,12 @@ def vgg_11_bn_cls(
     r"""VGG-11 with BatchNorm — image classifier.
 
     Same topology as :func:`vgg_11_cls` but with
-    :class:`~lucid.nn.BatchNorm2d` after each Conv + ReLU pair.
+    :class:`~lucid.nn.BatchNorm2d` between each Conv and its ReLU.
     BatchNorm was added in the timm / reference-framework
     reimplementations of VGG (not in the original paper) and
     substantially improves convergence speed and final accuracy.
     Approximately 132.9 M parameters; top-1 ImageNet validation
-    accuracy of 70.37% (torchvision eval).
+    accuracy of 70.37% (reference_vision eval).
 
     Parameters
     ----------
@@ -713,7 +765,7 @@ def vgg_11_bn_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``VGG11_BN_Weights`` and hosted on the Hugging Face Hub under
     ``lucid-dl/vgg-11-bn``.
 
@@ -742,6 +794,7 @@ def vgg_11_bn_cls(
     model_type="vgg",
     model_class=VGGForImageClassification,
     default_config=_CFG_13_BN,
+    params=133053736,
 )
 def vgg_13_bn_cls(
     pretrained: bool | str = False,
@@ -752,9 +805,9 @@ def vgg_13_bn_cls(
     r"""VGG-13 with BatchNorm — image classifier.
 
     Same topology as :func:`vgg_13_cls` but with
-    :class:`~lucid.nn.BatchNorm2d` after each Conv + ReLU pair.
+    :class:`~lucid.nn.BatchNorm2d` between each Conv and its ReLU.
     Approximately 133.0 M parameters; top-1 ImageNet validation
-    accuracy of 71.59% (torchvision eval).
+    accuracy of 71.59% (reference_vision eval).
 
     Parameters
     ----------
@@ -778,7 +831,7 @@ def vgg_13_bn_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``VGG13_BN_Weights`` and hosted on the Hugging Face Hub under
     ``lucid-dl/vgg-13-bn``.
 
@@ -807,6 +860,7 @@ def vgg_13_bn_cls(
     model_type="vgg",
     model_class=VGGForImageClassification,
     default_config=_CFG_16_BN,
+    params=138365992,
 )
 def vgg_16_bn_cls(
     pretrained: bool | str = False,
@@ -817,9 +871,9 @@ def vgg_16_bn_cls(
     r"""VGG-16 with BatchNorm — image classifier.
 
     Same topology as :func:`vgg_16_cls` but with
-    :class:`~lucid.nn.BatchNorm2d` after each Conv + ReLU pair.
+    :class:`~lucid.nn.BatchNorm2d` between each Conv and its ReLU.
     Approximately 138.4 M parameters; top-1 ImageNet validation
-    accuracy of 73.36% (torchvision eval).  Often preferred over plain
+    accuracy of 73.36% (reference_vision eval).  Often preferred over plain
     :func:`vgg_16_cls` for downstream fine-tuning.
 
     Parameters
@@ -844,7 +898,7 @@ def vgg_16_bn_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``VGG16_BN_Weights`` and hosted on the Hugging Face Hub under
     ``lucid-dl/vgg-16-bn``.
 
@@ -873,6 +927,7 @@ def vgg_16_bn_cls(
     model_type="vgg",
     model_class=VGGForImageClassification,
     default_config=_CFG_19_BN,
+    params=143678248,
 )
 def vgg_19_bn_cls(
     pretrained: bool | str = False,
@@ -883,9 +938,9 @@ def vgg_19_bn_cls(
     r"""VGG-19 with BatchNorm — image classifier.
 
     Same topology as :func:`vgg_19_cls` but with
-    :class:`~lucid.nn.BatchNorm2d` after each Conv + ReLU pair.
+    :class:`~lucid.nn.BatchNorm2d` between each Conv and its ReLU.
     Approximately 143.7 M parameters; top-1 ImageNet validation
-    accuracy of 74.22% (torchvision eval).  The deepest VGG variant —
+    accuracy of 74.22% (reference_vision eval).  The deepest VGG variant —
     BatchNorm is especially valuable at this depth.
 
     Parameters
@@ -910,7 +965,7 @@ def vgg_19_bn_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``VGG19_BN_Weights`` and hosted on the Hugging Face Hub under
     ``lucid-dl/vgg-19-bn``.
 

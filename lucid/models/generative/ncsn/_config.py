@@ -101,11 +101,15 @@ class NCSNConfig(GenerativeModelConfig):
         resnet_groups: GroupNorm group count.
         num_noise_levels: Number of σ levels ``L`` (paper L=10, NCSNv2 large
             L ≈ 200–500).
-        sigma_max: Largest noise σ_1 (paper CIFAR-10: 50.0).
+        sigma_max: Largest noise σ_1.  50.0 belongs to NCSNv2 (Technique 1)
+            and goes with L = 232; NCSN v1 uses σ_1 = 1.0 with L = 10.
+            Mixing the two breaks Technique 2's ratio criterion.
         sigma_min: Smallest noise σ_L (paper CIFAR-10: 0.01).
         langevin_steps: Sampler steps per σ level (paper T=100).
         langevin_eps: Sampler step-size base (paper ε=2e-5).  Per-σ step
             size is ``ε · σ_i² / σ_L²`` (Song 2019 §4.3).
+        scale_by_sigma: Divide the network output by σ (NCSNv2 Technique 3).
+            Default True; set False for the NCSN v1 parameterisation.
     """
 
     model_type: ClassVar[str] = "ncsn"
@@ -120,11 +124,23 @@ class NCSNConfig(GenerativeModelConfig):
     resnet_groups: int = 32
 
     # Score-based: sigma schedule + Langevin sampler.
+    # v1 defaults: sigma_1 = 1.0 with L = 10.  The registered factories
+    # override both together with the v2 pairs (50/232, 90/500) — pairing
+    # sigma_max=50 with L=10 is neither paper's setting.
     num_noise_levels: int = 10
-    sigma_max: float = 50.0
+    sigma_max: float = 1.0
     sigma_min: float = 0.01
     langevin_steps: int = 100
     langevin_eps: float = 2e-5
+    # NCSNv2 Technique 3 — parameterise the network as s_theta(x, sigma) =
+    # s_theta(x) / sigma.  On by default because every factory here uses the
+    # v2 noise range (50 -> 0.01), where the unscaled parameterisation is the
+    # documented failure case.  Set False for the v1 formulation, in which the
+    # score magnitude is learned per level via conditional normalisation.
+    scale_by_sigma: bool = True
+    # NCSNv2 Technique 5: a final noiseless correction after the last Langevin
+    # step.  Both released configs set denoise: true.
+    denoise: bool = True
 
     @override
     def __post_init__(self) -> None:

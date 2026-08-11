@@ -15,6 +15,7 @@ from lucid.models.vision.inception_next._weights import (
     InceptionNeXtSmallWeights,
     InceptionNeXtTinyWeights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_T = InceptionNeXtConfig(
     depths=(3, 3, 9, 3),
@@ -54,6 +55,7 @@ def _c(
     model_type="inception_next",
     model_class=InceptionNeXt,
     default_config=_CFG_T,
+    params=23974296,
 )
 def inception_next_tiny(pretrained: bool = False, **overrides: object) -> InceptionNeXt:
     r"""InceptionNeXt-Tiny backbone (Yu et al., 2024).
@@ -97,6 +99,10 @@ def inception_next_tiny(pretrained: bool = False, **overrides: object) -> Incept
     >>> feat.shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "inception_next_tiny", alternative="inception_next_tiny_cls"
+        )
     return _b(_CFG_T, overrides)
 
 
@@ -112,6 +118,7 @@ def inception_next_tiny(pretrained: bool = False, **overrides: object) -> Incept
     model_type="inception_next",
     model_class=InceptionNeXtForImageClassification,
     default_config=_CFG_T,
+    params=28055680,
 )
 def inception_next_tiny_cls(
     pretrained: bool | str = False,
@@ -174,6 +181,7 @@ def inception_next_tiny_cls(
     model_type="inception_next",
     model_class=InceptionNeXt,
     default_config=_CFG_S,
+    params=45292632,
 )
 def inception_next_small(
     pretrained: bool = False, **overrides: object
@@ -216,6 +224,10 @@ def inception_next_small(
     >>> feat.shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "inception_next_small", alternative="inception_next_small_cls"
+        )
     return _b(_CFG_S, overrides)
 
 
@@ -228,6 +240,7 @@ def inception_next_small(
     model_type="inception_next",
     model_class=InceptionNeXtForImageClassification,
     default_config=_CFG_S,
+    params=49374016,
 )
 def inception_next_small_cls(
     pretrained: bool | str = False,
@@ -290,6 +303,7 @@ def inception_next_small_cls(
     model_type="inception_next",
     model_class=InceptionNeXt,
     default_config=_CFG_B,
+    params=80444192,
 )
 def inception_next_base(pretrained: bool = False, **overrides: object) -> InceptionNeXt:
     r"""InceptionNeXt-Base backbone (Yu et al., 2024).
@@ -330,6 +344,10 @@ def inception_next_base(pretrained: bool = False, **overrides: object) -> Incept
     >>> feat.shape
     (1, 1024)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "inception_next_base", alternative="inception_next_base_cls"
+        )
     return _b(_CFG_B, overrides)
 
 
@@ -342,6 +360,7 @@ def inception_next_base(pretrained: bool = False, **overrides: object) -> Incept
     model_type="inception_next",
     model_class=InceptionNeXtForImageClassification,
     default_config=_CFG_B,
+    params=86672136,
 )
 def inception_next_base_cls(
     pretrained: bool | str = False,

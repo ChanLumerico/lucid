@@ -129,7 +129,14 @@ class _GPT2SelfAttention(nn.Module):
         # triangle; add any padding mask on top.
         bias: Tensor = (1.0 - causal) * -1e4
         if attention_mask is not None:
-            bias = bias + attention_mask
+            pad_mask = attention_mask
+            mask_len = int(pad_mask.shape[-1])
+            if mask_len < t_total:
+                # StaticCache hands back its full max_cache_len buffer; the
+                # unwritten tail carries no real key, and ``causal`` already
+                # blocks it, so extend the padding mask with neutral zeros.
+                pad_mask = F.pad(pad_mask, (0, t_total - mask_len))
+            bias = bias + pad_mask
 
         # Fused SDPA on the memory-heavy path (large T forms a (B,H,T,t_total)
         # score matrix).  Keep the explicit path for attention dropout (the fused
@@ -221,7 +228,26 @@ class _GPT2Block(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _scale_residual_init(model: nn.Module, num_layers: int) -> None:
+def _init_weights(model: nn.Module, std: float) -> None:
+    """Initialise every Linear and Embedding from ``N(0, std²)``.
+
+    GPT-2 initialises *all* weights at ``initializer_range = 0.02``, including
+    both embedding tables.  Leaving them at the framework's fan-in defaults
+    puts ``wte`` / ``wpe`` at std ≈ 1 — fifty times too wide — and because the
+    LM head is tied to ``wte`` the initial logits are fifty times too large,
+    so a from-scratch run starts from an enormous cross-entropy.  LayerNorm
+    keeps its unit-weight / zero-bias default.
+    """
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+
+
+def _scale_residual_init(model: nn.Module, num_layers: int, std: float = 0.02) -> None:
     """Re-initialise the post-residual projection weights with std scaled by
     ``1 / sqrt(2 * N)``.
 
@@ -233,11 +259,11 @@ def _scale_residual_init(model: nn.Module, num_layers: int) -> None:
     for name, module in model.named_modules():
         if name.endswith(".attn.c_proj") or name.endswith(".mlp.c_proj"):
             assert isinstance(module, nn.Linear)
-            # HF uses std=0.02 for every Linear by default; we already have
-            # something Glorot-ish from nn.Linear's reset_parameters.  Re-init
-            # ``c_proj`` weights to N(0, (0.02 * factor)²) so the residual
-            # stream stays variance-stable at depth.
-            nn.init.normal_(module.weight, mean=0.0, std=0.02 * factor)
+            # Narrow ``c_proj`` relative to the base init so the residual
+            # stream stays variance-stable at depth.  The base width is
+            # ``config.initializer_range`` — hardcoding 0.02 here made that
+            # config field dead for anyone who changed it.
+            nn.init.normal_(module.weight, mean=0.0, std=std * factor)
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
 
@@ -320,6 +346,7 @@ class GPT2Model(PretrainedModel):
     def __init__(self, config: GPT2Config) -> None:
         super().__init__(config)
         self._max_pos = config.max_position_embeddings
+        self._use_cache = config.use_cache
         # HF naming: ``wte`` / ``wpe`` / ``h`` / ``ln_f`` — keep verbatim.
         self.wte = nn.Embedding(config.vocab_size, config.hidden_size)
         self.wpe = nn.Embedding(config.max_position_embeddings, config.hidden_size)
@@ -332,8 +359,14 @@ class GPT2Model(PretrainedModel):
         pos = lucid.arange(config.max_position_embeddings).long().unsqueeze(0)
         self.register_buffer("position_ids", pos, persistent=False)
 
+        # Base init first, then the residual-projection override — the order
+        # matters, since ``_scale_residual_init`` deliberately narrows c_proj
+        # relative to this baseline.
+        _init_weights(self, config.initializer_range)
         if config.scale_residual_init:
-            _scale_residual_init(self, config.num_hidden_layers)
+            _scale_residual_init(
+                self, config.num_hidden_layers, config.initializer_range
+            )
 
     @override
     def get_input_embeddings(self) -> nn.Module:
@@ -354,9 +387,14 @@ class GPT2Model(PretrainedModel):
         attention_mask: Tensor | None = None,
         *,
         past_key_values: Cache | None = None,
-        use_cache: bool = False,
+        use_cache: bool | None = None,
         cache_position: Tensor | None = None,
     ) -> BaseModelOutput:
+        # ``None`` means "whatever the config says" — hard-coding False here
+        # made ``config.use_cache`` dead, so a model configured for cached
+        # decoding still ran the quadratic path unless every call site
+        # remembered to pass the flag.
+        use_cache = self._use_cache if use_cache is None else use_cache
         B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
         past_len = (
             past_key_values.get_seq_length() if past_key_values is not None else 0
@@ -384,7 +422,12 @@ class GPT2Model(PretrainedModel):
         pos_emb = cast(Tensor, self.wpe(pos_ids))
         hidden = cast(Tensor, self.drop(tok_emb + pos_emb))
 
-        ext_mask = extended_attention_mask(attention_mask, (B, T))
+        # Keys span the cached history plus the new tokens, so the padding
+        # mask has to be that wide -- a T-wide mask would broadcast onto the
+        # wrong columns (or fail outright) once a cache is in play.
+        ext_mask = extended_attention_mask(
+            attention_mask, (B, T), key_length=past_len + T
+        )
         for layer_idx, block in enumerate(self.h):
             hidden = cast(
                 Tensor,
@@ -469,6 +512,7 @@ class GPT2LMHeadModel(PretrainedModel, CausalLMMixin):
         super().__init__(config)
         self.transformer = GPT2Model(config)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        self._use_cache = config.use_cache
         if config.tie_word_embeddings:
             self._tie_lm_head_to_input_embeddings()
 
@@ -483,9 +527,10 @@ class GPT2LMHeadModel(PretrainedModel, CausalLMMixin):
         labels: Tensor | None = None,
         *,
         past_key_values: Cache | None = None,
-        use_cache: bool = False,
+        use_cache: bool | None = None,
         cache_position: Tensor | None = None,
     ) -> CausalLMOutput:
+        use_cache = self._use_cache if use_cache is None else use_cache
         if use_cache and past_key_values is None:
             past_key_values = DynamicCache()
 
@@ -606,8 +651,15 @@ class GPT2ForSequenceClassification(PretrainedModel):
         if attention_mask is None:
             last_idx = [T - 1] * B
         else:
-            mask_f = attention_mask.float()
-            last_idx = [int(mask_f[b].sum().item()) - 1 for b in range(B)]
+            # The last *real* token is the last position the mask keeps, not
+            # ``count - 1``: under left padding ([0, 0, 1, 1]) the count says
+            # index 1, which is a pad slot.  One .tolist() pulls the whole
+            # mask across in a single sync rather than one per row.
+            rows = cast(list[list[float]], attention_mask.float().tolist())
+            last_idx = []
+            for row in rows:
+                kept = [i for i, v in enumerate(row) if v > 0.5]
+                last_idx.append(kept[-1] if kept else 0)
 
         pooled = lucid.stack([hidden[b, last_idx[b], :] for b in range(B)], dim=0)
         pooled = cast(Tensor, self.dropout(pooled))
@@ -689,18 +741,16 @@ class _GPT2MultipleChoiceHead(nn.Module):
     @override
     def forward(self, hidden_states: Tensor, mc_token_ids: Tensor) -> Tensor:  # type: ignore[override]
         N, C, L, H = hidden_states.shape
-        pooled_rows: list[list[list[float]]] = []
+        # Slice out the chosen position per (batch, choice); reading the values
+        # with ``.item()`` and rebuilding a tensor would detach the head, so
+        # ``mc_loss`` would train the summary Linear and nothing else.  Only the
+        # token index is read as an int — it carries no gradient anyway.
+        rows: list[Tensor] = []
         for n in range(N):
-            choices: list[list[float]] = []
             for c in range(C):
                 t = int(mc_token_ids[n, c].item())
-                choices.append(
-                    [float(hidden_states[n, c, t, h].item()) for h in range(H)]
-                )
-            pooled_rows.append(choices)
-        pooled = lucid.tensor(
-            pooled_rows, device=hidden_states.device.type
-        )  # (N, C, H)
+                rows.append(hidden_states[n, c, t : t + 1, :])  # (1, H)
+        pooled = lucid.cat(rows, dim=0).reshape(N, C, H)  # (N, C, H)
         pooled = cast(Tensor, self.dropout(pooled))
         return cast(Tensor, self.summary(pooled)).reshape(N, C)
 

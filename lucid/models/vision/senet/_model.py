@@ -12,6 +12,7 @@ from typing import ClassVar, cast, final, override
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -32,7 +33,12 @@ class _SEBlock(nn.Module):
 
     def __init__(self, channels: int, reduction: int = 16) -> None:
         super().__init__()
-        rd_channels = channels // reduction
+        if reduction < 1:
+            raise ValueError(f"reduction must be >= 1, got {reduction}")
+        # A reduction larger than the channel count floors the bottleneck to
+        # zero, which builds a Conv2d with 0 output channels — a silently
+        # degenerate gate rather than an error.
+        rd_channels = max(1, channels // reduction)
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.fc1 = nn.Conv2d(channels, rd_channels, kernel_size=1, bias=True)
         self.fc2 = nn.Conv2d(rd_channels, channels, kernel_size=1, bias=True)
@@ -86,9 +92,13 @@ class _SEBasicBlock(nn.Module):
         out = cast(
             Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
         )
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
-        )
+        # No activation between bn2 and the SE gate: the canonical residual
+        # unit (He et al. 2015, Fig. 5 left) puts BN alone after the second
+        # 3x3 and takes the ReLU *after* the addition, and Figure 3 wraps that
+        # whole unit unchanged, inserting Squeeze/Excitation/Scale between it
+        # and the (+).  The extra ReLU here rectified the signal before the
+        # gate ever saw it, so SE could only scale non-negative activations.
+        out = cast(Tensor, self.bn2(cast(Tensor, self.conv2(out))))
         out = cast(Tensor, self.se(out))
 
         if self.downsample is not None:
@@ -116,12 +126,30 @@ class _SEBottleneck(nn.Module):
         stride: int = 1,
         downsample: nn.Module | None = None,
         reduction: int = 16,
+        legacy_stride: bool = False,
     ) -> None:
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 1, bias=False)
+        # Where the stride sits distinguishes the original Caffe SENet block
+        # (ResNet-v1: subsample at the 1x1, so the 3x3 sees the halved map)
+        # from the modern v1.5 block (subsample at the 3x3).  Stride is not
+        # stored in a state dict and every weight shape is identical either
+        # way, so a checkpoint from the wrong geometry loads silently and
+        # simply computes the wrong thing.
+        self.conv1 = nn.Conv2d(
+            in_channels,
+            out_channels,
+            1,
+            stride=stride if legacy_stride else 1,
+            bias=False,
+        )
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.conv2 = nn.Conv2d(
-            out_channels, out_channels, 3, stride=stride, padding=1, bias=False
+            out_channels,
+            out_channels,
+            3,
+            stride=1 if legacy_stride else stride,
+            padding=1,
+            bias=False,
         )
         self.bn2 = nn.BatchNorm2d(out_channels)
         self.conv3 = nn.Conv2d(
@@ -158,35 +186,22 @@ class _SEBottleneck(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@final
-class _LegacyStemPool(nn.Module):
-    """Canonical SENet stem pool — 3×3 stride-2, no padding, ceil rounding.
-
-    The original SE-ResNet line rounds the stem max-pool output size up
-    (``ceil_mode=True``) with zero padding, so the last row/column of
-    windows reaches one element past the floor-mode grid.  Reproduce that
-    exactly by right/bottom-padding the input by one element with a very
-    negative fill (a no-op under ``max``) and then applying a plain
-    floor-mode 3×3 stride-2 pool.
-    """
-
-    _NEG_FILL: ClassVar[float] = -1e30
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.pool = nn.MaxPool2d(3, stride=2, padding=0, ceil_mode=False)
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = F.pad(x, (0, 1, 0, 1), mode="constant", value=self._NEG_FILL)
-        return cast(Tensor, self.pool(x))
-
-
 # ---------------------------------------------------------------------------
 # Stage builder
 # ---------------------------------------------------------------------------
 
 _BlockType = type[_SEBasicBlock] | type[_SEBottleneck]
+
+
+def _zero_init_residual(model: nn.Module) -> None:
+    """Zero the last BN gamma of every residual branch (He et al., *Bag of Tricks*)."""
+    for m in model.modules():
+        if isinstance(m, _SEBottleneck):
+            if m.bn3.weight is not None:
+                nn.init.constant_(m.bn3.weight, 0.0)
+        elif isinstance(m, _SEBasicBlock):
+            if m.bn2.weight is not None:
+                nn.init.constant_(m.bn2.weight, 0.0)
 
 
 def _make_layer(
@@ -196,6 +211,7 @@ def _make_layer(
     num_blocks: int,
     stride: int,
     reduction: int,
+    legacy_stride: bool = False,
 ) -> tuple[nn.Sequential, int]:
     """Build one SE-ResNet stage. Returns (layer, new_in_channels)."""
     final_channels = out_channels * block_cls.expansion
@@ -207,6 +223,11 @@ def _make_layer(
             nn.BatchNorm2d(final_channels),
         )
 
+    # Only the bottleneck block has the two convolutions the flag chooses
+    # between; the basic block's geometry is unambiguous.
+    extra: dict[str, bool] = (
+        {"legacy_stride": legacy_stride} if block_cls is _SEBottleneck else {}
+    )
     blocks: list[nn.Module] = [
         block_cls(
             in_channels,
@@ -214,6 +235,7 @@ def _make_layer(
             stride=stride,
             downsample=downsample,
             reduction=reduction,
+            **extra,
         )
     ]
     for _ in range(1, num_blocks):
@@ -251,23 +273,47 @@ def _build_body(
     )
     bn1 = nn.BatchNorm2d(stem_channels)
     pool: nn.Module = (
-        _LegacyStemPool()
+        nn.MaxPool2d(3, stride=2, padding=0, ceil_mode=True)
         if config.legacy_pool
         else nn.MaxPool2d(3, stride=2, padding=1)
     )
 
     cur = stem_channels
     layer1, cur = _make_layer(
-        block_cls, cur, hidden_sizes[0], config.layers[0], 1, config.reduction
+        block_cls,
+        cur,
+        hidden_sizes[0],
+        config.layers[0],
+        1,
+        config.reduction,
+        legacy_stride=config.legacy_stride,
     )
     layer2, cur = _make_layer(
-        block_cls, cur, hidden_sizes[1], config.layers[1], 2, config.reduction
+        block_cls,
+        cur,
+        hidden_sizes[1],
+        config.layers[1],
+        2,
+        config.reduction,
+        legacy_stride=config.legacy_stride,
     )
     layer3, cur = _make_layer(
-        block_cls, cur, hidden_sizes[2], config.layers[2], 2, config.reduction
+        block_cls,
+        cur,
+        hidden_sizes[2],
+        config.layers[2],
+        2,
+        config.reduction,
+        legacy_stride=config.legacy_stride,
     )
     layer4, cur = _make_layer(
-        block_cls, cur, hidden_sizes[3], config.layers[3], 2, config.reduction
+        block_cls,
+        cur,
+        hidden_sizes[3],
+        config.layers[3],
+        2,
+        config.reduction,
+        legacy_stride=config.legacy_stride,
     )
 
     exp = block_cls.expansion
@@ -330,7 +376,7 @@ class SENet(PretrainedModel, BackboneMixin):
         BatchNorm paired with the stem conv.
     maxpool : nn.Module
         3×3 max-pool at stride 2 — :class:`nn.MaxPool2d` for the modern
-        stem, or :class:`_LegacyStemPool` when ``config.legacy_pool``.
+        stem, or a ceil-mode 3x3/2 pool when ``config.legacy_pool``.
     layer1, layer2, layer3, layer4 : nn.Sequential
         The four SE-augmented residual stages.
     feature_info : list[FeatureInfo]
@@ -370,6 +416,11 @@ class SENet(PretrainedModel, BackboneMixin):
         self.layer3 = l3
         self.layer4 = l4
         self._feature_info = fi
+
+        # Reference initialisation plus the optional identity-start trick.
+        init_cnn_fan_out(self)
+        if config.zero_init_residual:
+            _zero_init_residual(self)
 
     @property
     @override
@@ -465,7 +516,13 @@ class SENetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         )
         final_channels = 512 * block_cls.expansion
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.dropout = nn.Dropout(p=config.dropout)
         self.fc = nn.Linear(final_channels, config.num_classes)
+
+        # Reference initialisation plus the optional identity-start trick.
+        init_cnn_fan_out(self)
+        if config.zero_init_residual:
+            _zero_init_residual(self)
 
     @override
     def forward(  # type: ignore[override]
@@ -481,6 +538,7 @@ class SENetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x = cast(Tensor, self.layer4(x))
         x = cast(Tensor, self.avgpool(x))
         x = x.flatten(1)
+        x = cast(Tensor, self.dropout(x))
         logits = cast(Tensor, self.fc(x))
 
         loss: Tensor | None = None

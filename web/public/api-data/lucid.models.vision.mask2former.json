@@ -3,7 +3,7 @@
   "name": "mask2former",
   "path": "lucid.models.vision.mask2former",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/__init__.py#L1",
   "members": [
     {
       "name": "Mask2FormerConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerConfig(num_classes: int = 150, in_channels: int = 3, swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, swin_mlp_ratio: float = 4.0, d_model: int = 256, mask_feature_size: int = 256, n_head: int = 8, num_encoder_layers: int = 6, encoder_feedforward_dim: int = 1024, num_decoder_layers: int = 10, dim_feedforward: int = 2048, dropout: float = 0.0, num_queries: int = 100, num_feature_levels: int = 3, feature_strides: tuple[int, int, int, int] = (4, 8, 16, 32), common_stride: int = 4)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 150, in_channels: int = 3, swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, swin_mlp_ratio: float = 4.0, d_model: int = 256, mask_feature_size: int = 256, n_head: int = 8, num_encoder_layers: int = 6, encoder_feedforward_dim: int = 1024, num_decoder_layers: int = 10, dim_feedforward: int = 2048, dropout: float = 0.0, num_queries: int = 100, num_feature_levels: int = 3, feature_strides: tuple[int, int, int, int] = (4, 8, 16, 32), common_stride: int = 4)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,7 +42,7 @@
         }
       ],
       "summary": "Configuration for Mask2Former (Cheng et al., CVPR 2022).",
-      "extended": "The field set mirrors the reference framework's `Mask2FormerConfig`\nso the pretrained-weight converter is a near-identity key map.  The\npipeline is:\n\nImage → Swin backbone → [stage1..4] feature maps\n    → MSDeformAttn pixel decoder → 3 multi-scale memory levels\n                                 + 1/4-scale mask features\n    → 9-layer masked-attention transformer decoder (cycling levels)\n    → class head (Linear → K+1) + mask head (MLP → dot mask features)",
+      "extended": "The field set mirrors the reference framework's `Mask2FormerConfig`\nso the pretrained-weight converter is a near-identity key map.  The\npipeline is:\n\nImage → Swin backbone → [stage1..4] feature maps\n    → MSDeformAttn pixel decoder → 3 multi-scale memory levels\n                                 + 1/4-scale mask features\n    → 9-layer masked-attention transformer decoder (cycling levels)\n    → class head (Linear → K+1) + mask head (MLP → dot mask features)\n\n> **Note:**\n>\n> **Inference only.**  §3.2.2's objective is unimplemented: the\n> Hungarian matcher, the class-CE / mask-BCE / dice terms, the\n> point-sampled mask loss (K = 12,544 points rather than dense) and\n> the auxiliary losses on every decoder layer.  `forward` raises\n> if given targets rather than discarding them.",
       "parameters": [
         {
           "name": "num_classes",
@@ -177,7 +177,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerForSemanticSegmentation(config: Mask2FormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_model.py#L1238",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_model.py#L1292",
       "subcategory": "model",
       "methods": [
         {
@@ -186,7 +186,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: Mask2FormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_model.py#L1294",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_model.py#L1348",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -208,7 +208,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: dict[str, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_model.py#L1304",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_model.py#L1358",
           "subcategory": "model",
           "summary": "Run Mask2Former for semantic segmentation.",
           "extended": null,
@@ -222,7 +222,7 @@
             {
               "name": "targets",
               "annotation": "dict[str, Tensor] | None",
-              "description": "Currently ignored (inference path).",
+              "description": "Rejected.  This family is inference-only — see the\n     class docstring — so a target dict would be silently\n     discarded, and the caller would watch a loss of\n     `None` and conclude the model had converged.",
               "default": "None"
             }
           ],
@@ -287,7 +287,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_tiny(pretrained: bool | str = False, weights: Mask2FormerSwinTinyWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_pretrained.py#L62",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_pretrained.py#L62",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Tiny backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the Swin-Tiny\nbackbone (`embed_dim = 96`, `depths = (2, 2, 6, 2)`,\n`num_heads = (3, 6, 12, 24)`, `window_size = 7`), a 6-layer\nmulti-scale deformable pixel decoder, and a 9-layer masked-attention\ntransformer decoder with 100 queries.  Default targets ADE20K\n(150 classes); reaches ADE20K validation mIoU of 47.7%.",
@@ -1240,7 +1240,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_small(pretrained: bool | str = False, weights: Mask2FormerSwinSmallWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_pretrained.py#L122",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_pretrained.py#L122",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Small backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the Swin-Small\nbackbone (`embed_dim = 96`, `depths = (2, 2, 18, 2)`,\n`num_heads = (3, 6, 12, 24)`).  Same transformer head as\n`mask2former_swin_tiny`; ADE20K validation mIoU of 51.3%.",
@@ -2193,7 +2193,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_base(pretrained: bool | str = False, weights: Mask2FormerSwinBaseWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_pretrained.py#L180",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_pretrained.py#L180",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Base backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the Swin-Base\nbackbone (`embed_dim = 128`, `depths = (2, 2, 18, 2)`,\n`num_heads = (4, 8, 16, 32)`).  ADE20K validation mIoU of 53.9%.",
@@ -3146,7 +3146,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_large(pretrained: bool | str = False, weights: Mask2FormerSwinLargeWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_pretrained.py#L235",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_pretrained.py#L235",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Large backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the largest\nSwin backbone (`embed_dim = 192`, `depths = (2, 2, 18, 2)`,\n`num_heads = (6, 12, 24, 48)`).  Reaches ADE20K validation mIoU of\n56.1% — the headline result of the paper.",
@@ -4103,7 +4103,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinTinyWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_weights.py#L29",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_weights.py#L34",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_tiny`.",
@@ -4127,7 +4127,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinSmallWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_weights.py#L55",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_weights.py#L65",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_small`.",
@@ -4151,11 +4151,11 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinBaseWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_weights.py#L81",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_weights.py#L91",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_base`.",
-      "extended": "Single ADE20k semantic checkpoint converted from\n`facebook/mask2former-swin-base-ade-semantic` (Cheng et al., 2022;\n~107M params, 53.9 mIoU on the ADE20k validation set).",
+      "extended": "Single ADE20k semantic checkpoint converted from\n`facebook/mask2former-swin-base-ade-semantic` (Cheng et al., 2022;\n~107M params, 52.4 mIoU on the ADE20k validation set).",
       "parameters": [],
       "returns": null,
       "raises": [],
@@ -4175,7 +4175,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinLargeWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/mask2former/_weights.py#L107",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_weights.py#L120",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_large`.",
@@ -4202,7 +4202,7 @@
   "see_also": [],
   "canonical_name": "Mask2Former",
   "citation": "Cheng, Bowen, et al. \"Masked-attention Mask Transformer for Universal Image Segmentation.\" Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2022, pp. 1290–1299.",
-  "theory": "Mask2Former generalises MaskFormer into a single architecture\nthat wins on **semantic**, **instance**, and **panoptic**\nsegmentation simultaneously.  It keeps the mask-classification\nframing — $N$ object queries each predict a class and a\nbinary mask — and improves it with three orthogonal changes.\n\n**Masked cross-attention.**  In every decoder layer the queries\nattend only to feature locations that the *previous* layer\nalready considered foreground for that query:\n\n\n\n$$\n\\mathrm{attn}_{ij} = \\mathrm{softmax}_j\\!\\bigl(\n    Q_i K_j^{\\top} / \\sqrt{d} + \\mathcal{M}_{ij}^{\\,\\ell-1}\n\\bigr),\n$$\n\nwhere $\\mathcal{M}^{\\ell-1}_{ij} = 0$ if the predicted\nbinary mask of query $i$ at layer $\\ell - 1$\nactivates pixel $j$ and $-\\infty$ otherwise.  This\nconfines query updates to plausible mask regions and accelerates\nconvergence.\n\n**Multi-scale features.**  The decoder layers cycle through three\npyramid levels $(P_3, P_4, P_5)$ of an enhanced FPN-style\n*pixel decoder*, so high-resolution semantic detail and broad\ncontextual features are both available to every query.\n\n**Improved pixel decoder.**  A multi-scale deformable-attention\nencoder fuses the backbone feature maps before producing the\nper-pixel embeddings against which the query embeddings are dotted\nto form binary masks.\n\nTraining uses the same Hungarian-matched class CE + mask BCE/Dice\nlosses as MaskFormer (with auxiliary losses at intermediate\ndecoder layers).  Mask2Former sets a new SOTA on each of ADE20K,\nCityscapes, and COCO with a *single* model, eliminating the need\nfor task-specific architectures.",
+  "theory": "Mask2Former generalises MaskFormer into a single architecture\nthat wins on **semantic**, **instance**, and **panoptic**\nsegmentation simultaneously.  It keeps the mask-classification\nframing — $N$ object queries each predict a class and a\nbinary mask — and improves it with three orthogonal changes.\n\n**Masked cross-attention.**  In every decoder layer the queries\nattend only to feature locations that the *previous* layer\nalready considered foreground for that query:\n\n\n\n$$\n\\mathrm{attn}_{ij} = \\mathrm{softmax}_j\\!\\bigl(\n    Q_i K_j^{\\top} / \\sqrt{d} + \\mathcal{M}_{ij}^{\\,\\ell-1}\n\\bigr),\n$$\n\nwhere $\\mathcal{M}^{\\ell-1}_{ij} = 0$ if the predicted\nbinary mask of query $i$ at layer $\\ell - 1$\nactivates pixel $j$ and $-\\infty$ otherwise.  This\nconfines query updates to plausible mask regions and accelerates\nconvergence.\n\n**Multi-scale features.**  The decoder layers cycle through three\npyramid levels $(P_3, P_4, P_5)$ of an enhanced FPN-style\n*pixel decoder*, so high-resolution semantic detail and broad\ncontextual features are both available to every query.\n\n**Improved pixel decoder.**  A multi-scale deformable-attention\nencoder fuses the backbone feature maps before producing the\nper-pixel embeddings against which the query embeddings are dotted\nto form binary masks.\n\nTraining keeps MaskFormer's Hungarian-matched class CE + mask\nBCE/Dice objective and its auxiliary losses at intermediate decoder\nlayers, but computes the mask term on *sampled points* rather than\ndensely: Section 3.2.2 draws $K = 12{,}544$ ($112 \\times 112$) points by uniform plus importance sampling, in both the\nmatching and the final loss, cutting training memory roughly 3x.\nThat point-sampled loss is one of the paper's three enumerated\ncontributions, alongside masked attention and the multi-scale\nstrategy described above.  Mask2Former sets a new SOTA on each of\nADE20K, Cityscapes, and COCO with a *single* model, eliminating the\nneed for task-specific architectures.",
   "tasks": [
     "semantic-segmentation"
   ]

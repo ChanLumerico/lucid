@@ -233,7 +233,7 @@ class TestDenseNetWeightsEnums(unittest.TestCase):
 
         meta = DenseNet201Weights.IMAGENET1K_V1.meta
         self.assertEqual(
-            meta["source"], "torchvision/DenseNet201_Weights.IMAGENET1K_V1"
+            meta["source"], "reference_vision/DenseNet201_Weights.IMAGENET1K_V1"
         )
         self.assertEqual(meta["num_params"], 20_013_928)
 

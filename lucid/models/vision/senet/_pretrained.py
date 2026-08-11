@@ -14,6 +14,7 @@ from lucid.models.vision.senet._weights import (
     SEResNet101Weights,
     SEResNet152Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -22,8 +23,18 @@ from lucid.models.vision.senet._weights import (
 _CFG_18 = SENetConfig(block_type="basic", layers=(2, 2, 2, 2), legacy_pool=True)
 _CFG_34 = SENetConfig(block_type="basic", layers=(3, 4, 6, 3), legacy_pool=True)
 _CFG_50 = SENetConfig(block_type="bottleneck", layers=(3, 4, 6, 3))
-_CFG_101 = SENetConfig(block_type="bottleneck", layers=(3, 4, 23, 3), legacy_pool=True)
-_CFG_152 = SENetConfig(block_type="bottleneck", layers=(3, 8, 36, 3), legacy_pool=True)
+_CFG_101 = SENetConfig(
+    block_type="bottleneck",
+    layers=(3, 4, 23, 3),
+    legacy_pool=True,
+    legacy_stride=True,
+)
+_CFG_152 = SENetConfig(
+    block_type="bottleneck",
+    layers=(3, 8, 36, 3),
+    legacy_pool=True,
+    legacy_stride=True,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +89,8 @@ def se_resnet_18(pretrained: bool = False, **overrides: object) -> SENet:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("se_resnet_18", alternative="se_resnet_18_cls")
     cfg = replace(_CFG_18, **cast(dict[str, Any], overrides)) if overrides else _CFG_18
     return SENet(cfg)
 
@@ -127,6 +140,8 @@ def se_resnet_34(pretrained: bool = False, **overrides: object) -> SENet:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("se_resnet_34", alternative="se_resnet_34_cls")
     cfg = replace(_CFG_34, **cast(dict[str, Any], overrides)) if overrides else _CFG_34
     return SENet(cfg)
 
@@ -145,9 +160,11 @@ def se_resnet_50(pretrained: bool = False, **overrides: object) -> SENet:
     (:class:`_SEBottleneck` blocks stacked ``[3, 4, 6, 3]``) plus
     squeeze-and-excitation modules at the end of every bottleneck.
     Approximately 28.1M parameters — about 10% more than plain
-    ResNet-50 — and 77.6% ImageNet-1k top-1 accuracy in Hu et al.,
-    2018 (Table 2) versus 76.2% for plain ResNet-50.  The most
-    widely deployed SE variant.
+    ResNet-50 — and 76.71% ImageNet-1k top-1 accuracy in Hu et al.,
+    2018 (Table 2: 23.29% top-1 error) versus 75.20% for their
+    re-implemented ResNet-50 baseline.  The most widely deployed SE
+    variant.  (The shipped checkpoint's own metric is recorded in
+    ``_weights.py`` and differs from the paper's number.)
 
     Parameters
     ----------
@@ -179,6 +196,8 @@ def se_resnet_50(pretrained: bool = False, **overrides: object) -> SENet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("se_resnet_50", alternative="se_resnet_50_cls")
     cfg = replace(_CFG_50, **cast(dict[str, Any], overrides)) if overrides else _CFG_50
     return SENet(cfg)
 
@@ -196,8 +215,11 @@ def se_resnet_101(pretrained: bool = False, **overrides: object) -> SENet:
     Builds an :class:`SENet` with ResNet-101 topology
     (:class:`_SEBottleneck` blocks stacked ``[3, 4, 23, 3]``) plus
     squeeze-and-excitation modules.  Approximately 49.3M
-    parameters and 78.3% ImageNet-1k top-1 accuracy in Hu et al.,
-    2018 (Table 2) versus 77.4% for plain ResNet-101.
+    parameters and 77.62% ImageNet-1k top-1 accuracy in Hu et al.,
+    2018 (Table 2: 22.38% top-1 error) versus 76.83% for their
+    re-implemented ResNet-101 baseline.  (78.32% is this family's
+    shipped-checkpoint metric, recorded in ``_weights.py`` — not a
+    paper figure.)
 
     Parameters
     ----------
@@ -228,6 +250,8 @@ def se_resnet_101(pretrained: bool = False, **overrides: object) -> SENet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("se_resnet_101", alternative="se_resnet_101_cls")
     cfg = (
         replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
     )
@@ -247,9 +271,10 @@ def se_resnet_152(pretrained: bool = False, **overrides: object) -> SENet:
     Builds an :class:`SENet` with ResNet-152 topology
     (:class:`_SEBottleneck` blocks stacked ``[3, 8, 36, 3]``) plus
     squeeze-and-excitation modules.  Approximately 66.8M
-    parameters and 78.7% ImageNet-1k top-1 accuracy in Hu et al.,
-    2018 (Table 2) — the deepest SE-ResNet variant in the original
-    paper.
+    parameters and 78.43% ImageNet-1k top-1 accuracy in Hu et al.,
+    2018 (Table 2: 21.57% top-1 error) — the deepest SE-ResNet
+    variant in the original paper.  (78.66% is the shipped
+    checkpoint's metric, recorded in ``_weights.py``.)
 
     Parameters
     ----------
@@ -280,6 +305,8 @@ def se_resnet_152(pretrained: bool = False, **overrides: object) -> SENet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("se_resnet_152", alternative="se_resnet_152_cls")
     cfg = (
         replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
     )
@@ -448,8 +475,10 @@ def se_resnet_50_cls(
     SE-ResNet-50 backbone (:class:`_SEBottleneck` blocks stacked
     ``[3, 4, 6, 3]``) followed by global average pooling and a
     linear projection to ``config.num_classes``.  Approximately
-    28.1M parameters and 77.6% ImageNet-1k top-1 accuracy in
-    Hu et al., 2018 (Table 2) — the canonical SE variant.
+    28.1M parameters and 76.71% ImageNet-1k top-1 accuracy in
+    Hu et al., 2018 (Table 2: 23.29% top-1 error) — the canonical
+    SE variant.  The shipped checkpoint's own metric is recorded in
+    ``_weights.py``.
 
     Parameters
     ----------
@@ -519,8 +548,10 @@ def se_resnet_101_cls(
     Builds an :class:`SENetForImageClassification` with the
     SE-ResNet-101 backbone (:class:`_SEBottleneck` blocks stacked
     ``[3, 4, 23, 3]``) followed by global average pooling and a
-    linear classifier.  Approximately 49.3M parameters and 78.3%
-    ImageNet-1k top-1 accuracy in Hu et al., 2018 (Table 2).
+    linear classifier.  Approximately 49.3M parameters and 77.62%
+    ImageNet-1k top-1 accuracy in Hu et al., 2018 (Table 2: 22.38%
+    top-1 error).  78.32% is the shipped checkpoint's metric, not
+    the paper's.
 
     Parameters
     ----------
@@ -590,9 +621,10 @@ def se_resnet_152_cls(
     Builds an :class:`SENetForImageClassification` with the
     SE-ResNet-152 backbone (:class:`_SEBottleneck` blocks stacked
     ``[3, 8, 36, 3]``) followed by global average pooling and a
-    linear classifier.  Approximately 66.8M parameters and 78.7%
-    ImageNet-1k top-1 accuracy in Hu et al., 2018 (Table 2) — the
-    deepest SE-ResNet variant in the original paper.
+    linear classifier.  Approximately 66.8M parameters and 78.43%
+    ImageNet-1k top-1 accuracy in Hu et al., 2018 (Table 2: 21.57%
+    top-1 error) — the deepest SE-ResNet variant in the original
+    paper.  78.66% is the shipped checkpoint's metric.
 
     Parameters
     ----------

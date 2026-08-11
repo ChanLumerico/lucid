@@ -59,21 +59,45 @@ class _ResBlock(nn.Module):
         *,
         dropout: float = 0.0,
         groups: int = 32,
+        scale_shift: bool = False,
     ) -> None:
         super().__init__()
         # GroupNorm requires channels % groups == 0; clamp ``groups`` down
         # when the user-supplied count exceeds the available channels.
-        g_in = min(groups, in_channels) if in_channels % groups != 0 else groups
+        # ``min(groups, in_channels)`` is not necessarily a *divisor* of
+        # in_channels — and the decoder's ResBlock input is ch + skip_ch,
+        # a width the config never validates.  Walk down to the largest
+        # divisor instead so GroupNorm can always be built.
+        g_in = groups
+        if in_channels % g_in != 0:
+            g_in = next(
+                (
+                    g
+                    for g in range(min(groups, in_channels), 0, -1)
+                    if in_channels % g == 0
+                ),
+                1,
+            )
         g_out = min(groups, out_channels) if out_channels % groups != 0 else groups
 
         # eps=1e-6 is the canonical DDPM GroupNorm epsilon (Ho 2020 TF code +
         # diffusers ``norm_eps``); required for checkpoint parity.
         self.norm1 = nn.GroupNorm(g_in, in_channels, eps=1e-6)
         self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1)
-        self.time_proj = nn.Linear(time_emb_dim, out_channels)
+        self._scale_shift = scale_shift
+        # FiLM needs two vectors per channel; additive needs one.
+        self.time_proj = nn.Linear(
+            time_emb_dim, out_channels * 2 if scale_shift else out_channels
+        )
         self.norm2 = nn.GroupNorm(g_out, out_channels, eps=1e-6)
         self.dropout = nn.Dropout(p=dropout)
         self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
+        # The reference zero-initialises this projection so the block is
+        # exactly the identity at step 0 — the standard diffusion U-Net
+        # recipe, and what keeps a deep stack stable from the first step.
+        nn.init.zeros_(self.conv2.weight)
+        if self.conv2.bias is not None:
+            nn.init.zeros_(self.conv2.bias)
 
         if in_channels != out_channels:
             self.skip: nn.Module = nn.Conv2d(in_channels, out_channels, 1)
@@ -85,8 +109,14 @@ class _ResBlock(nn.Module):
         h = cast(Tensor, self.conv1(F.silu(cast(Tensor, self.norm1(x)))))
         # (B, out_ch) → (B, out_ch, 1, 1) so it broadcasts across spatial.
         t = cast(Tensor, self.time_proj(F.silu(t_emb))).unsqueeze(-1).unsqueeze(-1)
-        h = h + t
-        h = cast(Tensor, self.norm2(h))
+        if self._scale_shift:
+            # Improved-DDPM: h = norm(h) * (1 + scale) + shift.
+            half = int(t.shape[1]) // 2
+            scale, shift = t[:, :half], t[:, half:]
+            h = cast(Tensor, self.norm2(h)) * (1.0 + scale) + shift
+        else:
+            h = h + t
+            h = cast(Tensor, self.norm2(h))
         h = F.silu(h)
         h = cast(Tensor, self.dropout(h))
         h = cast(Tensor, self.conv2(h))
@@ -117,6 +147,12 @@ class _AttentionBlock(nn.Module):
         self.norm = nn.GroupNorm(g, channels, eps=1e-6)
         self.qkv = nn.Conv2d(channels, channels * 3, 1)
         self.proj = nn.Conv2d(channels, channels, 1)
+        # The reference zero-initialises this projection so the block is
+        # exactly the identity at step 0 — the standard diffusion U-Net
+        # recipe, and what keeps a deep stack stable from the first step.
+        nn.init.zeros_(self.proj.weight)
+        if self.proj.bias is not None:
+            nn.init.zeros_(self.proj.bias)
         self.num_heads = num_heads
         self.head_dim = channels // num_heads
         self.scale = 1.0 / math.sqrt(self.head_dim)
@@ -303,6 +339,7 @@ class DDPMUNet(nn.Module):
                         time_dim,
                         dropout=config.dropout,
                         groups=config.resnet_groups,
+                        scale_shift=config.use_scale_shift_norm,
                     )
                 )
                 ch = out_ch
@@ -336,6 +373,7 @@ class DDPMUNet(nn.Module):
             time_dim,
             dropout=config.dropout,
             groups=config.resnet_groups,
+            scale_shift=config.use_scale_shift_norm,
         )
         self.mid_attn = _AttentionBlock(
             ch,
@@ -348,6 +386,7 @@ class DDPMUNet(nn.Module):
             time_dim,
             dropout=config.dropout,
             groups=config.resnet_groups,
+            scale_shift=config.use_scale_shift_norm,
         )
 
         # ── Decoder ─────────────────────────────────────────────────────────
@@ -365,6 +404,7 @@ class DDPMUNet(nn.Module):
                         time_dim,
                         dropout=config.dropout,
                         groups=config.resnet_groups,
+                        scale_shift=config.use_scale_shift_norm,
                     )
                 )
                 ch = out_ch
@@ -392,9 +432,22 @@ class DDPMUNet(nn.Module):
         )
         self.norm_out = nn.GroupNorm(g_out, ch, eps=1e-6)
         self.conv_out = nn.Conv2d(ch, config.out_channels_effective, 3, padding=1)
+        # The reference zero-initialises this projection so the block is
+        # exactly the identity at step 0 — the standard diffusion U-Net
+        # recipe, and what keeps a deep stack stable from the first step.
+        nn.init.zeros_(self.conv_out.weight)
+        if self.conv_out.bias is not None:
+            nn.init.zeros_(self.conv_out.bias)
 
         # Pre-computed "blocks per stage" for forward dispatch.
         self._blocks_per_down_stage = config.num_res_blocks
+        # 1.0 disables the rescale entirely, so the common T=1000 case pays
+        # nothing for the flag existing.
+        self._timestep_scale = (
+            1000.0 / float(config.num_train_timesteps)
+            if config.rescale_timesteps
+            else 1.0
+        )
         self._blocks_per_up_stage = config.num_res_blocks + 1
 
     @override
@@ -411,6 +464,11 @@ class DDPMUNet(nn.Module):
         """
         if timestep.ndim == 0:
             timestep = timestep.reshape((1,)).expand((int(sample.shape[0]),))
+        if self._timestep_scale != 1.0:
+            # Improved-DDPM's ``rescale_timesteps``: a T != 1000 model is fed
+            # ``t * (1000 / T)`` so the sinusoidal embedding still sees the
+            # magnitude range it was designed for.
+            timestep = timestep * self._timestep_scale  # int → float32
         t_emb = cast(Tensor, self.time_mlp(timestep))  # (B, time_dim)
 
         h = cast(Tensor, self.conv_in(sample))

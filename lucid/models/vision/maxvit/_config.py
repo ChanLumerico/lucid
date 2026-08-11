@@ -74,11 +74,11 @@ class MaxViTConfig(ModelConfig):
     window_size : int, optional
         Side length :math:`P` of the partition window for block and
         grid attention.  Defaults to ``7``.
-    num_heads : int, optional
-        Number of attention heads used by both block and grid
-        attention.  In practice the reference recipe fixes ``head_dim``
-        to 32 and derives ``num_heads = dim / 32`` per stage; this
-        field is informational.  Defaults to ``32``.
+    head_dim : int, optional
+        Size of each attention head.  Table 11 fixes this at 32 and
+        derives the head count per stage as ``dim // head_dim``, so this
+        is the knob that actually sets attention granularity.  Defaults
+        to ``32``.
     mlp_ratio : float, optional
         MLP expansion ratio inside the partition-attention blocks.
         Defaults to ``4.0``.
@@ -130,9 +130,20 @@ class MaxViTConfig(ModelConfig):
     depths: tuple[int, ...] = (2, 2, 5, 2)
     dims: tuple[int, ...] = (64, 128, 256, 512)
     window_size: int = 7
-    num_heads: int = 32
+    # Table 11 fixes the head *size* at 32 and derives the head count per
+    # stage as ``dim // head_dim``.  This field was named ``num_heads`` and
+    # then ignored entirely — the builder hardcoded the same 32 — so setting
+    # it changed nothing.  Renamed to what it actually is, and now wired in.
+    head_dim: int = 32
     mlp_ratio: float = 4.0
     stem_width: int | None = None
+
+    # Stochastic depth.  Table 12 makes this the primary per-variant
+    # regulariser — 0.2 / 0.3 / 0.4 / 0.6 for MaxViT-T/S/B/L on ImageNet-1k —
+    # and Appendix 0.B.1 says the variants differ mainly in this rate.  The
+    # default stays 0.0 so eval and weight transfer are untouched; pass the
+    # paper's value to reproduce the training recipe.
+    drop_path_rate: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "depths", tuple(self.depths))

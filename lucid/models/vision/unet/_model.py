@@ -102,20 +102,25 @@ class _DoubleConv(nn.Module):
         dim: int = 2,
         dropout: float = 0.0,
         residual: bool = False,
+        mid_ch: int | None = None,
     ) -> None:
         super().__init__()
         self._dim = dim
         self._residual = residual
+        # ``mid_ch`` is the width *between* the two convolutions.  The 2D
+        # U-Net runs both at ``out_ch``; Cicek's 3D U-Net halves the first so
+        # the level doubles its channel count right before the pool.
+        mid = out_ch if mid_ch is None else mid_ch
 
         layers: list[nn.Module] = [
-            _conv(dim, in_ch, out_ch),
-            _bn(dim, out_ch),
+            _conv(dim, in_ch, mid),
+            _bn(dim, mid),
             nn.ReLU(inplace=True),
         ]
         if dropout > 0.0:
             layers.append(nn.Dropout(p=dropout))
         layers += [
-            _conv(dim, out_ch, out_ch),
+            _conv(dim, mid, out_ch),
             _bn(dim, out_ch),
         ]
         # Final ReLU is applied AFTER the residual add (or directly if no shortcut).
@@ -127,7 +132,15 @@ class _DoubleConv(nn.Module):
 
         self.shortcut: nn.Module | None
         if residual and in_ch != out_ch:
-            self.shortcut = _conv(dim, in_ch, out_ch, k=1, padding=0, bias=False)
+            # A projection shortcut in a post-activation residual block is
+            # Conv1x1 *plus* BatchNorm, so both addends of ``out + identity``
+            # are normalised.  A bare conv leaves the identity branch on a
+            # different scale from the body, which the following ReLU then
+            # bakes in.  Lucid's own ResNet builds the same Sequential.
+            self.shortcut = nn.Sequential(
+                _conv(dim, in_ch, out_ch, k=1, padding=0, bias=False),
+                _bn(dim, out_ch),
+            )
         else:
             self.shortcut = None
 
@@ -155,9 +168,17 @@ class _EncoderBlock(nn.Module):
         dim: int = 2,
         dropout: float = 0.0,
         residual: bool = False,
+        double_before_pool: bool = False,
     ) -> None:
         super().__init__()
-        self.conv = _DoubleConv(in_ch, out_ch, dim, dropout, residual)
+        self.conv = _DoubleConv(
+            in_ch,
+            out_ch,
+            dim,
+            dropout,
+            residual,
+            mid_ch=out_ch // 2 if double_before_pool else None,
+        )
         self.pool = _pool(dim)
 
     @override
@@ -179,18 +200,28 @@ class _DecoderBlock(nn.Module):
         bilinear: bool = False,
         dropout: float = 0.0,
         residual: bool = False,
+        double_before_pool: bool = False,
     ) -> None:
         super().__init__()
         self._dim = dim
+        mid = out_ch // 2 if double_before_pool else None
         if bilinear:
-            self.up: nn.Module = nn.Upsample(
-                scale_factor=2, mode=_interp_mode(dim), align_corners=True
+            # Section 2 pairs the upsample with "a 2x2 convolution
+            # ('up-convolution') that halves the number of feature channels".
+            # Interpolation alone carries all ``in_ch`` channels into the
+            # concat, so the bilinear decoder came out *wider* than the
+            # transposed-conv one instead of matching its budget.
+            self.up: nn.Module = nn.Sequential(
+                nn.Upsample(scale_factor=2, mode=_interp_mode(dim), align_corners=True),
+                _conv(dim, in_ch, in_ch // 2, k=1, padding=0, bias=False),
             )
-            self.conv = _DoubleConv(in_ch + skip_ch, out_ch, dim, dropout, residual)
+            self.conv = _DoubleConv(
+                in_ch // 2 + skip_ch, out_ch, dim, dropout, residual, mid_ch=mid
+            )
         else:
             self.up = _deconv(dim, in_ch, in_ch // 2)
             self.conv = _DoubleConv(
-                in_ch // 2 + skip_ch, out_ch, dim, dropout, residual
+                in_ch // 2 + skip_ch, out_ch, dim, dropout, residual, mid_ch=mid
             )
 
     @override
@@ -331,7 +362,9 @@ class UNetForSemanticSegmentation(PretrainedModel):
         enc_channels: list[int] = []
         for i in range(depth):
             out_ch = ch * (2**i)
-            block = _EncoderBlock(in_ch, out_ch, dim, dropout, residual)
+            block = _EncoderBlock(
+                in_ch, out_ch, dim, dropout, residual, config.double_before_pool
+            )
             self.add_module(f"encoder_{i}", block)
             self.encoders.append(block)
             enc_channels.append(out_ch)
@@ -339,7 +372,14 @@ class UNetForSemanticSegmentation(PretrainedModel):
 
         # Bottleneck
         bottleneck_ch = ch * (2**depth)
-        self.bottleneck = _DoubleConv(in_ch, bottleneck_ch, dim, dropout, residual)
+        self.bottleneck = _DoubleConv(
+            in_ch,
+            bottleneck_ch,
+            dim,
+            dropout,
+            residual,
+            mid_ch=bottleneck_ch // 2 if config.double_before_pool else None,
+        )
 
         # Decoder stages (reverse order)
         self.decoders: list[_DecoderBlock] = []
@@ -351,6 +391,7 @@ class UNetForSemanticSegmentation(PretrainedModel):
                 dec_in,
                 skip_ch,
                 dec_out,
+                double_before_pool=config.double_before_pool,
                 dim=dim,
                 bilinear=config.bilinear,
                 dropout=dropout,

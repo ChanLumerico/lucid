@@ -1,7 +1,7 @@
 """Pretrained-weight declarations for the GoogLeNet family.
 
 The single paper-cited architecture (Szegedy et al., CVPR 2015) ships
-one ImageNet-1k checkpoint converted from torchvision's
+one ImageNet-1k checkpoint converted from reference_vision's
 ``GoogLeNet_Weights.IMAGENET1K_V1``: :class:`GoogLeNetWeights`.
 
 The checkpoint uses the canonical 224 crop / 256 resize / bilinear
@@ -18,7 +18,7 @@ _PRESET = ImageClassification(crop_size=224, resize_size=256, interpolation="bil
 class GoogLeNetWeights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.googlenet_cls`.
 
-    Single ImageNet-1k checkpoint converted from torchvision's
+    Single ImageNet-1k checkpoint converted from reference_vision's
     ``GoogLeNet_Weights.IMAGENET1K_V1`` (Szegedy et al., 2015; ~13.0M
     params with auxiliary heads, 69.778% top-1).
     """
@@ -30,7 +30,7 @@ class GoogLeNetWeights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/GoogLeNet_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/GoogLeNet_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 13_004_888,
             "metrics": {"ImageNet-1k": {"acc@1": 69.778}},

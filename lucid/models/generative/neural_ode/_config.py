@@ -26,6 +26,13 @@ TraceMethod = Literal["exact", "hutchinson"]
 # the usual default.
 TraceNoise = Literal["rademacher", "gaussian"]
 
+#: Which vector field to build.  ``"planar"`` is the paper's eq. (9)+(10)
+#: — a single layer of gated planar units — and is what the authors' own
+#: ``examples/cnf.py`` builds.  ``"concat_squash"`` is the deeper MLP the
+#: FFJORD follow-up popularised; it is a strictly larger family, but it is
+#: not the model this paper describes.
+VectorFieldKind = Literal["planar", "concat_squash"]
+
 
 @model_family_meta(
     canonical_name="Neural ODE",
@@ -167,6 +174,7 @@ class NeuralODEConfig(NormalizingFlowConfig):
 
     prior: FlowPrior = "gaussian"
 
+    field: VectorFieldKind = "planar"
     hidden_dim: int = 64
     num_blocks: int = 2
 

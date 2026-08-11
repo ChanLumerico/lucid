@@ -1,12 +1,12 @@
 """Pretrained-weight declarations for the Vision Transformer family.
 
 Four paper-cited variants (Dosovitskiy et al., ICLR 2021) ship the
-official ImageNet-1k checkpoints converted from torchvision's
+official ImageNet-1k checkpoints converted from reference_vision's
 ``ViT_*_Weights.IMAGENET1K_V1`` tag: :class:`ViTBase16Weights`,
 :class:`ViTBase32Weights`, :class:`ViTLarge16Weights`, and
 :class:`ViTLarge32Weights`.
 
-ViT-Huge/14 is intentionally not shipped: torchvision only distributes
+ViT-Huge/14 is intentionally not shipped: reference_vision only distributes
 it as a 518x518 SWAG checkpoint whose ``pos_embedding`` token count does
 not match Lucid's default ``image_size=224`` config, so there is no clean
 224x224 1k-class checkpoint to host.
@@ -27,7 +27,7 @@ _PRESET = ImageClassification(crop_size=224, resize_size=256, interpolation="bil
 class ViTBase16Weights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.vit_base_16_cls`.
 
-    Single ImageNet-1k checkpoint converted from torchvision's
+    Single ImageNet-1k checkpoint converted from reference_vision's
     ``ViT_B_16_Weights.IMAGENET1K_V1`` (Dosovitskiy et al., 2021;
     ~86.6M params, 81.072% top-1).
     """
@@ -39,7 +39,7 @@ class ViTBase16Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ViT_B_16_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/ViT_B_16_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 86_567_656,
             "metrics": {"ImageNet-1k": {"acc@1": 81.072}},
@@ -52,7 +52,7 @@ class ViTBase16Weights(WeightsEnum):
 class ViTBase32Weights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.vit_base_32_cls`.
 
-    Single ImageNet-1k checkpoint converted from torchvision's
+    Single ImageNet-1k checkpoint converted from reference_vision's
     ``ViT_B_32_Weights.IMAGENET1K_V1`` (Dosovitskiy et al., 2021;
     ~88.2M params, 75.912% top-1).
     """
@@ -64,7 +64,7 @@ class ViTBase32Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ViT_B_32_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/ViT_B_32_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 88_224_232,
             "metrics": {"ImageNet-1k": {"acc@1": 75.912}},
@@ -77,7 +77,7 @@ class ViTBase32Weights(WeightsEnum):
 class ViTLarge16Weights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.vit_large_16_cls`.
 
-    Single ImageNet-1k checkpoint converted from torchvision's
+    Single ImageNet-1k checkpoint converted from reference_vision's
     ``ViT_L_16_Weights.IMAGENET1K_V1`` (Dosovitskiy et al., 2021;
     ~304.3M params, 79.662% top-1).  Uses a 242-pixel resize before the
     224 center crop (vs. 256 for the other variants).
@@ -92,7 +92,7 @@ class ViTLarge16Weights(WeightsEnum):
         ),
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ViT_L_16_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/ViT_L_16_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 304_326_632,
             "metrics": {"ImageNet-1k": {"acc@1": 79.662}},
@@ -105,7 +105,7 @@ class ViTLarge16Weights(WeightsEnum):
 class ViTLarge32Weights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.vit_large_32_cls`.
 
-    Single ImageNet-1k checkpoint converted from torchvision's
+    Single ImageNet-1k checkpoint converted from reference_vision's
     ``ViT_L_32_Weights.IMAGENET1K_V1`` (Dosovitskiy et al., 2021;
     ~306.5M params, 76.972% top-1).
     """
@@ -117,7 +117,7 @@ class ViTLarge32Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ViT_L_32_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/ViT_L_32_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 306_535_400,
             "metrics": {"ImageNet-1k": {"acc@1": 76.972}},

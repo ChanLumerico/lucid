@@ -30,6 +30,7 @@ Losses (training)
   total loss:     primary + 0.4 × auxiliary
 """
 
+from dataclasses import dataclass
 from typing import ClassVar, cast, final, override
 
 import lucid.nn as nn
@@ -42,6 +43,9 @@ from lucid.models.vision.fcn._config import FCNConfig
 # ---------------------------------------------------------------------------
 # ResNet backbone (dilated, self-contained)
 # ---------------------------------------------------------------------------
+
+
+_AUX_LOSS_WEIGHT: float = 0.5
 
 
 class _Bottleneck(nn.Module):
@@ -96,7 +100,7 @@ def _make_layer(
 ) -> tuple[nn.Sequential, int]:
     """Build one ResNet stage with optional dilation.
 
-    The reference dilated ResNet (torchvision ``replace_stride_with_dilation``)
+    The reference dilated ResNet (reference_vision ``replace_stride_with_dilation``)
     applies the *previous* stage's dilation to the first block of a dilated
     stage and the new dilation to the remaining blocks — e.g. layer3's first
     block uses dilation 1 then 2, layer4's first uses 2 then 4.
@@ -219,6 +223,26 @@ class _FCNHead(nn.Sequential):
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class FCNOutput(SemanticSegmentationOutput):
+    r"""Segmentation output that also carries the auxiliary head.
+
+    The reference runs its aux classifier whenever one exists — not only
+    when targets are supplied — and returns both predictions, each already
+    upsampled to the input size.  Computing it solely inside the loss
+    branch made the aux prediction unreachable: a caller wanting to weight
+    the aux term itself, or simply to inspect it, had no way to get at it.
+
+    Attributes
+    ----------
+    aux_logits : Tensor or None, optional
+        Auxiliary head logits at input resolution, or ``None`` when the
+        model was built without an auxiliary classifier.
+    """
+
+    aux_logits: Tensor | None = None
+
+
 class FCNForSemanticSegmentation(PretrainedModel):
     r"""Fully Convolutional Network for semantic segmentation (Long et al., CVPR 2015).
 
@@ -271,7 +295,13 @@ class FCNForSemanticSegmentation(PretrainedModel):
         \mathcal{L} = \mathcal{L}_\mathrm{CE}(\mathrm{main}, y)
                     + 0.4\, \mathcal{L}_\mathrm{CE}(\mathrm{aux}, y),
 
-    with categorical cross-entropy summed over all pixels.
+    with categorical cross-entropy **averaged** over the non-ignored
+    pixels.  The paper (§4.1) defines the objective as an unnormalised
+    spatial *sum*, and its quoted learning rates are calibrated to that
+    scale; the reference recipe that produced the shipped checkpoints
+    uses the mean instead, and this implementation follows the
+    reference so those weights reproduce.  Scale the learning rate
+    accordingly if switching to the paper's formulation.
 
     Examples
     --------
@@ -341,16 +371,28 @@ class FCNForSemanticSegmentation(PretrainedModel):
             main_feat, size=(iH, iW), mode="bilinear", align_corners=False
         )
 
+        # Run the aux head whenever one exists, as the reference does —
+        # its output is part of the model's prediction, not a detail of
+        # the loss.
+        aux_feat: Tensor = cast(Tensor, self.aux_classifier(c4))
+        aux_logits: Tensor = F.interpolate(
+            aux_feat, size=(iH, iW), mode="bilinear", align_corners=False
+        )
+
         loss: Tensor | None = None
         if targets is not None:
-            main_loss: Tensor = F.cross_entropy(logits, targets)
-
-            # Auxiliary head — only computed during training
-            aux_feat: Tensor = cast(Tensor, self.aux_classifier(c4))
-            aux_logits: Tensor = F.interpolate(
-                aux_feat, size=(iH, iW), mode="bilinear", align_corners=False
+            ignore_index = self._cfg.ignore_index
+            main_loss: Tensor = F.cross_entropy(
+                logits, targets, ignore_index=ignore_index
             )
-            aux_loss: Tensor = F.cross_entropy(aux_logits, targets)
-            loss = main_loss + 0.4 * aux_loss
 
-        return SemanticSegmentationOutput(logits=logits, loss=loss)
+            aux_loss: Tensor = F.cross_entropy(
+                aux_logits, targets, ignore_index=ignore_index
+            )
+            # The paper has no auxiliary head at all, so the recipe that
+            # trained these checkpoints is the only authority: it weights
+            # the aux term at 0.5.  0.4 is the PSPNet / mmsegmentation
+            # convention and belongs to different weights.
+            loss = main_loss + _AUX_LOSS_WEIGHT * aux_loss
+
+        return FCNOutput(logits=logits, loss=loss, aux_logits=aux_logits)

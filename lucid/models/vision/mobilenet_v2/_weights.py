@@ -1,13 +1,13 @@
 """Pretrained-weight declarations for the MobileNet v2 family.
 
 One paper-cited variant (Sandler et al., CVPR 2018) ships an
-ImageNet-1k checkpoint converted from torchvision's
+ImageNet-1k checkpoint converted from reference_vision's
 ``MobileNet_V2_Weights.IMAGENET1K_V1`` tag.  Preset is the standard
 ImageNet eval pipeline (224 crop / 256 resize / bilinear / ImageNet
 stats).
 
 Only the full-width (:math:`\\alpha = 1.0`) classifier ships pretrained
-weights — torchvision does not distribute a 0.75-width checkpoint, so
+weights — reference_vision does not distribute a 0.75-width checkpoint, so
 :func:`lucid.models.mobilenet_v2_075_cls` has no weights enum.
 """
 
@@ -34,7 +34,7 @@ class MobileNetV2Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/MobileNet_V2_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/MobileNet_V2_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 3_504_872,
             "metrics": {"ImageNet-1k": {"acc@1": 71.878, "acc@5": 90.286}},

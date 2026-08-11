@@ -3,7 +3,7 @@
   "name": "resnext",
   "path": "lucid.models.vision.resnext",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/__init__.py#L1",
   "members": [
     {
       "name": "ResNeXtConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "ResNeXtConfig(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), cardinality: int = 32, width_per_group: int = 4, dropout: float = 0.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_config.py#L10",
+      "signature": "ResNeXtConfig(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), cardinality: int = 32, width_per_group: int = 4, dropout: float = 0.0, zero_init_residual: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.resnext._config.ResNeXtConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), cardinality: int = 32, width_per_group: int = 4, dropout: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_config.py#L1",
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), cardinality: int = 32, width_per_group: int = 4, dropout: float = 0.0, zero_init_residual: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "ResNeXt(config: ResNeXtConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_model.py#L201",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_model.py#L209",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ResNeXtConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_model.py#L273",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_model.py#L281",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_model.py#L286",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_model.py#L302",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_model.py#L289",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_model.py#L305",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_model.py#L299",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_model.py#L315",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -215,7 +215,7 @@
       ],
       "labels": [],
       "signature": "ResNeXtForImageClassification(config: ResNeXtConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_model.py#L309",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_model.py#L325",
       "subcategory": "model",
       "methods": [
         {
@@ -224,7 +224,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ResNeXtConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_model.py#L371",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_model.py#L387",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -246,7 +246,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_model.py#L387",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_model.py#L409",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -312,10 +312,10 @@
       "kind": "function",
       "labels": [],
       "signature": "resnext_50_32x4d(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_pretrained.py#L30",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_pretrained.py#L34",
       "subcategory": "pretrained",
       "summary": "ResNeXt-50 (32x4d) feature-extracting backbone.",
-      "extended": "Builds a `ResNeXt` with the paper-cited ResNeXt-50 (32x4d)\ntopology: per-stage block counts `(3, 4, 6, 3)` (same as\nResNet-50), cardinality $C = 32$, width per group\n$d = 4$.  Approximately 25.0 M parameters — within roughly\n1% of ResNet-50's parameter budget while achieving ≈1pp higher\nImageNet top-1 accuracy (77.8% in Xie et al., 2017, Table 5).",
+      "extended": "Builds a `ResNeXt` with the paper-cited ResNeXt-50 (32x4d)\ntopology: per-stage block counts `(3, 4, 6, 3)` (same as\nResNet-50), cardinality $C = 32$, width per group\n$d = 4$.  23.0 M parameters without a classifier head\n(`resnext_50_32x4d_cls` adds 2.05 M more for the 1000-way\nhead, reaching the 25.0 M the paper quotes) — within roughly 1% of\nResNet-50's budget while achieving ≈1pp higher ImageNet top-1\naccuracy (77.8%, i.e. the 22.2% top-1 error Xie et al., 2017\nreport for this configuration).",
       "parameters": [
         {
           "name": "pretrained",
@@ -975,7 +975,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnext_50_32x4d_cls(pretrained: bool | str = False, weights: ResNeXt50_32x4dWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_pretrained.py#L205",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_pretrained.py#L282",
       "subcategory": "pretrained",
       "summary": "ResNeXt-50 (32x4d) image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNeXtForImageClassification` with the\npaper-cited ResNeXt-50 (32x4d) topology and a\n`lucid.nn.Linear` classifier projecting 2048 →\n`config.num_classes`.  Approximately 25.0 M parameters; the\ndistributed `IMAGENET1K_V2` checkpoint reaches 81.198% ImageNet-1k\ntop-1 with the improved training recipe.",
@@ -1008,7 +1008,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnext import resnext_50_32x4d_cls\n>>> model = resnext_50_32x4d_cls(num_classes=100)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 100)\nLoad ImageNet-pretrained weights:\n>>> model = resnext_50_32x4d_cls(pretrained=True)\n>>> from lucid.models.vision.resnext import ResNeXt50_32x4dWeights\n>>> model = resnext_50_32x4d_cls(weights=ResNeXt50_32x4dWeights.IMAGENET1K_V2)"
       ],
       "notes": [
-        "Pretrained weights are converted from torchvision's\n`ResNeXt50_32X4D_Weights.IMAGENET1K_V2` and hosted on the Hugging\nFace Hub under `lucid-dl/resnext-50-32x4d`.  The V2 preset uses a\n232 resize ahead of the 224 center crop."
+        "Pretrained weights are converted from reference_vision's\n`ResNeXt50_32X4D_Weights.IMAGENET1K_V2` and hosted on the Hugging\nFace Hub under `lucid-dl/resnext-50-32x4d`.  The V2 preset uses a\n232 resize ahead of the 224 center crop."
       ],
       "attributes": [],
       "warns": [],
@@ -1658,10 +1658,10 @@
       "kind": "function",
       "labels": [],
       "signature": "resnext_101_32x4d(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_pretrained.py#L88",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_pretrained.py#L99",
       "subcategory": "pretrained",
       "summary": "ResNeXt-101 (32x4d) feature-extracting backbone.",
-      "extended": "Builds a `ResNeXt` with the paper-cited ResNeXt-101 (32x4d)\ntopology: per-stage block counts `(3, 4, 23, 3)` (same as\nResNet-101), cardinality $C = 32$, width per group\n$d = 4$.  Approximately 44.2 M parameters; reaches 78.8%\nImageNet top-1 in Xie et al., 2017 (Table 5).",
+      "extended": "Builds a `ResNeXt` with the paper-cited ResNeXt-101 (32x4d)\ntopology: per-stage block counts `(3, 4, 23, 3)` (same as\nResNet-101), cardinality $C = 32$, width per group\n$d = 4$.  42.1 M parameters without a classifier head\n(`resnext_101_32x4d_cls` adds 2.05 M more, reaching the\n44.2 M the paper quotes); reaches 78.8% ImageNet top-1 in\nXie et al., 2017.",
       "parameters": [
         {
           "name": "pretrained",
@@ -2321,7 +2321,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnext_101_32x4d_cls(pretrained: bool | str = False, weights: ResNeXt101_32x4dWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_pretrained.py#L289",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_pretrained.py#L366",
       "subcategory": "pretrained",
       "summary": "ResNeXt-101 (32x4d) image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNeXtForImageClassification` with the\npaper-cited ResNeXt-101 (32x4d) topology and a\n`lucid.nn.Linear` classifier projecting 2048 →\n`config.num_classes`.  Approximately 44.2 M parameters; the\ndistributed Gluon `GLUON_IN1K` checkpoint reaches 80.342%\nImageNet-1k top-1.",
@@ -3004,10 +3004,10 @@
       "kind": "function",
       "labels": [],
       "signature": "resnext_101_32x8d(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_pretrained.py#L141",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_pretrained.py#L158",
       "subcategory": "pretrained",
       "summary": "ResNeXt-101 (32x8d) feature-extracting backbone.",
-      "extended": "Builds a `ResNeXt` with the higher-capacity ResNeXt-101\n(32x8d) topology: per-stage block counts `(3, 4, 23, 3)`,\ncardinality $C = 32$, width per group $d = 8$ (double\nthe standard ResNeXt-101).  Approximately 88.8 M parameters — the\nwidest of the canonical ResNeXt variants, widely used as the\nbackbone for ImageNet-pretrained downstream models (e.g. Facebook's\nInstagram-pretrained `ig_resnext_101_32x8d`).",
+      "extended": "Builds a `ResNeXt` with the higher-capacity ResNeXt-101\n(32x8d) topology: per-stage block counts `(3, 4, 23, 3)`,\ncardinality $C = 32$, width per group $d = 8$ (double\nthe standard ResNeXt-101).  86.7 M parameters without a\nclassifier head (`resnext_101_32x8d_cls` adds 2.05 M more,\nreaching 88.8 M) — the widest of the canonical ResNeXt variants, widely used as the\nbackbone for ImageNet-pretrained downstream models (e.g. Facebook's\nInstagram-pretrained `ig_resnext_101_32x8d`).",
       "parameters": [
         {
           "name": "pretrained",
@@ -3031,7 +3031,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnext import resnext_101_32x8d\n>>> model = resnext_101_32x8d()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 2048, 7, 7)\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Xie et al., CVPR 2017.  This widened variant is included in\nthe reference-framework model zoo because of its strong transfer\nlearning performance."
+        "Not a variant of Xie et al., CVPR 2017 — 32x8d appears nowhere in\nthe paper.  It comes from the reference model zoo, where it is kept\nfor its transfer-learning performance (and is the topology\nFacebook's Instagram-pretrained `ig_resnext_101_32x8d` uses)."
       ],
       "attributes": [],
       "warns": [],
@@ -3662,12 +3662,90 @@
       }
     },
     {
+      "name": "resnext_101_64x4d",
+      "path": "lucid.models.vision.resnext._pretrained.resnext_101_64x4d",
+      "kind": "function",
+      "labels": [],
+      "signature": "resnext_101_64x4d(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_pretrained.py#L220",
+      "subcategory": "pretrained",
+      "summary": "ResNeXt-101 (64x4d) feature-extracting backbone — the paper's headline model.",
+      "extended": "Builds a `ResNeXt` with per-stage block counts\n`(3, 4, 23, 3)`, cardinality $C = 64$ and width per group\n$d = 4$.  This is Table 4's 2x-complexity configuration, the\none §5.1's \"reduces the top-1 error to 20.4%\" refers to, and the\nbasis of the 2nd-place ILSVRC-2016 submission.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `ResNeXtConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ResNeXt",
+        "description": "Backbone with the ResNeXt-101 (64x4d) configuration applied\n(or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.resnext import resnext_101_64x4d\n>>> model = resnext_101_64x4d()\n>>> model(lucid.randn(1, 3, 224, 224)).last_hidden_state.shape\n(1, 2048, 7, 7)"
+      ],
+      "notes": [
+        "Xie et al., CVPR 2017, Table 4: 20.4% top-1 / 5.3% top-5 error at\n224x224.  The paper also reports 19.1 / 4.4 for this configuration\nat 320x320, in its comparison against state-of-the-art models."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "resnext_101_64x4d_cls",
+      "path": "lucid.models.vision.resnext._pretrained.resnext_101_64x4d_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "resnext_101_64x4d_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_pretrained.py#L532",
+      "subcategory": "pretrained",
+      "summary": "ResNeXt-101 (64x4d) image classifier — the paper's headline model.",
+      "extended": "Builds a `ResNeXtForImageClassification` with cardinality\n$C = 64$ and width per group $d = 4$, plus a\n`lucid.nn.Linear` classifier projecting 2048 →\n`config.num_classes`.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Reserved for future pretrained-weight loading.  Currently\nignored.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Keyword overrides forwarded into `ResNeXtConfig`.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "ResNeXtForImageClassification",
+        "description": "Classifier with the ResNeXt-101 (64x4d) configuration applied\n(or with `overrides` merged on top of it)."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.resnext import resnext_101_64x4d_cls\n>>> model = resnext_101_64x4d_cls(num_classes=10)\n>>> model(lucid.randn(1, 3, 224, 224)).logits.shape\n(1, 10)"
+      ],
+      "notes": [
+        "Xie et al., CVPR 2017, Table 4: 20.4% top-1 / 5.3% top-5 error at\n224x224 — the result §5.1's headline refers to, and the basis of\nthe 2nd-place ILSVRC-2016 submission."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "resnext_101_32x8d_cls",
       "path": "lucid.models.vision.resnext._pretrained.resnext_101_32x8d_cls",
       "kind": "function",
       "labels": [],
       "signature": "resnext_101_32x8d_cls(pretrained: bool | str = False, weights: ResNeXt101_32x8dWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_pretrained.py#L373",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_pretrained.py#L450",
       "subcategory": "pretrained",
       "summary": "ResNeXt-101 (32x8d) image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNeXtForImageClassification` with the\nhigh-capacity ResNeXt-101 (32x8d) topology and a\n`lucid.nn.Linear` classifier projecting 2048 →\n`config.num_classes`.  Approximately 88.8 M parameters; the\ndistributed `IMAGENET1K_V2` checkpoint reaches 82.834%\nImageNet-1k top-1 with the improved training recipe.",
@@ -3700,7 +3778,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnext import resnext_101_32x8d_cls\n>>> model = resnext_101_32x8d_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)\nLoad ImageNet-pretrained weights:\n>>> model = resnext_101_32x8d_cls(pretrained=True)\n>>> from lucid.models.vision.resnext import ResNeXt101_32x8dWeights\n>>> model = resnext_101_32x8d_cls(weights=ResNeXt101_32x8dWeights.IMAGENET1K_V2)"
       ],
       "notes": [
-        "See Xie et al., \"Aggregated Residual Transformations for Deep\nNeural Networks\", CVPR 2017.  Pretrained weights are converted from\ntorchvision's `ResNeXt101_32X8D_Weights.IMAGENET1K_V2` and hosted\non the Hugging Face Hub under `lucid-dl/resnext-101-32x8d`.  The V2\npreset uses a 232 resize ahead of the 224 center crop."
+        "See Xie et al., \"Aggregated Residual Transformations for Deep\nNeural Networks\", CVPR 2017.  Pretrained weights are converted from\nreference_vision's `ResNeXt101_32X8D_Weights.IMAGENET1K_V2` and hosted\non the Hugging Face Hub under `lucid-dl/resnext-101-32x8d`.  The V2\npreset uses a 232 resize ahead of the 224 center crop."
       ],
       "attributes": [],
       "warns": [],
@@ -4354,7 +4432,7 @@
       ],
       "labels": [],
       "signature": "ResNeXt50_32x4dWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_weights.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_weights.py#L21",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.resnext_50_32x4d_cls`.",
@@ -4372,7 +4450,7 @@
         {
           "name": "IMAGENET1K_V2",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V2 checkpoint (top-1 81.198% / top-5 95.340%),\nsourced from `torchvision/ResNeXt50_32X4D_Weights.IMAGENET1K_V2`."
+          "description": "ImageNet-1k V2 checkpoint (top-1 81.198% / top-5 95.340%),\nsourced from `reference_vision/ResNeXt50_32X4D_Weights.IMAGENET1K_V2`."
         },
         {
           "name": "DEFAULT",
@@ -4393,11 +4471,11 @@
       ],
       "labels": [],
       "signature": "ResNeXt101_32x4dWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_weights.py#L111",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_weights.py#L111",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.resnext_101_32x4d_cls`.",
-      "extended": "Sourced from the timm Gluon `gluon_in1k` checkpoint — note the\nbicubic interpolation and 0.875 crop_pct (256 resize → 224 crop)\nrather than the bilinear / 232-resize preset of the torchvision V2\nvariants.",
+      "extended": "Sourced from the timm Gluon `gluon_in1k` checkpoint — note the\nbicubic interpolation and 0.875 crop_pct (256 resize → 224 crop)\nrather than the bilinear / 232-resize preset of the reference_vision V2\nvariants.",
       "parameters": [],
       "returns": null,
       "raises": [],
@@ -4432,7 +4510,7 @@
       ],
       "labels": [],
       "signature": "ResNeXt101_32x8dWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/resnext/_weights.py#L66",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/resnext/_weights.py#L66",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.resnext_101_32x8d_cls`.",
@@ -4450,7 +4528,7 @@
         {
           "name": "IMAGENET1K_V2",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V2 checkpoint (top-1 82.834% / top-5 96.228%),\nsourced from `torchvision/ResNeXt101_32X8D_Weights.IMAGENET1K_V2`."
+          "description": "ImageNet-1k V2 checkpoint (top-1 82.834% / top-5 96.228%),\nsourced from `reference_vision/ResNeXt101_32X8D_Weights.IMAGENET1K_V2`."
         },
         {
           "name": "DEFAULT",

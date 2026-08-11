@@ -8,6 +8,7 @@ from lucid.models._registry import register_model
 from lucid.models.vision.sknet._config import SKNetConfig
 from lucid.models.vision.sknet._model import SKNet, SKNetForImageClassification
 from lucid.models.vision.sknet._weights import SKResNet18Weights, SKResNet34Weights
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -46,8 +47,11 @@ _CFG_SK34 = SKNetConfig(
 _CFG_SK50 = SKNetConfig(
     layers=(3, 4, 6, 3), cardinality=1, base_width=64, split_input=True
 )
+# Section 3.2: "SKNet-101, which has {3,4,23,3} SK units".  Table 2 pins it
+# at 48.9M params / 8.46 GFLOPs, which is the ResNeXt-101 32x4d base -- not
+# the cardinality-1, width-64 ResNet base this used to build.
 _CFG_SK101 = SKNetConfig(
-    layers=(3, 4, 23, 3), cardinality=1, base_width=64, split_input=True
+    layers=(3, 4, 23, 3), cardinality=32, base_width=4, split_input=True
 )
 
 # sk_resnext_50_32x4d:
@@ -74,6 +78,7 @@ _CFG_SK_RX50 = SKNetConfig(
     model_type="sknet",
     model_class=SKNet,
     default_config=_CFG_SK18,
+    params=11463616,
 )
 def sk_resnet_18(pretrained: bool = False, **overrides: object) -> SKNet:
     r"""SK-ResNet-18 feature-extracting backbone (no classification head).
@@ -101,9 +106,12 @@ def sk_resnet_18(pretrained: bool = False, **overrides: object) -> SKNet:
     Notes
     -----
     See Li et al., "Selective Kernel Networks", CVPR 2019
-    (arXiv:1903.06586).  Uses ``rd_ratio = 0.6`` for the attention
-    bottleneck and ``split_input = False`` so each branch receives
-    the full input — matching the SK-ResNet-18 budget reference.
+    (arXiv:1903.06586).  ``_CFG_SK18`` uses ``rd_ratio = 1/8``,
+    ``rd_divisor = 16`` and ``split_input = True``, so each branch
+    receives half the input.  Only the *first* :math:`3 \times 3` of
+    each basic block is a Selective Kernel unit — the second stays a
+    plain conv-BN-act (see ``_SelectiveKernelBasic``).  ~11.5M
+    parameters.
 
     Examples
     --------
@@ -115,6 +123,8 @@ def sk_resnet_18(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("sk_resnet_18", alternative="sk_resnet_18_cls")
     cfg = (
         replace(_CFG_SK18, **cast(dict[str, Any], overrides))
         if overrides
@@ -129,15 +139,16 @@ def sk_resnet_18(pretrained: bool = False, **overrides: object) -> SKNet:
     model_type="sknet",
     model_class=SKNet,
     default_config=_CFG_SK34,
+    params=21803392,
 )
 def sk_resnet_34(pretrained: bool = False, **overrides: object) -> SKNet:
     r"""SK-ResNet-34 feature-extracting backbone (no classification head).
 
     Builds an :class:`SKNet` with ResNet-34 topology
     (:class:`_SelectiveKernelBasic` blocks stacked ``[3, 4, 6, 3]``).
-    Both :math:`3 \times 3` convolutions inside every basic block
-    are replaced by Selective Kernel units.  Approximately 46.9M
-    parameters.
+    Only the *first* :math:`3 \times 3` of each basic block is a
+    Selective Kernel unit; the second stays a plain conv-BN-act.
+    Approximately 21.8M parameters.
 
     Parameters
     ----------
@@ -168,6 +179,8 @@ def sk_resnet_34(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("sk_resnet_34", alternative="sk_resnet_34_cls")
     cfg = (
         replace(_CFG_SK34, **cast(dict[str, Any], overrides))
         if overrides
@@ -182,6 +195,7 @@ def sk_resnet_34(pretrained: bool = False, **overrides: object) -> SKNet:
     model_type="sknet",
     model_class=SKNet,
     default_config=_CFG_SK50,
+    params=23879104,
 )
 def sk_resnet_50(pretrained: bool = False, **overrides: object) -> SKNet:
     r"""SK-ResNet-50 feature-extracting backbone (no classification head).
@@ -224,6 +238,8 @@ def sk_resnet_50(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("sk_resnet_50")
     cfg = (
         replace(_CFG_SK50, **cast(dict[str, Any], overrides))
         if overrides
@@ -238,6 +254,7 @@ def sk_resnet_50(pretrained: bool = False, **overrides: object) -> SKNet:
     model_type="sknet",
     model_class=SKNet,
     default_config=_CFG_SK101,
+    params=44019008,
 )
 def sk_resnet_101(pretrained: bool = False, **overrides: object) -> SKNet:
     r"""SK-ResNet-101 feature-extracting backbone (no classification head).
@@ -276,6 +293,8 @@ def sk_resnet_101(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("sk_resnet_101")
     cfg = (
         replace(_CFG_SK101, **cast(dict[str, Any], overrides))
         if overrides
@@ -290,6 +309,7 @@ def sk_resnet_101(pretrained: bool = False, **overrides: object) -> SKNet:
     model_type="sknet",
     model_class=SKNet,
     default_config=_CFG_SK_RX50,
+    params=25430784,
 )
 def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
     r"""SK-ResNeXt-50 32×4d feature-extracting backbone (the paper's SKNet-50).
@@ -305,9 +325,10 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
             \tfrac{\text{base\_width}}{64} \rfloor \cdot
             \text{cardinality},
 
-    matching the ``SKNet-50`` entry in Li et al., 2019.
-    Approximately 27.5M parameters and 77.5% ImageNet-1k top-1
-    accuracy in the paper.
+    matching the ``SKNet-50`` entry in Li et al., 2019.  Table 2 gives
+    that entry 27.5M parameters, 4.47 GFLOPs and top-1 *error* 20.79 at
+    a 224 centre crop — i.e. 79.21% accuracy, not the 77.5% previously
+    quoted here (the paper reports error, not accuracy).
 
     Parameters
     ----------
@@ -340,6 +361,8 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
     >>> out.last_hidden_state.shape
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("sk_resnext_50_32x4d")
     cfg = (
         replace(_CFG_SK_RX50, **cast(dict[str, Any], overrides))
         if overrides
@@ -361,6 +384,7 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
     model_type="sknet",
     model_class=SKNetForImageClassification,
     default_config=_CFG_SK18,
+    params=11976616,
 )
 def sk_resnet_18_cls(
     pretrained: bool | str = False,
@@ -442,6 +466,7 @@ def sk_resnet_18_cls(
     model_type="sknet",
     model_class=SKNetForImageClassification,
     default_config=_CFG_SK34,
+    params=22316392,
 )
 def sk_resnet_34_cls(
     pretrained: bool | str = False,
@@ -512,6 +537,7 @@ def sk_resnet_34_cls(
     model_type="sknet",
     model_class=SKNetForImageClassification,
     default_config=_CFG_SK50,
+    params=25928104,
 )
 def sk_resnet_50_cls(
     pretrained: bool = False, **overrides: object
@@ -553,6 +579,8 @@ def sk_resnet_50_cls(
     >>> out.logits.shape
     (2, 10)
     """
+    if pretrained:
+        reject_unavailable_pretrained("sk_resnet_50_cls")
     cfg = (
         replace(_CFG_SK50, **cast(dict[str, Any], overrides))
         if overrides
@@ -567,6 +595,7 @@ def sk_resnet_50_cls(
     model_type="sknet",
     model_class=SKNetForImageClassification,
     default_config=_CFG_SK101,
+    params=46068008,
 )
 def sk_resnet_101_cls(
     pretrained: bool = False, **overrides: object
@@ -607,6 +636,8 @@ def sk_resnet_101_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("sk_resnet_101_cls")
     cfg = (
         replace(_CFG_SK101, **cast(dict[str, Any], overrides))
         if overrides
@@ -621,6 +652,7 @@ def sk_resnet_101_cls(
     model_type="sknet",
     model_class=SKNetForImageClassification,
     default_config=_CFG_SK_RX50,
+    params=27479784,
 )
 def sk_resnext_50_32x4d_cls(
     pretrained: bool = False, **overrides: object
@@ -631,7 +663,8 @@ def sk_resnext_50_32x4d_cls(
     ResNeXt-style SK backbone (``cardinality = 32``,
     ``base_width = 4``) followed by global average pooling and a
     linear projection to ``config.num_classes``.  Approximately
-    27.5M parameters and 77.5% ImageNet-1k top-1 accuracy in
+    27.5M parameters and 79.21% ImageNet-1k top-1 accuracy
+    (Table 2 reports 20.79 top-1 *error*) in
     Li et al., 2019 (Table 1, SKNet-50 row).
 
     Parameters
@@ -663,6 +696,8 @@ def sk_resnext_50_32x4d_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("sk_resnext_50_32x4d_cls")
     cfg = (
         replace(_CFG_SK_RX50, **cast(dict[str, Any], overrides))
         if overrides

@@ -483,7 +483,6 @@ class TestDetectionRegistry:
             "yolo_v1",
             "yolo_v1_tiny",
             "yolo_v2",
-            "yolo_v2_tiny",
             "yolo_v3",
             "yolo_v3_tiny",
             "yolo_v4",
@@ -601,7 +600,9 @@ class TestFasterRCNNWeightsEnums:
         assert "lucid-dl/faster-rcnn-resnet-50-fpn" in e.url
         assert "/COCO_V1/" in e.url
         meta = FasterRCNNResNet50FPNWeights.COCO_V1.meta
-        assert meta["source"] == ("torchvision/FasterRCNN_ResNet50_FPN_Weights.COCO_V1")
+        assert meta["source"] == (
+            "reference_vision/FasterRCNN_ResNet50_FPN_Weights.COCO_V1"
+        )
         assert meta["license"] == "bsd-3-clause"
         assert meta["num_params"] == 41_755_286
         assert meta["metrics"]["COCO"]["box mAP"] == 37.0
@@ -654,7 +655,9 @@ class TestMaskRCNNWeightsEnums:
         assert "lucid-dl/mask-rcnn-resnet-50-fpn" in e.url
         assert "/COCO_V1/" in e.url
         meta = MaskRCNNResNet50FPNWeights.COCO_V1.meta
-        assert meta["source"] == ("torchvision/MaskRCNN_ResNet50_FPN_Weights.COCO_V1")
+        assert meta["source"] == (
+            "reference_vision/MaskRCNN_ResNet50_FPN_Weights.COCO_V1"
+        )
         assert meta["license"] == "bsd-3-clause"
         assert meta["num_params"] == 44_401_393
         assert meta["metrics"]["COCO"]["box mAP"] == 37.9

@@ -79,7 +79,15 @@ from lucid.models.generative._config import GenerativeModelConfig
     encoder stage and re-injected at the matching decoder resolution;
     the KL becomes a sum
     :math:`\sum_\ell \mathrm{KL}(q_\phi(z_\ell \mid x) \,\|\, p(z_\ell))`,
-    granting strictly tighter bounds and richer multi-scale priors.
+    giving the decoder a multi-scale prior to condition on.
+
+    Note that this is *not* the Ladder VAE of Sønderby et al.: their
+    tighter bound comes from a top-down inference path that merges
+    bottom-up evidence with the generative prior at each layer, not from
+    stacking latents.  Independent :math:`\mathcal{N}(0, I)` latents
+    conditioning the same decoder carry no such guarantee — their Fig. 3b
+    shows a plain layered VAE gaining nothing from extra stochastic
+    layers.
 
     The encoder/decoder backbones here are convolutional with stride-2
     down-/up-sampling blocks; the reconstruction term is selectable

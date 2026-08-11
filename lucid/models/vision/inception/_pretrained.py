@@ -11,6 +11,7 @@ from lucid.models.vision.inception._model import (
     InceptionV3ForImageClassification,
 )
 from lucid.models.vision.inception._weights import InceptionV3Weights
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG = InceptionConfig(aux_logits=False)
 _CFG_AUX = InceptionConfig(aux_logits=True)
@@ -64,6 +65,8 @@ def inception_v3(pretrained: bool = False, **overrides: object) -> InceptionV3:
     >>> out.last_hidden_state.shape   # (B, 2048, 1, 1)
     (1, 2048, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("inception_v3", alternative="inception_v3_cls")
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return InceptionV3(cfg)
 
@@ -133,7 +136,7 @@ def inception_v3_cls(
         \mathcal{L} = \mathcal{L}_{\text{main}}
             + 0.4 \cdot \mathcal{L}_{\text{aux}}.
 
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``Inception_V3_Weights`` (auxiliary head dropped) and hosted on the
     Hugging Face Hub under ``lucid-dl/inception-v3``.  They evaluate at a
     299-pixel centre crop resized from 342.
@@ -156,6 +159,12 @@ def inception_v3_cls(
     """
     entry = weights_mod.resolve_weights(InceptionV3Weights, pretrained, weights)
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
+    if entry is not None and "transform_input" not in overrides:
+        # The reference builder force-enables this whenever weights are given:
+        # the checkpoint is a TF port expecting (x-0.5)/0.5 inputs while the
+        # bundled preset emits ImageNet-normalised ones.  An explicit override
+        # still wins.
+        cfg = replace(cfg, transform_input=True)
     model = InceptionV3ForImageClassification(cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="inception_v3_cls")

@@ -3,7 +3,7 @@
   "name": "vgg",
   "path": "lucid.models.vision.vgg",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/__init__.py#L1",
   "members": [
     {
       "name": "VGGConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "VGGConfig(num_classes: int = 1000, in_channels: int = 3, arch: tuple[int, ...] = (2, 2, 3, 3, 3), batch_norm: bool = False, dropout: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, arch: tuple[int, ...] = (2, 2, 3, 3, 3), batch_norm: bool = False, dropout: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "VGG(config: VGGConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_model.py#L56",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_model.py#L57",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VGGConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_model.py#L123",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_model.py#L124",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_model.py#L134",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_model.py#L141",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_model.py#L137",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_model.py#L144",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_model.py#L142",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_model.py#L149",
           "subcategory": "model",
           "summary": "Run Fast R-CNN on a batch of images.",
           "extended": null,
@@ -229,7 +229,7 @@
       ],
       "labels": [],
       "signature": "VGGForImageClassification(config: VGGConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_model.py#L152",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_model.py#L159",
       "subcategory": "model",
       "methods": [
         {
@@ -238,7 +238,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VGGConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_model.py#L212",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_model.py#L219",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -260,7 +260,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_model.py#L222",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_model.py#L229",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -331,10 +331,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_11(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L48",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L49",
       "subcategory": "pretrained",
       "summary": "VGG-11 feature-extracting backbone (config A, no BatchNorm).",
-      "extended": "Builds a `VGG` with the paper-cited VGG-11 topology:\nper-block convolution counts `(1, 1, 2, 2, 2)` across the five\nblocks of widths `(64, 128, 256, 512, 512)`.  Approximately\n132.9 M parameters in the full classifier variant (≈9.2 M in the\nconvolutional trunk alone).  Reaches a top-5 ImageNet validation\nerror of 9.4% in Simonyan & Zisserman, ICLR 2015 (Table 3,\nconfiguration A).",
+      "extended": "Builds a `VGG` with the paper-cited VGG-11 topology:\nper-block convolution counts `(1, 1, 2, 2, 2)` across the five\nblocks of widths `(64, 128, 256, 512, 512)`.  Approximately\n132.9 M parameters in the full classifier variant (≈9.2 M in the\nconvolutional trunk alone).  Reaches a top-5 ImageNet validation\nerror of 10.4% in Simonyan & Zisserman, ICLR 2015 (Table 3,\nconfiguration A, single test scale S = Q = 256).  9.4% belongs to\nconfiguration C, not A.",
       "parameters": [
         {
           "name": "pretrained",
@@ -363,6 +363,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 9220480,
       "model_summary": {
         "name": "VGG",
         "type": "VGG",
@@ -540,10 +541,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_11_bn(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L231",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L266",
       "subcategory": "pretrained",
       "summary": "VGG-11 with BatchNorm — feature-extracting backbone.",
-      "extended": "Builds a `VGG` with the VGG-11 topology\n`arch=(1, 1, 2, 2, 2)` and a `lucid.nn.BatchNorm2d` layer\nafter each Conv + ReLU pair.  BatchNorm was added in the\ntimm / reference-framework reimplementations of VGG (not in the\noriginal paper) and substantially improves convergence speed and\nfinal accuracy; the topology is otherwise identical to\n`vgg_11`.  Approximately 132.9 M parameters.",
+      "extended": "Builds a `VGG` with the VGG-11 topology\n`arch=(1, 1, 2, 2, 2)` and a `lucid.nn.BatchNorm2d` layer\nbetween each Conv and its ReLU.  BatchNorm was added in the\ntimm / reference-framework reimplementations of VGG (not in the\noriginal paper) and substantially improves convergence speed and\nfinal accuracy; the topology is otherwise identical to\n`vgg_11`.  9.22 M parameters without the FC head (`vgg_11_cls` adds it for 132.9 M).",
       "parameters": [
         {
           "name": "pretrained",
@@ -570,6 +571,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 9225984,
       "model_summary": {
         "name": "VGG",
         "type": "VGG",
@@ -803,10 +805,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_11_bn_cls(pretrained: bool | str = False, weights: VGG11BNWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L671",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L722",
       "subcategory": "pretrained",
       "summary": "VGG-11 with BatchNorm — image classifier.",
-      "extended": "Same topology as `vgg_11_cls` but with\n`lucid.nn.BatchNorm2d` after each Conv + ReLU pair.\nBatchNorm was added in the timm / reference-framework\nreimplementations of VGG (not in the original paper) and\nsubstantially improves convergence speed and final accuracy.\nApproximately 132.9 M parameters; top-1 ImageNet validation\naccuracy of 70.37% (torchvision eval).",
+      "extended": "Same topology as `vgg_11_cls` but with\n`lucid.nn.BatchNorm2d` between each Conv and its ReLU.\nBatchNorm was added in the timm / reference-framework\nreimplementations of VGG (not in the original paper) and\nsubstantially improves convergence speed and final accuracy.\nApproximately 132.9 M parameters; top-1 ImageNet validation\naccuracy of 70.37% (reference_vision eval).",
       "parameters": [
         {
           "name": "pretrained",
@@ -836,11 +838,12 @@
         ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_11_bn_cls\n>>> model = vgg_11_bn_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Pretrained weights are converted from torchvision's\n`VGG11_BN_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/vgg-11-bn`."
+        "Pretrained weights are converted from reference_vision's\n`VGG11_BN_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/vgg-11-bn`."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 132868840,
       "model_summary": {
         "name": "VGGForImageClassification",
         "type": "VGGForImageClassification",
@@ -1103,10 +1106,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_11_cls(pretrained: bool | str = False, weights: VGG11Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L409",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L456",
       "subcategory": "pretrained",
       "summary": "VGG-11 image classifier (config A, no BatchNorm).",
-      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-11 topology (`arch=(1, 1, 2, 2, 2)`) followed by the two\n4096-dim fully-connected layers and a final linear projection to\n`config.num_classes`.  Approximately 132.9 M parameters total\n(≈124 M of which sit in the two large FC layers).  Reaches a top-1\nImageNet validation accuracy of 69.02% (torchvision eval).",
+      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-11 topology (`arch=(1, 1, 2, 2, 2)`) followed by the two\n4096-dim fully-connected layers and a final linear projection to\n`config.num_classes`.  Approximately 132.9 M parameters total\n(≈124 M of which sit in the two large FC layers).  Reaches a top-1\nImageNet validation accuracy of 69.02% (reference_vision eval).",
       "parameters": [
         {
           "name": "pretrained",
@@ -1136,11 +1139,12 @@
         ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_11_cls\n>>> model = vgg_11_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Pretrained weights are converted from torchvision's `VGG11_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/vgg-11`."
+        "Pretrained weights are converted from reference_vision's `VGG11_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/vgg-11`."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 132863336,
       "model_summary": {
         "name": "VGGForImageClassification",
         "type": "VGGForImageClassification",
@@ -1347,10 +1351,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_13(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L96",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L105",
       "subcategory": "pretrained",
       "summary": "VGG-13 feature-extracting backbone (config B, no BatchNorm).",
-      "extended": "Builds a `VGG` with the paper-cited VGG-13 topology:\nper-block convolution counts `(2, 2, 2, 2, 2)`.  Approximately\n133.0 M parameters in the full classifier variant.  Reaches a top-5\nImageNet validation error of 8.8% (Simonyan & Zisserman, ICLR 2015,\nTable 3, configuration B).",
+      "extended": "Builds a `VGG` with the paper-cited VGG-13 topology:\nper-block convolution counts `(2, 2, 2, 2, 2)`.  Approximately\n133.0 M parameters in the full classifier variant.  Reaches a top-5\nImageNet validation error of 9.9% (Simonyan & Zisserman, ICLR 2015,\nTable 3, configuration B, single test scale S = Q = 256).  8.8% is\nconfiguration D.",
       "parameters": [
         {
           "name": "pretrained",
@@ -1379,6 +1383,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 9404992,
       "model_summary": {
         "name": "VGG",
         "type": "VGG",
@@ -1584,10 +1589,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_13_bn(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L276",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L314",
       "subcategory": "pretrained",
       "summary": "VGG-13 with BatchNorm — feature-extracting backbone.",
-      "extended": "Builds a `VGG` with the VGG-13 topology\n`arch=(2, 2, 2, 2, 2)` and `lucid.nn.BatchNorm2d` after\neach Conv + ReLU pair.  Approximately 133.0 M parameters.",
+      "extended": "Builds a `VGG` with the VGG-13 topology\n`arch=(2, 2, 2, 2, 2)` and `lucid.nn.BatchNorm2d` between\neach Conv and its ReLU.  9.41 M parameters without the FC head (`vgg_13_bn_cls` adds it for 133.1 M).",
       "parameters": [
         {
           "name": "pretrained",
@@ -1614,6 +1619,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 9410880,
       "model_summary": {
         "name": "VGG",
         "type": "VGG",
@@ -1889,10 +1895,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_13_bn_cls(pretrained: bool | str = False, weights: VGG13BNWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L739",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L791",
       "subcategory": "pretrained",
       "summary": "VGG-13 with BatchNorm — image classifier.",
-      "extended": "Same topology as `vgg_13_cls` but with\n`lucid.nn.BatchNorm2d` after each Conv + ReLU pair.\nApproximately 133.0 M parameters; top-1 ImageNet validation\naccuracy of 71.59% (torchvision eval).",
+      "extended": "Same topology as `vgg_13_cls` but with\n`lucid.nn.BatchNorm2d` between each Conv and its ReLU.\nApproximately 133.0 M parameters; top-1 ImageNet validation\naccuracy of 71.59% (reference_vision eval).",
       "parameters": [
         {
           "name": "pretrained",
@@ -1922,11 +1928,12 @@
         ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_13_bn_cls\n>>> model = vgg_13_bn_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Pretrained weights are converted from torchvision's\n`VGG13_BN_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/vgg-13-bn`."
+        "Pretrained weights are converted from reference_vision's\n`VGG13_BN_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/vgg-13-bn`."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 133053736,
       "model_summary": {
         "name": "VGGForImageClassification",
         "type": "VGGForImageClassification",
@@ -2231,10 +2238,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_13_cls(pretrained: bool | str = False, weights: VGG13Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L476",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L524",
       "subcategory": "pretrained",
       "summary": "VGG-13 image classifier (config B, no BatchNorm).",
-      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-13 topology (`arch=(2, 2, 2, 2, 2)`) followed by the standard\n4096 → 4096 → `num_classes` FC head.  Approximately 133.0 M\nparameters total.  Reaches a top-1 ImageNet validation accuracy of\n69.93% (torchvision eval).",
+      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-13 topology (`arch=(2, 2, 2, 2, 2)`) followed by the standard\n4096 → 4096 → `num_classes` FC head.  Approximately 133.0 M\nparameters total.  Reaches a top-1 ImageNet validation accuracy of\n69.93% (reference_vision eval).",
       "parameters": [
         {
           "name": "pretrained",
@@ -2264,11 +2271,12 @@
         ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_13_cls\n>>> model = vgg_13_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Pretrained weights are converted from torchvision's `VGG13_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/vgg-13`."
+        "Pretrained weights are converted from reference_vision's `VGG13_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/vgg-13`."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 133047848,
       "model_summary": {
         "name": "VGGForImageClassification",
         "type": "VGGForImageClassification",
@@ -2503,10 +2511,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_16(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L139",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L156",
       "subcategory": "pretrained",
       "summary": "VGG-16 feature-extracting backbone (config D, no BatchNorm).",
-      "extended": "Builds a `VGG` with the paper-cited VGG-16 topology:\nper-block convolution counts `(2, 2, 3, 3, 3)` — adding a third\n$3\\times3$ convolution to each of the deeper blocks 3/4/5.\nApproximately 138.4 M parameters in the full classifier variant\n(≈14.7 M in the convolutional trunk alone).  Reaches a top-5\nImageNet validation error of 7.3% (Simonyan & Zisserman, ICLR 2015,\nTable 3, configuration D) — VGG-16 was the most widely deployed\nvariant of the family.",
+      "extended": "Builds a `VGG` with the paper-cited VGG-16 topology:\nper-block convolution counts `(2, 2, 3, 3, 3)` — adding a third\n$3\\times3$ convolution to each of the deeper blocks 3/4/5.\nApproximately 138.4 M parameters in the full classifier variant\n(≈14.7 M in the convolutional trunk alone).  Reaches a top-5\nImageNet validation error of 8.8% (Simonyan & Zisserman, ICLR 2015,\nTable 3, configuration D, single test scale S = Q = 256) — VGG-16\nwas the most widely deployed variant of the family.  The often-quoted\n7.3% is the ILSVRC-2014 submission *test* error of an ensemble of\nseven nets (Table 6), not a single-model number.",
       "parameters": [
         {
           "name": "pretrained",
@@ -2535,6 +2543,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 14714688,
       "model_summary": {
         "name": "VGG",
         "type": "VGG",
@@ -2782,10 +2791,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_16_bn(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L317",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L358",
       "subcategory": "pretrained",
       "summary": "VGG-16 with BatchNorm — feature-extracting backbone.",
-      "extended": "Builds a `VGG` with the VGG-16 topology\n`arch=(2, 2, 3, 3, 3)` and `lucid.nn.BatchNorm2d` after\neach Conv + ReLU pair.  Approximately 138.4 M parameters.  Often\npreferred over plain `vgg_16` for downstream fine-tuning\nbecause BatchNorm stabilises gradient statistics in the early conv\nstack.",
+      "extended": "Builds a `VGG` with the VGG-16 topology\n`arch=(2, 2, 3, 3, 3)` and `lucid.nn.BatchNorm2d` between\neach Conv and its ReLU.  14.72 M parameters without the FC head (`vgg_16_bn_cls` adds it for 138.4 M).  Often\npreferred over plain `vgg_16` for downstream fine-tuning\nbecause BatchNorm stabilises gradient statistics in the early conv\nstack.",
       "parameters": [
         {
           "name": "pretrained",
@@ -2812,6 +2821,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 14723136,
       "model_summary": {
         "name": "VGG",
         "type": "VGG",
@@ -3150,10 +3160,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_16_bn_cls(pretrained: bool | str = False, weights: VGG16BNWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L804",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L857",
       "subcategory": "pretrained",
       "summary": "VGG-16 with BatchNorm — image classifier.",
-      "extended": "Same topology as `vgg_16_cls` but with\n`lucid.nn.BatchNorm2d` after each Conv + ReLU pair.\nApproximately 138.4 M parameters; top-1 ImageNet validation\naccuracy of 73.36% (torchvision eval).  Often preferred over plain\n`vgg_16_cls` for downstream fine-tuning.",
+      "extended": "Same topology as `vgg_16_cls` but with\n`lucid.nn.BatchNorm2d` between each Conv and its ReLU.\nApproximately 138.4 M parameters; top-1 ImageNet validation\naccuracy of 73.36% (reference_vision eval).  Often preferred over plain\n`vgg_16_cls` for downstream fine-tuning.",
       "parameters": [
         {
           "name": "pretrained",
@@ -3183,11 +3193,12 @@
         ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_16_bn_cls\n>>> model = vgg_16_bn_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Pretrained weights are converted from torchvision's\n`VGG16_BN_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/vgg-16-bn`."
+        "Pretrained weights are converted from reference_vision's\n`VGG16_BN_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/vgg-16-bn`."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 138365992,
       "model_summary": {
         "name": "VGGForImageClassification",
         "type": "VGGForImageClassification",
@@ -3555,10 +3566,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_16_cls(pretrained: bool | str = False, weights: VGG16Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L541",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L590",
       "subcategory": "pretrained",
       "summary": "VGG-16 image classifier (config D, no BatchNorm).",
-      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-16 topology (`arch=(2, 2, 3, 3, 3)`) followed by the standard\n4096 → 4096 → `num_classes` FC head.  Approximately 138.4 M\nparameters total and a top-1 ImageNet validation accuracy of 71.59%\n(torchvision eval) — the most widely used VGG variant.",
+      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-16 topology (`arch=(2, 2, 3, 3, 3)`) followed by the standard\n4096 → 4096 → `num_classes` FC head.  Approximately 138.4 M\nparameters total and a top-1 ImageNet validation accuracy of 71.59%\n(reference_vision eval) — the most widely used VGG variant.",
       "parameters": [
         {
           "name": "pretrained",
@@ -3588,11 +3599,12 @@
         ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_16_cls\n>>> model = vgg_16_cls(pretrained=True)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 1000)"
       ],
       "notes": [
-        "Pretrained weights are converted from torchvision's `VGG16_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/vgg-16`."
+        "Pretrained weights are converted from reference_vision's `VGG16_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/vgg-16`."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 138357544,
       "model_summary": {
         "name": "VGGForImageClassification",
         "type": "VGGForImageClassification",
@@ -3869,10 +3881,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_19(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L185",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L211",
       "subcategory": "pretrained",
       "summary": "VGG-19 feature-extracting backbone (config E, no BatchNorm).",
-      "extended": "Builds a `VGG` with the paper-cited VGG-19 topology:\nper-block convolution counts `(2, 2, 4, 4, 4)` — four\n$3\\times3$ convolutions in each of the deeper blocks.\nApproximately 143.7 M parameters in the full classifier variant.\nReaches a top-5 ImageNet validation error of 7.5% (Simonyan &\nZisserman, ICLR 2015, Table 3, configuration E) — slightly worse\nthan VGG-16 due to optimisation difficulty at this depth without\nresidual connections.",
+      "extended": "Builds a `VGG` with the paper-cited VGG-19 topology:\nper-block convolution counts `(2, 2, 4, 4, 4)` — four\n$3\\times3$ convolutions in each of the deeper blocks.\nApproximately 143.7 M parameters in the full classifier variant.\nReaches a top-5 ImageNet validation error of 9.0% (Simonyan &\nZisserman, ICLR 2015, Table 3, configuration E, single test scale\nS = Q = 256).  7.5% is Table 4's multi-scale figure, which D and E\nshare.  E is not worse than D: at multiple scales they tie, and the\npaper's best single model is E at 7.1% (Table 5, multi-crop and\ndense evaluation).",
       "parameters": [
         {
           "name": "pretrained",
@@ -3901,6 +3913,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 20024384,
       "model_summary": {
         "name": "VGG",
         "type": "VGG",
@@ -4190,10 +4203,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_19_bn(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L361",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L405",
       "subcategory": "pretrained",
       "summary": "VGG-19 with BatchNorm — feature-extracting backbone.",
-      "extended": "Builds a `VGG` with the VGG-19 topology\n`arch=(2, 2, 4, 4, 4)` and `lucid.nn.BatchNorm2d` after\neach Conv + ReLU pair.  Approximately 143.7 M parameters.  The\ndeepest VGG variant; BatchNorm is particularly helpful at this\ndepth.",
+      "extended": "Builds a `VGG` with the VGG-19 topology\n`arch=(2, 2, 4, 4, 4)` and `lucid.nn.BatchNorm2d` between\neach Conv and its ReLU.  20.04 M parameters without the FC head (`vgg_19_bn_cls` adds it for 143.7 M).  The\ndeepest VGG variant; BatchNorm is particularly helpful at this\ndepth.",
       "parameters": [
         {
           "name": "pretrained",
@@ -4220,6 +4233,7 @@
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 20035392,
       "model_summary": {
         "name": "VGG",
         "type": "VGG",
@@ -4621,10 +4635,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_19_bn_cls(pretrained: bool | str = False, weights: VGG19BNWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L870",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L924",
       "subcategory": "pretrained",
       "summary": "VGG-19 with BatchNorm — image classifier.",
-      "extended": "Same topology as `vgg_19_cls` but with\n`lucid.nn.BatchNorm2d` after each Conv + ReLU pair.\nApproximately 143.7 M parameters; top-1 ImageNet validation\naccuracy of 74.22% (torchvision eval).  The deepest VGG variant —\nBatchNorm is especially valuable at this depth.",
+      "extended": "Same topology as `vgg_19_cls` but with\n`lucid.nn.BatchNorm2d` between each Conv and its ReLU.\nApproximately 143.7 M parameters; top-1 ImageNet validation\naccuracy of 74.22% (reference_vision eval).  The deepest VGG variant —\nBatchNorm is especially valuable at this depth.",
       "parameters": [
         {
           "name": "pretrained",
@@ -4654,11 +4668,12 @@
         ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_19_bn_cls\n>>> model = vgg_19_bn_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Pretrained weights are converted from torchvision's\n`VGG19_BN_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/vgg-19-bn`."
+        "Pretrained weights are converted from reference_vision's\n`VGG19_BN_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/vgg-19-bn`."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 143678248,
       "model_summary": {
         "name": "VGGForImageClassification",
         "type": "VGGForImageClassification",
@@ -5089,10 +5104,10 @@
       "kind": "function",
       "labels": [],
       "signature": "vgg_19_cls(pretrained: bool | str = False, weights: VGG19Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_pretrained.py#L606",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_pretrained.py#L656",
       "subcategory": "pretrained",
       "summary": "VGG-19 image classifier (config E, no BatchNorm).",
-      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-19 topology (`arch=(2, 2, 4, 4, 4)`) followed by the standard\n4096 → 4096 → `num_classes` FC head.  Approximately 143.7 M\nparameters total.  Reaches a top-1 ImageNet validation accuracy of\n72.38% (torchvision eval).",
+      "extended": "Builds a `VGGForImageClassification` with the paper-cited\nVGG-19 topology (`arch=(2, 2, 4, 4, 4)`) followed by the standard\n4096 → 4096 → `num_classes` FC head.  Approximately 143.7 M\nparameters total.  Reaches a top-1 ImageNet validation accuracy of\n72.38% (reference_vision eval).",
       "parameters": [
         {
           "name": "pretrained",
@@ -5122,11 +5137,12 @@
         ">>> import lucid\n>>> from lucid.models.vision.vgg import vgg_19_cls\n>>> model = vgg_19_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Pretrained weights are converted from torchvision's `VGG19_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/vgg-19`."
+        "Pretrained weights are converted from reference_vision's `VGG19_Weights`\nand hosted on the Hugging Face Hub under `lucid-dl/vgg-19`."
       ],
       "attributes": [],
       "warns": [],
       "see_also": [],
+      "param_count": 143667240,
       "model_summary": {
         "name": "VGGForImageClassification",
         "type": "VGGForImageClassification",
@@ -5449,7 +5465,7 @@
       ],
       "labels": [],
       "signature": "VGG11BNWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_weights.py#L191",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_weights.py#L191",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vgg_11_bn_cls`.",
@@ -5461,13 +5477,13 @@
         ">>> from lucid.models import vgg_11_bn_cls\n>>> model = vgg_11_bn_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the reference_vision reimplementation (not in the\noriginal paper)."
       ],
       "attributes": [
         {
           "name": "IMAGENET1K_V1",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V1 checkpoint (top-1 70.370% / top-5 89.810%),\nsourced from `torchvision/VGG11_BN_Weights.IMAGENET1K_V1`."
+          "description": "ImageNet-1k V1 checkpoint (top-1 70.370% / top-5 89.810%),\nsourced from `reference_vision/VGG11_BN_Weights.IMAGENET1K_V1`."
         },
         {
           "name": "DEFAULT",
@@ -5488,7 +5504,7 @@
       ],
       "labels": [],
       "signature": "VGG11Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_weights.py#L23",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_weights.py#L23",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vgg_11_cls`.",
@@ -5506,7 +5522,7 @@
         {
           "name": "IMAGENET1K_V1",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V1 checkpoint (top-1 69.020% / top-5 88.628%),\nsourced from `torchvision/VGG11_Weights.IMAGENET1K_V1`."
+          "description": "ImageNet-1k V1 checkpoint (top-1 69.020% / top-5 88.628%),\nsourced from `reference_vision/VGG11_Weights.IMAGENET1K_V1`."
         },
         {
           "name": "DEFAULT",
@@ -5527,7 +5543,7 @@
       ],
       "labels": [],
       "signature": "VGG13BNWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_weights.py#L235",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_weights.py#L235",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vgg_13_bn_cls`.",
@@ -5539,13 +5555,13 @@
         ">>> from lucid.models import vgg_13_bn_cls\n>>> model = vgg_13_bn_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the reference_vision reimplementation (not in the\noriginal paper)."
       ],
       "attributes": [
         {
           "name": "IMAGENET1K_V1",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V1 checkpoint (top-1 71.586% / top-5 90.374%),\nsourced from `torchvision/VGG13_BN_Weights.IMAGENET1K_V1`."
+          "description": "ImageNet-1k V1 checkpoint (top-1 71.586% / top-5 90.374%),\nsourced from `reference_vision/VGG13_BN_Weights.IMAGENET1K_V1`."
         },
         {
           "name": "DEFAULT",
@@ -5566,7 +5582,7 @@
       ],
       "labels": [],
       "signature": "VGG13Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_weights.py#L65",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_weights.py#L65",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vgg_13_cls`.",
@@ -5584,7 +5600,7 @@
         {
           "name": "IMAGENET1K_V1",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V1 checkpoint (top-1 69.928% / top-5 89.246%),\nsourced from `torchvision/VGG13_Weights.IMAGENET1K_V1`."
+          "description": "ImageNet-1k V1 checkpoint (top-1 69.928% / top-5 89.246%),\nsourced from `reference_vision/VGG13_Weights.IMAGENET1K_V1`."
         },
         {
           "name": "DEFAULT",
@@ -5605,7 +5621,7 @@
       ],
       "labels": [],
       "signature": "VGG16BNWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_weights.py#L279",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_weights.py#L279",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vgg_16_bn_cls`.",
@@ -5617,13 +5633,13 @@
         ">>> from lucid.models import vgg_16_bn_cls\n>>> model = vgg_16_bn_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the reference_vision reimplementation (not in the\noriginal paper)."
       ],
       "attributes": [
         {
           "name": "IMAGENET1K_V1",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V1 checkpoint (top-1 73.360% / top-5 91.516%),\nsourced from `torchvision/VGG16_BN_Weights.IMAGENET1K_V1`."
+          "description": "ImageNet-1k V1 checkpoint (top-1 73.360% / top-5 91.516%),\nsourced from `reference_vision/VGG16_BN_Weights.IMAGENET1K_V1`."
         },
         {
           "name": "DEFAULT",
@@ -5644,7 +5660,7 @@
       ],
       "labels": [],
       "signature": "VGG16Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_weights.py#L107",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_weights.py#L107",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vgg_16_cls`.",
@@ -5662,7 +5678,7 @@
         {
           "name": "IMAGENET1K_V1",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V1 checkpoint (top-1 71.592% / top-5 90.382%),\nsourced from `torchvision/VGG16_Weights.IMAGENET1K_V1`."
+          "description": "ImageNet-1k V1 checkpoint (top-1 71.592% / top-5 90.382%),\nsourced from `reference_vision/VGG16_Weights.IMAGENET1K_V1`."
         },
         {
           "name": "DEFAULT",
@@ -5683,7 +5699,7 @@
       ],
       "labels": [],
       "signature": "VGG19BNWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_weights.py#L323",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_weights.py#L323",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vgg_19_bn_cls`.",
@@ -5695,13 +5711,13 @@
         ">>> from lucid.models import vgg_19_bn_cls\n>>> model = vgg_19_bn_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the torchvision reimplementation (not in the\noriginal paper)."
+        "Reference: Simonyan, Zisserman, *\"Very Deep Convolutional Networks\nfor Large-Scale Image Recognition\"*, ICLR 2015 ([arXiv:1409.1556](https://arxiv.org/abs/1409.1556)).\nBatchNorm added in the reference_vision reimplementation (not in the\noriginal paper)."
       ],
       "attributes": [
         {
           "name": "IMAGENET1K_V1",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V1 checkpoint (top-1 74.218% / top-5 91.842%),\nsourced from `torchvision/VGG19_BN_Weights.IMAGENET1K_V1`."
+          "description": "ImageNet-1k V1 checkpoint (top-1 74.218% / top-5 91.842%),\nsourced from `reference_vision/VGG19_BN_Weights.IMAGENET1K_V1`."
         },
         {
           "name": "DEFAULT",
@@ -5722,7 +5738,7 @@
       ],
       "labels": [],
       "signature": "VGG19Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/vgg/_weights.py#L149",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/vgg/_weights.py#L149",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vgg_19_cls`.",
@@ -5740,7 +5756,7 @@
         {
           "name": "IMAGENET1K_V1",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V1 checkpoint (top-1 72.376% / top-5 90.876%),\nsourced from `torchvision/VGG19_Weights.IMAGENET1K_V1`."
+          "description": "ImageNet-1k V1 checkpoint (top-1 72.376% / top-5 90.876%),\nsourced from `reference_vision/VGG19_Weights.IMAGENET1K_V1`."
         },
         {
           "name": "DEFAULT",

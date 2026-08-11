@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any, cast
 
 import lucid.weights as weights_mod
+import lucid.nn as nn
 from lucid.models._registry import register_model
 from lucid.models.vision.googlenet._config import GoogLeNetConfig
 from lucid.models.vision.googlenet._model import (
@@ -11,6 +12,7 @@ from lucid.models.vision.googlenet._model import (
     GoogLeNetForImageClassification,
 )
 from lucid.models.vision.googlenet._weights import GoogLeNetWeights
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG = GoogLeNetConfig()
 _CFG_NO_AUX = GoogLeNetConfig(aux_logits=False)
@@ -31,8 +33,12 @@ def googlenet(pretrained: bool = False, **overrides: object) -> GoogLeNet:
     :class:`_InceptionModule` blocks at three resolutions
     (28×28 → 14×14 → 7×7) and a final
     :class:`~lucid.nn.AdaptiveAvgPool2d` to :math:`1\times1`.
-    Approximately 6.8 M parameters in the backbone — roughly **12×
-    fewer** than AlexNet despite being substantially deeper.
+    5.60 M parameters in the backbone; :func:`googlenet_cls` adds the
+    1000-way head and the two auxiliary classifiers for 13.00 M total,
+    or 6.62 M with ``aux_logits=False`` — the figure the reference
+    publishes, since its builder drops the aux heads after loading.
+    Either way, far fewer than AlexNet despite being substantially
+    deeper.
 
     Parameters
     ----------
@@ -67,6 +73,8 @@ def googlenet(pretrained: bool = False, **overrides: object) -> GoogLeNet:
     >>> out.logits.shape   # (B, 1024, 1, 1)
     (1, 1024, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("googlenet", alternative="googlenet_cls")
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return GoogLeNet(cfg)
 
@@ -126,7 +134,7 @@ def googlenet_cls(
     vanishing gradients in this 22-layer network without the benefit of
     residual connections; they contribute to the loss with weight
     :math:`0.3` each during training and are discarded at inference.
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``GoogLeNet_Weights.IMAGENET1K_V1`` and hosted under
     ``lucid-dl/googlenet``.
 
@@ -142,7 +150,24 @@ def googlenet_cls(
     """
     entry = weights_mod.resolve_weights(GoogLeNetWeights, pretrained, weights)
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
-    model = GoogLeNetForImageClassification(cfg)
+    if entry is not None and "transform_input" not in overrides:
+        # Matches the reference builder, which force-sets this whenever
+        # ImageNet weights are requested; the checkpoint is a TF port that
+        # expects (x-0.5)/0.5 inputs.  An explicit override still wins.
+        cfg = replace(cfg, transform_input=True)
+    # The checkpoint always carries aux1/aux2 tensors, so a caller asking for
+    # ``aux_logits=False`` alongside ``pretrained`` used to hit a load failure
+    # -- even though the docstring above recommends exactly that pairing for a
+    # cheaper inference graph.  Build with the aux heads so the load has
+    # somewhere to put them, then drop them, which is what the reference
+    # builder does.
+    drop_aux = entry is not None and not cfg.aux_logits
+    build_cfg = replace(cfg, aux_logits=True) if drop_aux else cfg
+    model = GoogLeNetForImageClassification(build_cfg)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="googlenet_cls")
+    if drop_aux:
+        model.aux1 = nn.Identity()
+        model.aux2 = nn.Identity()
+        model.config = cfg
     return model

@@ -35,6 +35,8 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_transformer_trunc_normal
+from lucid.models._utils._classification import DropPath
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -58,7 +60,11 @@ class _InceptionDWConv2d(nn.Module):
     """
 
     def __init__(
-        self, dim: int, band_kernel: int = 11, branch_ratio: float = 0.125
+        self,
+        dim: int,
+        band_kernel: int = 11,
+        branch_ratio: float = 0.125,
+        square_kernel: int = 3,
     ) -> None:
         super().__init__()
         gc = int(dim * branch_ratio)
@@ -67,7 +73,9 @@ class _InceptionDWConv2d(nn.Module):
 
         pad = band_kernel // 2
         # Named exactly as timm's InceptionDWConv2d
-        self.dwconv_hw = nn.Conv2d(gc, gc, 3, padding=1, groups=gc)
+        self.dwconv_hw = nn.Conv2d(
+            gc, gc, square_kernel, padding=square_kernel // 2, groups=gc
+        )
         self.dwconv_w = nn.Conv2d(gc, gc, (1, band_kernel), padding=(0, pad), groups=gc)
         self.dwconv_h = nn.Conv2d(gc, gc, (band_kernel, 1), padding=(pad, 0), groups=gc)
 
@@ -80,6 +88,14 @@ class _InceptionDWConv2d(nn.Module):
         x2 = x[:, id_chs + gc : id_chs + 2 * gc, :, :]
         x3 = x[:, id_chs + 2 * gc :, :, :]
 
+        # Divergence, deliberate: Eq. 5/7 order the branches
+        # (hw, w, h, identity), while the reference splits identity *first*
+        # — ``split_indexes = (dim - 3*gc, gc, gc, gc)`` — and concatenates
+        # in that same order.  Channel order is not observable through the
+        # block's output distribution, but it is observable through the
+        # weights: following the paper here would permute every shipped
+        # checkpoint's channels.  Matching the reference, which is where the
+        # weights come from.
         y0 = x0
         y1 = cast(Tensor, self.dwconv_hw(x1))
         y2 = cast(Tensor, self.dwconv_w(x2))
@@ -123,12 +139,20 @@ class _MetaNeXtBlock(nn.Module):
         band_kernel: int,
         mlp_ratio: int,
         layer_scale_init: float = 1e-6,
+        drop_path_rate: float = 0.0,
+        branch_ratio: float = 0.125,
+        square_kernel: int = 3,
     ) -> None:
         super().__init__()
-        self.token_mixer = _InceptionDWConv2d(dim, band_kernel)
+        self.token_mixer = _InceptionDWConv2d(
+            dim, band_kernel, branch_ratio, square_kernel
+        )
         self.norm = nn.BatchNorm2d(dim)
         self.mlp = _ConvMlp(dim, mlp_ratio)
         self.gamma = nn.Parameter(lucid.full((dim,), layer_scale_init))
+        # Stochastic depth on the residual branch — the paper trains every
+        # variant with it and the config could not express it at all.
+        self.drop_path = DropPath(drop_path_rate)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -137,7 +161,7 @@ class _MetaNeXtBlock(nn.Module):
         x = cast(Tensor, self.norm(x))
         x = cast(Tensor, self.mlp(x))
         x = x * self.gamma.reshape(-1, 1, 1)
-        return shortcut + x
+        return shortcut + cast(Tensor, self.drop_path(x))
 
 
 # ---------------------------------------------------------------------------
@@ -157,8 +181,12 @@ class _Stage(nn.Module):
         mlp_ratio: int,
         *,
         downsample: bool,
+        dpr: list[float] | None = None,
+        branch_ratio: float = 0.125,
+        square_kernel: int = 3,
     ) -> None:
         super().__init__()
+        dpr = dpr if dpr is not None else [0.0] * depth
         if downsample:
             # timm: Sequential(BN2d(in_dim), Conv2d(in_dim→out_dim, 2, stride=2))
             self.downsample: nn.Module = nn.Sequential(
@@ -169,7 +197,17 @@ class _Stage(nn.Module):
             self.downsample = nn.Identity()
 
         self.blocks = nn.Sequential(
-            *[_MetaNeXtBlock(out_dim, band_kernel, mlp_ratio) for _ in range(depth)]
+            *[
+                _MetaNeXtBlock(
+                    out_dim,
+                    band_kernel,
+                    mlp_ratio,
+                    drop_path_rate=dpr[j],
+                    branch_ratio=branch_ratio,
+                    square_kernel=square_kernel,
+                )
+                for j in range(depth)
+            ]
         )
 
     @override
@@ -187,12 +225,21 @@ class _Stage(nn.Module):
 class _MlpClassifierHead(nn.Module):
     """timm MlpClassifierHead: GlobalAvgPool → fc1 → GELU → norm → fc2."""
 
-    def __init__(self, in_features: int, num_classes: int, mlp_ratio: int = 3) -> None:
+    def __init__(
+        self,
+        in_features: int,
+        num_classes: int,
+        mlp_ratio: int = 3,
+        drop_rate: float = 0.0,
+    ) -> None:
         super().__init__()
         hidden = in_features * mlp_ratio
         self.fc1 = nn.Linear(in_features, hidden)
         # timm uses eps=1e-6 for the head LayerNorm
         self.norm = nn.LayerNorm(hidden, eps=1e-6)
+        # The reference's MlpHead drops between ``norm`` and ``fc2``; without
+        # it the head is unregularised however ``drop_rate`` is set.
+        self.drop = nn.Dropout(p=drop_rate)
         self.fc2 = nn.Linear(hidden, num_classes)
 
     @override
@@ -202,6 +249,7 @@ class _MlpClassifierHead(nn.Module):
         x = cast(Tensor, self.fc1(x))
         x = F.gelu(x)
         x = cast(Tensor, self.norm(x))
+        x = cast(Tensor, self.drop(x))
         return cast(Tensor, self.fc2(x))
 
 
@@ -227,6 +275,10 @@ def _build_inception_next(cfg: InceptionNeXtConfig) -> tuple[
     reduction = 4
 
     mlp_ratios = cfg.mlp_ratios
+    # Linear stochastic-depth schedule over the *global* block index.
+    total = sum(cfg.depths)
+    dpr_all = [cfg.drop_path_rate * k / max(total - 1, 1) for k in range(total)]
+    cursor = 0
     for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims)):
         in_dim = cfg.dims[i - 1] if i > 0 else dim
         stage = _Stage(
@@ -234,13 +286,20 @@ def _build_inception_next(cfg: InceptionNeXtConfig) -> tuple[
             out_dim=dim,
             depth=depth,
             band_kernel=cfg.band_kernel,
+            branch_ratio=cfg.branch_ratio,
+            square_kernel=cfg.square_kernel,
             mlp_ratio=mlp_ratios[i],
             downsample=(i > 0),
+            dpr=dpr_all[cursor : cursor + depth],
         )
+        cursor += depth
         stages.append(stage)
-        fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
+        # Advance BEFORE recording: stage i>0 is preceded by its own
+        # downsample, so recording first reported (4,4,8,16) for a backbone
+        # that actually emits (4,8,16,32).
         if i > 0:
             reduction *= 2
+        fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
 
     return stem, nn.ModuleList(stages), fi, cfg.dims[-1]
 
@@ -324,6 +383,12 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
         self.stem = stem
         self.stages = stages
         self._feature_info = fi
+
+        # Reference initialisation: trunc_normal_(0.02) on Linear / patch-embed
+        # convs with zero bias, unit LayerNorms, and the same draw for the
+        # class token and positional table (bare Parameters the framework
+        # default never touches — they were sitting at exact zeros).
+        init_transformer_trunc_normal(self)
         self._out_dim = out_dim
 
     @override
@@ -411,7 +476,9 @@ class InceptionNeXtForImageClassification(PretrainedModel):
         stem, stages, _, out_dim = _build_inception_next(config)
         self.stem = stem
         self.stages = stages
-        self.head = _MlpClassifierHead(out_dim, config.num_classes)
+        self.head = _MlpClassifierHead(
+            out_dim, config.num_classes, drop_rate=config.drop_rate
+        )
 
     @override
     def forward(  # type: ignore[override]

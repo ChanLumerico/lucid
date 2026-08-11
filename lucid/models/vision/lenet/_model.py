@@ -5,15 +5,27 @@ Architecture (canonical):
     Input   : 1 × 32 × 32
     C1      : Conv 1→6,  5×5, valid  → 6  × 28 × 28
     S2      : AvgPool 2×2             → 6  × 14 × 14
-    C3      : Conv 6→16, 5×5, valid  → 16 × 10 × 10
+    C3      : Conv 6→16, 5×5, valid  → 16 × 10 × 10  (dense, see below)
     S4      : AvgPool 2×2             → 16 × 5  × 5
     C5      : Conv 16→120, 5×5, valid → 120 × 1 × 1   (fully-connected in disguise)
     F6      : Linear 120 → 84
     Output  : Linear 84  → num_classes
 
-Activations in the paper are tanh (squashing functions).  The ``activation``
-and ``pooling`` config fields let callers switch to the modern ReLU/MaxPool
-convention without changing the topology.
+Two documented divergences from the 1998 paper, both matching universal
+modern practice rather than the original:
+
+* **C3 connectivity.**  Table I gives a *sparse* connection scheme in which
+  each of the 16 C3 maps reads only a chosen subset of the 6 S2 maps —
+  1,516 trainable parameters.  This implementation connects C3 densely to
+  all 6 inputs (2,416 parameters).  LeCun's stated motivation for the
+  sparse table was to break symmetry and to keep the connection count
+  within 1998 compute budgets; neither concern survives, and every
+  contemporary re-implementation uses the dense convolution.
+* **Squashing function.**  ``activation="tanh"`` is plain :math:`\tanh`,
+  not the paper's scaled :math:`1.7159\tanh(\tfrac{2}{3}a)`.
+
+The ``activation`` and ``pooling`` config fields let callers switch to the
+modern ReLU/MaxPool convention without changing the topology.
 """
 
 from typing import ClassVar, cast, override
@@ -38,6 +50,16 @@ def _act(name: str) -> nn.Module:
 
 
 def _pool(name: str) -> nn.Module:
+    """Sub-sampling layer for S2 / S4.
+
+    Section II.B's sub-sampling unit is not a plain pool: it sums the four
+    inputs, scales by a *trainable* coefficient, adds a trainable bias and
+    passes the result through the squashing function.  Both parameters and
+    the post-pool nonlinearity are dropped here — a parameter-free
+    ``AvgPool2d`` (or ``MaxPool2d``) is what every modern
+    re-implementation uses, and it is why the trunk's parameter count is
+    slightly below a literal reading of the paper.
+    """
     if name == "max":
         return nn.MaxPool2d(2, stride=2)
     return nn.AvgPool2d(2, stride=2)
@@ -147,7 +169,10 @@ class LeNet(PretrainedModel, BackboneMixin):
         self._feature_info = [
             FeatureInfo(stage=1, num_channels=6, reduction=2),
             FeatureInfo(stage=2, num_channels=16, reduction=4),
-            FeatureInfo(stage=3, num_channels=120, reduction=32),
+            # C5 is a 5x5 conv over the 5x5 S4 map, so it collapses to 1x1
+            # without downsampling: the network stride there is still 4
+            # (the two 2x subsampling layers), not 32.
+            FeatureInfo(stage=3, num_channels=120, reduction=4),
         ]
 
     @override

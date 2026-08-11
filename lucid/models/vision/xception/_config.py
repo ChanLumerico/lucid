@@ -26,8 +26,12 @@ from lucid.models._meta import model_family_meta
     its limit: instead of a handful of branches, *every output
     channel* of the :math:`1\times1` pointwise convolution gets its
     own independent :math:`3\times3` spatial filter.  This is exactly
-    the **depthwise separable convolution** — a pointwise mix in
-    channel space followed by a per-channel spatial filter.
+    the **depthwise separable convolution** — §1.2 defines it as a
+    depthwise (per-channel spatial) convolution *followed by* a
+    pointwise :math:`1\times1` mix in channel space, which is also the
+    order the code builds.  (Xception's own blocks are the "extreme
+    Inception" reading of that same pair, so the modules appear in the
+    depthwise-then-pointwise order throughout.)
 
     The architectural hypothesis is that the cross-channel
     correlations and the spatial correlations in feature maps are
@@ -41,8 +45,9 @@ from lucid.models._meta import model_family_meta
         D_K^2 \cdot M \cdot N \;\;\longrightarrow\;\;
         M \cdot N \;+\; D_K^2 \cdot M.
 
-    Xception stacks 36 such layers, organised into 14 modules with
-    linear residual shortcuts around each module (similar to ResNet).
+    Xception stacks 36 such layers, organised into 14 modules.  Twelve
+    of them carry a linear residual shortcut (similar to ResNet); the
+    first and the last do not.
     With essentially the *same* parameter budget as Inception-v3, it
     outperforms it on ImageNet and substantially outperforms it on
     the much larger JFT dataset.  The architecture is designed for a

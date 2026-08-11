@@ -21,6 +21,7 @@ from typing import Any, cast
 from lucid.models._registry import register_model
 from lucid.models.generative.vae._config import VAEConfig
 from lucid.models.generative.vae._model import VAEForImageGeneration, VAEModel
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # Vanilla / β-VAE default — single bottleneck ``z``.
 _CFG_VAE = VAEConfig(
@@ -108,6 +109,8 @@ def vae(pretrained: bool = False, **overrides: object) -> VAEModel:
     >>> out.sample.shape, out.latent.shape
     ((1, 3, 32, 32), (1, 128))
     """
+    if pretrained:
+        reject_unavailable_pretrained("vae")
     return VAEModel(_apply(_CFG_VAE, overrides))
 
 
@@ -169,6 +172,8 @@ def hvae(pretrained: bool = False, **overrides: object) -> VAEModel:
     >>> out.sample.shape, out.latent.shape   # latent is flat concat (32+64+128)
     ((1, 3, 32, 32), (1, 224))
     """
+    if pretrained:
+        reject_unavailable_pretrained("hvae")
     return VAEModel(_apply(_CFG_HVAE, overrides))
 
 
@@ -219,6 +224,8 @@ def vae_gen(pretrained: bool = False, **overrides: object) -> VAEForImageGenerat
     >>> out.sample.shape, out.kl_loss.shape   # reconstruction + scalar KL
     ((1, 3, 32, 32), ())
     """
+    if pretrained:
+        reject_unavailable_pretrained("vae_gen")
     return VAEForImageGeneration(_apply(_CFG_VAE, overrides))
 
 
@@ -266,4 +273,6 @@ def hvae_gen(pretrained: bool = False, **overrides: object) -> VAEForImageGenera
     >>> out.sample.shape, out.kl_loss.shape
     ((1, 3, 32, 32), ())
     """
+    if pretrained:
+        reject_unavailable_pretrained("hvae_gen")
     return VAEForImageGeneration(_apply(_CFG_HVAE, overrides))

@@ -1,7 +1,7 @@
 """Vision Transformer (ViT) configuration (Dosovitskiy et al., 2020)."""
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
@@ -170,3 +170,24 @@ class ViTConfig(ModelConfig):
     dropout: float = 0.0
     attention_dropout: float = 0.0
     layer_norm_eps: float = 1e-6
+    # §3.1: during *pre-training* the head is an MLP with one hidden layer of
+    # width ``representation_size`` followed by tanh; fine-tuning replaces it
+    # with a single linear layer.  ``None`` selects the fine-tuning head,
+    # which is what every released ImageNet checkpoint uses.
+    representation_size: int | None = None
+    # §3.1 uses the CLS token, but the official implementation also offers
+    # global average pooling over the patch tokens ("gap"), which reaches the
+    # same accuracy at a different learning rate (Appendix D.4 / Fig. 9).
+    classifier: Literal["token", "gap"] = "token"
+
+    def __post_init__(self) -> None:
+        if self.classifier not in ("token", "gap"):
+            raise ValueError(
+                f"classifier must be 'token' or 'gap', got {self.classifier!r}"
+            )
+        if self.representation_size is not None and self.representation_size <= 0:
+            raise ValueError(
+                "representation_size is the width of the pre-logits hidden "
+                f"layer, so it must be positive; got {self.representation_size}. "
+                "Use None for the single-linear fine-tuning head."
+            )

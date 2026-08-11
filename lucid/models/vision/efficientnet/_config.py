@@ -81,3 +81,10 @@ class EfficientNetConfig(ModelConfig):
     dropout: float = 0.2
     drop_connect_rate: float = 0.2
     se_ratio: float = 0.25
+    # BatchNorm hyper-parameters.  The zoo that produced the shipped B5/B6/B7
+    # checkpoints builds those three with eps=1e-3, momentum=0.01 and leaves
+    # B0-B4 on the framework defaults, so this has to be settable per variant:
+    # the checkpoints' running_var was fitted under their own eps, and eval
+    # divides by sqrt(running_var + eps).
+    bn_eps: float = 1e-5
+    bn_momentum: float = 0.1

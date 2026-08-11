@@ -3,6 +3,9 @@ Transformer modules: TransformerEncoderLayer, TransformerEncoder,
 TransformerDecoderLayer, TransformerDecoder, Transformer.
 """
 
+import re
+from collections.abc import Iterator, Sequence
+
 from typing import cast, override
 
 from lucid._tensor.tensor import Tensor
@@ -179,9 +182,11 @@ class TransformerEncoderLayer(Module):
         nhead: int,
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
+        attention_dropout: float | None = None,
         activation: str = "relu",
         batch_first: bool = False,
         norm_first: bool = False,
+        layer_norm_eps: float = 1e-5,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -194,19 +199,26 @@ class TransformerEncoderLayer(Module):
         self.activation = activation
         self.batch_first = batch_first
         self.norm_first = norm_first
+        self.layer_norm_eps = layer_norm_eps
 
+        # A single ``dropout`` used to drive both the residual dropout and the
+        # attention-probability dropout; the reference exposes them separately
+        # (and Transformer-big sets attention dropout to 0.3 with residual
+        # dropout at 0.1).  ``None`` keeps the old behaviour.
+        attn_p = dropout if attention_dropout is None else attention_dropout
+        self.attention_dropout_val = attn_p
         self.self_attn = MultiheadAttention(
             d_model,
             nhead,
-            dropout=dropout,
+            dropout=attn_p,
             batch_first=batch_first,
             device=device,
             dtype=dtype,
         )
         self.linear1 = Linear(d_model, dim_feedforward, device=device, dtype=dtype)
         self.linear2 = Linear(dim_feedforward, d_model, device=device, dtype=dtype)
-        self.norm1 = LayerNorm(d_model, device=device, dtype=dtype)
-        self.norm2 = LayerNorm(d_model, device=device, dtype=dtype)
+        self.norm1 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
+        self.norm2 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)
@@ -281,6 +293,62 @@ class TransformerEncoderLayer(Module):
             f"d_model={self.d_model}, nhead={self.nhead}, "
             f"dim_feedforward={self.dim_feedforward}, dropout={self.dropout_val}"
         )
+
+
+def _proto_device(layer: Module) -> DeviceLike:
+    """Device of a prototype layer, read off its first parameter."""
+    for prm in layer.parameters():
+        return prm.device.type
+    return None
+
+
+def _proto_dtype(layer: Module) -> DTypeLike:
+    """Dtype of a prototype layer, read off its first parameter."""
+    for prm in layer.parameters():
+        return prm.dtype
+    return None
+
+
+class _LayerContainer(Module):
+    """Holds a stack's layers under the conventional ``layers.N`` prefix.
+
+    Iterating, indexing and ``len()`` behave like the plain list this
+    replaced, so the stacks' ``forward`` bodies are unchanged; the only
+    difference is that the layers are now *submodules of a submodule*, which
+    is what puts ``layers.`` into the state-dict keys.
+    """
+
+    def __init__(self, layers: Sequence[Module]) -> None:
+        super().__init__()
+        self._items: list[Module] = list(layers)
+        for i, layer in enumerate(self._items):
+            self.add_module(str(i), layer)
+
+    def __iter__(self) -> Iterator[Module]:
+        return iter(self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __getitem__(self, index: int) -> Module:
+        return self._items[index]
+
+
+def _lift_flat_layer_keys(state_dict: dict[str, Tensor], prefix: str) -> None:
+    """Accept the older ``<prefix>N.*`` layout as ``<prefix>layers.N.*``.
+
+    Checkpoints written before the stacks moved under ``layers`` name their
+    entries ``encoder.0.self_attn.…``; rewriting them on the way in keeps
+    those files loadable.
+    """
+    flat = re.compile(rf"^{re.escape(prefix)}(\d+)\.(.+)$")
+    for key in list(state_dict):
+        m = flat.match(key)
+        if m is None:
+            continue
+        lifted = f"{prefix}layers.{m.group(1)}.{m.group(2)}"
+        if lifted not in state_dict:
+            state_dict[lifted] = state_dict.pop(key)
 
 
 class TransformerEncoder(Module):
@@ -400,24 +468,64 @@ class TransformerEncoder(Module):
     ) -> None:
         """Initialise the TransformerEncoder module. See the class docstring for parameter semantics."""
         super().__init__()
-        self.layers = [
+        # Rebuild from the prototype's *full* configuration.  Dropping
+        # ``layer_norm_eps`` / ``device`` / ``dtype`` here silently reset every
+        # cloned layer to the framework defaults, so a Transformer built with
+        # eps=1e-12 ran its per-layer norms at 1e-5 and a model constructed on
+        # metal materialised its layers on the CPU.
+        _built = [
             TransformerEncoderLayer(
                 encoder_layer.d_model,
                 encoder_layer.nhead,
                 encoder_layer.dim_feedforward,
                 encoder_layer.dropout_val,
+                encoder_layer.attention_dropout_val,
                 encoder_layer.activation,
                 encoder_layer.batch_first,
                 encoder_layer.norm_first,
+                layer_norm_eps=encoder_layer.layer_norm_eps,
+                device=_proto_device(encoder_layer),
+                dtype=_proto_dtype(encoder_layer),
             )
             for _ in range(num_layers)
         ]
-        for i, layer in enumerate(self.layers):
-            self.add_module(str(i), layer)
+        # Registering under ``layers.N`` makes the state-dict keys read
+        # ``encoder.layers.0.self_attn.*`` — the conventional layout, and the
+        # one every external checkpoint of this architecture is written in.
+        # Registering the layers directly on the stack gave ``encoder.0.*``,
+        # which no such checkpoint matches.  ``_load_from_state_dict`` below
+        # still accepts the old flat form.
+        self.layers = _LayerContainer(_built)
         self.norm = norm
         if norm is not None:
             self.add_module("norm", norm)
         self.num_layers = num_layers
+
+    @override
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        """Tolerate the pre-``layers`` flat key layout."""
+        _lift_flat_layer_keys(state_dict, prefix)
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
     @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
@@ -621,9 +729,11 @@ class TransformerDecoderLayer(Module):
         nhead: int,
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
+        attention_dropout: float | None = None,
         activation: str = "relu",
         batch_first: bool = False,
         norm_first: bool = False,
+        layer_norm_eps: float = 1e-5,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -636,11 +746,18 @@ class TransformerDecoderLayer(Module):
         self.activation = activation
         self.batch_first = batch_first
         self.norm_first = norm_first
+        self.layer_norm_eps = layer_norm_eps
 
+        # A single ``dropout`` used to drive both the residual dropout and the
+        # attention-probability dropout; the reference exposes them separately
+        # (and Transformer-big sets attention dropout to 0.3 with residual
+        # dropout at 0.1).  ``None`` keeps the old behaviour.
+        attn_p = dropout if attention_dropout is None else attention_dropout
+        self.attention_dropout_val = attn_p
         self.self_attn = MultiheadAttention(
             d_model,
             nhead,
-            dropout=dropout,
+            dropout=attn_p,
             batch_first=batch_first,
             device=device,
             dtype=dtype,
@@ -648,16 +765,16 @@ class TransformerDecoderLayer(Module):
         self.multihead_attn = MultiheadAttention(
             d_model,
             nhead,
-            dropout=dropout,
+            dropout=attn_p,
             batch_first=batch_first,
             device=device,
             dtype=dtype,
         )
         self.linear1 = Linear(d_model, dim_feedforward, device=device, dtype=dtype)
         self.linear2 = Linear(dim_feedforward, d_model, device=device, dtype=dtype)
-        self.norm1 = LayerNorm(d_model, device=device, dtype=dtype)
-        self.norm2 = LayerNorm(d_model, device=device, dtype=dtype)
-        self.norm3 = LayerNorm(d_model, device=device, dtype=dtype)
+        self.norm1 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
+        self.norm2 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
+        self.norm3 = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)
@@ -916,24 +1033,64 @@ class TransformerDecoder(Module):
     ) -> None:
         """Initialise the TransformerDecoder module. See the class docstring for parameter semantics."""
         super().__init__()
-        self.layers = [
+        # Rebuild from the prototype's *full* configuration.  Dropping
+        # ``layer_norm_eps`` / ``device`` / ``dtype`` here silently reset every
+        # cloned layer to the framework defaults, so a Transformer built with
+        # eps=1e-12 ran its per-layer norms at 1e-5 and a model constructed on
+        # metal materialised its layers on the CPU.
+        _built = [
             TransformerDecoderLayer(
                 decoder_layer.d_model,
                 decoder_layer.nhead,
                 decoder_layer.dim_feedforward,
                 decoder_layer.dropout_val,
+                decoder_layer.attention_dropout_val,
                 decoder_layer.activation,
                 decoder_layer.batch_first,
                 decoder_layer.norm_first,
+                layer_norm_eps=decoder_layer.layer_norm_eps,
+                device=_proto_device(decoder_layer),
+                dtype=_proto_dtype(decoder_layer),
             )
             for _ in range(num_layers)
         ]
-        for i, layer in enumerate(self.layers):
-            self.add_module(str(i), layer)
+        # Registering under ``layers.N`` makes the state-dict keys read
+        # ``encoder.layers.0.self_attn.*`` — the conventional layout, and the
+        # one every external checkpoint of this architecture is written in.
+        # Registering the layers directly on the stack gave ``encoder.0.*``,
+        # which no such checkpoint matches.  ``_load_from_state_dict`` below
+        # still accepts the old flat form.
+        self.layers = _LayerContainer(_built)
         self.norm = norm
         if norm is not None:
             self.add_module("norm", norm)
         self.num_layers = num_layers
+
+    @override
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        """Tolerate the pre-``layers`` flat key layout."""
+        _lift_flat_layer_keys(state_dict, prefix)
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
     @override
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
@@ -1162,8 +1319,10 @@ class Transformer(Module):
         num_decoder_layers: int = 6,
         dim_feedforward: int = 2048,
         dropout: float = 0.1,
+        attention_dropout: float | None = None,
         activation: str = "relu",
         batch_first: bool = False,
+        layer_norm_eps: float = 1e-5,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -1174,8 +1333,10 @@ class Transformer(Module):
             nhead,
             dim_feedforward,
             dropout,
+            attention_dropout,
             activation,
             batch_first,
+            layer_norm_eps=layer_norm_eps,
             device=device,
             dtype=dtype,
         )
@@ -1184,13 +1345,15 @@ class Transformer(Module):
             nhead,
             dim_feedforward,
             dropout,
+            attention_dropout,
             activation,
             batch_first,
+            layer_norm_eps=layer_norm_eps,
             device=device,
             dtype=dtype,
         )
-        enc_norm = LayerNorm(d_model, device=device, dtype=dtype)
-        dec_norm = LayerNorm(d_model, device=device, dtype=dtype)
+        enc_norm = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
+        dec_norm = LayerNorm(d_model, eps=layer_norm_eps, device=device, dtype=dtype)
         self.encoder = TransformerEncoder(enc_layer, num_encoder_layers, norm=enc_norm)
         self.decoder = TransformerDecoder(dec_layer, num_decoder_layers, norm=dec_norm)
         self.d_model = d_model
@@ -1240,7 +1403,14 @@ class Transformer(Module):
         )
         return cast(
             Tensor,
-            self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask),
+            self.decoder(
+                tgt,
+                memory,
+                tgt_mask=tgt_mask,
+                memory_mask=memory_mask,
+                tgt_key_padding_mask=tgt_key_padding_mask,
+                memory_key_padding_mask=memory_key_padding_mask,
+            ),
         )
 
     @override

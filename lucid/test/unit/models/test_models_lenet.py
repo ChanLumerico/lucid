@@ -49,10 +49,17 @@ class TestLeNetConfig(unittest.TestCase):
 
 
 class TestLeNetParamCounts(unittest.TestCase):
-    """Canonical LeNet-5 parameter counts from the 1998 paper."""
+    """Parameter counts for the topology Lucid builds.
+
+    These are *not* the 1998 paper's numbers.  Table I's sparse C3
+    connection scheme gives C3 1,516 parameters; this implementation
+    connects C3 densely (2,416), as every modern re-implementation does,
+    so the trunk is 900 heavier than a literal reading of the paper.
+    """
 
     def test_backbone_params(self) -> None:
-        # C1(156) + C3(2416) + C5(48120) = 50692
+        # C1(156) + C3(2416, dense — paper's sparse Table I is 1516)
+        #        + C5(48120) = 50692
         self.assertEqual(lenet_5().num_parameters(), 50_692)
 
     def test_classifier_params(self) -> None:
@@ -84,7 +91,11 @@ class TestLeNetBackbone(unittest.TestCase):
         fi = self.model.feature_info
         self.assertEqual(len(fi), 3)
         self.assertEqual([f.num_channels for f in fi], [6, 16, 120])
-        self.assertEqual([f.reduction for f in fi], [2, 4, 32])
+        # C5 is a 5x5 conv over the 5x5 S4 map: it collapses the map to 1x1
+        # without downsampling, so the network stride there is still 4 (the two
+        # 2x subsampling layers).  Reporting 32 confused "output is 1x1" with
+        # "downsampled 32x".
+        self.assertEqual([f.reduction for f in fi], [2, 4, 4])
 
     def test_forward_features_shape_32x32(self) -> None:
         x = lucid.randn(1, 1, 32, 32)
@@ -168,12 +179,27 @@ class TestLeNetRegistry(unittest.TestCase):
         self.assertEqual(cfg.activation, "tanh")
 
     def test_auto_model(self) -> None:
-        m = models.AutoModel.from_pretrained("lenet_5")
+        # ``from_pretrained`` invokes the factory with ``pretrained=True``, and
+        # no LeNet weights are published — so the dispatch is exercised through
+        # ``create_model``, which is the random-init entry point.
+        m = models.create_model("lenet_5")
         self.assertIsInstance(m, LeNet)
 
     def test_auto_model_for_classification(self) -> None:
-        m = models.AutoModelForImageClassification.from_pretrained("lenet_5_cls")
+        m = models.create_model("lenet_5_cls")
         self.assertIsInstance(m, LeNetForImageClassification)
+
+    def test_from_pretrained_refuses_when_no_weights_are_published(self) -> None:
+        """A weightless family must refuse, not hand back a random model.
+
+        ``from_pretrained`` performs no check that weights actually loaded,
+        so a factory that ignored ``pretrained`` used to return a randomly
+        initialised network that the caller believed was trained.
+        """
+        with self.assertRaises(NotImplementedError):
+            models.AutoModel.from_pretrained("lenet_5")
+        with self.assertRaises(NotImplementedError):
+            models.AutoModelForImageClassification.from_pretrained("lenet_5_cls")
 
 
 class TestLeNetSerialization(unittest.TestCase):

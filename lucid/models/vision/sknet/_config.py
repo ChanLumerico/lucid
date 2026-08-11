@@ -113,6 +113,10 @@ class SKNetConfig(ModelConfig):
     split_input: bool = True
     rd_ratio: float = 1.0 / 16
     rd_divisor: int = 8
+    # §4.1: "Label-smoothing regularization is used during training."
+    # Reproducing the paper's reported top-1 needs it, but it is a training
+    # choice, so it defaults off and inference is unaffected either way.
+    label_smoothing: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "layers", tuple(self.layers))

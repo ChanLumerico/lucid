@@ -856,8 +856,8 @@ def bert_base_qa(
     >>> # question + context (CLS q [SEP] c [SEP]) ids
     >>> input_ids = lucid.tensor([[101, 2040, 102, 1045, 2572, 102]])
     >>> out = model(input_ids)
-    >>> out.logits.shape   # (1, T=6, 2) — last dim is (start, end)
-    (1, 6, 2)
+    >>> out.start_logits.shape, out.end_logits.shape
+    ((1, 6), (1, 6))
     """
     entry = weights_mod.resolve_weights(BERTBaseQAWeights, pretrained, weights)
     model = BERTForQuestionAnswering(_apply(_CFG_BASE, overrides))

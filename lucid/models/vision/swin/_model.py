@@ -29,6 +29,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -41,10 +42,16 @@ from lucid.models.vision.swin._config import SwinConfig
 
 
 class _PatchEmbed(nn.Module):
-    def __init__(self, in_ch: int, patch_size: int, embed_dim: int) -> None:
+    def __init__(
+        self, in_ch: int, patch_size: int, embed_dim: int, dropout: float = 0.0
+    ) -> None:
         super().__init__()
         self.proj = nn.Conv2d(in_ch, embed_dim, patch_size, stride=patch_size)
         self.norm = nn.LayerNorm(embed_dim)
+        # The reference holds ``pos_drop = nn.Dropout(drop_rate)`` and applies
+        # it to the patch-embedding output before stage 1; nothing sat on that
+        # path here, so ``config.dropout`` never reached it.
+        self.pos_drop = nn.Dropout(p=dropout)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -52,7 +59,7 @@ class _PatchEmbed(nn.Module):
         B, C, H, W = x.shape
         x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
         x = cast(Tensor, self.norm(x))
-        return x
+        return cast(Tensor, self.pos_drop(x))
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +69,14 @@ class _PatchEmbed(nn.Module):
 
 @final
 class _PatchMerge(nn.Module):
+    """Concat 2x2 neighbours, normalise, project 4C -> 2C.
+
+    Table 7 writes the downsampler as "concat 2x2, 192-d, LN", which read
+    literally is concat -> Linear -> LayerNorm.  Both reference
+    implementations do concat -> LayerNorm -> Linear, and the shipped
+    checkpoints were trained that way, so that order is what runs here.
+    """
+
     def __init__(self, dim: int) -> None:
         super().__init__()
         self.norm = nn.LayerNorm(4 * dim)
@@ -71,6 +86,12 @@ class _PatchMerge(nn.Module):
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, H, W, C)
         B, H, W, C = x.shape
+        # The reference pads before merging when a side is odd; the strided
+        # slices below otherwise drop the last row/column silently (or
+        # mismatch, since 0::2 and 1::2 differ in length at odd sizes).
+        if H % 2 or W % 2:
+            x = F.pad(x, (0, 0, 0, W % 2, 0, H % 2))
+            H, W = H + H % 2, W + W % 2
         x0 = x[:, 0::2, 0::2, :]
         x1 = x[:, 1::2, 0::2, :]
         x2 = x[:, 0::2, 1::2, :]
@@ -118,6 +139,7 @@ class _WindowAttention(nn.Module):
         window_size: int,
         num_heads: int,
         attn_drop: float,
+        proj_drop: float = 0.0,
     ) -> None:
         super().__init__()
         self.dim = dim
@@ -129,6 +151,10 @@ class _WindowAttention(nn.Module):
         self.qkv = nn.Linear(dim, dim * 3, bias=True)
         self.proj = nn.Linear(dim, dim)
         self.attn_drop = nn.Dropout(p=attn_drop)
+        # The reference wires ``proj_drop`` to the same rate as the MLP
+        # dropout and applies it right after the output projection; without
+        # it ``config.dropout`` regularised the MLP branch only.
+        self.proj_drop = nn.Dropout(p=proj_drop)
 
         # Relative position bias table: (2W-1)^2 × num_heads
         n = (2 * window_size - 1) ** 2
@@ -162,12 +188,24 @@ class _WindowAttention(nn.Module):
 
         attn = (q @ k.permute(0, 1, 3, 2)) * self.scale
 
-        # Relative position bias
-        rel_pos_idx = cast(Tensor, self.rel_pos_idx)
+        # Relative position bias.  When the feature map is smaller than the
+        # configured window the block clamps down to it, so derive the index
+        # for the *effective* window — its offsets are a sub-range of the
+        # table's, so the same learned parameters still apply.
+        eff = int(round(float(N) ** 0.5))
+        if eff == self.ws:
+            rel_pos_idx = cast(Tensor, self.rel_pos_idx)
+        else:
+            c1d = lucid.arange(eff).to(lucid.int64)
+            gy_e, gx_e = lucid.meshgrid(c1d, c1d, indexing="ij")
+            fy, fx = gy_e.flatten(), gx_e.flatten()
+            ry = fy.unsqueeze(1) - fy.unsqueeze(0) + (self.ws - 1)
+            rx = fx.unsqueeze(1) - fx.unsqueeze(0) + (self.ws - 1)
+            rel_pos_idx = ry * (2 * self.ws - 1) + rx
         idx = rel_pos_idx.reshape(-1)
         bias = (
             self.rel_pos_bias[idx]
-            .reshape(self.ws * self.ws, self.ws * self.ws, self.num_heads)
+            .reshape(N, N, self.num_heads)
             .permute(2, 0, 1)
             .unsqueeze(0)
         )
@@ -184,7 +222,7 @@ class _WindowAttention(nn.Module):
         attn = cast(Tensor, self.attn_drop(attn))
 
         x = (attn @ v).permute(0, 2, 1, 3).reshape(B_, N, C)
-        return cast(Tensor, self.proj(x))
+        return cast(Tensor, self.proj_drop(cast(Tensor, self.proj(x))))
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +251,7 @@ class _SwinBlock(nn.Module):
         self.shift_size = window_size // 2 if shift else 0
 
         self.norm1 = nn.LayerNorm(dim)
-        self.attn = _WindowAttention(dim, window_size, num_heads, attn_drop)
+        self.attn = _WindowAttention(dim, window_size, num_heads, attn_drop, dropout)
         self.norm2 = nn.LayerNorm(dim)
         mlp_dim = int(dim * mlp_ratio)
         self.mlp = nn.Sequential(
@@ -224,13 +262,24 @@ class _SwinBlock(nn.Module):
             nn.Dropout(p=dropout),
         )
         self.drop_path = DropPath(drop_path_rate)
+        # The shifted-window mask depends only on the padded resolution, the
+        # shift and the window — never on the input values — so it is built
+        # once per distinct geometry instead of on every forward.  Derived
+        # state, so deliberately not a registered buffer: it must not enter
+        # ``state_dict`` and it must not be restored from a checkpoint.
+        self._mask_cache: dict[tuple[int, int, int, int, str], Tensor] = {}
 
     def _attn_mask(
-        self, H: int, W: int, shift_size: int, device: str = "cpu"
+        self,
+        H: int,
+        W: int,
+        shift_size: int,
+        device: str = "cpu",
+        ws: int | None = None,
     ) -> Tensor | None:
         if shift_size == 0:
             return None
-        ws = self.ws
+        ws = self.ws if ws is None else ws
         ss = shift_size
         img_mask = lucid.zeros(1, H, W, 1, device=device)
         slices_h = [slice(0, -ws), slice(-ws, -ss), slice(-ss, None)]
@@ -258,23 +307,46 @@ class _SwinBlock(nn.Module):
         x = cast(Tensor, self.norm1(x))
 
         # When the whole feature map fits inside a single window, the
-        # reference Swin disables the cyclic shift (and its attention mask):
-        # there is nothing to shift across window boundaries.
-        eff_ss = 0 if self.ws >= min(H, W) else self.shift_size
+        # reference disables the cyclic shift *and* clamps the window down to
+        # the map — the second half was missing, so ``_window_partition`` was
+        # still handed the configured window and produced a zero-sized grid.
+        eff_ws = min(self.ws, H, W)
+        eff_ss = 0 if eff_ws >= min(H, W) else self.shift_size
+
+        # Section 3.2 footnote 4: "bottom-right padding is employed on the
+        # feature map if needed" so the window size divides it.  Without this
+        # any resolution that is not a multiple of the window raised a
+        # ShapeMismatch part-way through the forward.
+        pad_h = (eff_ws - H % eff_ws) % eff_ws
+        pad_w = (eff_ws - W % eff_ws) % eff_ws
+        if pad_h or pad_w:
+            x = F.pad(x, (0, 0, 0, pad_w, 0, pad_h))
+        Hp = H + pad_h
+        Wp = W + pad_w
 
         if eff_ss > 0:
             x = lucid.roll(x, [-eff_ss, -eff_ss], dims=[1, 2])
 
-        mask = self._attn_mask(H, W, eff_ss, device=x.device.type)
-        windows, nH, nW = _window_partition(x, self.ws)
-        windows = windows.reshape(-1, self.ws * self.ws, C)
+        dev = x.device.type
+        cache_key = (Hp, Wp, eff_ss, eff_ws, dev)
+        mask = self._mask_cache.get(cache_key)
+        if mask is None and eff_ss > 0:
+            mask = self._attn_mask(Hp, Wp, eff_ss, device=dev, ws=eff_ws)
+            if mask is not None:
+                self._mask_cache[cache_key] = mask
+        windows, nH, nW = _window_partition(x, eff_ws)
+        windows = windows.reshape(-1, eff_ws * eff_ws, C)
 
         attn_out = cast(Tensor, self.attn(windows, mask=mask))
-        attn_out = attn_out.reshape(-1, self.ws, self.ws, C)
-        x = _window_reverse(attn_out, self.ws, nH, nW)
+        attn_out = attn_out.reshape(-1, eff_ws, eff_ws, C)
+        x = _window_reverse(attn_out, eff_ws, nH, nW)
 
         if eff_ss > 0:
             x = lucid.roll(x, [eff_ss, eff_ss], dims=[1, 2])
+
+        # Crop the padding back off before the residual add.
+        if pad_h or pad_w:
+            x = x[:, :H, :W, :]
 
         x = shortcut + cast(Tensor, self.drop_path(x))
         x = x + cast(
@@ -342,7 +414,9 @@ class _SwinStage(nn.Module):
 def _build_swin(
     cfg: SwinConfig,
 ) -> tuple[_PatchEmbed, nn.ModuleList, nn.LayerNorm, list[FeatureInfo], int]:
-    patch_embed = _PatchEmbed(cfg.in_channels, cfg.patch_size, cfg.embed_dim)
+    patch_embed = _PatchEmbed(
+        cfg.in_channels, cfg.patch_size, cfg.embed_dim, cfg.dropout
+    )
 
     stages: list[nn.Module] = []
     dim = cfg.embed_dim
@@ -350,13 +424,15 @@ def _build_swin(
     reduction = cfg.patch_size
 
     # Linear stochastic-depth schedule across the trunk (Liu 2021 §A).
+    # ``linspace(0, drop_path_rate, total_blocks)``: the first block never
+    # drops and the last drops at the configured rate.  A one-block trunk is
+    # the degenerate case of that line, so it gets 0.0 — not the max rate,
+    # which would drop the only block in the network.
     total_blocks = sum(cfg.depths)
-    if total_blocks > 1 and cfg.drop_path_rate > 0.0:
-        dp_all = [
-            cfg.drop_path_rate * i / (total_blocks - 1) for i in range(total_blocks)
-        ]
-    else:
-        dp_all = [cfg.drop_path_rate] * total_blocks
+    dp_all = [
+        cfg.drop_path_rate * i / (total_blocks - 1) if total_blocks > 1 else 0.0
+        for i in range(total_blocks)
+    ]
     block_cursor = 0
 
     for i, (depth, heads) in enumerate(zip(cfg.depths, cfg.num_heads)):
@@ -487,6 +563,12 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
         self._out_dim = out_dim
         self.avgpool = nn.AdaptiveAvgPool2d(1)
 
+        # Reference initialisation: trunc_normal_(0.02) on Linear/patch-embed
+        # convs with zero bias, LayerNorms at unit weight.  The framework
+        # default (kaiming_uniform, a=sqrt(5)) is far wider and the paper's
+        # LR schedule is not tuned for it.
+        init_transformer_trunc_normal(self)
+
     @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
@@ -587,7 +669,7 @@ class SwinTransformerForImageClassification(PretrainedModel, ClassificationHeadM
         self.stages = stages
         self.norm = norm
         self.avgpool = nn.AdaptiveAvgPool2d(1)
-        self._build_classifier(out_dim, config.num_classes)
+        self._build_classifier(out_dim, config.num_classes, dropout=config.dropout)
 
     @override
     def forward(  # type: ignore[override]

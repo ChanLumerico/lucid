@@ -16,7 +16,10 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
-from lucid.models._utils._common import make_divisible as _make_divisible
+from lucid.models._utils._common import (
+    init_cnn_fan_out,
+    make_divisible as _make_divisible,
+)
 from lucid.models.vision.mobilenet_v2._config import MobileNetV2Config
 
 # ---------------------------------------------------------------------------
@@ -109,9 +112,10 @@ def _build_features(cfg: MobileNetV2Config) -> tuple[nn.Sequential, int]:
             )
             in_ch = out_ch
 
-    # Head conv — paper §3.4 / torchvision reference: scale 1280 by
+    # Head conv — the paper's own rule, stated in §6.1: scale 1280 by
     # ``max(1.0, width_mult)`` so wider models still get a wider head, but
-    # narrow variants don't shrink the head below 1280.
+    # narrow variants don't shrink the head below 1280.  (§3.4 describes
+    # the inverted-residual block, not this.)
     last_ch = _make_divisible(1280 * max(1.0, cfg.width_mult))
     layers += [
         nn.Conv2d(in_ch, last_ch, 1, bias=False),
@@ -212,7 +216,11 @@ class MobileNetV2(PretrainedModel, BackboneMixin):
         def _ch(c: int) -> int:
             return _make_divisible(c * w)
 
-        cumulative = 1
+        # The stem is a stride-2 conv, so the pyramid starts at /2.  Seeding
+        # the accumulator at 1 reported half the true downsampling factor for
+        # every stage, which would place each level one octave too fine for any
+        # detector consuming this backbone.
+        cumulative = 2
         fi: list[FeatureInfo] = []
         for stage, (_, c, _, s) in enumerate(_INVERTED_RESIDUAL_SETTINGS):
             cumulative *= s
@@ -220,6 +228,12 @@ class MobileNetV2(PretrainedModel, BackboneMixin):
                 FeatureInfo(stage=stage + 1, num_channels=_ch(c), reduction=cumulative)
             )
         self._feature_info = fi
+
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self, linear_std=0.01)
 
     @override
     @property
@@ -319,6 +333,12 @@ class MobileNetV2ForImageClassification(PretrainedModel, ClassificationHeadMixin
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.drop = nn.Dropout(p=config.dropout)
         self._build_classifier(num_features, config.num_classes)
+
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self, linear_std=0.01)
 
     @override
     def forward(  # type: ignore[override]

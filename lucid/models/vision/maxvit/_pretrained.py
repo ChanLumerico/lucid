@@ -13,12 +13,13 @@ from lucid.models.vision.maxvit._weights import (
     MaxViTSmallWeights,
     MaxViTTinyWeights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_T = MaxViTConfig(
     depths=(2, 2, 5, 2),
     dims=(64, 128, 256, 512),
     window_size=7,
-    num_heads=32,
+    head_dim=32,
     mlp_ratio=4.0,
 )
 
@@ -26,7 +27,7 @@ _CFG_S = MaxViTConfig(
     depths=(2, 2, 5, 2),
     dims=(96, 192, 384, 768),
     window_size=7,
-    num_heads=32,
+    head_dim=32,
     mlp_ratio=4.0,
     stem_width=64,
 )
@@ -35,7 +36,7 @@ _CFG_B = MaxViTConfig(
     depths=(2, 6, 14, 2),
     dims=(96, 192, 384, 768),
     window_size=7,
-    num_heads=32,
+    head_dim=32,
     mlp_ratio=4.0,
     stem_width=64,
 )
@@ -44,7 +45,7 @@ _CFG_L = MaxViTConfig(
     depths=(2, 6, 14, 2),
     dims=(128, 256, 512, 1024),
     window_size=7,
-    num_heads=32,
+    head_dim=32,
     mlp_ratio=4.0,
 )
 
@@ -52,7 +53,7 @@ _CFG_XL = MaxViTConfig(
     depths=(2, 6, 14, 2),
     dims=(192, 384, 768, 1536),
     window_size=7,
-    num_heads=32,
+    head_dim=32,
     mlp_ratio=4.0,
 )
 
@@ -76,6 +77,7 @@ def _c(cfg: MaxViTConfig, kw: dict[str, object]) -> MaxViTForImageClassification
     model_type="maxvit",
     model_class=MaxViT,
     default_config=_CFG_T,
+    params=30139848,
 )
 def maxvit_tiny(pretrained: bool = False, **overrides: object) -> MaxViT:
     r"""MaxViT-Tiny backbone (Tu et al., 2022).
@@ -115,6 +117,8 @@ def maxvit_tiny(pretrained: bool = False, **overrides: object) -> MaxViT:
     >>> feat.shape
     (1, 512)
     """
+    if pretrained:
+        reject_unavailable_pretrained("maxvit_tiny", alternative="maxvit_tiny_cls")
     return _b(_CFG_T, overrides)
 
 
@@ -124,13 +128,15 @@ def maxvit_tiny(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_type="maxvit",
     model_class=MaxViT,
     default_config=_CFG_S,
+    params=67566828,
 )
 def maxvit_small(pretrained: bool = False, **overrides: object) -> MaxViT:
     r"""MaxViT-Small backbone (Tu et al., 2022).
 
     Builds the canonical *MaxViT-Small* configuration: same depths
     as MaxViT-Tiny (``depths=(2, 2, 5, 2)``) but wider —
-    ``dims=(96, 192, 384, 768)``.  Approximately **55.8M parameters**.
+    ``dims=(96, 192, 384, 768)``.  **67.6M parameters** headless
+    (68.9M with the classifier head; paper Table 1 lists 69M).
 
     Parameters
     ----------
@@ -160,6 +166,8 @@ def maxvit_small(pretrained: bool = False, **overrides: object) -> MaxViT:
     >>> model.forward_features(x).shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained("maxvit_small", alternative="maxvit_small_cls")
     return _b(_CFG_S, overrides)
 
 
@@ -169,13 +177,15 @@ def maxvit_small(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_type="maxvit",
     model_class=MaxViT,
     default_config=_CFG_B,
+    params=118106580,
 )
 def maxvit_base(pretrained: bool = False, **overrides: object) -> MaxViT:
     r"""MaxViT-Base backbone (Tu et al., 2022).
 
     Builds the canonical *MaxViT-Base* configuration:
     ``depths=(2, 6, 14, 2)``, ``dims=(96, 192, 384, 768)``.
-    Approximately **96.6M parameters**.
+    **118.1M parameters** headless (119.5M with the classifier
+    head; paper Table 1 lists 119M).
 
     Parameters
     ----------
@@ -205,6 +215,8 @@ def maxvit_base(pretrained: bool = False, **overrides: object) -> MaxViT:
     >>> model.forward_features(x).shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained("maxvit_base", alternative="maxvit_base_cls")
     return _b(_CFG_B, overrides)
 
 
@@ -214,13 +226,15 @@ def maxvit_base(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_type="maxvit",
     model_class=MaxViT,
     default_config=_CFG_L,
+    params=209708912,
 )
 def maxvit_large(pretrained: bool = False, **overrides: object) -> MaxViT:
     r"""MaxViT-Large backbone (Tu et al., 2022).
 
     Builds the canonical *MaxViT-Large* configuration:
     ``depths=(2, 6, 14, 2)``, ``dims=(128, 256, 512, 1024)``.
-    Approximately **171.2M parameters**.
+    **209.7M parameters** headless (211.8M with the classifier
+    head; paper Table 1 lists 212M).
 
     Parameters
     ----------
@@ -250,6 +264,8 @@ def maxvit_large(pretrained: bool = False, **overrides: object) -> MaxViT:
     >>> model.forward_features(x).shape
     (1, 1024)
     """
+    if pretrained:
+        reject_unavailable_pretrained("maxvit_large", alternative="maxvit_large_cls")
     return _b(_CFG_L, overrides)
 
 
@@ -259,13 +275,15 @@ def maxvit_large(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_type="maxvit",
     model_class=MaxViT,
     default_config=_CFG_XL,
+    params=471051048,
 )
 def maxvit_xlarge(pretrained: bool = False, **overrides: object) -> MaxViT:
     r"""MaxViT-XLarge backbone (Tu et al., 2022).
 
     Builds the canonical *MaxViT-XLarge* configuration:
     ``depths=(2, 6, 14, 2)``, ``dims=(192, 384, 768, 1536)``.
-    Approximately **383.7M parameters** — the largest variant in the
+    **471.1M parameters** headless (475.0M with the classifier head,
+    which is the paper's 475M figure) — the largest variant in the
     paper.
 
     Parameters
@@ -298,6 +316,8 @@ def maxvit_xlarge(pretrained: bool = False, **overrides: object) -> MaxViT:
     >>> model.forward_features(x).shape
     (1, 1536)
     """
+    if pretrained:
+        reject_unavailable_pretrained("maxvit_xlarge")
     return _b(_CFG_XL, overrides)
 
 
@@ -313,6 +333,7 @@ def maxvit_xlarge(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_type="maxvit",
     model_class=MaxViTForImageClassification,
     default_config=_CFG_T,
+    params=30916528,
 )
 def maxvit_tiny_cls(
     pretrained: bool | str = False,
@@ -378,6 +399,7 @@ def maxvit_tiny_cls(
     model_type="maxvit",
     model_class=MaxViTForImageClassification,
     default_config=_CFG_S,
+    params=68927956,
 )
 def maxvit_small_cls(
     pretrained: bool | str = False,
@@ -441,6 +463,7 @@ def maxvit_small_cls(
     model_type="maxvit",
     model_class=MaxViTForImageClassification,
     default_config=_CFG_B,
+    params=119467708,
 )
 def maxvit_base_cls(
     pretrained: bool | str = False,
@@ -504,6 +527,7 @@ def maxvit_base_cls(
     model_type="maxvit",
     model_class=MaxViTForImageClassification,
     default_config=_CFG_L,
+    params=211785560,
 )
 def maxvit_large_cls(
     pretrained: bool | str = False,
@@ -564,6 +588,7 @@ def maxvit_large_cls(
     model_type="maxvit",
     model_class=MaxViTForImageClassification,
     default_config=_CFG_XL,
+    params=474951952,
 )
 def maxvit_xlarge_cls(
     pretrained: bool = False, **overrides: object
@@ -572,7 +597,7 @@ def maxvit_xlarge_cls(
 
     Combines the :func:`maxvit_xlarge` backbone (``depths=(2, 6, 14, 2)``,
     ``dims=(192, 384, 768, 1536)``) with the reference NormMLP head.
-    ~383.7M parameters — the largest MaxViT variant.
+    ~475.0M parameters — the largest MaxViT variant.
 
     Parameters
     ----------
@@ -602,4 +627,6 @@ def maxvit_xlarge_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("maxvit_xlarge_cls")
     return _c(_CFG_XL, overrides)

@@ -202,6 +202,9 @@ class _Block35(nn.Module):
             _ConvBnReLU(48, 64, 3, padding=1),
         )
         # timm uses `conv2d` (not `proj`) with bias=True
+        # Figures 16/17/19 give the closing linear projections as
+        # 384 / 1154 / 2048; TF-Slim uses 320 / 1088 / 2080 and the
+        # checkpoint's tensors are shaped accordingly.
         self.conv2d = nn.Conv2d(128, 320, 1)
 
     @override
@@ -420,12 +423,19 @@ def _build_body(config: InceptionResNetConfig) -> dict[str, nn.Module]:
         # MaxPool 3×3 s2 — no params, stored separately in model
         # Inception body
         "mixed_5b": _Mixed5b(),
+        # Figure 15 of the paper shows 5 / 10 / 5 residual blocks; TF-Slim --
+        # and therefore the checkpoint whose tensors these modules must match
+        # -- builds 10 / 20 / 9+1.  The counts are fixed by the weights.
         "repeat": nn.Sequential(*[_Block35(scale=s_a) for _ in range(10)]),
         "mixed_6a": _Mixed6a(),
         "repeat_1": nn.Sequential(*[_Block17(scale=s_b) for _ in range(20)]),
         "mixed_7a": _Mixed7a(),
         "repeat_2": nn.Sequential(*[_Block8(scale=s_c) for _ in range(9)]),
         "block8": _Block8(scale=1.0, no_relu=True),
+        # A fourth divergence from the paper: Figure 15 pools the 8x8
+        # grid directly into the classifier, with no 1x1 projection
+        # between.  TF-Slim inserts this 2080 -> 1536 conv, and the
+        # checkpoint carries its weights, so it is not optional here.
         "conv2d_7b": _ConvBnReLU(2080, 1536, 1),
     }
 
@@ -573,7 +583,12 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.repeat_2(x))
         x = cast(Tensor, self.block8(x))
         x = cast(Tensor, self.conv2d_7b(x))
-        return cast(Tensor, self.avgpool(x))
+        # ``feature_info`` describes the pre-pool pyramid, and the mixin
+        # documents this as returning the deepest stage's *feature map*.
+        # Pooling here collapsed it to 1x1, so the declared reduction was
+        # wrong by the input size and no consumer could reach a spatial map.
+        # The classifier applies its own pooling.
+        return x
 
     @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
@@ -690,6 +705,16 @@ class InceptionResNetV2ForImageClassification(PretrainedModel):
         x = cast(Tensor, self.conv2d_4a(x))
         x = cast(Tensor, self._pool2(x))
         return x
+
+    def reset_classifier(self, num_classes: int) -> None:
+        """Replace the classification head with a freshly initialised one.
+
+        The head keeps the reference checkpoint's ``classif`` attribute name,
+        so this cannot come from ``ClassificationHeadMixin`` (which looks for
+        ``self.classifier``).  The class docstring documented the method
+        without anything implementing it.
+        """
+        self.classif = nn.Linear(self.classif.in_features, num_classes)
 
     @override
     def forward(  # type: ignore[override]

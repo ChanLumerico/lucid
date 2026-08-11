@@ -34,6 +34,11 @@ _PRESET_B0 = ImageClassification(
 _PRESET_B1 = ImageClassification(
     crop_size=240, resize_size=256, interpolation="bicubic"
 )
+# Divergence, deliberate: the paper's compound-scaling table puts B2 at
+# 260x260, but the checkpoint this preset serves was trained and published
+# at 288 — evaluating it at 260 measures a resolution it never saw.  The
+# eval preset follows the weights; ``EfficientNetConfig`` still carries the
+# paper's 260 for anyone training from scratch.
 _PRESET_B2 = ImageClassification(
     crop_size=288, resize_size=288, interpolation="bicubic"
 )
@@ -64,7 +69,7 @@ class EfficientNetB0Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 77.692% / top-5 93.532%),
-        sourced from ``torchvision/EfficientNet_B0_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/EfficientNet_B0_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -86,7 +91,7 @@ class EfficientNetB0Weights(WeightsEnum):
         transforms=_PRESET_B0,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/EfficientNet_B0_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/EfficientNet_B0_Weights.IMAGENET1K_V1",
             "license": "apache-2.0",
             "num_params": 5_288_548,
             "gflops": 0.386,
@@ -106,7 +111,7 @@ class EfficientNetB1Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 78.642% / top-5 94.186%),
-        sourced from ``torchvision/EfficientNet_B1_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/EfficientNet_B1_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -128,7 +133,7 @@ class EfficientNetB1Weights(WeightsEnum):
         transforms=_PRESET_B1,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/EfficientNet_B1_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/EfficientNet_B1_Weights.IMAGENET1K_V1",
             "license": "apache-2.0",
             "num_params": 7_794_184,
             "gflops": 0.687,
@@ -148,7 +153,7 @@ class EfficientNetB2Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 80.608% / top-5 95.310%),
-        sourced from ``torchvision/EfficientNet_B2_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/EfficientNet_B2_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -170,7 +175,7 @@ class EfficientNetB2Weights(WeightsEnum):
         transforms=_PRESET_B2,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/EfficientNet_B2_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/EfficientNet_B2_Weights.IMAGENET1K_V1",
             "license": "apache-2.0",
             "num_params": 9_109_994,
             "gflops": 1.088,
@@ -190,7 +195,7 @@ class EfficientNetB3Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 82.008% / top-5 96.054%),
-        sourced from ``torchvision/EfficientNet_B3_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/EfficientNet_B3_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -212,7 +217,7 @@ class EfficientNetB3Weights(WeightsEnum):
         transforms=_PRESET_B3,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/EfficientNet_B3_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/EfficientNet_B3_Weights.IMAGENET1K_V1",
             "license": "apache-2.0",
             "num_params": 12_233_232,
             "gflops": 1.827,
@@ -232,7 +237,7 @@ class EfficientNetB4Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 83.384% / top-5 96.594%),
-        sourced from ``torchvision/EfficientNet_B4_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/EfficientNet_B4_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -254,7 +259,7 @@ class EfficientNetB4Weights(WeightsEnum):
         transforms=_PRESET_B4,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/EfficientNet_B4_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/EfficientNet_B4_Weights.IMAGENET1K_V1",
             "license": "apache-2.0",
             "num_params": 19_341_616,
             "gflops": 4.394,
@@ -274,7 +279,7 @@ class EfficientNetB5Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 83.444% / top-5 96.628%),
-        sourced from ``torchvision/EfficientNet_B5_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/EfficientNet_B5_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -296,7 +301,7 @@ class EfficientNetB5Weights(WeightsEnum):
         transforms=_PRESET_B5,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/EfficientNet_B5_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/EfficientNet_B5_Weights.IMAGENET1K_V1",
             "license": "apache-2.0",
             "num_params": 30_389_784,
             "gflops": 10.266,
@@ -316,7 +321,7 @@ class EfficientNetB6Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 84.008% / top-5 96.916%),
-        sourced from ``torchvision/EfficientNet_B6_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/EfficientNet_B6_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -338,7 +343,7 @@ class EfficientNetB6Weights(WeightsEnum):
         transforms=_PRESET_B6,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/EfficientNet_B6_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/EfficientNet_B6_Weights.IMAGENET1K_V1",
             "license": "apache-2.0",
             "num_params": 43_040_704,
             "gflops": 19.068,
@@ -358,7 +363,7 @@ class EfficientNetB7Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 84.122% / top-5 96.908%),
-        sourced from ``torchvision/EfficientNet_B7_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/EfficientNet_B7_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -380,7 +385,7 @@ class EfficientNetB7Weights(WeightsEnum):
         transforms=_PRESET_B7,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/EfficientNet_B7_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/EfficientNet_B7_Weights.IMAGENET1K_V1",
             "license": "apache-2.0",
             "num_params": 66_347_960,
             "gflops": 37.746,

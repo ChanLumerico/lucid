@@ -48,11 +48,17 @@ from lucid.models._meta import model_family_meta
     per-pixel embeddings against which the query embeddings are dotted
     to form binary masks.
 
-    Training uses the same Hungarian-matched class CE + mask BCE/Dice
-    losses as MaskFormer (with auxiliary losses at intermediate
-    decoder layers).  Mask2Former sets a new SOTA on each of ADE20K,
-    Cityscapes, and COCO with a *single* model, eliminating the need
-    for task-specific architectures.
+    Training keeps MaskFormer's Hungarian-matched class CE + mask
+    BCE/Dice objective and its auxiliary losses at intermediate decoder
+    layers, but computes the mask term on *sampled points* rather than
+    densely: Section 3.2.2 draws :math:`K = 12{,}544` (:math:`112 \times
+    112`) points by uniform plus importance sampling, in both the
+    matching and the final loss, cutting training memory roughly 3x.
+    That point-sampled loss is one of the paper's three enumerated
+    contributions, alongside masked attention and the multi-scale
+    strategy described above.  Mask2Former sets a new SOTA on each of
+    ADE20K, Cityscapes, and COCO with a *single* model, eliminating the
+    need for task-specific architectures.
     """,
 )
 @dataclass(frozen=True)
@@ -92,6 +98,14 @@ class Mask2FormerConfig(ModelConfig):
         num_feature_levels:    Number of multi-scale memory levels (3).
         feature_strides:       Backbone output strides.
         common_stride:         Finest pixel-decoder stride.
+
+    .. note::
+
+       **Inference only.**  §3.2.2's objective is unimplemented: the
+       Hungarian matcher, the class-CE / mask-BCE / dice terms, the
+       point-sampled mask loss (K = 12,544 points rather than dense) and
+       the auxiliary losses on every decoder layer.  ``forward`` raises
+       if given targets rather than discarding them.
     """
 
     model_type: ClassVar[str] = "mask2former"

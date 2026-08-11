@@ -14,6 +14,7 @@ from lucid.models.vision.convnext._weights import (
     ConvNeXtTinyWeights,
     ConvNeXtXLargeWeights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_T = ConvNeXtConfig(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768))
 _CFG_S = ConvNeXtConfig(depths=(3, 3, 27, 3), dims=(96, 192, 384, 768))
@@ -41,6 +42,7 @@ def _c(cfg: ConvNeXtConfig, kw: dict[str, object]) -> ConvNeXtForImageClassifica
     model_type="convnext",
     model_class=ConvNeXt,
     default_config=_CFG_T,
+    params=28_589_128,
 )
 def convnext_tiny(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     r"""ConvNeXt-Tiny backbone (Liu et al., 2022).
@@ -81,6 +83,8 @@ def convnext_tiny(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     >>> feat.shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained("convnext_tiny", alternative="convnext_tiny_cls")
     return _b(_CFG_T, overrides)
 
 
@@ -90,6 +94,7 @@ def convnext_tiny(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_type="convnext",
     model_class=ConvNeXt,
     default_config=_CFG_S,
+    params=50_223_688,
 )
 def convnext_small(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     r"""ConvNeXt-Small backbone (Liu et al., 2022).
@@ -126,6 +131,10 @@ def convnext_small(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     >>> model.forward_features(x).shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "convnext_small", alternative="convnext_small_cls"
+        )
     return _b(_CFG_S, overrides)
 
 
@@ -135,6 +144,7 @@ def convnext_small(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_type="convnext",
     model_class=ConvNeXt,
     default_config=_CFG_B,
+    params=88_591_464,
 )
 def convnext_base(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     r"""ConvNeXt-Base backbone (Liu et al., 2022).
@@ -160,9 +170,11 @@ def convnext_base(pretrained: bool = False, **overrides: object) -> ConvNeXt:
 
     Notes
     -----
-    ConvNeXt-B reaches **83.8% top-1 on ImageNet-1k** (224x224) and
-    **85.8% top-1** at 384x384 after ImageNet-22k pretraining (Liu
-    et al., 2022, Tables 1 and 11).
+    ConvNeXt-B reaches **83.8% top-1 on ImageNet-1k** (224x224).  With
+    ImageNet-22k pretraining it reaches **85.8%** at 224x224 and
+    **86.8%** at 384x384 (Liu et al., 2022, Table 1 lower block; the
+    per-resolution breakdown is Table 12 — Table 11 is "Detailed results
+    for modernizing a ResNet-200").
 
     Examples
     --------
@@ -173,6 +185,8 @@ def convnext_base(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     >>> model.forward_features(x).shape
     (1, 1024)
     """
+    if pretrained:
+        reject_unavailable_pretrained("convnext_base", alternative="convnext_base_cls")
     return _b(_CFG_B, overrides)
 
 
@@ -182,6 +196,7 @@ def convnext_base(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_type="convnext",
     model_class=ConvNeXt,
     default_config=_CFG_L,
+    params=197_767_336,
 )
 def convnext_large(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     r"""ConvNeXt-Large backbone (Liu et al., 2022).
@@ -208,8 +223,9 @@ def convnext_large(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     Notes
     -----
     ConvNeXt-L reaches **84.3% top-1 on ImageNet-1k** (224x224) and
-    **86.6% top-1** at 384x384 after ImageNet-22k pretraining (Liu
-    et al., 2022, Tables 1 and 11).
+    **86.6% top-1** at 224x224 — and **87.5%** at 384x384 — after
+    ImageNet-22k pretraining (Liu et al., 2022, Table 1 lower block;
+    per-resolution detail in Table 12).
 
     Examples
     --------
@@ -220,6 +236,10 @@ def convnext_large(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     >>> model.forward_features(x).shape
     (1, 1536)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "convnext_large", alternative="convnext_large_cls"
+        )
     return _b(_CFG_L, overrides)
 
 
@@ -229,6 +249,7 @@ def convnext_large(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_type="convnext",
     model_class=ConvNeXt,
     default_config=_CFG_XL,
+    params=350_196_968,
 )
 def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     r"""ConvNeXt-XLarge backbone (Liu et al., 2022).
@@ -254,9 +275,11 @@ def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
 
     Notes
     -----
-    ConvNeXt-XL reaches **87.0% top-1 on ImageNet-1k** at 384x384
-    fine-tune resolution after ImageNet-22k pretraining (Liu et al.,
-    2022, Table 11) — the headline result of the paper.
+    ConvNeXt-XL reaches **87.0% top-1 on ImageNet-1k** at 224x224 —
+    and **87.8%** at 384x384 — after ImageNet-22k pretraining (Liu
+    et al., 2022, Table 1 lower block; per-resolution detail in
+    Table 12).  87.0 is the 224 number, which is what this family's
+    weight entry preprocesses for.
 
     Examples
     --------
@@ -267,6 +290,10 @@ def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     >>> model.forward_features(x).shape
     (1, 2048)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "convnext_xlarge", alternative="convnext_xlarge_cls"
+        )
     return _b(_CFG_XL, overrides)
 
 
@@ -281,6 +308,7 @@ def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_type="convnext",
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_T,
+    params=28_589_128,
 )
 def convnext_tiny_cls(
     pretrained: bool | str = False,
@@ -344,6 +372,7 @@ def convnext_tiny_cls(
     model_type="convnext",
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_S,
+    params=50_223_688,
 )
 def convnext_small_cls(
     pretrained: bool | str = False,
@@ -405,6 +434,7 @@ def convnext_small_cls(
     model_type="convnext",
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_B,
+    params=88_591_464,
 )
 def convnext_base_cls(
     pretrained: bool | str = False,
@@ -435,9 +465,11 @@ def convnext_base_cls(
 
     Notes
     -----
-    ConvNeXt-B reaches **83.8% top-1 on ImageNet-1k** (224x224) and
-    **85.8% top-1** at 384x384 after ImageNet-22k pretraining (Liu
-    et al., 2022, Tables 1 and 11).
+    ConvNeXt-B reaches **83.8% top-1 on ImageNet-1k** (224x224).  With
+    ImageNet-22k pretraining it reaches **85.8%** at 224x224 and
+    **86.8%** at 384x384 (Liu et al., 2022, Table 1 lower block; the
+    per-resolution breakdown is Table 12 — Table 11 is "Detailed results
+    for modernizing a ResNet-200").
 
     Examples
     --------
@@ -467,6 +499,7 @@ def convnext_base_cls(
     model_type="convnext",
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_L,
+    params=197_767_336,
 )
 def convnext_large_cls(
     pretrained: bool | str = False,
@@ -498,8 +531,9 @@ def convnext_large_cls(
     Notes
     -----
     ConvNeXt-L reaches **84.3% top-1 on ImageNet-1k** (224x224) and
-    **86.6% top-1** at 384x384 after ImageNet-22k pretraining (Liu
-    et al., 2022, Tables 1 and 11).
+    **86.6% top-1** at 224x224 — and **87.5%** at 384x384 — after
+    ImageNet-22k pretraining (Liu et al., 2022, Table 1 lower block;
+    per-resolution detail in Table 12).
 
     Examples
     --------
@@ -529,6 +563,7 @@ def convnext_large_cls(
     model_type="convnext",
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_XL,
+    params=350_196_968,
 )
 def convnext_xlarge_cls(
     pretrained: bool | str = False,
@@ -560,9 +595,11 @@ def convnext_xlarge_cls(
 
     Notes
     -----
-    ConvNeXt-XL reaches **87.0% top-1 on ImageNet-1k** at 384x384
-    fine-tune resolution after ImageNet-22k pretraining (Liu et al.,
-    2022, Table 11) — the headline result of the paper.
+    ConvNeXt-XL reaches **87.0% top-1 on ImageNet-1k** at 224x224 —
+    and **87.8%** at 384x384 — after ImageNet-22k pretraining (Liu
+    et al., 2022, Table 1 lower block; per-resolution detail in
+    Table 12).  87.0 is the 224 number, which is what this family's
+    weight entry preprocesses for.
 
     Examples
     --------

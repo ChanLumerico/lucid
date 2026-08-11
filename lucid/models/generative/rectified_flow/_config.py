@@ -185,6 +185,11 @@ class RectifiedFlowConfig(GenerativeModelConfig):
         Gain applied to the last convolution of each block.  Zero makes
         every residual branch start as the identity, which is what the
         reference configs set.
+    scale_by_sigma : bool, default=False
+        Divide the network output by the conditioning value ``t * 999``.
+        All four released 256x256 configs set this; the CIFAR-10 one does
+        not, hence the default.  It is part of the trained function, so a
+        checkpoint and its flag have to agree.
     t_schedule : {"uniform", "t0", "t1"} or int, default="uniform"
         Which times the objective draws.  ``"uniform"`` is the
         rectified-flow / reflow objective; the others pin ``t`` and turn
@@ -238,8 +243,16 @@ class RectifiedFlowConfig(GenerativeModelConfig):
     progressive_input: ProgressiveInput = "none"
     embedding_type: TimeEmbedding = "positional"
     fourier_scale: float = 16.0
+    # The reference shifts [0, 1] inputs to [-1, 1] inside the network
+    # when ``data.centered`` is False.  The CelebA-HQ and AFHQ configs
+    # set it True (so no shift); the LSUN bedroom/church configs inherit
+    # False from default_lsun_configs, so those two released models *do*
+    # apply x -> 2x - 1 internally.  Building all four identically meant
+    # the LSUN nets saw inputs an octave off.
+    data_centered: bool = True
     skip_rescale: bool = True
     init_scale: float = 0.0
+    scale_by_sigma: bool = False
 
     t_schedule: TimeSchedule | int = "uniform"
     time_eps: float = 1e-3

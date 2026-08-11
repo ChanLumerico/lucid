@@ -59,6 +59,14 @@ class _SwinPatchEmbeddings(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, tuple[int, int]]:  # type: ignore[override]
+        # Pad to a multiple of patch_size, as the reference does.  A
+        # stride-``patch_size`` convolution silently *drops* the remainder
+        # otherwise, so an image whose side is not a multiple loses its last
+        # rows/columns before the backbone ever sees them.
+        ph = (self.patch_size - int(x.shape[2]) % self.patch_size) % self.patch_size
+        pw = (self.patch_size - int(x.shape[3]) % self.patch_size) % self.patch_size
+        if ph or pw:
+            x = F.pad(x, (0, pw, 0, ph))
         emb: Tensor = cast(Tensor, self.projection(x))  # (B, C, H', W')
         h = int(emb.shape[2])
         w = int(emb.shape[3])
@@ -98,6 +106,13 @@ class _SwinPatchMerging(nn.Module):
         b = int(x.shape[0])
         c = int(x.shape[2])
         x = x.reshape(b, h, w, c)
+        # The reference pads before merging when a side is odd; the strided
+        # slices below otherwise disagree in length (0::2 and 1::2 differ by
+        # one at odd sizes) and the concat raises ShapeMismatch.  A 384x384
+        # input reaches an odd feature map by stage 3.
+        if h % 2 or w % 2:
+            x = F.pad(x, (0, 0, 0, w % 2, 0, h % 2))
+            h, w = h + h % 2, w + w % 2
         # Interleave 2x2 neighbourhoods: order is (row, col) for col in 0,1 / row in 0,1
         x0 = x[:, 0::2, 0::2, :]
         x1 = x[:, 1::2, 0::2, :]
@@ -594,6 +609,45 @@ class _DeformableAttention(nn.Module):
         self.attention_weights = nn.Linear(embed_dim, num_heads * n_levels * n_points)
         self.value_proj = nn.Linear(embed_dim, embed_dim)
         self.output_proj = nn.Linear(embed_dim, embed_dim)
+        self._reset_parameters()
+
+    def _reset_parameters(self) -> None:
+        r"""The MSDeformAttn-specific reset both references apply.
+
+        The sampling offsets start at zero *weight* with a **bias laid out
+        as a ring**: head :math:`h` points at angle :math:`2\pi h / H`, and
+        the ``p``-th sampling point along each ray sits at radius
+        :math:`p + 1`.  That gives every head a distinct initial direction
+        and every point a distinct distance, so the deformable sampler
+        starts as a spread-out grid rather than collapsing all heads onto
+        the same location.  Attention weights start at exactly zero (a
+        uniform softmax), and the two projections are Xavier-uniform with
+        zero bias.
+        """
+        nn.init.zeros_(self.sampling_offsets.weight)
+        thetas = [2.0 * math.pi * h / self.num_heads for h in range(self.num_heads)]
+        grid = [(math.cos(t), math.sin(t)) for t in thetas]
+        scale = max(max(abs(x), abs(y)) for x, y in grid)
+        bias: list[float] = []
+        for gx, gy in grid:
+            for _lvl in range(self.n_levels):
+                for pt in range(self.n_points):
+                    bias.append(gx / scale * (pt + 1))
+                    bias.append(gy / scale * (pt + 1))
+        if self.sampling_offsets.bias is not None:
+            with lucid.no_grad():
+                self.sampling_offsets.bias[:] = lucid.tensor(
+                    bias, device=self.sampling_offsets.bias.device.type
+                )
+
+        nn.init.zeros_(self.attention_weights.weight)
+        if self.attention_weights.bias is not None:
+            nn.init.zeros_(self.attention_weights.bias)
+
+        for proj in (self.value_proj, self.output_proj):
+            nn.init.xavier_uniform_(proj.weight)
+            if proj.bias is not None:
+                nn.init.zeros_(proj.bias)
 
     @override
     def forward(  # type: ignore[override]
@@ -1311,13 +1365,26 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
 
         Args:
             x:       (B, C, H, W) image batch.
-            targets: Currently ignored (inference path).
+            targets: Rejected.  This family is inference-only — see the
+                     class docstring — so a target dict would be silently
+                     discarded, and the caller would watch a loss of
+                     ``None`` and conclude the model had converged.
 
         Returns:
             ``SemanticSegmentationOutput`` with ``logits`` of shape
             ``(B, K, H, W)`` (no-object slot dropped — matching the reference
             semantic post-processing), upsampled to the input resolution.
         """
+        if targets is not None:
+            raise NotImplementedError(
+                "Mask2Former does not have a training path: the Hungarian "
+                "matcher, the class-CE / mask-BCE / dice objective, the "
+                "point-sampled mask loss and the per-decoder-layer auxiliary "
+                "losses are all unimplemented, so passing targets cannot "
+                "produce a loss.  Use this model for inference, or supply "
+                "your own criterion over the returned logits."
+            )
+
         iH = int(x.shape[2])
         iW = int(x.shape[3])
 
@@ -1336,14 +1403,20 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
         )  # (B, N, K+1)
         mask_logits: Tensor = mask_predictions[-1]  # (B, N, H/4, W/4)
 
-        # 4. Semantic post-processing (reference-exact):
-        #    masks_queries_logits are bilinearly upsampled to the input
-        #    resolution FIRST, then
+        # 4. Semantic post-processing:
+        #    masks_queries_logits are bilinearly upsampled FIRST, then
         #      masks_classes = softmax(class)[..., :-1]   (drop no-object)
         #      masks_probs   = sigmoid(mask)
         #      seg = einsum("bqc,bqhw->bchw")
-        #    This ordering (upsample → sigmoid → combine) matches the
-        #    reference ``post_process_semantic_segmentation`` exactly.
+        #    The ordering (upsample → sigmoid → combine) is the reference's.
+        #    Divergence, deliberate: the reference upsamples to a hard-coded
+        #    384x384 — the size its own preprocessor resizes every image to —
+        #    and only then resizes to the requested target.  Lucid has no
+        #    such fixed preprocessing step, so it upsamples straight to the
+        #    input resolution.  The two agree exactly for a 384x384 input;
+        #    at any other size the reference interpolates twice and this
+        #    interpolates once, which is the more faithful result for the
+        #    resolution the caller actually passed.
         b = int(class_logits.shape[0])
         n = int(class_logits.shape[1])
         K_plus_1 = self._cfg.num_classes + 1

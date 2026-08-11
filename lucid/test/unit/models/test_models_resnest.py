@@ -102,8 +102,15 @@ class TestResNeStClassifier(unittest.TestCase):
 class TestResNeStRegistry(unittest.TestCase):
 
     def test_variants_registered(self) -> None:
-        # 6 paper-cited variants (14 / 26 / 50 / 101 / 200 / 269 — He 2020
-        # Table 1) × 2 (raw + ``_cls`` task wrapper) = 12 registered names.
+        # 6 registered depths (14 / 26 / 50 / 101 / 200 / 269) x 2
+        # (raw + ``_cls`` task wrapper) = 12 registered names.
+        #
+        # Not all six are paper variants: ResNeSt is Zhang et al., 2020
+        # (arXiv:2004.08955), whose Table 1 is the ImageNet ablation study
+        # (mixup/autoaug on the left, radix-vs-cardinality on the right) and
+        # contains no depth table at all.  14 and 26 appear nowhere in the
+        # paper — they come from timm.  The old comment credited "He 2020
+        # Table 1", which is the wrong author and the wrong table.
         self.assertEqual(len(models.list_models(family="resnest")), 12)
 
     def test_all_variants_present(self) -> None:

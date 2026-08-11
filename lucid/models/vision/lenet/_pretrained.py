@@ -12,6 +12,7 @@ from typing import Any, cast
 from lucid.models._registry import register_model
 from lucid.models.vision.lenet._config import LeNetConfig
 from lucid.models.vision.lenet._model import LeNet, LeNetForImageClassification
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_5 = LeNetConfig()  # paper original (tanh + avg-pool)
 
@@ -32,9 +33,9 @@ def lenet_5(pretrained: bool = False, **overrides: object) -> LeNet:
     Builds a :class:`LeNet` with the paper-cited LeCun 1998 topology:
     three convolutions (C1: 1→6, C3: 6→16, C5: 16→120) interleaved with
     two :math:`2\times2` sub-sampling layers, using :math:`\tanh`
-    activations and parameter-free average pooling.  Approximately
-    44 k convolutional parameters (≈60 k including the F6 + output
-    layers of the classifier variant).  Designed for :math:`1\times32
+    activations and parameter-free average pooling.  50,692
+    convolutional parameters (61,706 including the F6 + output layers
+    of the classifier variant).  Designed for :math:`1\times32
     \times32` grayscale digit inputs.
 
     Parameters
@@ -74,6 +75,8 @@ def lenet_5(pretrained: bool = False, **overrides: object) -> LeNet:
     >>> out.last_hidden_state.shape   # (B, 120, 1, 1)
     (1, 120, 1, 1)
     """
+    if pretrained:
+        reject_unavailable_pretrained("lenet_5")
     cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
     return LeNet(cfg)
 
@@ -133,5 +136,7 @@ def lenet_5_cls(
     >>> out.logits.shape
     (2, 10)
     """
+    if pretrained:
+        reject_unavailable_pretrained("lenet_5_cls")
     cfg = replace(_CFG_5, **cast(dict[str, Any], overrides)) if overrides else _CFG_5
     return LeNetForImageClassification(cfg)

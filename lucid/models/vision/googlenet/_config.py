@@ -23,25 +23,29 @@ from lucid.models._meta import model_family_meta
     multiple sizes, and forcing the network to commit to a single
     kernel per layer wastes capacity.
 
-    Each Inception module computes, in parallel, a :math:`1\times1`
-    convolution, a :math:`3\times3` convolution, a :math:`5\times5`
-    convolution, and a :math:`3\times3` max-pool branch.  To keep the
-    computation tractable, *cheap* :math:`1\times1` bottlenecks are
-    placed before the larger spatial convolutions and after the
-    pooling branch.  Concatenating along the channel axis gives the
-    next layer an enriched, multi-scale feature representation.
-    Formally, an Inception block produces
+    Each Inception module computes four branches in parallel and
+    concatenates them along the channel axis, giving the next layer an
+    enriched, multi-scale representation.  To keep the computation
+    tractable, *cheap* :math:`1\times1` bottlenecks sit before the
+    larger spatial convolutions and after the pooling branch:
 
     .. math::
 
         y = \mathrm{concat}\bigl(
             f_{1\times1}(x),\; f_{3\times3}(g_{1\times1}(x)),\;
-            f_{5\times5}(h_{1\times1}(x)),\; p_{1\times1}(\mathrm{pool}(x))
+            f'_{3\times3}(h_{1\times1}(x)),\; p_{1\times1}(\mathrm{pool}(x))
         \bigr),
 
     where each :math:`f` is a learned convolution and each
     :math:`g, h, p_{1\times1}` is a dimensionality-reducing
     :math:`1\times1` projection.
+
+    Divergence, deliberate: the paper's third branch is a
+    :math:`5\times5` convolution.  The reference implementation the
+    shipped weights come from uses a :math:`3\times3` there instead —
+    a documented deviation on its side — and this build follows the
+    weights, so the third branch is :math:`3\times3` in the code and in
+    the equation above.
 
     GoogLeNet stacks nine such modules into a 22-layer network with
     only 5 M parameters — roughly **12×** fewer than AlexNet — while
@@ -71,5 +75,9 @@ class GoogLeNetConfig(ModelConfig):
     num_classes: int = 1000
     in_channels: int = 3
     aux_logits: bool = True
+    # See InceptionConfig.transform_input — the ImageNet-1k checkpoint is a TF
+    # port that expects (x-0.5)/0.5 inputs while the bundled preset emits
+    # ImageNet-normalised ones.
+    transform_input: bool = False
     dropout: float = 0.4
     aux_dropout: float = 0.7

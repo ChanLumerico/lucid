@@ -440,10 +440,12 @@ class _VelocityField(nn.Module):
         base = config.base_channels
         time_dim = base * 4
         self._act_name = config.act_fn
+        self._data_centered = config.data_centered
         self._levels = levels
         self._blocks_per_down = config.num_res_blocks
         self._blocks_per_up = config.num_res_blocks + 1
         self._embedding_type = config.embedding_type
+        self._scale_by_sigma = config.scale_by_sigma
         self._progressive = config.progressive
         self._progressive_input = config.progressive_input
         self._time_floor = config.time_eps * _TIME_SCALE
@@ -472,16 +474,29 @@ class _VelocityField(nn.Module):
         else:
             self.fourier = None
             embed_dim = base
-        self.time_mlp = nn.Sequential(
-            nn.Linear(embed_dim, time_dim),
-            nn.SiLU(),
-            nn.Linear(time_dim, time_dim),
-        )
+        # ``config.act_fn`` drives every other activation in the net; the
+        # time MLP was the one place that hardcoded SiLU, so asking for a
+        # different activation silently left this branch alone.
+        self.time_mlp_fc1 = nn.Linear(embed_dim, time_dim)
+        self.time_mlp_fc2 = nn.Linear(time_dim, time_dim)
+        # The reference initialises both of these with its default
+        # variance_scaling(1.0, 'fan_avg', 'uniform') — Xavier-uniform gain 1
+        # — and zeroes the biases, exactly as ``_init_conv`` and
+        # ``_ResBlock.time_proj`` already do here.  Left on Lucid's Linear
+        # default the second layer came out ~1.7x too narrow and the biases
+        # were non-zero.
+        for _linear in (self.time_mlp_fc1, self.time_mlp_fc2):
+            nn.init.xavier_uniform_(_linear.weight, gain=1.0)
+            if _linear.bias is not None:
+                nn.init.zeros_(_linear.bias)
 
         self.conv_in = _conv3x3(config.in_channels, base)
 
         size = config.sample_size
-        spatial = size[0] if isinstance(size, tuple) else int(size)
+        # The reference keys attention on the *width*; on a
+        # non-square input the two disagree and attention lands at
+        # the wrong stage entirely.
+        spatial = size[1] if isinstance(size, tuple) else int(size)
 
         # Pyramid resamplers carry the image itself, so they keep the
         # sample's channel count and hold no convolution.
@@ -612,9 +627,16 @@ class _VelocityField(nn.Module):
         """
         if t.ndim == 0:
             t = t.reshape((1,)).expand((int(sample.shape[0]),))
-        t_emb = cast(Tensor, self.time_mlp(self._time_embedding(t)))
+        t_hidden = cast(Tensor, self.time_mlp_fc1(self._time_embedding(t)))
+        t_emb = cast(
+            Tensor,
+            self.time_mlp_fc2(generative_activation(self._act_name, t_hidden)),
+        )
 
         pyramid_in = sample if self._progressive_input == "input_skip" else None
+        if not self._data_centered:
+            # Reference ncsnpp.forward: ``if not config.data.centered: x = 2*x - 1``.
+            sample = sample * 2.0 - 1.0
         h = cast(Tensor, self.conv_in(sample))
         skips: list[Tensor] = [h]
 
@@ -666,9 +688,29 @@ class _VelocityField(nn.Module):
                 h = cast(Tensor, self.up_sample[order](h, t_emb))
 
         if pyramid_out is not None:
-            return pyramid_out
-        h = generative_activation(self._act_name, cast(Tensor, self.norm_out(h)))
-        return cast(Tensor, self.conv_out(h))
+            out = pyramid_out
+        else:
+            h = generative_activation(self._act_name, cast(Tensor, self.norm_out(h)))
+            out = cast(Tensor, self.conv_out(h))
+
+        if self._scale_by_sigma:
+            # NCSN++ output scaling, which every released 256x256 config turns
+            # on: ``h = h / used_sigmas``.  Under the Fourier embedding the
+            # reference's ``used_sigmas`` *is* the conditioning value it was
+            # handed, and its callers always pass ``t * 999`` — so the trained
+            # high-resolution velocity is ``unet(x, t) / (999 t)``.  The
+            # CIFAR-10 config sets this False, which is why it stays off by
+            # default here.
+            scaled_t = t * _TIME_SCALE
+            # Same floor the Fourier embedding uses: the divisor is singular
+            # at t = 0, and the floor is the smallest value training or
+            # sampling ever produces, so clamping changes nothing in range.
+            floor = lucid.full_like(scaled_t, max(self._time_floor, 1e-12))
+            denom = lucid.maximum(scaled_t, floor).reshape(
+                -1, *([1] * (len(sample.shape) - 1))
+            )
+            out = out / denom
+        return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────

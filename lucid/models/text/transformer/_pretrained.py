@@ -11,6 +11,7 @@ from lucid.models.text.transformer._model import (
     TransformerForTokenClassification,
     TransformerModel,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # Vaswani et al. (2017) §6.2 — Table 3 "base" and "big" (the only two
 # sizes the paper specifies).
@@ -37,6 +38,7 @@ def _apply(cfg: TransformerConfig, overrides: dict[str, object]) -> TransformerC
     model_type="transformer",
     model_class=TransformerModel,
     default_config=_CFG_BASE,
+    params=63084544,
 )
 def transformer_base(pretrained: bool = False, **overrides: object) -> TransformerModel:
     r"""Construct a Vaswani-style Transformer "base" encoder-decoder.
@@ -86,9 +88,11 @@ def transformer_base(pretrained: bool = False, **overrides: object) -> Transform
     >>> src = lucid.tensor([[1, 234, 567, 2]])
     >>> tgt = lucid.tensor([[1, 100, 200]])
     >>> out = model(src, decoder_input_ids=tgt)
-    >>> out.logits.shape   # (B=1, T_tgt=3, d_model=512)
+    >>> out.last_hidden_state.shape   # (B=1, T_tgt=3, d_model=512)
     (1, 3, 512)
     """
+    if pretrained:
+        reject_unavailable_pretrained("transformer_base")
     return TransformerModel(_apply(_CFG_BASE, overrides))
 
 
@@ -98,6 +102,7 @@ def transformer_base(pretrained: bool = False, **overrides: object) -> Transform
     model_type="transformer",
     model_class=TransformerModel,
     default_config=_CFG_LARGE,
+    params=214249472,
 )
 def transformer_large(
     pretrained: bool = False, **overrides: object
@@ -138,9 +143,11 @@ def transformer_large(
     >>> src = lucid.tensor([[1, 234, 567, 2]])
     >>> tgt = lucid.tensor([[1, 100, 200]])
     >>> out = model(src, decoder_input_ids=tgt)
-    >>> out.logits.shape   # (B=1, T_tgt=3, d_model=1024)
+    >>> out.last_hidden_state.shape   # (B=1, T_tgt=3, d_model=1024)
     (1, 3, 1024)
     """
+    if pretrained:
+        reject_unavailable_pretrained("transformer_large")
     return TransformerModel(_apply(_CFG_LARGE, overrides))
 
 
@@ -153,6 +160,7 @@ def transformer_large(
     model_type="transformer",
     model_class=TransformerForSeq2SeqLM,
     default_config=_CFG_BASE,
+    params=63084544,
 )
 def transformer_base_seq2seq(
     pretrained: bool = False, **overrides: object
@@ -204,6 +212,8 @@ def transformer_base_seq2seq(
     >>> out.logits.shape   # (B=1, T_tgt=3, vocab=37000)
     (1, 3, 37000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("transformer_base_seq2seq")
     return TransformerForSeq2SeqLM(_apply(_CFG_BASE, overrides))
 
 
@@ -213,6 +223,7 @@ def transformer_base_seq2seq(
     model_type="transformer",
     model_class=TransformerForSeq2SeqLM,
     default_config=_CFG_LARGE,
+    params=214249472,
 )
 def transformer_large_seq2seq(
     pretrained: bool = False, **overrides: object
@@ -253,6 +264,8 @@ def transformer_large_seq2seq(
     >>> out.logits.shape   # (B=1, T_tgt=3, vocab=37000)
     (1, 3, 37000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("transformer_large_seq2seq")
     return TransformerForSeq2SeqLM(_apply(_CFG_LARGE, overrides))
 
 
@@ -265,6 +278,7 @@ def transformer_large_seq2seq(
     model_type="transformer",
     model_class=TransformerForSequenceClassification,
     default_config=_CFG_BASE,
+    params=37861378,
 )
 def transformer_base_cls(
     pretrained: bool = False, **overrides: object
@@ -307,6 +321,8 @@ def transformer_base_cls(
     >>> out.logits.shape   # (1, num_labels=3)
     (1, 3)
     """
+    if pretrained:
+        reject_unavailable_pretrained("transformer_base_cls")
     return TransformerForSequenceClassification(_apply(_CFG_BASE, overrides))
 
 
@@ -316,6 +332,7 @@ def transformer_base_cls(
     model_type="transformer",
     model_class=TransformerForTokenClassification,
     default_config=_CFG_BASE,
+    params=37861378,
 )
 def transformer_base_token_cls(
     pretrained: bool = False, **overrides: object
@@ -367,4 +384,6 @@ def transformer_base_token_cls(
     >>> out.logits.shape   # (1, T=4, num_labels=9)
     (1, 4, 9)
     """
+    if pretrained:
+        reject_unavailable_pretrained("transformer_base_token_cls")
     return TransformerForTokenClassification(_apply(_CFG_BASE, overrides))

@@ -103,3 +103,9 @@ class UNetConfig(ModelConfig):
     dim: Literal[2, 3] = 2
     # Block style: "basic" = paper DoubleConv, "res" = residual DoubleConv.
     block: Literal["basic", "res"] = "basic"
+    # 3D U-Net (Cicek 2016): "we avoid bottlenecks by doubling the number
+    # of channels already before max pooling. We also adopt this scheme in
+    # the synthesis path."  With it, the first conv of each level emits
+    # half the level's width and the second emits all of it.  The 2D U-Net
+    # keeps both convs at the full width, so this defaults off.
+    double_before_pool: bool = False

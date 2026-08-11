@@ -13,6 +13,7 @@ from lucid.models.vision.vit._weights import (
     ViTLarge16Weights,
     ViTLarge32Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_B16 = ViTConfig(patch_size=16, dim=768, depth=12, num_heads=12)
 _CFG_B32 = ViTConfig(patch_size=32, dim=768, depth=12, num_heads=12)
@@ -84,6 +85,8 @@ def vit_base_16(pretrained: bool = False, **overrides: object) -> ViT:
     >>> feat.shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vit_base_16", alternative="vit_base_16_cls")
     return _b(_CFG_B16, overrides)
 
 
@@ -130,6 +133,8 @@ def vit_base_32(pretrained: bool = False, **overrides: object) -> ViT:
     >>> model.forward_features(x).shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vit_base_32", alternative="vit_base_16_cls")
     return _b(_CFG_B32, overrides)
 
 
@@ -177,6 +182,8 @@ def vit_large_16(pretrained: bool = False, **overrides: object) -> ViT:
     >>> model.forward_features(x).shape
     (1, 1024)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vit_large_16", alternative="vit_base_16_cls")
     return _b(_CFG_L16, overrides)
 
 
@@ -222,6 +229,8 @@ def vit_large_32(pretrained: bool = False, **overrides: object) -> ViT:
     >>> model.forward_features(x).shape
     (1, 1024)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vit_large_32", alternative="vit_base_16_cls")
     return _b(_CFG_L32, overrides)
 
 
@@ -272,6 +281,8 @@ def vit_huge_14(pretrained: bool = False, **overrides: object) -> ViT:
     >>> model.forward_features(x).shape
     (1, 1280)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vit_huge_14", alternative="vit_base_16_cls")
     return _b(_CFG_H14, overrides)
 
 
@@ -327,7 +338,7 @@ def vit_base_16_cls(
     -----
     Standard ImageNet recipe: backbone returns the CLS token after the
     final LayerNorm, head applies a single affine map to produce class
-    logits.  Pretrained weights are converted from torchvision's
+    logits.  Pretrained weights are converted from reference_vision's
     ``ViT_B_16_Weights.IMAGENET1K_V1`` (81.072% top-1) and hosted under
     ``lucid-dl/vit-base-16``.  See
     `arXiv:2010.11929 <https://arxiv.org/abs/2010.11929>`_.
@@ -393,7 +404,7 @@ def vit_base_32_cls(
     Notes
     -----
     Reference: Dosovitskiy et al. (2020), Table 1.  Pretrained weights are
-    converted from torchvision's ``ViT_B_32_Weights.IMAGENET1K_V1``
+    converted from reference_vision's ``ViT_B_32_Weights.IMAGENET1K_V1``
     (75.912% top-1) and hosted under ``lucid-dl/vit-base-32``.
 
     Examples
@@ -456,7 +467,7 @@ def vit_large_16_cls(
     Notes
     -----
     Reference: Dosovitskiy et al. (2020), Table 5.  Pretrained weights are
-    converted from torchvision's ``ViT_L_16_Weights.IMAGENET1K_V1``
+    converted from reference_vision's ``ViT_L_16_Weights.IMAGENET1K_V1``
     (79.662% top-1, 242-pixel resize) and hosted under
     ``lucid-dl/vit-large-16``.
 
@@ -520,7 +531,7 @@ def vit_large_32_cls(
     Notes
     -----
     Reference: Dosovitskiy et al. (2020), Table 1.  Pretrained weights are
-    converted from torchvision's ``ViT_L_32_Weights.IMAGENET1K_V1``
+    converted from reference_vision's ``ViT_L_32_Weights.IMAGENET1K_V1``
     (76.972% top-1) and hosted under ``lucid-dl/vit-large-32``.
 
     Examples
@@ -584,4 +595,6 @@ def vit_huge_14_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("vit_huge_14_cls", alternative="vit_base_16_cls")
     return _c(_CFG_H14, overrides)

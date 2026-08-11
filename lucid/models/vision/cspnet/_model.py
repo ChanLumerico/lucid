@@ -8,8 +8,8 @@ Three paper-cited variants ship from this module via
 
 * CSPResNet-50  — ResNet-50 base wrapped in ``CrossStage``
 * CSPResNeXt-50 — ResNeXt-50 base (groups=32) wrapped in ``CrossStage``
-* CSPDarknet-53 — Darknet-53 base in ``DarkStage`` (paper-cited
-  Wang 2020 baseline used by YOLOv4)
+* CSPDarknet-53 — Darknet-53 base wrapped in ``CrossStage`` with the
+  Darknet block (paper-cited Wang 2020 baseline used by YOLOv4)
 
 Module + state-dict naming mirrors ``timm.models.cspnet`` exactly, so a
 single converter handles all three variants with no per-arch
@@ -22,6 +22,7 @@ import lucid.nn.functional as F
 from typing import ClassVar, cast, final, override
 
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -70,7 +71,9 @@ class _ConvBnAct(nn.Module):
         x = cast(Tensor, self.conv(x))
         x = cast(Tensor, self.bn(x))
         if self.apply_act:
-            x = F.leaky_relu(x, negative_slope=0.01)
+            # darknet's ``activation=leaky`` is slope 0.1, not the framework
+            # default 0.01 that ``act_layer='leaky_relu'`` resolves to.
+            x = F.leaky_relu(x, negative_slope=0.1)
         return x
 
 
@@ -115,7 +118,7 @@ class _BottleneckBlock(nn.Module):
         x = cast(Tensor, self.conv3(x))
         x = cast(Tensor, self.attn3(x))
         x = cast(Tensor, self.drop_path(x)) + shortcut
-        return F.leaky_relu(x, negative_slope=0.01)
+        return F.leaky_relu(x, negative_slope=0.1)
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +160,19 @@ class _DarkBlock(nn.Module):
 # ---------------------------------------------------------------------------
 # CrossStage — CSP-wrapped residual stage (paper §3.1)
 # ---------------------------------------------------------------------------
+
+
+def _zero_init_last(model: nn.Module) -> None:
+    """Zero the last block BN gamma — ``conv3`` on bottlenecks, ``conv2`` on dark blocks."""
+    for m in model.modules():
+        if isinstance(m, _BottleneckBlock):
+            bn = getattr(m.conv3, "bn", None)
+            if bn is not None and bn.weight is not None:
+                nn.init.constant_(bn.weight, 0.0)
+        elif isinstance(m, _DarkBlock):
+            bn = getattr(m.conv2, "bn", None)
+            if bn is not None and bn.weight is not None:
+                nn.init.constant_(bn.weight, 0.0)
 
 
 @final
@@ -220,6 +236,18 @@ class _CrossStage(nn.Module):
             self.conv_down = nn.Identity()
 
         # ── conv_exp ──  (expanded input — split in half along channels)
+        #
+        # Divergence, deliberate: the authors' cfgs use an **asymmetric
+        # split** in stage 1.  ``csresnet50.cfg`` applies two separate 1x1
+        # convs to the same stem output at unequal widths (128 for the
+        # bypass, 64 for the block branch), and the first block then widens
+        # 64 -> 128, so darknet's shortcut adds across a channel-truncated
+        # residual.  Here the split is even and the residual is full.
+        # Following the weights rather than the cfg: the checkpoints this
+        # family serves come from the reference implementation, which is
+        # even-split throughout, and they load key-for-key only against
+        # this shape.  A caller reproducing darknet's own trained weights
+        # needs the asymmetric form, which is a different model.
         self.conv_exp = _ConvBnAct(
             down_chs,
             exp_chs,
@@ -229,6 +257,14 @@ class _CrossStage(nn.Module):
         self.expand_chs = exp_chs
 
         # ── blocks ──  (only the "process" half goes through these)
+        #
+        # The reference widens on the *first* block (exp_chs//2 ->
+        # block_out_chs) and keeps block_out_chs thereafter, then narrows
+        # back in conv_transition_b.  Wiring every block at exp_chs//2 and
+        # widening in the transition instead is the same network only while
+        # ``block_ratio`` leaves block_out_chs == exp_chs//2 — which every
+        # shipped config does, so this was invisible until someone overrode
+        # ``block_ratio`` and got a differently-shaped stage with no error.
         block_in = exp_chs // 2
         blocks: list[nn.Module] = []
         for _ in range(depth):
@@ -236,7 +272,7 @@ class _CrossStage(nn.Module):
                 blocks.append(
                     _BottleneckBlock(
                         block_in,
-                        block_in,
+                        block_out_chs,
                         bottle_ratio=bottle_ratio,
                         groups=groups,
                     )
@@ -245,21 +281,22 @@ class _CrossStage(nn.Module):
                 blocks.append(
                     _DarkBlock(
                         block_in,
-                        block_in,
+                        block_out_chs,
                         bottle_ratio=bottle_ratio,
                         groups=groups,
                     )
                 )
+            block_in = block_out_chs
         self.blocks = nn.Sequential(*blocks)
 
         # ── transitions ──
         self.conv_transition_b = _ConvBnAct(
-            exp_chs // 2,
             block_out_chs,
+            exp_chs // 2,
             kernel_size=1,
         )
         self.conv_transition = _ConvBnAct(
-            block_out_chs + exp_chs // 2,
+            exp_chs,
             out_chs,
             kernel_size=1,
         )
@@ -275,64 +312,6 @@ class _CrossStage(nn.Module):
         xb = cast(Tensor, self.blocks(xb))
         xb = cast(Tensor, self.conv_transition_b(xb))
         return cast(Tensor, self.conv_transition(lucid.cat([xs, xb], dim=1)))
-
-
-# ---------------------------------------------------------------------------
-# DarkStage — plain sequential Darknet stage (paper-faithful for CSPDarknet)
-# ---------------------------------------------------------------------------
-
-
-@final
-class _DarkStage(nn.Module):
-    """Plain sequential stage: down-conv then ``depth`` Darknet blocks."""
-
-    def __init__(
-        self,
-        in_chs: int,
-        out_chs: int,
-        stride: int,
-        depth: int,
-        block_type: str = "dark",
-        bottle_ratio: float = 0.5,
-        groups: int = 1,
-    ) -> None:
-        super().__init__()
-        self.conv_down: nn.Module
-        if stride > 1:
-            self.conv_down = _ConvBnAct(
-                in_chs,
-                out_chs,
-                kernel_size=3,
-                stride=stride,
-            )
-        else:
-            self.conv_down = nn.Identity()
-        blocks: list[nn.Module] = []
-        for _ in range(depth):
-            if block_type == "bottle":
-                blocks.append(
-                    _BottleneckBlock(
-                        out_chs,
-                        out_chs,
-                        bottle_ratio=bottle_ratio,
-                        groups=groups,
-                    )
-                )
-            else:
-                blocks.append(
-                    _DarkBlock(
-                        out_chs,
-                        out_chs,
-                        bottle_ratio=bottle_ratio,
-                        groups=groups,
-                    )
-                )
-        self.blocks = nn.Sequential(*blocks)
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv_down(x))
-        return cast(Tensor, self.blocks(x))
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +334,14 @@ class _Stem(nn.Module):
         self.conv1 = _ConvBnAct(in_channels, out_chs, kernel_size, stride=stride)
         self.pool: nn.Module
         if pool == "max":
+            # Divergence, deliberate: csresnet50.cfg / csresnext50.cfg specify
+            # ``[maxpool] size=2 stride=2``, but the checkpoints this family
+            # ships (``timm/cspresnet50.ra_in1k`` and siblings) were trained
+            # with a 3x3/stride-2/pad-1 pool.  Both give the same output size
+            # (224 -> 112 -> 56), so the weights load either way — but the
+            # 2x2 pool sees a different receptive field and would silently
+            # cost accuracy on every shipped checkpoint.  Following the
+            # weights, not the cfg.
             self.pool = nn.MaxPool2d(3, stride=2, padding=1)
         else:
             self.pool = nn.Identity()
@@ -441,6 +428,14 @@ class CSPNet(PretrainedModel, BackboneMixin):
         self.stem = stem
         self.stages = stages
         self._feature_info = fi
+
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self, linear_std=0.01)
+        if config.zero_init_last:
+            _zero_init_last(self)
         self._final_chs = final_chs
 
     @property
@@ -518,6 +513,14 @@ class CSPNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         # Match timm naming: ``head.fc`` (Linear).
         self._build_classifier(final_chs, config.num_classes, dropout=config.dropout)
+
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self, linear_std=0.01)
+        if config.zero_init_last:
+            _zero_init_last(self)
 
     @override
     def forward(  # type: ignore[override]

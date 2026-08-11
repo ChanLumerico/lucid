@@ -16,6 +16,7 @@ from lucid.models.vision.swin._weights import (
     SwinSmallWeights,
     SwinTinyWeights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_T = SwinConfig(embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
 _CFG_S = SwinConfig(embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
@@ -86,6 +87,8 @@ def swin_tiny(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     >>> feat.shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained("swin_tiny", alternative="swin_tiny_cls")
     return _b(_CFG_T, overrides)
 
 
@@ -132,6 +135,8 @@ def swin_small(pretrained: bool = False, **overrides: object) -> SwinTransformer
     >>> model.forward_features(x).shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained("swin_small", alternative="swin_tiny_cls")
     return _b(_CFG_S, overrides)
 
 
@@ -179,6 +184,8 @@ def swin_base(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     >>> model.forward_features(x).shape
     (1, 1024)
     """
+    if pretrained:
+        reject_unavailable_pretrained("swin_base", alternative="swin_tiny_cls")
     return _b(_CFG_B, overrides)
 
 
@@ -215,7 +222,8 @@ def swin_large(pretrained: bool = False, **overrides: object) -> SwinTransformer
     Notes
     -----
     Swin-L reaches **87.3% top-1 on ImageNet-1k** (384x384) after
-    ImageNet-22k pretraining (Liu et al., 2021, Table 2).
+    ImageNet-22k pretraining (Liu et al., 2021 — the classification
+    results; Table 2 is COCO detection).
 
     Examples
     --------
@@ -226,6 +234,8 @@ def swin_large(pretrained: bool = False, **overrides: object) -> SwinTransformer
     >>> model.forward_features(x).shape
     (1, 1536)
     """
+    if pretrained:
+        reject_unavailable_pretrained("swin_large", alternative="swin_tiny_cls")
     return _b(_CFG_L, overrides)
 
 
@@ -278,7 +288,7 @@ def swin_tiny_cls(
     Notes
     -----
     Swin-T reaches **81.3% top-1 on ImageNet-1k** (Liu et al., 2021).
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``Swin_T_Weights.IMAGENET1K_V1`` and hosted under
     ``lucid-dl/swin-tiny``.
 
@@ -341,7 +351,7 @@ def swin_small_cls(
     Notes
     -----
     Swin-S reaches **83.0% top-1 on ImageNet-1k** (Liu et al., 2021,
-    Table 1).  Pretrained weights are converted from torchvision's
+    Table 1).  Pretrained weights are converted from reference_vision's
     ``Swin_S_Weights.IMAGENET1K_V1`` and hosted under
     ``lucid-dl/swin-small``.
 
@@ -406,7 +416,7 @@ def swin_base_cls(
     Swin-B reaches **83.5% top-1 on ImageNet-1k** (224x224) and
     **86.4% top-1** at 384x384 after ImageNet-22k pretraining (Liu
     et al., 2021, Tables 1 and 2).  The shipped checkpoint is converted
-    from torchvision's ``Swin_B_Weights.IMAGENET1K_V1`` and hosted under
+    from reference_vision's ``Swin_B_Weights.IMAGENET1K_V1`` and hosted under
     ``lucid-dl/swin-base``.
 
     Examples
@@ -470,7 +480,8 @@ def swin_large_cls(
     -----
     Swin-L reaches **87.3% top-1 on ImageNet-1k** at 384x384
     fine-tune resolution after ImageNet-22k pretraining (Liu
-    et al., 2021, Table 2).  The shipped checkpoint is the 224x224
+    et al., 2021 — the classification results; Table 2 is COCO
+    detection).  The shipped checkpoint is the 224x224
     ImageNet-22k → ImageNet-1k finetune (86.3% top-1), converted from
     timm's ``swin_large_patch4_window7_224.ms_in22k_ft_in1k`` and
     hosted under ``lucid-dl/swin-large``.

@@ -62,6 +62,13 @@ class _DenseLayer(nn.Module):
         self.conv1 = nn.Conv2d(num_input_features, inter_features, 1, bias=False)
         self.norm2 = nn.BatchNorm2d(inter_features)
         self.conv2 = nn.Conv2d(inter_features, growth_rate, 3, padding=1, bias=False)
+        # Section 3 reads literally: "we add a dropout layer after each
+        # convolutional layer (except the first one)" — which would put
+        # dropout after the 1x1 bottleneck conv and inside the transition
+        # layers too, as the authors' original Torch code does.  Only the
+        # post-3x3 site is built here, matching the reference the shipped
+        # checkpoints come from.  Training-time only, so inference is
+        # unaffected either way.
         self.drop = nn.Dropout(p=dropout_rate) if dropout_rate > 0.0 else None
 
     @override
@@ -221,6 +228,29 @@ class _Features(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+def _init_reference(model: nn.Module) -> None:
+    """Reference DenseNet initialisation — ``kaiming_normal_`` at its defaults.
+
+    The reference's ``_initialize_weights`` is a bare
+    ``nn.init.kaiming_normal_(m.weight)`` on convolutions, which means
+    ``mode="fan_in", nonlinearity="leaky_relu"`` — not the explicit
+    ``fan_out`` / ``relu`` pair the ResNet family passes.  Norm layers get
+    unit weight and zero bias; the classifier bias is zeroed.
+    """
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.BatchNorm2d):
+            if m.weight is not None:
+                nn.init.ones_(m.weight)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+        elif isinstance(m, nn.Linear) and m.bias is not None:
+            nn.init.zeros_(m.bias)
+
+
 class DenseNet(PretrainedModel, BackboneMixin):
     r"""DenseNet feature-extracting backbone (no classification head).
 
@@ -299,17 +329,34 @@ class DenseNet(PretrainedModel, BackboneMixin):
         self.features = _Features(config)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
-        # feature_info: one entry per block (after each dense block)
+        # feature_info: one entry per block, reporting the dense block's own
+        # output (before the following transition).
+        #
+        # The running width has to carry the transition's theta=0.5 compression
+        # forward — the previous form halved ``nf`` only for display and fed the
+        # *uncompressed* total into the next block, so stages 2+ drifted
+        # (121 reported 128/320/704/1920 where the network emits
+        # 256/512/1024/1024).  The reduction likewise belongs to the block, not
+        # to the transition that follows it, so it advances after the append.
         fi: list[FeatureInfo] = []
         nf = config.num_init_features
         reduction = 4
+        last = len(config.block_config) - 1
         for i, nl in enumerate(config.block_config):
             nf += nl * config.growth_rate
-            ch = nf if i == len(config.block_config) - 1 else nf // 2
-            if i < len(config.block_config) - 1:
+            fi.append(FeatureInfo(stage=i + 1, num_channels=nf, reduction=reduction))
+            if i < last:
+                nf //= 2  # transition compression theta = 0.5
                 reduction *= 2
-            fi.append(FeatureInfo(stage=i + 1, num_channels=ch, reduction=reduction))
         self._feature_info = fi
+
+        # Reference initialisation.  DenseNet is NOT the fan-out/relu variant
+        # the ResNet line uses: its reference calls ``kaiming_normal_(weight)``
+        # with the defaults, i.e. **fan_in** and the leaky-relu gain.  Using
+        # fan_out here inflates every layer's weights, and because DenseNet
+        # concatenates rather than adds, that compounds across 121 layers into
+        # activations around 1e5 before BN is trained.
+        _init_reference(self)
 
     @property
     @override
@@ -393,6 +440,14 @@ class DenseNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.features = _Features(config)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self._build_classifier(self.features.num_features, config.num_classes)
+
+        # Reference initialisation.  DenseNet is NOT the fan-out/relu variant
+        # the ResNet line uses: its reference calls ``kaiming_normal_(weight)``
+        # with the defaults, i.e. **fan_in** and the leaky-relu gain.  Using
+        # fan_out here inflates every layer's weights, and because DenseNet
+        # concatenates rather than adds, that compounds across 121 layers into
+        # activations around 1e5 before BN is trained.
+        _init_reference(self)
 
     @override
     def forward(  # type: ignore[override]

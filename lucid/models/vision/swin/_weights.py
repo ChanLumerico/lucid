@@ -24,7 +24,7 @@ family conversion recipe in ``tools.convert_weights.swin``.
 from lucid.utils.transforms import ImageClassification
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-# torchvision tuned a distinct resize side length per Swin variant; all use
+# reference_vision tuned a distinct resize side length per Swin variant; all use
 # a 224 crop with bicubic interpolation and the standard ImageNet stats.
 _PRESET_T = ImageClassification(crop_size=224, resize_size=232, interpolation="bicubic")
 _PRESET_S = ImageClassification(crop_size=224, resize_size=246, interpolation="bicubic")
@@ -49,7 +49,7 @@ class SwinTinyWeights(WeightsEnum):
         transforms=_PRESET_T,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/Swin_T_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/Swin_T_Weights.IMAGENET1K_V1",
             "license": "mit",
             "num_params": 28_288_354,
             "gflops": 4.491,
@@ -75,7 +75,7 @@ class SwinSmallWeights(WeightsEnum):
         transforms=_PRESET_S,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/Swin_S_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/Swin_S_Weights.IMAGENET1K_V1",
             "license": "mit",
             "num_params": 49_606_258,
             "gflops": 8.741,
@@ -101,7 +101,7 @@ class SwinBaseWeights(WeightsEnum):
         transforms=_PRESET_B,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/Swin_B_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/Swin_B_Weights.IMAGENET1K_V1",
             "license": "mit",
             "num_params": 87_768_224,
             "gflops": 15.431,
@@ -118,8 +118,10 @@ class SwinLargeWeights(WeightsEnum):
     Ships the original Microsoft ImageNet-22k → ImageNet-1k finetune
     (:attr:`MS_IN22K_FT_IN1K`), re-hosted via timm
     (``swin_large_patch4_window7_224.ms_in22k_ft_in1k``) under
-    ``huggingface.co/lucid-dl/swin-large``.  The paper (Liu et al.,
-    2021, Table 2) reports 86.3% top-1 for this checkpoint at 224×224.
+    ``huggingface.co/lucid-dl/swin-large``.  86.3% top-1 at 224×224 is
+    the figure published for this checkpoint tag; the paper does not
+    report a 224×224 number for Swin-L, and its Table 2 is COCO
+    detection, not classification.
     """
 
     MS_IN22K_FT_IN1K = WeightEntry(

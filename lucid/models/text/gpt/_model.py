@@ -7,9 +7,9 @@ dict portability.  Layout:
     positions_embed    (max_pos → hidden)
     drop               (post-embedding Dropout)
     h.{i}.attn.{c_attn, c_proj}        (fused QKV + output projection)
-    h.{i}.ln_1                         (pre-attention LayerNorm)
+    h.{i}.ln_1                         (post-attention LayerNorm)
     h.{i}.mlp.{c_fc, c_proj}           (2-layer FFN, intermediate × 4)
-    h.{i}.ln_2                         (pre-MLP LayerNorm)
+    h.{i}.ln_2                         (post-MLP LayerNorm)
 
 The classifier / LM heads then sit on top of ``GPTModel``:
 
@@ -35,6 +35,26 @@ from lucid.models._output import (
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
 from lucid.models.text.gpt._config import GPTConfig
+
+
+def _init_weights(model: nn.Module, std: float) -> None:
+    """Initialise every Linear and Embedding from ``N(0, std²)``.
+
+    GPT-1 §4.1 uses ``N(0, 0.02)`` throughout.  ``config.initializer_range``
+    was declared and documented but never reached a single parameter, so the
+    embedding tables came out at the framework's fan-in default (std ≈ 1,
+    fifty times too wide) and — with the LM head tied to the token table —
+    the initial logits with them.
+    """
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+
+
 from lucid.utils.cache import Cache, DynamicCache, StaticCache
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -121,7 +141,14 @@ class _GPTSelfAttention(nn.Module):
         # triangle; add any padding mask on top.
         bias: Tensor = (1.0 - causal) * -1e4
         if attention_mask is not None:
-            bias = bias + attention_mask
+            pad_mask = attention_mask
+            mask_len = int(pad_mask.shape[-1])
+            if mask_len < t_total:
+                # StaticCache hands back its full max_cache_len buffer; the
+                # unwritten tail carries no real key, and ``causal`` already
+                # blocks it, so extend the padding mask with neutral zeros.
+                pad_mask = F.pad(pad_mask, (0, t_total - mask_len))
+            bias = bias + pad_mask
 
         # Fused SDPA on the memory-heavy path (large T forms a (B,H,T,t_total)
         # score matrix).  Keep the explicit path for attention dropout (the fused
@@ -295,6 +322,8 @@ class GPTModel(PretrainedModel):
         pos = lucid.arange(config.max_position_embeddings).long().unsqueeze(0)
         self.register_buffer("position_ids", pos, persistent=False)
 
+        _init_weights(self, config.initializer_range)
+
     @override
     def get_input_embeddings(self) -> nn.Module:
         return self.tokens_embed
@@ -340,7 +369,12 @@ class GPTModel(PretrainedModel):
         pos_emb = cast(Tensor, self.positions_embed(pos_ids))
         hidden = cast(Tensor, self.drop(tok_emb + pos_emb))
 
-        ext_mask = extended_attention_mask(attention_mask, (B, T))
+        # Keys span the cached history plus the new tokens, so the padding
+        # mask has to be that wide -- a T-wide mask would broadcast onto the
+        # wrong columns (or fail outright) once a cache is in play.
+        ext_mask = extended_attention_mask(
+            attention_mask, (B, T), key_length=past_len + T
+        )
         for layer_idx, block in enumerate(self.h):
             hidden = cast(
                 Tensor,
@@ -555,10 +589,15 @@ class GPTForSequenceClassification(PretrainedModel):
         if attention_mask is None:
             last_idx = [T - 1] * B
         else:
-            # `.sum()` over int dtype isn't supported on the CPU backend, so
-            # cast to float for the reduction and back to int for indexing.
-            mask_f = attention_mask.float()
-            last_idx = [int(mask_f[b].sum().item()) - 1 for b in range(B)]
+            # The last *real* token is the last position the mask keeps, not
+            # ``count - 1``: under left padding ([0, 0, 1, 1]) the count says
+            # index 1, which is a pad slot.  One .tolist() pulls the whole
+            # mask across in a single sync rather than one per row.
+            rows = cast(list[list[float]], attention_mask.float().tolist())
+            last_idx = []
+            for row in rows:
+                kept = [i for i, v in enumerate(row) if v > 0.5]
+                last_idx.append(kept[-1] if kept else 0)
 
         # Gather the last-token hidden state per row.
         pooled = lucid.stack(
@@ -577,6 +616,10 @@ class GPTForSequenceClassification(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # DoubleHeadsModel — LM head + multiple-choice classification head
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+# Section 3.3's auxiliary-LM weight: L = L_task + lambda * L_lm, lambda = 0.5.
+_AUX_LM_WEIGHT: float = 0.5
 
 
 @dataclass(slots=True)
@@ -650,20 +693,18 @@ class _GPTMultipleChoiceHead(nn.Module):
     def forward(self, hidden_states: Tensor, mc_token_ids: Tensor) -> Tensor:  # type: ignore[override]
         # hidden_states: (N, C, L, H); mc_token_ids: (N, C)
         N, C, L, H = hidden_states.shape
-        # Gather the chosen position per (batch, choice).  Index-build in
-        # Python — list comprehensions stay cheap because C is small (≤4-5).
-        pooled_rows: list[list[list[float]]] = []
+        # Gather the chosen position per (batch, choice) by *slicing*, never by
+        # reading values out with ``.item()``: rebuilding the pooled tensor from
+        # Python floats would detach it, and ``mc_loss`` would then produce no
+        # gradient anywhere in the trunk.  Only the token index is read as an
+        # int, which carries no gradient by construction.  C is small (≤4-5),
+        # so the Python loop stays cheap.
+        rows: list[Tensor] = []
         for n in range(N):
-            choices: list[list[float]] = []
             for c in range(C):
                 t = int(mc_token_ids[n, c].item())
-                choices.append(
-                    [float(hidden_states[n, c, t, h].item()) for h in range(H)]
-                )
-            pooled_rows.append(choices)
-        pooled = lucid.tensor(
-            pooled_rows, device=hidden_states.device.type
-        )  # (N, C, H)
+                rows.append(hidden_states[n, c, t : t + 1, :])  # (1, H)
+        pooled = lucid.cat(rows, dim=0).reshape(N, C, H)  # (N, C, H)
         pooled = cast(Tensor, self.dropout(pooled))
         return cast(Tensor, self.summary(pooled)).reshape(N, C)
 
@@ -784,7 +825,11 @@ class GPTDoubleHeadsModel(PretrainedModel):
 
         total_loss: Tensor | None = None
         if lm_loss is not None and mc_loss is not None:
-            total_loss = lm_loss + mc_loss
+            # Section 3.3: L_3(C) = L_2(C) + lambda * L_1(C), with lambda = 0.5
+            # in the paper's experiments.  Weighting the auxiliary LM term at
+            # 1.0 gives it the same pull as the task objective it is only
+            # meant to regularise.
+            total_loss = mc_loss + _AUX_LM_WEIGHT * lm_loss
         elif lm_loss is not None:
             total_loss = lm_loss
         elif mc_loss is not None:

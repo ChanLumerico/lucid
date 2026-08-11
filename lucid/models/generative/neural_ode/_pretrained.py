@@ -31,6 +31,7 @@ from lucid.models.generative.neural_ode._model import (
     NeuralODEForImageGeneration,
     NeuralODEModel,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # Paper §4: the vector field is a gated sum of M = 64 functions.  Two
 # blocks is the shallowest stack that lets the gates act on a hidden
@@ -103,6 +104,8 @@ def neural_ode(pretrained: bool = False, **overrides: object) -> NeuralODEModel:
     >>> model.trace_method            # two-dimensional, so exact
     'exact'
     """
+    if pretrained:
+        reject_unavailable_pretrained("neural_ode")
     return NeuralODEModel(_apply(_CFG_DEFAULT, overrides))
 
 
@@ -156,6 +159,8 @@ def neural_ode_gen(
     >>> model.generate(n_samples=2).samples.shape
     (2, 1, 1, 2)
     """
+    if pretrained:
+        reject_unavailable_pretrained("neural_ode_gen")
     return NeuralODEForImageGeneration(_apply(_CFG_DEFAULT, overrides))
 
 

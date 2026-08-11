@@ -22,21 +22,12 @@ timm                                Lucid
 ``classifier.{weight,bias}``        ``classifier.{weight,bias}``
 ==================================  =========================
 
-.. warning::
-
-   **Activation parity blocker.**  Both the timm checkpoint and the
-   original paper / TensorFlow reference use **ReLU6** (clip at 6) for
-   every stem/block activation, whereas Lucid's ``MobileNetV1`` model
-   (:mod:`lucid.models.vision.mobilenet._model`) currently instantiates
-   plain :class:`~lucid.nn.ReLU`.  The key mapping below is exact (loads
-   ``strict=True`` with zero missing/extra keys), but loading these
-   weights into the plain-ReLU model yields a max-abs logit diff of
-   ~28 against the source.  Swapping every ``nn.ReLU`` in ``_dw_pw`` and
-   the stem to :class:`~lucid.nn.ReLU6` brings the diff down to ~7e-6
-   (full parity).  That is a model edit and must be approved separately
-   — see the converter's ``needs_model_change`` report.  Until then this
-   converter is staged but its weights are not wired into
-   ``_pretrained.py`` / ``_weights.py``.
+The activation-parity blocker this file used to warn about is resolved
+in both directions: ``MobileNetV1`` uses :class:`~lucid.nn.ReLU6`
+throughout (stem and both activations of every separable block), matching
+the timm checkpoint and the TensorFlow reference, and the converted
+weights *are* wired — ``_weights.py`` carries a pinned sha256 and
+``_pretrained.py`` resolves and loads it.
 """
 
 import dataclasses

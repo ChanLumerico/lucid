@@ -27,16 +27,20 @@ from lucid.models._meta import model_family_meta
     convolution was reduced from an :math:`11\times11` stride-4 kernel
     to a :math:`7\times7` stride-2 kernel, addressing the observation
     that AlexNet's first layer learned a mixture of extremely
-    high-frequency and dead filters.  The second convolution's stride
-    was simultaneously dropped from 2 to a more moderate value, giving
-    denser low-level feature coverage and avoiding aliasing artefacts
-    that the visualisations had revealed.  The remaining layers retain
+    high-frequency and dead filters.  §4.1 attributes both changes to
+    layer 1 ("we (i) reduced the 1st layer filter size from 11x11 to
+    7x7 and (ii) made the stride of the convolution 2, rather than 4").
+    §5.1 then describes the model as having "stride 2 convolutions in
+    layers 1 & 2" — conv2's stride was *raised* from AlexNet's 1 to 2,
+    which is also what Figure 3's 55 -> 26 transition requires
+    arithmetically with a 5x5 kernel.  The remaining layers retain
     AlexNet's topology.
 
     These modest topological changes — together with the *methodology*
     of using visualisation to drive architectural choices — were
     influential out of proportion to their parameter cost.  ZFNet
-    achieved a top-5 error of 11.7% on ImageNet, and the
+    reports 16.5% top-5 validation error for the Figure 3 model
+    (Table 2), and the
     deconvolutional-network analysis it popularised is the conceptual
     ancestor of every later interpretability tool from Grad-CAM to
     feature inversion.

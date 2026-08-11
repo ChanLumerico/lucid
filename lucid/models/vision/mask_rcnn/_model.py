@@ -55,6 +55,8 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import InstanceSegmentationOutput
 from lucid.models._utils._detection import (
+    paste_masks_in_image,
+    remove_small_boxes,
     _ReferenceAnchorGenerator,
     multiscale_roi_align,
     nms,
@@ -104,6 +106,16 @@ class _MaskRCNNHeads(nn.Sequential):
             ch_in = hidden_channels
         super().__init__(*blocks)
 
+        # The reference ends both mask modules with a kaiming *normal*
+        # fan-out sweep over every weight (zero bias), matching the paper's
+        # FCN-style mask branch.  Lucid's conv default is kaiming *uniform*
+        # with a=sqrt(5) — a different distribution and gain.
+        for _name, _param in self.named_parameters():
+            if "weight" in _name:
+                nn.init.kaiming_normal_(_param, mode="fan_out", nonlinearity="relu")
+            else:
+                nn.init.zeros_(_param)
+
 
 @final
 class _MaskRCNNPredictor(nn.Module):
@@ -120,6 +132,16 @@ class _MaskRCNNPredictor(nn.Module):
         super().__init__()
         self.conv5_mask = nn.ConvTranspose2d(in_channels, hidden_channels, 2, stride=2)
         self.mask_fcn_logits = nn.Conv2d(hidden_channels, num_classes, 1)
+
+        # The reference ends both mask modules with a kaiming *normal*
+        # fan-out sweep over every weight (zero bias), matching the paper's
+        # FCN-style mask branch.  Lucid's conv default is kaiming *uniform*
+        # with a=sqrt(5) — a different distribution and gain.
+        for _name, _param in self.named_parameters():
+            if "weight" in _name:
+                nn.init.kaiming_normal_(_param, mode="fan_out", nonlinearity="relu")
+            else:
+                nn.init.zeros_(_param)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -383,6 +405,8 @@ class MaskRCNNForObjectDetection(PretrainedModel):
             logits=class_logits,
             pred_boxes=pred_boxes,
             pred_masks=mask_logits,
+            proposals=tuple(proposals),
+            hidden_states=tuple(det_feats),
         )
 
     def _decode_per_class(
@@ -439,6 +463,11 @@ class MaskRCNNForObjectDetection(PretrainedModel):
             ``(D, 1, 28, 28)`` sigmoid mask probabilities (the channel of
             each detection's predicted class).
         """
+        # ``forward`` carries its own proposals out, mirroring Faster R-CNN,
+        # so the documented ``model.postprocess(model(x))`` flow works without
+        # the caller re-running the RPN by hand.
+        if proposals is None:
+            proposals = list(output.proposals) if output.proposals is not None else None
         if proposals is None:
             raise ValueError(
                 "postprocess() needs the per-image proposals used in forward()."
@@ -452,7 +481,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         results: list[dict[str, Tensor]] = []
         offset = 0
 
-        for props in proposals:
+        for idx, props in enumerate(proposals):
             N_i = int(props.shape[0])
             lg_i = logits[offset : offset + N_i]
             bx_i = pred_boxes[offset : offset + N_i]
@@ -484,6 +513,15 @@ class MaskRCNNForObjectDetection(PretrainedModel):
                 bx_c = bx_class[mask_t]
                 # Mask channel for class c (sigmoid → probability).
                 mk_c = F.sigmoid(mk_i[mask_t][:, c, :, :])  # (k, 28, 28)
+                # The reference drops degenerate boxes before NMS.  A
+                # zero-area box has zero IoU with everything, so NMS cannot
+                # suppress it and it survives into the final detections.
+                keep_sz = remove_small_boxes(bx_c, 1e-2)
+                if int(keep_sz.shape[0]) == 0:
+                    continue
+                bx_c = bx_c[keep_sz]
+                sc_c = sc_c[keep_sz]
+                mk_c = mk_c[keep_sz]
                 keep = nms(bx_c, sc_c, cfg.nms_thresh)
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
@@ -501,12 +539,57 @@ class MaskRCNNForObjectDetection(PretrainedModel):
             all_l = lucid.cat(keep_labels, dim=0)
             all_m = lucid.cat(keep_masks, dim=0)
             order = lucid.argsort(-all_s)[: cfg.max_detections]
+            det_b = all_b[order]
+            det_s = all_s[order]
+            det_l = all_l[order].long()
+            det_m = all_m[order]
+
+            # Paper §3.1 (Inference): "The mask branch is then applied to the
+            # highest scoring 100 detection boxes ... it speeds up inference and
+            # improves accuracy (due to the use of fewer, more accurate RoIs)."
+            # The masks gathered above were RoI-Aligned on the *un-refined* RPN
+            # proposals, so their 28x28 grid is in the proposal's coordinate
+            # frame while ``boxes`` are the regressed ones — a consumer pasting
+            # the mask into the box would place it wrong.  Re-align on the final
+            # boxes when the feature levels came along with the output.
+            feats = output.hidden_states
+            if feats is not None and int(det_b.shape[0]) > 0:
+                scales = [1.0 / float(st) for st in self._strides[:4]]
+                m_feats = multiscale_roi_align(
+                    list(feats),
+                    [det_b],
+                    output_size=cfg.roi_mask_size,
+                    spatial_scales=scales,
+                    sampling_ratio=cfg.roi_sampling_ratio,
+                    canonical_scale=cfg.canonical_scale,
+                    canonical_level=cfg.canonical_level,
+                )
+                m_logits = self.roi_heads.predict_masks(m_feats)  # (D, K, mh, mw)
+                rows = [
+                    F.sigmoid(m_logits[i : i + 1, int(det_l[i].item()), :, :])
+                    for i in range(int(det_b.shape[0]))
+                ]
+                det_m = lucid.cat(rows, dim=0).unsqueeze(1)  # (D, 1, mh, mw)
+
+            # Paste onto the boxes and binarise.  A raw mh x mw probability
+            # grid is in RoI coordinates, so it says nothing about where in
+            # the image the instance is -- and ``mask_thresh`` had nothing to
+            # act on.  ``image_sizes`` is what makes the canvas known; without
+            # it the RoI-space probabilities are returned unchanged.
+            if image_sizes is not None and int(det_b.shape[0]) > 0:
+                det_m = paste_masks_in_image(
+                    det_m,
+                    det_b,
+                    image_sizes[idx],
+                    threshold=cfg.mask_thresh,
+                )
+
             results.append(
                 {
-                    "boxes": all_b[order],
-                    "scores": all_s[order],
-                    "labels": all_l[order].long(),
-                    "masks": all_m[order],
+                    "boxes": det_b,
+                    "scores": det_s,
+                    "labels": det_l,
+                    "masks": det_m,
                 }
             )
         return results

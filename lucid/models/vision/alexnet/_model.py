@@ -16,14 +16,24 @@ Architecture::
     Conv4 : 384→256, 3×3,  pad=1            → ReLU
     Conv5 : 256→256, 3×3,  pad=1            → ReLU → MaxPool 3×3 s2
     AdaptiveAvgPool → 6×6
-    FC6   : 256*6*6 → 4096                  → ReLU → Dropout
-    FC7   : 4096    → 4096                  → ReLU → Dropout
+    Dropout → FC6 : 256*6*6 → 4096          → ReLU
+    Dropout → FC7 : 4096    → 4096          → ReLU
     FC8   : 4096    → num_classes
 
-LRN was a contribution of the 2012 paper but is dropped in the 2014
-single-stream derivation (and in essentially every subsequent ImageNet-
-classifier publication) — it adds compute without measurable accuracy
-gain once dropout + ReLU + heavy augmentation are present.
+Two deliberate divergences from arXiv:1404.5997, both inherited from the
+canonical reference implementation these weights come from:
+
+* **conv4 width.**  Footnote 1 of the 2014 paper gives conv4 384 filters;
+  the widths built here are 64/192/384/256/256, so conv4 is 256.  That is
+  what the reference implementation has always used and what the converted
+  checkpoint's tensors are shaped for — changing it would break every
+  shipped weight for a number no released model was ever trained with.
+* **Local response normalisation.**  The 2012 paper introduced LRN; the
+  2014 paper does not discuss normalisation at all, so it cannot be cited
+  as having removed it.  The omission here follows the reference
+  implementation, which drops LRN because later work found it adds compute
+  without measurable accuracy gain once dropout, ReLU and heavy
+  augmentation are present.
 """
 
 from typing import ClassVar, cast, override
@@ -38,7 +48,9 @@ from lucid.models.vision.alexnet._config import AlexNetConfig
 
 
 def _build_features(cfg: AlexNetConfig) -> nn.Sequential:
-    # OWT-2014 single-stream channel widths (64/192/384/256/256), no LRN.
+    # Single-stream channel widths (64/192/384/256/256), no LRN.  Both
+    # choices follow the reference implementation rather than the 2014
+    # paper -- see the module docstring for why.
     # Indices in the resulting Sequential land at {0, 3, 6, 8, 10} for the
     # five convolutions — matching the reference-framework state_dict so
     # the converted checkpoint loads with a direct ``features.N.*`` map.
@@ -67,6 +79,43 @@ def _build_features(cfg: AlexNetConfig) -> nn.Sequential:
 # ---------------------------------------------------------------------------
 # AlexNet backbone  (task="base")
 # ---------------------------------------------------------------------------
+
+
+def _init_paper_weights(model: nn.Module) -> None:
+    r"""AlexNet's own initialisation (Krizhevsky et al., 2012, section 5).
+
+    "We initialized the weights in each layer from a zero-mean Gaussian
+    distribution with standard deviation 0.01.  We initialized the neuron
+    biases in the second, fourth, and fifth convolutional layers, as well as
+    in the fully-connected hidden layers, with the constant 1.  This
+    initialization accelerates the early stages of learning by providing the
+    ReLUs with positive inputs.  We initialized the neuron biases in the
+    remaining layers with the constant 0."
+
+    The bias-of-one on exactly those layers is the point: it is what keeps
+    their ReLUs on at step 0.  Lucid's default gives every conv a
+    ``kaiming_uniform(a=sqrt(5))`` weight and a uniform bias, so neither the
+    scale nor the positive-input trick survives.
+    """
+    convs = [m for m in model.modules() if isinstance(m, nn.Conv2d)]
+    linears = [m for m in model.modules() if isinstance(m, nn.Linear)]
+
+    for m in convs + linears:
+        nn.init.normal_(m.weight, mean=0.0, std=0.01)
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+
+    # Conv 2, 4 and 5 (1-indexed as the paper counts them).
+    for idx in (1, 3, 4):
+        if idx < len(convs):
+            cbias = convs[idx].bias
+            if cbias is not None:
+                nn.init.ones_(cbias)
+    # The fully-connected *hidden* layers — every Linear but the classifier.
+    for lin in linears[:-1]:
+        lbias = lin.bias
+        if lbias is not None:
+            nn.init.ones_(lbias)
 
 
 class AlexNet(PretrainedModel, BackboneMixin):
@@ -117,10 +166,12 @@ class AlexNet(PretrainedModel, BackboneMixin):
     on a 1.2 M-image dataset; and *heavy data augmentation* (random
     crop, horizontal flip, AlexNet-style PCA colour jitter) was made
     central to the recipe.  The 2012 paper additionally used local
-    response normalisation between blocks 1-2; the 2014 derivation
-    drops it as compute-without-accuracy.  The classifier variant has
-    approximately 61.1 M parameters (≈58.6 M of which sit in the two
-    4096-dim fully-connected layers).  With the original ImageNet-1k
+    response normalisation between blocks 1-2; this implementation omits
+    it, following the reference implementation (the 2014 paper does not
+    discuss normalisation).  The classifier variant has
+    61,100,840 parameters, of which 58.6 M sit in the *three*
+    fully-connected layers; the two 4096-dim hidden ones alone account
+    for 54.5 M.  With the original ImageNet-1k
     training recipe the single-stream AlexNet reaches roughly 56.5%
     top-1 / 79.1% top-5 on the validation split.
 
@@ -155,8 +206,13 @@ class AlexNet(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=2, num_channels=192, reduction=8),
             FeatureInfo(stage=3, num_channels=384, reduction=16),
             FeatureInfo(stage=4, num_channels=256, reduction=16),
-            FeatureInfo(stage=5, num_channels=256, reduction=32),
+            # conv5 emits a 13x13 map from a 224 input — stride 16.  The
+            # /32 only appears after the following max-pool, which is not
+            # part of this stage.
+            FeatureInfo(stage=5, num_channels=256, reduction=16),
         ]
+
+        _init_paper_weights(self)
 
     @override
     @property
@@ -208,7 +264,7 @@ class AlexNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         The two hidden fully-connected layers, both projecting to 4096
         dimensions.
     drop6, drop7 : nn.Dropout
-        :class:`~lucid.nn.Dropout` layers applied after each ReLU in
+        :class:`~lucid.nn.Dropout` layers applied before each FC in
         the hidden FC stack, controlled by ``config.dropout``.
     classifier : nn.Module
         Final linear projection to ``num_classes``, built by
@@ -263,6 +319,8 @@ class AlexNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.drop7 = nn.Dropout(p=config.dropout)
         self._build_classifier(4096, config.num_classes)
 
+        _init_paper_weights(self)
+
     @override
     def forward(  # type: ignore[override]
         self,
@@ -272,8 +330,14 @@ class AlexNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x = cast(Tensor, self.features(x))
         x = cast(Tensor, self.avgpool(x))
         x = x.flatten(1)
-        x = cast(Tensor, self.drop6(F.relu(cast(Tensor, self.fc6(x)))))
-        x = cast(Tensor, self.drop7(F.relu(cast(Tensor, self.fc7(x)))))
+        # Dropout goes *in front of* each FC, matching the reference
+        # classifier's Dropout -> Linear -> ReLU ordering.  Dropping after the
+        # ReLU instead zeroes post-activation units, so the layer that follows
+        # never sees the noise it is supposed to be regularised against; the
+        # two orderings differ only in training mode, which is why eval-time
+        # parity never caught it.
+        x = F.relu(cast(Tensor, self.fc6(cast(Tensor, self.drop6(x)))))
+        x = F.relu(cast(Tensor, self.fc7(cast(Tensor, self.drop7(x)))))
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None

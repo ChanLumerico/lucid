@@ -2,8 +2,8 @@
 
 Paper: "Visualizing and Understanding Convolutional Networks"
 Architecture differs from AlexNet in the first two conv layers:
-    Conv1 : 3→96,  7×7, stride=2, pad=1  → ReLU → LRN → MaxPool 3×3 s2
-    Conv2 : 96→256, 5×5, stride=2, pad=0 → ReLU → LRN → MaxPool 3×3 s2
+    Conv1 : 3→96,  7×7, stride=2, pad=1  → ReLU → MaxPool 3×3 s2 → LRN
+    Conv2 : 96→256, 5×5, stride=2, pad=0 → ReLU → MaxPool 3×3 s2 → LRN
     Conv3 : 256→384, 3×3, pad=1          → ReLU
     Conv4 : 384→384, 3×3, pad=1          → ReLU
     Conv5 : 384→256, 3×3, pad=1          → ReLU → MaxPool 3×3 s2
@@ -25,17 +25,29 @@ from lucid.models.vision.zfnet._config import ZFNetConfig
 
 
 def _build_features(cfg: ZFNetConfig) -> nn.Sequential:
+    # The overlapping 3x3/2 pools use *ceiling* output sizing, which is what
+    # Fig. 3's tensor chain requires: 224 -> 110 -> 55 -> 26 -> 13 -> 6.  Under
+    # floor sizing each pool sheds a row and a column (110 -> 54 -> 25 -> 12 ->
+    # 5), so conv5 emitted a 5x5 map and ``AdaptiveAvgPool2d((6, 6))`` silently
+    # *up*-sampled it — FC6 then consumed 9216 numbers interpolated from 6400
+    # rather than the paper's 9216 independent activations.
     return nn.Sequential(
         # Block 1 — 7×7 stride=2 (key ZFNet modification)
+        # Figure 3's caption numbers the block explicitly: "(i) passed
+        # through a rectified linear function, (ii) pooled (max within 3x3
+        # regions, using stride 2) and (iii) contrast normalized" — so LRN
+        # comes *after* the pool.  The "55 by 55" it reports is the
+        # post-pool size, which settles the order: normalising the 110x110
+        # pre-pool tensor instead changes every downstream activation.
         nn.Conv2d(cfg.in_channels, 96, 7, stride=2, padding=1),
         nn.ReLU(inplace=True),
+        nn.MaxPool2d(3, stride=2, ceil_mode=True),
         nn.LocalResponseNorm(5, alpha=1e-4, beta=0.75, k=2.0),
-        nn.MaxPool2d(3, stride=2),
         # Block 2 — 5×5 stride=2 (key ZFNet modification)
         nn.Conv2d(96, 256, 5, stride=2),
         nn.ReLU(inplace=True),
+        nn.MaxPool2d(3, stride=2, ceil_mode=True),
         nn.LocalResponseNorm(5, alpha=1e-4, beta=0.75, k=2.0),
-        nn.MaxPool2d(3, stride=2),
         # Block 3
         nn.Conv2d(256, 384, 3, padding=1),
         nn.ReLU(inplace=True),
@@ -45,7 +57,7 @@ def _build_features(cfg: ZFNetConfig) -> nn.Sequential:
         # Block 5
         nn.Conv2d(384, 256, 3, padding=1),
         nn.ReLU(inplace=True),
-        nn.MaxPool2d(3, stride=2),
+        nn.MaxPool2d(3, stride=2, ceil_mode=True),
     )
 
 
@@ -97,7 +109,8 @@ class ZFNet(PretrainedModel, BackboneMixin):
     -----
     From Zeiler & Fergus, "Visualizing and Understanding Convolutional
     Networks", ECCV 2014.  The paper reports a single-model top-5
-    ImageNet validation error of 11.7%, an improvement of roughly four
+    ImageNet validation error of 16.5% for a single net (Table 2),
+    an improvement of roughly four
     percentage points over the published AlexNet number, achieved with
     essentially the same parameter and FLOP budget.  More important
     than the accuracy gain was the *methodology*: ZFNet popularised
@@ -187,7 +200,8 @@ class ZFNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
     -----
     From Zeiler & Fergus, "Visualizing and Understanding Convolutional
     Networks", ECCV 2014, §3.  Top-5 ImageNet-1k validation error in
-    the paper is 11.7%.  The classifier head is identical to AlexNet's
+    the paper is 16.5% (Table 2, single net).  The classifier head
+    is identical to AlexNet's
     by design — ZFNet's contribution lives entirely in the first two
     convolutional layers.
 

@@ -1,9 +1,9 @@
-"""PVT v2 parity tests (B0–B5 + legacy pvt_tiny alias).
+"""PVT v2 parity tests (B0–B5).
 
 B0 — default tier (self-consistency).
 B1 — default tier (timm parity).
 B2–B5 — slow tier (self-consistency).
-pvt_tiny — alias for B1 (timm parity)."""
+"""
 
 import pytest
 import lucid.models as M
@@ -23,7 +23,6 @@ _FACTORIES = frozenset(
         M.pvt_v2_b3_cls,
         M.pvt_v2_b4_cls,
         M.pvt_v2_b5_cls,
-        M.pvt_tiny_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

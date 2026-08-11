@@ -16,6 +16,7 @@ from lucid.models.vision.resnet._weights import (
     WideResNet50Weights,
     WideResNet101Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -52,6 +53,7 @@ _CFG_269 = ResNetConfig(block_type="bottleneck", layers=(3, 30, 48, 8))
     model_type="resnet",
     model_class=ResNet,
     default_config=_CFG_18,
+    params=11176512,
 )
 def resnet_18(pretrained: bool = False, **overrides: object) -> ResNet:
     r"""ResNet-18 feature-extracting backbone (no classification head).
@@ -103,6 +105,8 @@ def resnet_18(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 512, H/32, W/32)
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnet_18", alternative="resnet_18_cls")
     cfg = replace(_CFG_18, **cast(dict[str, Any], overrides)) if overrides else _CFG_18
     return ResNet(cfg)
 
@@ -113,6 +117,7 @@ def resnet_18(pretrained: bool = False, **overrides: object) -> ResNet:
     model_type="resnet",
     model_class=ResNet,
     default_config=_CFG_34,
+    params=21284672,
 )
 def resnet_34(pretrained: bool = False, **overrides: object) -> ResNet:
     r"""ResNet-34 feature-extracting backbone (no classification head).
@@ -156,6 +161,8 @@ def resnet_34(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 512, H/32, W/32)
     (1, 512, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnet_34", alternative="resnet_34_cls")
     cfg = replace(_CFG_34, **cast(dict[str, Any], overrides)) if overrides else _CFG_34
     return ResNet(cfg)
 
@@ -166,6 +173,7 @@ def resnet_34(pretrained: bool = False, **overrides: object) -> ResNet:
     model_type="resnet",
     model_class=ResNet,
     default_config=_CFG_50,
+    params=23508032,
 )
 def resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     r"""ResNet-50 feature-extracting backbone (no classification head).
@@ -218,6 +226,8 @@ def resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (2, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnet_50", alternative="resnet_50_cls")
     cfg = replace(_CFG_50, **cast(dict[str, Any], overrides)) if overrides else _CFG_50
     return ResNet(cfg)
 
@@ -228,6 +238,7 @@ def resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     model_type="resnet",
     model_class=ResNet,
     default_config=_CFG_101,
+    params=42500160,
 )
 def resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     r"""ResNet-101 feature-extracting backbone (no classification head).
@@ -271,6 +282,8 @@ def resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnet_101", alternative="resnet_101_cls")
     cfg = (
         replace(_CFG_101, **cast(dict[str, Any], overrides)) if overrides else _CFG_101
     )
@@ -283,6 +296,7 @@ def resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     model_type="resnet",
     model_class=ResNet,
     default_config=_CFG_152,
+    params=58143808,
 )
 def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
     r"""ResNet-152 feature-extracting backbone (no classification head).
@@ -326,6 +340,8 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnet_152", alternative="resnet_152_cls")
     cfg = (
         replace(_CFG_152, **cast(dict[str, Any], overrides)) if overrides else _CFG_152
     )
@@ -345,6 +361,7 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
     model_type="resnet",
     model_class=ResNetForImageClassification,
     default_config=_CFG_18,
+    params=11689512,
 )
 def resnet_18_cls(
     pretrained: bool | str = False,
@@ -393,7 +410,7 @@ def resnet_18_cls(
     -----
     See He et al., "Deep Residual Learning for Image Recognition",
     CVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are
-    converted from torchvision's ``ResNet18_Weights`` and hosted on the
+    converted from reference_vision's ``ResNet18_Weights`` and hosted on the
     Hugging Face Hub under ``lucid-dl/resnet-18``.
 
     Examples
@@ -428,6 +445,7 @@ def resnet_18_cls(
     model_type="resnet",
     model_class=ResNetForImageClassification,
     default_config=_CFG_34,
+    params=21797672,
 )
 def resnet_34_cls(
     pretrained: bool | str = False,
@@ -468,7 +486,7 @@ def resnet_34_cls(
     -----
     See He et al., "Deep Residual Learning for Image Recognition",
     CVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are
-    converted from torchvision's ``ResNet34_Weights`` and hosted on the
+    converted from reference_vision's ``ResNet34_Weights`` and hosted on the
     Hugging Face Hub under ``lucid-dl/resnet-34``.
 
     Examples
@@ -497,6 +515,7 @@ def resnet_34_cls(
     model_type="resnet",
     model_class=ResNetForImageClassification,
     default_config=_CFG_50,
+    params=25557032,
 )
 def resnet_50_cls(
     pretrained: bool | str = False,
@@ -542,7 +561,7 @@ def resnet_50_cls(
     See He et al., "Deep Residual Learning for Image Recognition",
     CVPR 2016 (arXiv:1512.03385), Table 1.  Final pre-classifier
     feature has 2048 channels (``hidden_sizes[3] * expansion``).
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``ResNet50_Weights`` and hosted on the Hugging Face Hub under
     ``lucid-dl/resnet-50``.
 
@@ -580,6 +599,7 @@ def resnet_50_cls(
     model_type="resnet",
     model_class=ResNetForImageClassification,
     default_config=_CFG_101,
+    params=44549160,
 )
 def resnet_101_cls(
     pretrained: bool | str = False,
@@ -620,7 +640,7 @@ def resnet_101_cls(
     -----
     See He et al., "Deep Residual Learning for Image Recognition",
     CVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are
-    converted from torchvision's ``ResNet101_Weights`` and hosted on the
+    converted from reference_vision's ``ResNet101_Weights`` and hosted on the
     Hugging Face Hub under ``lucid-dl/resnet-101``.
 
     Examples
@@ -651,6 +671,7 @@ def resnet_101_cls(
     model_type="resnet",
     model_class=ResNetForImageClassification,
     default_config=_CFG_152,
+    params=60192808,
 )
 def resnet_152_cls(
     pretrained: bool | str = False,
@@ -692,7 +713,7 @@ def resnet_152_cls(
     -----
     See He et al., "Deep Residual Learning for Image Recognition",
     CVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are
-    converted from torchvision's ``ResNet152_Weights`` and hosted on the
+    converted from reference_vision's ``ResNet152_Weights`` and hosted on the
     Hugging Face Hub under ``lucid-dl/resnet-152``.
 
     Examples
@@ -726,6 +747,7 @@ def resnet_152_cls(
     model_type="resnet",
     model_class=ResNet,
     default_config=_CFG_WIDE50,
+    params=66834240,
 )
 def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     r"""Wide ResNet-50-2 feature-extracting backbone (no classification head).
@@ -769,6 +791,10 @@ def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "wide_resnet_50", alternative="wide_resnet_50_cls"
+        )
     cfg = (
         replace(_CFG_WIDE50, **cast(dict[str, Any], overrides))
         if overrides
@@ -786,6 +812,7 @@ def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     model_type="resnet",
     model_class=ResNetForImageClassification,
     default_config=_CFG_WIDE50,
+    params=68883240,
 )
 def wide_resnet_50_cls(
     pretrained: bool | str = False,
@@ -824,7 +851,7 @@ def wide_resnet_50_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``Wide_ResNet50_2_Weights`` and hosted on the Hugging Face Hub under
     ``lucid-dl/wide-resnet-50-2``.
 
@@ -861,6 +888,7 @@ def wide_resnet_50_cls(
     model_type="resnet",
     model_class=ResNet,
     default_config=_CFG_WIDE101,
+    params=124837696,
 )
 def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     r"""Wide ResNet-101-2 feature-extracting backbone (no classification head).
@@ -896,6 +924,10 @@ def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "wide_resnet_101", alternative="wide_resnet_101_cls"
+        )
     cfg = (
         replace(_CFG_WIDE101, **cast(dict[str, Any], overrides))
         if overrides
@@ -913,6 +945,7 @@ def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     model_type="resnet",
     model_class=ResNetForImageClassification,
     default_config=_CFG_WIDE101,
+    params=126886696,
 )
 def wide_resnet_101_cls(
     pretrained: bool | str = False,
@@ -951,7 +984,7 @@ def wide_resnet_101_cls(
 
     Notes
     -----
-    Pretrained weights are converted from torchvision's
+    Pretrained weights are converted from reference_vision's
     ``Wide_ResNet101_2_Weights`` and hosted on the Hugging Face Hub
     under ``lucid-dl/wide-resnet-101-2``.
 
@@ -988,6 +1021,7 @@ def wide_resnet_101_cls(
     model_type="resnet",
     model_class=ResNet,
     default_config=_CFG_200,
+    params=62624832,
 )
 def resnet_200(pretrained: bool = False, **overrides: object) -> ResNet:
     r"""ResNet-200 feature-extracting backbone (no classification head).
@@ -1029,6 +1063,8 @@ def resnet_200(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnet_200")
     cfg = (
         replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
     )
@@ -1041,6 +1077,7 @@ def resnet_200(pretrained: bool = False, **overrides: object) -> ResNet:
     model_type="resnet",
     model_class=ResNetForImageClassification,
     default_config=_CFG_200,
+    params=64673832,
 )
 def resnet_200_cls(
     pretrained: bool = False, **overrides: object
@@ -1076,6 +1113,8 @@ def resnet_200_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnet_200_cls")
     cfg = (
         replace(_CFG_200, **cast(dict[str, Any], overrides)) if overrides else _CFG_200
     )
@@ -1093,6 +1132,7 @@ def resnet_200_cls(
     model_type="resnet",
     model_class=ResNet,
     default_config=_CFG_269,
+    params=100024384,
 )
 def resnet_269(pretrained: bool = False, **overrides: object) -> ResNet:
     r"""ResNet-269 feature-extracting backbone (no classification head).
@@ -1133,6 +1173,8 @@ def resnet_269(pretrained: bool = False, **overrides: object) -> ResNet:
     >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
     (1, 2048, 7, 7)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnet_269")
     cfg = (
         replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
     )
@@ -1145,6 +1187,7 @@ def resnet_269(pretrained: bool = False, **overrides: object) -> ResNet:
     model_type="resnet",
     model_class=ResNetForImageClassification,
     default_config=_CFG_269,
+    params=102073384,
 )
 def resnet_269_cls(
     pretrained: bool = False, **overrides: object
@@ -1180,6 +1223,8 @@ def resnet_269_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    if pretrained:
+        reject_unavailable_pretrained("resnet_269_cls")
     cfg = (
         replace(_CFG_269, **cast(dict[str, Any], overrides)) if overrides else _CFG_269
     )

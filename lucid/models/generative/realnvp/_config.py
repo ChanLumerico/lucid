@@ -102,6 +102,8 @@ class RealNVPConfig(NormalizingFlowConfig):
         base_dim: Feature maps in the first scale's coupling networks;
             doubled at every subsequent scale, as in the released
             implementation.  Paper §4.1: ``32``, or ``64`` for CIFAR-10.
+        use_weight_norm: Apply weight normalisation to every convolution
+            inside the coupling networks (paper §4.1).
         use_batch_norm: Enable batch normalisation — inside the coupling
             networks *and* on each coupling layer's output, where it is
             an invertible rescaling that contributes to the
@@ -133,7 +135,18 @@ class RealNVPConfig(NormalizingFlowConfig):
     residual_blocks: int = 4
     base_dim: int = 32
     use_batch_norm: bool = True
+    # §4.1: "we use ... weight normalization" in the coupling networks.
+    # Without it the s/t stack is a plain conv tower and the reported
+    # optimisation behaviour does not reproduce.
+    use_weight_norm: bool = True
     data_constraint: float = 0.9
+    # Bit depth of the discrete data the reported likelihood is measured
+    # against.  The flow itself is fitted to ``x`` in ``[0, 1]``, but the
+    # paper models ``logit(alpha + (1 - alpha) * x / 256)`` and reports
+    # bits/dim on the 8-bit pixel scale, so the change of variables from
+    # ``{0, ..., 255}`` to ``[0, 1]`` contributes ``num_bits`` to the metric.
+    # Table 1 is not comparable without it.
+    num_bits: int = 8
 
     @override
     def __post_init__(self) -> None:

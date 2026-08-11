@@ -14,9 +14,14 @@ Key idea:
 
 Faithfulness notes
 ------------------
-* The original paper trains SVMs on top of frozen CNN features.  Modern
-  reproductions (and the Caffe reference code) use softmax end-to-end, which
-  is what we implement here.
+* The original paper trains per-class one-vs-rest linear SVMs on top of
+  frozen CNN features, and so does the authors' release — ``rcnn_train.m``
+  is entirely an SVM trainer and ``rcnn_test.m`` scores with the stored
+  SVM weights.  Softmax appears there only in the comparison utility
+  ``rcnn_test_softmax.m``, which the paper itself reports as ~3.3 mAP
+  worse (§4.2 / Appendix B).  This module implements the softmax head
+  because it is what modern reproductions use and what an end-to-end
+  training path can actually optimise — not because the reference does.
 * ``proposals`` must be supplied externally (e.g. from selective search or
   any other proposal method).  This module covers the CNN + head portion.
 * Bounding-box regression targets are *class-specific* (num_classes × 4
@@ -24,6 +29,8 @@ Faithfulness notes
 """
 
 from typing import ClassVar, cast, final, override
+
+import math
 
 import lucid
 import lucid.nn as nn
@@ -51,8 +58,8 @@ class _ConvFeatures(nn.Module):
     Output : (N, 9216)                   — flattened pool5 features
                                            (for roi_size = 227)
 
-    Architecture (matches original AlexNet / RCNN paper):
-      Conv1  : 11×11, s=4, p=2 → 96ch  → 55×55
+    Architecture (CaffeNet, the network the paper fine-tunes):
+      Conv1  : 11×11, s=4, p=0 → 96ch  → 55×55
       Pool1  : 3×3, s=2         →        27×27
       Conv2  : 5×5,  p=2 → 256ch →       27×27
       Pool2  : 3×3, s=2         →        13×13
@@ -61,13 +68,25 @@ class _ConvFeatures(nn.Module):
       Conv5  : 3×3,  p=1 → 256ch →       13×13
       Pool5  : 3×3, s=2         →         6× 6
       Flatten:               → 256*6*6 = 9 216
+
+    Two documented divergences from CaffeNet, both simplifications rather
+    than accidents — this trunk is randomly initialised, so nothing depends
+    on matching CaffeNet's tensor layout:
+
+    * **Grouped convolutions.**  CaffeNet splits conv2/conv4/conv5 into two
+      groups (the 2012 two-GPU partition).  Here they are dense, which is a
+      strictly larger model at the same channel widths.
+    * **Local response normalisation.**  CaffeNet has LRN after conv1 and
+      conv2; it is omitted, as it is in every post-2014 re-derivation.
     """
 
-    def __init__(self, in_channels: int) -> None:
+    def __init__(self, in_channels: int, roi_size: int = 227) -> None:
         super().__init__()
         self.features = nn.Sequential(
-            # Block 1
-            nn.Conv2d(in_channels, 96, kernel_size=11, stride=4, padding=2),
+            # Block 1.  padding=0: CaffeNet takes a 227px crop straight into
+            # an 11x11 stride-4 conv, giving 55x55.  padding=2 makes it 56x56,
+            # which shifts every downstream receptive field by half a stride.
+            nn.Conv2d(in_channels, 96, kernel_size=11, stride=4, padding=0),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2),
             # Block 2
@@ -85,7 +104,14 @@ class _ConvFeatures(nn.Module):
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2),
         )
-        self.out_dim: int = 256 * 6 * 6  # = 9 216 for 227 × 227 input
+        # ``roi_size`` is an advertised override, so the flattened width has to
+        # follow it rather than assume the 6x6 pool5 of a 227px crop.  One
+        # zero-input trace at construction settles it exactly.
+        with lucid.no_grad():
+            probe = lucid.zeros((1, in_channels, roi_size, roi_size))
+            self.out_dim: int = int(
+                cast(Tensor, self.features(probe)).flatten(1).shape[1]
+            )
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -110,8 +136,15 @@ class _FCHead(nn.Module):
     Architecture:
       fc6   : feat_dim → 4 096, ReLU, Dropout
       fc7   : 4 096    → 4 096, ReLU, Dropout
-      cls   : 4 096    → num_classes + 1   (linear)
-      bbox  : 4 096    → num_classes × 4   (linear)
+      cls   : 4 096    → num_classes + 1   (linear, on fc7)
+      bbox  : feat_dim → num_classes × 4   (linear, on **pool5**)
+
+    Appendix C is explicit that the regressor's input is pool5: "we use the
+    features computed by the CNN ... :math:`P^i_5` denotes the pool_5
+    features", and the released code trains its ridge regressors on the
+    pool5 layer.  Reading fc7 instead puts two dropout-regularised
+    non-linearities between the spatial map and a head whose whole job is to
+    recover geometry.
     """
 
     def __init__(
@@ -126,15 +159,16 @@ class _FCHead(nn.Module):
         self.drop = nn.Dropout(p=dropout)
 
         self.cls_head = nn.Linear(4096, num_classes + 1)
-        self.bbox_head = nn.Linear(4096, num_classes * 4)
+        self.bbox_head = nn.Linear(feat_dim, num_classes * 4)
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+        pool5 = x
         x = F.relu(cast(Tensor, self.fc6(x)))
         x = cast(Tensor, self.drop(x))
         x = F.relu(cast(Tensor, self.fc7(x)))
         x = cast(Tensor, self.drop(x))
-        return cast(Tensor, self.cls_head(x)), cast(Tensor, self.bbox_head(x))
+        return cast(Tensor, self.cls_head(x)), cast(Tensor, self.bbox_head(pool5))
 
 
 # ---------------------------------------------------------------------------
@@ -170,11 +204,12 @@ class RCNNForObjectDetection(PretrainedModel):
         AlexNet conv1-conv5 trunk applied to each warped RoI crop.  Output
         is a 9216-dim vector for the default ``roi_size=227``.
     fc_head : _FCHead
-        Two-layer FC trunk (``fc6``, ``fc7``) followed by sibling
-        :class:`~lucid.nn.Linear` heads:
-        ``cls_head`` produces :math:`(N, K+1)` class logits (background +
-        ``num_classes`` foreground classes) and ``bbox_head`` produces
-        :math:`(N, 4K)` class-specific bounding-box deltas.
+        Two-layer FC trunk (``fc6``, ``fc7``) plus sibling
+        :class:`~lucid.nn.Linear` heads: ``cls_head`` reads fc7 and produces
+        :math:`(N, K+1)` class logits (background + ``num_classes``
+        foreground classes), while ``bbox_head`` reads the pool5 features
+        directly (Appendix C) and produces :math:`(N, 4K)` class-specific
+        bounding-box deltas.
 
     Notes
     -----
@@ -229,11 +264,12 @@ class RCNNForObjectDetection(PretrainedModel):
         super().__init__(config)
         self._num_classes = config.num_classes
         self._roi_size = config.roi_size
+        self._context_pad = config.context_pad
         self._score_thresh = config.score_thresh
         self._nms_thresh = config.nms_thresh
         self._max_det = config.max_detections
 
-        self.conv_features = _ConvFeatures(config.in_channels)
+        self.conv_features = _ConvFeatures(config.in_channels, config.roi_size)
         self.fc_head = _FCHead(
             feat_dim=self.conv_features.out_dim,
             num_classes=config.num_classes,
@@ -261,19 +297,43 @@ class RCNNForObjectDetection(PretrainedModel):
         H = int(img.shape[2])
         W = int(img.shape[3])
         S = self._roi_size
+        pad = self._context_pad
+        # Appendix A warps "with context": the box is dilated in *source* space
+        # by however much puts exactly ``pad`` warped pixels of surroundings on
+        # each side, so the box itself lands on the central S - 2*pad square.
+        ctx = pad / (S - 2 * pad) if pad > 0 and S > 2 * pad else 0.0
         crops: list[Tensor] = []
 
         for n in range(int(proposals.shape[0])):
-            x1 = max(0, int(proposals[n, 0].item()))
-            y1 = max(0, int(proposals[n, 1].item()))
-            x2 = min(W, int(proposals[n, 2].item()))
-            y2 = min(H, int(proposals[n, 3].item()))
+            bx1 = float(proposals[n, 0].item())
+            by1 = float(proposals[n, 1].item())
+            bx2 = float(proposals[n, 2].item())
+            by2 = float(proposals[n, 3].item())
+            if ctx > 0.0:
+                dw, dh = (bx2 - bx1) * ctx, (by2 - by1) * ctx
+                bx1, bx2 = bx1 - dw, bx2 + dw
+                by1, by2 = by1 - dh, by2 + dh
 
-            # Ensure positive size
-            x2 = max(x1 + 1, x2)
-            y2 = max(y1 + 1, y2)
+            x1, y1 = int(math.floor(bx1)), int(math.floor(by1))
+            x2, y2 = int(math.ceil(bx2)), int(math.ceil(by2))
+            x2, y2 = max(x1 + 1, x2), max(y1 + 1, y2)
 
-            crop: Tensor = img[:, :, y1:y2, x1:x2]  # (1, C, h, w)
+            # Clamp on *both* sides.  x1 was floored at 0 but never capped, so
+            # a proposal lying entirely off the right/bottom edge gave a slice
+            # start past the tensor and an empty crop, which then blew up in
+            # the interpolate below.  The reference clips the box and rebuilds
+            # a full crop window, zero-filling whatever falls outside — after
+            # mean subtraction the reference's mean-pixel fill *is* zero.
+            cx1 = min(max(0, x1), max(W - 1, 0))
+            cy1 = min(max(0, y1), max(H - 1, 0))
+            cx2 = max(cx1 + 1, min(W, x2))
+            cy2 = max(cy1 + 1, min(H, y2))
+
+            crop: Tensor = img[:, :, cy1:cy2, cx1:cx2]  # (1, C, h, w)
+            left, top = max(0, cx1 - x1), max(0, cy1 - y1)
+            right, bottom = max(0, x2 - cx2), max(0, y2 - cy2)
+            if left or right or top or bottom:
+                crop = F.pad(crop, (left, right, top, bottom))
             warped = F.interpolate(crop, size=(S, S), mode="bilinear")
             crops.append(warped)
 
@@ -282,49 +342,41 @@ class RCNNForObjectDetection(PretrainedModel):
             return lucid.zeros((0, C, S, S), device=img.device.type)
         return lucid.cat(crops, dim=0)
 
-    def _decode_top_boxes(
+    def _decode_all_class_boxes(
         self,
         proposals: Tensor,
         bbox_deltas: Tensor,
-        top_class: Tensor,
         image_size: tuple[int, int],
     ) -> Tensor:
-        """Decode class-specific bbox deltas for each proposal's top class.
+        """Decode every class's bbox deltas for each proposal.
 
         Args:
             proposals:   (N, 4) xyxy input proposals.
             bbox_deltas: (N, num_classes * 4) raw regression output.
-            top_class:   (N,) int index of predicted foreground class
-                         (0 = background, 1..K = foreground).
             image_size:  (H, W) used for clipping.
 
         Returns:
-            (N, 4) decoded xyxy boxes.
+            (N, K, 4) decoded xyxy boxes, one per foreground class.
         """
         N = int(proposals.shape[0])
         K = self._num_classes
-        decoded: list[Tensor] = []
+        dev = proposals.device.type
+        if N == 0:
+            return lucid.zeros((0, K, 4), device=dev)
 
         # bbox_deltas: (N, K*4) → (N, K, 4)
         deltas = bbox_deltas.reshape(N, K, 4)
 
-        for n in range(N):
-            cls_idx = int(top_class[n].item())
-            if cls_idx == 0:
-                # Background — return the original proposal
-                decoded.append(proposals[n : n + 1])
-            else:
-                c = cls_idx - 1  # foreground class index (0-based)
-                c_clamped = max(0, min(c, K - 1))
-                delta_n = deltas[n : n + 1, c_clamped, :]  # (1, 4)
-                box_n = decode_boxes(delta_n, proposals[n : n + 1])  # (1, 4)
-                decoded.append(box_n)
-
-        if not decoded:
-            return lucid.zeros((0, 4), device=proposals.device.type)
-
-        boxes = lucid.cat(decoded, dim=0)
-        return clip_boxes_to_image(boxes, image_size)
+        # Paper Appendix C trains a SEPARATE regressor per class, so class c's
+        # detections must use class c's four deltas.  Decoding only the argmax
+        # class and reusing that one box for every class made the 4K-way head
+        # dead weight for K-1 of the K classes — every class reported byte-
+        # identical boxes.  Mirrors ``FastRCNN._decode_all_boxes``.
+        per_class: list[Tensor] = []
+        for c in range(K):
+            boxes_c = decode_boxes(deltas[:, c, :], proposals)
+            per_class.append(clip_boxes_to_image(boxes_c, image_size))
+        return lucid.stack(per_class, dim=1)  # (N, K, 4)
 
     # ------------------------------------------------------------------
     # Forward
@@ -381,11 +433,8 @@ class RCNNForObjectDetection(PretrainedModel):
             # logits_i : (N_i, num_classes + 1)
             # deltas_i : (N_i, num_classes * 4)
 
-            # 4. Decode top-class bounding boxes
-            scores_i = F.softmax(logits_i, dim=-1)  # (N_i, K+1)
-            top_cls_i = lucid.argsort(-scores_i, dim=-1)[:, 0]  # (N_i,)
-
-            boxes_i = self._decode_top_boxes(props, deltas_i, top_cls_i, (H, W))
+            # 4. Decode one box per class (class-specific regression)
+            boxes_i = self._decode_all_class_boxes(props, deltas_i, (H, W))
 
             all_logits.append(logits_i)
             all_boxes.append(boxes_i)
@@ -443,7 +492,7 @@ class RCNNForObjectDetection(PretrainedModel):
         for props in proposals:
             N_i = int(props.shape[0])
             lg_i = logits[offset : offset + N_i]  # (N_i, K+1)
-            bx_i = pred_boxes[offset : offset + N_i]  # (N_i, 4)
+            bx_i = pred_boxes[offset : offset + N_i]  # (N_i, K, 4)
             offset += N_i
 
             scores_i = F.softmax(lg_i, dim=-1)
@@ -467,7 +516,7 @@ class RCNNForObjectDetection(PretrainedModel):
 
                 mask_t = lucid.tensor(mask, device=dev).long()
                 sc_c = cls_scores[mask_t]
-                bx_c = bx_i[mask_t]
+                bx_c = bx_i[mask_t][:, c - 1, :]  # class-c regressor
 
                 # NMS
                 keep = batched_nms(
@@ -478,7 +527,10 @@ class RCNNForObjectDetection(PretrainedModel):
                     ),  # single class → no offset
                     self._nms_thresh,
                 )
-                keep = keep[: self._max_det]
+                # ``max_detections`` is a *per image* limit applied once after a
+                # global score sort.  Capping inside the class loop let each of
+                # the K classes keep its own full quota, so the returned count
+                # scaled with the class count.
 
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
@@ -487,11 +539,15 @@ class RCNNForObjectDetection(PretrainedModel):
                 )
 
             if keep_boxes:
+                all_b = lucid.cat(keep_boxes, dim=0)
+                all_s = lucid.cat(keep_scores, dim=0)
+                all_l = lucid.cat(keep_labels, dim=0)
+                order = lucid.argsort(-all_s)[: self._max_det]
                 results.append(
                     {
-                        "boxes": lucid.cat(keep_boxes, dim=0),
-                        "scores": lucid.cat(keep_scores, dim=0),
-                        "labels": lucid.cat(keep_labels, dim=0),
+                        "boxes": all_b[order],
+                        "scores": all_s[order],
+                        "labels": all_l[order],
                     }
                 )
             else:

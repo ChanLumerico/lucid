@@ -12,6 +12,7 @@ from typing import ClassVar, cast, final, override
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -83,6 +84,13 @@ class _ResNeXtBottleneck(nn.Module):
 # ---------------------------------------------------------------------------
 # Stage builder
 # ---------------------------------------------------------------------------
+
+
+def _zero_init_residual(model: nn.Module) -> None:
+    """Zero the final BN gamma of every bottleneck (He et al., *Bag of Tricks*)."""
+    for m in model.modules():
+        if isinstance(m, _ResNeXtBottleneck) and m.bn3.weight is not None:
+            nn.init.constant_(m.bn3.weight, 0.0)
 
 
 def _make_layer(
@@ -281,6 +289,14 @@ class ResNeXt(PretrainedModel, BackboneMixin):
         self.layer4 = l4
         self._feature_info = fi
 
+        # Reference initialisation (He/MSRA fan-out convs, unit norms).
+        # Without this the family starts from Lucid's generic
+        # kaiming_uniform(a=sqrt(5)), a different distribution and gain
+        # than the one the paper's schedule is tuned for.
+        init_cnn_fan_out(self)
+        if config.zero_init_residual:
+            _zero_init_residual(self)
+
     @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
@@ -383,6 +399,12 @@ class ResNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self._build_classifier(
             final_channels, config.num_classes, dropout=config.dropout
         )
+
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms — Lucid's Conv2d default is a different distribution and gain.
+        init_cnn_fan_out(self)
+        if config.zero_init_residual:
+            _zero_init_residual(self)
 
     @override
     def forward(  # type: ignore[override]

@@ -3,7 +3,7 @@
 Three paper-cited variants (Xie et al., CVPR 2017):
 
 * :class:`ResNeXt50_32x4dWeights` and :class:`ResNeXt101_32x8dWeights`
-  ship the torchvision ``IMAGENET1K_V2`` checkpoints (the improved
+  ship the reference_vision ``IMAGENET1K_V2`` checkpoints (the improved
   training recipe), which evaluate with a **232** resize → 224 crop
   bilinear preset (not the usual 256).
 * :class:`ResNeXt101_32x4dWeights` ships the timm Gluon ``GLUON_IN1K``
@@ -28,7 +28,7 @@ class ResNeXt50_32x4dWeights(WeightsEnum):
     ----------
     IMAGENET1K_V2 : WeightEntry
         ImageNet-1k V2 checkpoint (top-1 81.198% / top-5 95.340%),
-        sourced from ``torchvision/ResNeXt50_32X4D_Weights.IMAGENET1K_V2``.
+        sourced from ``reference_vision/ResNeXt50_32X4D_Weights.IMAGENET1K_V2``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V2`.
 
@@ -54,7 +54,7 @@ class ResNeXt50_32x4dWeights(WeightsEnum):
         transforms=ImageClassification(crop_size=224, resize_size=232),
         meta={
             "tag": "IMAGENET1K_V2",
-            "source": "torchvision/ResNeXt50_32X4D_Weights.IMAGENET1K_V2",
+            "source": "reference_vision/ResNeXt50_32X4D_Weights.IMAGENET1K_V2",
             "license": "bsd-3-clause",
             "num_params": 25_028_904,
             "metrics": {"ImageNet-1k": {"acc@1": 81.198, "acc@5": 95.340}},
@@ -73,7 +73,7 @@ class ResNeXt101_32x8dWeights(WeightsEnum):
     ----------
     IMAGENET1K_V2 : WeightEntry
         ImageNet-1k V2 checkpoint (top-1 82.834% / top-5 96.228%),
-        sourced from ``torchvision/ResNeXt101_32X8D_Weights.IMAGENET1K_V2``.
+        sourced from ``reference_vision/ResNeXt101_32X8D_Weights.IMAGENET1K_V2``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V2`.
 
@@ -99,7 +99,7 @@ class ResNeXt101_32x8dWeights(WeightsEnum):
         transforms=ImageClassification(crop_size=224, resize_size=232),
         meta={
             "tag": "IMAGENET1K_V2",
-            "source": "torchvision/ResNeXt101_32X8D_Weights.IMAGENET1K_V2",
+            "source": "reference_vision/ResNeXt101_32X8D_Weights.IMAGENET1K_V2",
             "license": "bsd-3-clause",
             "num_params": 88_791_336,
             "metrics": {"ImageNet-1k": {"acc@1": 82.834, "acc@5": 96.228}},
@@ -114,7 +114,7 @@ class ResNeXt101_32x4dWeights(WeightsEnum):
 
     Sourced from the timm Gluon ``gluon_in1k`` checkpoint — note the
     bicubic interpolation and 0.875 crop_pct (256 resize → 224 crop)
-    rather than the bilinear / 232-resize preset of the torchvision V2
+    rather than the bilinear / 232-resize preset of the reference_vision V2
     variants.
 
     Attributes

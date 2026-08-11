@@ -58,6 +58,9 @@ class RCNNConfig(ModelConfig):
                          Background is automatically added as class 0,
                          giving (num_classes + 1) output logits.
         in_channels:     Number of input image channels (3 for RGB).
+        context_pad:     Pixels of image context kept around each proposal
+                         in the *warped* frame (Appendix A's :math:`p`).
+                         ``0`` warps the tight box.
         roi_size:        Each region proposal is warped to this square size
                          before being forwarded through the backbone.
                          Original paper: 227.
@@ -68,6 +71,16 @@ class RCNNConfig(ModelConfig):
         nms_thresh:      IoU threshold for per-class NMS at inference time.
         max_detections:  Maximum number of detections returned per image
                          after NMS.
+
+    .. note::
+
+       **Inference only.**  None of the paper's three trained stages is
+       implemented: CNN fine-tuning (positives at IoU >= 0.5, §2.3), the
+       per-class linear SVMs (positives = ground-truth boxes only,
+       negatives at IoU < 0.3, §2.3), and the class-specific ridge
+       bounding-box regressors on pool5 features (proposals at IoU > 0.6,
+       Appendix C).  ``forward`` takes no targets and returns no loss.
+       Use this family to run a trained detector, not to train one.
     """
 
     model_type: ClassVar[str] = "rcnn"
@@ -75,7 +88,13 @@ class RCNNConfig(ModelConfig):
     num_classes: int = 80
     in_channels: int = 3
     roi_size: int = 227
+    # Appendix A: the tight box is dilated so the warped crop carries
+    # exactly p pixels of context on each side.  The released code uses
+    # crop_padding = 16.
+    context_pad: int = 16
     dropout: float = 0.5
     score_thresh: float = 0.05
-    nms_thresh: float = 0.5
+    # NMS IoU threshold: the author's release hardcodes 0.3 (rcnn_test_bbox_regressor.m);
+    # 0.5 is the Faster R-CNN convention, not R-CNN's.
+    nms_thresh: float = 0.3
     max_detections: int = 300

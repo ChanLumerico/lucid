@@ -45,6 +45,7 @@ from lucid.models.generative.rectified_flow._model import (
     RectifiedFlowForImageGeneration,
     RectifiedFlowModel,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # 32x32 — DDPM++: no filtering, no pyramid, positional time embedding,
 # four residual blocks per resolution and attention at 16x16 only.
@@ -80,7 +81,13 @@ _CFG_HIGH_RES = RectifiedFlowConfig(
     progressive_input="input_skip",
     embedding_type="fourier",
     fourier_scale=16.0,
+    scale_by_sigma=True,
 )
+
+# LSUN bedroom/church inherit ``data.centered = False`` from
+# default_lsun_configs, so those two released nets shift [0,1] inputs to
+# [-1,1] internally.  CelebA-HQ and AFHQ set it True and do not.
+_CFG_LSUN = replace(_CFG_HIGH_RES, data_centered=False)
 
 
 def _apply(
@@ -140,6 +147,8 @@ def rectified_flow_cifar(
     >>> model.nfe                      # training solves nothing
     0
     """
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_cifar")
     return RectifiedFlowModel(_apply(_CFG_CIFAR, overrides))
 
 
@@ -148,7 +157,7 @@ def rectified_flow_cifar(
     family="rectified_flow",
     model_type="rectified_flow",
     model_class=RectifiedFlowModel,
-    default_config=_CFG_HIGH_RES,
+    default_config=_CFG_LSUN,
 )
 def rectified_flow_bedroom(
     pretrained: bool = False, **overrides: object
@@ -179,7 +188,9 @@ def rectified_flow_bedroom(
     >>> rectified_flow_bedroom().config.fir
     True
     """
-    return RectifiedFlowModel(_apply(_CFG_HIGH_RES, overrides))
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_bedroom")
+    return RectifiedFlowModel(_apply(_CFG_LSUN, overrides))
 
 
 @register_model(
@@ -187,7 +198,7 @@ def rectified_flow_bedroom(
     family="rectified_flow",
     model_type="rectified_flow",
     model_class=RectifiedFlowModel,
-    default_config=_CFG_HIGH_RES,
+    default_config=_CFG_LSUN,
 )
 def rectified_flow_church(
     pretrained: bool = False, **overrides: object
@@ -217,7 +228,9 @@ def rectified_flow_church(
     >>> rectified_flow_church().config.progressive
     'output_skip'
     """
-    return RectifiedFlowModel(_apply(_CFG_HIGH_RES, overrides))
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_church")
+    return RectifiedFlowModel(_apply(_CFG_LSUN, overrides))
 
 
 @register_model(
@@ -257,6 +270,8 @@ def rectified_flow_celeba_hq(
     >>> rectified_flow_celeba_hq().config.embedding_type
     'fourier'
     """
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_celeba_hq")
     return RectifiedFlowModel(_apply(_CFG_HIGH_RES, overrides))
 
 
@@ -296,6 +311,8 @@ def rectified_flow_afhq_cat(
     >>> rectified_flow_afhq_cat().config.num_res_blocks
     2
     """
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_afhq_cat")
     return RectifiedFlowModel(_apply(_CFG_HIGH_RES, overrides))
 
 
@@ -346,6 +363,8 @@ def rectified_flow_cifar_gen(
     >>> model(z1, noise=z0).loss.shape          # the reflow objective
     ()
     """
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_cifar_gen")
     return RectifiedFlowForImageGeneration(_apply(_CFG_CIFAR, overrides))
 
 
@@ -386,6 +405,8 @@ def rectified_flow_bedroom_gen(
     >>> rectified_flow_bedroom_gen().rectified_flow.input_dim
     196608
     """
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_bedroom_gen")
     return RectifiedFlowForImageGeneration(_apply(_CFG_HIGH_RES, overrides))
 
 
@@ -426,6 +447,8 @@ def rectified_flow_church_gen(
     >>> rectified_flow_church_gen().rectified_flow.t_schedule
     'uniform'
     """
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_church_gen")
     return RectifiedFlowForImageGeneration(_apply(_CFG_HIGH_RES, overrides))
 
 
@@ -466,6 +489,8 @@ def rectified_flow_celeba_hq_gen(
     >>> rectified_flow_celeba_hq_gen().config.sample_size
     256
     """
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_celeba_hq_gen")
     return RectifiedFlowForImageGeneration(_apply(_CFG_HIGH_RES, overrides))
 
 
@@ -506,6 +531,8 @@ def rectified_flow_afhq_cat_gen(
     >>> rectified_flow_afhq_cat_gen().config.progressive_input
     'input_skip'
     """
+    if pretrained:
+        reject_unavailable_pretrained("rectified_flow_afhq_cat_gen")
     return RectifiedFlowForImageGeneration(_apply(_CFG_HIGH_RES, overrides))
 
 

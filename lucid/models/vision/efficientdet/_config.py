@@ -100,6 +100,15 @@ class EfficientDetConfig(ModelConfig):
         anchor_ratios:    Anchor aspect ratios.
         anchor_num_scales: Octave subdivisions per scale.
 
+        -- Loss --
+        focal_alpha:      Focal-loss class balance (paper: 0.25).
+        focal_gamma:      Focal-loss focusing exponent (paper: 1.5).
+        box_loss_weight:  Multiplier on the box term of the total loss (50).
+        focal_prior_prob: Class-head bias prior probability (0.01).
+        iou_fg_thresh:    IoU at or above which an anchor is foreground.
+        iou_bg_thresh:    IoU below which an anchor is background; the
+                          [bg, fg) band is ignored by the class loss.
+
         -- Inference --
         score_thresh:   Minimum sigmoid class score.
         nms_thresh:     Per-class NMS threshold.
@@ -116,6 +125,13 @@ class EfficientDetConfig(ModelConfig):
 
     # Backbone feature channel counts at P3/P4/P5 (extracted from EfficientNet)
     backbone_in_channels: tuple[int, int, int] = (40, 112, 320)
+    # EfficientNet compound coefficients for the backbone.  D{phi} uses
+    # B{phi}: (1.0,1.0) (1.0,1.1) (1.1,1.2) (1.2,1.4) (1.4,1.8) (1.6,2.2)
+    # (1.8,2.6) (2.0,3.1).  These have to agree with
+    # ``backbone_in_channels`` — the projections are built from the latter
+    # and fed by the former.
+    backbone_width_coeff: float = 1.0
+    backbone_depth_coeff: float = 1.0
 
     # BiFPN
     fpn_channels: int = 64
@@ -128,6 +144,25 @@ class EfficientDetConfig(ModelConfig):
     anchor_scales: tuple[float, ...] = (1.0, 2.0 ** (1.0 / 3.0), 2.0 ** (2.0 / 3.0))
     anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0)
     anchor_base_sizes: tuple[int, ...] = (32, 64, 128, 256, 512)
+
+    # Loss (paper §6: "focal loss with alpha = 0.25 and gamma = 1.5"; the
+    # reference additionally weights the box term by 50 because both terms are
+    # normalised by the same positive-anchor count).
+    focal_alpha: float = 0.25
+    focal_gamma: float = 1.5
+    box_loss_weight: float = 50.0
+    # Prior probability the class head's bias is initialised to, so that at
+    # step 0 every anchor predicts p ~= 0.01 rather than 0.5.
+    focal_prior_prob: float = 0.01
+    # Anchors below ``iou_bg_thresh`` are background, at or above
+    # ``iou_fg_thresh`` are foreground, and the band between the two is
+    # *ignored* — excluded from the classification loss entirely.
+    iou_fg_thresh: float = 0.5
+    iou_bg_thresh: float = 0.4
+
+    # Input resolution, the third scaled axis (paper eq. R = 512 + 128*phi).
+    # Table 1: 512/640/768/896/1024/1280/1280/1536.
+    image_size: int = 512
 
     # Inference
     score_thresh: float = 0.05
@@ -149,15 +184,21 @@ class EfficientDetConfig(ModelConfig):
 
 # Each entry: (phi, fpn_channels, fpn_repeats, head_repeats,
 #              backbone_in_channels-P3/P4/P5, image_size)
-_COMPOUND_PARAMS: dict[int, tuple[int, int, int, tuple[int, int, int]]] = {
-    0: (64, 3, 3, (40, 112, 320)),
-    1: (88, 4, 3, (40, 112, 320)),
-    2: (112, 5, 3, (48, 120, 352)),
-    3: (160, 6, 4, (48, 136, 384)),
-    4: (224, 7, 4, (56, 160, 448)),
-    5: (288, 7, 4, (64, 176, 512)),
-    6: (384, 8, 5, (72, 200, 576)),
-    7: (384, 8, 5, (80, 224, 640)),
+# (fpn_channels, fpn_repeats, head_repeats, backbone_in_channels,
+#  backbone_width, backbone_depth, image_size, anchor_scale)
+_COMPOUND_PARAMS: dict[
+    int, tuple[int, int, int, tuple[int, int, int], float, float, int, float]
+] = {
+    0: (64, 3, 3, (40, 112, 320), 1.0, 1.0, 512, 4.0),
+    1: (88, 4, 3, (40, 112, 320), 1.0, 1.1, 640, 4.0),
+    2: (112, 5, 3, (48, 120, 352), 1.1, 1.2, 768, 4.0),
+    3: (160, 6, 4, (48, 136, 384), 1.2, 1.4, 896, 4.0),
+    4: (224, 7, 4, (56, 160, 448), 1.4, 1.8, 1024, 4.0),
+    5: (288, 7, 4, (64, 176, 512), 1.6, 2.2, 1280, 4.0),
+    6: (384, 8, 5, (72, 200, 576), 1.8, 2.6, 1280, 4.0),
+    # D7 is the one variant the reference overrides: anchor_scale 5.0, so the
+    # base sizes become 40/80/160/320/640 rather than 4*stride.
+    7: (384, 8, 5, (80, 224, 640), 2.0, 3.1, 1536, 5.0),
 }
 
 
@@ -189,11 +230,16 @@ def efficientdet_config(phi: int = 0, num_classes: int = 80) -> EfficientDetConf
     .. [1] Tan, Pang & Le, *EfficientDet: Scalable and Efficient Object
        Detection*, CVPR 2020.
     """
-    fpn_ch, fpn_rep, head_rep, bb_ch = _COMPOUND_PARAMS[phi]
+    fpn_ch, fpn_rep, head_rep, bb_ch, bb_w, bb_d, img, anc_scale = _COMPOUND_PARAMS[phi]
+    strides = (8, 16, 32, 64, 128)
     return EfficientDetConfig(
+        image_size=img,
+        anchor_base_sizes=tuple(int(anc_scale * st) for st in strides),
         num_classes=num_classes,
         phi=phi,
         backbone_in_channels=bb_ch,
+        backbone_width_coeff=bb_w,
+        backbone_depth_coeff=bb_d,
         fpn_channels=fpn_ch,
         fpn_repeats=fpn_rep,
         head_repeats=head_rep,

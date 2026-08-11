@@ -66,10 +66,12 @@ class FastRCNNConfig(ModelConfig):
                          For VGG16 with pool5 removed: 1/16.
         dropout:         Dropout probability after fc6 and fc7.
         bbox_reg_weights: Per-component weight scaling for bbox regression
-                          targets (tx, ty, tw, th).  Matches the paper's
-                          normalisation by (0, 0, 0, 0) mean / (0.1, 0.1,
-                          0.2, 0.2) std, encoded here as multiplicative
-                          weights.
+                          targets (tx, ty, tw, th).  The paper states no
+                          target normalisation; the (0, 0, 0, 0) mean /
+                          (0.1, 0.1, 0.2, 0.2) std these weights invert
+                          comes from the authors' released code
+                          (``BBOX_NORMALIZE_STDS``), which every later
+                          two-stage detector inherited.
         score_thresh:    Minimum class score at inference time.
         nms_thresh:      Per-class NMS IoU threshold.
         max_detections:  Maximum detections returned per image.
@@ -84,7 +86,9 @@ class FastRCNNConfig(ModelConfig):
     dropout: float = 0.5
     bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0)
     score_thresh: float = 0.05
-    nms_thresh: float = 0.5
+    # NMS IoU threshold: paper section 3 defers to R-CNN's settings, and
+    # fast-rcnn's config.py sets __C.TEST.NMS = 0.3.
+    nms_thresh: float = 0.3
     max_detections: int = 300
 
     def __post_init__(self) -> None:

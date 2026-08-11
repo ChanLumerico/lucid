@@ -112,7 +112,7 @@ class BERTMiniWeights(WeightsEnum):
             "tag": _TAG,
             "source": "transformers/google/bert_uncased_L-4_H-256_A-4",
             "license": _LICENSE,
-            "num_params": 11_171_328,
+            "num_params": 11_170_560,
             "file_size_mb": 42.62,
         },
     )
@@ -320,7 +320,7 @@ class BERTBaseMLMWeights(WeightsEnum):
             "tag": _TAG,
             "source": "transformers/google-bert/bert-base-uncased",
             "license": _LICENSE,
-            "num_params": 109_514_298,
+            "num_params": 110_104_890,
             "file_size_mb": 509.46,
         },
     )
@@ -362,7 +362,7 @@ class BERTLargeMLMWeights(WeightsEnum):
             "tag": _TAG,
             "source": "transformers/google-bert/bert-large-uncased",
             "license": _LICENSE,
-            "num_params": 335_174_586,
+            "num_params": 336_224_058,
             "file_size_mb": 1401.87,
         },
     )
@@ -415,7 +415,7 @@ class BERTBaseQAWeights(WeightsEnum):
             "tag": _SQUAD_TAG,
             "source": "transformers/csarron/bert-base-uncased-squad-v1",
             "license": "mit",
-            "num_params": 108_893_186,
+            "num_params": 109_483_778,
             "metrics": {"squad": {"f1": 88.1, "exact_match": 80.9}},
         },
     )
@@ -506,7 +506,7 @@ class BERTBaseNERWeights(WeightsEnum):
             "tag": _CONLL_TAG,
             "source": "transformers/dslim/bert-base-NER",
             "license": "mit",
-            "num_params": 107_726_601,
+            "num_params": 109_483_778,
             "metrics": {"conll2003": {"f1": 91.3}},
         },
     )

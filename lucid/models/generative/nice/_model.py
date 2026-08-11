@@ -26,6 +26,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import GenerationOutput, NormalizingFlowOutput
 from lucid.models._utils._generative import (
+    resolve_generation_device,
     flow_prior_log_prob,
     flow_prior_sample,
     generative_activation,
@@ -405,7 +406,7 @@ class NICEForImageGeneration(PretrainedModel):
         self,
         n_samples: int = 1,
         *,
-        device: str = "cpu",
+        device: str | None = None,
     ) -> GenerationOutput:
         """Sample ``n_samples`` vectors by inverting a prior draw.
 
@@ -424,5 +425,6 @@ class NICEForImageGeneration(PretrainedModel):
             on — no squashing is applied.  Reshape to the dataset's image
             grid for display.
         """
+        device = resolve_generation_device(self, device)
         h = flow_prior_sample(self._prior, (n_samples, self._input_dim), device=device)
         return GenerationOutput(samples=self.nice.decode(h))

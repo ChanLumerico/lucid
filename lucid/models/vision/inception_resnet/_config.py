@@ -53,7 +53,28 @@ from lucid.models._meta import model_family_meta
 class InceptionResNetConfig(ModelConfig):
     """Configuration for Inception-ResNet v2.
 
-    Uses the same stem as Inception-v4, followed by:
+    This is the *TF-Slim* Inception-ResNet-v2 — the network the released
+    checkpoint was trained as — which differs from the paper's figures in
+    three documented ways.  All three are dictated by the weights: the
+    tensors in the checkpoint have these shapes and these counts.
+
+    ``Sequential`` stem, not Figure 3's parallel-branch stem
+      Fig. 3 draws three filter-concat junctions
+      (``{MaxPool | Conv}`` → ``{1x1→3x3 | 1x1→7x1→1x7→3x3}`` →
+      ``{Conv | MaxPool}``) reaching 35×35×384.  TF-Slim instead runs a
+      plain sequential conv/pool chain into Mixed_5b.
+
+    Repeat counts 10 / 20 / 9+1, not Figure 15's 5 / 10 / 5
+      TF-Slim doubles every stage.
+
+    Residual widths 320 / 1088 / 2080, not Figures 16/17/19's
+    384 / 1154 / 2048
+      The three ``Linear`` 1×1 projections that close each residual block
+      are sized to TF-Slim's widths.
+
+    Layout as built::
+
+      - Sequential stem (TF-Slim)
       - Mixed_5b (192 → 320)
       - 10× Block35  (scale_a, default 0.17)
       - Mixed_6a / Reduction-A (320 → 1088)

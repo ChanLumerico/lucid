@@ -3,7 +3,7 @@
   "name": "rcnn",
   "path": "lucid.models.vision.rcnn",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/rcnn/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/rcnn/__init__.py#L1",
   "members": [
     {
       "name": "RCNNConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "RCNNConfig(num_classes: int = 80, in_channels: int = 3, roi_size: int = 227, dropout: float = 0.5, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 300)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/rcnn/_config.py#L10",
+      "signature": "RCNNConfig(num_classes: int = 80, in_channels: int = 3, roi_size: int = 227, context_pad: int = 16, dropout: float = 0.5, score_thresh: float = 0.05, nms_thresh: float = 0.3, max_detections: int = 300)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/rcnn/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.rcnn._config.RCNNConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 80, in_channels: int = 3, roi_size: int = 227, dropout: float = 0.5, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 300)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/rcnn/_config.py#L1",
+          "signature": "__init__(num_classes: int = 80, in_channels: int = 3, roi_size: int = 227, context_pad: int = 16, dropout: float = 0.5, score_thresh: float = 0.05, nms_thresh: float = 0.3, max_detections: int = 300)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/rcnn/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,7 +42,7 @@
         }
       ],
       "summary": "Configuration for R-CNN.",
-      "extended": "R-CNN (Girshick et al., CVPR 2014) applies a CNN independently to each\nregion proposal (warped to a fixed `roi_size × roi_size` crop), then\nfeeds the flattened pool5 features through two FC layers before the\nclassification and bounding-box regression heads.\n\nOriginal paper uses AlexNet (5 conv + 3 FC) as the backbone.  The\neffective output of pool5 for a 227 × 227 input is 6 × 6 × 256 = 9 216.",
+      "extended": "R-CNN (Girshick et al., CVPR 2014) applies a CNN independently to each\nregion proposal (warped to a fixed `roi_size × roi_size` crop), then\nfeeds the flattened pool5 features through two FC layers before the\nclassification and bounding-box regression heads.\n\nOriginal paper uses AlexNet (5 conv + 3 FC) as the backbone.  The\neffective output of pool5 for a 227 × 227 input is 6 × 6 × 256 = 9 216.\n\n> **Note:**\n>\n> **Inference only.**  None of the paper's three trained stages is\n> implemented: CNN fine-tuning (positives at IoU >= 0.5, §2.3), the\n> per-class linear SVMs (positives = ground-truth boxes only,\n> negatives at IoU < 0.3, §2.3), and the class-specific ridge\n> bounding-box regressors on pool5 features (proposals at IoU > 0.6,\n> Appendix C).  `forward` takes no targets and returns no loss.\n> Use this family to run a trained detector, not to train one.",
       "parameters": [
         {
           "name": "num_classes",
@@ -55,6 +55,12 @@
           "annotation": "int",
           "description": "Number of input image channels (3 for RGB).",
           "default": "3"
+        },
+        {
+          "name": "context_pad",
+          "annotation": "int",
+          "description": "Pixels of image context kept around each proposal\n             in the *warped* frame (Appendix A's $p$).\n             `0` warps the tight box.",
+          "default": "16"
         },
         {
           "name": "roi_size",
@@ -78,7 +84,7 @@
           "name": "nms_thresh",
           "annotation": "float",
           "description": "IoU threshold for per-class NMS at inference time.",
-          "default": "0.5"
+          "default": "0.3"
         },
         {
           "name": "max_detections",
@@ -105,7 +111,7 @@
       ],
       "labels": [],
       "signature": "RCNNForObjectDetection(config: RCNNConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/rcnn/_model.py#L145",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/rcnn/_model.py#L179",
       "subcategory": "model",
       "methods": [
         {
@@ -114,7 +120,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: RCNNConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/rcnn/_model.py#L228",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/rcnn/_model.py#L263",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -136,7 +142,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, proposals: list[Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/rcnn/_model.py#L333",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/rcnn/_model.py#L385",
           "subcategory": "model",
           "summary": "Run R-CNN on a batch of images.",
           "extended": null,
@@ -171,7 +177,7 @@
           "kind": "function",
           "labels": [],
           "signature": "postprocess(output: ObjectDetectionOutput, proposals: list[Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/rcnn/_model.py#L411",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/rcnn/_model.py#L460",
           "subcategory": "model",
           "summary": "Apply score threshold + per-class NMS to raw R-CNN output.",
           "extended": null,
@@ -233,7 +239,7 @@
         {
           "name": "fc_head",
           "annotation": "_FCHead",
-          "description": "Two-layer FC trunk (`fc6`, `fc7`) followed by sibling\n`lucid.nn.Linear` heads:\n`cls_head` produces $(N, K+1)$ class logits (background +\n`num_classes` foreground classes) and `bbox_head` produces\n$(N, 4K)$ class-specific bounding-box deltas."
+          "description": "Two-layer FC trunk (`fc6`, `fc7`) plus sibling\n`lucid.nn.Linear` heads: `cls_head` reads fc7 and produces\n$(N, K+1)$ class logits (background + `num_classes`\nforeground classes), while `bbox_head` reads the pool5 features\ndirectly (Appendix C) and produces $(N, 4K)$ class-specific\nbounding-box deltas."
         }
       ],
       "warns": [],
@@ -245,7 +251,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rcnn(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/rcnn/_pretrained.py#L41",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/rcnn/_pretrained.py#L43",
       "subcategory": "pretrained",
       "summary": "R-CNN with AlexNet backbone (Girshick et al., CVPR 2014).",
       "extended": "Builds a `RCNNForObjectDetection` with the paper-cited AlexNet\ntopology: five-conv trunk applied to each region proposal warped to\n$227 \\times 227$, followed by two FC layers and sibling\nclassification (`num_classes + 1`) and class-specific bounding-box\nregression (`4 \\cdot num_classes`) heads.  Original PASCAL VOC 2010\ntest mAP of 53.3% (paper Table 9) — a ~20-point jump over the prior\nDPM state of the art.",

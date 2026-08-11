@@ -16,7 +16,10 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
-from lucid.models._utils._common import make_divisible as _make_divisible
+from lucid.models._utils._common import (
+    init_cnn_fan_out,
+    make_divisible as _make_divisible,
+)
 from lucid.models.vision.mobilenet_v3._config import MobileNetV3Config
 
 # MobileNet v3 overrides the default batch-norm hyperparameters: the NAS
@@ -193,20 +196,29 @@ def _build_features(cfg: MobileNetV3Config) -> tuple[nn.Sequential, int, int]:
 
     # Head conv
     last_block_ch = in_ch
-    penultimate_ch = (
-        _make_divisible(960 * w) if cfg.variant == "large" else _make_divisible(576 * w)
-    )
+    # The reference derives this from the *already-rounded* last block width:
+    # ``6 * lastconv_input_channels``.  Composing the other way —
+    # ``make_divisible(576 * w)`` — is a different function of ``w``; the two
+    # agree at width_mult=1.0 (6*96=576, 6*160=960) and diverge below it.
+    penultimate_ch = 6 * last_block_ch
     layers += [
+        # Table 2 marks SE on MobileNetV3-Small's final 1x1 to 576, and there
+        # is no SE module here.  That follows the reference: neither the
+        # canonical vision library's ``mobilenet_v3_small`` nor timm's
+        # ``mobilenetv3_small_100`` places SE on that layer, and the shipped
+        # checkpoints have no tensors for one.
         nn.Conv2d(last_block_ch, penultimate_ch, 1, bias=False),
         nn.BatchNorm2d(penultimate_ch, eps=_BN_EPS, momentum=_BN_MOMENTUM),
         nn.Hardswish(),
     ]
-    # Large → 1280, Small → 1024 (paper Table 2 / torchvision)
-    head_ch = (
-        _make_divisible(1280 * w)
-        if cfg.variant == "large"
-        else _make_divisible(1024 * w)
-    )
+    # Large → 1280, Small → 1024 (paper Table 2 / the reference).
+    #
+    # The final NBN layer does NOT shrink below width 1 — the MobileNetV2
+    # convention the reference keeps.  Scaling it made the 0.75 variants
+    # miss Table 3's counts (V3-Large 0.75 -> 4.0M, V3-Small 0.75 -> 2.0M),
+    # which are only reproducible with the head fixed at 1280 / 1024.
+    base_head = 1280 if cfg.variant == "large" else 1024
+    head_ch = _make_divisible(base_head * w) if w > 1.0 else base_head
     return nn.Sequential(*layers), penultimate_ch, head_ch
 
 
@@ -316,12 +328,33 @@ class MobileNetV3(PretrainedModel, BackboneMixin):
         specs = _LARGE_SPECS if config.variant == "large" else _SMALL_SPECS
         scaled = _apply_width(specs, w)
 
+        # One entry per *resolution* stage, not per block.  Enumerating every
+        # inverted residual gave 11 (small) / 15 (large) entries at repeated
+        # reductions, and the last one described the final block (96 / 160 ch)
+        # rather than what ``forward_features`` returns — the post-conv map at
+        # 576 / 960 channels.  A pyramid consumer reading the last entry got
+        # the wrong channel count.
         cumulative = 2  # stem stride=2
-        fi: list[FeatureInfo] = []
-        for i, (_, _, o_ch, _, _, _, s) in enumerate(scaled):
+        per_reduction: dict[int, int] = {}
+        order: list[int] = []
+        for _, _, o_ch, _, _, _, s in scaled:
             cumulative *= s
-            fi.append(FeatureInfo(stage=i + 1, num_channels=o_ch, reduction=cumulative))
-        self._feature_info = fi
+            if cumulative not in per_reduction:
+                order.append(cumulative)
+            per_reduction[cumulative] = o_ch
+        # The trunk ends with a 1x1 conv that widens the last stage, and that
+        # is the tensor the backbone hands back.
+        per_reduction[cumulative] = num_features
+        self._feature_info = [
+            FeatureInfo(stage=i + 1, num_channels=per_reduction[r], reduction=r)
+            for i, r in enumerate(order)
+        ]
+
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self, linear_std=0.01)
 
     @override
     @property
@@ -331,7 +364,12 @@ class MobileNetV3(PretrainedModel, BackboneMixin):
     @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.features(x))
-        return cast(Tensor, self.avgpool(x))
+        # ``feature_info`` describes the pre-pool pyramid, and the mixin
+        # documents this as returning the deepest stage's *feature map*.
+        # Pooling here collapsed it to 1x1, so the declared reduction was
+        # wrong by the input size and no consumer could reach a spatial map.
+        # The classifier applies its own pooling.
+        return x
 
     @override
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
@@ -416,6 +454,12 @@ class MobileNetV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
         self.classifier = _build_classifier_head(
             penultimate_ch, head_ch, config.num_classes, config.dropout
         )
+
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self, linear_std=0.01)
 
     @override
     def forward(  # type: ignore[override]

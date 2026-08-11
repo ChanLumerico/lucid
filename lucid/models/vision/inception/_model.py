@@ -21,6 +21,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import transform_input_imagenet_to_tf
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput
@@ -72,13 +73,22 @@ class _ConvBnReLU(nn.Module):
 
 @final
 class _InceptionA(nn.Module):
-    """Inception-A block (factorized 5×5 into two 3×3)."""
+    """Inception-A block (35×35 stage).
+
+    Note the divergence: Figure 5 of the paper is exactly the proposal to
+    replace the 5×5 branch with two stacked 3×3 convolutions, and this
+    block keeps the literal 5×5.  That is what the reference
+    implementation builds and what the converted checkpoint's tensors are
+    shaped for, so the shape is fixed by the weights, not chosen here.
+    (The *third* branch below is genuinely the two-3×3 stack, which is
+    presumably where the original comment's claim came from.)
+    """
 
     def __init__(self, in_channels: int, pool_features: int) -> None:
         super().__init__()
         # branch1: 1×1
         self.branch1 = _ConvBnReLU(in_channels, 64, 1)
-        # branch2: 1×1 → 5×5 (implemented as two 3×3)
+        # branch2: 1×1 → literal 5×5 (NOT the Fig. 5 factorisation)
         self.branch2_a = _ConvBnReLU(in_channels, 48, 1)
         self.branch2_b = _ConvBnReLU(48, 64, 5, padding=2)
         # branch3: 1×1 → 3×3 → 3×3
@@ -339,7 +349,8 @@ class InceptionV3Output:
         ``(B, num_classes)``; ``None`` at inference or when
         ``aux_logits=False``.
     loss : Tensor or None, optional, default=None
-        Cross-entropy loss with auxiliary term (weight 0.4) when labels
+        Cross-entropy loss with auxiliary term (weight 0.4, a reference
+        training constant rather than a paper figure) when labels
         were passed to :meth:`forward`; ``None`` otherwise.
 
     Notes
@@ -380,6 +391,16 @@ def _build_inception_stem(in_channels: int) -> nn.Sequential:
         _ConvBnReLU(32, 32, 3),
         _ConvBnReLU(32, 64, 3, padding=1),
         nn.MaxPool2d(3, stride=2),
+        # Three deliberate divergences from Table 1 rows 5-7, all of them
+        # what the reference implementation builds and what the converted
+        # checkpoint's tensors are shaped for:
+        #   * the 64->80 layer is 1x1 here, 3x3 in the paper;
+        #   * the stride-2 reduction is a max-pool, not the paper's strided
+        #     convolution;
+        #   * the paper's seventh row (a 3x3 producing 35x35x288) has no
+        #     counterpart, which is why the first Inception-A sees 192
+        #     channels and emits 256 rather than the 288 that §6 states for
+        #     all three 35x35 modules.
         _ConvBnReLU(64, 80, 1),
         _ConvBnReLU(80, 192, 3),
         nn.MaxPool2d(3, stride=2),
@@ -389,6 +410,47 @@ def _build_inception_stem(in_channels: int) -> nn.Sequential:
 # ---------------------------------------------------------------------------
 # InceptionV3 backbone (task="base")
 # ---------------------------------------------------------------------------
+
+
+def _init_reference_weights(model: nn.Module) -> None:
+    r"""Truncated-normal init with the reference's per-module stddev.
+
+    The reference uses ``trunc_normal_(std=stddev, a=-2, b=2)`` on every
+    conv and linear, where ``stddev`` is 0.1 by default but **0.01** on the
+    auxiliary classifier's second conv and **0.001** on its fully-connected
+    layer.  Those two small values are the part that matters: the aux head
+    is summed into the loss during joint training, and at Lucid's default
+    kaiming-uniform it starts far too wide to be a gentle auxiliary signal.
+    """
+    aux_conv_std, aux_fc_std = 0.01, 0.001
+    for module in model.modules():
+        if not isinstance(module, _InceptionAux):
+            continue
+        for sub in module.conv1.modules():
+            if isinstance(sub, nn.Conv2d):
+                nn.init.trunc_normal_(sub.weight, 0.0, aux_conv_std, -2.0, 2.0)
+        nn.init.trunc_normal_(module.fc.weight, 0.0, aux_fc_std, -2.0, 2.0)
+        if module.fc.bias is not None:
+            nn.init.zeros_(module.fc.bias)
+
+    aux_params = {
+        id(p)
+        for m in model.modules()
+        if isinstance(m, _InceptionAux)
+        for p in m.parameters()
+    }
+    for module in model.modules():
+        if isinstance(module, (nn.Conv2d, nn.Linear)):
+            if id(module.weight) in aux_params:
+                continue
+            nn.init.trunc_normal_(module.weight, 0.0, 0.1, -2.0, 2.0)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.BatchNorm2d):
+            if module.weight is not None:
+                nn.init.ones_(module.weight)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
 
 
 class InceptionV3(PretrainedModel, BackboneMixin):
@@ -475,6 +537,10 @@ class InceptionV3(PretrainedModel, BackboneMixin):
         # InceptionA × 3 (pool_features = 32, 64, 64)
         # InceptionA always outputs 64+64+96+pool_features channels
         # a0: 192→256 (pool=32), a1: 256→288 (pool=64), a2: 288→288 (pool=64)
+        # 192 in / 256 out: §6 gives all three 35x35 modules 288 filters,
+        # but the stem omits the paper's 288-channel row (see _make_stem),
+        # so the reference's first module is narrower.  Fixed by the
+        # checkpoint, not chosen here.
         self.inception_a0 = _InceptionA(192, pool_features=32)
         self.inception_a1 = _InceptionA(256, pool_features=64)
         self.inception_a2 = _InceptionA(288, pool_features=64)
@@ -483,6 +549,9 @@ class InceptionV3(PretrainedModel, BackboneMixin):
         self.reduction_a = _InceptionB(288)
 
         # InceptionC × 4 (channels_7x7 = 128, 160, 160, 192)
+        # Table 1 and §6 specify *five* 17×17 (Fig. 6) modules; the
+        # reference implementation builds four (Mixed_6b..6e) and the
+        # published checkpoint has four, so four is what loads.
         self.inception_c0 = _InceptionC(768, channels_7x7=128)
         self.inception_c1 = _InceptionC(768, channels_7x7=160)
         self.inception_c2 = _InceptionC(768, channels_7x7=160)
@@ -503,6 +572,8 @@ class InceptionV3(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=2, num_channels=768, reduction=16),
             FeatureInfo(stage=3, num_channels=2048, reduction=32),
         ]
+
+        _init_reference_weights(self)
 
     @override
     @property
@@ -611,6 +682,10 @@ class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
 
         # InceptionA × 3
         # a0: 192→256 (pool=32), a1: 256→288 (pool=64), a2: 288→288 (pool=64)
+        # 192 in / 256 out: §6 gives all three 35x35 modules 288 filters,
+        # but the stem omits the paper's 288-channel row (see _make_stem),
+        # so the reference's first module is narrower.  Fixed by the
+        # checkpoint, not chosen here.
         self.inception_a0 = _InceptionA(192, pool_features=32)
         self.inception_a1 = _InceptionA(256, pool_features=64)
         self.inception_a2 = _InceptionA(288, pool_features=64)
@@ -619,6 +694,9 @@ class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
         self.reduction_a = _InceptionB(288)
 
         # InceptionC × 4
+        # Table 1 and §6 specify *five* 17×17 (Fig. 6) modules; the
+        # reference implementation builds four (Mixed_6b..6e) and the
+        # published checkpoint has four, so four is what loads.
         self.inception_c0 = _InceptionC(768, channels_7x7=128)
         self.inception_c1 = _InceptionC(768, channels_7x7=160)
         self.inception_c2 = _InceptionC(768, channels_7x7=160)
@@ -635,12 +713,19 @@ class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
         self.drop = nn.Dropout(p=config.dropout)
         self._build_classifier(2048, config.num_classes)
 
-        # Auxiliary classifier — paper §6 / Fig.10 attaches after the last
-        # 17×17 stage (Mixed_6e = inception_c3), not after c1.
+        # Auxiliary classifier, attached after the last 17x17 stage
+        # (Mixed_6e = inception_c3), not after c1.  That placement follows
+        # the reference implementation; the paper's §4 discusses auxiliary
+        # classifiers as regularisers but names no attachment point, and
+        # §6 / Fig. 10 are about something else entirely.  The 0.4 loss
+        # weight below is likewise a TF-Slim training constant — the paper
+        # gives no aux weight anywhere.
         if config.aux_logits:
             self.aux: nn.Module = _InceptionAux(768, config.num_classes)
         else:
             self.aux = nn.Identity()
+
+        _init_reference_weights(self)
 
     @override
     def forward(  # type: ignore[override]
@@ -652,6 +737,8 @@ class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
         assert isinstance(cfg, InceptionConfig)
         use_aux = cfg.aux_logits and self.training
 
+        if cfg.transform_input:
+            x = transform_input_imagenet_to_tf(x)
         x = cast(Tensor, self.stem(x))
         x = cast(Tensor, self.inception_a0(x))
         x = cast(Tensor, self.inception_a1(x))

@@ -6,6 +6,7 @@ from lucid.models.text.transformer._model import (
     TransformerForSequenceClassification,
     TransformerForTokenClassification,
     TransformerModel,
+    TransformerModelOutput,
 )
 from lucid.models.text.transformer._pretrained import (
     transformer_base,
@@ -19,6 +20,7 @@ from lucid.models.text.transformer._pretrained import (
 __all__ = [
     "TransformerConfig",
     "TransformerModel",
+    "TransformerModelOutput",
     "TransformerForSeq2SeqLM",
     "TransformerForSequenceClassification",
     "TransformerForTokenClassification",

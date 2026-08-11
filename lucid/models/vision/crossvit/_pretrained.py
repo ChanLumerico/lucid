@@ -24,6 +24,7 @@ from lucid.models.vision.crossvit._weights import (
     CrossViTSmallWeights,
     CrossViTTinyWeights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # ---------------------------------------------------------------------------
 # Paper Table 2 configurations.
@@ -102,11 +103,13 @@ def _c(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViTForImageClassifica
     model_type="crossvit",
     model_class=CrossViT,
     default_config=_CFG_TINY,
-    params=7_000_000,
+    params=6_724_800,
 )
 def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-Ti backbone — ``embed_dims=(96, 192)``, depths
     ``((1, 4, 0))×3``, 3 heads.  ~7M params (paper Table 2)."""
+    if pretrained:
+        reject_unavailable_pretrained("crossvit_tiny", alternative="crossvit_tiny_cls")
     return _b(_CFG_TINY, overrides)
 
 
@@ -116,11 +119,15 @@ def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
     model_type="crossvit",
     model_class=CrossViT,
     default_config=_CFG_SMALL,
-    params=26_700_000,
+    params=26_278_272,
 )
 def crossvit_small(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-S backbone — ``embed_dims=(192, 384)``, depths
     ``((1, 4, 0))×3``, 6 heads.  ~26.7M params (paper Table 2)."""
+    if pretrained:
+        reject_unavailable_pretrained(
+            "crossvit_small", alternative="crossvit_small_cls"
+        )
     return _b(_CFG_SMALL, overrides)
 
 
@@ -130,11 +137,13 @@ def crossvit_small(pretrained: bool = False, **overrides: object) -> CrossViT:
     model_type="crossvit",
     model_class=CrossViT,
     default_config=_CFG_BASE,
-    params=105_000_000,
+    params=103_871_232,
 )
 def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-B backbone — ``embed_dims=(384, 768)``, depths
     ``((1, 4, 0))×3``, 12 heads.  ~105M params (paper Table 2)."""
+    if pretrained:
+        reject_unavailable_pretrained("crossvit_base", alternative="crossvit_base_cls")
     return _b(_CFG_BASE, overrides)
 
 
@@ -144,11 +153,13 @@ def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
     model_type="crossvit",
     model_class=CrossViT,
     default_config=_CFG_9,
-    params=8_600_000,
+    params=8_167_296,
 )
 def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-9 backbone — ``embed_dims=(128, 256)``, depths
     ``((1, 3, 0))×3``, 4 heads.  ~8.6M params (paper Table 2)."""
+    if pretrained:
+        reject_unavailable_pretrained("crossvit_9", alternative="crossvit_9_cls")
     return _b(_CFG_9, overrides)
 
 
@@ -158,11 +169,13 @@ def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
     model_type="crossvit",
     model_class=CrossViT,
     default_config=_CFG_15,
-    params=27_400_000,
+    params=26_950_464,
 )
 def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-15 backbone — ``embed_dims=(192, 384)``, depths
     ``((1, 5, 0))×3``, 6 heads.  ~27.4M params (paper Table 2)."""
+    if pretrained:
+        reject_unavailable_pretrained("crossvit_15", alternative="crossvit_15_cls")
     return _b(_CFG_15, overrides)
 
 
@@ -172,11 +185,13 @@ def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
     model_type="crossvit",
     model_class=CrossViT,
     default_config=_CFG_18,
-    params=43_300_000,
+    params=42_597_408,
 )
 def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-18 backbone — ``embed_dims=(224, 448)``, depths
     ``((1, 6, 0))×3``, 7 heads.  ~43.3M params (paper Table 2)."""
+    if pretrained:
+        reject_unavailable_pretrained("crossvit_18", alternative="crossvit_18_cls")
     return _b(_CFG_18, overrides)
 
 
@@ -191,7 +206,7 @@ def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_TINY,
-    params=7_000_000,
+    params=7_014_800,
 )
 def crossvit_tiny_cls(
     pretrained: bool | str = False,
@@ -203,7 +218,7 @@ def crossvit_tiny_cls(
 
     Two-branch ViT with embedding dims ``(96, 192)``, per-stage depths
     ``((1, 4, 0)) x 3``, and 3 attention heads per branch.  ~7M
-    parameters; paper Table 2 reports **72.6%** ImageNet-1k top-1 at
+    parameters; paper Table 2 reports **73.4%** ImageNet-1k top-1 at
     240x240.
 
     Parameters
@@ -244,7 +259,7 @@ def crossvit_tiny_cls(
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_SMALL,
-    params=26_700_000,
+    params=26_856_272,
 )
 def crossvit_small_cls(
     pretrained: bool | str = False,
@@ -291,7 +306,7 @@ def crossvit_small_cls(
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_BASE,
-    params=105_000_000,
+    params=105_025_232,
 )
 def crossvit_base_cls(
     pretrained: bool | str = False,
@@ -338,7 +353,7 @@ def crossvit_base_cls(
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_9,
-    params=8_600_000,
+    params=8_553_296,
 )
 def crossvit_9_cls(
     pretrained: bool | str = False,
@@ -385,7 +400,7 @@ def crossvit_9_cls(
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_15,
-    params=27_400_000,
+    params=27_528_464,
 )
 def crossvit_15_cls(
     pretrained: bool | str = False,
@@ -432,7 +447,7 @@ def crossvit_15_cls(
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_18,
-    params=43_300_000,
+    params=43_271_408,
 )
 def crossvit_18_cls(
     pretrained: bool | str = False,

@@ -9,6 +9,7 @@ from lucid.models.vision.efficientdet._config import (
     efficientdet_config,
 )
 from lucid.models.vision.efficientdet._model import EfficientDetForObjectDetection
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 
 def _det(
@@ -25,6 +26,8 @@ def _det(
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
     default_config=efficientdet_config(phi=0),
+    params=3900000,
+    summary="auto",
 )
 def efficientdet_d0(
     pretrained: bool = False,
@@ -67,6 +70,8 @@ def efficientdet_d0(
     >>> out.pred_boxes.shape[-1]
     4
     """
+    if pretrained:
+        reject_unavailable_pretrained("efficientdet_d0")
     return _det(efficientdet_config(phi=0), overrides)
 
 
@@ -76,6 +81,8 @@ def efficientdet_d0(
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
     default_config=efficientdet_config(phi=1),
+    params=6600000,
+    summary="auto",
 )
 def efficientdet_d1(
     pretrained: bool = False,
@@ -113,6 +120,8 @@ def efficientdet_d1(
     >>> out.pred_boxes.shape[-1]
     4
     """
+    if pretrained:
+        reject_unavailable_pretrained("efficientdet_d1")
     return _det(efficientdet_config(phi=1), overrides)
 
 
@@ -122,6 +131,8 @@ def efficientdet_d1(
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
     default_config=efficientdet_config(phi=2),
+    params=8100000,
+    summary="auto",
 )
 def efficientdet_d2(
     pretrained: bool = False,
@@ -159,6 +170,8 @@ def efficientdet_d2(
     >>> out.pred_boxes.shape[-1]
     4
     """
+    if pretrained:
+        reject_unavailable_pretrained("efficientdet_d2")
     return _det(efficientdet_config(phi=2), overrides)
 
 
@@ -168,6 +181,8 @@ def efficientdet_d2(
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
     default_config=efficientdet_config(phi=3),
+    params=12000000,
+    summary="auto",
 )
 def efficientdet_d3(
     pretrained: bool = False,
@@ -205,6 +220,8 @@ def efficientdet_d3(
     >>> out.pred_boxes.shape[-1]
     4
     """
+    if pretrained:
+        reject_unavailable_pretrained("efficientdet_d3")
     return _det(efficientdet_config(phi=3), overrides)
 
 
@@ -214,6 +231,8 @@ def efficientdet_d3(
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
     default_config=efficientdet_config(phi=4),
+    params=20700000,
+    summary="auto",
 )
 def efficientdet_d4(
     pretrained: bool = False,
@@ -251,6 +270,8 @@ def efficientdet_d4(
     >>> out.pred_boxes.shape[-1]
     4
     """
+    if pretrained:
+        reject_unavailable_pretrained("efficientdet_d4")
     return _det(efficientdet_config(phi=4), overrides)
 
 
@@ -260,6 +281,8 @@ def efficientdet_d4(
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
     default_config=efficientdet_config(phi=5),
+    params=33700000,
+    summary="auto",
 )
 def efficientdet_d5(
     pretrained: bool = False,
@@ -297,6 +320,8 @@ def efficientdet_d5(
     >>> out.pred_boxes.shape[-1]
     4
     """
+    if pretrained:
+        reject_unavailable_pretrained("efficientdet_d5")
     return _det(efficientdet_config(phi=5), overrides)
 
 
@@ -306,6 +331,8 @@ def efficientdet_d5(
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
     default_config=efficientdet_config(phi=6),
+    params=51900000,
+    summary="auto",
 )
 def efficientdet_d6(
     pretrained: bool = False,
@@ -343,6 +370,8 @@ def efficientdet_d6(
     >>> out.pred_boxes.shape[-1]
     4
     """
+    if pretrained:
+        reject_unavailable_pretrained("efficientdet_d6")
     return _det(efficientdet_config(phi=6), overrides)
 
 
@@ -352,6 +381,8 @@ def efficientdet_d6(
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
     default_config=efficientdet_config(phi=7),
+    params=51900000,
+    summary="auto",
 )
 def efficientdet_d7(
     pretrained: bool = False,
@@ -392,4 +423,6 @@ def efficientdet_d7(
     >>> out.pred_boxes.shape[-1]
     4
     """
+    if pretrained:
+        reject_unavailable_pretrained("efficientdet_d7")
     return _det(efficientdet_config(phi=7), overrides)

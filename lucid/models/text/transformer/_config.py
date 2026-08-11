@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.text._config import LanguageModelConfig
+from lucid.models.text._config import LanguageModelConfig, TextActivation
 
 
 @model_family_meta(
@@ -79,10 +79,11 @@ from lucid.models.text._config import LanguageModelConfig
 class TransformerConfig(LanguageModelConfig):
     """Configuration for every Vaswani-style Transformer variant.
 
-    The bare paper specifies a single 65 537-token shared BPE vocabulary for
-    WMT En-De and separate vocabularies for some tasks; we make this
-    configurable via ``decoder_vocab_size`` / ``share_embeddings`` so callers
-    can match whichever checkpoint they're porting.
+    The paper shares one BPE vocabulary — and one embedding matrix — across
+    source, target and the pre-softmax projection (§3.4), which is the
+    default here.  ``decoder_vocab_size`` / ``share_embeddings`` stay
+    configurable so callers porting a checkpoint with split vocabularies can
+    turn sharing off.
     """
 
     model_type: ClassVar[str] = "transformer"
@@ -96,11 +97,21 @@ class TransformerConfig(LanguageModelConfig):
     max_position_embeddings: int = 5_000  # sinusoidal table size
     hidden_dropout: float = 0.1
     attention_dropout: float = 0.1
+    # Section 5.4 / Table 3: eps_ls = 0.1 for both the base and big
+    # configurations.
+    label_smoothing: float = 0.1
+    # Vaswani §3.3: FFN(x) = max(0, xW₁+b₁)W₂+b₂ — ReLU, not the GELU that
+    # ``LanguageModelConfig`` defaults to for the BERT/GPT-era families.
+    hidden_act: TextActivation = "relu"
 
     # Seq2seq additions.
     decoder_vocab_size: int | None = None  # None → reuse vocab_size
     num_decoder_layers: int = 6  # paper N=6 on both sides
-    share_embeddings: bool = False  # share src / tgt token tables
+    # §3.4: "we share the same weight matrix between the two embedding
+    # layers and the pre-softmax linear transformation".  Sharing is the
+    # paper's architecture, not an option -- leaving it off gives the base
+    # model a second 37k x 512 table and inflates it from 65M to 82M.
+    share_embeddings: bool = True  # share src / tgt token tables
     tie_word_embeddings: bool = True  # tie LM head to target embedding
 
     # Classification fine-tuning head (encoder-only consumption).

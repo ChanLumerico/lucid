@@ -5,6 +5,7 @@ from typing import ClassVar, cast, final, override
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -316,7 +317,13 @@ def _zero_init_residual(model: nn.Module) -> None:
 class ResNet(PretrainedModel, BackboneMixin):
     r"""ResNet feature-extracting backbone (no classification head).
 
-    Implements the original ResNet topology from He et al., "Deep
+    Implements the ResNet topology from He et al. in its *v1.5* form:
+    the downsampling stride sits on the bottleneck's 3x3 convolution.
+    The paper says only that "downsampling is performed by conv3_1,
+    conv4_1, and conv5_1 with a stride of 2" without naming which conv
+    carries it; the original MSRA release put it on the first 1x1 (v1).
+    v1.5 is what every modern reference builds and what the shipped
+    checkpoints were trained as., "Deep
     Residual Learning for Image Recognition", CVPR 2016
     (arXiv:1512.03385), restricted to the convolutional trunk: a 7×7
     stem at stride 2, a 3×3 max-pool at stride 2, then four stages of
@@ -410,6 +417,12 @@ class ResNet(PretrainedModel, BackboneMixin):
         self.layer3 = l3
         self.layer4 = l4
         self._feature_info = fi
+
+        # Reference initialisation (He/MSRA fan-out convs, unit norms).
+        # Without this the family starts from Lucid's generic
+        # kaiming_uniform(a=sqrt(5)), a different distribution and gain
+        # than the one the paper's schedule is tuned for.
+        init_cnn_fan_out(self)
 
         if config.zero_init_residual:
             _zero_init_residual(self)

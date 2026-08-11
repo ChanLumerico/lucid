@@ -1,6 +1,8 @@
 """Xception parity test (299x299 input vs timm legacy_xception).
 
-DepthwiseSep structure differs from timm — expected to skip."""
+The structure matches the reference key-for-key apart from the head, which
+the spec's ``key_remap`` handles (classifier.1.* -> fc.*); this is not an
+expected-skip family."""
 
 import pytest
 import lucid.models as M

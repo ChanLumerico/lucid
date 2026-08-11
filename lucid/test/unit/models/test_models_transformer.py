@@ -56,8 +56,18 @@ class TestTransformerConfig:
         assert cfg.effective_decoder_vocab_size == 1000
 
     def test_decoder_vocab_explicit(self) -> None:
-        cfg = TransformerConfig(vocab_size=1000, decoder_vocab_size=2000)
+        # A separate target vocabulary only makes sense with sharing off --
+        # sharing one matrix across two vocabularies is a contradiction, and
+        # __post_init__ rejects it (see the next test).
+        cfg = TransformerConfig(
+            vocab_size=1000, decoder_vocab_size=2000, share_embeddings=False
+        )
         assert cfg.effective_decoder_vocab_size == 2000
+
+    def test_embeddings_are_shared_by_default(self) -> None:
+        # Section 3.4 shares one weight matrix across both embedding layers
+        # and the pre-softmax projection.
+        assert TransformerConfig().share_embeddings is True
 
     def test_share_embeddings_requires_matching_vocab(self) -> None:
         with pytest.raises(ValueError, match="share_embeddings"):
@@ -85,7 +95,9 @@ class TestTransformerModel:
         src = lucid.tensor([[1, 2, 3, 4, 5]]).long()
         tgt = lucid.tensor([[1, 2, 3]]).long()
         out = m(src, tgt)
-        assert tuple(out.logits.shape) == (1, 3, _HIDDEN)
+        # The bare trunk has no LM head, so it returns hidden states — not
+        # ``logits``, which would invite a softmax over d_model units.
+        assert tuple(out.last_hidden_state.shape) == (1, 3, _HIDDEN)
         assert tuple(out.encoder_last_hidden_state.shape) == (1, 5, _HIDDEN)
 
     def test_seq_too_long_raises(self) -> None:
@@ -235,4 +247,4 @@ class TestTransformerRegistry:
             lucid.tensor([[1, 2, 3]]).long(),
             lucid.tensor([[1]]).long(),
         )
-        assert tuple(out.logits.shape) == (1, 1, _HIDDEN)
+        assert tuple(out.last_hidden_state.shape) == (1, 1, _HIDDEN)

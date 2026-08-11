@@ -18,12 +18,15 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 class CSPResNet50Weights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.cspresnet_50_cls`.
 
-    Wang et al. CVPRW 2020 CSP-ResNet-50 (21.6 M params, top-1 76.74%).
+    Wang et al. CVPRW 2020 CSP-ResNet-50 (21.6 M params, top-1 79.58%).
 
     Attributes
     ----------
     RA_IN1K : WeightEntry
-        ImageNet-1k RandAugment recipe checkpoint (top-1 76.74%),
+        ImageNet-1k RandAugment recipe checkpoint (top-1 79.58% at
+        256x256, per timm's ``results-imagenet.csv`` for this exact tag).
+        The authors' README figure of 76.6 belongs to their own
+        darknet-trained model, which is a different checkpoint.
         sourced from ``timm/cspresnet50.ra_in1k``.
     DEFAULT : WeightEntry
         Alias for :attr:`RA_IN1K`.
@@ -45,14 +48,19 @@ class CSPResNet50Weights(WeightsEnum):
         sha256="f02d1a547ee3792f61a4510d171c04c2a3321e7c6818e7867a3f3f326b99e554",
         num_classes=1000,
         transforms=ImageClassification(
-            crop_size=256, resize_size=288, interpolation="bilinear"
+            # 288, not round(256 / 0.887) = 289: the reference *floors*
+            # this ratio, and 288 is the resize the checkpoint's published
+            # top-1 was measured under.
+            crop_size=256,
+            resize_size=288,
+            interpolation="bilinear",
         ),
         meta={
             "tag": "RA_IN1K",
             "source": "timm/cspresnet50.ra_in1k",
             "license": "apache-2.0",
             "num_params": 21_620_000,
-            "metrics": {"ImageNet-1k": {"acc@1": 76.74}},
+            "metrics": {"ImageNet-1k": {"acc@1": 79.58}},
         },
     )
     DEFAULT = RA_IN1K
@@ -88,8 +96,17 @@ class CSPResNeXt50Weights(WeightsEnum):
         url=f"{HUB_BASE}/cspresnext-50/resolve/main/RA_IN1K/model.safetensors",
         sha256="375b1e34949c133601cd65c1bcf2309715c9fef9684c65338a30f36b400eede4",
         num_classes=1000,
+        # The source checkpoint is a 256px model (config.json: input_size
+        # [3, 256, 256], crop_pct 0.887), like both siblings in this file.
+        # Evaluating it through a 224px crop feeds every stage the wrong
+        # object scale and silently costs top-1.
         transforms=ImageClassification(
-            crop_size=224, resize_size=256, interpolation="bilinear"
+            # 288, not round(256 / 0.887) = 289: the reference *floors*
+            # this ratio, and 288 is the resize the checkpoint's published
+            # top-1 was measured under.
+            crop_size=256,
+            resize_size=288,
+            interpolation="bilinear",
         ),
         meta={
             "tag": "RA_IN1K",
@@ -133,7 +150,12 @@ class CSPDarknet53Weights(WeightsEnum):
         sha256="d951deae3e98baa8e1fc33c18235ef399f872605a29b1a24f2d89a61f5d4312c",
         num_classes=1000,
         transforms=ImageClassification(
-            crop_size=256, resize_size=288, interpolation="bilinear"
+            # 288, not round(256 / 0.887) = 289: the reference *floors*
+            # this ratio, and 288 is the resize the checkpoint's published
+            # top-1 was measured under.
+            crop_size=256,
+            resize_size=288,
+            interpolation="bilinear",
         ),
         meta={
             "tag": "RA_IN1K",

@@ -194,7 +194,7 @@ class TestAutocontrastParity:
 
 @pytest.mark.parity
 class TestPosterizeParity:
-    """uint8 bit-mask quantisation.  Reference torchvision requires uint8
+    """uint8 bit-mask quantisation.  The reference vision library requires uint8
     input, so we convert float→uint8 for it and back to float for the
     comparison.
 
@@ -257,7 +257,7 @@ class TestPosterizeParity:
 
 @pytest.mark.parity
 class TestSolarizeParity:
-    """Threshold-and-invert.  Reference torchvision's float solarize uses
+    """Threshold-and-invert.  The reference vision library's float solarize uses
     the same ``>= threshold`` spec as Lucid; should be bit-exact."""
 
     @pytest.mark.parametrize("threshold", [0.0, 0.25, 0.5, 0.75, 1.0])

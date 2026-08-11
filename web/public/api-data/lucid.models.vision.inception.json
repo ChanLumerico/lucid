@@ -3,7 +3,7 @@
   "name": "inception",
   "path": "lucid.models.vision.inception",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/__init__.py#L1",
   "members": [
     {
       "name": "InceptionConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "InceptionConfig(num_classes: int = 1000, in_channels: int = 3, version: str = 'v3', aux_logits: bool = False, dropout: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_config.py#L10",
+      "signature": "InceptionConfig(num_classes: int = 1000, in_channels: int = 3, version: str = 'v3', aux_logits: bool = False, dropout: float = 0.5, transform_input: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.inception._config.InceptionConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, version: str = 'v3', aux_logits: bool = False, dropout: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_config.py#L1",
+          "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, version: str = 'v3', aux_logits: bool = False, dropout: float = 0.5, transform_input: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,7 +42,7 @@
         }
       ],
       "summary": "Configuration for Inception v3.",
-      "extended": "`aux_logits` enables the auxiliary classifier that attaches after the\nsecond InceptionC block (used during training with weight 0.4).\n`dropout` — main head dropout rate (0.5 in the paper).\n`version` — only `\"v3\"` is supported in this module.",
+      "extended": "`aux_logits` enables the auxiliary classifier that attaches after the\nsecond InceptionC block (used during training with weight 0.4).\n`dropout` — main head dropout rate.  0.5 is the reference\n  implementation's default, not the paper's: §8 (Training\n  Methodology) specifies no dropout rate, and \"dropout\" appears in\n  the text only in §4 and as \"label-dropout\" in §7.  (timm defaults\n  this to 0.0.)\n`version` — only `\"v3\"` is supported in this module.",
       "parameters": [],
       "returns": null,
       "raises": [],
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "InceptionV3(config: InceptionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L394",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L456",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: InceptionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L471",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L533",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L509",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L580",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L512",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L583",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L528",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L599",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -235,7 +235,7 @@
       ],
       "labels": [],
       "signature": "InceptionV3ForImageClassification(config: InceptionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L538",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L609",
       "subcategory": "model",
       "methods": [
         {
@@ -244,7 +244,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: InceptionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L608",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L679",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -266,7 +266,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L645",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L730",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -344,7 +344,7 @@
       "bases": [],
       "labels": [],
       "signature": "InceptionV3Output(logits: Tensor, aux_logits: Tensor | None = None, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L322",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L332",
       "subcategory": "model",
       "methods": [
         {
@@ -353,7 +353,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, aux_logits: Tensor | None = None, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -388,7 +388,7 @@
         {
           "name": "loss",
           "annotation": "Tensor or None",
-          "description": "Cross-entropy loss with auxiliary term (weight 0.4) when labels\nwere passed to `forward`; `None` otherwise.",
+          "description": "Cross-entropy loss with auxiliary term (weight 0.4, a reference\ntraining constant rather than a paper figure) when labels\nwere passed to `forward`; `None` otherwise.",
           "default": "None"
         }
       ],
@@ -410,7 +410,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inception_v3(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_pretrained.py#L19",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_pretrained.py#L20",
       "subcategory": "pretrained",
       "summary": "Inception v3 feature-extracting backbone.",
       "extended": "Builds an `InceptionV3` with the paper-cited Szegedy 2016\ntopology: deep stem → 3× Inception-A → Reduction-A → 4× Inception-C\n→ Reduction-B → 2× Inception-E → $1\\times1$ global pool.\nDesigned for $299\\times299$ RGB inputs.  Approximately\n21.8 M parameters in the backbone alone.",
@@ -2240,7 +2240,7 @@
       "kind": "function",
       "labels": [],
       "signature": "inception_v3_cls(pretrained: bool | str = False, weights: InceptionV3Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_pretrained.py#L74",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_pretrained.py#L77",
       "subcategory": "pretrained",
       "summary": "Inception v3 image classifier (no auxiliary head by default).",
       "extended": "Builds an `InceptionV3ForImageClassification` with the\npaper-cited Szegedy 2016 topology.  Default configuration matches\nthe standard reference-framework setting of `aux_logits=False` —\napproximately 23.8 M parameters; enable the auxiliary classifier\nby passing `aux_logits=True` (adds ≈4 M parameters used only\nduring training).  Designed for $299\\times299$ RGB inputs;\nachieves a top-5 ImageNet validation error of 3.5%.",
@@ -2273,7 +2273,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.inception import inception_v3_cls\n>>> model = inception_v3_cls().eval()\n>>> x = lucid.randn(2, 3, 299, 299)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 1000)\nLoad ImageNet-pretrained weights:\n>>> model = inception_v3_cls(pretrained=True)            # DEFAULT tag\n>>> from lucid.models.vision.inception import InceptionV3Weights\n>>> model = inception_v3_cls(weights=InceptionV3Weights.IMAGENET1K_V1)"
       ],
       "notes": [
-        "See Szegedy et al., \"Rethinking the Inception Architecture for\nComputer Vision\", CVPR 2016, §6.  Training with the auxiliary head\nadds a 0.4-weighted cross-entropy term as\n\n\n\n$$\n\\mathcal{L} = \\mathcal{L}_{\\text{main}}\n    + 0.4 \\cdot \\mathcal{L}_{\\text{aux}}.\n$$\n\nPretrained weights are converted from torchvision's\n`Inception_V3_Weights` (auxiliary head dropped) and hosted on the\nHugging Face Hub under `lucid-dl/inception-v3`.  They evaluate at a\n299-pixel centre crop resized from 342."
+        "See Szegedy et al., \"Rethinking the Inception Architecture for\nComputer Vision\", CVPR 2016, §6.  Training with the auxiliary head\nadds a 0.4-weighted cross-entropy term as\n\n\n\n$$\n\\mathcal{L} = \\mathcal{L}_{\\text{main}}\n    + 0.4 \\cdot \\mathcal{L}_{\\text{aux}}.\n$$\n\nPretrained weights are converted from reference_vision's\n`Inception_V3_Weights` (auxiliary head dropped) and hosted on the\nHugging Face Hub under `lucid-dl/inception-v3`.  They evaluate at a\n299-pixel centre crop resized from 342."
       ],
       "attributes": [],
       "warns": [],
@@ -4101,7 +4101,7 @@
       ],
       "labels": [],
       "signature": "InceptionV3Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/inception/_weights.py#L24",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/inception/_weights.py#L24",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.inception_v3_cls`.",
@@ -4119,7 +4119,7 @@
         {
           "name": "IMAGENET1K_V1",
           "annotation": "WeightEntry",
-          "description": "ImageNet-1k V1 checkpoint (top-1 77.294% / top-5 93.450%),\nsourced from `torchvision/Inception_V3_Weights.IMAGENET1K_V1`."
+          "description": "ImageNet-1k V1 checkpoint (top-1 77.294% / top-5 93.450%),\nsourced from `reference_vision/Inception_V3_Weights.IMAGENET1K_V1`."
         },
         {
           "name": "DEFAULT",

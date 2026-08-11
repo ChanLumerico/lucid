@@ -51,7 +51,11 @@ class InceptionConfig(ModelConfig):
 
     ``aux_logits`` enables the auxiliary classifier that attaches after the
     second InceptionC block (used during training with weight 0.4).
-    ``dropout`` — main head dropout rate (0.5 in the paper).
+    ``dropout`` — main head dropout rate.  0.5 is the reference
+      implementation's default, not the paper's: §8 (Training
+      Methodology) specifies no dropout rate, and "dropout" appears in
+      the text only in §4 and as "label-dropout" in §7.  (timm defaults
+      this to 0.0.)
     ``version`` — only ``"v3"`` is supported in this module.
     """
 
@@ -60,5 +64,22 @@ class InceptionConfig(ModelConfig):
     num_classes: int = 1000
     in_channels: int = 3
     version: str = "v3"
+
+    def __post_init__(self) -> None:
+        # The docstring promises "only v3 is supported", but nothing enforced
+        # it: ``inception_v3_cls(version="v4")`` built a plain v3 and then
+        # wrote the bogus value into config.json on save.
+        if self.version != "v3":
+            raise ValueError(
+                f"only version='v3' is implemented by this module, got "
+                f"{self.version!r}"
+            )
+
     aux_logits: bool = False
     dropout: float = 0.5
+    # The shipped checkpoint is a port of the original TF weights, which expect
+    # inputs in the (x-0.5)/0.5 range.  Callers feed ImageNet-normalised images
+    # (that is what the bundled preset produces), so the model re-normalises
+    # internally — exactly what the reference builder force-enables whenever
+    # pretrained weights are requested.
+    transform_input: bool = False

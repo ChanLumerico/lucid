@@ -191,7 +191,7 @@ class TestConvNeXtWeightsEnums(unittest.TestCase):
         from lucid.models.weights import ConvNeXtXLargeWeights
 
         # XLarge uses the timm-sourced fb_in22k_ft_in1k tag (different
-        # naming convention from the torchvision IMAGENET1K_V1 four).
+        # naming convention from the reference_vision IMAGENET1K_V1 four).
         self.assertIs(
             ConvNeXtXLargeWeights.DEFAULT, ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K
         )
@@ -204,7 +204,7 @@ class TestConvNeXtWeightsEnums(unittest.TestCase):
         self.assertEqual(meta["license"], "apache-2.0")
         self.assertEqual(meta["num_params"], 350_196_968)
         tf = ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K.transforms()
-        # timm preset: 224 crop, 256 resize, bicubic (≠ torchvision bilinear).
+        # timm preset: 224 crop, 256 resize, bicubic (≠ reference_vision bilinear).
         self.assertEqual(tf.crop_size, 224)
         self.assertEqual(tf.resize_size, 256)
 
@@ -221,12 +221,12 @@ class TestConvNeXtWeightsEnums(unittest.TestCase):
 
         meta = ConvNeXtBaseWeights.IMAGENET1K_V1.meta
         self.assertEqual(
-            meta["source"], "torchvision/ConvNeXt_Base_Weights.IMAGENET1K_V1"
+            meta["source"], "reference_vision/ConvNeXt_Base_Weights.IMAGENET1K_V1"
         )
         self.assertEqual(meta["num_params"], 88_591_464)
         self.assertIn("ImageNet-1k", meta["metrics"])
 
-    def test_transforms_match_torchvision(self) -> None:
+    def test_transforms_match_reference_vision(self) -> None:
         # ConvNeXt resize sizes differ per variant (236 / 230 / 232 / 232).
         from lucid.models.weights import (
             ConvNeXtBaseWeights,

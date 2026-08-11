@@ -18,11 +18,16 @@ softmax ⊗ sigmoid summation.
 from lucid.utils.transforms import Segmentation
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
+# Every facebook/mask2former-swin-*-ade-semantic preprocessor_config.json
+# gives size={"height": 384, "width": 384} as an explicit pair, so the
+# upstream processor resizes straight to 384x384 -- aspect ratio distorted,
+# no crop.  Shortest-edge + centre-crop framed the image differently from
+# how the checkpoint was evaluated.
 _PRESET = Segmentation(
-    crop_size=384,
     resize_size=384,
     mean=(0.485, 0.456, 0.406),
     std=(0.229, 0.224, 0.225),
+    stretch=True,
 )
 
 
@@ -45,7 +50,12 @@ class Mask2FormerSwinTinyWeights(WeightsEnum):
             "tag": "ADE20K",
             "source": "facebook/mask2former-swin-tiny-ade-semantic",
             "license": "other",
-            "num_params": 47_441_169,
+            # Same convention as the other three entries: the HF
+            # safetensors total, i.e. Lucid's built parameter count
+            # (47,439,633) plus the criterion's 151-entry empty_weight
+            # buffer plus the int64 relative_position_index buffers
+            # (12 blocks x 7^4 = 28,812).
+            "num_params": 47_468_596,
             "metrics": {"ADE20K": {"mIoU": 47.7}},
         },
     )
@@ -84,7 +94,7 @@ class Mask2FormerSwinBaseWeights(WeightsEnum):
 
     Single ADE20k semantic checkpoint converted from
     ``facebook/mask2former-swin-base-ade-semantic`` (Cheng et al., 2022;
-    ~107M params, 53.9 mIoU on the ADE20k validation set).
+    ~107M params, 52.4 mIoU on the ADE20k validation set).
     """
 
     ADE20K = WeightEntry(
@@ -98,7 +108,10 @@ class Mask2FormerSwinBaseWeights(WeightsEnum):
             "source": "facebook/mask2former-swin-base-ade-semantic",
             "license": "other",
             "num_params": 107_420_006,
-            "metrics": {"ADE20K": {"mIoU": 53.9}},
+            # MODEL_ZOO.md ADE20K: Swin-B is 52.4; the 53.9 row belongs to
+            # Swin-B (IN21k), a different checkpoint
+            # (facebook/mask2former-swin-base-IN21k-ade-semantic).
+            "metrics": {"ADE20K": {"mIoU": 52.4}},
         },
     )
     DEFAULT = ADE20K

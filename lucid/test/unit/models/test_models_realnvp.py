@@ -212,8 +212,19 @@ class TestRealNVPModel:
         cfg = _tiny_cfg()
         m = RealNVPModel(cfg).eval()
         x = lucid.rand((2, 3, 8, 8))
-        expected = -m.log_prob(x) / (cfg.input_dim * math.log(2.0))
+        # ``log_prob`` is the density over the model's own [0, 1] input space;
+        # the reported metric adds the 8-bit discretisation term so it lands
+        # on the paper's Table 1 scale.
+        expected = -m.log_prob(x) / (cfg.input_dim * math.log(2.0)) + cfg.num_bits
         assert float((m.bits_per_dim(x) - expected).abs().max().item()) < 1e-6
+
+    def test_bits_per_dim_carries_the_discretisation_offset(self) -> None:
+        cfg = _tiny_cfg()
+        m = RealNVPModel(cfg).eval()
+        x = lucid.rand((2, 3, 8, 8))
+        uncorrected = -m.log_prob(x) / (cfg.input_dim * math.log(2.0))
+        offset = float((m.bits_per_dim(x) - uncorrected).mean().item())
+        assert abs(offset - cfg.num_bits) < 1e-6
 
     def test_logit_stage_inverts(self) -> None:
         m = RealNVPModel(_tiny_cfg()).eval()
@@ -245,7 +256,9 @@ class TestRealNVPForImageGeneration:
         out = m(x)
         assert out.loss is not None
         expected = float(
-            (-out.log_prob / (cfg.input_dim * math.log(2.0))).mean().item()
+            (-out.log_prob / (cfg.input_dim * math.log(2.0)) + cfg.num_bits)
+            .mean()
+            .item()
         )
         assert abs(float(out.loss.item()) - expected) < 1e-6
 

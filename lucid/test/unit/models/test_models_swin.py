@@ -173,13 +173,13 @@ class TestSwinSerialization(unittest.TestCase):
 
 
 # (factory, slug, tag, source, num_params, resize_size) — the three
-# torchvision IMAGENET1K_V1 variants plus the timm MS_IN22K_FT_IN1K Large.
+# reference_vision IMAGENET1K_V1 variants plus the timm MS_IN22K_FT_IN1K Large.
 _SHIPPED = (
     (
         "swin_tiny_cls",
         "swin-tiny",
         "IMAGENET1K_V1",
-        "torchvision/Swin_T_Weights.IMAGENET1K_V1",
+        "reference_vision/Swin_T_Weights.IMAGENET1K_V1",
         28_288_354,
         232,
     ),
@@ -187,7 +187,7 @@ _SHIPPED = (
         "swin_small_cls",
         "swin-small",
         "IMAGENET1K_V1",
-        "torchvision/Swin_S_Weights.IMAGENET1K_V1",
+        "reference_vision/Swin_S_Weights.IMAGENET1K_V1",
         49_606_258,
         246,
     ),
@@ -195,7 +195,7 @@ _SHIPPED = (
         "swin_base_cls",
         "swin-base",
         "IMAGENET1K_V1",
-        "torchvision/Swin_B_Weights.IMAGENET1K_V1",
+        "reference_vision/Swin_B_Weights.IMAGENET1K_V1",
         87_768_224,
         238,
     ),

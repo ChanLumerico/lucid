@@ -3,7 +3,7 @@
   "name": "lenet",
   "path": "lucid.models.vision.lenet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/__init__.py#L1",
   "members": [
     {
       "name": "LeNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "LeNetConfig(num_classes: int = 10, in_channels: int = 1, activation: str = 'tanh', pooling: str = 'avg')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 10, in_channels: int = 1, activation: str = 'tanh', pooling: str = 'avg')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,7 +42,7 @@
         }
       ],
       "summary": "Configuration for LeNet-5.",
-      "extended": "`activation` controls the nonlinearity:\n  - `\"tanh\"`    — original paper (Gradient-Based Learning, 1998)\n  - `\"relu\"`    — modern convention\n\n`pooling` controls the sub-sampling layers:\n  - `\"avg\"`     — original paper (average pooling / sub-sampling)\n  - `\"max\"`     — modern convention\n\n`in_channels` defaults to 1 (grayscale). Set to 3 for RGB inputs,\nthough the canonical use-case is MNIST / single-channel images.",
+      "extended": "`activation` controls the nonlinearity:\n  - `\"tanh\"`    — plain $\\tanh$.  The 1998 paper's squashing\n    function is the scaled $f(a) = 1.7159\\tanh(\\tfrac{2}{3}a)$\n    (Appendix A), chosen so $f(\\pm 1) = \\pm 1$; plain tanh is\n    what every modern re-implementation uses and what the shipped\n    weights were trained with.\n  - `\"relu\"`    — modern convention\n\n`pooling` controls the sub-sampling layers:\n  - `\"avg\"`     — original paper (average pooling / sub-sampling)\n  - `\"max\"`     — modern convention\n\n`in_channels` defaults to 1 (grayscale). Set to 3 for RGB inputs,\nthough the canonical use-case is MNIST / single-channel images.",
       "parameters": [],
       "returns": null,
       "raises": [],
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "LeNet(config: LeNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_model.py#L74",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_model.py#L96",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: LeNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_model.py#L144",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_model.py#L166",
           "subcategory": "model",
           "summary": "Configure a `DataLoader`; see the class docstring for parameter\nsemantics.",
           "extended": null,
@@ -103,7 +103,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_model.py#L155",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_model.py#L180",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -124,7 +124,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_model.py#L158",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_model.py#L183",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -146,7 +146,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_model.py#L162",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_model.py#L187",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -212,7 +212,7 @@
       ],
       "labels": [],
       "signature": "LeNetForImageClassification(config: LeNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_model.py#L172",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_model.py#L197",
       "subcategory": "model",
       "methods": [
         {
@@ -221,7 +221,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: LeNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_model.py#L250",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_model.py#L275",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -243,7 +243,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_model.py#L257",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_model.py#L282",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -314,10 +314,10 @@
       "kind": "function",
       "labels": [],
       "signature": "lenet_5(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_pretrained.py#L22",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_pretrained.py#L23",
       "subcategory": "pretrained",
       "summary": "LeNet-5 feature-extracting backbone (no classification head).",
-      "extended": "Builds a `LeNet` with the paper-cited LeCun 1998 topology:\nthree convolutions (C1: 1→6, C3: 6→16, C5: 16→120) interleaved with\ntwo $2\\times2$ sub-sampling layers, using $\\tanh$\nactivations and parameter-free average pooling.  Approximately\n44 k convolutional parameters (≈60 k including the F6 + output\nlayers of the classifier variant).  Designed for $1\\times32 \\times32$ grayscale digit inputs.",
+      "extended": "Builds a `LeNet` with the paper-cited LeCun 1998 topology:\nthree convolutions (C1: 1→6, C3: 6→16, C5: 16→120) interleaved with\ntwo $2\\times2$ sub-sampling layers, using $\\tanh$\nactivations and parameter-free average pooling.  50,692\nconvolutional parameters (61,706 including the F6 + output layers\nof the classifier variant).  Designed for $1\\times32 \\times32$ grayscale digit inputs.",
       "parameters": [
         {
           "name": "pretrained",
@@ -425,7 +425,7 @@
       "kind": "function",
       "labels": [],
       "signature": "lenet_5_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/lenet/_pretrained.py#L84",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/lenet/_pretrained.py#L87",
       "subcategory": "pretrained",
       "summary": "LeNet-5 image classifier (C1-S2-C3-S4-C5 + F6 + linear head).",
       "extended": "Builds a `LeNetForImageClassification` with the paper-cited\nLeCun 1998 configuration: three convolutions, two sub-sampling\nlayers, a hidden F6 layer (120 → 84), and a final linear projection\nto `config.num_classes` (default 10 for MNIST).  Approximately\n60 k parameters total.",
@@ -564,7 +564,7 @@
   "see_also": [],
   "canonical_name": "LeNet",
   "citation": "LeCun, Yann, et al. \"Gradient-based learning applied to document recognition.\" Proceedings of the IEEE, vol. 86, no. 11, 1998, pp. 2278–2324.",
-  "theory": "LeNet-5 is the prototypical convolutional neural network and the\ndirect ancestor of every modern vision architecture.  Designed for\nhandwritten-digit recognition on 32×32 grayscale inputs, it\ninterleaves *learned* $5\\times5$ convolutions with fixed\n$2\\times2$ sub-sampling (average pooling) layers, ending in\ntwo fully-connected layers and a Gaussian-RBF output layer.\n\nThe key insight of LeCun et al. was that local receptive fields,\nshared weights, and spatial sub-sampling — together — give a model\nthat is approximately invariant to small translations, scalings,\nand distortions of the input.  Convolution enforces *weight\nsharing*: the same $5\\times5$ filter slides across the image,\nso a feature detector learned in one location applies everywhere.\nSub-sampling layers then *pool* responses over a neighbourhood,\nyielding coarser feature maps that are robust to the exact position\nof each feature.\n\nFormally, a LeNet layer computes\n\n\n\n$$\nh_{i,j}^{(k)} = \\phi\\!\\left(\n    \\sum_{c}\\sum_{u,v} W_{u,v,c}^{(k)} \\, x_{i+u,\\,j+v,\\,c}\n    + b^{(k)}\n\\right),\n$$\n\nwhere $\\phi$ is $\\tanh$ in the original paper (or ReLU\nin modern reimplementations) and the kernel $W^{(k)}$ is\nshared across all spatial positions $(i, j)$.  Despite its\nsmall size by today's standards (≈60 k parameters), LeNet\nestablished the convolutional template — conv → nonlinearity →\npool → repeat → flatten → MLP — that is still recognisable in\nevery CNN that followed.",
+  "theory": "LeNet-5 is the prototypical convolutional neural network and the\ndirect ancestor of every modern vision architecture.  Designed for\nhandwritten-digit recognition on 32×32 grayscale inputs, it\ninterleaves *learned* $5\\times5$ convolutions with fixed\n$2\\times2$ sub-sampling (average pooling) layers, ending in\ntwo fully-connected layers and an output layer.  (The 1998 paper's\noutput layer is a set of Gaussian RBF units scoring against fixed\nASCII bitmap prototypes; this implementation uses an ordinary linear\nlayer trained with cross-entropy, which is the universal modern\nsubstitute.)\n\nThe key insight of LeCun et al. was that local receptive fields,\nshared weights, and spatial sub-sampling — together — give a model\nthat is approximately invariant to small translations, scalings,\nand distortions of the input.  Convolution enforces *weight\nsharing*: the same $5\\times5$ filter slides across the image,\nso a feature detector learned in one location applies everywhere.\nSub-sampling layers then *pool* responses over a neighbourhood,\nyielding coarser feature maps that are robust to the exact position\nof each feature.\n\nFormally, a LeNet layer computes\n\n\n\n$$\nh_{i,j}^{(k)} = \\phi\\!\\left(\n    \\sum_{c}\\sum_{u,v} W_{u,v,c}^{(k)} \\, x_{i+u,\\,j+v,\\,c}\n    + b^{(k)}\n\\right),\n$$\n\nwhere $\\phi$ is $\\tanh$ in the original paper (or ReLU\nin modern reimplementations) and the kernel $W^{(k)}$ is\nshared across all spatial positions $(i, j)$.  Despite its\nsmall size by today's standards (≈60 k parameters), LeNet\nestablished the convolutional template — conv → nonlinearity →\npool → repeat → flatten → MLP — that is still recognisable in\nevery CNN that followed.",
   "tasks": [
     "image-classification"
   ]

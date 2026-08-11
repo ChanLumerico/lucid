@@ -20,7 +20,11 @@ from lucid.models._meta import model_family_meta
     handwritten-digit recognition on 32×32 grayscale inputs, it
     interleaves *learned* :math:`5\times5` convolutions with fixed
     :math:`2\times2` sub-sampling (average pooling) layers, ending in
-    two fully-connected layers and a Gaussian-RBF output layer.
+    two fully-connected layers and an output layer.  (The 1998 paper's
+    output layer is a set of Gaussian RBF units scoring against fixed
+    ASCII bitmap prototypes; this implementation uses an ordinary linear
+    layer trained with cross-entropy, which is the universal modern
+    substitute.)
 
     The key insight of LeCun et al. was that local receptive fields,
     shared weights, and spatial sub-sampling — together — give a model
@@ -52,10 +56,14 @@ from lucid.models._meta import model_family_meta
 )
 @dataclass(frozen=True)
 class LeNetConfig(ModelConfig):
-    """Configuration for LeNet-5.
+    r"""Configuration for LeNet-5.
 
     ``activation`` controls the nonlinearity:
-      - ``"tanh"``    — original paper (Gradient-Based Learning, 1998)
+      - ``"tanh"``    — plain :math:`\tanh`.  The 1998 paper's squashing
+        function is the scaled :math:`f(a) = 1.7159\tanh(\tfrac{2}{3}a)`
+        (Appendix A), chosen so :math:`f(\pm 1) = \pm 1`; plain tanh is
+        what every modern re-implementation uses and what the shipped
+        weights were trained with.
       - ``"relu"``    — modern convention
 
     ``pooling`` controls the sub-sampling layers:
@@ -72,3 +80,15 @@ class LeNetConfig(ModelConfig):
     in_channels: int = 1
     activation: str = "tanh"  # "tanh" | "relu"
     pooling: str = "avg"  # "avg" | "max"
+
+    def __post_init__(self) -> None:
+        # The builders test only for the non-default literal and fall back to
+        # the default for anything else, so ``activation="ReLU"`` (wrong case)
+        # or ``pooling="none"`` silently produced the *default* network — the
+        # opposite of what the caller asked for, with no warning.
+        if self.activation not in ("tanh", "relu"):
+            raise ValueError(
+                f"activation must be 'tanh' or 'relu', got {self.activation!r}"
+            )
+        if self.pooling not in ("avg", "max"):
+            raise ValueError(f"pooling must be 'avg' or 'max', got {self.pooling!r}")

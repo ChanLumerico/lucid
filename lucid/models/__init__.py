@@ -23,6 +23,8 @@ from lucid.models._output import (
     ModelOutput, BaseModelOutput, BaseModelOutputWithPooling,
     ImageClassificationOutput, ObjectDetectionOutput, InstanceSegmentationOutput,
     SemanticSegmentationOutput, CausalLMOutput, MaskedLMOutput, Seq2SeqLMOutput,
+    SequenceClassificationOutput, TokenClassificationOutput,
+    QuestionAnsweringOutput,
     DiffusionModelOutput, VAEOutput, NormalizingFlowOutput, GenerationOutput,
 )
 from lucid.models._protocols import (
@@ -212,7 +214,9 @@ from lucid.models.vision.resnext import (
     ResNeXtConfig, ResNeXt, ResNeXtForImageClassification,
     resnext_50_32x4d, resnext_50_32x4d_cls,
     resnext_101_32x4d, resnext_101_32x4d_cls,
-    resnext_101_32x8d, resnext_101_32x8d_cls,
+    resnext_101_32x8d,
+    resnext_101_64x4d,
+    resnext_101_64x4d_cls, resnext_101_32x8d_cls,
 )
 # 2017 — Xception (Chollet)
 from lucid.models.vision.xception import (
@@ -335,11 +339,10 @@ from lucid.models.vision.pvt import (
     PVTConfig, PVT, PVTForImageClassification,
     pvt_v2_b0, pvt_v2_b0_cls,
     pvt_v2_b1, pvt_v2_b1_cls,
-    pvt_v2_b2, pvt_v2_b2_cls,
+    pvt_v2_b2, pvt_v2_b2_li, pvt_v2_b2_cls,
     pvt_v2_b3, pvt_v2_b3_cls,
     pvt_v2_b4, pvt_v2_b4_cls,
     pvt_v2_b5, pvt_v2_b5_cls,
-    pvt_tiny, pvt_tiny_cls,
 )
 # 2022 — ConvNeXt (Liu et al.)
 from lucid.models.vision.convnext import (
@@ -368,6 +371,8 @@ from lucid.models.vision.maxvit import (
 from lucid.models.vision.inception_next import (
     InceptionNeXtConfig, InceptionNeXt, InceptionNeXtForImageClassification,
     inception_next_tiny, inception_next_tiny_cls,
+    inception_next_small, inception_next_small_cls,
+    inception_next_base, inception_next_base_cls,
 )
 # 2014 — R-CNN (Girshick et al.)
 from lucid.models.vision.rcnn import (
@@ -432,7 +437,7 @@ from lucid.models.vision.yolo import (
     YOLOV1Config, YOLOV1ForObjectDetection,
     yolo_v1, yolo_v1_tiny,
     YOLOV2Config, YOLOV2ForObjectDetection,
-    yolo_v2, yolo_v2_tiny,
+    yolo_v2,
     YOLOV3Config, YOLOV3ForObjectDetection,
     yolo_v3, yolo_v3_tiny,
     YOLOV4Config, YOLOV4ForObjectDetection,
@@ -452,6 +457,8 @@ __all__ = [
     "ModelOutput", "BaseModelOutput", "BaseModelOutputWithPooling",
     "ImageClassificationOutput", "ObjectDetectionOutput", "InstanceSegmentationOutput",
     "SemanticSegmentationOutput", "CausalLMOutput", "MaskedLMOutput", "Seq2SeqLMOutput",
+    "SequenceClassificationOutput", "TokenClassificationOutput",
+    "QuestionAnsweringOutput",
     "DiffusionModelOutput", "VAEOutput", "NormalizingFlowOutput", "GenerationOutput",
     "AutoConfig", "AutoModel",
     "AutoModelForCausalLM", "AutoModelForImageClassification",
@@ -507,7 +514,9 @@ __all__ = [
     "ResNeXtConfig", "ResNeXt", "ResNeXtForImageClassification",
     "resnext_50_32x4d", "resnext_50_32x4d_cls",
     "resnext_101_32x4d", "resnext_101_32x4d_cls",
-    "resnext_101_32x8d", "resnext_101_32x8d_cls",
+    "resnext_101_32x8d",
+    "resnext_101_64x4d",
+    "resnext_101_64x4d_cls", "resnext_101_32x8d_cls",
     # ── Vision (2017) Xception ────────────────────────────────────────────────
     "XceptionConfig", "Xception", "XceptionForImageClassification", "XceptionOutput",
     "xception", "xception_cls",
@@ -578,9 +587,8 @@ __all__ = [
     # ── Vision (2021) PVT ────────────────────────────────────────────────────
     "PVTConfig", "PVT", "PVTForImageClassification",
     "pvt_v2_b0", "pvt_v2_b0_cls", "pvt_v2_b1", "pvt_v2_b1_cls",
-    "pvt_v2_b2", "pvt_v2_b2_cls", "pvt_v2_b3", "pvt_v2_b3_cls",
+    "pvt_v2_b2", "pvt_v2_b2_li", "pvt_v2_b2_cls", "pvt_v2_b3", "pvt_v2_b3_cls",
     "pvt_v2_b4", "pvt_v2_b4_cls", "pvt_v2_b5", "pvt_v2_b5_cls",
-    "pvt_tiny", "pvt_tiny_cls",
     # ── Vision (2022) ConvNeXt ────────────────────────────────────────────────
     "ConvNeXtConfig", "ConvNeXt", "ConvNeXtForImageClassification",
     "convnext_tiny", "convnext_tiny_cls", "convnext_small", "convnext_small_cls",
@@ -599,6 +607,8 @@ __all__ = [
     # ── Vision (2023) InceptionNeXt ──────────────────────────────────────────
     "InceptionNeXtConfig", "InceptionNeXt", "InceptionNeXtForImageClassification",
     "inception_next_tiny", "inception_next_tiny_cls",
+    "inception_next_small", "inception_next_small_cls",
+    "inception_next_base", "inception_next_base_cls",
     # ── Vision (2015) FCN ────────────────────────────────────────────────────
     "FCNConfig", "FCNForSemanticSegmentation",
     "fcn_resnet50", "fcn_resnet101",
@@ -681,7 +691,7 @@ __all__ = [
     "yolo_v1", "yolo_v1_tiny",
     # ── Vision (2017) YOLOv2 ──────────────────────────────────────────────────
     "YOLOV2Config", "YOLOV2ForObjectDetection",
-    "yolo_v2", "yolo_v2_tiny",
+    "yolo_v2",
     # ── Vision (2018) YOLOv3 ──────────────────────────────────────────────────
     "YOLOV3Config", "YOLOV3ForObjectDetection",
     "yolo_v3", "yolo_v3_tiny",

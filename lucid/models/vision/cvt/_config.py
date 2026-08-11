@@ -130,6 +130,12 @@ class CvTConfig(ModelConfig):
     embed_strides: tuple[int, ...] = (4, 2, 2)
     mlp_ratio: float = 4.0
     dropout: float = 0.0
+    # Table 1: 0.1 for CvT-13/21, 0.3 for CvT-W24.  Stochastic depth is a
+    # training-time regulariser, so it is invisible to eval parity -- which
+    # is exactly why its absence went unnoticed.  Default 0.0 keeps every
+    # existing config numerically identical; the factories set the
+    # paper-cited rates.
+    drop_path_rate: float = 0.0
     # Per-stage class-token flag.  The reference CvT prepends a single
     # learnable CLS token only on the *last* stage; that token gathers
     # global information through the stage's attention and is what the

@@ -8,6 +8,7 @@ from lucid.models._registry import register_model
 from lucid.models.vision.alexnet._config import AlexNetConfig
 from lucid.models.vision.alexnet._model import AlexNet, AlexNetForImageClassification
 from lucid.models.vision.alexnet._weights import AlexNetWeights
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG = AlexNetConfig()
 
@@ -71,6 +72,8 @@ def alexnet(pretrained: bool = False, **overrides: object) -> AlexNet:
     >>> out.last_hidden_state.shape   # (B, 256, 6, 6)
     (1, 256, 6, 6)
     """
+    if pretrained:
+        reject_unavailable_pretrained("alexnet", alternative="alexnet_cls")
     cfg = replace(_CFG, **cast(dict[str, Any], overrides)) if overrides else _CFG
     return AlexNet(cfg)
 
@@ -136,7 +139,7 @@ def alexnet_cls(
     4096-dim activation to zero during training was the principal
     technique that prevented overfitting of a 60 M-parameter network
     on 1.2 M images.  Pretrained weights are converted from
-    torchvision's ``AlexNet_Weights.IMAGENET1K_V1`` and hosted on the
+    reference_vision's ``AlexNet_Weights.IMAGENET1K_V1`` and hosted on the
     Hugging Face Hub under ``lucid-dl/alexnet``.
 
     Examples

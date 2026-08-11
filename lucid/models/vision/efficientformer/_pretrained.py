@@ -15,9 +15,14 @@ from lucid.models.vision.efficientformer._weights import (
     EfficientFormerL3Weights,
     EfficientFormerL7Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
-# Paper §4.1 / appendix: linear stochastic-depth schedule with max rate
-# 0.0 (L1), 0.1 (L3), 0.2 (L7); LayerScale init 1e-5 across all variants.
+# Stochastic depth is 0.0 for every variant: both reference implementations
+# leave ``drop_path_rate`` at its 0.0 default, snap-research's training entry
+# point has no --drop-path flag at all, and the paper never mentions it.  The
+# graded 0.0/0.1/0.2 schedule previously baked in here was attributed to the
+# paper but appears in neither it nor either reference.  LayerScale init is
+# 1e-5 across all variants.
 _CFG_L1 = EfficientFormerConfig(
     depths=(3, 2, 6, 4),
     embed_dims=(48, 96, 224, 448),
@@ -26,12 +31,22 @@ _CFG_L1 = EfficientFormerConfig(
     drop_path_rate=0.0,
 )
 
+# Two documented divergences from Table 6, both resolved in favour of the
+# reference because the paper's own Table 1 parameter counts confirm it:
+#
+#   * L3's last stage is 2 MB4D + 4 MB3D (``num_vit=4``); Table 6 prints
+#     3 + 3.  ``num_vit=4`` builds 31,406,000 params, matching Table 1's
+#     31.3M; the Table 6 split does not.
+#   * L7's stage 3 is 18 blocks; Table 6 prints 8.  ``depths[2]=18``
+#     builds 82,229,328, matching Table 1's 82.1M.
+#
+# So Table 6 is internally inconsistent with Table 1, and the reference
+# implements the arrangement Table 1 was measured from.
 _CFG_L3 = EfficientFormerConfig(
     depths=(4, 4, 12, 6),
     embed_dims=(64, 128, 320, 512),
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
     num_vit=4,
-    drop_path_rate=0.1,
 )
 
 _CFG_L7 = EfficientFormerConfig(
@@ -39,7 +54,6 @@ _CFG_L7 = EfficientFormerConfig(
     embed_dims=(96, 192, 384, 768),
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
     num_vit=8,
-    drop_path_rate=0.2,
 )
 
 
@@ -64,6 +78,8 @@ def _c(
     model_type="efficientformer",
     model_class=EfficientFormer,
     default_config=_CFG_L1,
+    params=12300000,
+    summary="auto",
 )
 def efficientformer_l1(
     pretrained: bool = False, **overrides: object
@@ -73,7 +89,8 @@ def efficientformer_l1(
     Builds the canonical *EfficientFormer-L1* configuration:
     ``depths=(3, 2, 6, 4)``, ``embed_dims=(48, 96, 224, 448)``,
     ``mlp_ratios=(4.0, 4.0, 4.0, 4.0)``, ``drop_path_rate=0.0``.
-    Approximately **12.3M parameters** — the smallest, lowest-latency
+    **11.4M parameters** headless (12.3M with the classification
+    heads) — the smallest, lowest-latency
     variant in the paper.
 
     Parameters
@@ -107,6 +124,10 @@ def efficientformer_l1(
     >>> feat.shape
     (1, 448)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "efficientformer_l1", alternative="efficientformer_l1_cls"
+        )
     return _b(_CFG_L1, overrides)
 
 
@@ -116,6 +137,8 @@ def efficientformer_l1(
     model_type="efficientformer",
     model_class=EfficientFormer,
     default_config=_CFG_L3,
+    params=31300000,
+    summary="auto",
 )
 def efficientformer_l3(
     pretrained: bool = False, **overrides: object
@@ -124,7 +147,8 @@ def efficientformer_l3(
 
     Builds the canonical *EfficientFormer-L3* configuration:
     ``depths=(4, 4, 12, 6)``, ``embed_dims=(64, 128, 320, 512)``,
-    ``drop_path_rate=0.1``.  Approximately **30.9M parameters**.
+    ``drop_path_rate=0.1``.  **30.4M parameters** headless (31.4M
+    with the classification heads).
 
     Parameters
     ----------
@@ -154,6 +178,10 @@ def efficientformer_l3(
     >>> model.forward_features(x).shape
     (1, 512)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "efficientformer_l3", alternative="efficientformer_l3_cls"
+        )
     return _b(_CFG_L3, overrides)
 
 
@@ -163,6 +191,8 @@ def efficientformer_l3(
     model_type="efficientformer",
     model_class=EfficientFormer,
     default_config=_CFG_L7,
+    params=82100000,
+    summary="auto",
 )
 def efficientformer_l7(
     pretrained: bool = False, **overrides: object
@@ -171,7 +201,8 @@ def efficientformer_l7(
 
     Builds the canonical *EfficientFormer-L7* configuration:
     ``depths=(6, 6, 18, 8)``, ``embed_dims=(96, 192, 384, 768)``,
-    ``drop_path_rate=0.2``.  Approximately **81.5M parameters** — the
+    ``drop_path_rate=0.2``.  **80.7M parameters** headless (82.2M
+    with the classification heads) — the
     largest variant in the paper.
 
     Parameters
@@ -202,6 +233,10 @@ def efficientformer_l7(
     >>> model.forward_features(x).shape
     (1, 768)
     """
+    if pretrained:
+        reject_unavailable_pretrained(
+            "efficientformer_l7", alternative="efficientformer_l7_cls"
+        )
     return _b(_CFG_L7, overrides)
 
 
@@ -217,6 +252,8 @@ def efficientformer_l7(
     model_type="efficientformer",
     model_class=EfficientFormerForImageClassification,
     default_config=_CFG_L1,
+    params=12300000,
+    summary="auto",
 )
 def efficientformer_l1_cls(
     pretrained: bool | str = False,
@@ -284,6 +321,8 @@ def efficientformer_l1_cls(
     model_type="efficientformer",
     model_class=EfficientFormerForImageClassification,
     default_config=_CFG_L3,
+    params=31300000,
+    summary="auto",
 )
 def efficientformer_l3_cls(
     pretrained: bool | str = False,
@@ -349,6 +388,8 @@ def efficientformer_l3_cls(
     model_type="efficientformer",
     model_class=EfficientFormerForImageClassification,
     default_config=_CFG_L7,
+    params=82100000,
+    summary="auto",
 )
 def efficientformer_l7_cls(
     pretrained: bool | str = False,

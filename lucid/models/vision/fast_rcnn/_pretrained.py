@@ -6,6 +6,7 @@ from typing import Any, cast
 from lucid.models._registry import register_model
 from lucid.models.vision.fast_rcnn._config import FastRCNNConfig
 from lucid.models.vision.fast_rcnn._model import FastRCNNForObjectDetection
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 _CFG_VGG16 = FastRCNNConfig(
     num_classes=80,
@@ -15,7 +16,8 @@ _CFG_VGG16 = FastRCNNConfig(
     dropout=0.5,
     bbox_reg_weights=(10.0, 10.0, 5.0, 5.0),
     score_thresh=0.05,
-    nms_thresh=0.5,
+    # The released code uses 0.3; 0.5 is the Faster R-CNN convention.
+    nms_thresh=0.3,
     max_detections=300,
 )
 
@@ -43,8 +45,10 @@ def fast_rcnn(
     VGG16 topology: shared backbone applied once to the full image, then
     7x7 RoI Pool over the stride-16 feature map followed by two 4096-dim
     FC layers and sibling K+1 / 4K heads.  Approximately 138M parameters
-    (most in the FC layers) and ~146x faster training than R-CNN while
-    reaching the same VOC2007 mAP of 66.9% (paper Table 1).
+    (most in the FC layers).  Section 4.4 / Table 4 give **146x faster
+    inference** than R-CNN for VGG16 (213x with truncated SVD); *training*
+    is 9x faster, from 84 hours to 9.5.  Table 1 puts Fast R-CNN's VOC2007
+    mAP at 66.9% against R-CNN BB's 66.0% — higher, not equal.
 
     Parameters
     ----------
@@ -82,4 +86,6 @@ def fast_rcnn(
     >>> out.logits.shape, out.pred_boxes.shape
     ((2, 81), (2, 80, 4))
     """
+    if pretrained:
+        reject_unavailable_pretrained("fast_rcnn")
     return _det(_CFG_VGG16, overrides)

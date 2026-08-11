@@ -30,6 +30,17 @@ Losses (training)
 -----------------
   Requires integer ``targets`` of shape (B, H, W).
   Uses cross-entropy loss: F.cross_entropy(logits, targets).
+
+Divergence, deliberate: 2-D
+---------------------------
+  The paper's Implementation Details state "we propose a 3D-model to
+  capture sufficient semantic context", and every released network is
+  Conv3d / BatchNorm3d with trilinear resampling — it was built for CT
+  volumes.  This is a 2-D model: the attention gate, the encoder and the
+  decoder are all Conv2d.  The gating mechanism, which is the paper's
+  actual contribution, is unchanged; only the convolution rank differs.
+  A caller with volumetric data wants a 3-D port, not this module, and
+  no 3-D checkpoint will load into it.
 """
 
 from typing import ClassVar, cast, final, override
@@ -78,10 +89,14 @@ class _AttentionGate(nn.Module):
 
     def __init__(self, x_channels: int, g_channels: int, inter_channels: int) -> None:
         super().__init__()
-        self.Wx = nn.Conv2d(x_channels, inter_channels, 1, bias=True)
+        # Section 3.2: "input feature-maps are downsampled to the resolution
+        # of gating signal".  Wx therefore carries stride 2, so the whole
+        # ReLU / psi / sigmoid stack runs on the coarse grid -- a quarter of
+        # the activations, and the attention coefficients are decided at the
+        # scale the gate actually carries semantics at.
+        self.Wx = nn.Conv2d(x_channels, inter_channels, 1, stride=2, bias=True)
         self.Wg = nn.Conv2d(g_channels, inter_channels, 1, bias=True)
         self.psi = nn.Conv2d(inter_channels, 1, 1, bias=True)
-        self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
 
     @override
     def forward(self, x: Tensor, g: Tensor) -> Tensor:  # type: ignore[override]
@@ -92,16 +107,33 @@ class _AttentionGate(nn.Module):
             g: (B, G, H/2, W/2) — gating signal (coarser).
 
         Returns:
-            (B, F, H, W) — gated skip features.
+            (B, F, H, W) — gated skip features.  The coefficients themselves
+            are computed at the gating resolution and resampled back up.
         """
-        # 1. Project skip: (B, inter, H, W)
+        # 1. Project *and* downsample the skip: (B, inter, H/2, W/2)
         wx: Tensor = cast(Tensor, self.Wx(x))
-        # 2. Project gate and upsample: (B, inter, H', W') → (B, inter, H, W)
+        # 2. Project gate and resample to wx's *actual* size.  A fixed
+        # scale_factor only lands on the right shape when every spatial
+        # dimension is even all the way down: MaxPool2d floors, so a 25x25
+        # skip pools to 12x12 and the two grids disagree.  The reference
+        # resamples to ``theta_x_size[2:]`` for exactly this reason.
         wg_raw: Tensor = cast(Tensor, self.Wg(g))
-        wg: Tensor = cast(Tensor, self.up(wg_raw))
-        # 3. Combine and compute attention map
+        wg: Tensor = F.interpolate(
+            wg_raw,
+            size=(int(wx.shape[2]), int(wx.shape[3])),
+            mode="bilinear",
+            align_corners=True,
+        )
+        # 3. Combine and compute the attention map on the gating grid
         combined: Tensor = F.relu(wx + wg)
-        att: Tensor = F.sigmoid(cast(Tensor, self.psi(combined)))  # (B, 1, H, W)
+        att: Tensor = F.sigmoid(cast(Tensor, self.psi(combined)))
+        # 4. "Grid resampling of attention coefficients" back to x's size
+        att = F.interpolate(
+            att,
+            size=(int(x.shape[2]), int(x.shape[3])),
+            mode="bilinear",
+            align_corners=True,
+        )
         return x * att
 
 
@@ -122,7 +154,10 @@ class _EncoderBlock(nn.Module):
 
 
 class _DecoderBlock(nn.Module):
-    """Decoder stage: Upsample → AttentionGate → Cat → DoubleConv."""
+    """Decoder stage: Upsample → AttentionGate → Cat → DoubleConv.
+
+    ``gated=False`` (the finest level) skips the gate entirely.
+    """
 
     def __init__(
         self,
@@ -130,10 +165,18 @@ class _DecoderBlock(nn.Module):
         skip_ch: int,
         out_ch: int,
         bilinear: bool = False,
+        gated: bool = True,
     ) -> None:
         super().__init__()
         inter_ch = out_ch // 2 if out_ch // 2 > 0 else 1
-        self.gate = _AttentionGate(skip_ch, in_ch, inter_ch)
+        # Section 3.2: "low-level feature-maps, i.e. the first skip
+        # connections, are not used in the gating function since they do not
+        # represent the input data in a high dimensional space."  The
+        # reference builds 3 gates for a 4-level U-Net, passing conv1
+        # straight through.
+        self.gate: _AttentionGate | None = (
+            _AttentionGate(skip_ch, in_ch, inter_ch) if gated else None
+        )
         if bilinear:
             self.up: nn.Module = nn.Upsample(
                 scale_factor=2, mode="bilinear", align_corners=True
@@ -144,7 +187,9 @@ class _DecoderBlock(nn.Module):
             self.conv = _DoubleConv(in_ch // 2 + skip_ch, out_ch)
 
     @override
-    def forward(self, x: Tensor, skip: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self, x: Tensor, skip: Tensor, gate: Tensor | None = None
+    ) -> Tensor:
         """Decode one level.
 
         Args:
@@ -155,7 +200,19 @@ class _DecoderBlock(nn.Module):
             (B, out_ch, 2H', 2W')
         """
         x_up: Tensor = cast(Tensor, self.up(x))
-        gated_skip: Tensor = self.gate.forward(skip, x)
+        # The deepest stage is handed the projected gating signal; shallower
+        # stages gate on the previous decoder output, as the reference does.
+        g_src = x if gate is None else gate
+        gated_skip: Tensor = (
+            skip if self.gate is None else self.gate.forward(skip, g_src)
+        )
+        # The decoder's own upsample is also a fixed factor of 2, so pad it
+        # up to the skip whenever the encoder's floor-division lost a row or
+        # column.  Same guard the sibling U-Net applies.
+        sH, sW = int(gated_skip.shape[2]), int(gated_skip.shape[3])
+        uH, uW = int(x_up.shape[2]), int(x_up.shape[3])
+        if sH != uH or sW != uW:
+            x_up = F.pad(x_up, (0, sW - uW, 0, sH - uH))
         combined: Tensor = lucid.cat([x_up, gated_skip], dim=1)
         return self.conv.forward(combined)
 
@@ -175,7 +232,7 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
 
     .. math::
 
-        \alpha^\ell = \sigma\!\bigl(\psi^\top \tanh(W_x x^\ell + W_g g^\ell)\bigr),
+        \alpha^\ell = \sigma\!\bigl(\psi^\top \mathrm{ReLU}(W_x x^\ell + W_g g^\ell)\bigr),
         \qquad
         \hat{x}^\ell = \alpha^\ell \odot x^\ell,
 
@@ -258,6 +315,15 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
         # Bottleneck
         bottleneck_ch = ch * (2**depth)
         self.bottleneck = _DoubleConv(in_ch, bottleneck_ch)
+        # The reference does not hand the raw bottleneck to the gates: a
+        # ``UnetGridGatingSignal`` (1x1 conv + BN + ReLU) projects it first,
+        # so the gating signal is a learned summary rather than whatever the
+        # deepest convolution happened to leave behind.
+        self.gating = nn.Sequential(
+            nn.Conv2d(bottleneck_ch, bottleneck_ch, 1, bias=False),
+            nn.BatchNorm2d(bottleneck_ch),
+            nn.ReLU(inplace=True),
+        )
 
         # Decoder stages (reverse order)
         self.decoders: list[_DecoderBlock] = []
@@ -266,13 +332,25 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
             skip_ch = enc_channels[i]
             dec_out = enc_channels[i]
             dec_block = _DecoderBlock(
-                dec_in, skip_ch, dec_out, bilinear=config.bilinear
+                dec_in,
+                skip_ch,
+                dec_out,
+                bilinear=config.bilinear,
+                gated=i > 0,
             )
             self.add_module(f"decoder_{i}", dec_block)
             self.decoders.append(dec_block)
             dec_in = dec_out
 
-        # Segmentation head
+        # Segmentation head.
+        #
+        # Deep supervision is NOT implemented.  The paper's own model
+        # (``unet_CT_multi_att_dsv``) attaches a per-level 1x1 conv, upsamples
+        # each to the input resolution and sums the losses; the "dsv" in its
+        # name is that mechanism.  It is a training-time signal only — the
+        # inference path is identical either way — so its absence changes no
+        # forward result, but a from-scratch run will not reproduce the
+        # paper's convergence without it.
         self.head = nn.Conv2d(enc_channels[0], config.num_classes, 1)
 
     @override
@@ -303,11 +381,12 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
 
         # Bottleneck
         feat = self.bottleneck.forward(feat)
+        gating: Tensor = cast(Tensor, self.gating(feat))
 
         # Decoder path
         for i, dec in enumerate(self.decoders):
             skip = skips[-(i + 1)]
-            feat = dec.forward(feat, skip)
+            feat = dec.forward(feat, skip, gating if i == 0 else None)
 
         # Segmentation head
         logits: Tensor = cast(Tensor, self.head(feat))  # (B, num_classes, H, W)

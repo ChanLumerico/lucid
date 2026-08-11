@@ -44,8 +44,8 @@ Loss (training)
 """
 
 import math
-from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from dataclasses import dataclass, replace
+from typing import Any, ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
@@ -166,6 +166,24 @@ class YOLOV3Config(ModelConfig):
 # ---------------------------------------------------------------------------
 
 
+# Pad fill for the stride-1 max-pool.  Must lose every max against a real
+# activation; leaky-ReLU outputs go negative, so 0 will not do.
+_NEG_FILL: float = -1e30
+
+# YOLOv3-Tiny is clustered separately from the full model — six priors, not
+# nine, and not a subset of them (yolov3-tiny.cfg:
+# ``anchors = 10,14, 23,27, 37,58, 81,82, 135,169, 344,319``).  The stride-32
+# head takes mask 3,4,5 and the stride-16 head mask 0,1,2.
+_TINY_ANCHORS: tuple[tuple[float, float], ...] = (
+    (10.0, 14.0),
+    (23.0, 27.0),
+    (37.0, 58.0),
+    (81.0, 82.0),
+    (135.0, 169.0),
+    (344.0, 319.0),
+)
+
+
 class _ConvBnLeaky(nn.Module):
     """Conv2d(bias=False) → BatchNorm2d → LeakyReLU(0.1)."""
 
@@ -264,15 +282,20 @@ class _Darknet53(nn.Module):
         x = cast(Tensor, self.stage1_blocks(x))
         x = cast(Tensor, self.down1(x))
 
+        # The detection taps come *after* their residual stack, not before the
+        # preceding downsample: Darknet-53 predicts from the 8×256 stage
+        # (stride 8) and the 8×512 stage (stride 16).  Tapping a stage early
+        # yields stride-4/8 maps that the decoder then scales by 8/16, doubling
+        # every predicted centre.
         x = cast(Tensor, self.stage2_blocks(x))
-        p3_raw = x  # (B, 256, H/8, W/8)
         x = cast(Tensor, self.down2(x))
 
         x = cast(Tensor, self.stage3_blocks(x))
-        p4_raw = x  # (B, 512, H/16, W/16)
+        p3_raw = x  # (B, 256, H/8, W/8)
         x = cast(Tensor, self.down3(x))
 
         x = cast(Tensor, self.stage4_blocks(x))
+        p4_raw = x  # (B, 512, H/16, W/16)
         x = cast(Tensor, self.down4(x))
 
         p5 = cast(Tensor, self.stage5_blocks(x))  # (B, 1024, H/32, W/32)
@@ -309,8 +332,13 @@ class _Darknet53Tiny(nn.Module):
         self.conv5 = _ConvBnLeaky(128, 256, 3)  # P4_raw
         self.pool5 = nn.MaxPool2d(2, stride=2)
         self.conv6 = _ConvBnLeaky(256, 512, 3)
-        # Stride-1 MaxPool with same-pad to keep spatial size
-        self.pool6 = nn.MaxPool2d(2, stride=1, padding=1)
+        # Stride-1 MaxPool that must *preserve* the grid.  darknet pads this
+        # layer asymmetrically (0 left/top, 1 right/bottom), so 13x13 stays
+        # 13x13; symmetric padding=1 gives 14x14 and desynchronises the P5
+        # head from its stride-32 decode grid.  The pad value has to be very
+        # negative rather than 0 — these activations come from a leaky ReLU
+        # and are frequently negative, so a 0 pad would win the max.
+        self.pool6 = nn.MaxPool2d(2, stride=1, padding=0)
         self.conv7 = _ConvBnLeaky(512, 1024, 3)
         self.conv8 = _ConvBnLeaky(1024, 256, 1)  # bottleneck before P5 head
 
@@ -323,7 +351,9 @@ class _Darknet53Tiny(nn.Module):
         x = cast(Tensor, self.conv5(x))
         p4_raw = x  # (B, 256, H/16, W/16)
         x = cast(Tensor, self.pool5(x))
-        x = cast(Tensor, self.pool6(cast(Tensor, self.conv6(x))))
+        x = cast(Tensor, self.conv6(x))
+        x = F.pad(x, (0, 1, 0, 1), mode="constant", value=_NEG_FILL)
+        x = cast(Tensor, self.pool6(x))
         x = cast(Tensor, self.conv7(x))
         p5 = cast(Tensor, self.conv8(x))  # (B, 256, H/32, W/32)
         return p4_raw, p5
@@ -353,6 +383,25 @@ def _make_detection_head(
         _ConvBnLeaky(mid_ch * 2, mid_ch, 1),
     ]
     compress = nn.Sequential(*c)
+    predict = nn.Conv2d(mid_ch, num_anchors * (5 + num_classes), 1, bias=True)
+    return compress, predict
+
+
+def _make_tiny_detection_head(
+    in_ch: int, mid_ch: int, num_anchors: int, num_classes: int
+) -> tuple[nn.Sequential, nn.Conv2d]:
+    """Build a YOLOv3-*Tiny* detection head.
+
+    ``yolov3-tiny.cfg`` uses a two-convolution head, not the full model's
+    alternating five: a single 3x3 expansion followed by the 1x1 predictor.
+    Borrowing the 5-conv head roughly triples the head's parameters and
+    changes the receptive field the predictions are made from, which is the
+    opposite of what the "tiny" variant exists for.
+
+    Returns:
+        (compress_convs, predict_conv)
+    """
+    compress = nn.Sequential(_ConvBnLeaky(in_ch, mid_ch, 3))
     predict = nn.Conv2d(mid_ch, num_anchors * (5 + num_classes), 1, bias=True)
     return compress, predict
 
@@ -452,6 +501,67 @@ def _decode_predictions(
 # ---------------------------------------------------------------------------
 
 
+# Paper §2.1 uses 0.5; darknet's yolov3.cfg spells it ``ignore_thresh = .7``
+# for the [yolo] layers.  The paper value is the one the text commits to.
+_IGNORE_IOU_THRESH = 0.5
+
+
+def _ignore_mask(
+    pred_b: Tensor,
+    anchors_wh: list[tuple[float, float]],
+    stride: int,
+    gt_boxes: Tensor,
+    fH: int,
+    fW: int,
+    nA: int,
+    thresh: float,
+) -> Tensor:
+    """1.0 where a non-assigned anchor overlaps some GT by more than ``thresh``.
+
+    Built from decoded *predicted* boxes, as the paper specifies.  This is a
+    selection mask, so reading values out with ``.item()`` is correct — it
+    carries no gradient by construction.
+    """
+    dev = pred_b.device.type
+    M = int(gt_boxes.shape[0])
+    out = [[[0.0] * fW for _ in range(fH)] for _ in range(nA)]
+    if M == 0:
+        return lucid.tensor(out, device=dev)
+
+    gts = [
+        (
+            float(gt_boxes[m, 0].item()),
+            float(gt_boxes[m, 1].item()),
+            float(gt_boxes[m, 2].item()),
+            float(gt_boxes[m, 3].item()),
+        )
+        for m in range(M)
+    ]
+    for a in range(nA):
+        aw, ah = anchors_wh[a]
+        for r in range(fH):
+            for c in range(fW):
+                tx = float(pred_b[a, r, c, 0].item())
+                ty = float(pred_b[a, r, c, 1].item())
+                tw = float(pred_b[a, r, c, 2].item())
+                th = float(pred_b[a, r, c, 3].item())
+                bx = (1.0 / (1.0 + math.exp(-tx)) + c) * stride
+                by = (1.0 / (1.0 + math.exp(-ty)) + r) * stride
+                bw = math.exp(min(tw, 20.0)) * aw
+                bh = math.exp(min(th, 20.0)) * ah
+                px1, py1 = bx - bw / 2.0, by - bh / 2.0
+                px2, py2 = bx + bw / 2.0, by + bh / 2.0
+                for gx1, gy1, gx2, gy2 in gts:
+                    iw = max(min(px2, gx2) - max(px1, gx1), 0.0)
+                    ih = max(min(py2, gy2) - max(py1, gy1), 0.0)
+                    inter = iw * ih
+                    union = bw * bh + (gx2 - gx1) * (gy2 - gy1) - inter
+                    if inter / (union + 1e-9) > thresh:
+                        out[a][r][c] = 1.0
+                        break
+    return lucid.tensor(out, device=dev)
+
+
 def _yolov3_loss(
     raw_preds: list[Tensor],
     targets: list[dict[str, Tensor]],
@@ -469,6 +579,8 @@ def _yolov3_loss(
         Scalar loss tensor.
     """
     B = int(raw_preds[0].shape[0])
+    n_pos = 0.0
+    n_cells = 0.0
     C = config.num_classes
     nA = 3  # anchors per scale
     anchors_all = config.anchors  # 9 anchor pairs
@@ -479,7 +591,8 @@ def _yolov3_loss(
     scale_anchor_idx = [(6, 7, 8), (3, 4, 5), (0, 1, 2)]
     strides = [config.strides[2], config.strides[1], config.strides[0]]
 
-    total_loss: list[Tensor] = []
+    localisation: list[Tensor] = []
+    objectness: list[Tensor] = []
 
     for scale_i, (raw, anchor_idx_triple, stride) in enumerate(
         zip(raw_preds, scale_anchor_idx, strides)
@@ -497,69 +610,17 @@ def _yolov3_loss(
             M = int(gt_boxes.shape[0])
 
             # Build target tensors (floats) for this image and scale
-            tgt_tx = lucid.zeros((nA, fH, fW))
-            tgt_ty = lucid.zeros((nA, fH, fW))
-            tgt_tw = lucid.zeros((nA, fH, fW))
-            tgt_th = lucid.zeros((nA, fH, fW))
-            tgt_obj = lucid.zeros((nA, fH, fW))
-            tgt_cls = lucid.zeros((nA, fH, fW, C))
-            obj_mask = lucid.zeros((nA, fH, fW))  # 1 for positives
+            _dev = raw.device.type
+            tgt_tx = lucid.zeros((nA, fH, fW), device=_dev)
+            tgt_ty = lucid.zeros((nA, fH, fW), device=_dev)
+            tgt_tw = lucid.zeros((nA, fH, fW), device=_dev)
+            tgt_th = lucid.zeros((nA, fH, fW), device=_dev)
+            tgt_obj = lucid.zeros((nA, fH, fW), device=_dev)
+            tgt_cls = lucid.zeros((nA, fH, fW, C), device=_dev)
+            obj_mask = lucid.zeros((nA, fH, fW), device=_dev)  # 1 for positives
+            coord_scale = lucid.ones((nA, fH, fW), device=_dev)
 
             if M > 0:
-                for m in range(M):
-                    x1g = float(gt_boxes[m, 0].item())
-                    y1g = float(gt_boxes[m, 1].item())
-                    x2g = float(gt_boxes[m, 2].item())
-                    y2g = float(gt_boxes[m, 3].item())
-                    wg = x2g - x1g
-                    hg = y2g - y1g
-                    cxg = (x1g + x2g) / 2.0
-                    cyg = (y1g + y2g) / 2.0
-                    cls_id = int(gt_labels[m].item())
-
-                    # Grid cell
-                    col_idx = int(cxg / stride)
-                    row_idx = int(cyg / stride)
-                    col_idx = max(0, min(col_idx, fW - 1))
-                    row_idx = max(0, min(row_idx, fH - 1))
-
-                    # Find best anchor (centred at 0 IoU match)
-                    best_iou = -1.0
-                    best_a = 0
-                    for a_i, (aw, ah) in enumerate(anchors_wh):
-                        # IoU between GT box (centred at origin) and anchor
-                        inter_w = min(wg, aw)
-                        inter_h = min(hg, ah)
-                        inter = inter_w * inter_h
-                        union = wg * hg + aw * ah - inter
-                        iou_val = inter / (union + 1e-6)
-                        if iou_val > best_iou:
-                            best_iou = iou_val
-                            best_a = a_i
-
-                    aw_best, ah_best = anchors_wh[best_a]
-
-                    # Regression targets in grid-cell space
-                    tx_tgt = cxg / stride - float(col_idx)
-                    ty_tgt = cyg / stride - float(row_idx)
-                    tw_tgt = math.log(max(wg, 1.0) / aw_best + 1e-9)
-                    th_tgt = math.log(max(hg, 1.0) / ah_best + 1e-9)
-
-                    # Write targets using Python-level scalar assignment via
-                    # list construction + lucid.tensor (no in-place indexing needed)
-                    # We accumulate into lists, then form full tensors at the end.
-                    # For simplicity, we build mutable Python arrays and convert once.
-                    # We track positives with a list below.
-                    _ = (tx_tgt, ty_tgt, tw_tgt, th_tgt)  # computed but used below
-
-                    # Mark positive
-                    # Build coordinate index to update (a, r, c) positions
-                    # We must do this via slice assignment using tensor indexing
-                    # (Lucid supports in-place via __setitem__ if available, or
-                    #  we collect then construct).
-                    # Strategy: accumulate Python-list targets, then build tensor.
-                    pass
-
                 # Rebuild entire target arrays from scratch using Python lists.
                 # This avoids any in-place mutation on Lucid tensors.
                 tx_arr: list[list[list[float]]] = [
@@ -584,6 +645,9 @@ def _yolov3_loss(
                 mask_arr: list[list[list[float]]] = [
                     [[0.0] * fW for _ in range(fH)] for _ in range(nA)
                 ]
+                coord_arr: list[list[list[float]]] = [
+                    [[1.0] * fW for _ in range(fH)] for _ in range(nA)
+                ]
 
                 for m in range(M):
                     x1g = float(gt_boxes[m, 0].item())
@@ -599,9 +663,16 @@ def _yolov3_loss(
                     col_idx = max(0, min(int(cxg / stride), fW - 1))
                     row_idx = max(0, min(int(cyg / stride), fH - 1))
 
+                    # Paper §2.1: "our system only assigns one bounding box
+                    # prior for each ground truth object".  The argmax runs
+                    # over ALL nine priors, so a GT becomes a positive only at
+                    # the one scale that owns its best prior — picking a best
+                    # anchor per scale instead would force a large object to be
+                    # regressed by a 10x13 prior on the stride-8 map, whose
+                    # log-space target is pure noise.
                     best_iou = -1.0
-                    best_a = 0
-                    for a_i, (aw, ah) in enumerate(anchors_wh):
+                    best_global = 0
+                    for a_i, (aw, ah) in enumerate(anchors_all):
                         inter_w = min(wg, aw)
                         inter_h = min(hg, ah)
                         inter = inter_w * inter_h
@@ -609,29 +680,41 @@ def _yolov3_loss(
                         iou_val = inter / (union + 1e-6)
                         if iou_val > best_iou:
                             best_iou = iou_val
-                            best_a = a_i
+                            best_global = a_i
 
+                    if best_global not in anchor_idx_triple:
+                        continue
+                    best_a = anchor_idx_triple.index(best_global)
                     aw_best, ah_best = anchors_wh[best_a]
                     tx_arr[best_a][row_idx][col_idx] = cxg / stride - float(col_idx)
                     ty_arr[best_a][row_idx][col_idx] = cyg / stride - float(row_idx)
-                    tw_arr[best_a][row_idx][col_idx] = math.log(
-                        max(wg, 1.0) / aw_best + 1e-9
-                    )
-                    th_arr[best_a][row_idx][col_idx] = math.log(
-                        max(hg, 1.0) / ah_best + 1e-9
-                    )
+                    # t_w = log(w_gt / p_w) exactly inverts the decode.  Flooring
+                    # the GT side at 1 px shifted the target for every box smaller
+                    # than a pixel at this stride, and adding the epsilon to the
+                    # *ratio* rather than guarding the argument perturbed all of
+                    # them.  Guard the argument instead.
+                    tw_arr[best_a][row_idx][col_idx] = math.log(max(wg / aw_best, 1e-9))
+                    th_arr[best_a][row_idx][col_idx] = math.log(max(hg / ah_best, 1e-9))
                     obj_arr[best_a][row_idx][col_idx] = 1.0
                     mask_arr[best_a][row_idx][col_idx] = 1.0
+                    # darknet scales the coordinate delta by
+                    # ``2 - w_gt*h_gt/(W*H)`` so a small box is not
+                    # out-weighted by a large one sharing the loss.
+                    coord_arr[best_a][row_idx][col_idx] = 2.0 - (wg * hg) / max(
+                        float(fW * stride) * float(fH * stride), 1e-6
+                    )
                     if 0 <= cls_id < C:
                         cls_arr[best_a][row_idx][col_idx][cls_id] = 1.0
 
-                tgt_tx = lucid.tensor(tx_arr)
-                tgt_ty = lucid.tensor(ty_arr)
-                tgt_tw = lucid.tensor(tw_arr)
-                tgt_th = lucid.tensor(th_arr)
-                tgt_obj = lucid.tensor(obj_arr)
-                tgt_cls = lucid.tensor(cls_arr)
-                obj_mask = lucid.tensor(mask_arr)
+                dev = raw.device.type
+                tgt_tx = lucid.tensor(tx_arr, device=dev)
+                tgt_ty = lucid.tensor(ty_arr, device=dev)
+                tgt_tw = lucid.tensor(tw_arr, device=dev)
+                tgt_th = lucid.tensor(th_arr, device=dev)
+                tgt_obj = lucid.tensor(obj_arr, device=dev)
+                tgt_cls = lucid.tensor(cls_arr, device=dev)
+                obj_mask = lucid.tensor(mask_arr, device=dev)
+                coord_scale = lucid.tensor(coord_arr, device=dev)
 
             # Predicted values for this image
             pred_b = raw_r[b]  # (nA, fH, fW, 5+C)
@@ -643,21 +726,29 @@ def _yolov3_loss(
             pred_cls_logits = pred_b[..., 5:]  # (nA, fH, fW, C)
 
             # Box MSE loss (positive anchors only)
-            box_loss_sx = ((F.sigmoid(pred_tx) - tgt_tx) ** 2) * obj_mask
-            box_loss_sy = ((F.sigmoid(pred_ty) - tgt_ty) ** 2) * obj_mask
-            box_loss_w = ((pred_tw - tgt_tw) ** 2) * obj_mask
-            box_loss_h = ((pred_th - tgt_th) ** 2) * obj_mask
+            _cw = obj_mask * coord_scale
+            box_loss_sx = ((F.sigmoid(pred_tx) - tgt_tx) ** 2) * _cw
+            box_loss_sy = ((F.sigmoid(pred_ty) - tgt_ty) ** 2) * _cw
+            box_loss_w = ((pred_tw - tgt_tw) ** 2) * _cw
+            box_loss_h = ((pred_th - tgt_th) ** 2) * _cw
             box_loss = (box_loss_sx + box_loss_sy + box_loss_w + box_loss_h).sum()
 
             # Objectness BCE
             obj_bce = F.binary_cross_entropy_with_logits(
                 pred_tc, tgt_obj, reduction="none"
             )
-            # negative anchors get lambda_noobj weight
-            noobj_mask = 1.0 - obj_mask
-            obj_loss = (
-                obj_bce * obj_mask + obj_bce * noobj_mask * config.lambda_noobj
-            ).sum()
+            # Paper §2.1: "If the bounding box prior is not the best but does
+            # overlap a ground truth object by more than some threshold we
+            # ignore the prediction ... We use the threshold of .5."  Without
+            # this, a near-perfect box that merely lost the argmax is punished
+            # as background, and with ~10k anchors that term dominates.
+            ignore = _ignore_mask(
+                pred_b, anchors_wh, stride, gt_boxes, fH, fW, nA, _IGNORE_IOU_THRESH
+            )
+            noobj_mask = (1.0 - obj_mask) * (1.0 - ignore)
+            # v3 drops v1's lambda weighting — "we use sum of squared error
+            # loss" — and lets the ignore mask do the negative balancing.
+            obj_loss = (obj_bce * obj_mask + obj_bce * noobj_mask).sum()
 
             # Class BCE (positive anchors only)
             cls_bce = F.binary_cross_entropy_with_logits(
@@ -665,12 +756,22 @@ def _yolov3_loss(
             )
             cls_loss = (cls_bce * obj_mask[..., None]).sum()
 
-            scale_loss = config.lambda_coord * box_loss + obj_loss + cls_loss
-            total_loss.append(scale_loss.reshape(1))
+            # The two families of term scale with different things, so they
+            # need different denominators.  Box and class regress only at
+            # positive anchors, and objectness is evaluated at *every* cell —
+            # summing both raw made the loss grow with resolution, batch size
+            # and object count at once, so one learning rate could not serve a
+            # 416 crop and a 608 one.
+            localisation.append((box_loss + cls_loss).reshape(1))
+            objectness.append(obj_loss.reshape(1))
+            n_pos += float(obj_mask.sum().item())
+            n_cells += float(B * nA * fH * fW)
 
-    if not total_loss:
+    if not localisation:
         return lucid.zeros((1,))
-    return lucid.cat(total_loss).sum()
+    loc = lucid.cat(localisation).sum() / max(1.0, n_pos)
+    obj = lucid.cat(objectness).sum() / max(1.0, n_cells)
+    return loc + obj
 
 
 # ---------------------------------------------------------------------------
@@ -753,23 +854,25 @@ class YOLOV3ForObjectDetection(PretrainedModel):
         # Backbone
         self.backbone = _Darknet53(config.in_channels)
 
-        # Actual backbone output channels:
-        #   p3_raw : 128ch  (stride-8  feature, before down2)
-        #   p4_raw : 256ch  (stride-16 feature, before down3)
-        #   p5     : 1024ch (stride-32 final stage)
+        # Backbone output channels (Darknet-53, paper Table 1):
+        #   p3_raw : 256ch  (stride-8  — after the 8× 256 residual stage)
+        #   p4_raw : 512ch  (stride-16 — after the 8× 512 residual stage)
+        #   p5     : 1024ch (stride-32 — after the 4× 1024 residual stage)
 
         # P5 head (1024ch input): compress mid_ch=512
         self.p5_compress, self.p5_predict = _make_detection_head(1024, 512, nA, C)
         # p5_compress output: 512ch
 
-        # Upsample + concat: p5_up (256ch) + p4_raw (256ch) = 512ch
+        # Upsample + concat: p5_up (256ch) + p4_raw (512ch) = 768ch, matching
+        # darknet's route layer that joins the upsample with layer 61.
         self.p5_to_p4_conv = _ConvBnLeaky(512, 256, 1)  # 512→256
-        self.p4_compress, self.p4_predict = _make_detection_head(256 + 256, 256, nA, C)
+        self.p4_compress, self.p4_predict = _make_detection_head(256 + 512, 256, nA, C)
         # p4_compress output: 256ch
 
-        # Upsample + concat: p4_up (128ch) + p3_raw (128ch) = 256ch
+        # Upsample + concat: p4_up (128ch) + p3_raw (256ch) = 384ch (route with
+        # layer 36).
         self.p4_to_p3_conv = _ConvBnLeaky(256, 128, 1)  # 256→128
-        self.p3_compress, self.p3_predict = _make_detection_head(128 + 128, 128, nA, C)
+        self.p3_compress, self.p3_predict = _make_detection_head(128 + 256, 128, nA, C)
 
     @override
     def forward(  # type: ignore[override]
@@ -835,13 +938,17 @@ class YOLOV3ForObjectDetection(PretrainedModel):
         all_logits: list[Tensor] = []
         all_boxes: list[Tensor] = []
 
+        all_conf: list[Tensor] = []
+
         for raw_pred, anch_wh, stride in zip(raw_preds, scale_anchors, scale_strides):
-            logits_s, boxes_s, _ = _decode_predictions(raw_pred, anch_wh, stride)
+            logits_s, boxes_s, conf_s = _decode_predictions(raw_pred, anch_wh, stride)
             all_logits.append(logits_s)
             all_boxes.append(boxes_s)
+            all_conf.append(conf_s)
 
         logits = lucid.cat(all_logits, dim=1)  # (B, total_anchors, C)
         pred_boxes = lucid.cat(all_boxes, dim=1)  # (B, total_anchors, 4)
+        objectness = lucid.cat(all_conf, dim=1)  # (B, total_anchors)
 
         # Loss
         loss: Tensor | None = None
@@ -852,6 +959,7 @@ class YOLOV3ForObjectDetection(PretrainedModel):
             logits=logits,
             pred_boxes=pred_boxes,
             loss=loss,
+            objectness=objectness,
         )
 
     def postprocess(
@@ -876,21 +984,30 @@ class YOLOV3ForObjectDetection(PretrainedModel):
             boxes = output.pred_boxes[b]  # (total_anchors, 4)
             iH, iW = image_sizes[b]
 
+            # YOLO scores a detection by Pr(object)·Pr(class|object); dropping
+            # the objectness factor emits every background anchor whose class
+            # sigmoid happens to clear the threshold, and ranks NMS wrongly.
             cls_probs = F.sigmoid(cls_logits)  # (total_anchors, C)
-            N_anc = int(cls_probs.shape[0])
+            if output.objectness is not None:
+                cls_probs = cls_probs * output.objectness[b][:, None]
             C = int(cls_probs.shape[1])
 
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
 
-            for a in range(N_anc):
-                for c in range(C):
-                    sc = float(cls_probs[a, c].item())
-                    if sc >= self._cfg.score_thresh:
-                        keep_boxes.append(boxes[a : a + 1])  # (1, 4)
-                        keep_scores.append(lucid.tensor([[sc]]))
-                        keep_labels.append(lucid.tensor([[float(c)]]))
+            # One .tolist() instead of N_anc * C device syncs.  At 416px
+            # with 80 classes that scan was 10,647 * 80 = 851,760 scalar
+            # round-trips per image; darknet and every reference thresholds
+            # the (N, C) score matrix in one go.
+            flat = cast(list[float], cls_probs.reshape(-1).tolist())
+            thresh = self._cfg.score_thresh
+            for idx, sc in enumerate(flat):
+                if sc >= thresh:
+                    a, c = divmod(idx, C)
+                    keep_boxes.append(boxes[a : a + 1])  # (1, 4)
+                    keep_scores.append(lucid.tensor([[sc]]))
+                    keep_labels.append(lucid.tensor([[float(c)]]))
 
             if not keep_boxes:
                 results.append(
@@ -945,7 +1062,8 @@ class _YOLOV3Tiny(PretrainedModel):
     """YOLOv3-Tiny — 2-scale lightweight variant.
 
     Uses _Darknet53Tiny backbone (6 conv stages + maxpool, no residuals)
-    and detects at P5 (stride 32) and P4 (stride 16) only.
+    and detects at P5 (stride 32) and P4 (stride 16) only, each through the
+    cfg's two-convolution head rather than the full model's five.
     """
 
     config_class: ClassVar[type[YOLOV3Config]] = YOLOV3Config
@@ -957,14 +1075,27 @@ class _YOLOV3Tiny(PretrainedModel):
         C = config.num_classes
         nA = 3
 
+        # ``YOLOV3Config`` defaults to the full model's nine priors, which are
+        # not this variant's — slicing them was giving Tiny the wrong boxes.
+        # A caller who supplies exactly six is taken at their word.
+        self._tiny_anchors: tuple[tuple[float, float], ...] = (
+            config.anchors if len(config.anchors) == 6 else _TINY_ANCHORS
+        )
+
         self.backbone = _Darknet53Tiny(config.in_channels)
 
-        # P5 head: tiny backbone outputs 256ch at P5
-        self.p5_compress, self.p5_predict = _make_detection_head(256, 128, nA, C)
+        # P5 head.  The backbone already ends with the cfg's ``conv 256 1x1``
+        # bottleneck, so this is the remaining ``conv 512 3x3`` -> ``conv 255
+        # 1x1`` pair.
+        self.p5_compress, self.p5_predict = _make_tiny_detection_head(256, 512, nA, C)
 
-        # P4 branch: upsample P5 (128ch) + concat P4_raw (256ch) → 384ch
-        self.p5_to_p4_conv = _ConvBnLeaky(128, 128, 1)
-        self.p4_compress, self.p4_predict = _make_detection_head(256 + 128, 128, nA, C)
+        # P4 branch: the cfg routes off the *256ch bottleneck*, not the 512ch
+        # expansion — ``conv 128 1x1`` -> upsample -> route(concat layer 8,
+        # 256ch) = 384ch -> ``conv 256 3x3`` -> ``conv 255 1x1``.
+        self.p5_to_p4_conv = _ConvBnLeaky(256, 128, 1)
+        self.p4_compress, self.p4_predict = _make_tiny_detection_head(
+            256 + 128, 256, nA, C
+        )
 
     @override
     def forward(  # type: ignore[override]
@@ -973,14 +1104,15 @@ class _YOLOV3Tiny(PretrainedModel):
         targets: list[dict[str, Tensor]] | None = None,
     ) -> ObjectDetectionOutput:
         cfg = self._cfg
-        anchors_all = cfg.anchors
+        anchors_all = self._tiny_anchors
 
         p4_raw, p5 = self.backbone.forward(x)
 
         p5_feat = cast(Tensor, self.p5_compress(p5))
         p5_raw_pred = cast(Tensor, self.p5_predict(p5_feat))
 
-        p5_up = cast(Tensor, self.p5_to_p4_conv(p5_feat))
+        # Route off the bottleneck ``p5``, not the expanded ``p5_feat``.
+        p5_up = cast(Tensor, self.p5_to_p4_conv(p5))
         fH4 = int(p4_raw.shape[2])
         fW4 = int(p4_raw.shape[3])
         p5_up = F.interpolate(p5_up, size=(fH4, fW4), mode="nearest")
@@ -989,22 +1121,27 @@ class _YOLOV3Tiny(PretrainedModel):
         p4_raw_pred = cast(Tensor, self.p4_predict(p4_feat))
 
         raw_preds = [p5_raw_pred, p4_raw_pred]
+        # yolov3-tiny.cfg masks: 3,4,5 on the stride-32 head, 0,1,2 on the
+        # stride-16 head.
         scale_anchors = [
-            [anchors_all[6], anchors_all[7], anchors_all[8]],
             [anchors_all[3], anchors_all[4], anchors_all[5]],
+            [anchors_all[0], anchors_all[1], anchors_all[2]],
         ]
         scale_strides = [cfg.strides[2], cfg.strides[1]]
 
         all_logits: list[Tensor] = []
         all_boxes: list[Tensor] = []
+        all_conf: list[Tensor] = []
 
         for raw_pred, anch_wh, stride in zip(raw_preds, scale_anchors, scale_strides):
-            logits_s, boxes_s, _ = _decode_predictions(raw_pred, anch_wh, stride)
+            logits_s, boxes_s, conf_s = _decode_predictions(raw_pred, anch_wh, stride)
             all_logits.append(logits_s)
             all_boxes.append(boxes_s)
+            all_conf.append(conf_s)
 
         logits = lucid.cat(all_logits, dim=1)
         pred_boxes = lucid.cat(all_boxes, dim=1)
+        objectness = lucid.cat(all_conf, dim=1)
 
         loss: Tensor | None = None
         if targets is not None:
@@ -1014,6 +1151,7 @@ class _YOLOV3Tiny(PretrainedModel):
             logits=logits,
             pred_boxes=pred_boxes,
             loss=loss,
+            objectness=objectness,
         )
 
 
@@ -1021,12 +1159,17 @@ class _YOLOV3Tiny(PretrainedModel):
 # Factory functions
 # ---------------------------------------------------------------------------
 
+_CFG_V3 = YOLOV3Config()
+_CFG_V3_TINY = YOLOV3Config()
+
 
 @register_model(
     task="object-detection",
     family="yolo",
     model_type="yolo_v3",
     model_class=YOLOV3ForObjectDetection,
+    default_config=_CFG_V3,
+    params=55523933,
 )
 def yolo_v3(
     pretrained: bool = False,
@@ -1070,7 +1213,9 @@ def yolo_v3(
     >>> out.logits.shape[0]
     1
     """
-    config = YOLOV3Config(**{k: v for k, v in overrides.items()})  # type: ignore[arg-type]
+    config = (
+        replace(_CFG_V3, **cast(dict[str, Any], overrides)) if overrides else _CFG_V3
+    )
     model = YOLOV3ForObjectDetection(config)
     if pretrained:
         raise NotImplementedError("Pretrained YOLOv3 weights are not yet available.")
@@ -1082,6 +1227,8 @@ def yolo_v3(
     family="yolo",
     model_type="yolo_v3_tiny",
     model_class=_YOLOV3Tiny,
+    default_config=_CFG_V3_TINY,
+    params=8852366,
 )
 def yolo_v3_tiny(
     pretrained: bool = False,
@@ -1125,7 +1272,11 @@ def yolo_v3_tiny(
     >>> out.logits.shape[0]
     1
     """
-    config = YOLOV3Config(**{k: v for k, v in overrides.items()})  # type: ignore[arg-type]
+    config = (
+        replace(_CFG_V3_TINY, **cast(dict[str, Any], overrides))
+        if overrides
+        else _CFG_V3_TINY
+    )
     model = _YOLOV3Tiny(config)
     if pretrained:
         raise NotImplementedError(

@@ -39,7 +39,7 @@ class MaskRCNNResNet50FPNWeights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "COCO_V1",
-            "source": "torchvision/MaskRCNN_ResNet50_FPN_Weights.COCO_V1",
+            "source": "reference_vision/MaskRCNN_ResNet50_FPN_Weights.COCO_V1",
             "license": "bsd-3-clause",
             "num_params": 44_401_393,
             "metrics": {"COCO": {"box mAP": 37.9, "mask mAP": 34.6}},

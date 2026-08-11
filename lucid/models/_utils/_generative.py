@@ -17,6 +17,7 @@ import math
 
 import lucid
 import lucid.autograd
+import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid._types import Reduction
@@ -491,3 +492,26 @@ def exact_divergence(
     if total is None:
         raise ValueError("exact_divergence: seeds must not be empty")
     return total
+
+
+def resolve_generation_device(model: nn.Module, device: str | None) -> str:
+    """Pick the device a sampler should draw its latents on.
+
+    ``generate()`` used to hard-default this to ``"cpu"``, so moving a model
+    to an accelerator and sampling raised ``DeviceMismatch`` — the weights
+    were on one device and the freshly drawn noise on another.  Defaulting to
+    the model's own device makes ``model.to("metal").generate(...)`` work,
+    while an explicit argument still wins.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Any module; its first parameter decides the device.
+    device : str or None
+        Caller's explicit choice, or ``None`` to follow the model.
+    """
+    if device is not None:
+        return device
+    for param in model.parameters():
+        return str(param.device.type)
+    return "cpu"

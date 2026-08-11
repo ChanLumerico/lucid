@@ -38,7 +38,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast, override
 
 import lucid
 import lucid.nn as nn
-import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import ModelConfig, PretrainedModel
 from lucid.models._meta import model_family_meta
@@ -75,7 +74,11 @@ _ARCH_FULL: list[object] = [
     (1024, 3, 1, 1),
 ]
 
-# Tiny Darknet architecture spec
+# Tiny Darknet architecture spec.  yolov1-tiny.cfg tapers 1024 -> 256 right
+# before the connected layer, precisely so the FC head stays small: 7*7*256
+# -> 1470 is ~18M weights.  Keeping three 1024-channel convs made the head
+# 7*7*1024 -> 1470 and the whole model ~236M params, five times the size the
+# "fast" variant exists to avoid.
 _ARCH_TINY: list[object] = [
     (16, 3, 1, 1),
     "M",
@@ -90,8 +93,7 @@ _ARCH_TINY: list[object] = [
     (512, 3, 1, 1),
     "M",
     (1024, 3, 1, 1),
-    (1024, 3, 1, 1),
-    (1024, 3, 1, 1),
+    (256, 3, 1, 1),
 ]
 
 
@@ -186,7 +188,16 @@ class YOLOV1Config(ModelConfig):
 def _conv_block(
     in_ch: int, out_ch: int, kernel: int, stride: int, padding: int
 ) -> nn.Sequential:
-    """Conv2d → BatchNorm2d → LeakyReLU(0.1) block."""
+    """Conv2d → BatchNorm2d → LeakyReLU(0.1) block.
+
+    Divergence, deliberate: the CVPR-2016 paper describes plain
+    conv + leaky-ReLU, and batch normalisation is introduced only in
+    YOLO9000, where it heads the improvements table at +2% mAP.  But
+    pjreddie's shipped ``cfg/yolov1.cfg`` carries ``batch_normalize=1``
+    on all 24 convs — the released cfg is a later retrain, so paper and
+    reference genuinely disagree.  Following the cfg, which is what any
+    future weight port would need.
+    """
     return nn.Sequential(
         nn.Conv2d(in_ch, out_ch, kernel, stride=stride, padding=padding, bias=False),
         nn.BatchNorm2d(out_ch),
@@ -254,8 +265,10 @@ class YOLOV1ForObjectDetection(PretrainedModel):
     config : YOLOV1Config
         Frozen architecture spec.  Use :func:`yolo_v1` for the full
         Darknet backbone or :func:`yolo_v1_tiny` for the lightweight
-        Tiny variant; both default to PASCAL VOC's ``S = 7``,
-        ``B = 2``, ``C = 20``.
+        Tiny variant.  Both use the paper's ``S = 7``, ``B = 2`` grid but
+        default to ``C = 80`` (COCO), the repo-wide convention for
+        detection configs — the paper's own model is ``C = 20`` (VOC),
+        which you get by passing ``num_classes=20``.
 
     Attributes
     ----------
@@ -355,7 +368,7 @@ class YOLOV1ForObjectDetection(PretrainedModel):
         self,
         raw: Tensor,
         image_size: tuple[int, int],
-    ) -> tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor]:
         """Decode raw grid output to flat predictions.
 
         Args:
@@ -386,6 +399,7 @@ class YOLOV1ForObjectDetection(PretrainedModel):
 
         all_boxes_list: list[Tensor] = []
         all_logits_list: list[Tensor] = []
+        all_conf_list: list[Tensor] = []
 
         for r in range(S):
             for c in range(S):
@@ -401,14 +415,21 @@ class YOLOV1ForObjectDetection(PretrainedModel):
                     raw_w = box_cell[:, b, 2]
                     raw_h = box_cell[:, b, 3]
 
-                    # cx/cy: sigmoid + cell offset → pixel x_center
-                    x_pixel = (F.sigmoid(raw_cx) + float(c)) * cell_w
-                    y_pixel = (F.sigmoid(raw_cy) + float(r)) * cell_h
-                    # Paper §2 / Eq.1: w, h are network outputs ∈ [0, 1]
-                    # directly (normalized by image dims) — sigmoid, not exp.
-                    # exp() is YOLOv2's anchor-based parametrization.
-                    w_pixel = F.sigmoid(raw_w) * float(W)
-                    h_pixel = F.sigmoid(raw_h) * float(H)
+                    # ``yolov1.cfg`` ends with ``[connected] activation=linear``
+                    # and ``[detection] sqrt=1``: x/y are *raw* cell-relative
+                    # offsets and the w/h channels are literally sqrt(w),
+                    # sqrt(h), which ``detection_layer.c`` squares at decode.
+                    # The paper only requires the values to land in [0, 1] and
+                    # prescribes no squashing function; a sigmoid is YOLOv2's
+                    # anchor parameterisation, and it also makes w = 0 and
+                    # w = 1 unreachable except in the limit.  The sqrt
+                    # parameterisation is the whole point of §2.2's "we predict
+                    # the square root of the bounding box width and height",
+                    # which equalises the loss's sensitivity across box scales.
+                    x_pixel = (raw_cx + float(c)) * cell_w
+                    y_pixel = (raw_cy + float(r)) * cell_h
+                    w_pixel = (raw_w**2) * float(W)
+                    h_pixel = (raw_h**2) * float(H)
 
                     # Convert cxcywh → xyxy
                     x1 = x_pixel - w_pixel / 2.0
@@ -426,12 +447,25 @@ class YOLOV1ForObjectDetection(PretrainedModel):
                     box = lucid.stack([x1, y1, x2, y2], dim=1)
                     all_boxes_list.append(box.unsqueeze(1))  # (batch, 1, 4)
                     all_logits_list.append(cls_cell.unsqueeze(1))  # (batch, 1, C)
+                    # Paper §2.1 Eq. 2: the class-specific confidence score is
+                    # Pr(class|object)·Pr(object)·IOU, so the per-box confidence
+                    # channel must multiply the shared per-cell class term.
+                    # Without it the two boxes of a cell are indistinguishable
+                    # and background cells are never suppressed.
+                    # Confidence is a linear output too; clamping to [0, 1]
+                    # keeps the score-threshold and NMS comparisons meaningful
+                    # without imposing a squashing function the network was
+                    # never trained through.
+                    all_conf_list.append(
+                        box_cell[:, b, 4].clamp(min=0.0, max=1.0).unsqueeze(1)
+                    )
 
         # Stack: (batch, S*S*B, 4) and (batch, S*S*B, C)
         pred_boxes = lucid.cat(all_boxes_list, dim=1)  # (batch, S*S*B, 4)
         logits = lucid.cat(all_logits_list, dim=1)  # (batch, S*S*B, C)
+        conf = lucid.cat(all_conf_list, dim=1)  # (batch, S*S*B)
 
-        return logits, pred_boxes
+        return logits, pred_boxes, conf
 
     def _compute_loss(
         self,
@@ -569,43 +603,33 @@ class YOLOV1ForObjectDetection(PretrainedModel):
                                 (row, col, b)
                             ]
 
-                            # Target cx/cy in cell-relative sigmoid-space
+                            # The head is linear, so the loss compares raw
+                            # outputs against cell-relative targets — the same
+                            # parameterisation the decoder above inverts.
+                            # Squashing here and squaring there would train the
+                            # network for one convention and read it in another.
                             tgt_cx_rel = cx_m / cell_w_px - float(col)
                             tgt_cy_rel = cy_m / cell_h_px - float(row)
-                            # Clamp to valid sigmoid output range (avoid NaN in log)
-                            tgt_cx_rel = max(1e-6, min(1.0 - 1e-6, tgt_cx_rel))
-                            tgt_cy_rel = max(1e-6, min(1.0 - 1e-6, tgt_cy_rel))
-
-                            # Coordinate loss: MSE on sigmoid outputs
-                            sig_cx = F.sigmoid(pred_cx)
-                            sig_cy = F.sigmoid(pred_cy)
                             tgt_cx_t = lucid.tensor([tgt_cx_rel])
                             tgt_cy_t = lucid.tensor([tgt_cy_rel])
 
-                            xy_terms.append((sig_cx - tgt_cx_t[0]) ** 2)
-                            xy_terms.append((sig_cy - tgt_cy_t[0]) ** 2)
+                            xy_terms.append((pred_cx - tgt_cx_t[0]) ** 2)
+                            xy_terms.append((pred_cy - tgt_cy_t[0]) ** 2)
 
-                            # Paper Eq.3: MSE on sqrt(w_norm), sqrt(h_norm).
-                            # w_norm = sigmoid(raw_w) ∈ [0,1], not exp(raw_w).
-                            pred_w_norm = F.sigmoid(pred_w)
-                            pred_h_norm = F.sigmoid(pred_h)
+                            # Paper Eq.3 is MSE on sqrt(w), sqrt(h) — and with
+                            # ``[detection] sqrt=1`` the network output *is*
+                            # sqrt(w), so the prediction enters the term
+                            # directly rather than being rooted first.
                             tgt_w_norm = max(0.0, min(1.0, w_m / float(W)))
                             tgt_h_norm = max(0.0, min(1.0, h_m / float(H)))
                             tgt_sqrt_w_t = lucid.tensor([math.sqrt(tgt_w_norm)])
                             tgt_sqrt_h_t = lucid.tensor([math.sqrt(tgt_h_norm)])
-                            wh_terms.append(
-                                (pred_w_norm.clamp(min=1e-12) ** 0.5 - tgt_sqrt_w_t[0])
-                                ** 2
-                            )
-                            wh_terms.append(
-                                (pred_h_norm.clamp(min=1e-12) ** 0.5 - tgt_sqrt_h_t[0])
-                                ** 2
-                            )
+                            wh_terms.append((pred_w - tgt_sqrt_w_t[0]) ** 2)
+                            wh_terms.append((pred_h - tgt_sqrt_h_t[0]) ** 2)
 
-                            # Confidence loss (obj): MSE vs iou_val
-                            sig_conf = F.sigmoid(pred_conf)
+                            # Confidence loss (obj): MSE vs iou_val, linear.
                             tgt_iou_t = lucid.tensor([iou_val])
-                            conf_obj.append((sig_conf - tgt_iou_t[0]) ** 2)
+                            conf_obj.append((pred_conf - tgt_iou_t[0]) ** 2)
 
                             # Class loss: MSE on class scores vs one-hot
                             pred_cls = cls_preds[bi, row, col, :]  # (C,)
@@ -616,13 +640,19 @@ class YOLOV1ForObjectDetection(PretrainedModel):
 
                         else:
                             # No-object: confidence should be 0
-                            sig_conf = F.sigmoid(pred_conf)
-                            conf_noobj.append(sig_conf**2)
+                            conf_noobj.append(pred_conf**2)
 
             def _mean_or_zero(parts: list[Tensor]) -> Tensor:
+                # YOLOv1 Eq. 3 is a SUM of squared errors over all cells and
+                # predictors, not a per-group mean.  Averaging each group
+                # separately renormalises the ~S²·B background confidence
+                # terms against the handful of object terms, which is exactly
+                # what lambda_noobj exists to control — so the mean form
+                # silently cancels it and makes the balance drift with grid
+                # size and object count.
                 if not parts:
                     return lucid.zeros((1,))
-                return lucid.cat([t.reshape(1) for t in parts]).mean()
+                return lucid.cat([t.reshape(1) for t in parts]).sum()
 
             loss_xy = lc * _mean_or_zero(xy_terms)
             loss_wh = lc * _mean_or_zero(wh_terms)
@@ -660,13 +690,18 @@ class YOLOV1ForObjectDetection(PretrainedModel):
             - ``loss``:       scalar tensor when targets are provided, else None
         """
         raw = self._forward_features(x)
-        logits, pred_boxes = self._decode_predictions(raw, image_size)
+        logits, pred_boxes, objectness = self._decode_predictions(raw, image_size)
 
         loss: Tensor | None = None
         if targets is not None:
             loss = self._compute_loss(raw, targets, image_size)
 
-        return ObjectDetectionOutput(logits=logits, pred_boxes=pred_boxes, loss=loss)
+        return ObjectDetectionOutput(
+            logits=logits,
+            pred_boxes=pred_boxes,
+            loss=loss,
+            objectness=objectness,
+        )
 
     def postprocess(
         self,
@@ -692,7 +727,15 @@ class YOLOV1ForObjectDetection(PretrainedModel):
             lg_b = output.logits[b]  # (S*S*B, C)
             bx_b = output.pred_boxes[b]  # (S*S*B, 4)
             # Confidence scores: max class prob (no sigmoid — raw logits)
-            sc_b = F.sigmoid(lg_b)  # (S*S*B, C)
+            # darknet's yolov1.cfg ends in a *linear* [connected] layer with
+            # softmax=0: the class channels ARE the probabilities, fitted to
+            # the one-hot by MSE and used directly at test time.  Squashing
+            # them through a sigmoid here made every background class sit at
+            # 0.5 and clear the threshold.  Multiply in the per-box confidence
+            # (Eq. 2) so the score is Pr(class|object)·Pr(object)·IOU.
+            sc_b = lg_b  # (S*S*B, C)
+            if output.objectness is not None:
+                sc_b = sc_b * output.objectness[b][:, None]
 
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
@@ -791,8 +834,9 @@ def yolo_v1(
     r"""YOLOv1 with full Darknet backbone (Redmon et al., CVPR 2016).
 
     Builds the paper-cited full YOLOv1 detector: 24-layer Darknet
-    backbone, 7x7 grid, 2 boxes per cell, 20 PASCAL VOC classes (or
-    80 COCO classes if overridden).  Approximately 270M parameters
+    backbone, 7x7 grid, 2 boxes per cell, and 80 COCO classes by
+    default (pass ``num_classes=20`` for the paper's PASCAL VOC model,
+    whose 7x7x30 output tensor the paper describes).  ~270M parameters
     (most in the two 4096-dim FC layers) and 63.4% mAP on VOC 2007
     test (paper Table 1) at 45 fps.
 
@@ -842,11 +886,14 @@ def yolo_v1_tiny(
 ) -> YOLOV1ForObjectDetection:
     r"""YOLOv1-Tiny with reduced Darknet backbone (Redmon et al., CVPR 2016).
 
-    Builds the lightweight variant explicitly described in the YOLOv1
-    paper alongside the full model: 9-layer Darknet-Tiny backbone with
-    the same 7x7 grid and 2 boxes per cell.  Approximately 45M
-    parameters and 52.7% mAP on VOC 2007 at 155 fps (paper Table 1) —
-    trades accuracy for speed.
+    Builds the lightweight variant described in the YOLOv1 paper alongside
+    the full model: 9-layer Darknet-Tiny backbone with the same 7x7 grid
+    and 2 boxes per cell.  52.7% mAP on VOC 2007 at 155 fps (paper Table 1)
+    — trades accuracy for speed.
+
+    The backbone tapers to 256 channels before the head, as
+    ``yolov1-tiny.cfg`` does; the paper gives no parameter count for Fast
+    YOLO, saying only that it uses "fewer filters in those layers".
 
     Parameters
     ----------

@@ -87,6 +87,8 @@ class DETRConfig(ModelConfig):
         d_model:       Transformer embedding dimension.
         n_head:        Number of self-/cross-attention heads.
         num_encoder_layers: Encoder depth.
+        aux_loss:          Apply the set loss after every decoder layer, not
+                           only the last (paper: "auxiliary decoding losses").
         num_decoder_layers: Decoder depth.
         dim_feedforward:   FFN inner dimension in each transformer layer.
         dropout:           Dropout in transformer.
@@ -112,6 +114,10 @@ class DETRConfig(ModelConfig):
     d_model: int = 256
     n_head: int = 8
     num_encoder_layers: int = 6
+    # Auxiliary decoding losses.  On by default, matching the reference,
+    # whose training entry point exposes ``--no_aux_loss`` as the opt-out.
+    # Inference is unaffected: the heads still read the last decoder layer.
+    aux_loss: bool = True
     num_decoder_layers: int = 6
     dim_feedforward: int = 2048
     dropout: float = 0.1

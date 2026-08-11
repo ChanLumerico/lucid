@@ -15,6 +15,7 @@ from lucid.models.vision.pvt._weights import (
     PVTv2B4Weights,
     PVTv2B5Weights,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # ── Canonical configs ─────────────────────────────────────────────────────────
 
@@ -36,6 +37,13 @@ _CFG_B1 = PVTConfig(
     mlp_ratios=(8.0, 8.0, 4.0, 4.0),
 )
 
+# Divergence, deliberate: Table 1 prints L_2 = 3 for B2 and B3, but the
+# authors' released configs use 4, and the paper's own parameter counts
+# agree with the configs rather than with its table.  Measured here:
+# B2 with L_2 = 4 is 25,362,856 parameters with the classifier, matching
+# the 25.4M Table 2 reports; L_2 = 3 gives 24.76M.  B3 with L_2 = 4 is
+# 45,238,696 against the reported 45.2M; L_2 = 3 gives 44.64M.  Following
+# the configs the checkpoints were trained under.
 _CFG_B2 = PVTConfig(
     variant="pvt_v2_b2",
     embed_dims=(64, 128, 320, 512),
@@ -43,6 +51,20 @@ _CFG_B2 = PVTConfig(
     num_heads=(1, 2, 5, 8),
     sr_ratios=(8, 4, 2, 1),
     mlp_ratios=(8.0, 8.0, 4.0, 4.0),
+)
+
+# PVT v2-B2-Li — Table 1's "B2-Li" column: the same B2 topology with
+# *linear* SRA (average-pool to 7x7 at every stage instead of a stride-R_i
+# convolution).  Table 2 reports 22.6M / 3.9 GFLOPs / 82.1 top-1.
+_CFG_B2_LI = PVTConfig(
+    variant="pvt_v2_b2_li",
+    embed_dims=(64, 128, 320, 512),
+    depths=(3, 4, 6, 3),
+    num_heads=(1, 2, 5, 8),
+    sr_ratios=(8, 4, 2, 1),
+    mlp_ratios=(8.0, 8.0, 4.0, 4.0),
+    linear_sra=True,
+    linear_pool_size=7,
 )
 
 _CFG_B3 = PVTConfig(
@@ -71,9 +93,6 @@ _CFG_B5 = PVTConfig(
     sr_ratios=(8, 4, 2, 1),
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
 )
-
-# B1 alias — kept for backwards compatibility
-_CFG_TINY = _CFG_B1
 
 
 def _b(cfg: PVTConfig, kw: dict[str, object]) -> PVT:
@@ -134,6 +153,8 @@ def pvt_v2_b0(pretrained: bool = False, **overrides: object) -> PVT:
     >>> feat.shape
     (1, 256)
     """
+    if pretrained:
+        reject_unavailable_pretrained("pvt_v2_b0", alternative="pvt_v2_b0_cls")
     return _b(_CFG_B0, overrides)
 
 
@@ -181,6 +202,8 @@ def pvt_v2_b1(pretrained: bool = False, **overrides: object) -> PVT:
     >>> model.forward_features(x).shape
     (1, 512)
     """
+    if pretrained:
+        reject_unavailable_pretrained("pvt_v2_b1", alternative="pvt_v2_b1_cls")
     return _b(_CFG_B1, overrides)
 
 
@@ -226,7 +249,56 @@ def pvt_v2_b2(pretrained: bool = False, **overrides: object) -> PVT:
     >>> model.forward_features(x).shape
     (1, 512)
     """
+    if pretrained:
+        reject_unavailable_pretrained("pvt_v2_b2", alternative="pvt_v2_b2_cls")
     return _b(_CFG_B2, overrides)
+
+
+@register_model(
+    task="base",
+    family="pvt",
+    model_type="pvt",
+    model_class=PVT,
+    default_config=_CFG_B2_LI,
+)
+def pvt_v2_b2_li(pretrained: bool = False, **overrides: object) -> PVT:
+    r"""PVT v2-B2-Li backbone — B2 with *linear* SRA (Wang et al., 2022).
+
+    Same topology as :func:`pvt_v2_b2`, but §3.5's linear spatial-reduction
+    attention: every stage average-pools its key/value map to a fixed
+    :math:`7 \times 7` grid before the :math:`1 \times 1` projection,
+    instead of applying a stride-:math:`R_i` convolution.  Attention cost
+    becomes linear in the token count rather than quadratic.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B2-Li config.
+
+    Returns
+    -------
+    PVT
+        A :class:`PVT` backbone returning a flat :math:`(B, 512)` feature.
+
+    Notes
+    -----
+    Table 1 carries a full "B2-Li" column and Table 2 reports it at
+    **22.6M parameters, 3.9 GFLOPs and 82.1% top-1** on ImageNet-1k.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b2_li
+    >>> model = pvt_v2_b2_li()
+    >>> model.forward_features(lucid.randn(1, 3, 224, 224)).shape
+    (1, 512)
+    """
+    if pretrained:
+        reject_unavailable_pretrained("pvt_v2_b2_li")
+    return _b(_CFG_B2_LI, overrides)
 
 
 @register_model(
@@ -272,6 +344,8 @@ def pvt_v2_b3(pretrained: bool = False, **overrides: object) -> PVT:
     >>> model.forward_features(x).shape
     (1, 512)
     """
+    if pretrained:
+        reject_unavailable_pretrained("pvt_v2_b3", alternative="pvt_v2_b3_cls")
     return _b(_CFG_B3, overrides)
 
 
@@ -317,6 +391,8 @@ def pvt_v2_b4(pretrained: bool = False, **overrides: object) -> PVT:
     >>> model.forward_features(x).shape
     (1, 512)
     """
+    if pretrained:
+        reject_unavailable_pretrained("pvt_v2_b4", alternative="pvt_v2_b4_cls")
     return _b(_CFG_B4, overrides)
 
 
@@ -333,8 +409,9 @@ def pvt_v2_b5(pretrained: bool = False, **overrides: object) -> PVT:
     Builds the largest PVT v2 variant *B5*:
     ``embed_dims=(64, 128, 320, 512)``, ``depths=(3, 6, 40, 3)``,
     and ``mlp_ratios=(4.0, 4.0, 4.0, 4.0)`` (uniform MLP ratio).
-    Approximately **82.9M parameters** — the largest variant in the
-    paper.
+    81.4M parameters without a classifier head
+    (:func:`pvt_v2_b5_cls` adds 0.51M more for the 1000-way head,
+    reaching 82.0M) — the largest variant in the paper.
 
     Parameters
     ----------
@@ -364,58 +441,11 @@ def pvt_v2_b5(pretrained: bool = False, **overrides: object) -> PVT:
     >>> model.forward_features(x).shape
     (1, 512)
     """
+    if pretrained:
+        reject_unavailable_pretrained("pvt_v2_b5", alternative="pvt_v2_b5_cls")
     return _b(_CFG_B5, overrides)
 
 
-@register_model(
-    task="base",
-    family="pvt",
-    model_type="pvt",
-    model_class=PVT,
-    default_config=_CFG_TINY,
-)
-def pvt_tiny(pretrained: bool = False, **overrides: object) -> PVT:
-    r"""PVT-Tiny backbone — alias for :func:`pvt_v2_b1`.
-
-    Backwards-compatible alias kept for users on older releases that
-    referred to the ~14M-parameter variant as "PVT-Tiny".  Identical
-    to :func:`pvt_v2_b1` in every respect.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical PVT v2-B1 config.
-
-    Returns
-    -------
-    PVT
-        A :class:`PVT` backbone returning a flat :math:`(B, 512)`
-        feature.
-
-    See Also
-    --------
-    pvt_v2_b1 : The canonical factory this alias forwards to.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.pvt import pvt_tiny
-    >>> model = pvt_tiny()
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model.forward_features(x).shape
-    (1, 512)
-    """
-    return _b(_CFG_TINY, overrides)
-
-
-# ── Classifiers ───────────────────────────────────────────────────────────────
-
-
-# reason: pvt_v2_b0_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory
-# protocol predates the v3.1 weights system and still names only pretrained + **overrides.
 @register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="pvt",
@@ -776,48 +806,3 @@ def pvt_v2_b5_cls(
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="pvt_v2_b5_cls")
     return model
-
-
-@register_model(
-    task="image-classification",
-    family="pvt",
-    model_type="pvt",
-    model_class=PVTForImageClassification,
-    default_config=_CFG_TINY,
-)
-def pvt_tiny_cls(
-    pretrained: bool = False, **overrides: object
-) -> PVTForImageClassification:
-    r"""PVT-Tiny image classifier — alias for :func:`pvt_v2_b1_cls`.
-
-    Backwards-compatible alias kept for users on older releases that
-    referred to the ~14M-parameter classifier as "PVT-Tiny".  Identical
-    to :func:`pvt_v2_b1_cls` in every respect.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical PVT v2-B1 config.
-
-    Returns
-    -------
-    PVTForImageClassification
-        Classifier whose ``logits`` has shape ``(B, num_classes)``.
-
-    See Also
-    --------
-    pvt_v2_b1_cls : The canonical factory this alias forwards to.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.pvt import pvt_tiny_cls
-    >>> model = pvt_tiny_cls(num_classes=1000)
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model(x).logits.shape
-    (1, 1000)
-    """
-    return _c(_CFG_TINY, overrides)

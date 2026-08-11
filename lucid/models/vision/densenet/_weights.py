@@ -1,7 +1,7 @@
 """Pretrained-weight declarations for the DenseNet family.
 
 Four paper-cited variants (Huang et al., CVPR 2017) — all converted
-from torchvision's ``DenseNet*_Weights.IMAGENET1K_V1`` tag.  Preset is
+from reference_vision's ``DenseNet*_Weights.IMAGENET1K_V1`` tag.  Preset is
 the standard ImageNet eval pipeline (224 crop / 256 resize / bilinear /
 ImageNet stats) for every variant.
 """
@@ -22,7 +22,7 @@ class DenseNet121Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 74.434% / top-5 91.972%),
-        sourced from ``torchvision/DenseNet121_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/DenseNet121_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -44,7 +44,7 @@ class DenseNet121Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/DenseNet121_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/DenseNet121_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 7_978_856,
             "metrics": {"ImageNet-1k": {"acc@1": 74.434, "acc@5": 91.972}},
@@ -63,7 +63,7 @@ class DenseNet161Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 77.138% / top-5 93.560%),
-        sourced from ``torchvision/DenseNet161_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/DenseNet161_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -85,7 +85,7 @@ class DenseNet161Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/DenseNet161_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/DenseNet161_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 28_681_000,
             "metrics": {"ImageNet-1k": {"acc@1": 77.138, "acc@5": 93.560}},
@@ -104,7 +104,7 @@ class DenseNet169Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 75.600% / top-5 92.806%),
-        sourced from ``torchvision/DenseNet169_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/DenseNet169_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -126,7 +126,7 @@ class DenseNet169Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/DenseNet169_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/DenseNet169_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 14_149_480,
             "metrics": {"ImageNet-1k": {"acc@1": 75.600, "acc@5": 92.806}},
@@ -145,7 +145,7 @@ class DenseNet201Weights(WeightsEnum):
     ----------
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 76.896% / top-5 93.370%),
-        sourced from ``torchvision/DenseNet201_Weights.IMAGENET1K_V1``.
+        sourced from ``reference_vision/DenseNet201_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -167,7 +167,7 @@ class DenseNet201Weights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/DenseNet201_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/DenseNet201_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 20_013_928,
             "metrics": {"ImageNet-1k": {"acc@1": 76.896, "acc@5": 93.370}},

@@ -32,6 +32,7 @@ from typing import ClassVar, cast, final, override
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput
@@ -335,7 +336,12 @@ def _xception_forward_features(model: nn.Module, x: Tensor) -> Tensor:
     x = F.relu(cast(Tensor, model.bn3(cast(Tensor, model.conv3(x)))))
     x = F.relu(cast(Tensor, model.bn4(cast(Tensor, model.conv4(x)))))
 
-    return cast(Tensor, model.avgpool(x))
+    # ``feature_info`` describes the pre-pool pyramid, and the mixin
+    # documents this as returning the deepest stage's *feature map*.
+    # Pooling here collapsed it to 1x1, so the declared reduction was
+    # wrong by the input size and no consumer could reach a spatial map.
+    # The classifier applies its own pooling.
+    return x
 
 
 def _build_xception_body(ic: int) -> dict[str, nn.Module]:
@@ -475,6 +481,12 @@ class Xception(PretrainedModel, BackboneMixin):
             FeatureInfo(stage=4, num_channels=2048, reduction=32),
         ]
 
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self)
+
     @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
@@ -559,6 +571,12 @@ class XceptionForImageClassification(PretrainedModel, ClassificationHeadMixin):
             setattr(self, name, module)
         self._build_classifier(2048, config.num_classes, dropout=config.dropout)
 
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self)
+
     @override
     def forward(  # type: ignore[override]
         self,
@@ -566,6 +584,7 @@ class XceptionForImageClassification(PretrainedModel, ClassificationHeadMixin):
         labels: Tensor | None = None,
     ) -> XceptionOutput:
         x = _xception_forward_features(self, x)
+        x = cast(Tensor, self.avgpool(x))
         x = x.flatten(1)
         logits = cast(Tensor, self.classifier(x))
 

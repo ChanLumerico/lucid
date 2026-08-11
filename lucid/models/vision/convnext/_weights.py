@@ -2,15 +2,19 @@
 
 ImageNet-1k weights for the four canonical paper-cited variants
 (``convnext_tiny`` / ``convnext_small`` / ``convnext_base`` /
-``convnext_large``).  Converted from torchvision's official
-``ConvNeXt_*_Weights.IMAGENET1K_V1`` tag — which in turn re-distributes
-Facebook AI Research's published checkpoints — re-hosted under the
+``convnext_large``).  Converted from the reference vision library's
+``ConvNeXt_*_Weights.IMAGENET1K_V1`` tag and re-hosted under the
 ``lucid-dl`` org so the per-family enum can pull a Lucid-native
-SafeTensors blob without a torchvision dependency at load time.
+SafeTensors blob without a reference dependency at load time.
+
+Those are that library's *own retrained* weights, not a
+redistribution of the original authors' checkpoints — its recipe and
+reported accuracies differ from the paper's.  Attributing them to the
+original lab also mis-states the licence they carry.
 
 The ``convnext_xlarge`` variant (paper Table 9, 350M params) ships in
 a follow-up commit sourced from timm's ``fb_in22k_ft_in1k`` checkpoint;
-torchvision does not publish a 1k-class xlarge head.
+reference_vision does not publish a 1k-class xlarge head.
 """
 
 from lucid.utils.transforms import ImageClassification
@@ -21,7 +25,7 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 class ConvNeXtTinyWeights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.convnext_tiny_cls`.
 
-    Currently ships :attr:`IMAGENET1K_V1` — torchvision's ImageNet-1k
+    Currently ships :attr:`IMAGENET1K_V1` — reference_vision's ImageNet-1k
     checkpoint (acc@1 = 82.520 / acc@5 = 96.146) re-hosted under
     ``huggingface.co/lucid-dl/convnext-tiny``.
     """
@@ -33,8 +37,8 @@ class ConvNeXtTinyWeights(WeightsEnum):
         transforms=ImageClassification(crop_size=224, resize_size=236),
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ConvNeXt_Tiny_Weights.IMAGENET1K_V1",
-            "license": "mit",
+            "source": "reference_vision/ConvNeXt_Tiny_Weights.IMAGENET1K_V1",
+            "license": "bsd-3-clause",
             "num_params": 28_589_128,
             "gflops": 4.456,
             "file_size_mb": 109.1,
@@ -48,7 +52,7 @@ class ConvNeXtTinyWeights(WeightsEnum):
 class ConvNeXtSmallWeights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.convnext_small_cls`.
 
-    Currently ships :attr:`IMAGENET1K_V1` — torchvision's ImageNet-1k
+    Currently ships :attr:`IMAGENET1K_V1` — reference_vision's ImageNet-1k
     checkpoint (acc@1 = 83.616 / acc@5 = 96.650).
     """
 
@@ -59,8 +63,8 @@ class ConvNeXtSmallWeights(WeightsEnum):
         transforms=ImageClassification(crop_size=224, resize_size=230),
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ConvNeXt_Small_Weights.IMAGENET1K_V1",
-            "license": "mit",
+            "source": "reference_vision/ConvNeXt_Small_Weights.IMAGENET1K_V1",
+            "license": "bsd-3-clause",
             "num_params": 50_223_688,
             "gflops": 8.684,
             "file_size_mb": 191.6,
@@ -74,7 +78,7 @@ class ConvNeXtSmallWeights(WeightsEnum):
 class ConvNeXtBaseWeights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.convnext_base_cls`.
 
-    Currently ships :attr:`IMAGENET1K_V1` — torchvision's ImageNet-1k
+    Currently ships :attr:`IMAGENET1K_V1` — reference_vision's ImageNet-1k
     checkpoint (acc@1 = 84.062 / acc@5 = 96.870).
     """
 
@@ -85,8 +89,8 @@ class ConvNeXtBaseWeights(WeightsEnum):
         transforms=ImageClassification(crop_size=224, resize_size=232),
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ConvNeXt_Base_Weights.IMAGENET1K_V1",
-            "license": "mit",
+            "source": "reference_vision/ConvNeXt_Base_Weights.IMAGENET1K_V1",
+            "license": "bsd-3-clause",
             "num_params": 88_591_464,
             "gflops": 15.355,
             "file_size_mb": 338.0,
@@ -104,7 +108,7 @@ class ConvNeXtXLargeWeights(WeightsEnum):
     ImageNet-22k pretraining → ImageNet-1k finetune checkpoint
     (paper Table 11, acc@1 ≈ 87.0%), sourced via timm's
     ``convnext_xlarge.fb_in22k_ft_in1k`` and re-hosted under
-    ``huggingface.co/lucid-dl/convnext-xlarge``.  torchvision does not
+    ``huggingface.co/lucid-dl/convnext-xlarge``.  reference_vision does not
     publish a 1k-class ConvNeXt-XLarge head.
     """
 
@@ -132,7 +136,7 @@ class ConvNeXtXLargeWeights(WeightsEnum):
 class ConvNeXtLargeWeights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.convnext_large_cls`.
 
-    Currently ships :attr:`IMAGENET1K_V1` — torchvision's ImageNet-1k
+    Currently ships :attr:`IMAGENET1K_V1` — reference_vision's ImageNet-1k
     checkpoint (acc@1 = 84.414 / acc@5 = 96.976).
     """
 
@@ -143,8 +147,8 @@ class ConvNeXtLargeWeights(WeightsEnum):
         transforms=ImageClassification(crop_size=224, resize_size=232),
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/ConvNeXt_Large_Weights.IMAGENET1K_V1",
-            "license": "mit",
+            "source": "reference_vision/ConvNeXt_Large_Weights.IMAGENET1K_V1",
+            "license": "bsd-3-clause",
             "num_params": 197_767_336,
             "gflops": 34.361,
             "file_size_mb": 754.4,

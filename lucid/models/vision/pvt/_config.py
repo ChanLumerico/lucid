@@ -8,12 +8,15 @@ from lucid.models._meta import model_family_meta
 
 
 @model_family_meta(
-    canonical_name="PVT",
+    canonical_name="PVT v2",
     citation=(
-        'Wang, Wenhai, et al. "Pyramid Vision Transformer: A '
-        "Versatile Backbone for Dense Prediction without "
-        'Convolutions." Proceedings of the IEEE/CVF International '
-        "Conference on Computer Vision, 2021, pp. 568-578."
+        'Wang, Wenhai, et al. "PVT v2: Improved Baselines with '
+        'Pyramid Vision Transformer." Computational Visual Media, '
+        "vol. 8, no. 3, 2022, pp. 415-424.  Builds on Wang, Wenhai, "
+        'et al. "Pyramid Vision Transformer: A Versatile Backbone '
+        'for Dense Prediction without Convolutions." Proceedings of '
+        "the IEEE/CVF International Conference on Computer Vision, "
+        "2021, pp. 568-578."
     ),
     theory=r"""
     The Pyramid Vision Transformer (PVT) introduces a hierarchical
@@ -122,12 +125,24 @@ class PVTConfig(ModelConfig):
     model_type: ClassVar[str] = "pvt"
 
     num_classes: int = 1000
+    # Stochastic depth.  The reference ramps the drop probability linearly
+    # with the *global* block index, so deeper blocks are dropped more
+    # often; a single flat rate is not the same regulariser.
+    drop_path_rate: float = 0.0
     in_channels: int = 3
     variant: str = "pvt_tiny"
     embed_dims: tuple[int, ...] = (64, 128, 320, 512)
     depths: tuple[int, ...] = (2, 2, 2, 2)
     num_heads: tuple[int, ...] = (1, 2, 5, 8)
     sr_ratios: tuple[int, ...] = (8, 4, 2, 1)
+    # Section 3.5's *linear* SRA: instead of a stride-R convolution, average-
+    # pool every stage to a fixed P x P grid (P = 7) before the 1x1
+    # projection, making attention linear in the token count rather than
+    # quadratic.  Table 1 carries a full "B2-Li" column and Table 2 reports
+    # it at 22.6M / 3.9 GFLOPs / 82.1 top-1, so it is a paper variant with
+    # published numbers — there was simply no way to build it.
+    linear_sra: bool = False
+    linear_pool_size: int = 7
     # Per-stage MLP expansion ratios (PVT v2-B1: 8,8,4,4 — stages 3&4 use 4)
     mlp_ratios: tuple[float, ...] = (8.0, 8.0, 4.0, 4.0)
 

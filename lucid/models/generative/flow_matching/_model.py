@@ -29,6 +29,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import DiffusionModelOutput, GenerationOutput
 from lucid.models._utils._generative import (
+    resolve_generation_device,
     exact_divergence,
     generative_activation,
     hutchinson_divergence,
@@ -151,6 +152,12 @@ class _ResBlock(nn.Module):
         self.norm2 = nn.GroupNorm(g_out, out_channels, eps=1e-6)
         self.dropout = nn.Dropout(p=dropout)
         self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
+        # The reference zero-initialises this projection so the block is
+        # exactly the identity at step 0 — the standard diffusion U-Net
+        # recipe, and what keeps a deep stack stable from the first step.
+        nn.init.zeros_(self.conv2.weight)
+        if self.conv2.bias is not None:
+            nn.init.zeros_(self.conv2.bias)
 
         if in_channels != out_channels:
             self.skip: nn.Module = nn.Conv2d(in_channels, out_channels, 1)
@@ -189,6 +196,12 @@ class _AttentionBlock(nn.Module):
         self.norm = nn.GroupNorm(g, channels, eps=1e-6)
         self.qkv = nn.Conv2d(channels, channels * 3, 1)
         self.proj = nn.Conv2d(channels, channels, 1)
+        # The reference zero-initialises this projection so the block is
+        # exactly the identity at step 0 — the standard diffusion U-Net
+        # recipe, and what keeps a deep stack stable from the first step.
+        nn.init.zeros_(self.proj.weight)
+        if self.proj.bias is not None:
+            nn.init.zeros_(self.proj.bias)
         self.num_heads = heads
         self.head_dim = channels // heads
         self.scale = 1.0 / math.sqrt(self.head_dim)
@@ -413,6 +426,12 @@ class _VelocityField(nn.Module):
         )
         self.norm_out = nn.GroupNorm(g_out, ch, eps=1e-6)
         self.conv_out = nn.Conv2d(ch, config.in_channels, 3, padding=1)
+        # The reference zero-initialises this projection so the block is
+        # exactly the identity at step 0 — the standard diffusion U-Net
+        # recipe, and what keeps a deep stack stable from the first step.
+        nn.init.zeros_(self.conv_out.weight)
+        if self.conv_out.bias is not None:
+            nn.init.zeros_(self.conv_out.bias)
 
         self._levels = levels
         self._blocks_per_down = config.num_res_blocks
@@ -580,6 +599,13 @@ class _LikelihoodDynamics:
 # ─────────────────────────────────────────────────────────────────────────────
 # Direct model
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+# ``lucid.diffeq`` solvers that take exactly the grid they are handed.
+# Anything else is adaptive and re-chooses its own step sizes.
+_FIXED_STEP_SOLVERS: frozenset[str] = frozenset(
+    {"euler", "midpoint", "heun2", "heun3", "rk4", "rk4_classic"}
+)
 
 
 class FlowMatchingModel(PretrainedModel):
@@ -818,7 +844,7 @@ class FlowMatchingModel(PretrainedModel):
         n_samples: int = 1,
         *,
         steps: int | None = None,
-        device: str = "cpu",
+        device: str | None = None,
         noise: Tensor | None = None,
     ) -> Tensor:
         r"""Generate by integrating the field from noise to data.
@@ -844,6 +870,7 @@ class FlowMatchingModel(PretrainedModel):
         Tensor
             ``(N, C, H, W)`` samples at ``t = 1``.
         """
+        device = resolve_generation_device(self, device)
         if noise is None:
             if n_samples <= 0:
                 raise ValueError(f"n_samples must be positive, got {n_samples}")
@@ -867,7 +894,21 @@ class FlowMatchingModel(PretrainedModel):
                     self.dynamics.velocity,
                     flat,
                     grid,
-                    method="rk4",
+                    # ``config.solver`` is documented as "method handed to
+                    # odeint for sampling and likelihood", and hard-coding
+                    # rk4 ignored it — while also spending four field
+                    # evaluations per requested step, so ``steps=N`` cost 4N.
+                    #
+                    # But an *adaptive* method (the ``dopri5`` default) on a
+                    # fixed grid makes ``steps`` stop being a budget at all,
+                    # which is the one thing this branch exists to guarantee.
+                    # So honour the configured method when it is fixed-step,
+                    # and otherwise fall back to Euler — one evaluation per
+                    # step, and what the reference's ``ODESolver.sample``
+                    # defaults to.
+                    method=(
+                        self._solver if self._solver in _FIXED_STEP_SOLVERS else "euler"
+                    ),
                     return_trajectory=False,
                 ),
             )
@@ -997,7 +1038,7 @@ class FlowMatchingForImageGeneration(PretrainedModel):
         n_samples: int = 1,
         *,
         steps: int | None = None,
-        device: str = "cpu",
+        device: str | None = None,
         noise: Tensor | None = None,
     ) -> GenerationOutput:
         """Sample by integrating the field from ``t = 0`` to ``t = 1``.
@@ -1019,6 +1060,7 @@ class FlowMatchingForImageGeneration(PretrainedModel):
         GenerationOutput
             ``samples`` of shape ``(n_samples, C, H, W)``.
         """
+        device = resolve_generation_device(self, device)
         return GenerationOutput(
             samples=self.flow_matching.sample(
                 n_samples, steps=steps, device=device, noise=noise

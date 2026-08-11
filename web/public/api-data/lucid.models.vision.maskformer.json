@@ -3,7 +3,7 @@
   "name": "maskformer",
   "path": "lucid.models.vision.maskformer",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/__init__.py#L1",
   "members": [
     {
       "name": "MaskFormerConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "MaskFormerConfig(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/_config.py#L10",
+      "signature": "MaskFormerConfig(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 0, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.maskformer._config.MaskFormerConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/_config.py#L1",
+          "signature": "__init__(num_classes: int = 150, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_block: Literal['basic', 'bottleneck'] = 'bottleneck', d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 0, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, fpn_out_channels: int = 256)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -77,8 +77,8 @@
         {
           "name": "num_encoder_layers",
           "annotation": "int",
-          "description": "Pixel decoder transformer encoder depth.",
-          "default": "6"
+          "description": "Depth of the transformer encoder applied to the\n               flattened C5 memory before the decoder reads it.\n               `0` (the reference semantic setting) skips it.",
+          "default": "0"
         },
         {
           "name": "num_decoder_layers",
@@ -132,7 +132,7 @@
       ],
       "labels": [],
       "signature": "MaskFormerForSemanticSegmentation(config: MaskFormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/_model.py#L707",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_model.py#L825",
       "subcategory": "model",
       "methods": [
         {
@@ -141,7 +141,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MaskFormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/_model.py#L782",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_model.py#L900",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -163,7 +163,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: dict[str, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/_model.py#L811",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_model.py#L931",
           "subcategory": "model",
           "summary": "Run MaskFormer.",
           "extended": null,
@@ -242,12 +242,70 @@
       "see_also": []
     },
     {
+      "name": "MaskFormerOutput",
+      "path": "lucid.models.vision.maskformer._model.MaskFormerOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "SemanticSegmentationOutput"
+      ],
+      "labels": [],
+      "signature": "MaskFormerOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, class_queries_logits: Tensor | None = None, masks_queries_logits: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_model.py#L799",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.maskformer._model.MaskFormerOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, class_queries_logits: Tensor | None = None, masks_queries_logits: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_model.py#L1",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Segmentation output that also carries the raw per-query predictions.",
+      "extended": "`logits` is the semantic map the paper's *semantic* inference\nproduces by marginalising the queries.  That marginalisation is\nlossy: it collapses N queries into K class channels, so the general\nmask-classification inference of §3.4 — which needs each query's\nclass distribution and its own mask — cannot be recovered from it.\nBoth are returned here so panoptic and instance inference are\nexpressible without re-running the model.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "class_queries_logits",
+          "annotation": "Tensor",
+          "description": "Per-query class logits, shape `(B, N, K + 1)`; the last column\nis the \"no object\" class."
+        },
+        {
+          "name": "masks_queries_logits",
+          "annotation": "Tensor",
+          "description": "Per-query mask logits at the mask-feature resolution, shape\n`(B, N, fH, fW)` — *not* upsampled, matching the reference."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "maskformer_resnet50",
       "path": "lucid.models.vision.maskformer._pretrained.maskformer_resnet50",
       "kind": "function",
       "labels": [],
       "signature": "maskformer_resnet50(pretrained: bool | str = False, weights: MaskFormerResNet50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/_pretrained.py#L55",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_pretrained.py#L55",
       "subcategory": "pretrained",
       "summary": "MaskFormer with ResNet-50 backbone (Cheng et al., NeurIPS 2021).",
       "extended": "Builds a `MaskFormerForSemanticSegmentation` with the paper-cited\nResNet-50 configuration: 100 segmentation queries, a 6-layer transformer\ndecoder with `d_model = 256`, 8 attention heads, `dim_feedforward =\n2048`, and a 256-channel FPN pixel decoder.  Default targets ADE20K\n(150 semantic classes); reaches ADE20K validation mIoU of 44.5%\n(paper Table 3, MaskFormer-R50 row) — competitive with much heavier\nper-pixel baselines.",
@@ -1614,7 +1672,7 @@
       "kind": "function",
       "labels": [],
       "signature": "maskformer_resnet101(pretrained: bool | str = False, weights: MaskFormerResNet101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/_pretrained.py#L128",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_pretrained.py#L128",
       "subcategory": "pretrained",
       "summary": "MaskFormer with ResNet-101 backbone (Cheng et al., NeurIPS 2021).",
       "extended": "Builds a `MaskFormerForSemanticSegmentation` with the same\ntransformer head as `maskformer_resnet50` but a deeper ResNet-101\nbackbone (`[3, 4, 23, 3]` bottleneck blocks).  Reaches ADE20K\nvalidation mIoU of 45.5% (paper Table 3, MaskFormer-R101 row).",
@@ -2985,7 +3043,7 @@
       ],
       "labels": [],
       "signature": "MaskFormerResNet50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/_weights.py#L24",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_weights.py#L24",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.maskformer_resnet50`.",
@@ -3009,7 +3067,7 @@
       ],
       "labels": [],
       "signature": "MaskFormerResNet101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/d86d663/lucid/models/vision/maskformer/_weights.py#L49",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/maskformer/_weights.py#L49",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.maskformer_resnet101`.",

@@ -21,8 +21,14 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
-from lucid.models._utils._common import make_divisible as _make_divisible
+from lucid.models._utils._common import (
+    init_cnn_fan_out,
+    make_divisible as _make_divisible,
+)
 from lucid.models.vision.sknet._config import SKNetConfig
+
+# Paper Eq. (4): L, "the minimal value of d", is 32 in every experiment.
+_SK_MIN_ATTN_CHANNELS: int = 32
 
 # ---------------------------------------------------------------------------
 # SelectiveKernelAttn — attention module (Conv2d-based, as in timm)
@@ -168,6 +174,16 @@ class _SelectiveKernel(nn.Module):
         self.out_channels = out_channels
         self.split_input = split_input
 
+        # Splitting sizes the branch convs *and* slices the input, so an
+        # indivisible width silently dropped the trailing channels: at
+        # in_channels=5 the branches saw 2 each and channel 4 never reached
+        # the output at all.  The reference asserts this at construction.
+        if split_input and in_channels % self.num_paths != 0:
+            raise ValueError(
+                f"split_input=True requires in_channels divisible by "
+                f"{self.num_paths}, got {in_channels}"
+            )
+
         path_in = in_channels // self.num_paths if split_input else in_channels
         effective_groups = min(out_channels, groups)
 
@@ -186,7 +202,13 @@ class _SelectiveKernel(nn.Module):
             ]
         )
 
-        attn_channels = _make_divisible(out_channels * rd_ratio, divisor=rd_divisor)
+        # Eq. (4): d = max(C/r, L) with L = 32 — "the minimal value of d".
+        # Without the floor the attention bottleneck collapses on narrow
+        # stages (out_channels=64, r=1/16 gives d=8, four times too small).
+        attn_channels = max(
+            _make_divisible(out_channels * rd_ratio, divisor=rd_divisor),
+            _SK_MIN_ATTN_CHANNELS,
+        )
         self.attn = _SelectiveKernelAttn(out_channels, self.num_paths, attn_channels)
 
     @override
@@ -547,6 +569,12 @@ class SKNet(PretrainedModel, BackboneMixin):
         self.layer4 = l4
         self._feature_info = fi
 
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self)
+
     @override
     @property
     def feature_info(self) -> list[FeatureInfo]:
@@ -647,6 +675,13 @@ class SKNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         final_channels = 512 * expansion  # 512 (basic) or 2048 (bottleneck)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self._build_classifier(final_channels, config.num_classes)
+        self._label_smoothing = config.label_smoothing
+
+        # Reference initialisation: He/MSRA fan-out normal on convs, unit
+        # norms.  Lucid's Conv2d default is kaiming_uniform(a=sqrt(5)) — a
+        # different distribution *and* gain — so a from-scratch run would
+        # otherwise start somewhere the paper's schedule was never tuned for.
+        init_cnn_fan_out(self)
 
     @override
     def forward(  # type: ignore[override]
@@ -666,6 +701,8 @@ class SKNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
 
         loss: Tensor | None = None
         if labels is not None:
-            loss = F.cross_entropy(logits, labels)
+            loss = F.cross_entropy(
+                logits, labels, label_smoothing=self._label_smoothing
+            )
 
         return ImageClassificationOutput(logits=logits, loss=loss)

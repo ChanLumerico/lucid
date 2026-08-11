@@ -182,3 +182,11 @@ class ResNetConfig(ModelConfig):
         # JSON round-trips lists; coerce back to tuples for frozen-dataclass fields.
         object.__setattr__(self, "layers", tuple(self.layers))
         object.__setattr__(self, "hidden_sizes", tuple(self.hidden_sizes))
+        # ``block_type`` is documented as a two-value enumeration but typed as
+        # a bare str.  Untouched, a typo silently selected the *other* branch —
+        # ``block_type="Bottleneck"`` quietly built a BasicBlock network.
+        if self.block_type not in ("basic", "bottleneck"):
+            raise ValueError(
+                f"block_type must be 'basic' or 'bottleneck', got "
+                f"{self.block_type!r}"
+            )

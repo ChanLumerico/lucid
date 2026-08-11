@@ -31,12 +31,14 @@ Architecture (EfficientFormer-L1, image=224):
   Head   : Flat -> LN -> mean pool tokens -> (head + head_dist) / 2
 """
 
+from dataclasses import dataclass
 from typing import ClassVar, cast, final, override
 
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -156,6 +158,12 @@ class _Pooling(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        # ``Pool(x) - x``, not Eqn 4's ``Pool(x) + x``.  Both references do
+        # this: the mixer returns the pooling *residual*, and the enclosing
+        # block adds it back as ``x + LayerScale(mixer(x))`` — so the sum
+        # Eqn 4 writes is formed one level up, and subtracting here is what
+        # stops the identity being counted twice.  Inherited from
+        # PoolFormer, which EfficientFormer's MB4D block is built on.
         num = cast(Tensor, self.pool(x))
         den = cast(Tensor, self.pool(lucid.ones(x.shape, device=x.device.type)))
         return num / den - x
@@ -188,6 +196,10 @@ class _Attention(nn.Module):
         super().__init__()
         self.num_heads = num_heads
         self.key_dim = key_dim
+        # Both references scale by the per-head key dim (32 -> 0.17678).  A
+        # literal reading of Eqn 6 scales by the stage *width* C_j
+        # (448/512/768), giving ~0.047 for L1 — the shipped checkpoints were
+        # trained under the reference convention, so that is what runs here.
         self.scale = key_dim**-0.5
         self.val_dim = int(attn_ratio * key_dim)
         self.val_attn_dim = self.val_dim * num_heads
@@ -225,6 +237,21 @@ class _Attention(nn.Module):
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         B, N, _ = x.shape
+        # The attention-bias table is built for a fixed ``resolution**2``
+        # token grid, so a differently-sized input cannot be served.  Say so
+        # here rather than letting the bias reshape below fail with a bare
+        # ShapeMismatch that names neither the input size nor the knob.
+        expected = self.resolution * self.resolution
+        if N != expected:
+            side = int(round(N**0.5))
+            raise ValueError(
+                f"attention got {N} tokens but its bias table is built for "
+                f"{expected} ({self.resolution}x{self.resolution}).  The token "
+                f"grid is {side}x{side}, i.e. an input of {side * 32}px against "
+                f"the {self.resolution * 32}px this model was configured for. "
+                f"Rebuild with resolution={side} (and the matching image size) "
+                f"to run at that resolution."
+            )
         qkv = cast(Tensor, self.qkv(x))  # (B, N, key*2 + val) * heads
         qkv = qkv.reshape(B, N, self.num_heads, -1).permute(0, 2, 1, 3)
         q = qkv[:, :, :, : self.key_dim]
@@ -370,6 +397,7 @@ class _Stage(nn.Module):
         num_vit: int,
         cfg: EfficientFormerConfig,
         dp_rates: list[float],
+        mlp_ratio: float,
     ) -> None:
         super().__init__()
         if downsample:
@@ -393,7 +421,7 @@ class _Stage(nn.Module):
                         cfg.num_heads,
                         cfg.attn_ratio,
                         cfg.resolution,
-                        cfg.mlp_ratios[-1],
+                        mlp_ratio,
                         dp_rates[block_idx],
                         cfg.layer_scale_init,
                     )
@@ -403,7 +431,7 @@ class _Stage(nn.Module):
                     _MetaBlock2d(
                         dim,
                         cfg.pool_size,
-                        cfg.mlp_ratios[-1],
+                        mlp_ratio,
                         dp_rates[block_idx],
                         cfg.layer_scale_init,
                     )
@@ -461,6 +489,10 @@ def _build_efficientformer(cfg: EfficientFormerConfig) -> tuple[
                 num_vit=cfg.num_vit if i == last_stage else 0,
                 cfg=cfg,
                 dp_rates=dp_rates,
+                # ``mlp_ratios`` is declared and documented as *per-stage*;
+                # every stage was reading the last entry, so the stage-4 ratio
+                # governed all four and a non-uniform tuple did nothing.
+                mlp_ratio=cfg.mlp_ratios[i],
             )
         )
         prev_dim = dim
@@ -574,6 +606,12 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
         self.stages = stages
         self.norm = hn
         self._feature_info = fi
+
+        # Reference initialisation: trunc_normal_(0.02) on Linear / patch-embed
+        # convs with zero bias, unit LayerNorms, and the same draw for the
+        # class token and positional table (bare Parameters the framework
+        # default never touches — they were sitting at exact zeros).
+        init_transformer_trunc_normal(self)
         self._out_dim = out_dim
 
     @override
@@ -595,6 +633,32 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 # EfficientFormer for image classification (distilled dual head)
 # ---------------------------------------------------------------------------
+
+
+@dataclass
+class EfficientFormerOutput(ImageClassificationOutput):
+    r"""Classification output carrying both distillation heads.
+
+    The reference keeps ``head`` and ``head_dist`` separate in training —
+    that separation is the whole point of a distilled dual head, since the
+    two are supervised by different targets (ground truth and the teacher).
+    Averaging before the loss trains a single averaged predictor instead,
+    and left the individual logits unreachable to any caller wanting to
+    apply a distillation objective.
+
+    ``logits`` stays the averaged value the reference uses at inference, so
+    existing consumers are unaffected.
+
+    Attributes
+    ----------
+    head_logits : Tensor or None, optional
+        Logits from the ground-truth classification head.
+    head_dist_logits : Tensor or None, optional
+        Logits from the distillation head.
+    """
+
+    head_logits: Tensor | None = None
+    head_dist_logits: Tensor | None = None
 
 
 class EfficientFormerForImageClassification(PretrainedModel, ClassificationHeadMixin):
@@ -687,15 +751,27 @@ class EfficientFormerForImageClassification(PretrainedModel, ClassificationHeadM
         self,
         x: Tensor,
         labels: Tensor | None = None,
-    ) -> ImageClassificationOutput:
+    ) -> EfficientFormerOutput:
         seq = _forward_trunk(self.stem, self.stages, self.norm, x)  # (B, N, C)
         feat = seq.mean(dim=1)
-        logits = (
-            cast(Tensor, self.head(feat)) + cast(Tensor, self.head_dist(feat))
-        ) / 2.0
+        head_logits = cast(Tensor, self.head(feat))
+        head_dist_logits = cast(Tensor, self.head_dist(feat))
+        logits = (head_logits + head_dist_logits) / 2.0
 
         loss: Tensor | None = None
         if labels is not None:
-            loss = F.cross_entropy(logits, labels)
+            # Supervise each head, rather than their average.  With no teacher
+            # supplied both see the ground truth; a caller doing real
+            # distillation reads ``head_dist_logits`` and applies its own
+            # objective.
+            loss = (
+                F.cross_entropy(head_logits, labels)
+                + F.cross_entropy(head_dist_logits, labels)
+            ) / 2.0
 
-        return ImageClassificationOutput(logits=logits, loss=loss)
+        return EfficientFormerOutput(
+            logits=logits,
+            loss=loss,
+            head_logits=head_logits,
+            head_dist_logits=head_dist_logits,
+        )

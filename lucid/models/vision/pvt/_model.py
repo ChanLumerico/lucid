@@ -34,6 +34,8 @@ from typing import ClassVar, cast, final, override
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
+from lucid.models._utils._common import init_transformer_trunc_normal
+from lucid.models._utils._classification import DropPath
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
@@ -42,6 +44,11 @@ from lucid.models.vision.pvt._config import PVTConfig
 # ---------------------------------------------------------------------------
 # Overlapping patch embedding (also used as "downsample" for stages 1-3)
 # ---------------------------------------------------------------------------
+
+
+# Both references run PVT v2's block and stage LayerNorms at 1e-6, not
+# the framework default of 1e-5.
+_LN_EPS: float = 1e-6
 
 
 @final
@@ -122,7 +129,14 @@ class _SRAttention(nn.Module):
     map (via a stride-sr_ratio Conv2d), reducing the O(N²) cost for large N.
     """
 
-    def __init__(self, dim: int, num_heads: int, sr_ratio: int) -> None:
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        sr_ratio: int,
+        linear: bool = False,
+        pool_size: int = 7,
+    ) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.sr_ratio = sr_ratio
@@ -133,10 +147,20 @@ class _SRAttention(nn.Module):
         self.kv = nn.Linear(dim, dim * 2)
         self.proj = nn.Linear(dim, dim)
 
-        if sr_ratio > 1:
+        self.linear = linear
+        if linear:
+            # Linear SRA (§3.3/§3.5): pool to a fixed P x P grid, then a 1x1
+            # projection + norm + GELU.  Independent of ``sr_ratio``, which
+            # is why B2-Li uses P_i = 7 at every stage instead of R_i.
+            self.pool: nn.Module | None = nn.AdaptiveAvgPool2d((pool_size, pool_size))
+            self.sr = nn.Conv2d(dim, dim, 1, stride=1)
+            self.norm = nn.LayerNorm(dim)
+        elif sr_ratio > 1:
+            self.pool = None
             self.sr = nn.Conv2d(dim, dim, sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
         else:
+            self.pool = None
             self.sr = None  # type: ignore[assignment]
             self.norm = None  # type: ignore[assignment]
 
@@ -150,9 +174,13 @@ class _SRAttention(nn.Module):
 
         if self.sr is not None:
             x_2d = x.permute(0, 2, 1).reshape(B, C, H, W)
+            if self.pool is not None:
+                x_2d = cast(Tensor, self.pool(x_2d))  # (B, C, P, P)
             x_2d = cast(Tensor, self.sr(x_2d))  # (B, C, H', W')
             x_2d = x_2d.flatten(2).permute(0, 2, 1)  # (B, H'*W', C)
             x_2d = cast(Tensor, self.norm(x_2d))
+            if self.linear:
+                x_2d = F.gelu(x_2d)
             kv_src = x_2d
         else:
             kv_src = x
@@ -182,17 +210,28 @@ class _PVTBlock(nn.Module):
         num_heads: int,
         sr_ratio: int,
         mlp_ratio: float,
+        drop_path_rate: float = 0.0,
+        linear: bool = False,
+        pool_size: int = 7,
     ) -> None:
         super().__init__()
-        self.norm1 = nn.LayerNorm(dim)
-        self.attn = _SRAttention(dim, num_heads, sr_ratio)
-        self.norm2 = nn.LayerNorm(dim)
+        self.norm1 = nn.LayerNorm(dim, eps=_LN_EPS)
+        self.attn = _SRAttention(dim, num_heads, sr_ratio, linear, pool_size)
+        self.norm2 = nn.LayerNorm(dim, eps=_LN_EPS)
         self.mlp = _DWConvMLP(dim, mlp_ratio)
+        # Stochastic depth on both residual branches, as the reference does.
+        self.drop_path = DropPath(drop_path_rate)
 
     @override
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
-        x = x + cast(Tensor, self.attn(cast(Tensor, self.norm1(x)), H, W))  # type: ignore[arg-type]
-        x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)), H, W))  # type: ignore[arg-type]
+        x = x + cast(
+            Tensor,
+            self.drop_path(cast(Tensor, self.attn(cast(Tensor, self.norm1(x)), H, W))),  # type: ignore[arg-type]
+        )
+        x = x + cast(
+            Tensor,
+            self.drop_path(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)), H, W))),  # type: ignore[arg-type]
+        )
         return x
 
 
@@ -222,16 +261,31 @@ class _PVTStage(nn.Module):
         sr_ratio: int,
         mlp_ratio: float,
         is_first: bool,
+        dpr: list[float] | None = None,
+        linear: bool = False,
+        pool_size: int = 7,
     ) -> None:
         super().__init__()
+        dpr = dpr if dpr is not None else [0.0] * depth
         # Stage 0: patch_embed lives on the model, not inside the stage.
         # Stages 1-3: patch_embed stored as downsample (timm key layout).
         if not is_first:
             self.downsample = _OverlapPatchEmbed(in_ch, embed_dim, patch_size, stride)
         self.blocks = nn.ModuleList(
-            [_PVTBlock(embed_dim, num_heads, sr_ratio, mlp_ratio) for _ in range(depth)]
+            [
+                _PVTBlock(
+                    embed_dim,
+                    num_heads,
+                    sr_ratio,
+                    mlp_ratio,
+                    drop_path_rate=dpr[j],
+                    linear=linear,
+                    pool_size=pool_size,
+                )
+                for j in range(depth)
+            ]
         )
-        self.norm = nn.LayerNorm(embed_dim)
+        self.norm = nn.LayerNorm(embed_dim, eps=_LN_EPS)
 
     def forward_tokens(self, tokens: Tensor, H: int, W: int) -> tuple[Tensor, int, int]:
         """Run blocks + norm on pre-embedded tokens (B, N, C)."""
@@ -245,8 +299,15 @@ class _PVTStage(nn.Module):
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
         # x is a spatial map (B, C_in, H_in, W_in).
-        # For stage 0 this should NOT be called directly — call forward_tokens.
-        # For stages 1-3, downsample first, then run blocks.
+        # Stage 0's patch embedding lives on the model, not here, so this
+        # path has nothing to downsample with.  Say so instead of raising an
+        # AttributeError from the middle of the call.
+        if not hasattr(self, "downsample"):
+            raise RuntimeError(
+                "stage 0 has no downsample — its patch embedding lives on the "
+                "model as ``patch_embed``.  Call ``forward_tokens(tokens, H, W)`` "
+                "with the already-embedded tokens instead."
+            )
         tokens, H, W = cast(tuple[Tensor, int, int], self.downsample(x))
         return self.forward_tokens(tokens, H, W)
 
@@ -270,6 +331,11 @@ def _build_pvt(cfg: PVTConfig) -> tuple[
       stages.1-3   — downsample + blocks + norm
     """
     stages: list[nn.Module] = []
+
+    # Linear stochastic-depth schedule over the global block index.
+    total = sum(cfg.depths)
+    dpr_all = [cfg.drop_path_rate * k / max(total - 1, 1) for k in range(total)]
+    cursor = 0
     fi: list[FeatureInfo] = []
 
     in_ch = cfg.in_channels
@@ -299,8 +365,12 @@ def _build_pvt(cfg: PVTConfig) -> tuple[
                 sr_ratio=sr,
                 mlp_ratio=mlp_r,
                 is_first=is_first,
+                dpr=dpr_all[cursor : cursor + depth],
+                linear=cfg.linear_sra,
+                pool_size=cfg.linear_pool_size,
             )
         )
+        cursor += depth
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
         in_ch = dim
 
@@ -390,6 +460,12 @@ class PVT(PretrainedModel, BackboneMixin):
         super().__init__(config)
         self.patch_embed, self.stages, fi, out_dim = _build_pvt(config)
         self._feature_info = fi
+
+        # Reference initialisation: trunc_normal_(0.02) on Linear / patch-embed
+        # convs with zero bias, unit LayerNorms, and the same draw for the
+        # class token and positional table (bare Parameters the framework
+        # default never touches — they were sitting at exact zeros).
+        init_transformer_trunc_normal(self)
         self._out_dim = out_dim
 
     @override

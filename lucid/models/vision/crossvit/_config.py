@@ -126,6 +126,19 @@ class CrossViTConfig(ModelConfig):
     layer_norm_eps: float = 1e-6
 
     def __post_init__(self) -> None:
+        # ``depths[k][2]`` (the per-stage cross-attention count L) is only
+        # honoured for 0 and 1: the fusion is one ``_CrossAttentionBlock`` per
+        # branch, which is what the reference builds when L == 0, and what
+        # every registered variant uses.  Larger values used to be accepted,
+        # build a single block anyway, and still reserve L stochastic-depth
+        # slots — over-advancing the drop-path cursor for the whole model.
+        for k, stage in enumerate(self.depths):
+            if len(stage) >= 3 and int(stage[2]) > 1:
+                raise NotImplementedError(
+                    f"depths[{k}][2]={stage[2]} (cross-attention depth) is not "
+                    f"implemented; the fusion builds a single block per branch, "
+                    f"so only 0 or 1 is supported."
+                )
         object.__setattr__(self, "img_scale", tuple(self.img_scale))
         object.__setattr__(self, "patch_sizes", tuple(self.patch_sizes))
         object.__setattr__(self, "embed_dims", tuple(self.embed_dims))

@@ -21,7 +21,12 @@ import lucid
 import lucid.models as M
 import lucid.nn as nn
 
-from lucid.test.unit.compile._helpers import assert_compiles, metal_tensor
+from lucid.test.unit.compile._helpers import (
+    COMPILE_DEVICE,
+    assert_compiles,
+    metal_tensor,
+    to_metal,
+)
 
 
 def _img(c: int = 3, hw: int = 64) -> lucid.Tensor:
@@ -96,3 +101,24 @@ def test_lstm_head_compiles() -> None:
     # Multi-layer bidirectional LSTM — silently eager-fell-back before this
     # session's multi-output / liveness fixes.
     assert_compiles(_LSTMHead(), metal_tensor(8, 4, 16))
+
+
+def test_embedding_padding_idx_compiles() -> None:
+    """``padding_idx`` must survive compilation.
+
+    The emitter used to gather and stop, so a compiled embedding handed the
+    pad token whatever row the weight happened to hold.  Nothing caught it
+    because a freshly built table usually has that row zeroed already — the
+    two paths agreed by accident.  Filling it deliberately is what makes the
+    contract testable.
+    """
+    emb = nn.Embedding(8, 4, padding_idx=0)
+    nn.init.normal_(emb.weight, std=1.0)
+    ids = lucid.tensor([[0, 1, 2, 0]]).long().to(COMPILE_DEVICE)
+    assert_compiles(emb, ids)
+
+    emb.eval()
+    to_metal(emb)
+    out = emb(ids)
+    pad_rows = out[0, 0].abs().sum() + out[0, 3].abs().sum()
+    assert float(pad_rows.item()) == 0.0

@@ -18,7 +18,7 @@ checkpoint loads strict:
     │    sizes ((32,),(64,),(128,),(256,),(512,)), ratios (0.5,1,2)
     │    → per-level top-k → decode → clip → NMS 0.7 → top-1000 proposals
     │
-    └─ MultiScale RoI Align (7×7, sampling_ratio=2, aligned) over P2-P5
+    └─ MultiScale RoI Align (7×7, sampling_ratio=2, aligned=False) over P2-P5
          ↓  FPN level-assignment k = floor(4 + log2(sqrt(wh)/224)), k∈[2,5]
        TwoMLPHead: fc6 (256·7·7 → 1024) → fc7 (1024 → 1024)
          ↓
@@ -259,7 +259,9 @@ class FasterRCNNForObjectDetection(PretrainedModel):
     config_class: ClassVar[type[FasterRCNNConfig]] = FasterRCNNConfig
     base_model_prefix: ClassVar[str] = "faster_rcnn"
 
-    # FPN level strides: P2..P5 then the pool level.
+    # Nominal FPN level strides (P2..P5 then the pool level) for a size that
+    # divides evenly.  ``forward`` derives the real ones from the feature maps
+    # rather than trusting these.
     _strides: ClassVar[tuple[int, ...]] = (4, 8, 16, 32, 64)
 
     def __init__(self, config: FasterRCNNConfig) -> None:
@@ -350,7 +352,12 @@ class FasterRCNNForObjectDetection(PretrainedModel):
                 dl_t = dl_b[top_idx]
                 anc_t = anc[top_idx]
 
-                props = decode_boxes(dl_t, anc_t, (1.0, 1.0, 1.0, 1.0))
+                # Proposals are *inputs* to the second stage, not a
+                # differentiable path back into the RPN: the reference
+                # detaches them so the RoI head's loss trains the RoI head
+                # alone.  Without this the box head's gradient reaches
+                # rpn.bbox_pred through the coordinates it was handed.
+                props = decode_boxes(dl_t.detach(), anc_t, (1.0, 1.0, 1.0, 1.0))
                 props = clip_boxes_to_image(props, image_size)
                 boxes_parts.append(props)
                 scores_parts.append(F.sigmoid(sc_t))
@@ -420,15 +427,22 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         # 1. Backbone + FPN → [P2, P3, P4, P5, pool]
         features = cast(list[Tensor], self.backbone(x))
 
+        # Derive the level strides from what the backbone actually produced.
+        # The class constant (4, 8, 16, 32, 64) only holds for input sizes
+        # divisible all the way down; anywhere else the real ratio differs and
+        # both the anchor grid and the RoI-Align scales silently drift off the
+        # feature map they are addressing.
+        strides = [max(1, iH // int(f.shape[2])) for f in features]
+
         # 2. RPN → per-image proposals (when not supplied)
         if proposals is None:
             logits, deltas = self.rpn.head.forward(features)
-            anchors = self._anchor_gen.forward(features, list(self._strides))
+            anchors = self._anchor_gen.forward(features, strides)
             proposals = self._rpn_proposals(logits, deltas, anchors, (iH, iW))
 
         # 3. MultiScale RoI Align over the four FPN detection levels (P2-P5).
         det_feats = features[:4]
-        det_scales = [1.0 / float(s) for s in self._strides[:4]]
+        det_scales = [1.0 / float(s) for s in strides[:4]]
         roi_feats = multiscale_roi_align(
             det_feats,
             proposals,
@@ -500,8 +514,11 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         output : ObjectDetectionOutput
             Raw RoI-head outputs from :meth:`forward`.
         image_sizes : list of (H, W), optional
-            Unused (boxes are already clipped); accepted for API symmetry
-            with other detectors.
+            Per-image extent.  A batch of differently-sized images is padded
+            to one canvas, and decoding clips to *that* canvas — so without
+            this a detection could legally extend into another image's
+            padding.  When given, image ``i``'s boxes are re-clipped to
+            ``image_sizes[i]``.
         proposals : list of Tensor, optional
             Per-image proposals; falls back to ``output.proposals``.
 
@@ -526,7 +543,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         results: list[dict[str, Tensor]] = []
         offset = 0
 
-        for props in proposals:
+        for _img_idx, props in enumerate(proposals):
             N_i = int(props.shape[0])
             lg_i = logits[offset : offset + N_i]
             bx_i = pred_boxes[offset : offset + N_i]
@@ -554,6 +571,15 @@ class FasterRCNNForObjectDetection(PretrainedModel):
                 mask_t = lucid.tensor(mask, device=dev).long()
                 sc_c = sc_c_all[mask_t]
                 bx_c = bx_class[mask_t]
+                # The reference drops degenerate boxes before NMS
+                # (``remove_small_boxes(min_size=1e-2)``).  A zero-area box
+                # has zero IoU with everything, so NMS cannot suppress it and
+                # it survives into the final detections.
+                keep_sz = remove_small_boxes(bx_c, 1e-2)
+                if int(keep_sz.shape[0]) == 0:
+                    continue
+                bx_c = bx_c[keep_sz]
+                sc_c = sc_c[keep_sz]
                 keep = nms(bx_c, sc_c, cfg.nms_thresh)
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
@@ -569,9 +595,12 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             all_s = lucid.cat(keep_scores, dim=0)
             all_l = lucid.cat(keep_labels, dim=0)
             order = lucid.argsort(-all_s)[: cfg.max_detections]
+            kept_boxes = all_b[order]
+            if image_sizes is not None and _img_idx < len(image_sizes):
+                kept_boxes = clip_boxes_to_image(kept_boxes, image_sizes[_img_idx])
             results.append(
                 {
-                    "boxes": all_b[order],
+                    "boxes": kept_boxes,
                     "scores": all_s[order],
                     "labels": all_l[order].long(),
                 }

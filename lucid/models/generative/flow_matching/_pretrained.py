@@ -34,6 +34,7 @@ from lucid.models.generative.flow_matching._model import (
     FlowMatchingForImageGeneration,
     FlowMatchingModel,
 )
+from lucid.models._utils._common import reject_unavailable_pretrained
 
 # 32x32 — four stages, 32 → 16 → 8 → 4, attention at 32/16/8.
 _CFG_CIFAR = FlowMatchingConfig(
@@ -140,6 +141,8 @@ def flow_matching_cifar(
     >>> model.nfe                      # training solves nothing
     0
     """
+    if pretrained:
+        reject_unavailable_pretrained("flow_matching_cifar")
     return FlowMatchingModel(_apply(_CFG_CIFAR, overrides))
 
 
@@ -179,6 +182,8 @@ def flow_matching_imagenet32(
     >>> flow_matching_imagenet32().path
     'ot'
     """
+    if pretrained:
+        reject_unavailable_pretrained("flow_matching_imagenet32")
     return FlowMatchingModel(_apply(_CFG_IMAGENET32, overrides))
 
 
@@ -218,6 +223,8 @@ def flow_matching_imagenet64(
     >>> flow_matching_imagenet64().input_dim
     12288
     """
+    if pretrained:
+        reject_unavailable_pretrained("flow_matching_imagenet64")
     return FlowMatchingModel(_apply(_CFG_IMAGENET64, overrides))
 
 
@@ -258,6 +265,8 @@ def flow_matching_imagenet128(
     >>> flow_matching_imagenet128().config.sample_size
     128
     """
+    if pretrained:
+        reject_unavailable_pretrained("flow_matching_imagenet128")
     return FlowMatchingModel(_apply(_CFG_IMAGENET128, overrides))
 
 
@@ -306,6 +315,8 @@ def flow_matching_cifar_gen(
     >>> model.generate(n_samples=2, steps=4).samples.shape
     (2, 3, 8, 8)
     """
+    if pretrained:
+        reject_unavailable_pretrained("flow_matching_cifar_gen")
     return FlowMatchingForImageGeneration(_apply(_CFG_CIFAR, overrides))
 
 
@@ -346,6 +357,8 @@ def flow_matching_imagenet32_gen(
     >>> flow_matching_imagenet32_gen().flow_matching.path
     'ot'
     """
+    if pretrained:
+        reject_unavailable_pretrained("flow_matching_imagenet32_gen")
     return FlowMatchingForImageGeneration(_apply(_CFG_IMAGENET32, overrides))
 
 
@@ -386,6 +399,8 @@ def flow_matching_imagenet64_gen(
     >>> flow_matching_imagenet64_gen().flow_matching.input_dim
     12288
     """
+    if pretrained:
+        reject_unavailable_pretrained("flow_matching_imagenet64_gen")
     return FlowMatchingForImageGeneration(_apply(_CFG_IMAGENET64, overrides))
 
 
@@ -426,6 +441,8 @@ def flow_matching_imagenet128_gen(
     >>> flow_matching_imagenet128_gen().flow_matching.config.sample_size
     128
     """
+    if pretrained:
+        reject_unavailable_pretrained("flow_matching_imagenet128_gen")
     return FlowMatchingForImageGeneration(_apply(_CFG_IMAGENET128, overrides))
 
 

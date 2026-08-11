@@ -130,6 +130,16 @@ class DDPMConfig(DiffusionModelConfig):
     resnet_groups: int = 32
 
     # Improved DDPM / Imagen-style extras.
+    # Improved-DDPM's ResBlock conditions with FiLM rather than addition:
+    # the time embedding projects to 2*out_channels and the block computes
+    # ``norm(h) * (1 + scale) + shift``.  Ho 2020's original CIFAR/LSUN
+    # models use the additive form, so this defaults off and the
+    # Improved-DDPM-derived factories turn it on.
+    use_scale_shift_norm: bool = False
+    # ``rescale_timesteps`` feeds the network ``t * (1000 / T)`` instead of
+    # the raw index, so a T=4000 model still sees magnitudes in [0, 1000)
+    # — the range the sinusoidal embedding was designed for.
+    rescale_timesteps: bool = False
     learn_sigma: bool = False
 
     # Sampling.
@@ -138,6 +148,18 @@ class DDPMConfig(DiffusionModelConfig):
     @override
     def __post_init__(self) -> None:
         super().__post_init__()
+        # ``out_channels`` is inherited and set by every factory, but the
+        # U-Net sizes ``conv_out`` from ``out_channels_effective`` — derived
+        # from ``in_channels`` and ``learn_sigma``.  The field was therefore
+        # never read, and the shipped ``learn_sigma=True`` presets left it at
+        # 3 while the network emitted 6.  Derive it so the value on the config
+        # is the one the model actually produces; rejecting the mismatch
+        # instead would have made those presets unconstructible.
+        object.__setattr__(
+            self,
+            "out_channels",
+            2 * self.in_channels if self.learn_sigma else self.in_channels,
+        )
         if self.base_channels <= 0:
             raise ValueError(
                 f"base_channels must be positive, got {self.base_channels}"

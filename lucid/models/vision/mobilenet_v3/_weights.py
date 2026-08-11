@@ -1,7 +1,7 @@
 """Pretrained-weight declarations for the MobileNet v3 family.
 
 Two paper-cited variants (Howard et al., ICCV 2019) — both converted
-from torchvision's ``MobileNet_V3_*_Weights.IMAGENET1K_V1`` tag.  Preset
+from reference_vision's ``MobileNet_V3_*_Weights.IMAGENET1K_V1`` tag.  Preset
 is the standard ImageNet eval pipeline (224 crop / 256 resize / bilinear
 / ImageNet stats) for both variants.
 
@@ -28,7 +28,7 @@ class MobileNetV3LargeWeights(WeightsEnum):
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 74.042% / top-5 91.340%),
         sourced from
-        ``torchvision/MobileNet_V3_Large_Weights.IMAGENET1K_V1``.
+        ``reference_vision/MobileNet_V3_Large_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -51,7 +51,7 @@ class MobileNetV3LargeWeights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/MobileNet_V3_Large_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/MobileNet_V3_Large_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 5_483_032,
             "gflops": 0.217,
@@ -72,7 +72,7 @@ class MobileNetV3SmallWeights(WeightsEnum):
     IMAGENET1K_V1 : WeightEntry
         ImageNet-1k V1 checkpoint (top-1 67.668% / top-5 87.402%),
         sourced from
-        ``torchvision/MobileNet_V3_Small_Weights.IMAGENET1K_V1``.
+        ``reference_vision/MobileNet_V3_Small_Weights.IMAGENET1K_V1``.
     DEFAULT : WeightEntry
         Alias for :attr:`IMAGENET1K_V1`.
 
@@ -95,7 +95,7 @@ class MobileNetV3SmallWeights(WeightsEnum):
         transforms=_PRESET,
         meta={
             "tag": "IMAGENET1K_V1",
-            "source": "torchvision/MobileNet_V3_Small_Weights.IMAGENET1K_V1",
+            "source": "reference_vision/MobileNet_V3_Small_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
             "num_params": 2_542_856,
             "gflops": 0.057,

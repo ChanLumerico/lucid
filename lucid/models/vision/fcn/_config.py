@@ -92,3 +92,26 @@ class FCNConfig(ModelConfig):
     classifier_hidden_channels: int = 512
     aux_hidden_channels: int = 256
     dropout: float = 0.1
+    # Void / unlabelled marker in the VOC + COCO-with-VOC label set the
+    # 21-class default targets.  These pixels must contribute no loss and no
+    # gradient; the segmentation recipe that produced the shipped checkpoints
+    # passes ``ignore_index=255`` to both the main and the auxiliary term.
+    ignore_index: int = 255
+
+    def __post_init__(self) -> None:
+        # ``variant`` advertised fcn32s / fcn16s / fcn8s but drove nothing:
+        # every value built the same single-scale dilated model, so a caller
+        # asking for the skip architectures got the coarse one and a config
+        # that claimed otherwise.  Only the single-scale head exists here, so
+        # the other two now refuse rather than silently substituting it.
+        if self.variant not in ("fcn32s", "fcn16s", "fcn8s"):
+            raise ValueError(
+                f"variant must be one of 'fcn32s', 'fcn16s', 'fcn8s', got "
+                f"{self.variant!r}"
+            )
+        if self.variant != "fcn32s":
+            raise NotImplementedError(
+                f"variant={self.variant!r} needs the paper's skip fusion "
+                f"(a scored pool4, and pool3 for fcn8s), which this module "
+                f"does not build; only the single-scale head is implemented."
+            )

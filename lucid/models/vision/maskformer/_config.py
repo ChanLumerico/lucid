@@ -82,7 +82,9 @@ class MaskFormerConfig(ModelConfig):
         backbone_layers:   ResNet layer counts (default ResNet-50: 3,4,6,3).
         d_model:           Transformer embedding dimension.
         n_head:            Number of attention heads.
-        num_encoder_layers: Pixel decoder transformer encoder depth.
+        num_encoder_layers: Depth of the transformer encoder applied to the
+                           flattened C5 memory before the decoder reads it.
+                           ``0`` (the reference semantic setting) skips it.
         num_decoder_layers: Query transformer decoder depth.
         dim_feedforward:   FFN inner dimension in each transformer layer.
         dropout:           Dropout probability.
@@ -102,7 +104,11 @@ class MaskFormerConfig(ModelConfig):
     # Transformer
     d_model: int = 256
     n_head: int = 8
-    num_encoder_layers: int = 6
+    # The semantic-segmentation config these checkpoints come from sets
+    # ENC_LAYERS: 0 -- the C5 feature goes straight into the decoder.  The
+    # "+6 Enc" row is the COCO-panoptic comparison against DETR, not the
+    # semantic result.  Values > 0 now build a real encoder stack.
+    num_encoder_layers: int = 0
     num_decoder_layers: int = 6
     dim_feedforward: int = 2048
     dropout: float = 0.1
