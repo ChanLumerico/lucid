@@ -3,7 +3,7 @@
   "name": "xception",
   "path": "lucid.models.vision.xception",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/__init__.py#L1",
   "members": [
     {
       "name": "XceptionConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "XceptionConfig(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "Xception(config: XceptionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L388",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L388",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: XceptionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L472",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L472",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L492",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L492",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L495",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L495",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L499",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L499",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -157,7 +157,7 @@
         }
       ],
       "summary": "Xception feature-extracting backbone (no classification head).",
-      "extended": "Implements the \"Extreme Inception\" topology from Chollet,\n\"Xception: Deep Learning with Depthwise Separable Convolutions\",\nCVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  The architecture replaces every\nInception module of Inception-v3 with a depthwise separable\nconvolution — the limiting case of an Inception block in which\nevery output channel of the pointwise convolution receives its\nown independent spatial filter.  This makes the cross-channel\nand spatial correlations *fully decoupled*, dramatically\nreducing parameters and FLOPs:\n\n$$\nD_K^2 \\cdot M \\cdot N \\;\\longrightarrow\\;\n    M \\cdot N \\;+\\; D_K^2 \\cdot M.\n$$\n\nThe body is organised into three phases — *entry flow* (3\nblocks, with 1×1 strided residuals and channel doubling from\n64 → 728), *middle flow* (8 identical 728-ch blocks with\nadditive identity shortcuts), and *exit flow* (1 strided\ntransition block plus two final separable convolutions\nexpanding to 1536 → 2048 channels).  Designed for a 299×299\ninput — the same crop size as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement.",
+      "extended": "Implements the \"Extreme Inception\" topology from Chollet,\n\"Xception: Deep Learning with Depthwise Separable Convolutions\",\nCVPR 2017 (arXiv:1610.02357).  The architecture replaces every\nInception module of Inception-v3 with a depthwise separable\nconvolution — the limiting case of an Inception block in which\nevery output channel of the pointwise convolution receives its\nown independent spatial filter.  This makes the cross-channel\nand spatial correlations *fully decoupled*, dramatically\nreducing parameters and FLOPs:\n\n$$\nD_K^2 \\cdot M \\cdot N \\;\\longrightarrow\\;\n    M \\cdot N \\;+\\; D_K^2 \\cdot M.\n$$\n\nThe body is organised into three phases — *entry flow* (3\nblocks, with 1×1 strided residuals and channel doubling from\n64 → 728), *middle flow* (8 identical 728-ch blocks with\nadditive identity shortcuts), and *exit flow* (1 strided\ntransition block plus two final separable convolutions\nexpanding to 1536 → 2048 channels).  Designed for a 299×299\ninput — the same crop size as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement.",
       "parameters": [
         {
           "name": "config",
@@ -240,7 +240,7 @@
       ],
       "labels": [],
       "signature": "XceptionForImageClassification(config: XceptionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L509",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L509",
       "subcategory": "model",
       "methods": [
         {
@@ -249,7 +249,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: XceptionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L568",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L568",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -271,7 +271,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L580",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L580",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -334,7 +334,7 @@
       "bases": [],
       "labels": [],
       "signature": "XceptionOutput(logits: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L266",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L266",
       "subcategory": "model",
       "methods": [
         {
@@ -343,7 +343,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -392,7 +392,7 @@
       "kind": "function",
       "labels": [],
       "signature": "xception(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_pretrained.py#L19",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_pretrained.py#L19",
       "subcategory": "pretrained",
       "summary": "Xception feature-extracting backbone (no classification head).",
       "extended": "Builds an `Xception` with the paper-cited \"Extreme\nInception\" topology from Chollet, 2017: a 2-conv stem, three\nentry-flow blocks (1×1 strided residuals with channel\nprogression 64 → 128 → 256 → 728), eight middle-flow blocks at\n728 channels, one exit-flow transition block (728 → 1024),\nand two final separable convolutions expanding to 1536 → 2048\nchannels.  20.8M parameters without a classifier head\n(`xception_cls` adds 2.05M more for the 1000-way head,\nreaching the 22,855,952 the paper reports) — the same budget as\nInception-v3 but with depthwise separable convolutions\nthroughout.",
@@ -419,7 +419,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.xception import xception\n>>> model = xception()\n>>> x = lucid.randn(1, 3, 299, 299)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 10, 10)"
       ],
       "notes": [
-        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  Designed for\n299×299 input — the same crop as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement."
+        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 (arXiv:1610.02357).  Designed for\n299×299 input — the same crop as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement."
       ],
       "attributes": [],
       "warns": [],
@@ -1087,7 +1087,7 @@
       "kind": "function",
       "labels": [],
       "signature": "xception_cls(pretrained: bool | str = False, weights: XceptionWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_pretrained.py#L83",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_pretrained.py#L83",
       "subcategory": "pretrained",
       "summary": "Xception image classifier (backbone + dropout + linear head).",
       "extended": "Builds an `XceptionForImageClassification` with the\ncanonical Xception backbone (Chollet, 2017) followed by\ndropout ($p = 0.5$) and a linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\n22,855,952 parameters, exactly the count Chollet reports for\nXception, and 79.0% ImageNet-1k top-1 accuracy at 299×299 —\noutperforming Inception-v3 at the same parameter budget.",
@@ -1120,7 +1120,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.xception import xception_cls\n>>> model = xception_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 299, 299)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = xception_cls(pretrained=True)            # DEFAULT tag\n>>> from lucid.models.vision.xception import XceptionWeights\n>>> model = xception_cls(weights=XceptionWeights.TF_IN1K)"
       ],
       "notes": [
-        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  Pretrained\nweights are converted from timm's `legacy_xception.tf_in1k` and\nhosted on the Hugging Face Hub under `lucid-dl/xception`.  The\neval preset is 299 crop / 333 resize / bicubic / mean=std=0.5 (not\nImageNet stats)."
+        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 (arXiv:1610.02357).  Pretrained\nweights are converted from timm's `legacy_xception.tf_in1k` and\nhosted on the Hugging Face Hub under `lucid-dl/xception`.  The\neval preset is 299 crop / 333 resize / bicubic / mean=std=0.5 (not\nImageNet stats)."
       ],
       "attributes": [],
       "warns": [],
@@ -1814,7 +1814,7 @@
       ],
       "labels": [],
       "signature": "XceptionWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/xception/_weights.py#L25",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/xception/_weights.py#L25",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.xception_cls`.",

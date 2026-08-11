@@ -3,7 +3,7 @@
   "name": "mask2former",
   "path": "lucid.models.vision.mask2former",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/__init__.py#L1",
   "members": [
     {
       "name": "Mask2FormerConfig",
@@ -14,8 +14,8 @@
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "Mask2FormerConfig(num_classes: int = 150, in_channels: int = 3, swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, swin_mlp_ratio: float = 4.0, d_model: int = 256, mask_feature_size: int = 256, n_head: int = 8, num_encoder_layers: int = 6, encoder_feedforward_dim: int = 1024, num_decoder_layers: int = 10, dim_feedforward: int = 2048, dropout: float = 0.0, num_queries: int = 100, num_feature_levels: int = 3, feature_strides: tuple[int, int, int, int] = (4, 8, 16, 32), common_stride: int = 4)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_config.py#L10",
+      "signature": "Mask2FormerConfig(num_classes: int = 150, in_channels: int = 3, swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, swin_mlp_ratio: float = 4.0, d_model: int = 256, mask_feature_size: int = 256, n_head: int = 8, num_encoder_layers: int = 6, encoder_feedforward_dim: int = 1024, num_decoder_layers: int = 10, dim_feedforward: int = 2048, dropout: float = 0.0, num_queries: int = 100, class_weight: float = 2.0, mask_weight: float = 5.0, dice_weight: float = 5.0, no_object_weight: float = 0.1, train_num_points: int = 12544, oversample_ratio: float = 3.0, importance_sample_ratio: float = 0.75, deep_supervision: bool = True, num_feature_levels: int = 3, feature_strides: tuple[int, int, int, int] = (4, 8, 16, 32), common_stride: int = 4)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -23,8 +23,8 @@
           "path": "lucid.models.vision.mask2former._config.Mask2FormerConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(num_classes: int = 150, in_channels: int = 3, swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, swin_mlp_ratio: float = 4.0, d_model: int = 256, mask_feature_size: int = 256, n_head: int = 8, num_encoder_layers: int = 6, encoder_feedforward_dim: int = 1024, num_decoder_layers: int = 10, dim_feedforward: int = 2048, dropout: float = 0.0, num_queries: int = 100, num_feature_levels: int = 3, feature_strides: tuple[int, int, int, int] = (4, 8, 16, 32), common_stride: int = 4)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_config.py#L1",
+          "signature": "__init__(num_classes: int = 150, in_channels: int = 3, swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, swin_mlp_ratio: float = 4.0, d_model: int = 256, mask_feature_size: int = 256, n_head: int = 8, num_encoder_layers: int = 6, encoder_feedforward_dim: int = 1024, num_decoder_layers: int = 10, dim_feedforward: int = 2048, dropout: float = 0.0, num_queries: int = 100, class_weight: float = 2.0, mask_weight: float = 5.0, dice_weight: float = 5.0, no_object_weight: float = 0.1, train_num_points: int = 12544, oversample_ratio: float = 3.0, importance_sample_ratio: float = 0.75, deep_supervision: bool = True, num_feature_levels: int = 3, feature_strides: tuple[int, int, int, int] = (4, 8, 16, 32), common_stride: int = 4)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,7 +42,7 @@
         }
       ],
       "summary": "Configuration for Mask2Former (Cheng et al., CVPR 2022).",
-      "extended": "The field set mirrors the reference framework's `Mask2FormerConfig`\nso the pretrained-weight converter is a near-identity key map.  The\npipeline is:\n\nImage → Swin backbone → [stage1..4] feature maps\n    → MSDeformAttn pixel decoder → 3 multi-scale memory levels\n                                 + 1/4-scale mask features\n    → 9-layer masked-attention transformer decoder (cycling levels)\n    → class head (Linear → K+1) + mask head (MLP → dot mask features)\n\n> **Note:**\n>\n> **Inference only.**  §3.2.2's objective is unimplemented: the\n> Hungarian matcher, the class-CE / mask-BCE / dice terms, the\n> point-sampled mask loss (K = 12,544 points rather than dense) and\n> the auxiliary losses on every decoder layer.  `forward` raises\n> if given targets rather than discarding them.",
+      "extended": "The field set mirrors the reference framework's `Mask2FormerConfig`\nso the pretrained-weight converter is a near-identity key map.  The\npipeline is:\n\nImage → Swin backbone → [stage1..4] feature maps\n    → MSDeformAttn pixel decoder → 3 multi-scale memory levels\n                                 + 1/4-scale mask features\n    → 9-layer masked-attention transformer decoder (cycling levels)\n    → class head (Linear → K+1) + mask head (MLP → dot mask features)\n\n> **Note:**\n>\n> **Training.**  Pass `targets` to `forward` for §3.2.2's\n> objective: Hungarian matching on a class + mask-BCE + dice cost,\n> the same three terms as the loss, all mask terms evaluated on\n> `train_num_points` importance-sampled points, and — under\n> `deep_supervision` — the whole criterion repeated on every\n> decoder layer.",
       "parameters": [
         {
           "name": "num_classes",
@@ -157,6 +157,54 @@
           "annotation": "int",
           "description": "Finest pixel-decoder stride.",
           "default": "4"
+        },
+        {
+          "name": "class_weight",
+          "annotation": "float",
+          "description": "Weight of the classification term, and of the\n               class cost inside the Hungarian matcher.",
+          "default": "2.0"
+        },
+        {
+          "name": "mask_weight",
+          "annotation": "float",
+          "description": "Weight of the point-sampled mask BCE.",
+          "default": "5.0"
+        },
+        {
+          "name": "dice_weight",
+          "annotation": "float",
+          "description": "Weight of the point-sampled dice term.",
+          "default": "5.0"
+        },
+        {
+          "name": "no_object_weight",
+          "annotation": "float",
+          "description": "Class weight of the \"no object\" slot (0.1).",
+          "default": "0.1"
+        },
+        {
+          "name": "train_num_points",
+          "annotation": "int",
+          "description": "K points per mask (12,544 = 112 x 112).",
+          "default": "12544"
+        },
+        {
+          "name": "oversample_ratio",
+          "annotation": "float",
+          "description": "Candidate multiplier for the importance sampler.",
+          "default": "3.0"
+        },
+        {
+          "name": "importance_sample_ratio",
+          "annotation": "float",
+          "description": "Share of K taken from the most uncertain\n               candidates; the rest are uniform.",
+          "default": "0.75"
+        },
+        {
+          "name": "deep_supervision",
+          "annotation": "bool",
+          "description": "Apply the criterion to every decoder layer, not\n               just the last.",
+          "default": "True"
         }
       ],
       "returns": null,
@@ -177,7 +225,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerForSemanticSegmentation(config: Mask2FormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_model.py#L1292",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_model.py#L1434",
       "subcategory": "model",
       "methods": [
         {
@@ -186,7 +234,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: Mask2FormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_model.py#L1348",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_model.py#L1490",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -207,8 +255,8 @@
           "path": "lucid.models.vision.mask2former._model.Mask2FormerForSemanticSegmentation.forward",
           "kind": "function",
           "labels": [],
-          "signature": "forward(x: Tensor, targets: dict[str, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_model.py#L1358",
+          "signature": "forward(x: Tensor, targets: list[dict[str, Tensor]] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_model.py#L1500",
           "subcategory": "model",
           "summary": "Run Mask2Former for semantic segmentation.",
           "extended": null,
@@ -221,8 +269,8 @@
             },
             {
               "name": "targets",
-              "annotation": "dict[str, Tensor] | None",
-              "description": "Rejected.  This family is inference-only — see the\n     class docstring — so a target dict would be silently\n     discarded, and the caller would watch a loss of\n     `None` and conclude the model had converged.",
+              "annotation": "list[dict[str, Tensor]] | None",
+              "description": "Optional per-image `{\"labels\": (M,) class ids,\n     \"masks\": (M, H, W) binary}`.  When given, §3.2.2's\n     objective is computed — Hungarian matching plus the\n     class / mask-BCE / dice terms, all mask terms on\n     importance-sampled points, repeated on every decoder\n     layer under `deep_supervision`.",
               "default": "None"
             }
           ],
@@ -254,7 +302,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mask2former import mask2former_swin_tiny\n>>> model = mask2former_swin_tiny()\n>>> x = lucid.randn(1, 3, 384, 384)\n>>> out = model(x)\n>>> out.logits.shape   # (B, K, H, W)\n(1, 150, 384, 384)"
       ],
       "notes": [
-        "See Cheng et al., \"Masked-attention Mask Transformer for Universal Image\nSegmentation\", CVPR 2022 ([arXiv:2112.01527](https://arxiv.org/abs/2112.01527)).  For semantic inference the\nmodel drops the no-object slot and collapses queries via the\n`softmax(class)[..., :-1] ⊗ sigmoid(mask)` einsum into a\n$(B, K, H, W)$ logit map, upsampled to the input resolution."
+        "See Cheng et al., \"Masked-attention Mask Transformer for Universal Image\nSegmentation\", CVPR 2022 (arXiv:2112.01527).  For semantic inference the\nmodel drops the no-object slot and collapses queries via the\n`softmax(class)[..., :-1] ⊗ sigmoid(mask)` einsum into a\n$(B, K, H, W)$ logit map, upsampled to the input resolution."
       ],
       "attributes": [
         {
@@ -287,7 +335,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_tiny(pretrained: bool | str = False, weights: Mask2FormerSwinTinyWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_pretrained.py#L62",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_pretrained.py#L62",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Tiny backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the Swin-Tiny\nbackbone (`embed_dim = 96`, `depths = (2, 2, 6, 2)`,\n`num_heads = (3, 6, 12, 24)`, `window_size = 7`), a 6-layer\nmulti-scale deformable pixel decoder, and a 9-layer masked-attention\ntransformer decoder with 100 queries.  Default targets ADE20K\n(150 classes); reaches ADE20K validation mIoU of 47.7%.",
@@ -1240,7 +1288,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_small(pretrained: bool | str = False, weights: Mask2FormerSwinSmallWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_pretrained.py#L122",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_pretrained.py#L122",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Small backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the Swin-Small\nbackbone (`embed_dim = 96`, `depths = (2, 2, 18, 2)`,\n`num_heads = (3, 6, 12, 24)`).  Same transformer head as\n`mask2former_swin_tiny`; ADE20K validation mIoU of 51.3%.",
@@ -2193,7 +2241,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_base(pretrained: bool | str = False, weights: Mask2FormerSwinBaseWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_pretrained.py#L180",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_pretrained.py#L180",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Base backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the Swin-Base\nbackbone (`embed_dim = 128`, `depths = (2, 2, 18, 2)`,\n`num_heads = (4, 8, 16, 32)`).  ADE20K validation mIoU of 53.9%.",
@@ -3146,7 +3194,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_large(pretrained: bool | str = False, weights: Mask2FormerSwinLargeWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_pretrained.py#L235",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_pretrained.py#L235",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Large backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the largest\nSwin backbone (`embed_dim = 192`, `depths = (2, 2, 18, 2)`,\n`num_heads = (6, 12, 24, 48)`).  Reaches ADE20K validation mIoU of\n56.1% — the headline result of the paper.",
@@ -4103,7 +4151,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinTinyWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_weights.py#L34",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_weights.py#L34",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_tiny`.",
@@ -4127,7 +4175,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinSmallWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_weights.py#L65",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_weights.py#L65",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_small`.",
@@ -4151,7 +4199,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinBaseWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_weights.py#L91",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_weights.py#L91",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_base`.",
@@ -4175,7 +4223,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinLargeWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/1cedd68b1/lucid/models/vision/mask2former/_weights.py#L120",
+      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/mask2former/_weights.py#L120",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_large`.",
