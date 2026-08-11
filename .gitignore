@@ -11,15 +11,6 @@ _pip_macro.sh
 # Lucid-format checkpoints — same reason as the line above: a doctest or a
 # stray script writing one into the tree must not become a commit.
 *.lucid
-# Two artefacts that reappear in the repo root after a commit, written by
-# something in the hook chain that calls ``lucid.save`` with a bare relative
-# path.  Ruled out: the serialization tests and doctests, the audit suite,
-# check_numpy_h4 / check_docstring_{coverage,xrefs}, build_model_summaries,
-# validate_model_zoo, a plain ``import lucid`` and pytest collection.  The
-# writer is still unidentified — this entry stops them reaching a commit, it
-# does not explain them.  Neither has ever been committed.
-/mean
-/ckpt_dir/
 *.DS_Store
 
 mypy_report.txt
