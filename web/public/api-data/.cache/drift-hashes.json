@@ -76,7 +76,7 @@
   "lucid.optim": "ef40d5a0d8c07862ec7a681c0b315cb8330dde074dca55f44d498352470cdce0",
   "lucid.profiler": "3d387c440b252f0a3ae01d798db5f8bc84849407bdb755f5a8e7a84b8c263908",
   "lucid.quantization": "d497c463d7dc556e076b6f46da3de660b3921f57cb6d05ff459a55520bf1d6bb",
-  "lucid.serialization": "daaa47a3182576176a0f153f5869d3b16f9cb497d952a005f5b12db12d390165",
+  "lucid.serialization": "0f5cce28eb9994b60e4731555f9214061f651bad46c6892387aae594a387d27e",
   "lucid.signal": "3c4f9ae1e9df97c7555750ca51dc1a8d07aadd8bcf61a8578df88368251529e4",
   "lucid.special": "6ecf9b42724c9d0567c2f2594733ec4401ca34fca1ad0f7155c9fd58453b5f0e",
   "lucid.tensor": "feacc62a464a6eaf47f504dca530a19bce4d0339e764e6bbcf6276b87bc9af0e",

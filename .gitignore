@@ -8,6 +8,9 @@ _pip_macro.sh
 
 *.lcd
 *.safetensors
+# Lucid-format checkpoints — same reason as the line above: a doctest or a
+# stray script writing one into the tree must not become a commit.
+*.lucid
 *.DS_Store
 
 mypy_report.txt

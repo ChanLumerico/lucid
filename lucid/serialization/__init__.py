@@ -143,7 +143,7 @@ def save(obj: object, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -
     --------
     >>> import lucid
     >>> sd = {"w": lucid.randn(3, 3)}
-    >>> lucid.serialization.save(sd, "ckpt.lucid")
+    >>> lucid.serialization.save(sd, "/tmp/ckpt.lucid")
     """
     sd_metadata: object | None = getattr(obj, "_metadata", None)
     container: dict[str, object] = {"_lucid_format": 2, "obj": obj}
@@ -205,7 +205,7 @@ def load(
     Examples
     --------
     >>> import lucid
-    >>> sd = lucid.serialization.load("ckpt.lucid")
+    >>> sd = lucid.serialization.load("/tmp/ckpt.lucid")
     """
     if isinstance(f, (str, bytes)):
         path_str = f.decode() if isinstance(f, bytes) else str(f)
@@ -359,7 +359,7 @@ def save_sharded(
     --------
     >>> import lucid
     >>> sd = {"w": lucid.randn(4096, 4096)}
-    >>> lucid.serialization.save_sharded(sd, "ckpt_dir", shard_size_mb=64)
+    >>> lucid.serialization.save_sharded(sd, "/tmp/ckpt_dir", shard_size_mb=64)
     """
     import json
     import os
@@ -463,7 +463,7 @@ def load_sharded(
     Examples
     --------
     >>> import lucid
-    >>> sd = lucid.serialization.load_sharded("ckpt_dir")
+    >>> sd = lucid.serialization.load_sharded("/tmp/ckpt_dir")
     """
     import json
     import os
@@ -567,7 +567,7 @@ def save_safetensors(
     --------
     >>> import lucid
     >>> sd = {"w": lucid.randn(3, 3)}
-    >>> lucid.serialization.save_safetensors(sd, "weights.safetensors")
+    >>> lucid.serialization.save_safetensors(sd, "/tmp/weights.safetensors")
     """
     _st = _require_safetensors()
 
@@ -633,7 +633,7 @@ def load_safetensors(
     Examples
     --------
     >>> import lucid
-    >>> sd = lucid.serialization.load_safetensors("weights.safetensors")
+    >>> sd = lucid.serialization.load_safetensors("/tmp/weights.safetensors")
     """
     from safetensors import safe_open as _safe_open
     from lucid._factories.converters import from_numpy as _from_numpy

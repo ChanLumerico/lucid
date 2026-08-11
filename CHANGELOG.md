@@ -236,6 +236,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - close every confirmed finding in the model-zoo audit
 
+- stop the doctests writing checkpoints into the repo
+
 ### Changed
 
 - give the engine ops one shared operand check
