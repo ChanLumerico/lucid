@@ -498,6 +498,27 @@ class NeuralODEModel(PretrainedModel):
 
     @override
     def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
+        r"""Encode ``x`` and report the density along with it.
+
+        Parameters
+        ----------
+        x : Tensor
+            ``(B, C, H, W)`` data samples.
+
+        Returns
+        -------
+        NormalizingFlowOutput
+            ``latent`` :math:`z`, ``log_det_jacobian`` accumulated over the
+            solve, and ``log_prob`` :math:`\log p_X(x)` in nats.  No
+            ``loss`` — that is the task wrapper's to define.
+
+        Notes
+        -----
+        Same computation as :meth:`log_prob`, returning the intermediates
+        instead of discarding them.  With ``trace_method`` resolving to
+        ``"hutchinson"`` the log-determinant is an unbiased *estimate*, so
+        two calls on the same input will not agree.
+        """
         z, log_det = self.encode(x)
         log_prob = flow_prior_log_prob(self._prior, z).sum(dim=-1) + log_det
         return NormalizingFlowOutput(
@@ -574,6 +595,26 @@ class NeuralODEForImageGeneration(PretrainedModel):
 
     @override
     def forward(self, x: Tensor) -> NormalizingFlowOutput:  # type: ignore[override]
+        r"""Run the flow and attach the training loss.
+
+        Parameters
+        ----------
+        x : Tensor
+            ``(B, C, H, W)`` data samples.
+
+        Returns
+        -------
+        NormalizingFlowOutput
+            The wrapped model's ``latent`` / ``log_det_jacobian`` /
+            ``log_prob``, plus ``loss``: the mean negative log-likelihood
+            in **bits per dimension**.
+
+        Notes
+        -----
+        Bits/dim rather than nats so the gradient magnitude does not scale
+        with the width of the data — the same quantity the likelihood
+        literature reports.
+        """
         out = cast(NormalizingFlowOutput, self.neural_ode(x))
         bits = -out.log_prob / (self._input_dim * math.log(2.0))
         return NormalizingFlowOutput(
