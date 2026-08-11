@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _require_differentiable(inputs: "Tensor | tuple[Tensor, ...]", where: str) -> None:
+def _require_differentiable(inputs: Tensor | tuple[Tensor, ...], where: str) -> None:
     """Refuse to differentiate with respect to a discrete input.
 
     A derivative with respect to an integer is not a small number, it is
