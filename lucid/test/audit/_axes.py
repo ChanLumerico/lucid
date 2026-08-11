@@ -24,6 +24,7 @@ import inspect
 import functools
 import json
 import pathlib
+import re
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -34,6 +35,8 @@ from lucid.test.audit import _probe, _specs, _surface
 from lucid.test.audit._result import Finding, Status
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from lucid.test.audit._specs import Call
     from lucid.test.audit._surface import Symbol
 
@@ -60,6 +63,49 @@ class Context:
         return list(_probe.DOMAINS)
 
 
+@functools.lru_cache(maxsize=2048)
+def _takes_no_tensor(fn: Any) -> bool:
+    """Whether the first thing ``fn`` takes is a function or a module.
+
+    The numeric axes vary a tensor and read a tensor back.  ``func.grad``
+    takes a *function*, ``nn.utils.weight_norm`` takes a *module*, and
+    neither has an operand for a finite difference to perturb — so all
+    eleven of them reported SKIP, 140 cells across fourteen symbols,
+    which reads as "nobody checked these".
+
+    Somebody does: :class:`~lucid.test.audit._axes_state.
+    FunctionalTransformAxis` compares ``grad(f)(x)`` against
+    ``backward()``, and :class:`~lucid.test.audit._axes_state.NnUtilsAxis`
+    checks that a parametrisation does not change what the module
+    computes.  They are checked *better* than a numeric axis could,
+    because the question fits.  Leaving the numeric cells in the
+    denominator made a done thing look undone.
+    """
+    if fn is None or isinstance(fn, type):
+        return False
+    try:
+        signature = inspect.signature(fn, annotation_format=annotationlib.Format.STRING)
+    except TypeError, ValueError, NameError:
+        return False
+    first = next(
+        (
+            p
+            for p in signature.parameters.values()
+            if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+        ),
+        None,
+    )
+    if first is None:
+        return False
+    text = str(first.annotation).replace("'", "")
+    if re.search(r"\bCallable\b", text):
+        return True
+    # ``skip_init(module_cls: type, *args, **kwargs)`` builds a layer; it
+    # is checked by the ``nnutils`` axis and has no tensor for a finite
+    # difference to move.
+    return bool(re.fullmatch(r"Module|nn\.Module|Optimizer|type", text.strip()))
+
+
 class Axis:
     """One question, asked of every symbol it applies to."""
 
@@ -70,10 +116,27 @@ class Axis:
     #: it out put every one of them outside the audit.
     kinds: frozenset[str] = frozenset({"op", "method"})
 
+    #: Whether this axis works by *perturbing a tensor operand*.  True for
+    #: the numeric sweep and false for the lifecycle axes, which take a
+    #: module or a function on purpose.
+    #:
+    #: Load-bearing, and learned the hard way: putting the "no tensor
+    #: operand, so this axis has nothing to ask" rule in the base class
+    #: without this flag silently withdrew ``quantization.prepare``,
+    #: ``convert``, ``fuse_modules`` and six more from the *quant* and
+    #: *compiled* axes — which check them properly and take a module by
+    #: design.  Nine symbols went from a verdict to none, and the
+    #: coverage number went *up*, because the cells left the denominator.
+    #: A refinement that improves the metric by deleting the measurement
+    #: is the one shape of change this file must never make.
+    varies_a_tensor: bool = True
+
     def applies(self, symbol: "Symbol") -> bool:
         if symbol.kind not in self.kinds:
             return False
         if not symbol.inert:
+            return False
+        if self.varies_a_tensor and _takes_no_tensor(_surface.resolve(symbol)):
             return False
         return True
 
@@ -194,26 +257,154 @@ class Axis:
             return False
         return bool(np.array_equal(first, other, equal_nan=first.dtype.kind == "f"))
 
+    #: Reasons that mean "the question does not apply here", as opposed
+    #: to "the harness could not build inputs".  The distinction is the
+    #: whole value of the SKIP number: it is meant to be the list of
+    #: things nobody checked, and an op with no tensor argument — every
+    #: ``nn.utils`` module transform, every ``func`` higher-order
+    #: function — is not one of them.  They are checked, by
+    #: :mod:`~lucid.test.audit._axes_state`, and filing them under SKIP
+    #: put 300-odd cells in a work queue that had already been done.
+    _NOT_NUMERIC = ("no tensor operand", "nothing measurable")
+
+    #: Reasons that mean the op has nothing this axis can measure, as
+    #: opposed to the op refusing.  ``_probe.contract`` raises this when
+    #: the output is a bool, a shape tuple or ``None`` — 99 cells were
+    #: filed as UNSUPPORTED ("the op refused, loudly and by design")
+    #: about ops that answered perfectly well in a type no derivative
+    #: can be taken of.
+    _NO_TENSOR_OUTPUT = "op did not return a tensor"
+
+    def _refusal(
+        self, symbol: "Symbol", detail: str, call: "Call | None" = None
+    ) -> Finding:
+        """UNSUPPORTED, unless the op had nothing this axis could use."""
+        if (
+            call is not None
+            and not self._primary_is_a_tensor(call)
+            and (
+                "incompatible function arguments" in detail
+                or "AttributeError" in detail
+            )
+        ):
+            # ``zeros((2, 4))`` takes a shape and ``pad_packed_sequence``
+            # takes a ``PackedSequence``; ``Call.base`` reads both as
+            # arrays, so the substituting axes handed them a bare tensor
+            # and were told ``incompatible function arguments`` /
+            # ``'Tensor' object has no attribute 'batch_sizes'``.
+            #
+            # Decided here rather than up front: an op whose primary is a
+            # *list* of tensors has no ``dtype`` either and substitutes
+            # fine, and pre-empting cost 99 cells that were passing.
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the substituted argument is not a plain tensor — this axis "
+                "has nothing it can vary here",
+            )
+        if self._NO_TENSOR_OUTPUT in detail:
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the output is not a tensor — there is no derivative to take",
+            )
+        return self._finding(symbol, Status.UNSUPPORTED, detail)
+
+    @staticmethod
+    def _too_coarse_for_a_difference(call: "Call") -> bool:
+        """Whether the operand's precision is below what the probe needs.
+
+        The sweep's working precision is float64 and the step is 1e-5, so
+        a central difference resolves a derivative to roughly 1e-10.  On
+        a float32 operand the same step leaves ~1e-3 of cancellation
+        error — three orders above the tolerance.
+
+        Consulted **only when a comparison has already failed**, and only
+        to choose between FAIL and TRUNCATION.  Refusing float32 operands
+        up front cost 366 cells that were passing their gradient check
+        perfectly well at that precision: an op is not unmeasurable just
+        because it *could* be noisy, it is unmeasurable when the noise is
+        what the axis actually saw.  This is the same discipline as
+        :func:`~lucid.test.audit._probe.quadratic_shrink` — interrogate
+        the disagreement, do not pre-empt it.
+        """
+        try:
+            primary = call.args[call.primary]
+        except IndexError, TypeError:
+            return False
+        return str(getattr(primary, "dtype", "")).endswith(("float32", "float16"))
+
+    @staticmethod
+    def _primary_is_a_tensor(call: "Call") -> bool:
+        """Whether the argument these axes substitute into is a tensor.
+
+        ``zeros((2, 4))`` takes a *shape*, and ``Call.base`` reads it as
+        an array because a tuple of ints is one — so the substituting
+        axes replaced the shape with a NaN tensor and were told
+        ``zeros(): incompatible function arguments``.  Twenty-odd cells
+        filed as "the op refused" about a factory being asked to build a
+        tensor out of a tensor.
+        """
+        try:
+            primary = call.args[call.primary]
+        except IndexError, TypeError:
+            return False
+        return hasattr(primary, "dtype") and hasattr(primary, "shape")
+
+    def _no_call(self, symbol: "Symbol", why: str) -> Finding:
+        """The finding for "no invocation ran", classified honestly."""
+        if "NotImplementedError" in why:
+            # The op said so itself.  ``F.fused_linear_gelu`` raises
+            # ``IBackend::fused_linear_gelu`` on this backend, which is a
+            # refusal by design and is exactly what UNSUPPORTED is for —
+            # filing it under SKIP put "the harness could not build
+            # inputs" against a call the harness built perfectly well.
+            return self._finding(symbol, Status.UNSUPPORTED, why)
+        if any(marker in why for marker in self._NOT_NUMERIC):
+            return self._finding(symbol, Status.NOT_APPLICABLE, why)
+        return self._finding(symbol, Status.SKIP, why)
+
     def _working_call(
         self, fn: Any, symbol: "Symbol", ctx: Context
     ) -> "tuple[Call, str, Any] | tuple[None, None, str]":
         """The first candidate invocation that runs, and its domain.
 
         Returns ``(call, domain, output)`` or ``(None, None, reason)``.
+
+        The reason reported when nothing ran is the *derived* candidate's
+        failure where there is one, not the last candidate's.  Candidates
+        arrive in tier order — hand spec, then signature, then the blind
+        ``op(x)`` / ``op(x, y)`` ladder — so "the last one" is always the
+        ladder, and the ladder fails the same uninformative way for
+        everything: ``op([x, x]): TypeError: rms_norm() missing 1
+        required positional argument``.  That names a parameter the
+        derivation had already filled, and sends whoever reads it to fix
+        something that is not broken.  The derived candidate's failure is
+        the one that says what the op actually refused.
         """
-        last = "no candidate invocation ran"
+        derived: "str | None" = None
+        first: "str | None" = None
+
+        def note(call: "Call", detail: str) -> None:
+            nonlocal derived, first
+            text = f"{call.note}: {detail}"
+            if first is None:
+                first = text
+            if derived is None and call.note.startswith("derived from signature"):
+                derived = text
+
         for domain in ctx.domains:
             for call in _specs.invocations(symbol.short, domain, symbol.qualname, fn):
                 try:
                     out = fn(*call.args, **call.kwargs)
                 except Exception as exc:  # noqa: BLE001 - surveying, not asserting
-                    last = f"{call.note}: {type(exc).__name__}: {str(exc)[:70]}"
+                    note(call, f"{type(exc).__name__}: {str(exc)[:70]}")
                     continue
                 if _probe.to_numpy(out) is None:
-                    last = f"{call.note}: returned no tensor"
+                    note(call, f"returned {type(out).__name__}, nothing measurable")
                     continue
                 return call, domain, out
-        return None, None, last
+        return None, None, derived or first or "no candidate invocation ran"
 
 
 # ── numeric axes ─────────────────────────────────────────────────────────────
@@ -230,10 +421,126 @@ class _DifferenceAxis(Axis):
     over.  Stated once so the two axes cannot drift apart on it.
     """
 
+    #: Ops whose differentiated argument must satisfy a *structural*
+    #: invariant, not merely lie in a numeric range.
+    #:
+    #: A central difference perturbs one element at a time, and one
+    #: element of an LU or LDL factor is not free: the triangle and the
+    #: pivot sequence describe each other, so every probe after the first
+    #: hands LAPACK a "factorization" that is not one.  ``dsytrs`` then
+    #: walks off the buffer — the sweep died inside ``ldl_solve`` about
+    #: one run in three, always with the heap already busy, never when
+    #: the symbol was run on its own.
+    #:
+    #: This is not a tolerance to widen.  There is no step size at which
+    #: a perturbed factor becomes a factor, so the derivative these axes
+    #: measure does not exist to be compared against.
+    _FACTORED_ARGUMENTS = frozenset({"LU", "LD"})
+
     def applies(self, symbol: "Symbol") -> bool:
         if "stochastic" in symbol.flags:
             return False
         return super().applies(symbol)
+
+    def _differentiates_a_factorization(self, fn: Any) -> bool:
+        try:
+            signature = inspect.signature(
+                fn, annotation_format=annotationlib.Format.STRING
+            )
+        except TypeError, ValueError, NameError:
+            return False
+        first = next(iter(signature.parameters), "")
+        return first in self._FACTORED_ARGUMENTS
+
+    def _differentiable_call(
+        self, fn: Any, symbol: "Symbol", ctx: Context
+    ) -> "tuple[Call, str, Any] | tuple[None, None, str]":
+        """The first invocation whose analytic gradient is **finite**.
+
+        ``_working_call`` keeps the first domain on which the *forward*
+        pass runs, and for a function with a vertical tangent at its
+        boundary that is not the same thing.  ``acos`` accepts the
+        ``moderate`` draw — it returns NaN outside [-1, 1] without
+        raising, so the forward call "works" — and then its derivative
+        ``-1/sqrt(1-x^2)`` is non-finite and the axis skipped.  Twenty-nine
+        ops went that way, every one of them differentiable and none of
+        them gradient-checked: ``sqrt``, ``rsqrt``, ``asin``, ``log1p``,
+        ``erfinv``, ``xlogy``, ``zeta`` and six Bessel functions.
+
+        Each is finite on a domain the ladder already offers — ``acos``
+        on ``unit``, ``sqrt`` on ``positive`` — so the fix is to keep
+        looking rather than to widen a tolerance.  The first working call
+        is still returned when no domain gives a finite gradient, so the
+        report stays truthful about ops that genuinely have none.
+        """
+        first: "tuple[Call, str, Any] | None" = None
+        # The same two-slot reason as ``_working_call``: the derived
+        # candidate's failure beats the blind ladder's, which is always
+        # ``op([x, x]): AttributeError`` and names nothing.
+        derived: "str | None" = None
+        earliest: "str | None" = None
+
+        def note(call: "Call", detail: str) -> None:
+            nonlocal derived, earliest
+            text = f"{call.note}: {detail}"
+            if earliest is None:
+                earliest = text
+            if derived is None and call.note.startswith("derived from signature"):
+                derived = text
+
+        for domain in ctx.domains:
+            for call in _specs.invocations(symbol.short, domain, symbol.qualname, fn):
+                try:
+                    out = fn(*call.args, **call.kwargs)
+                except Exception as exc:  # noqa: BLE001 - surveying, not asserting
+                    note(call, f"{type(exc).__name__}: {str(exc)[:70]}")
+                    continue
+                if _probe.to_numpy(out) is None:
+                    note(call, f"returned {type(out).__name__}, nothing measurable")
+                    continue
+                if first is None:
+                    first = (call, domain, out)
+                if self._gradient_is_finite(fn, call, ctx.step):
+                    return call, domain, out
+        if first is not None:
+            return first
+        return None, None, derived or earliest or "no candidate invocation ran"
+
+    @staticmethod
+    def _gradient_is_finite(fn: Any, call: "Call", step: float = 1e-5) -> bool:
+        """Whether *both* methods can be evaluated on this domain.
+
+        The analytic gradient being finite is half of it.  A central
+        difference also evaluates ``f(x ± h)``, and for a function with a
+        boundary in the probe's range that is a step outside the domain:
+        ``log`` on a draw that reaches 0, ``atanh`` on one that reaches
+        1.  Eleven ops picked a domain their gradient survived and their
+        *difference* did not, and reported "the finite difference left
+        the op's domain" — a true statement about a domain the ladder
+        had a better one for two entries down.
+        """
+        try:
+            probe = call.with_primary(call.base)
+            x = probe.args[probe.primary]
+            x.requires_grad_(True)
+            out = fn(*probe.args, **probe.kwargs)
+            _probe.contract(out, _probe.covector(64, _probe.SEED_A)).backward()
+        except Exception:  # noqa: BLE001 - the caller reports the real failure
+            return False
+        if x.grad is None:
+            return False
+        try:
+            if not np.isfinite(np.asarray(x.grad.numpy(), dtype=np.float64)).all():
+                return False
+            base = np.asarray(call.base, dtype=np.float64)
+            for shifted in (base + step, base - step):
+                moved = call.with_primary(shifted)
+                value = _probe.to_numpy(fn(*moved.args, **moved.kwargs))
+                if value is None or not np.isfinite(value.astype(float)).all():
+                    return False
+        except Exception:  # noqa: BLE001
+            return False
+        return True
 
 
 class GradientAxis(_DifferenceAxis):
@@ -251,9 +558,16 @@ class GradientAxis(_DifferenceAxis):
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        call, domain, first = self._working_call(fn, symbol, ctx)
+        if self._differentiates_a_factorization(fn):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the differentiated argument must be a valid factorization — "
+                "perturbing one element of it leaves the op's domain entirely",
+            )
+        call, domain, first = self._differentiable_call(fn, symbol, ctx)
         if call is None:
-            return self._finding(symbol, Status.SKIP, str(first))
+            return self._no_call(symbol, str(first))
         if self._draws_randomly(fn, call):
             return self._finding(
                 symbol,
@@ -265,7 +579,9 @@ class GradientAxis(_DifferenceAxis):
             base = call.base
         except TypeError:
             return self._finding(
-                symbol, Status.SKIP, "differentiated argument is not a tensor"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "nothing to differentiate — the operand is not a tensor",
             )
 
         weights = _probe.covector(64, _probe.SEED_A)
@@ -324,9 +640,7 @@ class GradientAxis(_DifferenceAxis):
             loss = _probe.contract(produced, weights)
             loss.backward()
         except Exception as exc:  # noqa: BLE001
-            return self._finding(
-                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:70]}"
-            )
+            return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:70]}", call)
         if x.grad is None:
             return self._finding(
                 symbol, Status.UNSUPPORTED, "no gradient reached the input"
@@ -497,6 +811,17 @@ class GradientAxis(_DifferenceAxis):
                 rel=rel,
                 rel_coarsened=rel_blunt,
             )
+        if self._too_coarse_for_a_difference(call) and rel < 1e-1:
+            # A float32 operand and a disagreement inside float32's own
+            # cancellation error.  TRUNCATION is what this status is
+            # for: the probe was the limit, not the op.
+            return self._finding(
+                symbol,
+                Status.TRUNCATION,
+                f"{domain}: rel {rel:.2e} on a float32 operand — inside the "
+                "cancellation error of a central difference at this step",
+                rel=rel,
+            )
         return self._finding(
             symbol,
             Status.FAIL,
@@ -523,9 +848,16 @@ class SecondGradientAxis(_DifferenceAxis):
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        call, domain, _ = self._working_call(fn, symbol, ctx)
+        if self._differentiates_a_factorization(fn):
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the differentiated argument must be a valid factorization — "
+                "perturbing one element of it leaves the op's domain entirely",
+            )
+        call, domain, why = self._differentiable_call(fn, symbol, ctx)
         if call is None:
-            return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+            return self._no_call(symbol, why)
         if self._draws_randomly(fn, call):
             return self._finding(
                 symbol,
@@ -537,7 +869,9 @@ class SecondGradientAxis(_DifferenceAxis):
             base = call.base
         except TypeError:
             return self._finding(
-                symbol, Status.SKIP, "differentiated argument is not a tensor"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "nothing to differentiate — the operand is not a tensor",
             )
 
         w1 = _probe.covector(64, _probe.SEED_A)
@@ -555,18 +889,14 @@ class SecondGradientAxis(_DifferenceAxis):
         try:
             x, scalar = directional(base)
         except Exception as exc:  # noqa: BLE001
-            return self._finding(
-                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:80]}"
-            )
+            return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:80]}", call)
         try:
             (second,) = lucid.autograd.grad(scalar, [x])
             analytic = np.asarray(second.numpy(), dtype=np.float64).reshape(-1)
         except Exception as exc:  # noqa: BLE001
             # Unreachable input is the standard case for a piecewise-constant
             # gradient — sum, mean, max and min all land here legitimately.
-            return self._finding(
-                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:80]}"
-            )
+            return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:80]}", call)
 
         try:
             fd = _probe.finite_difference(
@@ -620,6 +950,17 @@ class SecondGradientAxis(_DifferenceAxis):
                 Status.TRUNCATION,
                 f"{domain}: rel {rel:.2e} -> {rel_fine:.2e} at h/10",
             )
+        if self._too_coarse_for_a_difference(call) and rel < 1e-1:
+            # A float32 operand and a disagreement inside float32's own
+            # cancellation error.  TRUNCATION is what this status is
+            # for: the probe was the limit, not the op.
+            return self._finding(
+                symbol,
+                Status.TRUNCATION,
+                f"{domain}: rel {rel:.2e} on a float32 operand — inside the "
+                "cancellation error of a central difference at this step",
+                rel=rel,
+            )
         return self._finding(
             symbol,
             Status.FAIL,
@@ -643,9 +984,9 @@ class CreateGraphAxis(Axis):
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        call, domain, _ = self._working_call(fn, symbol, ctx)
+        call, domain, why = self._working_call(fn, symbol, ctx)
         if call is None:
-            return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+            return self._no_call(symbol, why)
         if self._draws_randomly(fn, call):
             return self._finding(
                 symbol,
@@ -656,7 +997,9 @@ class CreateGraphAxis(Axis):
             base = call.base
         except TypeError:
             return self._finding(
-                symbol, Status.SKIP, "differentiated argument is not a tensor"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "nothing to differentiate — the operand is not a tensor",
             )
 
         weights = _probe.covector(64, _probe.SEED_A)
@@ -683,13 +1026,24 @@ class CreateGraphAxis(Axis):
             try:
                 x_ref, loss = loss_of(base)
                 loss.backward()
-                reference = np.asarray(x_ref.grad.numpy(), dtype=np.float64).reshape(-1)
             except Exception as exc:  # noqa: BLE001
+                return self._refusal(
+                    symbol, f"backward(): {type(exc).__name__}: {str(exc)[:60]}", call
+                )
+            # Asked, not assumed.  Reading ``.grad.numpy()`` on an op
+            # that received no gradient raised ``AttributeError:
+            # 'NoneType' object has no attribute 'numpy'`` — 135 cells
+            # reporting a harness traceback where the finding is the
+            # plain fact that nothing reached the input, which this axis
+            # has a proper answer for.
+            if x_ref.grad is None:
                 return self._finding(
                     symbol,
                     Status.UNSUPPORTED,
-                    f"backward(): {type(exc).__name__}: {str(exc)[:60]}",
+                    "no gradient reached the input — nothing for the two "
+                    "routes to disagree about",
                 )
+            reference = np.asarray(x_ref.grad.numpy(), dtype=np.float64).reshape(-1)
             if np.abs(reference).max(initial=0.0) != 0.0:
                 break
         if np.abs(reference).max(initial=0.0) == 0.0:
@@ -733,6 +1087,18 @@ class CreateGraphAxis(Axis):
         rel = _probe.relative(reference, candidate)
         if rel < 1e-9:
             return self._finding(symbol, Status.PASS, f"{domain}: rel {rel:.2e}")
+        # Two routes through the *same* backward should agree exactly, so
+        # the tolerance here is 1e-9 — which is below float32 epsilon.  On
+        # a float32 operand a 1e-7 disagreement is the dtype, not the two
+        # routes diverging.
+        if self._too_coarse_for_a_difference(call) and rel < 1e-5:
+            return self._finding(
+                symbol,
+                Status.TRUNCATION,
+                f"{domain}: rel {rel:.2e} on a float32 operand — at the dtype's "
+                "own resolution, not a disagreement between the two routes",
+                rel=rel,
+            )
         return self._finding(
             symbol,
             Status.FAIL,
@@ -955,9 +1321,9 @@ class DeviceAxis(Axis):
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        call, domain, _ = self._working_call(fn, symbol, ctx)
+        call, domain, why = self._working_call(fn, symbol, ctx)
         if call is None:
-            return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+            return self._no_call(symbol, why)
         if self._draws_randomly(fn, call):
             return self._finding(
                 symbol,
@@ -1001,9 +1367,7 @@ class DeviceAxis(Axis):
         try:
             cpu_out, metal_out = on("cpu"), on("metal")
         except Exception as exc:  # noqa: BLE001
-            return self._finding(
-                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:70]}"
-            )
+            return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:70]}", call)
 
         # A tensor that quietly stayed on the CPU makes every comparison
         # below trivially true, so the landing device is checked first.
@@ -1024,6 +1388,18 @@ class DeviceAxis(Axis):
             device = getattr(out, "device", None)
             if device is None or want in str(device):
                 continue
+            if isinstance(out, np.ndarray):
+                # A bridge out of the framework: ``Tensor.numpy`` answers
+                # in host memory whatever the tensor was on, and that is
+                # its contract rather than a residency defect.  Only
+                # visible once ``to_numpy`` started recognising arrays;
+                # before that the op skipped and the question was never
+                # reached.
+                return self._finding(
+                    symbol,
+                    Status.NOT_APPLICABLE,
+                    "answers in host memory by contract — no device to compare",
+                )
             # An op that takes a ``device`` argument decides its own
             # output device, whatever its inputs are on.  Checked before
             # ``moved_any``, because a tensor argument is not proof of a
@@ -1099,11 +1475,24 @@ class DeviceAxis(Axis):
             atol=1e-6,
             equal_nan=True,
         ):
+            # Printed at the *disagreement*, not at element zero.  The
+            # first four entries of a NaN probe are usually NaN on both
+            # sides, so the message read ``cpu [nan nan nan -inf], metal
+            # [nan nan nan -inf]`` — two identical lists offered as
+            # evidence of a difference, which sends the reader to check
+            # the harness rather than the op.
+            left = self._comparable(nan_cpu).reshape(-1)
+            right = self._comparable(nan_metal).reshape(-1)
+            differ = np.flatnonzero(
+                ~(np.isclose(left, right, rtol=2e-5, atol=1e-6, equal_nan=True))
+            )
+            where = differ[:4]
             return self._finding(
                 symbol,
                 Status.FAIL,
-                "cpu and metal disagree on a non-finite input "
-                f"(cpu {nan_cpu.reshape(-1)[:4]}, metal {nan_metal.reshape(-1)[:4]})",
+                "cpu and metal disagree on a non-finite input at "
+                f"{differ.size} of {left.size} positions "
+                f"(index {where.tolist()}: cpu {left[where]}, metal {right[where]})",
             )
         return self._finding(
             symbol, Status.PASS, f"{domain}: finite and non-finite agree"
@@ -1191,9 +1580,9 @@ class NonFiniteAxis(Axis):
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        call, _, _ = self._working_call(fn, symbol, ctx)
+        call, _, why = self._working_call(fn, symbol, ctx)
         if call is None:
-            return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+            return self._no_call(symbol, why)
         if self._draws_randomly(fn, call):
             return self._finding(
                 symbol,
@@ -1204,7 +1593,11 @@ class NonFiniteAxis(Axis):
         try:
             shape = _probe.to_numpy(call.args[call.primary]).shape  # type: ignore[union-attr]
         except Exception:  # noqa: BLE001
-            return self._finding(symbol, Status.SKIP, "primary argument has no shape")
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the varied argument is not a tensor — nothing to vary",
+            )
 
         # Every element, not just the first.  A single NaN at index 0 asks
         # a weaker question than it looks: a crop, a ``take``, a pooling
@@ -1216,9 +1609,7 @@ class NonFiniteAxis(Axis):
         try:
             out = _probe.to_numpy(fn(*call.with_primary(probe).args, **call.kwargs))
         except Exception as exc:  # noqa: BLE001
-            return self._finding(
-                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
-            )
+            return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:60]}", call)
 
         # An op that ignores its input cannot propagate anything through it.
         # ``eye``, ``ones_``, ``new_zeros``, ``dirac`` and the rest of the
@@ -1235,12 +1626,26 @@ class NonFiniteAxis(Axis):
             )
         except Exception:  # noqa: BLE001
             other = None
+        # ``equal_nan``, not ``nan_to_num``.
+        #
+        # The probe above is *all NaN*, so mapping NaN to 0 before the
+        # comparison threw away the only thing being compared: ``floor``
+        # answers NaN for the NaN probe and 0 for the 0.5 probe, both
+        # became 0, and the axis concluded that ``floor`` does not depend
+        # on its input.  106 cells were excused that way — ``floor``,
+        # ``trunc``, ``diff`` and everything else whose value at 0.5 is
+        # zero — and each of them is an op whose NaN propagation this
+        # axis exists to check.
+        #
+        # Treating NaN as equal to NaN and unequal to everything else is
+        # what "did the answer move" actually means here.
         if (
             other is not None
             and out is not None
             and np.array_equal(
-                np.nan_to_num(np.asarray(out, dtype=np.float64), nan=0.0),
-                np.nan_to_num(np.asarray(other, dtype=np.float64), nan=0.0),
+                np.asarray(out, dtype=np.float64),
+                np.asarray(other, dtype=np.float64),
+                equal_nan=True,
             )
         ):
             return self._finding(
@@ -1252,7 +1657,9 @@ class NonFiniteAxis(Axis):
             return self._finding(symbol, Status.SKIP, "no comparable output")
         if out.dtype.kind not in "fc":
             return self._finding(
-                symbol, Status.SKIP, f"output dtype {out.dtype} cannot carry NaN"
+                symbol,
+                Status.NOT_APPLICABLE,
+                f"output dtype {out.dtype} cannot carry NaN",
             )
         if not np.isnan(out).any():
             return self._finding(
@@ -1306,7 +1713,9 @@ class BroadcastAxis(Axis):
             return self._finding(symbol, Status.NOT_APPLICABLE, "not a two-tensor op")
         if np.array_equal(with_b, with_c, equal_nan=True):
             return self._finding(
-                symbol, Status.SKIP, "second argument does not affect the result"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "second argument does not affect the result",
             )
         # ...and taking two operands is not the same as being elementwise.
         # ``kron`` returns (3, 16), ``mv`` contracts, ``masked_select``
@@ -1318,7 +1727,7 @@ class BroadcastAxis(Axis):
         if tuple(with_b.shape) != (3, 4):
             return self._finding(
                 symbol,
-                Status.SKIP,
+                Status.NOT_APPLICABLE,
                 f"not elementwise — equal shapes give {tuple(with_b.shape)}, not (3, 4)",
             )
 
@@ -1341,6 +1750,46 @@ class BroadcastAxis(Axis):
             follows_second &= tuple(got.shape) == sb
             if tuple(got.shape) != want:
                 failures.append(f"{sa}x{sb} -> {got.shape}, expected {want}")
+                continue
+
+            # ...and the right shape is not the right answer.
+            #
+            # This axis compared shapes and nothing else, so an op that
+            # broadcast to the correct extent and computed the wrong
+            # numbers passed all nine directions — 59 symbols reporting
+            # "9 directions" about a property that was never checked.
+            # Found by mutation: ``(a * b) * 2`` under broadcast only.
+            #
+            # The reference is the op itself on operands expanded by
+            # hand, so nothing here encodes an opinion about what the op
+            # should compute — only that broadcasting an argument and
+            # expanding it first must come to the same thing.
+            if "stochastic" in symbol.flags:
+                continue  # two draws differ by design; only the shape means anything
+            try:
+                expanded = _probe.to_numpy(
+                    fn(
+                        _probe.as_f64(np.broadcast_to(_probe.to_numpy(a), want)),
+                        _probe.as_f64(np.broadcast_to(_probe.to_numpy(b), want)),
+                    )
+                )
+            except Exception:  # noqa: BLE001 - the shape check already ran
+                continue
+            if expanded is None or expanded.shape != got.shape:
+                continue
+            if not np.allclose(
+                self._comparable(got),
+                self._comparable(expanded),
+                rtol=2e-5,
+                atol=1e-8,
+                equal_nan=True,
+            ):
+                drift = float(
+                    np.abs(self._comparable(got) - self._comparable(expanded)).max()
+                )
+                failures.append(
+                    f"{sa}x{sb}: broadcasting differs from expanding first by {drift:.3e}"
+                )
         # ...and being elementwise on equal shapes is not the same as
         # broadcasting.  ``isin`` asks "is each element of a somewhere in
         # b", so its answer has *a*'s shape whatever b's is; ``selu_``
@@ -1377,18 +1826,93 @@ class DtypeAxis(Axis):
     name = "dtype"
     summary = "dtype coverage and cpu/metal symmetry"
 
+    @staticmethod
+    def _complex_check(fn: Any, call: Any) -> "list[str]":
+        """Which complex dtypes the op accepts, for the ops that need one."""
+        accepted: "list[str]" = []
+        for name in _probe.COMPLEX_DTYPES:
+            dtype = _probe.dtype_of(name)
+            if dtype is None:
+                continue
+
+            def build(array: Any, follow: bool, _dtype: Any = dtype) -> Any:
+                return lucid.tensor(
+                    np.asarray(array, dtype=complex if follow else None),
+                    dtype=_dtype if follow else None,
+                )
+
+            try:
+                args = _probe.dtype_args(call, name, build)
+                kwargs = _probe.dtype_kwargs(call, build)
+                if _probe.to_numpy(fn(*args, **kwargs)) is not None:
+                    accepted.append(name)
+            except Exception:  # noqa: BLE001 - a refusal is the answer
+                continue
+        return accepted
+
+    def _dtype_kwarg_check(
+        self, symbol: "Symbol", fn: Any, call: Any
+    ) -> "Finding | None":
+        """A factory decides its own dtype, so ask it to.
+
+        ``zeros``, ``ones``, ``full``, ``empty``, ``rand`` and ``randn``
+        take a *shape*, not a tensor, so rebuilding "the primary at dtype
+        D" rebuilds an argument that is not a tensor and every dtype was
+        reported as refused.  Six factories and the only question that
+        matters for them — does the result come back at the dtype that
+        was asked for — went unasked.
+
+        Returns ``None`` when the symbol takes no ``dtype`` keyword, so
+        the caller can fall through to its own answer.
+        """
+        try:
+            signature = inspect.signature(
+                fn, annotation_format=annotationlib.Format.STRING
+            )
+        except TypeError, ValueError, NameError:
+            return None
+        if "dtype" not in signature.parameters:
+            return None
+
+        honoured: "list[str]" = []
+        for name in _probe.DTYPES:
+            dtype = _probe.dtype_of(name)
+            if dtype is None:
+                continue
+            try:
+                out = fn(*call.args, **{**call.kwargs, "dtype": dtype})
+            except Exception:  # noqa: BLE001 - a refusal is a fine answer
+                continue
+            got = getattr(out, "dtype", None)
+            if got is None:
+                continue
+            if str(got) != str(dtype):
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"asked for {dtype} and got {got}",
+                )
+            honoured.append(name)
+        if not honoured:
+            return None
+        return self._finding(
+            symbol, Status.PASS, f"honours dtype= for {len(honoured)} dtypes"
+        )
+
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        call, _, _ = self._working_call(fn, symbol, ctx)
+        call, _, why = self._working_call(fn, symbol, ctx)
         if call is None:
-            return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+            return self._no_call(symbol, why)
         try:
             base = call.base
         except TypeError:
             return self._finding(
-                symbol, Status.SKIP, "primary argument is not a tensor"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the varied argument is not a tensor — nothing to vary",
             )
 
         del base  # only needed to prove there is one; `dtype_args` reads it
@@ -1421,6 +1945,16 @@ class DtypeAxis(Axis):
                     continue
 
         if not any(support.values()):
+            complex_support = self._complex_check(fn, call)
+            if complex_support:
+                return self._finding(
+                    symbol,
+                    Status.PASS,
+                    f"defined on {', '.join(complex_support)} and no real dtype",
+                )
+            kwarg = self._dtype_kwarg_check(symbol, fn, call)
+            if kwarg is not None:
+                return kwarg
             return self._finding(symbol, Status.SKIP, "no dtype accepted")
         if len(devices) == 2:
             # An op whose *result* is float64 whatever it was handed cannot
@@ -1470,14 +2004,16 @@ class EdgeAxis(Axis):
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        call, _, _ = self._working_call(fn, symbol, ctx)
+        call, _, why = self._working_call(fn, symbol, ctx)
         if call is None:
-            return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+            return self._no_call(symbol, why)
         try:
             shape = call.base.shape
         except TypeError:
             return self._finding(
-                symbol, Status.SKIP, "primary argument is not a tensor"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the varied argument is not a tensor — nothing to vary",
             )
 
         notes: list[str] = []
@@ -1535,7 +2071,7 @@ class EdgeAxis(Axis):
             notes.append(f"size-1: {type(exc).__name__}")
 
         if len(notes) == 2:
-            return self._finding(symbol, Status.UNSUPPORTED, "; ".join(notes))
+            return self._refusal(symbol, "; ".join(notes), call)
         return self._finding(
             symbol, Status.PASS, "; ".join(notes) or "empty and size-1 accepted"
         )
@@ -1556,10 +2092,27 @@ class ModuleAxis(Axis):
     name = "module"
     summary = "construct, forward, backward, state_dict round trip, device move"
     kinds = frozenset({"module"})
+    varies_a_tensor = False
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         cls = symbol.obj
-        module = _try_construct(cls)
+
+        # The first construction that can also *forward*, not the first
+        # that survives ``__init__``.  ``Upsample`` builds happily from
+        # its own defaults and then cannot run, and committing to that
+        # object left the class unreachable while a second, equally
+        # legitimate construction was available — see
+        # :func:`_module_candidates`.
+        module = why = out = None
+        chosen = 0
+        for index, candidate in enumerate(_module_candidates(cls)):
+            if module is None:
+                module = candidate  # keep the first, to report against
+            produced, note = _try_forward(candidate)
+            if produced is not None:
+                module, out, why, chosen = candidate, produced, None, index
+                break
+            why = note
         if module is None:
             return self._finding(symbol, Status.SKIP, "no constructor signature worked")
 
@@ -1568,9 +2121,16 @@ class ModuleAxis(Axis):
         # design, and the base ``Module`` does too.  Running the lifecycle
         # against them reported a shape probe failing to find an input for
         # something that never accepts one.
+        #
+        # Asked of the *outcome* rather than of the function object.  The
+        # containers override ``forward`` in order to raise a better
+        # message than the base class's — ``"ModuleList has no forward;
+        # iterate manually."`` — so identity against ``Module.forward``
+        # missed all six of them and they were reported as unreachable
+        # rather than as inapplicable, which are opposite claims.
         if getattr(type(module), "forward", None) is getattr(
             lucid.nn.Module, "forward", None
-        ):
+        ) or (why is not None and "NotImplementedError" in why):
             return self._finding(
                 symbol,
                 Status.NOT_APPLICABLE,
@@ -1609,12 +2169,24 @@ class ModuleAxis(Axis):
                 f"and {len(buffers)} buffers — a shared submodule is registered twice",
             )
 
-        out, note = _try_forward(module)
         if out is None:
-            return self._finding(symbol, Status.SKIP, f"forward: {note}")
+            return self._finding(symbol, Status.SKIP, f"forward: {why}")
 
         try:
-            reloaded = _try_construct(cls)
+            # The *same* construction, not merely the same class.  A
+            # class has several plausible constructions and the one that
+            # forwarded is not always the first — reloading into the
+            # first produced a checkpoint written by one shape and read
+            # by another, and ``BatchNorm3d`` was reported for losing its
+            # state when nothing had been lost.
+            reloaded = next(
+                (
+                    candidate
+                    for index, candidate in enumerate(_module_candidates(cls))
+                    if index == chosen
+                ),
+                None,
+            )
             if reloaded is not None:
                 reloaded.load_state_dict(module.state_dict())
         except Exception as exc:  # noqa: BLE001
@@ -1653,6 +2225,7 @@ class OptimAxis(Axis):
     name = "optim"
     summary = "step, state_dict round trip, convergence on a convex problem"
     kinds = frozenset({"optim"})
+    varies_a_tensor = False
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         cls = symbol.obj
@@ -1665,6 +2238,18 @@ class OptimAxis(Axis):
                 optimiser = cls([weight], **kwargs)
                 break
         if optimiser is None:
+            if getattr(cls, "__abstractmethods__", frozenset()) or cls.__name__ == (
+                "Optimizer"
+            ):
+                # The base every optimizer derives from.  It has no
+                # update rule of its own, which is why it cannot be
+                # constructed — every concrete subclass is audited in
+                # its own right.
+                return self._finding(
+                    symbol,
+                    Status.NOT_APPLICABLE,
+                    "the base class — the update rule is the subclass's",
+                )
             return self._finding(symbol, Status.SKIP, "no constructor signature worked")
 
         def closure() -> Any:
@@ -1683,9 +2268,7 @@ class OptimAxis(Axis):
                     optimiser.step()
             last = float(loss)
         except Exception as exc:  # noqa: BLE001
-            return self._finding(
-                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:70]}"
-            )
+            return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:70]}")
 
         if not np.isfinite(last):
             return self._finding(symbol, Status.FAIL, f"loss became {last}")
@@ -1911,20 +2494,31 @@ def _default_qparams(kind: str) -> Any:
     return _probe.as_int(_np.array(0))
 
 
-def _default_submodule(name: str) -> Any:
+def _default_submodule(name: str, rank: int = 2) -> Any:
     """A concrete layer for a parameter annotated as the ``Module`` base.
 
     The fused ``intrinsic`` layers take the layers they fuse, and the
     annotation names the base class — which says nothing about what
-    would actually work.  The parameter name does.
+    would actually work.  The parameter name does, and the *fused
+    class's own name* says the rank: ``ConvReLU3d`` fuses a
+    ``Conv3d``, and handing it the 2-D default built an object whose
+    forward could only fail.
     """
     import lucid.nn as nn
 
+    conv = {1: nn.Conv1d, 2: nn.Conv2d, 3: nn.Conv3d}[rank]
+    norm = {1: nn.BatchNorm1d, 2: nn.BatchNorm2d, 3: nn.BatchNorm3d}[rank]
     return {
-        "conv": lambda: nn.Conv2d(3, 3, 3, padding=1),
-        "bn": lambda: nn.BatchNorm2d(3),
+        "conv": lambda: conv(3, 3, 3, padding=1),
+        "bn": lambda: norm(3),
+        "norm": lambda: norm(3),
         "relu": lambda: nn.ReLU(),
         "linear": lambda: nn.Linear(4, 4),
+        "module": lambda: nn.Linear(4, 4),
+        "parametrization": lambda: nn.Identity(),
+        "original": lambda: nn.Parameter(
+            _probe.as_f32(_probe.sample("moderate", (4, 4)))
+        ),
         "encoder_layer": lambda: nn.TransformerEncoderLayer(4, 2),
         "decoder_layer": lambda: nn.TransformerDecoderLayer(4, 2),
     }[name]()
@@ -1936,6 +2530,9 @@ def _default_submodule(name: str) -> Any:
 #: import time.
 _CTOR_FACTORY: "dict[str, Any]" = {
     "qconfig": _default_qconfig,
+    "module": lambda: _default_submodule("module"),
+    "parametrization": lambda: _default_submodule("parametrization"),
+    "original": lambda: _default_submodule("original"),
     "scale": lambda: _default_qparams("scale"),
     "zero_point": lambda: _default_qparams("zero_point"),
     "conv": lambda: _default_submodule("conv"),
@@ -1952,15 +2549,35 @@ _CTOR_FACTORY: "dict[str, Any]" = {
 }
 
 
-def _ctor_value(name: str, annotation: Any, depth: int) -> Any:
+#: Constructor arguments that mean something different in one class than
+#: they do everywhere else.  ``dim`` is a *width* for ``Linear``-shaped
+#: layers and the table gives it 4; for ``Unflatten`` it is an **axis**,
+#: and 4 is out of range on the probe — the layer reported ``'int' object
+#: is not iterable`` and went unreached.  Kept as narrow as it looks:
+#: one entry per genuine collision, not a per-class table.
+_CTOR_BY_CLASS: "dict[str, dict[str, Any]]" = {
+    "Unflatten": {"dim": 1, "unflattened_size": (2, 2)},
+    # ``output_size`` is a *canvas* here, and the table's 2 is smaller
+    # than the 3x3 kernel it has to reassemble into.
+    "Fold": {"output_size": 6, "kernel_size": 3},
+}
+
+
+def _ctor_value(name: str, annotation: Any, depth: int, cls_name: str = "") -> Any:
     """One constructor argument, by name first and annotation second.
 
     Raises ``KeyError`` when neither says anything, so the caller can
     fall back to the fixed ladder rather than pass a wrong-typed value
     and read the resulting ``TypeError`` as "this class is unbuildable".
     """
+    override = _CTOR_BY_CLASS.get(cls_name, {})
+    if name in override:
+        return override[name]
     if name in _CTOR_BY_NAME:
         return _CTOR_BY_NAME[name]
+    if name in ("conv", "bn", "norm", "relu"):
+        match = re.search(r"([123])d$", cls_name)
+        return _default_submodule(name, int(match.group(1)) if match else 2)
     if name in _CTOR_FACTORY:
         try:
             return _CTOR_FACTORY[name]()
@@ -2003,7 +2620,7 @@ def _is_module_class(obj: Any) -> bool:
         return False
 
 
-def _construct_module(cls: Any, depth: int = 0) -> Any:
+def _construct_module(cls: Any, depth: int = 0, fill_optional: bool = False) -> Any:
     """Build ``cls`` from its own signature, or ``None``.
 
     The ladder this replaces tried eight fixed argument tuples —
@@ -2049,10 +2666,35 @@ def _construct_module(cls: Any, depth: int = 0) -> Any:
                     kwargs["qconfig"] = _default_qconfig()
                 except Exception:  # noqa: BLE001
                     pass
+                continue
+            # ``Upsample(size=None, scale_factor=None)`` is the same
+            # shape of problem without the loud message.  Both are
+            # optional, exactly one has to be given, and honouring both
+            # defaults builds a layer whose forward can only fail — it
+            # reported "Unsupported interpolation mode: 'nearest'",
+            # which names neither the missing argument nor the real
+            # constraint.  Four classes were unreachable that way, and
+            # ``FractionalMaxPool2d`` a fifth for the same reason.
+            #
+            # Tried as a *second* candidate rather than instead of the
+            # first: the author's default is still the more faithful
+            # construction, and a class that works with it should be
+            # audited as the user gets it.
+            if fill_optional and parameter.default is None:
+                with contextlib.suppress(KeyError):
+                    kwargs[parameter.name] = _ctor_value(
+                        parameter.name,
+                        parameter.annotation,
+                        depth,
+                        getattr(cls, "__name__", ""),
+                    )
             continue  # a default the author chose is better than a guess
         try:
             kwargs[parameter.name] = _ctor_value(
-                parameter.name, parameter.annotation, depth
+                parameter.name,
+                parameter.annotation,
+                depth,
+                getattr(cls, "__name__", ""),
             )
         except KeyError:
             return None
@@ -2063,16 +2705,74 @@ def _construct_module(cls: Any, depth: int = 0) -> Any:
         return None
 
 
-def _try_construct(cls: Any) -> Any:
-    derived = _construct_module(cls)
-    if derived is not None:
-        return derived
+def _from_float(cls: Any) -> Any:
+    """A quantised layer built the way the framework builds one.
+
+    ``nn.quantized.Conv2d.__init__`` takes eight positional arguments and
+    produces a layer whose packed int8 weight has not been written yet —
+    the constructor exists for the state-dict loader.  Forwarding one
+    answers ``conv: W rank mismatch``, which is what eighteen quantised
+    and fused layers reported: a real object, correctly built, that
+    cannot run because nothing had quantised anything into it.
+
+    The route that works is ``from_float`` over an **observed** float
+    module — one carrying a calibrated ``activation_post_process``, which
+    is what ``prepare`` attaches.  Note that ``convert`` does not take
+    this route for convolutions: it routes the Linear family and returns
+    conv layers unchanged, so the flow a user would write leaves them
+    float.  That is recorded as an observation; here it simply means the
+    audit has to call ``from_float`` itself.
+    """
+    convert = getattr(cls, "from_float", None)
+    if convert is None:
+        return None
+    import lucid.nn.intrinsic as intrinsic  # noqa: PLC0415 - optional subsystem
+    import lucid.quantization as quantization  # noqa: PLC0415
+
+    name = getattr(cls, "__name__", "")
+    source_cls = getattr(lucid.nn, name, None) or getattr(intrinsic, name, None)
+    if source_cls is None or source_cls is cls:
+        return None
+    source = _construct_module(source_cls)
+    if source is None:
+        return None
+    try:
+        source.eval()
+        qconfig = quantization.get_default_qconfig()
+        observer = qconfig.activation()
+        observer(_probe.as_f32(_probe.sample("moderate", (2, 3, 6, 6))))
+        source.activation_post_process = observer
+        source.qconfig = qconfig
+        return convert(source)
+    except Exception:  # noqa: BLE001 - surveying, not asserting
+        return None
+
+
+def _module_candidates(cls: Any) -> "Iterator[Any]":
+    """Every way ``cls`` might be built, most faithful first.
+
+    A class has more than one plausible construction and only one of them
+    may be able to forward — see ``fill_optional`` in
+    :func:`_construct_module`.  Yielding them lets the caller keep the
+    first that survives the *whole* lifecycle instead of committing to
+    the first that survives ``__init__``.
+    """
+    for fill in (False, True):
+        built = _construct_module(cls, fill_optional=fill)
+        if built is not None:
+            yield built
+    quantised = _from_float(cls)
+    if quantised is not None:
+        yield quantised
     for args, kwargs in list(_CTOR_ARGS) + _ctor_args_with_qconfig():
         try:
-            return cls(*args, **kwargs)
+            yield cls(*args, **kwargs)
         except Exception:  # noqa: BLE001
             continue
-    return None
+
+
+def _try_construct(cls: Any) -> Any:
+    return next(_module_candidates(cls), None)
 
 
 #: Input shapes to try against an unknown module, coarse to fine.
@@ -2147,8 +2847,256 @@ def _module_input_shapes(module: Any) -> "list[tuple[int, ...]]":
             shapes += [(2, dims[0]), (2, dims[0], 6, 6)]
 
     shapes += list(_FORWARD_SHAPES)
+
+    # A layer whose name ends in ``1d`` / ``2d`` / ``3d`` states its own
+    # spatial rank, and an input below it is not a probe — it is an
+    # out-of-bounds read.  ``LPPool1d`` on a ``(2, 4)`` tensor calls
+    # ``unfold_dim(x, dim=2, ...)`` on a rank-2 tensor, returns a
+    # *larger* tensor than it was given, and corrupts the heap on the way
+    # past; the sweep then died several hundred symbols later inside
+    # something unrelated.  Recorded as a defect — a layer should refuse
+    # a rank it cannot use — and filtered here, because a survey that
+    # dies cannot report the defect it found.
+    name = type(module).__name__
+    match = re.search(r"([123])d$", name)
+    if match is not None:
+        # ``(N, C, *spatial)``: the batch is not optional in this
+        # framework's kernels.  ``N + 1`` let a rank-3 probe reach a 2-D
+        # convolution, which answered ``conv: x rank mismatch`` for ten
+        # classes — every lazy and every quantised convolution.
+        rank = int(match.group(1))
+        shapes = [sh for sh in shapes if len(sh) >= rank + 2]
+
+    # Two layers whose input shape is a function of their own
+    # construction, and which no width attribute describes.
+    factor = getattr(module, "upscale_factor", None)
+    if factor is not None:
+        # ``PixelShuffle`` moves ``r**2`` channels into the spatial
+        # dimensions, so the channel count has to be divisible by it.
+        shapes.insert(0, (2, int(factor) ** 2 * 2, 6, 6))
+    if name == "Fold":
+        # ``(N, C * kH * kW, L)`` — the unfolded form ``Fold`` reassembles,
+        # where ``L`` is the number of sliding positions the *output*
+        # canvas admits.  Both halves have to be derived from the layer's
+        # own arguments: a guessed ``L`` is rejected just as firmly as a
+        # guessed channel count, and by a message about the other one.
+        def _pair(value: Any, fallback: int) -> "tuple[int, int]":
+            if isinstance(value, (tuple, list)) and len(value) >= 2:
+                return int(value[0]), int(value[1])
+            if isinstance(value, int):
+                return value, value
+            return fallback, fallback
+
+        kh, kw = _pair(getattr(module, "kernel_size", None), 1)
+        oh, ow = _pair(getattr(module, "output_size", None), 6)
+        sh, sw = _pair(getattr(module, "stride", None), 1)
+        positions = ((oh - kh) // max(sh, 1) + 1) * ((ow - kw) // max(sw, 1) + 1)
+        if positions > 0:
+            shapes.insert(0, (2, 2 * kh * kw, positions))
+
     seen: "set[tuple[int, ...]]" = set()
     return [sh for sh in shapes if not (sh in seen or seen.add(sh))]
+
+
+def _forward_parameters(module: Any) -> "list[inspect.Parameter] | None":
+    """``forward``'s parameters after ``self``, or ``None`` if unreadable."""
+    forward = getattr(type(module), "forward", None)
+    if forward is None:
+        return None
+    try:
+        signature = inspect.signature(
+            forward, annotation_format=annotationlib.Format.STRING
+        )
+    except Exception:  # noqa: BLE001 - an unreadable signature is not a finding
+        return None
+    return [
+        p
+        for name, p in signature.parameters.items()
+        if name != "self" and p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+    ]
+
+
+def _unpool_indices(module: Any, shape: "tuple[int, ...]", rank: int) -> Any:
+    """Valid ``MaxUnpool`` indices, built rather than measured.
+
+    Each input element addresses one position in the unpooled output,
+    flat within its own spatial plane.  Taking the top-left corner of
+    each pooling window keeps every index distinct and in range, which is
+    the whole contract: two inputs mapping to one output position, or one
+    past the end, is what the layer must not be handed.
+    """
+    stride = getattr(module, "stride", None) or getattr(module, "kernel_size", 2)
+    step = stride[0] if isinstance(stride, (tuple, list)) else int(stride)
+    step = max(int(step), 1)
+
+    spatial = shape[-rank:]
+    out_spatial = tuple(int(s) * step for s in spatial)
+    grids = np.meshgrid(*[np.arange(s) * step for s in spatial], indexing="ij")
+    flat = np.zeros(spatial, dtype=np.int64)
+    for axis, grid in enumerate(grids):
+        flat = flat * out_spatial[axis] + grid if axis else grid.astype(np.int64)
+    return _probe.as_int(np.broadcast_to(flat, shape).copy())
+
+
+def _forward_companion(
+    name: str, module: Any, primary: Any, shape: "tuple[int, ...]", cast: Any
+) -> "list[Any]":
+    """Values for one forward argument that is not the input, by name.
+
+    A list because a name can mean more than one thing and the module is
+    the only authority on which: a multi-label ``target`` is an integer
+    matrix the width of the logits, a single-label one is an integer per
+    row, and both spell the parameter ``target``.
+
+    ``forward``'s parameter names carry the same information the free
+    functions' do, and reading them is the difference between a probe
+    and a guess.  ``MaxUnpool2d.forward(x, indices)`` wants the *indices
+    the pooling produced*, not a second float tensor: handed one it
+    raised, and three classes went unreached because the fixed ladder
+    had no form that could ever satisfy them.
+    """
+    if name == "indices":
+        # Preferably round-tripped through the pooling that produced
+        # them, so they are inside the output they address by
+        # construction.  ``max_pool{1,2,3}d(return_indices=True)`` is
+        # unimplemented at every rank, so that route does not exist —
+        # which means ``MaxUnpool1d``, ``MaxUnpool2d`` and ``MaxUnpool3d``
+        # cannot be reached through the framework's own API at all, and
+        # is recorded as a gap in its own right.
+        rank = max(len(shape) - 2, 1)
+        pool = {
+            1: lucid.nn.functional.max_pool1d,
+            2: lucid.nn.functional.max_pool2d,
+            3: lucid.nn.functional.max_pool3d,
+        }.get(rank)
+        if pool is not None:
+            with contextlib.suppress(Exception):
+                _, indices = pool(primary, kernel_size=2, return_indices=True)
+                return [indices]
+        return [_unpool_indices(module, shape, rank)]
+    if name in ("input_lengths", "target_lengths"):
+        batch = shape[1] if len(shape) > 1 else 1
+        length = shape[0] if name == "input_lengths" else max(shape[0] // 2, 1)
+        return [_probe.as_int(np.full((batch,), length))]
+    if name in ("targets", "target", "labels"):
+        classes = int(shape[-1]) if len(shape) >= 2 else 2
+        draw = _probe.rng(_probe.SEED_B)
+        matrix = draw.integers(0, max(classes, 1), shape)
+        return [
+            _probe.as_int(draw.integers(0, max(classes, 1), (shape[0],))),
+            _probe.as_int(matrix),
+            # ...and the same labels at int32.  ``multilabel_margin_loss``
+            # accepts *only* int32 and refuses the int64 that
+            # ``lucid.tensor([[0, 1]])`` produces — recorded as an
+            # inconsistency with every other classification loss, and
+            # offered here so the layer is reachable at all.
+            _probe.as_int(matrix).to(lucid.int32),
+            cast(_probe.sample("moderate", shape, 1)),
+        ]
+    if name in ("key", "value", "other", "target_seq", "memory"):
+        return [cast(_probe.sample("moderate", shape, 1 if name == "key" else 2))]
+    return [cast(_probe.sample("moderate", shape, 1))]
+
+
+def _ctc_arguments(cast: Any) -> "list[list[Any]]":
+    """The four tensors ``ctc_loss`` takes, agreeing with each other.
+
+    They are not four independent arguments.  ``targets`` has to hold
+    ``sum(target_lengths)`` entries, and no rule that derives one
+    parameter at a time can know that — deriving them separately built a
+    ``targets`` of 2 against lengths summing to 4, and the kernel read
+    past the end of it and took the process with it (SIGBUS, mid-sweep,
+    at ``nn.CTCLoss``).
+
+    That the framework crashes rather than refuses is a defect in the
+    framework and is recorded as one.  It is also why the probe has to
+    be right here rather than only honest: a survey that dies at the
+    same symbol every run reports nothing about the 300 symbols after
+    it.  The same lesson as ``lu_solve``'s pivots.
+    """
+    time_steps, batch, classes, labels = 6, 2, 5, 2
+    log_probs = cast(
+        _probe.rng(_probe.SEED_X).standard_normal((time_steps, batch, classes)) - 2.0
+    )
+    targets = _probe.as_int(
+        _probe.rng(_probe.SEED_B).integers(1, classes, (batch, labels))
+    )
+    return [
+        [
+            log_probs,
+            targets,
+            _probe.as_int(np.full((batch,), time_steps)),
+            _probe.as_int(np.full((batch,), labels)),
+        ]
+    ]
+
+
+#: Forwards whose arguments constrain each other, keyed on the set of
+#: required parameter names.  Kept to the cases where a joint constraint
+#: exists — deriving one name at a time is right for everything else and
+#: is what keeps this from becoming the hand-maintained table the rest of
+#: this module exists to avoid.
+_JOINT_FORWARDS: "dict[frozenset[str], Any]" = {
+    frozenset(
+        {"log_probs", "targets", "input_lengths", "target_lengths"}
+    ): _ctc_arguments,
+}
+
+
+def _forward_from_signature(
+    module: Any, shape: "tuple[int, ...]", cast: Any
+) -> "list[list[Any]]":
+    """Argument lists derived from ``forward``'s own parameter list.
+
+    The fixed ladder below tries one, two and three tensors of the probe
+    shape.  ``CTCLoss.forward`` takes four and ``RotaryEmbedding.forward``
+    takes none, so neither could ever be reached by trying more of the
+    same thing — the same hand-maintained-enumeration failure that held
+    the surface at 73.8% and the call ladder at 446 symbols.  The
+    interpreter already knows the arity; ask it.
+    """
+    parameters = _forward_parameters(module)
+    if parameters is None:
+        return []
+    required = [p for p in parameters if p.default is inspect.Parameter.empty]
+    joint = _JOINT_FORWARDS.get(frozenset(p.name for p in required))
+    if joint is not None:
+        return joint(cast)
+    if not required:
+        # ``RotaryEmbedding``, ``SinusoidalEmbedding`` and its 2-D
+        # sibling compute a table from their constructor arguments and
+        # take no input at all.  Every ladder form passed one, and all
+        # three reported ``forward() takes 1 positional argument but 2
+        # were given`` — an arity the ladder could not express rather
+        # than a module that could not run.
+        return (
+            [[]] if not parameters else [[], [cast(_probe.sample("moderate", shape))]]
+        )
+
+    primary = cast(_probe.sample("moderate", shape))
+    candidates: "list[list[Any]]" = [[primary]]
+    # An optional parameter the layer then demands.  ``MaxUnpool`` takes
+    # ``output_size=None`` and raises "output_size is required" on the
+    # default, the same shape of problem as ``qconfig`` in the
+    # constructors — a default the author's own code rejects.
+    trailing: "list[Any]" = []
+    if type(module).__name__.startswith("MaxUnpool") and any(
+        p.name == "output_size" for p in parameters
+    ):
+        rank = max(len(shape) - 2, 1)
+        stride = getattr(module, "stride", None) or getattr(module, "kernel_size", 2)
+        step = stride[0] if isinstance(stride, (tuple, list)) else int(stride)
+        trailing.append(tuple(int(s) * max(int(step), 1) for s in shape[-rank:]))
+    for parameter in required[1:]:
+        choices = _forward_companion(parameter.name, module, primary, shape, cast)
+        if not choices:
+            return []
+        candidates = [
+            [*prefix, choice] for prefix in candidates for choice in choices[:4]
+        ][:8]
+    if trailing:
+        candidates = [[*args, *trailing] for args in candidates] + candidates
+    return candidates
 
 
 def _forward_inputs(module: Any, shape: "tuple[int, ...]") -> "list[list[Any]]":
@@ -2166,14 +3114,27 @@ def _forward_inputs(module: Any, shape: "tuple[int, ...]") -> "list[list[Any]]":
         return [[idx]]
 
     dtypes = [_probe.as_f64]
+    # Buffers as well as parameters.
+    #
+    # A quantised layer holds its weights as int8 and its scales as
+    # float32, so ``parameters()`` reports nothing float and the probe
+    # stayed at float64 — which the transposed convolutions then
+    # rejected with ``DtypeMismatch: expected float64, got float32``,
+    # naming the probe's own dtype as the expectation.
     try:
-        first = next(iter(module.parameters()), None)
-        if first is not None and str(first.dtype).endswith("float32"):
+        floats = [
+            t
+            for t in list(module.parameters()) + [b for _, b in module.named_buffers()]
+            if str(getattr(t, "dtype", "")).endswith("float32")
+        ]
+        if floats:
             dtypes.insert(0, _probe.as_f32)
     except Exception:  # noqa: BLE001
         pass
 
     out: "list[list[Any]]" = []
+    for cast in dtypes:
+        out += _forward_from_signature(module, shape, cast)
     for cast in dtypes:
         one = cast(_probe.sample("moderate", shape, 0))
         two = cast(_probe.sample("moderate", shape, 1))
@@ -2197,13 +3158,24 @@ def _forward_inputs(module: Any, shape: "tuple[int, ...]") -> "list[list[Any]]":
 
 
 def _try_forward(module: Any) -> "tuple[Any, str]":
-    last = "no input shape worked"
+    # The *first* failure, not the last.
+    #
+    # ``_module_input_shapes`` puts the module's own answer first and the
+    # five fixed fallbacks last, so reporting the last one reported the
+    # least likely shape every time: fourteen classes all said
+    # ``forward: (2, 3, 4, 6, 6): TypeError``, which is a 5-D probe
+    # against ``PixelShuffle`` and says nothing.  Keeping the first
+    # failure names the shape the module asked for, and the message with
+    # it — the type alone hid that ``Upsample`` wanted a ``scale_factor``
+    # its constructor had never been given.
+    first = ""
     for shape in _module_input_shapes(module):
         for args in _forward_inputs(module, shape):
             try:
                 out = module(*args)
             except Exception as exc:  # noqa: BLE001
-                last = f"{shape}: {type(exc).__name__}"
+                if not first:
+                    first = f"{shape}: {type(exc).__name__}: {str(exc)[:70]}"
                 continue
             tensor = out if hasattr(out, "shape") else None
             if tensor is None and isinstance(out, (tuple, list)) and out:
@@ -2217,8 +3189,9 @@ def _try_forward(module: Any) -> "tuple[Any, str]":
                         break
             if tensor is not None and hasattr(tensor, "shape"):
                 return tensor, str(shape)
-            last = f"{shape}: returned no tensor"
-    return None, last
+            if not first:
+                first = f"{shape}: returned {type(out).__name__}, nothing measurable"
+    return None, first or "no input shape worked"
 
 
 #: The core numeric axes, cheapest first.
@@ -2242,6 +3215,7 @@ CORE_AXES: tuple[Axis, ...] = (
 # by the time the import executes.
 from lucid.test.audit._axes_data import DATA_AXES  # noqa: E402
 from lucid.test.audit._axes_stability import STABILITY_AXES  # noqa: E402
+from lucid.test.audit._axes_state import STATE_AXES  # noqa: E402
 from lucid.test.audit._axes_subsystem import SUBSYSTEM_AXES  # noqa: E402
 
 #: Every axis, in the order a full run executes them — cheapest first, so
@@ -2253,6 +3227,7 @@ ALL_AXES: tuple[Axis, ...] = (
     *STABILITY_AXES,
     *CORE_AXES[6:],
     *DATA_AXES,
+    *STATE_AXES,
     *SUBSYSTEM_AXES,
 )
 

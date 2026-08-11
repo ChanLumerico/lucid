@@ -1,4 +1,4 @@
-"""Typed targets for multi-target transforms (torchvision-v2 style).
+"""Typed targets for multi-target transforms (reference_vision-v2 style).
 
 A transform applied to a *sample* (image + companions) must move every
 target consistently: a flip mirrors the image, its segmentation mask,

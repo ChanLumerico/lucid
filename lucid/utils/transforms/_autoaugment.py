@@ -300,7 +300,7 @@ def apply_op(
     if op == "Rotate":
         # Negate to align with reference-framework / PIL rotation convention.
         # Lucid's ``affine_matrix`` uses the math convention (positive
-        # degrees → counter-clockwise); PIL / torchvision's ``F.rotate``
+        # degrees → counter-clockwise); PIL / reference_vision's ``F.rotate``
         # uses the image convention (positive degrees → clockwise).
         # Flipping the sign here makes ``apply_op("Rotate", +deg)`` agree
         # with the reference framework's ``_apply_op("Rotate", +deg)``.

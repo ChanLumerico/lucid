@@ -302,23 +302,28 @@ void register_nn(py::module_& m) {
     // Fixed-kernel pooling: stride=0 is a sentinel that the C++ op interprets
     // as stride == kernel_size (non-overlapping, stride-equals-kernel pooling).
     m.def("max_pool1d", &max_pool1d_op, py::arg("x"), py::arg("kernel_l"), py::arg("stride_l") = 0,
-          py::arg("pad_l") = 0, "1D max pooling. stride=0 means stride==kernel.");
+          py::arg("pad_l") = 0, py::arg("ceil_mode") = false,
+          "1D max pooling. stride=0 means stride==kernel.");
     m.def("max_pool2d", &max_pool2d_op, py::arg("x"), py::arg("kernel_h"), py::arg("kernel_w"),
           py::arg("stride_h") = 0, py::arg("stride_w") = 0, py::arg("pad_h") = 0,
-          py::arg("pad_w") = 0, "2D max pooling. stride=0 means stride==kernel.");
+          py::arg("pad_w") = 0, py::arg("ceil_mode") = false,
+          "2D max pooling. stride=0 means stride==kernel.");
     m.def("max_pool3d", &max_pool3d_op, py::arg("x"), py::arg("kernel_d"), py::arg("kernel_h"),
           py::arg("kernel_w"), py::arg("stride_d") = 0, py::arg("stride_h") = 0,
           py::arg("stride_w") = 0, py::arg("pad_d") = 0, py::arg("pad_h") = 0, py::arg("pad_w") = 0,
-          "3D max pooling. stride=0 means stride==kernel.");
+          py::arg("ceil_mode") = false, "3D max pooling. stride=0 means stride==kernel.");
 
     m.def("avg_pool1d", &avg_pool1d_op, py::arg("x"), py::arg("kernel_l"), py::arg("stride_l") = 0,
-          py::arg("pad_l") = 0, "1D average pooling. stride=0 means stride==kernel.");
+          py::arg("pad_l") = 0, py::arg("ceil_mode") = false, py::arg("count_include_pad") = true,
+          "1D average pooling. stride=0 means stride==kernel.");
     m.def("avg_pool2d", &avg_pool2d_op, py::arg("x"), py::arg("kernel_h"), py::arg("kernel_w"),
           py::arg("stride_h") = 0, py::arg("stride_w") = 0, py::arg("pad_h") = 0,
-          py::arg("pad_w") = 0, "2D average pooling. stride=0 means stride==kernel.");
+          py::arg("pad_w") = 0, py::arg("ceil_mode") = false, py::arg("count_include_pad") = true,
+          "2D average pooling. stride=0 means stride==kernel.");
     m.def("avg_pool3d", &avg_pool3d_op, py::arg("x"), py::arg("kernel_d"), py::arg("kernel_h"),
           py::arg("kernel_w"), py::arg("stride_d") = 0, py::arg("stride_h") = 0,
           py::arg("stride_w") = 0, py::arg("pad_d") = 0, py::arg("pad_h") = 0, py::arg("pad_w") = 0,
+          py::arg("ceil_mode") = false, py::arg("count_include_pad") = true,
           "3D average pooling. stride=0 means stride==kernel.");
 
     // Normalisation ops.  The "pure-function" batch norm variants compute

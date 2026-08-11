@@ -75,6 +75,19 @@ DTYPES: tuple[str, ...] = (
     "float64",
 )
 
+#: Tried only where the real ladder found nothing.  ``angle``, ``imag``,
+#: ``real`` and ``view_as_real`` are defined *only* on these, so over the
+#: real ladder each correctly refused all eight and the axis reported "no
+#: dtype accepted" — four complex ops with no answered cell on the one
+#: axis whose subject is which dtypes an op takes.
+#:
+#: Deliberately not in :data:`DTYPES`.  Complex arithmetic works on Metal
+#: (MLX has it) and raises ``cpu_backend::binary: dtype not supported`` on
+#: the CPU, so a global complex probe makes the device-symmetry check
+#: report that single backend fact **four hundred times**, once per op.
+#: One asymmetry is one finding.
+COMPLEX_DTYPES: tuple[str, ...] = ("complex64", "complex128")
+
 
 def dtype_of(name: str) -> Any:
     return getattr(lucid, name, None)
@@ -95,6 +108,23 @@ def as_f64(array: Any, device: str = "cpu") -> Any:
 def as_f32(array: Any, device: str = "cpu") -> Any:
     return lucid.tensor(
         np.ascontiguousarray(np.asarray(array, dtype=np.float32)), device=device
+    )
+
+
+def as_complex64(array: Any, device: str = "cpu") -> Any:
+    """A complex64 tensor — what the fft family accepts."""
+    return lucid.tensor(
+        np.ascontiguousarray(np.asarray(array, dtype=np.complex64)),
+        dtype=lucid.complex64,
+        device=device,
+    )
+
+
+def as_complex(array: Any, device: str = "cpu") -> Any:
+    return lucid.tensor(
+        np.ascontiguousarray(np.asarray(array, dtype=np.complex128)),
+        dtype=lucid.complex128,
+        device=device,
     )
 
 
@@ -147,6 +177,15 @@ def to_numpy(value: Any) -> np.ndarray | None:
     """
     if value is None:
         return None
+    if isinstance(value, np.ndarray):
+        # An array is already the answer.
+        #
+        # It fell through every branch and came back ``None``, so
+        # ``Tensor.numpy`` — whose entire contract is to hand one back —
+        # read as "returned ndarray, nothing measurable" and skipped all
+        # eleven numeric axes.  So did every bridge function that answers
+        # in numpy rather than in a tensor.
+        return value
     if hasattr(value, "numpy"):
         try:
             return np.asarray(value.numpy())
@@ -284,6 +323,8 @@ def numpy_of(name: str) -> Any:
         "float16": np.float16,
         "float32": np.float32,
         "float64": np.float64,
+        "complex64": np.complex64,
+        "complex128": np.complex128,
     }[name]
 
 
@@ -354,6 +395,8 @@ __all__ = [
     "DTYPES",
     "NON_FINITE",
     "SHAPE",
+    "as_complex",
+    "as_complex64",
     "as_f32",
     "as_f64",
     "as_int",

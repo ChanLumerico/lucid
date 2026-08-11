@@ -703,10 +703,13 @@ class Tensor:
         memory in C (row-major) order — i.e. the stride of each dimension equals
         the product of all *later* dimension sizes times the element size.
 
-        Non-contiguous tensors can arise from operations such as slicing,
-        transposing, or permuting axes.  Many C++ kernel paths require
-        contiguous input; call :meth:`contiguous` to get a contiguous copy
-        when needed.
+        **In this engine the answer is always** ``True``.  Lucid has no lazy
+        views: every operation that would return a strided view elsewhere
+        materialises a packed tensor here, including ``T``, :meth:`unfold`,
+        :meth:`diagonal`, ``expand``, ``broadcast_to`` and slicing with a
+        non-unit step.  The query is kept because it is part of the tensor
+        protocol and because kernels assert on it, not because it
+        distinguishes two states a caller can reach.
 
         Returns
         -------
@@ -720,8 +723,8 @@ class Tensor:
         >>> x = lucid.zeros(3, 4)
         >>> x.is_contiguous()
         True
-        >>> x.T.is_contiguous()   # transpose is not contiguous
-        False
+        >>> x.T.is_contiguous()   # a transpose is materialised, not viewed
+        True
 
         Notes
         -----
@@ -1640,10 +1643,14 @@ class Tensor:
         this may return a view or a copy depending on the backend; the result
         is always safe to pass to kernels that require contiguous input.
 
-        A tensor can become non-contiguous after operations like
-        transposing, permuting, or slicing with non-unit strides.  Making
-        it contiguous rewrites the data into a fresh buffer with strides
-        matching C row-major layout:
+        **In this engine every tensor is already contiguous**, so this is a
+        no-op in effect: Lucid materialises rather than viewing, and
+        transposing, permuting or slicing with a non-unit step all return
+        packed tensors.  Call it anyway where a kernel documents the
+        requirement — it is free when it is unnecessary, and it keeps the
+        call site correct if lazy views are ever introduced.  Making a
+        tensor contiguous rewrites the data into a fresh buffer with
+        strides matching C row-major layout:
 
         .. math::
 
@@ -1657,9 +1664,9 @@ class Tensor:
         Examples
         --------
         >>> import lucid
-        >>> x = lucid.zeros(3, 4).T    # transposed — not contiguous
+        >>> x = lucid.zeros(3, 4).T    # already materialised, so already packed
         >>> x.is_contiguous()
-        False
+        True
         >>> y = x.contiguous()
         >>> y.is_contiguous()
         True

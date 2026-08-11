@@ -1,13 +1,21 @@
 # `lucid-audit` — the whole diagnosis, one command
 
-Two stages, one verdict, one exit code.
+Four stages, one verdict, one exit code.
 
 | stage | asks | catches |
 |---|---|---|
-| **sweep** | does each reachable symbol keep its contract? | 1,507 symbols × 27 axes = 10,841 cells |
+| **self-check** | can the instruments still go red? | 30 mutants over 29 of 33 axes |
+| **sweep** | does each reachable symbol keep its contract? | 1,512 symbols × 33 axes = 10,800+ cells |
 | **suite** | are the specific values the right values? | `pytest lucid/test` + a line-coverage floor |
+| **doctests** | does the documentation run? | 5,499 examples + a per-module floor |
 
-They fail independently, and neither is a substitute for the other.
+They fail independently, and none is a substitute for another.
+
+The self-check runs **first**, on a clean interpreter, and the order is
+load-bearing: run after the sweep, four mutants stopped being caught,
+because the sweep leaves device and module state behind. An instrument
+check the run itself perturbs proves nothing.
+
 Measured on one session's defects: the sweep found the gradient that was
 never wired and the sampler drawing at the wrong concentration; the
 suite found the assignment writing a rectangle instead of a diagonal,
@@ -16,17 +24,20 @@ was NaN, and the window that deleted its own frame. A gate that runs
 only one of them reports "clean" over half a framework.
 
 ```bash
-lucid-audit                 # both stages, one verdict     (~15 min)
-lucid-audit --audit-only    # the sweep alone
-lucid-audit --tests-only    # the suite and the floor alone
+lucid-audit                 # every stage, one verdict     (~15 min)
+lucid-audit --audit-only    # self-check + sweep
+lucid-audit --tests-only    # suite + line coverage + doctests
+lucid-audit --self-check    # the instruments alone, seconds
 ```
 
 ```
 ── verdict ──────────────────────────────────────────────
+  blind axes                      0
   audit defects                   0
   audit coverage regressions      0
   suite failures                  0
   line coverage regressions       0
+  docstring regressions           0
 
   clean on every stage that ran
 ```
@@ -165,15 +176,71 @@ above the live region as they are found.
 | `PASS` | the axis's question was asked and answered correctly |
 | `FAIL` | a defect |
 | `TRNC` | the finite-difference probe was the limit, not the op — the disagreement shrank like `h²` when the step was refined |
-| `GAUG` | correct only up to a symmetry (sign of an eigenvector, phase of an FFT) |
+| `GAUG` | correct only up to a symmetry (sign of an eigenvector, phase of an FFT, the constant a softmax is invariant to) |
 | `VAC` | the check ran but could not have failed — reported separately because a vacuous pass reads as coverage and is not |
 | `UNSP` | the op refused, loudly and by design |
 | `SKIP` | **the harness could not build inputs.** Not "no problem" — "not checked" |
 | `KNWN` | a defect accepted in `known.json` |
 
+### Proving an axis can fail
+
+```bash
+lucid-audit --self-check
+```
+
+Breaks the framework on purpose, once per axis, in exactly the way that
+axis exists to notice — a gradient that is not the derivative, a NaN that
+gets swallowed, a handle whose `remove` does not remove — and reports
+whether the axis said so. 30 mutants, 29 of 33 axes; the four with no
+mutant are printed as **unproven**, each with the reason it cannot be
+written — "nobody got to it" and "it cannot be done" are different
+facts and only the second is a finding.
+
+It is not decoration. Three findings so far, all about this tool rather
+than the framework:
+
+* `broadcast` compared output *shapes* and never values, so an op that
+  broadcast to the right extent and computed the wrong numbers passed all
+  nine directions;
+* the tokenizer round trip passed a decoder that silently dropped a
+  character, on the grounds that dropping it was at least repeatable;
+* `layout` **cannot fail at all**. It compares a packed operand against a
+  strided view, and this engine materialises every view — `t[..., ::2]`,
+  `T`, `expand`, `broadcast_to`, `diagonal` and `unfold` all come back
+  packed — so the two operands are byte-identical. 688 cells per run were
+  reporting agreement between an op and itself. The axis now says so.
+
 `SKIP` is the number to watch. The summary's *applicable cells* line
 reports how many cells produced a verdict at all, and that is the honest
 measure of what a run actually checked.
+
+### `SKIP` is not `NOT_APPLICABLE`
+
+They were conflated, and it cost the SKIP list its meaning. "The scale
+sweep found no float output" is not a gap — `argmax` returns integers and
+a scale sweep has nothing to measure on it. Nor is "the op takes a module
+and returns a module": `nn.utils.weight_norm` is checked, thoroughly, by
+the `nnutils` axis. Filing either under SKIP put ~500 cells into a work
+queue that was already done, and buried the ones that were not.
+
+The rule is the axis's *question*, not its outcome:
+
+* the question cannot be asked here → `NOT_APPLICABLE`, and the cell
+  leaves the denominator;
+* the question applies and the harness could not set it up → `SKIP`, and
+  it stays in the denominator as a debt.
+
+### `UNSUPPORTED` is a claim about the op, so check it is one
+
+`UNSP` reads as "the op refused, loudly and by design", and 318 cells
+were making that claim about refusals the *probe* had provoked: a float64
+tensor handed to the `fft` family, which accepts only `F16/F32/C64`; a
+`Tensor` handed to `pad_packed_sequence`, which wants a `PackedSequence`;
+and 135 cells where the axis read `.grad.numpy()` on a `None` and
+reported its own `AttributeError`. The substitution now keeps the
+original argument's dtype, the axes name a missing gradient as a missing
+gradient, and a non-tensor output is `NOT_APPLICABLE` rather than a
+refusal — 318 down to **zero**.
 
 ---
 
@@ -184,8 +251,15 @@ They fail independently and are routinely conflated:
 | | meaning |
 |---|---|
 | **reach** | fraction of public objects the surface enumerates. Checked against `independent_walk()`, which shares none of the enumeration's logic. Currently 100%. |
-| **depth** | fraction of symbols with an axis that can actually fail, rather than only the smoke axis. Currently 93.6%; the remainder mutate process state and no numeric axis can express them. |
-| **verdict** | fraction of cells that answer rather than SKIP. **Only a real run knows this**, and it is well below the other two. |
+| **depth** | fraction of symbols with an axis that can actually fail, rather than only the smoke axis. |
+| **verdict** | fraction of cells that answer rather than SKIP. **Only a real run knows this**, and it is well below the other two. Currently 75.7%, over 1,476 of 1,512 symbols. It *fell* from 81.7% when `--self-check` showed the layout axis could not fail: 688 cells moved from PASS to VACUOUS, and the lower number is the true one. |
+
+"Mutating process state" is not a reason to stop, and was used as one for
+79 symbols. Mutating state is what makes them checkable: seed twice and
+the draws must match, set a default and a new tensor must follow it,
+register a hook and it must fire — then `remove()` and it must stop.
+That is the `state` and `hook` axes, and none of it is a numeric
+comparison.
 
 Reaching a symbol is not verifying it, and `depth` is an upper bound, not
 a result. Quote the verdict rate from `--json` when you want to say how
@@ -252,6 +326,18 @@ resort, not the first.
 low number there means the symbols need an axis, not a spec — see
 `_axes_data.py` for the shape of one.
 
+**A scoped run crashes and the full one does not.** That is not a
+selection bug. `--axis grad,grad2` SIGBUSes about three runs in five,
+inside LAPACK, reached from `lucid.linalg.ldl_solve`; the full sweep
+dies about one run in eight, and `ldl_solve` on its own survives 120 consecutive runs of the
+same axis. An out-of-bounds *write* elsewhere lands harmlessly when the
+other axes have already shaped the heap. Three such writes have been
+found and closed at the probe end — `ctc_loss` reading past `targets`,
+`lu_solve` reading past a flat `pivots`, `LPPool1d` unfolding a rank-2
+input — and at least one remains unlocated. When a run dies, re-run
+under `-X faulthandler` and bisect by axis, not by symbol: the symbol it
+dies in is the victim, not the cause.
+
 **A finding looks wrong.** Check the harness before the framework. Of the
 first twelve failures the newest axes reported, twelve were the
 instrument: an abstract base raising `NotImplementedError` by contract, a
@@ -271,10 +357,13 @@ without restoring the optimizer it drives.
 | `_axes_stability.py` | scale sweeps, extreme values, strides, determinism |
 | `_axes_subsystem.py` | distributions, diffeq, quantization, serialization, compile, smoke |
 | `_axes_data.py` | transforms, data, tokenizers, schedulers |
+| `_axes_state.py` | global state, hooks, dtype algebra, functional transforms, `nn.utils` |
 | `_specs.py` | hand-written invocations, and the tier order |
 | `_autospec.py` | invocations derived from signatures |
 | `_probe.py` | domains, sampling, finite differences |
 | `_console.py` | the stdlib ANSI display |
 | `_console_rich.py` | the `rich` display, when installed |
+| `_mutants.py` | the deliberate defects, one per axis, and `--self-check` |
+| `_doctests.py` | the documentation stage and its per-module floor |
 | `_result.py` | `Status`, `Finding`, `Report`, `Baseline` |
 | `known.json` | accepted defects, reported as `KNWN` rather than `FAIL` |

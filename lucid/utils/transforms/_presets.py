@@ -61,6 +61,8 @@ from lucid.utils.transforms._geometric import (
     CenterCrop,
     HorizontalFlip,
     LongestMaxSize,
+    Resize,
+    ResizeShortestEdge,
     RandomResizedCrop,
     SmallestMaxSize,
 )
@@ -283,7 +285,11 @@ class ImageClassification(TransformsPreset):
     r"""Standard ImageNet classification *inference* preset.
 
     Pipeline: ``SmallestMaxSize(resize_size)`` → ``CenterCrop(crop_size)``
-    → ``Normalize(mean, std)``.  This is the torchvision /
+    → ``Normalize``, or — with ``stretch=True`` —
+    ``Resize(resize_size, resize_size)`` → ``Normalize``, which is what an
+    upstream processor configured with an explicit ``(height, width)``
+    pair does.
+    → ``Normalize(mean, std)``.  This is the reference_vision /
     Albumentations canonical eval pipeline shipped with most
     pretrained image-classification weights.
 
@@ -401,7 +407,7 @@ class ImageClassificationAugment(TransformsPreset):
     Mirrors the reference-framework training recipe shipped with most
     classification models.  Setting ``auto_augment`` and/or
     ``random_erasing`` reaches the strong-augmentation recipe used by
-    timm / torchvision references.
+    timm / reference_vision references.
 
     Parameters
     ----------
@@ -539,6 +545,7 @@ class Detection(TransformsPreset):
         self,
         *,
         max_size: int = 1333,
+        min_size: int | None = None,
         min_area: float = 1.0,
         min_visibility: float = 0.0,
         mean: tuple[float, ...] | None = None,
@@ -546,17 +553,30 @@ class Detection(TransformsPreset):
         interpolation: str | Interpolation = Interpolation.BILINEAR,
     ) -> None:
         self.max_size = max_size
+        self.min_size = min_size
         self.min_area = min_area
         self.min_visibility = min_visibility
         self.mean = mean if mean is not None else _IMAGENET_MEAN
         self.std = std if std is not None else _IMAGENET_STD
         self.interpolation = interpolation
+        # The reference detection transform scales by
+        # ``min(min_size / short_side, max_size / long_side)`` — it targets the
+        # SHORTEST side and only falls back to the longest-side cap when that
+        # would overflow.  Resizing the longest side alone presents objects at
+        # a systematically different scale (~25% larger for a 4:3 image), which
+        # shifts FPN level assignment and anchor matching for a checkpoint
+        # trained the other way.  Composing the two caps reproduces the rule.
+        stages: list[TransformLike] = []
+        if min_size is not None:
+            stages.append(
+                ResizeShortestEdge(min_size, max_size, interpolation=interpolation)
+            )
+        else:
+            stages.append(LongestMaxSize(max_size, interpolation=interpolation))
+        stages.append(PadIfNeeded(max_size, max_size, value=0.0))
+        stages.append(Normalize(self.mean, self.std, max_pixel_value=1.0))
         self._pipeline = Compose(
-            [
-                LongestMaxSize(max_size, interpolation=interpolation),
-                PadIfNeeded(max_size, max_size, value=0.0),
-                Normalize(self.mean, self.std, max_pixel_value=1.0),
-            ],
+            stages,
             bbox_params=BboxParams(min_area=min_area, min_visibility=min_visibility),
         )
 
@@ -565,6 +585,7 @@ class Detection(TransformsPreset):
         interp = self.interpolation
         return {
             "max_size": self.max_size,
+            "min_size": self.min_size,
             "min_area": self.min_area,
             "min_visibility": self.min_visibility,
             "mean": list(self.mean),
@@ -603,25 +624,39 @@ class Segmentation(TransformsPreset):
 
     def __init__(
         self,
-        crop_size: int,
+        crop_size: int | None = None,
         *,
         resize_size: int = 520,
         mean: tuple[float, ...] | None = None,
         std: tuple[float, ...] | None = None,
         interpolation: str | Interpolation = Interpolation.BILINEAR,
+        stretch: bool = False,
     ) -> None:
         self.crop_size = crop_size
         self.resize_size = resize_size
         self.mean = mean if mean is not None else _IMAGENET_MEAN
         self.std = std if std is not None else _IMAGENET_STD
         self.interpolation = interpolation
-        self._pipeline = Compose(
-            [
-                SmallestMaxSize(resize_size, interpolation=interpolation),
-                CenterCrop(crop_size, crop_size),
-                Normalize(self.mean, self.std, max_pixel_value=1.0),
-            ]
-        )
+        self.stretch = stretch
+        # ``crop_size=None`` reproduces the reference SemanticSegmentation
+        # preset, which only resizes the shortest side: cropping an
+        # already-resized image discards the sides of every non-square input
+        # (a 500x375 VOC image becomes 693x520 and then loses 173 columns),
+        # so the reported mIoU would never be reachable.
+        stages: list[TransformLike]
+        if stretch:
+            # Some upstream processors are configured with an explicit
+            # ``size={"height": H, "width": W}`` pair, which resizes to
+            # exactly that shape -- aspect ratio distorted, nothing cropped.
+            # Reproducing them with shortest-edge + centre-crop feeds the
+            # model a differently-framed image than it was evaluated on.
+            stages = [Resize(resize_size, resize_size, interpolation=interpolation)]
+        else:
+            stages = [SmallestMaxSize(resize_size, interpolation=interpolation)]
+            if crop_size is not None:
+                stages.append(CenterCrop(crop_size, crop_size))
+        stages.append(Normalize(self.mean, self.std, max_pixel_value=1.0))
+        self._pipeline = Compose(stages)
 
     @override
     def _init_kwargs(self) -> dict[str, object]:
@@ -634,6 +669,7 @@ class Segmentation(TransformsPreset):
             "interpolation": (
                 interp.value if isinstance(interp, Interpolation) else interp
             ),
+            "stretch": self.stretch,
         }
 
 

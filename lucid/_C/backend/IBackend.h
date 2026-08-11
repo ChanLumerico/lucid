@@ -1659,6 +1659,15 @@ public:
         int stride[3];  // stride per spatial dimension
         int pad[3];     // symmetric padding per spatial dimension
         int N;          // number of spatial dimensions
+        // Ceiling output sizing.  The caller has already baked this into
+        // ``out_shape``; backends need it only to know that the final window
+        // may overhang the padded input and must be given room (max) or
+        // excluded from the divisor (avg).
+        bool ceil_mode = false;
+        // Average pooling only: whether zero-padding counts toward the
+        // divisor.  The ceil-mode overhang never counts either way, because
+        // the window end is clamped to ``S + pad``.
+        bool count_include_pad = true;
     };
 
     // N-D max pooling forward.  Returns [output, argmax]; argmax stores the

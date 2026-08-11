@@ -3,7 +3,7 @@
 A single rectangular region of the image is replaced with a constant,
 per-channel mean, or random noise.  The canonical companion to
 RandAugment / Mixup in modern ImageNet training recipes — included in
-the torchvision / timm reference pipelines.
+the reference_vision / timm reference pipelines.
 
 Photometric (image-only by convention): mask / boxes / keypoints pass
 through unchanged.  Implementation follows the
@@ -41,7 +41,7 @@ class RandomErasing(PhotometricTransform[_ErasingParams]):
     fraction of the image (sampled uniformly from ``scale``) and whose
     aspect ratio is sampled log-uniformly from ``ratio`` is replaced by
     ``value``.  If no rectangle fits after 10 attempts the call is a
-    no-op (matches the torchvision contract).
+    no-op (matches the reference_vision contract).
 
     Parameters
     ----------
@@ -118,7 +118,7 @@ class RandomErasing(PhotometricTransform[_ErasingParams]):
         c = int(img.shape[-3])
         area = float(h * w)
         log_lo, log_hi = math.log(self.ratio[0]), math.log(self.ratio[1])
-        # 10 attempts to fit a rectangle; otherwise no-op (torchvision spec).
+        # 10 attempts to fit a rectangle; otherwise no-op (reference_vision spec).
         for _ in range(10):
             target_area = _random.uniform(self.scale[0], self.scale[1]) * area
             aspect = math.exp(_random.uniform(log_lo, log_hi))

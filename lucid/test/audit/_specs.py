@@ -63,9 +63,28 @@ class Call:
         self.note = note
 
     def with_primary(self, array: np.ndarray) -> "Call":
-        """A copy whose differentiated argument is replaced by ``array``."""
+        """A copy whose differentiated argument is replaced by ``array``.
+
+        At the *original argument's* dtype, not unconditionally float64.
+        The axes mean "the same call with different values", and rebuilding
+        at float64 changed the call instead: the whole ``fft`` family
+        accepts only ``F16/F32/C64`` and every substituting axis —
+        nonfinite, layout, grad, creategraph, grad2 — handed it a float64
+        probe and was told ``fftn requires F16/F32/C64 input, got
+        float64``.  Sixty cells filed as "the op refused" about a refusal
+        the probe had provoked.
+        """
         args = list(self.args)
-        args[self.primary] = _probe.as_f64(array)
+        original = args[self.primary] if 0 <= self.primary < len(args) else None
+        dtype = getattr(original, "dtype", None)
+        text = str(dtype) if dtype is not None else ""
+        if "complex" in text:
+            build = _probe.as_complex64 if "64" in text else _probe.as_complex
+        elif "float32" in text or "float16" in text:
+            build = _probe.as_f32
+        else:
+            build = _probe.as_f64
+        args[self.primary] = build(array)
         return Call(args, dict(self.kwargs), self.primary, self.note)
 
     @property

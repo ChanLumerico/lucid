@@ -88,48 +88,88 @@ EXCLUDED: dict[str, str] = {
 
 #: Calling these mutates process-wide state, opens files, spawns work or
 #: blocks.  They are counted in the denominator and never invoked.
-STATEFUL: tuple[str, ...] = (
+#:
+#: Split into exact names and prefixes, because the single list this
+#: replaces was matched with ``tail.startswith(p)`` and a two-letter
+#: entry then claimed whatever began with it:
+#:
+#:     "to"    ->  topk, tolist, to_dlpack, to_engine_dtype
+#:     "item"  ->  itemsize
+#:     "get_"  ->  get_total_norm, get_default_qconfig, get_worker_info
+#:     "apply_"->  apply_rotary_emb
+#:
+#: ``topk`` is a pure function of its input and ``itemsize`` is an
+#: integer read off a dtype; neither writes anything.  Marked stateful
+#: they were excluded from every numeric axis and left with the smoke
+#: floor, which is how a differentiable selection op came to have no
+#: gradient check — 25 symbols, none of them stateful, all of them
+#: silently outside the audit.
+#:
+#: The second confusion the list made was **reading** state against
+#: **writing** it.  ``get_rng_state`` and ``are_deterministic_algorithms
+#: _enabled`` answer a question and change nothing; calling them is safe
+#: and is the only way to check what the setters did.  Only the writers
+#: need the guard, so only the writers are named here.
+STATEFUL_EXACT: frozenset[str] = frozenset(
+    {
+        # the RNG and the global defaults
+        "manual_seed",
+        "seed",
+        "use_deterministic_algorithms",
+        # grad-mode context managers, which take effect on construction
+        "no_grad",
+        "enable_grad",
+        "inference_mode",
+        # the filesystem
+        "save",
+        "load",
+        "download",
+        "load_weight_entry",
+        # tracing and timing, which install hooks of their own
+        "compile",
+        "profile",
+        "record_function",
+        # the device
+        "synchronize",
+        "empty_cache",
+        "reset_peak_memory_stats",
+        "to",
+        "to_shared",
+        "cpu",
+        "metal",
+        "cuda",
+        "pin_memory",
+        "share_memory_",
+        "record_stream",
+        # the tensor's own autograd state
+        "backward",
+        "requires_grad_",
+        "detach_",
+        "apply_",
+    }
+)
+
+#: Prefixes, each of which ends at a word boundary so a longer name
+#: cannot be claimed by accident.
+STATEFUL_PREFIX: tuple[str, ...] = (
     "set_",
-    "get_",
-    "manual_seed",
-    "seed",
-    "no_grad",
-    "enable_grad",
-    "inference_mode",
-    "save",
-    "load",
-    "compile",
-    "device",
-    "dtype",
-    "print",
-    "config",
-    "profile",
-    "benchmark",
-    "synchronize",
-    "empty_cache",
-    "use_deterministic",
-    "are_deterministic",
     "init_",
     "register_",
-    "share_memory",
-    "pin_memory",
-    "record_stream",
-    "backward",
     "retain_",
-    "requires_grad_",
-    "detach_",
-    "apply_",
-    "to",
-    "cpu",
-    "metal",
-    "cuda",
-    "item",
-    "tolist",
-    "numpy",
-    "storage",
-    "data_ptr",
-    "set_printoptions",
+    "save_",
+    "load_",
+    "compile_",
+    "compiled_",
 )
+
+#: Kept as the union, in that order, for anything reading the old name.
+STATEFUL: tuple[str, ...] = tuple(sorted(STATEFUL_EXACT)) + STATEFUL_PREFIX
+
+
+def mutates_process(tail: str) -> bool:
+    """Whether calling ``tail`` writes something the next check reads."""
+    return tail in STATEFUL_EXACT or tail.startswith(STATEFUL_PREFIX)
+
 
 #: Draw fresh random numbers, so two calls never agree.  Probed for shape
 #: and dtype but never compared value-for-value, and the determinism axis
@@ -187,7 +227,7 @@ class Symbol:
         self.obj = obj
         self.flags: set[str] = set()
         tail = qualname.rsplit(".", 1)[-1]
-        if any(tail.startswith(p) or tail == p.rstrip("_") for p in STATEFUL):
+        if mutates_process(tail):
             self.flags.add("stateful")
         if tail.endswith("_") and not tail.startswith("_"):
             self.flags.add("inplace")
@@ -528,7 +568,10 @@ __all__ = [
     "EXCLUDED",
     "independent_walk",
     "STATEFUL",
+    "STATEFUL_EXACT",
+    "STATEFUL_PREFIX",
     "STOCHASTIC_PATTERN",
+    "mutates_process",
     "SUBSYSTEMS",
     "Symbol",
     "counterparts",

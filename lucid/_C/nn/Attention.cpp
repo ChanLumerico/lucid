@@ -167,25 +167,40 @@ TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q,
     bwd->orig_k_shape_ = k->shape();
     bwd->orig_v_shape_ = v->shape();
     if (attn_mask) {
-        // Persist the mask (a non-differentiable auxiliary) so the GPU VJP
-        // backward can replay the exact masked attention.  Copying the Storage
-        // retains the underlying buffer independently of the mask tensor.
+        // Persist the mask so the GPU VJP backward can replay the exact masked
+        // attention.  Copying the Storage retains the underlying buffer
+        // independently of the mask tensor.
         bwd->has_mask_ = true;
         bwd->saved_mask_ = attn_mask->storage();
         bwd->mask_dtype_ = attn_mask->dtype();
+        bwd->orig_mask_shape_ = attn_mask->shape();
     }
-    kernel::NaryKernel<ScaledDotProductAttentionBackward, 3>::wire_autograd(std::move(bwd),
-                                                                            {q, k, v}, core.output);
 
-    // The autograd wiring above records only {q, k, v} as trace inputs
-    // (attn_mask is a non-differentiable auxiliary tensor, not an autograd
-    // input).  The compile path needs the mask too, so the sdpa emitter can
-    // add it before the softmax instead of falling back to eager — re-record
-    // the full input list (Tracer::on_op_io is last-write-wins).  Mirrors the
-    // embedding op's handling of its non-diff ``indices`` input.
-    if (attn_mask) {
-        if (auto* trc = ::lucid::compile::current_tracer()) {
+    // An *additive* (float) mask is a differentiable input when the caller
+    // actually wants its gradient: relative-position bias tables are learned
+    // parameters that reach the loss only through this argument.  A Bool
+    // keep-mask selects rather than adds, and a constant padding or causal
+    // mask needs no gradient — both get a null edge, which keeps the node
+    // (and the compile trace) exactly as it was for those callers.
+    const bool mask_is_differentiable =
+        attn_mask && attn_mask->dtype() != Dtype::Bool && attn_mask->requires_grad();
+    const TensorImplPtr& mask_edge = mask_is_differentiable ? attn_mask : TensorImplPtr{};
+    bwd->mask_differentiable_ = mask_is_differentiable;
+
+    kernel::NaryKernel<ScaledDotProductAttentionBackward, 4>::wire_autograd(
+        std::move(bwd), {q, k, v, mask_edge}, core.output);
+
+    // ``wire_autograd`` records its raw input array — including the null 4th
+    // slot when there is no mask, or a Bool one that carries no gradient.  The
+    // trace must not see that null, and a Bool mask must still appear so the
+    // sdpa emitter can fold it in rather than bailing to eager.  Re-record the
+    // exact operand list (``Tracer::on_op_io`` is last-write-wins), mirroring
+    // the embedding op's handling of its non-diff ``indices`` input.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        if (attn_mask) {
             trc->on_op_io({q, k, v, attn_mask}, core.output);
+        } else {
+            trc->on_op_io({q, k, v}, core.output);
         }
     }
     return core.output;
@@ -193,9 +208,27 @@ TensorImplPtr ScaledDotProductAttentionBackward::forward(const TensorImplPtr& q,
 
 std::vector<Storage> ScaledDotProductAttentionBackward::apply(Storage grad_out) {
     const Storage* mask_ptr = has_mask_ ? &saved_mask_ : nullptr;
-    return backend::Dispatcher::for_device(device_).sdpa_backward(
+    auto grads = backend::Dispatcher::for_device(device_).sdpa_backward(
         grad_out, saved_inputs_[0], saved_inputs_[1], saved_inputs_[2], saved_weights_, mask_ptr,
         orig_q_shape_, orig_k_shape_, orig_v_shape_, mask_dtype_, scale_, is_causal_, dtype_);
+
+    // The backends hand back dM at the *full* score shape (…, L_q, L_k); the
+    // caller's mask may have broadcast into it, so sum the expanded axes away.
+    // A Bool keep-mask has a null edge and a placeholder slot — leave it be.
+    if (grads.size() >= 4 && mask_differentiable_ && !orig_mask_shape_.empty()) {
+        Shape score_shape;
+        score_shape.reserve(orig_q_shape_.size());
+        for (std::size_t i = 0; i + 2 < orig_q_shape_.size(); ++i)
+            score_shape.push_back(orig_q_shape_[i]);
+        score_shape.push_back(orig_q_shape_[orig_q_shape_.size() - 2]);
+        score_shape.push_back(orig_k_shape_[orig_k_shape_.size() - 2]);
+
+        if (score_shape != orig_mask_shape_) {
+            grads[3] =
+                reduce_grad_to_shape(grads[3], score_shape, orig_mask_shape_, dtype_, device_);
+        }
+    }
+    return grads;
 }
 
 TensorImplPtr scaled_dot_product_attention_op(const TensorImplPtr& q,

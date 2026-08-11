@@ -64,7 +64,22 @@ _L, _H, _W = 8, 6, 6
 _MAX_CANDIDATES = 6
 
 
-def _tensor(shape: "tuple[int, ...]", domain: str, variant: int = 0) -> Any:
+#: Parameters whose probe is built in **float32**, not the sweep's
+#: float64 working precision.  ``utils.transforms.functional`` builds its
+#: sampling grids and its masks single-precision, so a float64 image
+#: reaches an internal ``grid_sample`` or ``where`` that refuses it —
+#: ``DtypeMismatch (grid_sample): expected float64, got float32``, which
+#: names the *probe's* dtype as the expectation and reads as a defect in
+#: a function that works.  An image transform's domain is float32 images
+#: and that is what it should be handed.
+_F32_PARAMS = frozenset(
+    {"img", "image", "pts", "points", "matrix", "field", "dx", "dy"}
+)
+
+
+def _tensor(
+    shape: "tuple[int, ...]", domain: str, variant: int = 0, name: str = ""
+) -> Any:
     """One tensor argument.
 
     ``variant`` must differ between the operands of a binary op.  Built
@@ -73,7 +88,54 @@ def _tensor(shape: "tuple[int, ...]", domain: str, variant: int = 0) -> Any:
     where it has no derivative: ``maximum(a, a)`` reports a convention
     rather than a slope, and no finite difference can agree with it.
     """
-    return _probe.as_f64(_probe.sample(domain, shape, variant))
+    build = _probe.as_f32 if name in _F32_PARAMS else _probe.as_f64
+    return build(_probe.sample(domain, shape, variant))
+
+
+def _factorization(kind: str, order: int) -> "tuple[Any, Any] | None":
+    """A **real** ``(factor, pivots)`` pair from the framework's own factoriser.
+
+    ``lu_solve`` and ``ldl_solve`` document that they take a
+    factorization, and the derivation was handing them a draw of random
+    numbers with a plausible pivot vector beside it.  LAPACK is entitled
+    to assume the structure it was promised — ``dsytrs`` walks the
+    triangle and the pivot sequence together — and a matrix that is not
+    one sends it off the end of the buffer: the sweep died inside
+    ``ldl_solve``'s backward pass roughly one run in three, always
+    somewhere else, always later.
+
+    Factorising a well-conditioned symmetric matrix costs one call and
+    removes the whole class.  Seeded, so a finding stays reproducible.
+    """
+    matrix = _probe.rng(_probe.SEED_X).standard_normal((order, order))
+    matrix = matrix + matrix.T + np.eye(order) * (order + 2.0)
+    factorise = {
+        "LU": getattr(lucid.linalg, "lu_factor", None),
+        "LD": getattr(lucid.linalg, "ldl_factor", None),
+    }.get(kind)
+    if factorise is None:
+        return None
+    try:
+        factor, pivots = factorise(_probe.as_f64(matrix))
+    except Exception:  # noqa: BLE001 - surveying, not asserting
+        return None
+    return factor, pivots
+
+
+class _AuditToyDataset:
+    """Six samples, for the loader helpers that take a dataset."""
+
+    def __len__(self) -> int:
+        return 6
+
+    def __getitem__(self, index: int) -> "tuple[Any, int]":
+        if index >= 6:
+            raise IndexError(index)
+        return _probe.as_f32(np.full((2,), float(index))), index % 2
+
+
+def _toy_dataset() -> Any:
+    return _AuditToyDataset()
 
 
 def _indices(shape: "tuple[int, ...]", high: int) -> Any:
@@ -99,6 +161,17 @@ def _is_tensor_annotation(text: str) -> bool:
 
 
 def _is_tensor_sequence(text: str) -> bool:
+    # A ``Callable`` that *returns* tensors is not a sequence of them.
+    #
+    # ``Callable[..., Tensor | tuple[Tensor, ...]]`` contains both
+    # ``Tensor`` and ``tuple``, so ``func`` — the first parameter of
+    # every higher-order function in the framework — was filled with a
+    # list and then called: ``TypeError: 'list' object is not callable``,
+    # for ``vjp``, ``jvp``, ``linearize``, ``gradcheck``,
+    # ``gradgradcheck``, ``hessian`` and ``checkpoint`` alike.  The
+    # return annotation describes what comes out, not what goes in.
+    if re.search(r"\bCallable\b", text):
+        return False
     return bool(re.search(r"\bTensor\b", text)) and bool(
         re.search(r"\b(list|Sequence|tuple|Iterable)\b", text)
     )
@@ -108,6 +181,12 @@ def _is_tensor_sequence(text: str) -> bool:
 #: convolution and a norm layer specifically, so the name picks the class
 #: rather than everything getting a ``Linear``.
 _MODULE_BY_NAME: "dict[str, Any]" = {
+    # ``fuse_modules(model, [["0", "1"]])`` names children by index, so
+    # the model it is handed has to *have* children — a bare ``Linear``
+    # answered "'Linear' has no attribute '0'".
+    "model": lambda: lucid.nn.Sequential(
+        lucid.nn.Linear(_COUT, _COUT), lucid.nn.ReLU()
+    ),
     "conv": lambda: lucid.nn.Conv2d(_CIN, _COUT, 3, padding=1),
     "bn": lambda: lucid.nn.BatchNorm2d(_COUT),
     "norm": lambda: lucid.nn.BatchNorm2d(_COUT),
@@ -239,6 +318,37 @@ _BY_NAME: "dict[str, Any]" = {
     "rounding_mode": None,
     "generator": None,
     "out": None,
+    # normalisation and the geometric transforms, whose required
+    # parameters are plain tuples the annotation describes only as
+    # ``tuple[int, int]`` — which the fallback fills with ``(2, 2)``,
+    # a valid pair and the wrong one for an image extent.
+    "normalized_shape": (_COUT,),
+    "mean": (0.5, 0.5, 0.5),
+    "std": (0.5, 0.5, 0.5),
+    "in_hw": (_L, _L),
+    "out_hw": (_L, _L),
+    "canvas_hw": (_L, _L),
+    "tile_grid_size": (2, 2),
+    "kernel2d": [[0.0, 1.0, 0.0], [1.0, -4.0, 1.0], [0.0, 1.0, 0.0]],
+    "src": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+    "dst": [[0.0, 0.0], [1.0, 0.1], [0.9, 1.0], [0.1, 0.9]],
+    # ``pack_padded_sequence(input, lengths)`` reads ``input`` as
+    # ``(T, B, *)`` and every length has to be ``<= T``.  Against the
+    # ``(2, 4)`` probe the list ``[3, 2]`` asks for three timesteps out
+    # of two, and the engine answered with ``item()``'s error rather
+    # than its own.
+    "lengths": [3, 2],
+    "argnums": 0,
+    "in_dims": 0,
+    "tensor_name": "weight",
+    # The ODE solvers: an initial state and a time grid.  ``y0`` and
+    # ``t`` carry no annotation the rules can read, so all four
+    # ``odeint`` entry points reported "missing 2 required positional
+    # arguments" while their signature said plainly what they take.
+    "t0": 0.0,
+    "t1": 1.0,
+    "rtol": 1e-6,
+    "atol": 1e-8,
 }
 
 #: Names whose value must agree with a tensor already chosen.  The only
@@ -260,6 +370,19 @@ _RELATED = (
     "indices",
     "running_mean",
     "running_var",
+    # ``pivots`` had a rule in :func:`_related_value` and was missing from
+    # this tuple, which is the only thing that reaches it — so the branch
+    # was unreachable and ``lu_solve`` and ``ldl_solve`` were handed a
+    # float tensor for an integer pivot vector on every candidate,
+    # refused it every time, and answered none of their 22 cells.  A
+    # dispatch table and its dispatch list are one fact written twice.
+    "pivots",
+    "B",
+    "matrix",
+    "pts",
+    "dx",
+    "dy",
+    "field",
 )
 
 
@@ -301,12 +424,61 @@ def _related_value(
         # the same symbol every run, which is the reason it matters here
         # rather than only in the framework.  LAPACK pivots are 1-based
         # over the order of the factorization, and int32 wide.
+        #
+        # One row per batch element, not one vector for the batch.  A
+        # flat ``(order,)`` against a batched ``LU`` is accepted, runs,
+        # returns plausible numbers — and reads pivots past the end of
+        # the buffer for every element after the first.  LAPACK's
+        # ``dgetrs`` then swaps rows of the right-hand side by those
+        # garbage indices, which writes outside it: the process kept
+        # going and died later, somewhere else, with a corrupted
+        # ObjC method cache.  Recorded in ``known.json``; the probe has
+        # to be right regardless, or the sweep cannot finish.
         order = max(shape[-2] if len(shape) >= 2 else shape[0], 1)
-        return True, _indices((order,), order).to(lucid.int32) + 1
+        # The pivots that belong to the factor the primary was built
+        # from, where there is one.  A pivot sequence is not independent
+        # of the triangle it permutes.
+        pair = _factorization("LD" if re.search(r"ldl", op_name) else "LU", order)
+        if pair is not None and not shape[:-2]:
+            return True, pair[1]
+        batch = tuple(shape[:-2])
+        return True, _indices((*batch, order), order).to(lucid.int32) + 1
     if name in ("running_mean", "running_var"):
         channels = shape[1] if len(shape) > 1 else shape[0]
         fill = 0.0 if name == "running_mean" else 1.0
         return True, _probe.as_f64(np.full((channels,), fill))
+
+    if name == "B":
+        # The right-hand side of a triangular solve, square with the
+        # factorization it is solved against.
+        order = shape[-1]
+        return True, _tensor(
+            (*shape[:-2], order, 1) if len(shape) >= 2 else (order, 1), domain
+        )
+    if name == "matrix":
+        # A 3x3 *homogeneous* affine, not the 2x3 the shorthand suggests.
+        # Every one of these transforms inverts the matrix internally and
+        # refuses a non-square one — ``inv.a: last two dims must be equal``
+        # — so the 2x3 form reached the op and was rejected by it, which
+        # reads as a defect and is a probe that handed over the wrong
+        # convention.  Identity plus a small shift: invertible, and not
+        # the degenerate map a random draw produces about one time in six.
+        return True, _probe.as_f32(
+            np.array([[1.0, 0.0, 0.1], [0.0, 1.0, -0.1], [0.0, 0.0, 1.0]])
+        )
+    if name == "pts":
+        return True, _probe.as_f32(np.array([[1.0, 2.0], [3.0, 4.0], [0.5, 1.5]]))
+    if name in ("dx", "dy"):
+        # A displacement field the size of the image it resamples.
+        spatial = shape[-2:] if len(shape) >= 2 else shape
+        return True, _tensor(
+            tuple(spatial), "unit", variant=1 if name == "dx" else 2, name=name
+        )
+    if name == "field":
+        # ``(H, W)``: a *scalar* field, as the docstring says.  Read as
+        # ``(2, H, W)`` it reached ``grid_sample`` with twice the values
+        # it expected and answered "reshape: total numel mismatch".
+        return True, _tensor((_L, _L), domain, name=name)
 
     if name in ("target", "labels"):
         # A class-index target is bounded by the width of the logits; a
@@ -347,8 +519,49 @@ def _rank_from(op_name: str, tensor_rank: int) -> int:
     return max(tensor_rank - 2, 1)
 
 
-def _tensor_shapes(op_name: str) -> "tuple[tuple[int, ...], ...]":
+#: What the *first parameter's name* says the probe should look like.
+#: A geometric transform takes an image, not a matrix of unrelated
+#: numbers, and ``(2, 4)`` is neither — the whole of
+#: ``utils.transforms.functional`` was probed with it and answered
+#: ShapeMismatch, which reads as a defect in nine working functions.
+_SHAPE_BY_FIRST_PARAM: "dict[str, tuple[tuple[int, ...], ...]]" = {
+    "img": ((_CIN, _L, _L), (_N, _CIN, _L, _L)),
+    "image": ((_CIN, _L, _L), (_N, _CIN, _L, _L)),
+    "pts": ((3, 2),),
+    "points": ((3, 2),),
+    "matrix": ((3, 3),),
+    "field": ((_L, _L),),
+}
+
+
+def _first_parameter(fn: Any) -> str:
+    try:
+        signature = inspect.signature(fn, annotation_format=annotationlib.Format.STRING)
+    except TypeError, ValueError, NameError:
+        return ""
+    return next(iter(signature.parameters), "")
+
+
+#: Ops defined only on a single element.  ``Tensor.item`` says so in its
+#: own error — "item() can only be called on a 1-element tensor" — and the
+#: probe handed it ``(2, 4)`` on every axis, so a method whose contract is
+#: one line went unchecked on all ten of them.
+_SINGLE_ELEMENT_OPS = frozenset({"item", "__index__", "__float__", "__int__"})
+
+
+def _tensor_shapes(op_name: str, fn: Any = None) -> "tuple[tuple[int, ...], ...]":
     """Candidate shapes for the first tensor, most likely first."""
+    if op_name in _SINGLE_ELEMENT_OPS:
+        return ((1,), (1, 1))
+    if re.search(r"pack_padded|pad_packed|pack_sequence", op_name):
+        # ``(T, B, *)`` — a padded batch, which is the only thing the
+        # packing helpers read.  Against a 2-D probe the time axis is
+        # missing and the length list indexes past the end of the shape.
+        return ((3, _N, _COUT),)
+    if fn is not None:
+        by_name = _SHAPE_BY_FIRST_PARAM.get(_first_parameter(fn))
+        if by_name is not None:
+            return by_name
     match = re.search(r"([123])d\b", op_name)
     if match is not None:
         rank = int(match.group(1))
@@ -379,6 +592,21 @@ def _value_for(
     name = param.name
     text = _clean(param.annotation)
 
+    # An unambiguous scalar annotation outranks every name rule below.
+    #
+    # ``condition`` is in :data:`_OPERAND_NAMES` because ``lucid.where``
+    # spells its predicate that way, and ``unsupported_if(condition:
+    # bool, ...)`` spells a plain bool the same — so it was handed a 2x4
+    # tensor and answered ``RuntimeError: Boolean value of Tensor is
+    # ambiguous`` on all eleven axes.  A name is evidence; an annotation
+    # that admits exactly one type is proof.
+    if re.fullmatch(r"bool|int|float|str", text.strip()) and name not in _BY_NAME:
+        return (
+            True,
+            {"bool": True, "int": 2, "float": 0.5, "str": "mean"}[text.strip()],
+            False,
+        )
+
     if name in _RELATED:
         found, value = _related_value(name, text, reference, op_name, domain)
         if found:
@@ -386,25 +614,132 @@ def _value_for(
 
     if name in _MODULE_PARAMS and not _is_tensor_annotation(text):
         return True, _module_for(name), False
+    # The ODE solvers.  ``t`` is annotated ``Tensor | Sequence[float]``,
+    # which reads as a sequence *of tensors* to the rule below and gave
+    # ``odeint`` a list of probes where it wanted a time grid.
+    # The quantisation helpers.  Their required arguments are a scale, a
+    # zero point, a scheme and a dtype — none of which any annotation
+    # describes ("_ScaleLike", "_ZeroPointLike", "QDtype") and none of
+    # which the ladder can invent, so eight public functions reported
+    # "no argument shape worked" on the smoke floor while the quant axis
+    # checked them properly one axis over.
+    if name in ("scale", "scales"):
+        return True, _probe.as_f32(np.array(0.02)), False
+    if name in ("zero_point", "biases"):
+        return True, _probe.as_int(np.array(0)), False
+    if name == "qdtype" or name == "dtype" and re.search(r"quant", op_name):
+        return True, lucid.quantization.quint8, False
+    if name == "qscheme":
+        return True, lucid.quantization.QScheme.PER_TENSOR_AFFINE, False
+    if name == "min_val":
+        return True, _probe.as_f32(np.array(-2.0)), False
+    if name == "max_val":
+        return True, _probe.as_f32(np.array(2.0)), False
+    if name == "quant_min":
+        return True, 0, False
+    if name == "quant_max":
+        return True, 255, False
+    if name == "modules_to_fuse":
+        return True, [["0", "1"]], False
+
+    if name == "vec":
+        # As many values as the parameters it is about to overwrite.
+        # ``Linear(4, 4)`` holds 20, and a ``(2, 4)`` probe made
+        # ``vector_to_parameters`` refuse a vector of the wrong length —
+        # correctly, and on all ten axes.
+        # ...and at the parameters' dtype.  A freshly built layer is
+        # float32 and ``copy_from`` refuses the sweep's float64.
+        total = sum(
+            int(np.prod(tuple(t.shape)))
+            for t in lucid.nn.Linear(_COUT, _COUT).parameters()
+        )
+        return True, _probe.as_f32(_probe.sample(domain, (total,))), True
+    # The remaining named arguments the ladder cannot invent.  Each is
+    # one entry and each was costing its symbol every cell it had.
+    if name in ("p", "q") and re.search(r"kl_divergence", op_name):
+        return True, lucid.distributions.Normal(0.0, 1.0), False
+    if name == "dataset":
+        return True, _toy_dataset(), False
+    if name == "v" and re.search(r"vjp", op_name):
+        # ``autograd.vjp(func, inputs, v)`` — the cotangent has the shape
+        # of the *output*, and the probe function reduces to a scalar.
+        return True, _probe.as_f64(np.array(1.0)), False
+    if name == "name" and re.search(r"weight|param", op_name):
+        return True, "weight", False
+    if name == "lengths":
+        # ``Tensor | list[int]`` reads as a sequence of tensors to the
+        # rule below, so the packing helpers were handed two float
+        # probes where they wanted two integers.
+        #
+        # ``random_split`` spells its partition sizes the same way and
+        # requires them to *sum to the dataset length*, which the
+        # sequence-length reading cannot satisfy.
+        if re.search(r"random_split|split", op_name):
+            return True, [4, 2], False
+        return True, [int(shape[0]), max(int(shape[0]) - 1, 1)], False
+    if name == "y0":
+        return True, _tensor((2,), "positive"), True
+    if name in ("t", "t_span") and re.search(r"odeint|solve_ivp", op_name):
+        return True, [0.0, 0.5, 1.0], False
+    if name == "event_fn":
+        return True, (lambda _t, y: y.reshape(-1)[0] - 1e9), False
     if name in _TENSOR_SEQUENCE_PARAMS or _is_tensor_sequence(text):
         # Marked differentiable: for ``cat`` and ``stack`` the sequence is
         # the operand, and the generic ladder's ``op([x, x])`` form treats
         # it the same way.  Left un-marked, ``_build`` finds no tensor to
         # differentiate and discards a perfectly good invocation.
-        return (
-            True,
-            [_tensor(shape, domain, variant), _tensor(shape, domain, variant=1)],
-            True,
-        )
+        operands = [_tensor(shape, domain, variant), _tensor(shape, domain, variant=1)]
+        if re.search(r"gradcheck|gradgradcheck", op_name):
+            # These differentiate what they are given, so what they are
+            # given has to be differentiable — "an input has no gradient
+            # after backward()" is the check correctly refusing a leaf
+            # nobody asked to track.
+            for operand in operands:
+                operand.requires_grad_(True)
+        return True, operands, True
     if name == "parameters" or re.search(r"Iterable\[Parameter\]", text):
         return True, list(lucid.nn.Linear(_COUT, _COUT).parameters()), False
+    if re.search(r"\bCallable\b", text) and re.search(r"odeint|solve_ivp", op_name):
+        # A right-hand side, not a loss: ``dy/dt`` has to have ``y``'s
+        # shape, and the scalar probe below made every solver report
+        # "func returned shape () but y0 has shape (2,)".
+        return True, (lambda _t, y: y * 0.5), False
+    if re.search(r"\bCallable\b", text) and re.search(r"odeint|solve_ivp", op_name):
+        # A right-hand side, not a loss: ``dy/dt`` has to have ``y``'s
+        # shape, and the scalar probe below made every solver report
+        # "func returned shape () but y0 has shape (2,)".
+        return True, (lambda _t, y: y * 0.5), False
     if re.search(r"\bCallable\b", text):
         # ``gradcheck``, ``jacrev``, ``vmap`` — the function under test is
         # the argument.  Squaring is differentiable twice and has a second
         # derivative that is not zero, so it exercises what they compute.
-        return True, (lambda *operands: operands[0] * operands[0]), False
+        #
+        # Reduced to a scalar, because ``gradcheck`` and ``hessian``
+        # require one and say so — "gradcheck requires a scalar-valued
+        # function" — while everything else here is happy either way.
+        # Every operand, not just the first.  ``gradcheck`` is handed a
+        # *sequence* of inputs and requires each to receive a gradient —
+        # a probe function that reads only ``operands[0]`` makes it
+        # report "an input has no gradient after backward()", which is
+        # the check working correctly on a function that ignores half
+        # its arguments.
+        return (
+            True,
+            (lambda *operands: sum((x * x).sum() for x in operands)),
+            False,
+        )
+    if name in ("LU", "LD") and len(shape) == 2:
+        pair = _factorization(name, shape[-1])
+        if pair is not None:
+            return True, pair[0], True
+
     if _is_tensor_annotation(text) or name in _TENSOR_PARAMS:
-        return True, _tensor(shape, domain, variant), True
+        # An op that reads a table wants the *row numbers*, and the
+        # annotation says ``Tensor`` for both.  ``check_embedding_indices``
+        # is named after what it takes and was still handed floats.
+        if variant == 0 and re.search(r"embedding_indices", op_name):
+            return True, _indices(shape, 8), True
+        return True, _tensor(shape, domain, variant, name=name), True
     # ``Self`` on a Tensor method, and the operand names the free
     # functions use.  ``lucid.atan2(input, other)`` carries no annotation
     # at all and ``Tensor.addmm(self, mat1, mat2)`` spells its operands
@@ -561,7 +896,7 @@ def invocations(fn: Any, op_name: str, domain: str) -> "Iterator[Call]":
         Key into :data:`~lucid.test.audit._probe.DOMAINS`.
     """
     emitted = 0
-    for shape in _tensor_shapes(op_name):
+    for shape in _tensor_shapes(op_name, fn):
         plan = _build(fn, op_name, domain, shape)
         if plan is None:
             continue
@@ -577,7 +912,7 @@ def explain(fn: Any, op_name: str) -> str:
         signature = inspect.signature(fn, annotation_format=annotationlib.Format.STRING)
     except (TypeError, ValueError, NameError) as exc:
         return f"unreadable signature: {type(exc).__name__}"
-    for shape in _tensor_shapes(op_name):
+    for shape in _tensor_shapes(op_name, fn):
         plan = _Plan()
         probe = _build(fn, op_name, "moderate", shape)
         if probe is not None:

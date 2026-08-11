@@ -34,7 +34,7 @@ class TestWeightsEnum:
 
     def test_meta_present(self) -> None:
         meta = ResNet18Weights.IMAGENET1K_V1.meta
-        assert meta["source"].startswith("torchvision/")
+        assert meta["source"].startswith("reference_vision/")
         assert meta["license"] == "bsd-3-clause"
         assert meta["metrics"]["ImageNet-1k"]["acc@1"] == pytest.approx(69.758)
 
@@ -54,7 +54,11 @@ class TestWeightsEnum:
 
 class TestDiscovery:
     def test_list_pretrained(self) -> None:
-        assert W.list_pretrained("resnet_18") == ["IMAGENET1K_V1"]
+        # These are 1000-class ImageNet weights including the fc layer, so
+        # they belong to the classifier factory -- the key every other
+        # classification enum in the zoo registers under.
+        assert W.list_pretrained("resnet_18_cls") == ["IMAGENET1K_V1"]
+        assert W.list_pretrained("resnet_18") == []
 
     def test_list_pretrained_unknown(self) -> None:
         assert W.list_pretrained("does_not_exist") == []

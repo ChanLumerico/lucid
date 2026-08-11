@@ -200,6 +200,59 @@ class LongestMaxSize(_MaxSizeResize):
         return f"LongestMaxSize(max_size={self.max_size}, p={self.p})"
 
 
+class ResizeShortestEdge(_MaxSizeResize):
+    r"""Reference detection resize: shortest side to ``min_size``, capped.
+
+    Applies the single scale factor
+
+    .. math::
+
+        s = \min\!\left(
+            \frac{\text{min\_size}}{\min(H, W)},\;
+            \frac{\text{max\_size}}{\max(H, W)}
+        \right)
+
+    so the shorter side reaches ``min_size`` unless that would push the
+    longer side past ``max_size``, in which case the longer side is what
+    binds.  This is what ``GeneralizedRCNNTransform`` does, and it is not
+    expressible as ``SmallestMaxSize`` followed by ``LongestMaxSize`` —
+    the latter rescales unconditionally and would undo the first stage.
+
+    Parameters
+    ----------
+    min_size : int
+        Target length of the shorter side.
+    max_size : int
+        Hard cap on the longer side.
+    interpolation : int or str or Interpolation, optional, default=1
+        Image resampling mode.
+    p : float, optional, default=1.0
+        Probability of applying the transform.
+    """
+
+    def __init__(
+        self,
+        min_size: int,
+        max_size: int,
+        interpolation: str | Interpolation | int = Interpolation.BILINEAR,
+        p: float = 1.0,
+    ) -> None:
+        super().__init__(max_size, interpolation=interpolation, p=p)
+        self.min_size = min_size
+
+    @override
+    def _target(self, h: int, w: int) -> tuple[int, int]:
+        scale = min(self.min_size / min(h, w), self.max_size / max(h, w))
+        return int(round(h * scale)), int(round(w * scale))
+
+    @override
+    def __repr__(self) -> str:
+        return (
+            f"ResizeShortestEdge(min_size={self.min_size}, "
+            f"max_size={self.max_size}, p={self.p})"
+        )
+
+
 # ── crop family ─────────────────────────────────────────────────────
 
 

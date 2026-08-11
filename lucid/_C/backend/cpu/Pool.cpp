@@ -97,6 +97,25 @@ void max_pool2d_backward_typed(
     }
 }
 
+// Per-axis divisor contribution for the average-pool window at output index
+// ``o``.
+//
+// The window end is clamped to ``S + pad`` — never past the right padding —
+// so a ceil-mode overhang counts toward neither the sum nor the divisor.
+// ``count_include_pad`` then selects between the padded extent and the number
+// of real input elements the window actually covers.  For floor-mode pooling
+// with ``count_include_pad`` this returns exactly ``K``, which is why every
+// pre-existing call site keeps its previous divisor.
+inline int avg_pool_span(int o, int S, int K, int stride, int pad, bool count_include_pad) {
+    const int start = o * stride - pad;
+    const int end = std::min(start + K, S + pad);
+    if (count_include_pad)
+        return end - start;
+    const int lo = std::max(start, 0);
+    const int hi = std::min(end, S);
+    return hi > lo ? hi - lo : 0;
+}
+
 template <typename T>
 void avg_pool2d_forward_typed(const T* x,
                               T* y,
@@ -111,8 +130,8 @@ void avg_pool2d_forward_typed(const T* x,
                               int sh,
                               int sw,
                               int ph,
-                              int pw) {
-    const T inv = T{1} / static_cast<T>(KH * KW);
+                              int pw,
+                              bool count_include_pad) {
     for (int b = 0; b < B; ++b) {
         for (int c = 0; c < C; ++c) {
             const T* xb = x + (b * C + c) * H * W;
@@ -131,7 +150,9 @@ void avg_pool2d_forward_typed(const T* x,
                             sum += xb[ih * W + iw];
                         }
                     }
-                    yb[oh * OW + ow] = sum * inv;
+                    const int denom = avg_pool_span(oh, H, KH, sh, ph, count_include_pad) *
+                                      avg_pool_span(ow, W, KW, sw, pw, count_include_pad);
+                    yb[oh * OW + ow] = denom > 0 ? sum / static_cast<T>(denom) : T{};
                 }
             }
         }
@@ -152,15 +173,19 @@ void avg_pool2d_backward_typed(const T* g,
                                int sh,
                                int sw,
                                int ph,
-                               int pw) {
-    const T inv = T{1} / static_cast<T>(KH * KW);
+                               int pw,
+                               bool count_include_pad) {
     for (int b = 0; b < B; ++b) {
         for (int c = 0; c < C; ++c) {
             const T* gb = g + (b * C + c) * OH * OW;
             T* dxb = dx + (b * C + c) * H * W;
             for (int oh = 0; oh < OH; ++oh) {
                 for (int ow = 0; ow < OW; ++ow) {
-                    const T scaled = gb[oh * OW + ow] * inv;
+                    const int denom = avg_pool_span(oh, H, KH, sh, ph, count_include_pad) *
+                                      avg_pool_span(ow, W, KW, sw, pw, count_include_pad);
+                    if (denom <= 0)
+                        continue;
+                    const T scaled = gb[oh * OW + ow] / static_cast<T>(denom);
                     for (int kh = 0; kh < KH; ++kh) {
                         const int ih = oh * sh - ph + kh;
                         if (ih < 0 || ih >= H)
@@ -225,9 +250,16 @@ void max_pool1d_backward_typed(
 }
 
 template <typename T>
-void avg_pool1d_forward_typed(
-    const T* x, T* y, int B, int C, int L, int KL, int OL, int sl, int pl) {
-    const T inv = T{1} / static_cast<T>(KL);
+void avg_pool1d_forward_typed(const T* x,
+                              T* y,
+                              int B,
+                              int C,
+                              int L,
+                              int KL,
+                              int OL,
+                              int sl,
+                              int pl,
+                              bool count_include_pad) {
     for (int b = 0; b < B; ++b) {
         for (int c = 0; c < C; ++c) {
             const T* xb = x + (b * C + c) * L;
@@ -240,22 +272,33 @@ void avg_pool1d_forward_typed(
                         continue;
                     sum += xb[il];
                 }
-                yb[ol] = sum * inv;
+                const int denom = avg_pool_span(ol, L, KL, sl, pl, count_include_pad);
+                yb[ol] = denom > 0 ? sum / static_cast<T>(denom) : T{};
             }
         }
     }
 }
 
 template <typename T>
-void avg_pool1d_backward_typed(
-    const T* g, T* dx, int B, int C, int L, int KL, int OL, int sl, int pl) {
-    const T inv = T{1} / static_cast<T>(KL);
+void avg_pool1d_backward_typed(const T* g,
+                               T* dx,
+                               int B,
+                               int C,
+                               int L,
+                               int KL,
+                               int OL,
+                               int sl,
+                               int pl,
+                               bool count_include_pad) {
     for (int b = 0; b < B; ++b) {
         for (int c = 0; c < C; ++c) {
             const T* gb = g + (b * C + c) * OL;
             T* dxb = dx + (b * C + c) * L;
             for (int ol = 0; ol < OL; ++ol) {
-                const T scaled = gb[ol] * inv;
+                const int denom = avg_pool_span(ol, L, KL, sl, pl, count_include_pad);
+                if (denom <= 0)
+                    continue;
+                const T scaled = gb[ol] / static_cast<T>(denom);
                 for (int kl = 0; kl < KL; ++kl) {
                     const int il = ol * sl - pl + kl;
                     if (il < 0 || il >= L)
@@ -379,8 +422,8 @@ void avg_pool3d_forward_typed(const T* x,
                               int sw,
                               int pd,
                               int ph,
-                              int pw) {
-    const T inv = T{1} / static_cast<T>(KD * KH * KW);
+                              int pw,
+                              bool count_include_pad) {
     const int HW = H * W;
     const int OHW = OH * OW;
     for (int b = 0; b < B; ++b) {
@@ -407,7 +450,12 @@ void avg_pool3d_forward_typed(const T* x,
                                 }
                             }
                         }
-                        yb[(od * OH + oh) * OW + ow] = sum * inv;
+                        const int denom =
+                            avg_pool_span(od, D, KD, sd, pd, count_include_pad) *
+                            avg_pool_span(oh, H, KH, sh, ph, count_include_pad) *
+                            avg_pool_span(ow, W, KW, sw, pw, count_include_pad);
+                        yb[(od * OH + oh) * OW + ow] =
+                            denom > 0 ? sum / static_cast<T>(denom) : T{};
                     }
                 }
             }
@@ -434,8 +482,8 @@ void avg_pool3d_backward_typed(const T* g,
                                int sw,
                                int pd,
                                int ph,
-                               int pw) {
-    const T inv = T{1} / static_cast<T>(KD * KH * KW);
+                               int pw,
+                               bool count_include_pad) {
     const int HW = H * W;
     const int OHW = OH * OW;
     for (int b = 0; b < B; ++b) {
@@ -445,7 +493,14 @@ void avg_pool3d_backward_typed(const T* g,
             for (int od = 0; od < OD; ++od) {
                 for (int oh = 0; oh < OH; ++oh) {
                     for (int ow = 0; ow < OW; ++ow) {
-                        const T scaled = gb[(od * OH + oh) * OW + ow] * inv;
+                        const int denom =
+                            avg_pool_span(od, D, KD, sd, pd, count_include_pad) *
+                            avg_pool_span(oh, H, KH, sh, ph, count_include_pad) *
+                            avg_pool_span(ow, W, KW, sw, pw, count_include_pad);
+                        if (denom <= 0)
+                            continue;
+                        const T scaled =
+                            gb[(od * OH + oh) * OW + ow] / static_cast<T>(denom);
                         for (int kd = 0; kd < KD; ++kd) {
                             const int id = od * sd - pd + kd;
                             if (id < 0 || id >= D)
@@ -504,20 +559,24 @@ void max_pool1d_backward_f64(
     max_pool1d_backward_typed<double>(g, a, dx, B, C, L, OL);
 }
 void avg_pool1d_forward_f32(
-    const float* x, float* y, int B, int C, int L, int KL, int OL, int sl, int pl) {
-    avg_pool1d_forward_typed<float>(x, y, B, C, L, KL, OL, sl, pl);
+    const float* x, float* y, int B, int C, int L, int KL, int OL, int sl, int pl,
+                            bool count_include_pad) {
+    avg_pool1d_forward_typed<float>(x, y, B, C, L, KL, OL, sl, pl, count_include_pad);
 }
 void avg_pool1d_forward_f64(
-    const double* x, double* y, int B, int C, int L, int KL, int OL, int sl, int pl) {
-    avg_pool1d_forward_typed<double>(x, y, B, C, L, KL, OL, sl, pl);
+    const double* x, double* y, int B, int C, int L, int KL, int OL, int sl, int pl,
+                            bool count_include_pad) {
+    avg_pool1d_forward_typed<double>(x, y, B, C, L, KL, OL, sl, pl, count_include_pad);
 }
 void avg_pool1d_backward_f32(
-    const float* g, float* dx, int B, int C, int L, int KL, int OL, int sl, int pl) {
-    avg_pool1d_backward_typed<float>(g, dx, B, C, L, KL, OL, sl, pl);
+    const float* g, float* dx, int B, int C, int L, int KL, int OL, int sl, int pl,
+                             bool count_include_pad) {
+    avg_pool1d_backward_typed<float>(g, dx, B, C, L, KL, OL, sl, pl, count_include_pad);
 }
 void avg_pool1d_backward_f64(
-    const double* g, double* dx, int B, int C, int L, int KL, int OL, int sl, int pl) {
-    avg_pool1d_backward_typed<double>(g, dx, B, C, L, KL, OL, sl, pl);
+    const double* g, double* dx, int B, int C, int L, int KL, int OL, int sl, int pl,
+                             bool count_include_pad) {
+    avg_pool1d_backward_typed<double>(g, dx, B, C, L, KL, OL, sl, pl, count_include_pad);
 }
 
 void max_pool3d_forward_f32(const float* x,
@@ -610,9 +669,10 @@ void avg_pool3d_forward_f32(const float* x,
                             int sw,
                             int pd,
                             int ph,
-                            int pw) {
+                            int pw,
+                            bool count_include_pad) {
     avg_pool3d_forward_typed<float>(x, y, B, C, D, H, W, KD, KH, KW, OD, OH, OW, sd, sh, sw, pd, ph,
-                                    pw);
+                                    pw, count_include_pad);
 }
 void avg_pool3d_forward_f64(const double* x,
                             double* y,
@@ -632,9 +692,10 @@ void avg_pool3d_forward_f64(const double* x,
                             int sw,
                             int pd,
                             int ph,
-                            int pw) {
+                            int pw,
+                            bool count_include_pad) {
     avg_pool3d_forward_typed<double>(x, y, B, C, D, H, W, KD, KH, KW, OD, OH, OW, sd, sh, sw, pd,
-                                     ph, pw);
+                                     ph, pw, count_include_pad);
 }
 void avg_pool3d_backward_f32(const float* g,
                              float* dx,
@@ -654,9 +715,10 @@ void avg_pool3d_backward_f32(const float* g,
                              int sw,
                              int pd,
                              int ph,
-                             int pw) {
+                             int pw,
+                             bool count_include_pad) {
     avg_pool3d_backward_typed<float>(g, dx, B, C, D, H, W, KD, KH, KW, OD, OH, OW, sd, sh, sw, pd,
-                                     ph, pw);
+                                     ph, pw, count_include_pad);
 }
 void avg_pool3d_backward_f64(const double* g,
                              double* dx,
@@ -676,9 +738,10 @@ void avg_pool3d_backward_f64(const double* g,
                              int sw,
                              int pd,
                              int ph,
-                             int pw) {
+                             int pw,
+                             bool count_include_pad) {
     avg_pool3d_backward_typed<double>(g, dx, B, C, D, H, W, KD, KH, KW, OD, OH, OW, sd, sh, sw, pd,
-                                      ph, pw);
+                                      ph, pw, count_include_pad);
 }
 
 void max_pool2d_forward_f32(const float* x,
@@ -743,8 +806,9 @@ void avg_pool2d_forward_f32(const float* x,
                             int sh,
                             int sw,
                             int ph,
-                            int pw) {
-    avg_pool2d_forward_typed<float>(x, y, B, C, H, W, KH, KW, OH, OW, sh, sw, ph, pw);
+                            int pw,
+                            bool count_include_pad) {
+    avg_pool2d_forward_typed<float>(x, y, B, C, H, W, KH, KW, OH, OW, sh, sw, ph, pw, count_include_pad);
 }
 void avg_pool2d_forward_f64(const double* x,
                             double* y,
@@ -759,8 +823,9 @@ void avg_pool2d_forward_f64(const double* x,
                             int sh,
                             int sw,
                             int ph,
-                            int pw) {
-    avg_pool2d_forward_typed<double>(x, y, B, C, H, W, KH, KW, OH, OW, sh, sw, ph, pw);
+                            int pw,
+                            bool count_include_pad) {
+    avg_pool2d_forward_typed<double>(x, y, B, C, H, W, KH, KW, OH, OW, sh, sw, ph, pw, count_include_pad);
 }
 void avg_pool2d_backward_f32(const float* g,
                              float* dx,
@@ -775,8 +840,9 @@ void avg_pool2d_backward_f32(const float* g,
                              int sh,
                              int sw,
                              int ph,
-                             int pw) {
-    avg_pool2d_backward_typed<float>(g, dx, B, C, H, W, KH, KW, OH, OW, sh, sw, ph, pw);
+                             int pw,
+                             bool count_include_pad) {
+    avg_pool2d_backward_typed<float>(g, dx, B, C, H, W, KH, KW, OH, OW, sh, sw, ph, pw, count_include_pad);
 }
 void avg_pool2d_backward_f64(const double* g,
                              double* dx,
@@ -791,8 +857,9 @@ void avg_pool2d_backward_f64(const double* g,
                              int sh,
                              int sw,
                              int ph,
-                             int pw) {
-    avg_pool2d_backward_typed<double>(g, dx, B, C, H, W, KH, KW, OH, OW, sh, sw, ph, pw);
+                             int pw,
+                             bool count_include_pad) {
+    avg_pool2d_backward_typed<double>(g, dx, B, C, H, W, KH, KW, OH, OW, sh, sw, ph, pw, count_include_pad);
 }
 
 }  // namespace lucid::backend::cpu

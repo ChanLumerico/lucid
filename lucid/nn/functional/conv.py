@@ -5,6 +5,7 @@ nn.functional convolution operations.
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._unsupported import unsupported_if
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -322,6 +323,20 @@ def conv_transpose1d(
     >>> y.shape
     (1, 2, 21)
     """
+    unsupported_if(
+        groups != 1,
+        "conv_transpose1d",
+        "groups",
+        groups,
+        detail="Only groups=1 is supported.",
+    )
+    unsupported_if(
+        dilation != 1,
+        "conv_transpose1d",
+        "dilation",
+        dilation,
+        detail="Only dilation=1 is supported.",
+    )
     s = _normalize_int_or_tuple(stride, 1)[0]
     p = _normalize_int_or_tuple(padding, 1)[0]
     op = _normalize_int_or_tuple(output_padding, 1)[0]
@@ -406,6 +421,20 @@ def conv_transpose2d(
     >>> y.shape
     (1, 8, 14, 14)
     """
+    unsupported_if(
+        groups != 1,
+        "conv_transpose2d",
+        "groups",
+        groups,
+        detail="Only groups=1 is supported.",
+    )
+    unsupported_if(
+        dilation != 1 and dilation != (1, 1),
+        "conv_transpose2d",
+        "dilation",
+        dilation,
+        detail="Only dilation=1 is supported.",
+    )
     sh, sw = _normalize_int_or_tuple(stride, 2)
     ph, pw = _normalize_int_or_tuple(padding, 2)
     oh, ow = _normalize_int_or_tuple(output_padding, 2)
@@ -487,6 +516,20 @@ def conv_transpose3d(
     >>> y.shape
     (1, 4, 8, 16, 16)
     """
+    unsupported_if(
+        groups != 1,
+        "conv_transpose3d",
+        "groups",
+        groups,
+        detail="Only groups=1 is supported.",
+    )
+    unsupported_if(
+        dilation != 1 and dilation != (1, 1, 1),
+        "conv_transpose3d",
+        "dilation",
+        dilation,
+        detail="Only dilation=1 is supported.",
+    )
     sd, sh, sw = _normalize_int_or_tuple(stride, 3)
     pd, ph, pw = _normalize_int_or_tuple(padding, 3)
     od, oh, ow = _normalize_int_or_tuple(output_padding, 3)

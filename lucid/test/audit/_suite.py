@@ -22,16 +22,20 @@ MLX and Accelerate, not Python line tracing.  A floor that is free to
 check should be checked on every run rather than remembered.
 """
 
+import contextlib
 import json
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from lucid.test.audit._console import Console
 
 
@@ -76,8 +80,32 @@ class SuiteResult:
         return 100.0 * self.line_covered / self.line_total
 
     @property
+    def finished(self) -> bool:
+        """Whether pytest reached a summary line at all.
+
+        Every pytest run that completes reports ``passed``, ``failed`` or
+        ``error``.  Those three and no others: the *collection* line
+        already says ``collected 19146 items / 10831 deselected / 14
+        skipped / 8315 selected``, so a check for "any counts at all" is
+        satisfied before a single test has run — which is exactly how a
+        suite killed at 37% reported itself clean twice.
+        """
+        return any(key in self.counts for key in ("passed", "failed", "error"))
+
+    @property
     def broken(self) -> int:
-        """Failures plus errors — the count that makes the verdict red."""
+        """Failures plus errors — the count that makes the verdict red.
+
+        A stage that **died** counts as one problem rather than none.
+        This was the reverse: ``returncode`` was recorded and never
+        consulted, so a pytest killed at 37% — no summary line, no
+        counts, no coverage data — produced ``broken == 0`` and the
+        verdict printed ``suite failures 0`` over a suite that had not
+        run.  A gate whose stage can vanish silently is worse than no
+        gate, because it answers.
+        """
+        if not self.finished:
+            return 1
         return self.counts.get("failed", 0) + self.counts.get(
             "error", self.counts.get("errors", 0)
         )
@@ -89,6 +117,7 @@ def run_suite(
     *,
     with_coverage: bool = True,
     root: "Path | None" = None,
+    ignore: "Sequence[str] | None" = None,
 ) -> SuiteResult:
     """Run the suite in a subprocess and return what it established.
 
@@ -104,6 +133,11 @@ def run_suite(
         Where progress is echoed while the child runs.
     path : str, optional
         What to hand pytest.  Default ``"lucid/test"`` — the whole tree.
+    ignore : sequence of str, optional
+        Subtrees to leave out, as ``--ignore=`` paths.  A gate is worth
+        having only if it can be run, and the model-zoo parity suite is
+        slow enough and optional enough that excluding it has to be one
+        flag rather than a reason to skip the whole stage.
         ``pytest.ini_options`` already deselects the audit sweep (marked
         ``audit``) and the heavy models, so this is "everything except
         the stage that is running right now".
@@ -124,7 +158,6 @@ def run_suite(
         return SuiteResult(unavailable=f"{path} is not in this checkout")
 
     argv = [sys.executable]
-    coverage_file = root / ".coverage.audit"
     if with_coverage:
         try:
             import coverage  # noqa: F401
@@ -136,12 +169,25 @@ def run_suite(
                     "grey",
                 )
             )
+
+    # The scratch files go to a system temporary directory rather than the
+    # repository root.  Running the gate must leave the checkout exactly as
+    # it found it: a stray ``.coverage.audit`` is picked up by the sync
+    # harness, shows in ``git status`` next to real work, and survives any
+    # run that is interrupted before the read-back.  ``parallel`` mode also
+    # writes ``<data-file>.<host>.<pid>.<random>`` siblings that deleting
+    # one known name would miss; a directory takes all of them with it.
+    scratch = contextlib.ExitStack()
+    coverage_file = None
     if with_coverage:
+        folder = Path(scratch.enter_context(tempfile.TemporaryDirectory()))
+        coverage_file = folder / "data"
         argv += ["-m", "coverage", "run", f"--data-file={coverage_file}"]
     argv += [
         "-m",
         "pytest",
         path,
+        *[f"--ignore={sub}" for sub in (ignore or ())],
         "-q",
         "-rfE",
         "--no-header",
@@ -153,46 +199,54 @@ def run_suite(
         f"--color={'yes' if console.colour else 'no'}",
     ]
 
-    console.always(console.paint(f"  running {path} — this is the long stage", "grey"))
+    scope = path + ("".join(f"  (without {sub})" for sub in (ignore or ())))
+    console.always(console.paint(f"  running {scope} — this is the long stage", "grey"))
 
     started = time.time()
-    proc = subprocess.Popen(
-        argv,
-        cwd=root,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    result = SuiteResult(ran=True)
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        line = line.rstrip("\n")
-        match = _FAILURE.match(line)
-        if match:
-            result.failures.append(match.group(1))
-        for count, label in _COUNT.findall(line):
-            if label.startswith("error"):
-                label = "error"
-            result.counts[label] = int(count)
-        if line.strip():
-            # ``write`` rather than ``always``: under ``--quiet`` the child's
-            # chatter is exactly what should disappear, and the counts and
-            # failures below survive because they go through ``always``.
-            console.write(console.paint(f"  │ {line[:160]}", "grey"))
-    result.returncode = proc.wait()
-    result.duration = time.time() - started
+    with scratch:
+        proc = subprocess.Popen(
+            argv,
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        result = SuiteResult(ran=True)
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            line = line.rstrip("\n")
+            match = _FAILURE.match(line)
+            if match:
+                result.failures.append(match.group(1))
+            for count, label in _COUNT.findall(line):
+                if label.startswith("error"):
+                    label = "error"
+                result.counts[label] = int(count)
+            if line.strip():
+                # ``write`` rather than ``always``: under ``--quiet`` the
+                # child's chatter is exactly what should disappear, and the
+                # counts and failures below survive because they go through
+                # ``always``.
+                console.write(console.paint(f"  │ {line[:160]}", "grey"))
+        result.returncode = proc.wait()
+        result.duration = time.time() - started
 
-    if with_coverage:
-        _read_coverage(result, root, coverage_file, console)
+        if coverage_file is not None:
+            _read_coverage(result, root, coverage_file, console)
     return result
 
 
 def _read_coverage(
     result: SuiteResult, root: Path, data_file: Path, console: "Console"
 ) -> None:
-    """Turn the collected data into per-file covered/total counts."""
-    out = root / ".coverage.audit.json"
+    """Turn the collected data into per-file covered/total counts.
+
+    ``data_file`` lives in a temporary directory the caller owns, and the
+    JSON is written beside it, so neither outlives the stage and neither
+    is ever written into the checkout.
+    """
+    out = data_file.with_name("coverage.json")
     try:
         subprocess.run(
             [
@@ -215,9 +269,6 @@ def _read_coverage(
             console.paint(f"  could not read the coverage data: {exc!r}", "grey")
         )
         return
-    finally:
-        for leftover in (out, data_file):
-            leftover.unlink(missing_ok=True)
 
     totals = payload["totals"]
     result.line_covered = totals["covered_lines"]
@@ -340,6 +391,19 @@ def report_suite(result: SuiteResult, console: "Console") -> None:
         return
 
     counts = result.counts
+    if not result.finished:
+        console.always("")
+        console.always(
+            console.paint(
+                f"  the suite did not finish — pytest exited {result.returncode} "
+                f"after {result.duration:.0f}s without reporting a single "
+                "passed, failed or errored test. Nothing was established; "
+                "this is not a clean run.",
+                "red",
+                "bold",
+            )
+        )
+        return
     parts = [f"{counts.get('passed', 0)} passed"]
     if result.broken:
         parts.append(f"{result.broken} failed")

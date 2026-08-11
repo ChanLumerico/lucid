@@ -425,3 +425,46 @@ def test_subsystem_kinds_reach_their_dedicated_axis() -> None:
         symbols = _surface.enumerate_surface([subsystem])
         assert symbols, subsystem
         assert any(by_name[axis_name].applies(s) for s in symbols), subsystem
+
+
+# ── the axes' own red light ──────────────────────────────────────────────────
+
+
+def test_every_mutant_is_caught_by_the_axis_that_claims_it() -> None:
+    """A green axis is not evidence until it has been made to go red.
+
+    Each mutant is the framework broken in exactly the way one axis
+    exists to notice.  An axis that stays green under its own defect
+    class is decoration, and this is the test that says so — it is how
+    ``broadcast`` was found comparing shapes and never values, and how
+    the tokenizer round trip was found passing a decoder that silently
+    dropped a character.
+    """
+    from lucid.test.audit import _mutants
+
+    blind = [
+        f"{verdict.axis}: {verdict.why} -> {verdict.status}"
+        for verdict in _mutants.verify()
+        if not verdict.caught
+    ]
+    assert not blind, "axes that did not notice their own defect: " + "; ".join(blind)
+
+
+def test_the_unproven_list_does_not_grow_silently() -> None:
+    """Adding an axis without a mutant is allowed, and has to be visible.
+
+    The number is a ceiling, not a target: lower it by writing a mutant,
+    never by deleting an axis.
+    """
+    from lucid.test.audit import _mutants
+
+    unproven = _mutants.unproven_axes()
+    assert len(unproven) <= 4, (
+        f"{len(unproven)} axes have no mutant and nothing shows they can fail: "
+        f"{unproven}"
+    )
+    unexplained = [name for name in unproven if name not in _mutants.UNPROVEN_REASONS]
+    assert not unexplained, (
+        "an axis may go unproven, and not silently — say why in "
+        f"UNPROVEN_REASONS: {unexplained}"
+    )

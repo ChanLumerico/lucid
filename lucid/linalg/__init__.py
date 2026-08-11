@@ -234,6 +234,7 @@ def cholesky(x: Tensor, *, upper: bool = False) -> Tensor:
 
 from lucid.autograd.function import Function as _AutogradFunction
 from lucid.autograd.function import FunctionCtx
+from lucid._unsupported import unsupported_if
 
 
 @final
@@ -651,7 +652,7 @@ class _SVDVhGrad(_AutogradFunction):
         return dA
 
 
-def svd(x: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
+def svd(x: Tensor, full_matrices: bool = False) -> tuple[Tensor, Tensor, Tensor]:
     r"""Singular value decomposition of a matrix.
 
     Factorizes any (possibly rectangular) matrix :math:`A \in
@@ -709,6 +710,13 @@ def svd(x: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     >>> S
     tensor([2., 1.])
     """
+    unsupported_if(
+        full_matrices,
+        "svd",
+        "full_matrices",
+        full_matrices,
+        detail="Only the reduced factorisation is computed; the default is False here for that reason.",
+    )
     _svd_result = _la.svd(_unwrap(x))
     u_impl: _C_engine.TensorImpl
     s_impl: _C_engine.TensorImpl
@@ -1016,6 +1024,13 @@ def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
     >>> lucid.allclose(Q.T @ Q, lucid.eye(2), atol=1e-5)   # Q is orthonormal
     True
     """
+    unsupported_if(
+        mode != "reduced",
+        "qr",
+        "mode",
+        mode,
+        detail="Only the reduced factorisation is computed.",
+    )
     q_impl, r_impl = _la.qr(_unwrap(x))
     if not _C_engine.grad_enabled() or not x.requires_grad:
         return _wrap(q_impl), _wrap(r_impl)
@@ -1580,6 +1595,13 @@ def matrix_rank(
     >>> matrix_rank(lucid.tensor([[1.0, 2.0], [2.0, 4.0]]))
     tensor(1, dtype=lucid.int64)
     """
+    unsupported_if(
+        hermitian,
+        "matrix_rank",
+        "hermitian",
+        hermitian,
+        detail="The general SVD path is always used.",
+    )
     _, S, _ = svd(A)
     m, n = int(A.shape[-2]), int(A.shape[-1])
     if tol is None:
@@ -2404,6 +2426,8 @@ def lstsq(
     >>> sol
     tensor([3., 3.])
     """
+    unsupported_if(rcond is not None, "lstsq", "rcond", rcond)
+    unsupported_if(driver is not None, "lstsq", "driver", driver)
     sol = _wrap(_la.lstsq(_unwrap(A), _unwrap(B)))
     dev = _unwrap(A).device
     dt = _unwrap(A).dtype
@@ -2561,6 +2585,13 @@ def ldl_factor(
     >>> A = lucid.tensor([[1.0, 2.0], [2.0, 3.0]])
     >>> LD, piv = ldl_factor(A)
     """
+    unsupported_if(
+        not hermitian,
+        "ldl_factor",
+        "hermitian",
+        hermitian,
+        detail="Only the Hermitian case is computed.",
+    )
     ld_impl, piv_impl = _la.ldl_factor(_unwrap(A))
     return _wrap(ld_impl), _wrap(piv_impl)
 

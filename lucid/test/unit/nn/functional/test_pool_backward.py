@@ -55,3 +55,81 @@ def test_max_pool2d_variants_metal_matches_cpu(k: int, s: int, hw: tuple) -> Non
         _grad(fn, (2, 3, *hw), "cpu", 7),
         atol=1e-5,
     )
+
+
+# ---------------------------------------------------------------------------
+# ceil_mode / count_include_pad regression
+#
+# Both parameters were accepted by the Python layer and stored on the module,
+# but the engine binding never carried them, so every ``ceil_mode=True`` in the
+# codebase was a silent no-op: the caller asked for ceiling output sizing and
+# got floor geometry.  GoogLeNet had to hand-roll a padded work-alike and
+# ResNeSt's downsample was quietly pooling one row and column short.  These
+# tests pin the plumbing so it cannot go dead again.
+# ---------------------------------------------------------------------------
+
+
+def _expected_out(size: int, k: int, stride: int, pad: int, ceil: bool) -> int:
+    num = size + 2 * pad - k + (stride - 1 if ceil else 0)
+    out = num // stride + 1
+    if ceil and (out - 1) * stride >= size + pad:
+        out -= 1
+    return out
+
+
+@pytest.mark.parametrize(
+    "size,k,stride,pad",
+    [
+        (5, 2, 2, 0),
+        (7, 2, 2, 0),
+        (110, 3, 2, 0),
+        (26, 3, 2, 0),
+        (9, 3, 2, 1),
+        (8, 2, 2, 0),
+    ],
+)
+@pytest.mark.parametrize("ceil", [False, True])
+def test_max_pool2d_honours_ceil_mode(size, k, stride, pad, ceil):
+    x = lucid.zeros(1, 1, size, size)
+    y = F.max_pool2d(x, k, stride=stride, padding=pad, ceil_mode=ceil)
+    want = _expected_out(size, k, stride, pad, ceil)
+    assert tuple(y.shape[2:]) == (want, want)
+
+
+@pytest.mark.parametrize("ceil", [False, True])
+def test_avg_pool2d_honours_ceil_mode(ceil):
+    x = lucid.zeros(1, 1, 5, 5)
+    y = F.avg_pool2d(x, 2, stride=2, ceil_mode=ceil)
+    want = _expected_out(5, 2, 2, 0, ceil)
+    assert tuple(y.shape[2:]) == (want, want)
+
+
+def test_avg_pool2d_ceil_divisor_excludes_the_overhang():
+    # Every window of an all-ones input must average to exactly 1.0, including
+    # the clipped edge windows.  Dividing by the full kernel area instead would
+    # give 1/2 along the edges and 1/4 in the corner.
+    x = lucid.ones(1, 1, 3, 3)
+    y = F.avg_pool2d(x, 2, stride=2, ceil_mode=True)
+    assert tuple(y.shape[2:]) == (2, 2)
+    for i in range(2):
+        for j in range(2):
+            assert abs(float(y[0, 0, i, j].item()) - 1.0) < 1e-6
+
+
+def test_avg_pool2d_count_include_pad_changes_the_divisor():
+    x = lucid.ones(1, 1, 4, 4)
+    inc = F.avg_pool2d(x, 3, stride=1, padding=1, count_include_pad=True)
+    exc = F.avg_pool2d(x, 3, stride=1, padding=1, count_include_pad=False)
+    # Excluding padding, an all-ones input averages to 1.0 everywhere; counting
+    # it, the corner window sees 4 real elements out of 9.
+    assert abs(float(exc[0, 0, 0, 0].item()) - 1.0) < 1e-6
+    assert abs(float(inc[0, 0, 0, 0].item()) - 4.0 / 9.0) < 1e-6
+
+
+def test_max_pool2d_ceil_routes_gradient_to_the_trailing_row():
+    # With floor sizing the last row and column are never pooled, so they get
+    # no gradient at all; ceil sizing must reach them.
+    x = lucid.arange(0, 25, dtype=lucid.float32).reshape(1, 1, 5, 5)
+    x.requires_grad = True
+    F.max_pool2d(x, 2, stride=2, ceil_mode=True).sum().backward()
+    assert float(x.grad[0, 0, 4, 4].item()) > 0.0

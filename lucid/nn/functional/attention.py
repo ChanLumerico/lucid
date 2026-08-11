@@ -121,6 +121,34 @@ def scaled_dot_product_attention(
     mask = _unwrap(attn_mask) if attn_mask is not None else None
     head_dim = query.shape[-1]
     scale_val = scale if scale is not None else 1.0 / math.sqrt(head_dim)
+
+    if dropout_p > 0.0:
+        # Dropout applies to the attention *probabilities*.  The fused kernel
+        # never materialises them (MLX's fused SDPA takes no dropout argument),
+        # and the engine's weights-returning variant emits them as a
+        # non-differentiable side output — so the only correct way to honour
+        # the request is the explicit math form, every step of which is
+        # differentiable.  Before this branch existed ``dropout_p`` was accepted
+        # and silently discarded: every caller that passed it, BERT included,
+        # trained with no attention regularisation whatsoever.
+        import lucid
+        from lucid.nn.functional.activations import softmax
+        from lucid.nn.functional.dropout import dropout as _dropout
+
+        scores = lucid.matmul(query, key.mT) * scale_val
+        if is_causal:
+            lq, lk = int(query.shape[-2]), int(key.shape[-2])
+            keep = lucid.tril(lucid.ones((lq, lk), device=query.device.type))
+            scores = scores + (keep - 1.0) * 1e9
+        if attn_mask is not None:
+            if attn_mask.dtype == lucid.bool_:
+                # Bool masks are keep-masks: True attends, False is dropped.
+                scores = scores + (attn_mask.to(scores.dtype) - 1.0) * 1e9
+            else:
+                scores = scores + attn_mask
+        weights = _dropout(softmax(scores, dim=-1), p=dropout_p, training=True)
+        return lucid.matmul(weights, value)
+
     return _wrap(
         _C_engine.nn.scaled_dot_product_attention(
             _unwrap(query),

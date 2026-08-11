@@ -33,7 +33,7 @@ class ColorJitterParams:
     order : tuple of int
         Random permutation of ``(0, 1, 2, 3)`` indexing the
         ``(brightness, contrast, saturation, hue)`` adjustment
-        sequence — matches the torchvision reference.
+        sequence — matches the reference_vision reference.
     brightness, contrast, saturation, hue : float or None
         Sampled factors per adjustment, or ``None`` when the
         corresponding range was disabled at construction time.

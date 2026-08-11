@@ -33,6 +33,7 @@ import numpy as np
 
 import lucid
 import lucid.optim.lr_scheduler
+import lucid.utils.cache
 import lucid.utils.data
 from lucid.test.audit._axes import Axis, Context
 from lucid.test.audit._result import Finding, Status
@@ -53,6 +54,14 @@ def _image() -> Any:
     """A deterministic ``(3, 16, 16)`` image in ``[0, 1]``."""
     values = np.linspace(0.0, 1.0, 3 * _SIDE * _SIDE, dtype=np.float32)
     return lucid.tensor(values.reshape(3, _SIDE, _SIDE))
+
+
+class _ToyIterableDataset(lucid.utils.data.IterableDataset):
+    """Three samples, reachable only by iterating — what ``ChainDataset`` takes."""
+
+    def __iter__(self) -> "Any":
+        for index in range(3):
+            yield lucid.tensor(np.full((2,), float(index), np.float32)), index % 2
 
 
 class _ToyDataset:
@@ -134,6 +143,12 @@ _BY_NAME: "dict[str, Any]" = {
     "mean": (0.5, 0.5, 0.5),
     "std": (0.5, 0.5, 0.5),
     "merges": [],
+    # The tokenizers.  ``vocab`` is annotated ``dict[str, int]`` and
+    # ``pieces`` ``list[tuple[str, float]]``, so the annotation fallback
+    # gave them ``2`` and ``1.0`` — "'int' object is not iterable" for
+    # eight tokenizer classes whose vocabulary the harness already
+    # builds one function above.
+    "pieces": [(w, -1.0) for w in _PROBE_WORDS] + [("<unk>", -10.0)],
     # A required ``str`` that is not free-form: the annotation fallback
     # supplied the literal "constant", which is a valid regex matching
     # nothing in the probe sentence, so the tokenizer correctly returned
@@ -143,7 +158,6 @@ _BY_NAME: "dict[str, Any]" = {
     "scores": [0.0] * 6,
     "lr_lambda": (lambda epoch: 0.95**epoch),
     "schedulers": None,  # filled in by the scheduler axis
-    "transforms": [],
     "policy": None,
 }
 
@@ -155,7 +169,142 @@ _VARIADIC: "dict[str, Any]" = {
         lucid.tensor(np.arange(6, dtype=np.float32)),
     ),
     "datasets": lambda: (_ToyDataset(3), _ToyDataset(3)),
+    # ``StackDataset(*args)`` names its variadic ``args``, so the table
+    # keyed on the parameter name missed it entirely.
+    "args": lambda: (_ToyDataset(3), _ToyDataset(3)),
 }
+
+#: Values that have to be *built* rather than named, so nothing is
+#: allocated at import time.  Keyed on the parameter name, tried after
+#: :data:`_BY_NAME` and before the annotation.
+#:
+#: This table is where the distributions and the tensor subclasses were
+#: stuck.  ``MultivariateNormal(loc, ...)``, ``Dirichlet(concentration)``,
+#: ``BoundingBoxes(data)`` and ``ComposeTransform(parts)`` each need one
+#: constructed object that no annotation describes, and each was
+#: reported as "no value for required parameter" on both the contract
+#: axis and its own subsystem axis — the same gap counted twice.
+_BUILD_BY_NAME: "dict[str, Any]" = {
+    "data": lambda: lucid.tensor(np.linspace(0.1, 0.9, 12, dtype=np.float32)),
+    "vocab": _tiny_vocab,
+    # The last handful of classes whose one required argument is an
+    # object no annotation describes.  Each is one line and each was
+    # costing its class every cell it had.
+    "activation": lambda: lucid.quantization.MinMaxObserver,
+    "weight": lambda: lucid.quantization.MinMaxObserver,
+    "scale": lambda: lucid.tensor(np.array(0.02, dtype=np.float32)),
+    "zero_point": lambda: lucid.tensor(np.array(0), dtype=lucid.int64),
+    "qscheme": lambda: lucid.quantization.QScheme.PER_TENSOR_AFFINE,
+    "qdtype": lambda: lucid.quantization.quint8,
+    "self_attention_cache": lucid.utils.cache.DynamicCache,
+    "cross_attention_cache": lucid.utils.cache.DynamicCache,
+    "hook": lambda: (lambda *args, **kwargs: None),
+    # A real second-order tableau: Heun's method, which satisfies the
+    # consistency conditions the diffeq axis then checks.
+    "a": lambda: ((), (1.0,)),
+    "b": lambda: (0.5, 0.5),
+    "c": lambda: (0.0, 1.0),
+    "order": lambda: 2,
+    "format": lambda: "xyxy",
+    "canvas_size": lambda: (_SIDE, _SIDE),
+    # ``PackedSequence(data, batch_sizes, ...)`` — the two agree with each
+    # other: five values packed as three then two.
+    "batch_sizes": lambda: lucid.tensor(np.array([3, 2]), dtype=lucid.int64),
+    "sorted_indices": lambda: None,
+    "unsorted_indices": lambda: None,
+    "loc": lambda: lucid.tensor(np.zeros(3, dtype=np.float32)),
+    "concentration": lambda: lucid.tensor(np.full(3, 2.0, dtype=np.float32)),
+    "concentration1": lambda: lucid.tensor(np.full(3, 2.0, dtype=np.float32)),
+    "covariance_matrix": lambda: lucid.tensor(np.eye(3, dtype=np.float32)),
+    "scale_tril": lambda: lucid.tensor(np.eye(3, dtype=np.float32)),
+    "probs": lambda: lucid.tensor(np.full(3, 1.0 / 3.0, dtype=np.float32)),
+    # Every scheduler takes a live optimizer, and the smoke axis had no
+    # way to build one — fourteen of them reported "no value for required
+    # parameter 'optimizer'" while the scheduler axis was checking them
+    # properly one axis over.
+    "optimizer": lambda: lucid.optim.SGD(
+        [lucid.nn.Parameter(lucid.tensor(np.zeros(3, dtype=np.float32)))], lr=0.1
+    ),
+    "opt": lambda: lucid.optim.SGD(
+        [lucid.nn.Parameter(lucid.tensor(np.zeros(3, dtype=np.float32)))], lr=0.1
+    ),
+    "hooks_list": list,
+    "events": list,
+    # A transform, and a list of them.  ``ComposeTransform`` and its two
+    # siblings reject an empty sequence by design, which is the right
+    # refusal and left them unconstructible for want of one element.
+    "transform": lambda: lucid.distributions.ExpTransform(),
+    "parts": lambda: [
+        lucid.distributions.ExpTransform(),
+        lucid.distributions.AbsTransform(),
+    ],
+    "tseq": lambda: [lucid.distributions.ExpTransform()],
+    # ``CatTransform``/``StackTransform``/``ComposeTransform`` all refuse
+    # an empty sequence, which is the right refusal — the table used to
+    # supply ``[]`` and the three of them were unconstructible for it.
+    "transforms": lambda: [
+        lucid.distributions.ExpTransform(),
+        lucid.distributions.AbsTransform(),
+    ],
+    "reinterpreted_batch_ndims": lambda: 1,
+    "registered": list,
+    "engine_dtype": lambda: lucid.float32._engine_dtype,
+    # A batch shape of (3,), not a scalar: ``Independent`` reinterprets
+    # ``reinterpreted_batch_ndims`` of the base's *batch* dimensions and
+    # refuses a base that has none.
+    # ``CumulativeDistributionTransform(distribution)`` needs something
+    # with a ``cdf``, and the annotation only says ``Distribution``.
+    "distribution": lambda: lucid.distributions.Normal(0.0, 1.0),
+    "base_distribution": lambda: lucid.distributions.Normal(
+        lucid.tensor(np.zeros(3, dtype=np.float32)),
+        lucid.tensor(np.ones(3, dtype=np.float32)),
+    ),
+    # A Wishart needs more degrees of freedom than the scale's order.
+    "df": lambda: 5.0,
+    "mixture_distribution": lambda: lucid.distributions.Categorical(
+        probs=lucid.tensor(np.full(3, 1.0 / 3.0, dtype=np.float32))
+    ),
+    "component_distribution": lambda: lucid.distributions.Normal(
+        lucid.tensor(np.zeros(3, dtype=np.float32)),
+        lucid.tensor(np.ones(3, dtype=np.float32)),
+    ),
+    "in_shape": lambda: (2, 3),
+    "out_shape": lambda: (3, 2),
+    # ``finfo`` wants a float dtype and ``iinfo`` an integer one, and
+    # they spell the parameter identically — the class asking is the only
+    # thing that distinguishes them.
+    "dt": lambda: "float32",
+    "type_or_str": lambda: "cpu",
+    # ``utils.transforms`` has no ``Identity``; an empty ``Compose`` is
+    # the transform that does nothing.
+    "first": lambda: lucid.utils.transforms.Compose([]),
+    "second": lambda: lucid.utils.transforms.Compose([]),
+    # ``WorkerInfo`` and ``BatchSampler`` — the loader's own metadata.
+    "id": lambda: 0,
+    "num_workers": lambda: 2,
+    "seed": lambda: 0,
+    "drop_last": lambda: False,
+    "sampler": lambda: lucid.utils.data.SequentialSampler(_ToyDataset(6)),
+    "dataset": lambda: _ToyDataset(6),
+    # ``ChainDataset`` requires *iterable* children and says so; a
+    # map-style dataset is the right refusal.
+    "datasets": lambda: [_ToyIterableDataset(), _ToyIterableDataset()],
+    # ``DiagnosisReport`` is a record of lists; an empty report is a
+    # valid one and is what a trace of nothing produces.
+    "grad_sinks": list,
+    "uncovered": list,
+    "covered": list,
+    "ops": list,
+    "nodes": list,
+}
+
+#: Optional parameters of which a class accepts **exactly one**.  Stated
+#: because the class states it — every one of these raises "pass exactly
+#: one of ..." naming its own group.
+_EXCLUSIVE: "tuple[frozenset[str], ...]" = (
+    frozenset({"probs", "logits"}),
+    frozenset({"covariance_matrix", "precision_matrix", "scale_tril"}),
+)
 
 #: Fallback by annotation when the name is not recognised.
 _BY_ANNOTATION: "tuple[tuple[str, Any], ...]" = (
@@ -166,14 +315,33 @@ _BY_ANNOTATION: "tuple[tuple[str, Any], ...]" = (
 )
 
 
+#: Parameters that mean something different in one class than in another,
+#: keyed on the class.  ``finfo`` and ``iinfo`` spell their argument
+#: identically and accept disjoint dtypes, so the name alone cannot
+#: decide — ``iinfo`` correctly refused the float the table supplies.
+_BY_CLASS: "dict[str, dict[str, Any]]" = {
+    "iinfo": {"dt": "int32"},
+    "dtype": {"engine_dtype": lucid.float32._engine, "itemsize": 4},
+}
+
+
 def _value_for(
-    param: "inspect.Parameter", extra: "dict[str, Any]"
+    param: "inspect.Parameter", extra: "dict[str, Any]", cls_name: str = ""
 ) -> "tuple[bool, Any]":
     """``(found, value)`` for one required parameter."""
+    override = _BY_CLASS.get(cls_name, {})
+    if param.name in override:
+        return True, override[param.name]
     if param.name in extra:
         return True, extra[param.name]
     if param.name in _BY_NAME:
         return True, _BY_NAME[param.name]
+    builder = _BUILD_BY_NAME.get(param.name)
+    if builder is not None:
+        try:
+            return True, builder()
+        except Exception:  # noqa: BLE001 - an unbuildable value is no value
+            return False, None
     annotation = str(param.annotation)
     for needle, value in _BY_ANNOTATION:
         if needle in annotation:
@@ -196,6 +364,15 @@ def _construct(cls: Any, **extra: Any) -> "tuple[Any, str]":
     # annotations raises ``NameError`` for 32 public classes, including
     # ``lucid.Tensor``.  Asking for the unevaluated text sidesteps it, and
     # the text is all the value table below needs anyway.
+    # An Enum is a namespace of members, not a thing you build.  Calling
+    # the class is the *functional API* — ``Enum("Name", names)`` — so it
+    # reported ``EnumType.__call__() missing 1 required positional
+    # argument`` for ``QScheme``, ``Interpolation`` and every other
+    # constant group.  Its first member is the instance a caller means.
+    members = list(getattr(cls, "__members__", {}).values())
+    if members:
+        return members[0], ""
+
     try:
         signature = inspect.signature(
             cls, annotation_format=annotationlib.Format.STRING
@@ -205,6 +382,7 @@ def _construct(cls: Any, **extra: Any) -> "tuple[Any, str]":
 
     kwargs: "dict[str, Any]" = {}
     args: "list[Any]" = []
+    optional: "list[inspect.Parameter]" = []
     for name, param in signature.parameters.items():
         if name == "self" or param.kind is param.VAR_KEYWORD:
             continue
@@ -219,15 +397,62 @@ def _construct(cls: Any, **extra: Any) -> "tuple[Any, str]":
                 args.extend(builder())
             continue
         if param.default is not param.empty and name not in extra:
+            if param.default is None:
+                optional.append(param)
             continue
-        found, value = _value_for(param, extra)
+        found, value = _value_for(param, extra, getattr(cls, "__name__", ""))
         if not found:
             return None, f"no value for required parameter {name!r}: {param.annotation}"
         kwargs[name] = value
     try:
         return cls(*args, **kwargs), ""
     except Exception as exc:  # noqa: BLE001 - surveying, not asserting
-        return None, f"{type(exc).__name__}: {str(exc)[:80]}"
+        first = f"{type(exc).__name__}: {str(exc)[:80]}"
+
+    # A second attempt, supplying the optional parameters the tables know
+    # a value for.  Nine distributions refuse every default they declare:
+    # ``probs`` and ``logits`` are both optional, exactly one has to be
+    # given, and honouring both defaults produces "pass exactly one of
+    # `probs` or `logits`" — a correct refusal of a construction nothing
+    # would ever write.  Only ``probs`` is in the table, so the pair
+    # cannot both be filled.
+    #
+    # Tried *after* the faithful construction rather than instead of it:
+    # a class that works with its own defaults is audited as the user
+    # gets it.
+    extra_kwargs = dict(kwargs)
+    added = False
+    claimed: "set[int]" = set()
+    for param in optional:
+        # At most one member of a mutually exclusive group.  Filling both
+        # is not a smaller mistake than filling neither: ``Wishart`` and
+        # ``MultivariateNormal`` refuse "exactly one of covariance_matrix,
+        # precision_matrix, scale_tril" just as loudly for two as for
+        # zero, and the retry that was meant to construct them made the
+        # message change without making the class buildable.
+        group = next(
+            (i for i, names in enumerate(_EXCLUSIVE) if param.name in names), None
+        )
+        if group is not None and group in claimed:
+            continue
+        found, value = _value_for(param, extra, getattr(cls, "__name__", ""))
+        if found:
+            extra_kwargs[param.name] = value
+            added = True
+            if group is not None:
+                claimed.add(group)
+    if not added:
+        return None, first
+    try:
+        return cls(*args, **extra_kwargs), ""
+    except Exception as exc:  # noqa: BLE001 - surveying, not asserting
+        # Both attempts, because they fail for different reasons and
+        # reporting only the first sends the reader to fix a parameter
+        # the second attempt had already supplied.
+        return (
+            None,
+            f"{first}; with optionals filled: {type(exc).__name__}: {str(exc)[:60]}",
+        )
 
 
 class TransformAxis(Axis):
@@ -254,6 +479,7 @@ class TransformAxis(Axis):
     name = "transform"
     summary = "apply to an image: finite output, unmodified input, seed-repeatable"
     kinds = frozenset({"transform"})
+    varies_a_tensor = False
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         obj = symbol.obj
@@ -264,7 +490,18 @@ class TransformAxis(Axis):
         if instance is None:
             return self._finding(symbol, Status.SKIP, f"construct: {why}")
         if not callable(instance):
-            return self._finding(symbol, Status.SKIP, "instance is not callable")
+            # ``Image``, ``Mask``, ``Keypoints``, ``BboxParams`` and the
+            # interpolation enum live in this package and are not
+            # transforms — they are the *data* transforms are applied to,
+            # and the parameter object that configures them.  "Applying
+            # it returns a finite tensor" is not a question about any of
+            # them, and filing six of them under SKIP claimed six
+            # augmentations were unchecked.
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "a data container, not a transform — nothing to apply",
+            )
 
         source = _image()
         before = source.numpy().copy()
@@ -360,11 +597,84 @@ class DataAxis(Axis):
     name = "data"
     summary = "dataset / sampler / loader: len, indexing and iteration agree"
     kinds = frozenset({"data"})
+    varies_a_tensor = False
+
+    def _collation(self, symbol: "Symbol", fn: Any) -> Finding:
+        """The five module-level functions, which are not classes.
+
+        ``collate``, ``default_collate``, ``default_convert``,
+        ``get_worker_info`` and ``random_split`` were reported "not a
+        class" — true, and the reason the loader's own batching path had
+        no check at all.  Each has one property that fails loudly when it
+        is wrong: a collation stacks a list of samples into a batch whose
+        leading dimension is the list's length, and a split partitions
+        the dataset without losing or duplicating a sample.
+        """
+        name = symbol.short
+        if name == "get_worker_info":
+            info = fn()
+            if info is not None:
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"reported {type(info).__name__} outside a worker process",
+                )
+            return self._finding(symbol, Status.PASS, "None outside a worker")
+
+        if name == "random_split":
+            dataset = _ToyDataset(6)
+            try:
+                parts = fn(dataset, [4, 2])
+            except Exception as exc:  # noqa: BLE001
+                return self._finding(
+                    symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
+                )
+            sizes = [len(p) for p in parts]
+            if sizes != [4, 2]:
+                return self._finding(
+                    symbol, Status.FAIL, f"asked for [4, 2] and got {sizes}"
+                )
+            # A partition, not a sample: every index exactly once.
+            seen = sorted(i for p in parts for i in getattr(p, "indices", []))
+            if seen and seen != list(range(6)):
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"the parts cover {seen}, not each of 0..5 exactly once",
+                )
+            return self._finding(symbol, Status.PASS, f"split 6 into {sizes}")
+
+        batch = [_ToyDataset(3)[i] for i in range(3)]
+        try:
+            out = fn(batch) if name != "default_convert" else fn(batch[0])
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
+            )
+        if name == "default_convert":
+            return self._finding(
+                symbol, Status.PASS, f"converted to {type(out).__name__}"
+            )
+        if not isinstance(out, (list, tuple)) or not out:
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"collated a 3-sample batch into {type(out).__name__}",
+            )
+        stacked = out[0]
+        if getattr(stacked, "shape", (0,))[0] != 3:
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"three samples collated to leading dimension "
+                f"{getattr(stacked, 'shape', None)}",
+            )
+        return self._finding(symbol, Status.PASS, "three samples become one batch of 3")
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         obj = symbol.obj
         if not isinstance(obj, type):
-            return self._finding(symbol, Status.SKIP, "not a class")
+            return self._collation(symbol, obj)
 
         dataset = _ToyDataset()
         instance, why = _construct(
@@ -390,7 +700,9 @@ class DataAxis(Axis):
             # ``Dataset`` and ``Sampler`` are the protocol, not an
             # implementation of it; refusing to answer is the contract.
             return self._finding(
-                symbol, Status.SKIP, "abstract base — __len__ is the subclass's"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "abstract base — __len__ is the subclass's",
             )
         except Exception as exc:  # noqa: BLE001
             return self._finding(
@@ -496,6 +808,7 @@ class TokenizerAxis(Axis):
     name = "tokenizer"
     summary = "encode / decode round trip, ids within the vocabulary"
     kinds = frozenset({"tokenizer"})
+    varies_a_tensor = False
 
     #: Lowercase ASCII only, so a byte-level and a word-level vocabulary
     #: both have a chance of representing it exactly.
@@ -564,10 +877,21 @@ class TokenizerAxis(Axis):
                 Status.FAIL,
                 "encoding the same text twice decoded to two different strings",
             )
+        # Not a pass.  The axis's question is whether ``decode(encode(t))``
+        # gives ``t`` back; when it does not, "at least it is repeatable"
+        # is a weaker statement wearing the same colour.  Found by
+        # mutation: a decoder that silently drops the last character is
+        # lossy and perfectly stable, and this branch passed it.
+        #
+        # VACUOUS rather than FAIL because a probe vocabulary genuinely
+        # cannot spell every input, so an inexact round trip here is not
+        # by itself evidence against the tokenizer — it is evidence that
+        # nothing was established.
         return self._finding(
             symbol,
-            Status.PASS,
-            f"lossy for this vocabulary but stable: {len(ids)} ids, decode repeatable",
+            Status.VACUOUS,
+            f"round trip is lossy and only stability was checked: "
+            f"{len(ids)} ids, decode repeatable",
         )
 
 
@@ -585,6 +909,7 @@ class SchedulerAxis(Axis):
     name = "scheduler"
     summary = "lr stays finite over an epoch sweep and survives a state_dict round trip"
     kinds = frozenset({"scheduler"})
+    varies_a_tensor = False
 
     _EPOCHS = 6
 

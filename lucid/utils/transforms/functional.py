@@ -1,6 +1,6 @@
 """Stateless functional transforms.
 
-Mirrors ``torchvision.transforms.functional``: plain functions that take
+Mirrors ``reference_vision.transforms.functional``: plain functions that take
 a :class:`lucid.Tensor` image (``(C, H, W)`` or ``(B, C, H, W)``) and
 return a transformed tensor.  The class-based transforms in
 :mod:`lucid.utils.transforms` are thin wrappers over these.
@@ -81,7 +81,7 @@ def resize(
         Image tensor ``(C, H, W)`` or ``(B, C, H, W)``.
     size : int or (int, int)
         If an ``int``, the **shorter** side is scaled to ``size`` with
-        the aspect ratio preserved (torchvision ``Resize(int)``
+        the aspect ratio preserved (reference_vision ``Resize(int)``
         semantics).  If ``(h, w)``, the image is resized to exactly that.
     interpolation : str, optional, default="bilinear"
         Mode forwarded to :func:`lucid.nn.functional.interpolate`.
@@ -807,7 +807,7 @@ def affine_matrix(
 
     Composition order is ``rotate ∘ shear ∘ scale`` (about the origin),
     followed by a re-centering so ``(cx, cy)`` stays fixed and then the
-    explicit translation.  This matches torchvision / Albumentations
+    explicit translation.  This matches reference_vision / Albumentations
     ``Affine`` semantics so matrices transfer directly.
 
     Parameters

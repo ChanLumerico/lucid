@@ -98,13 +98,18 @@ namespace lucid {
 // ----------
 // Vaswani et al., "Attention Is All You Need" (NeurIPS 2017).
 class LUCID_API ScaledDotProductAttentionBackward
-    : public FuncOp<ScaledDotProductAttentionBackward, 3> {
+    : public FuncOp<ScaledDotProductAttentionBackward, 4> {
 public:
     static const OpSchema schema_v1;
     double scale_ = 1.0;  // Dot-product scale factor (usually 1/sqrt(d_k)).
     Shape orig_q_shape_;
     Shape orig_k_shape_;
     Shape orig_v_shape_;
+
+    // Shape of the additive mask as the caller passed it, which may broadcast
+    // against the (…, L_q, L_k) score tensor.  The backward produces the mask
+    // gradient at full score shape and reduces it back to this.
+    Shape orig_mask_shape_;
 
     // Attention weight matrix; may be a {1} placeholder on the GPU path.
     Storage saved_weights_;
@@ -114,6 +119,11 @@ public:
     // no weights, so the mask cannot be recovered from ``saved_weights_``).
     bool is_causal_ = false;
     bool has_mask_ = false;
+    // True only when the mask was wired as an autograd input (additive dtype
+    // *and* the caller asked for its gradient).  ``apply`` keys the mask-grad
+    // reduction off this, so a constant padding/causal mask does no extra work
+    // and its placeholder slot is left untouched.
+    bool mask_differentiable_ = false;
     Dtype mask_dtype_ = Dtype::F32;
     Storage saved_mask_;  // valid iff has_mask_; Bool ⇒ keep-mask, else additive.
 
@@ -167,13 +177,21 @@ public:
                                  double scale,
                                  bool is_causal);
 
-    // Compute gradients with respect to ``Q``, ``K`` and ``V`` from the
-    // upstream gradient of the output.
+    // Compute gradients with respect to ``Q``, ``K``, ``V`` and the additive
+    // mask from the upstream gradient of the output.
     //
     // Reconstructs the saved weight matrix on the GPU path (where
     // ``saved_weights_`` is a ``{1}``-shape placeholder) by recomputing
     // $W = \text{softmax}(QK^\top \cdot s)$, then dispatches to
-    // ``IBackend::sdpa_backward`` for the three input gradients.
+    // ``IBackend::sdpa_backward`` for the input gradients.
+    //
+    // Because the scores are $S = QK^\top s + M$, the mask gradient is
+    // exactly the score gradient: $\partial\mathcal{L}/\partial M =
+    // \partial\mathcal{L}/\partial S$.  Both backends already form that
+    // quantity to produce dQ and dK, so it is returned rather than
+    // discarded, then reduced from the full score shape back to
+    // ``orig_mask_shape_``.  A ``Bool`` keep-mask is not differentiable and
+    // gets no edge.
     //
     // Parameters
     // ----------
@@ -184,9 +202,10 @@ public:
     // Returns
     // -------
     // std::vector<Storage>
-    //     Three Storage objects in edge order ``{dQ, dK, dV}``, each
-    //     reshaped back to ``orig_q_shape_`` / ``orig_k_shape_`` /
-    //     ``orig_v_shape_``.
+    //     Four Storage objects in edge order ``{dQ, dK, dV, dM}``, reshaped
+    //     back to ``orig_q_shape_`` / ``orig_k_shape_`` / ``orig_v_shape_`` /
+    //     ``orig_mask_shape_``.  ``dM`` is empty when no differentiable mask
+    //     was supplied; the engine discards it because that edge is null.
     std::vector<Storage> apply(Storage grad_out) override;
 };
 

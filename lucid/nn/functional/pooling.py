@@ -7,6 +7,7 @@ from typing import Callable, TYPE_CHECKING
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._unsupported import unsupported_if
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -189,12 +190,19 @@ def max_pool1d(
     >>> y.shape
     (2, 4, 8)
     """
+    unsupported_if(
+        dilation != 1,
+        "max_pool1d",
+        "dilation",
+        dilation,
+        detail="Only dilation=1 is supported.",
+    )
     _check_return_indices(return_indices, "max_pool1d")
     k = _int_or_tuple(kernel_size, 1)[0]
     s = k if stride is None else _int_or_tuple(stride, 1)[0]
     p = _int_or_tuple(padding, 1)[0]
     _int_or_tuple(dilation, 1)[0]
-    return _wrap(_C_engine.nn.max_pool1d(_unwrap(x), k, s, p))
+    return _wrap(_C_engine.nn.max_pool1d(_unwrap(x), k, s, p, ceil_mode))
 
 
 def max_pool2d(
@@ -260,12 +268,19 @@ def max_pool2d(
     >>> y.shape
     (1, 16, 16, 16)
     """
+    unsupported_if(
+        dilation != 1 and dilation != (1, 1),
+        "max_pool2d",
+        "dilation",
+        dilation,
+        detail="Only dilation=1 is supported.",
+    )
     _check_return_indices(return_indices, "max_pool2d")
     kh, kw = _int_or_tuple(kernel_size, 2)
     sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 2)
     ph, pw = _int_or_tuple(padding, 2)
     dh, dw = _int_or_tuple(dilation, 2)
-    return _wrap(_C_engine.nn.max_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw))
+    return _wrap(_C_engine.nn.max_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw, ceil_mode))
 
 
 def avg_pool1d(
@@ -330,7 +345,9 @@ def avg_pool1d(
     k = _int_or_tuple(kernel_size, 1)[0]
     s = k if stride is None else _int_or_tuple(stride, 1)[0]
     p = _int_or_tuple(padding, 1)[0]
-    return _wrap(_C_engine.nn.avg_pool1d(_unwrap(x), k, s, p))
+    return _wrap(
+        _C_engine.nn.avg_pool1d(_unwrap(x), k, s, p, ceil_mode, count_include_pad)
+    )
 
 
 def avg_pool2d(
@@ -397,10 +414,21 @@ def avg_pool2d(
     >>> y.shape
     (1, 8, 14, 14)
     """
+    unsupported_if(
+        divisor_override is not None,
+        "avg_pool2d",
+        "divisor_override",
+        divisor_override,
+        detail="The window size is always the divisor.",
+    )
     kh, kw = _int_or_tuple(kernel_size, 2)
     sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 2)
     ph, pw = _int_or_tuple(padding, 2)
-    return _wrap(_C_engine.nn.avg_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw))
+    return _wrap(
+        _C_engine.nn.avg_pool2d(
+            _unwrap(x), kh, kw, sh, sw, ph, pw, ceil_mode, count_include_pad
+        )
+    )
 
 
 def adaptive_avg_pool1d(x: Tensor, output_size: int | tuple[int, ...]) -> Tensor:
@@ -769,12 +797,21 @@ def max_pool3d(
     >>> y.shape
     (1, 4, 4, 8, 8)
     """
+    unsupported_if(
+        dilation != 1 and dilation != (1, 1, 1),
+        "max_pool3d",
+        "dilation",
+        dilation,
+        detail="Only dilation=1 is supported.",
+    )
     _check_return_indices(return_indices, "max_pool3d")
     kd, kh, kw = _int_or_tuple(kernel_size, 3)
     sd, sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 3)
     pd, ph, pw = _int_or_tuple(padding, 3)
     return _wrap(
-        _C_engine.nn.max_pool3d(_unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw)
+        _C_engine.nn.max_pool3d(
+            _unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw, ceil_mode
+        )
     )
 
 
@@ -843,11 +880,20 @@ def avg_pool3d(
     >>> y.shape
     (1, 4, 4, 8, 8)
     """
+    unsupported_if(
+        divisor_override is not None,
+        "avg_pool3d",
+        "divisor_override",
+        divisor_override,
+        detail="The window size is always the divisor.",
+    )
     kd, kh, kw = _int_or_tuple(kernel_size, 3)
     sd, sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 3)
     pd, ph, pw = _int_or_tuple(padding, 3)
     return _wrap(
-        _C_engine.nn.avg_pool3d(_unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw)
+        _C_engine.nn.avg_pool3d(
+            _unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw, ceil_mode, count_include_pad
+        )
     )
 
 

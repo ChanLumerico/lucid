@@ -70,14 +70,16 @@ class StabilityAxis(Axis):
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        call, _, _ = self._working_call(fn, symbol, ctx)
+        call, _, why = self._working_call(fn, symbol, ctx)
         if call is None:
-            return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+            return self._no_call(symbol, why)
         try:
             base = np.abs(call.base) + 0.25
         except TypeError:
             return self._finding(
-                symbol, Status.SKIP, "primary argument is not a tensor"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the varied argument is not a tensor — nothing to vary",
             )
         # A scalar operand is not necessarily a *value*.  ``eye(n)`` takes
         # a size, and multiplying it by 1e15 asks for a matrix of 1e30
@@ -88,7 +90,7 @@ class StabilityAxis(Axis):
         if base.ndim == 0 or base.size == 1:
             return self._finding(
                 symbol,
-                Status.SKIP,
+                Status.NOT_APPLICABLE,
                 "primary is a scalar — scaling it would change a size, not a value",
             )
 
@@ -157,7 +159,9 @@ class StabilityAxis(Axis):
                     "every scale is outside the domain: " + ", ".join(domain[:4]),
                 )
             return self._finding(
-                symbol, Status.SKIP, "no scale produced a float output"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the output is not float — a scale sweep has nothing to measure",
             )
         if broken:
             return self._finding(
@@ -371,9 +375,9 @@ class ContiguityAxis(Axis):
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
-        call, _, _ = self._working_call(fn, symbol, ctx)
+        call, _, why = self._working_call(fn, symbol, ctx)
         if call is None:
-            return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
+            return self._no_call(symbol, why)
         if self._draws_randomly(fn, call):
             return self._finding(
                 symbol,
@@ -384,10 +388,16 @@ class ContiguityAxis(Axis):
             base = call.base
         except TypeError:
             return self._finding(
-                symbol, Status.SKIP, "primary argument is not a tensor"
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the varied argument is not a tensor — nothing to vary",
             )
         if base.ndim < 1:
-            return self._finding(symbol, Status.SKIP, "0-d input has no layout to vary")
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "0-d input has no layout to vary",
+            )
 
         # A tensor twice the size in the last axis, whose every second
         # column holds the probe.  Slicing it back gives the same values
@@ -395,7 +405,23 @@ class ContiguityAxis(Axis):
         padded = np.repeat(base, 2, axis=-1)
         padded[..., 1::2] = -7.0
         try:
-            big = _probe.as_f64(padded)
+            # Built the same way the packed operand is.
+            #
+            # ``Call.with_primary`` honours the original argument's dtype;
+            # building the view unconditionally at float64 made the two
+            # operands *different precisions* rather than different
+            # layouts, and 19 float32 ops were reported for a "layout"
+            # difference of 1e-8 — exactly float32 epsilon.
+            packed_probe = call.with_primary(base).args[call.primary]
+            text = str(getattr(packed_probe, "dtype", ""))
+            if "complex64" in text:
+                big = _probe.as_complex64(padded)
+            elif "complex" in text:
+                big = _probe.as_complex(padded)
+            elif "float32" in text or "float16" in text:
+                big = _probe.as_f32(padded)
+            else:
+                big = _probe.as_f64(padded)
             view = big[..., ::2]
         except Exception as exc:  # noqa: BLE001
             return self._finding(
@@ -408,9 +434,7 @@ class ContiguityAxis(Axis):
             args[call.primary] = view
             strided = _probe.to_numpy(fn(*args, **call.kwargs))
         except Exception as exc:  # noqa: BLE001
-            return self._finding(
-                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
-            )
+            return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:60]}", call)
         if packed is None or strided is None or packed.shape != strided.shape:
             return self._finding(symbol, Status.SKIP, "outputs not comparable")
         if not np.allclose(
@@ -425,6 +449,34 @@ class ContiguityAxis(Axis):
                 Status.FAIL,
                 "a strided view of the same values gave a different answer "
                 f"(max diff {np.nanmax(np.abs(packed.astype(float) - strided.astype(float))):.3e})",
+            )
+
+        # They agreed — but could they have disagreed?
+        #
+        # This framework **materialises every view**.  ``big[..., ::2]``
+        # comes back packed, with the strides of a fresh tensor, and so
+        # do ``T``, ``expand``, ``broadcast_to``, ``diagonal`` and
+        # ``unfold``: ``is_contiguous()`` is True for all of them.  The
+        # two operands this axis compares therefore have the *same*
+        # layout, and 691 cells per run were reporting agreement between
+        # an op and itself.
+        #
+        # Reported rather than deleted, and reported as VACUOUS rather
+        # than PASS, which is this file's own stated rule: a check that
+        # cannot fail reads as coverage and is not.  The axis stays
+        # because the comparison above is correct and will start meaning
+        # something the day the engine grows a lazy view — and the
+        # ``layout`` mutant proves that comparison still catches a real
+        # difference today.
+        if (
+            bool(view.is_contiguous())
+            and view.stride() == big[..., : base.shape[-1]].stride()
+        ):
+            return self._finding(
+                symbol,
+                Status.VACUOUS,
+                "the strided probe came back packed — this engine materialises "
+                "every view, so both operands had the same layout",
             )
         return self._finding(symbol, Status.PASS, "strided and packed agree")
 

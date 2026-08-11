@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._unsupported import unsupported_if
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -141,6 +142,19 @@ def embedding(
     >>> out.shape
     (2, 3, 4)
     """
+    unsupported_if(
+        max_norm is not None,
+        "embedding",
+        "max_norm",
+        max_norm,
+        detail="Rows are never renormalised.",
+    )
+    unsupported_if(
+        scale_grad_by_freq, "embedding", "scale_grad_by_freq", scale_grad_by_freq
+    )
+    unsupported_if(
+        sparse, "embedding", "sparse", sparse, detail="Gradients are always dense."
+    )
     check_embedding_indices(x, weight, "embedding")
     pad = padding_idx if padding_idx is not None else -1
     # Normalised, not passed through.  The engine gather reads the index

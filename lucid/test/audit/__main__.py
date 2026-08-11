@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 _DEFAULT_KNOWN = Path(__file__).with_name("known.json")
 _DEFAULT_COVERAGE = Path(__file__).with_name("coverage.json")
 _DEFAULT_SUITE = Path(__file__).with_name("suite.json")
+_DEFAULT_DOCTEST = Path(__file__).with_name("doctest.json")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -108,6 +109,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="recorded line-coverage floor, compared against on every run",
     )
     stage.add_argument(
+        "--suite-ignore",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="a subtree pytest should leave out; repeatable "
+        "(e.g. --suite-ignore lucid/test/parity/models)",
+    )
+    stage.add_argument(
+        "--no-doctests",
+        action="store_true",
+        help="skip the docstring-example stage",
+    )
+    stage.add_argument(
+        "--no-self-check",
+        action="store_true",
+        help="skip proving the axes can go red",
+    )
+    stage.add_argument(
+        "--doctest-baseline",
+        type=Path,
+        default=_DEFAULT_DOCTEST,
+        help="recorded per-module doctest failures, compared on every run",
+    )
+    stage.add_argument(
+        "--update-doctests",
+        action="store_true",
+        help="record the current docstring failures as the new floor",
+    )
+    stage.add_argument(
         "--update-suite",
         action="store_true",
         help="record the current line coverage as the new floor",
@@ -153,6 +183,11 @@ def build_parser() -> argparse.ArgumentParser:
     info.add_argument("--list-subsystems", action="store_true")
     info.add_argument(
         "--list-uncovered", action="store_true", help="symbols no axis reached"
+    )
+    info.add_argument(
+        "--self-check",
+        action="store_true",
+        help="prove each axis can go red, by breaking the framework on purpose",
     )
     info.add_argument(
         "--coverage",
@@ -204,6 +239,69 @@ def _list_subsystems(console: Console) -> int:
     for name, why in _surface.EXCLUDED.items():
         console.always("  " + console.paint(f"excluded  {name}", "grey") + f"  — {why}")
     return 0
+
+
+def _self_check(console: Console) -> int:
+    """Which axes have been shown to produce a red light.
+
+    A green axis is not evidence until it has been made to fail.  This
+    breaks the framework on purpose, once per axis, in exactly the way
+    that axis exists to notice — and reports the axes nobody has proven
+    yet rather than omitting them.
+    """
+    from lucid.test.audit import _mutants
+
+    console.banner("Self-check", "each axis is handed the defect it claims to catch")
+    results = _mutants.verify()
+    rows = [
+        [
+            "caught" if r.caught else "MISSED",
+            r.axis,
+            r.why,
+            r.status if not r.caught else r.detail[:44],
+        ]
+        for r in results
+    ]
+    console.table(["", "axis", "the defect", "what the axis said"], rows, always=True)
+
+    missed = [r for r in results if not r.caught]
+    unproven = _mutants.unproven_axes()
+    console.always("")
+    console.always(
+        "  "
+        + console.paint("proven".ljust(22), "grey")
+        + console.paint(
+            f"{len(results) - len(missed)}/{len(results)} mutants caught ", "white"
+        )
+        + console.paint(
+            f"({len({r.axis for r in results}) - len({r.axis for r in missed})}"
+            f" of {len(_axes.ALL_AXES)} axes)",
+            "cyan",
+        )
+    )
+    if unproven:
+        console.always("")
+        console.rule(f"unproven · {len(unproven)}", "yellow")
+        console.always(
+            console.paint(
+                "  no mutant exercises these, so nothing here says they can fail:",
+                "grey",
+            )
+        )
+        for name in unproven:
+            reason = _mutants.UNPROVEN_REASONS.get(name, "no mutant written yet")
+            console.always("      " + console.paint(name.ljust(12), "yellow") + reason)
+    if missed:
+        console.always("")
+        console.rule(f"blind · {len(missed)}", "red")
+        for r in missed:
+            console.always(
+                "  "
+                + console.paint(r.axis.ljust(12), "red", "bold")
+                + f"{r.why} — the axis said {r.status}"
+            )
+    console.always("")
+    return 1 if missed else 0
 
 
 def _report_coverage(console: Console) -> int:
@@ -852,6 +950,7 @@ def _run_suite_stage(args: argparse.Namespace, console: Console) -> "tuple[int, 
         console,
         args.suite_path,
         with_coverage=not args.no_line_coverage,
+        ignore=args.suite_ignore,
     )
     _suite.report_suite(result, console)
 
@@ -894,6 +993,108 @@ def _run_suite_stage(args: argparse.Namespace, console: Console) -> "tuple[int, 
     return result.broken, regressions
 
 
+def _run_doctest_stage(args: argparse.Namespace, console: Console) -> int:
+    """The documentation, against the code it documents.
+
+    Returns the number of modules whose docstrings got *worse*.  The
+    standing failures are a recorded backlog: a stage that is red on
+    arrival teaches people to pass it with a flag, and the number that
+    matters for a gate is whether this change made it grow.
+    """
+    from lucid.test.audit import _doctests
+
+    console.banner("Docstrings", "every documented example, run as written")
+    result = _doctests.run()
+    if not result.ran or not result.attempted:
+        console.always(console.paint("  no docstring examples found", "grey"))
+        return 0
+
+    console.always(
+        "  "
+        + console.paint("examples".ljust(22), "grey")
+        + console.paint(
+            f"{result.attempted - result.failed}/{result.attempted} run " "as written ",
+            "white",
+        )
+        + console.paint(
+            f"({100 * (result.attempted - result.failed) / result.attempted:.1f}%)",
+            "cyan",
+        )
+    )
+
+    if args.update_doctests:
+        _doctests.save_floor(args.doctest_baseline, result)
+        console.always(
+            console.paint(
+                f"  {result.failed} failing example(s) in {len(result.per_module)} "
+                f"module(s) recorded in {args.doctest_baseline}",
+                "grey",
+            )
+        )
+        return 0
+
+    floor = _doctests.load_floor(args.doctest_baseline)
+    if floor is None:
+        console.always("")
+        console.always(
+            console.paint(
+                "  no doctest floor yet — run --update-doctests to record one", "grey"
+            )
+        )
+        return 0
+    worse = _doctests.regressions(result, floor)
+    if not worse:
+        console.always(
+            "  "
+            + console.paint("against the floor".ljust(22), "grey")
+            + console.paint("no module got worse", "green")
+        )
+        return 0
+    console.always("")
+    console.rule(f"docstring regressions · {len(worse)}", "red")
+    for name, was, now in worse:
+        console.always(
+            "  "
+            + console.paint("WORSE", "red", "bold")
+            + f"  {name}  ({was} -> {now} failing examples)"
+        )
+    return len(worse)
+
+
+def _run_self_check_stage(console: Console) -> int:
+    """Whether the instruments can still produce a red light.
+
+    Cheap — no framework symbol is swept, only the mutants — and it is
+    the one stage without which the others cannot be believed: a blind
+    axis and a clean framework print the same thing.
+    """
+    from lucid.test.audit import _mutants
+
+    console.banner("Self-check", "each axis is handed the defect it claims to catch")
+    results = _mutants.verify()
+    missed = [r for r in results if not r.caught]
+    console.always(
+        "  "
+        + console.paint("axes proven".ljust(22), "grey")
+        + console.paint(
+            f"{len(results) - len(missed)}/{len(results)} mutants caught ", "white"
+        )
+        + console.paint(
+            f"({len(_mutants.unproven_axes())} axes unproven, by design)", "cyan"
+        )
+    )
+    if missed:
+        console.always("")
+        console.rule(f"blind · {len(missed)}", "red")
+        for verdict in missed:
+            console.always(
+                "  "
+                + console.paint(verdict.axis.ljust(12), "red", "bold")
+                + f"{verdict.why} — the axis said {verdict.status}"
+            )
+    return len(missed)
+
+
 def _verdict(console: Console, tallies: "dict[str, int]") -> int:
     """One line per stage, then the answer.
 
@@ -931,6 +1132,8 @@ def main(argv: "Sequence[str] | None" = None) -> int:
         return _list_axes(console)
     if args.list_subsystems:
         return _list_subsystems(console)
+    if args.self_check:
+        return _self_check(console)
     if args.coverage:
         return _report_coverage(console)
     if args.list_uncovered:
@@ -954,6 +1157,17 @@ def main(argv: "Sequence[str] | None" = None) -> int:
 
     tallies: dict[str, int] = {}
     try:
+        # The self-check runs *first*, on a clean interpreter.
+        #
+        # Ordering is load-bearing, not cosmetic.  Run after the sweep,
+        # four mutants stopped being caught — the sweep leaves device and
+        # module state behind, and the axes that need Metal or a freshly
+        # built module then answered UNSUPPORTED instead of FAIL.  An
+        # instrument check that the run itself perturbs proves nothing,
+        # and proving the instruments before using them is the order the
+        # argument needs anyway.
+        if do_audit and not args.no_self_check:
+            tallies["blind axes"] = _run_self_check_stage(console)
         if do_audit:
             defects, cell_regressions = _run_audit_stage(args, console)
             tallies["audit defects"] = defects
@@ -962,6 +1176,8 @@ def main(argv: "Sequence[str] | None" = None) -> int:
             broken, line_regressions = _run_suite_stage(args, console)
             tallies["suite failures"] = broken
             tallies["line coverage regressions"] = line_regressions
+        if do_suite and not args.no_doctests:
+            tallies["docstring regressions"] = _run_doctest_stage(args, console)
     except KeyboardInterrupt:
         console.always("")
         console.always(console.paint("  interrupted — no report written", "yellow"))

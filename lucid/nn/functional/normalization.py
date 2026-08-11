@@ -346,13 +346,38 @@ def rms_norm(
     """
     from lucid._factories.creation import ones
 
-    C = x.shape[-1]
+    norm_shape = tuple(int(d) for d in normalized_shape)
+    if not norm_shape:
+        raise ValueError("rms_norm: normalized_shape must not be empty")
+    trailing = tuple(int(d) for d in x.shape[-len(norm_shape) :])
+    if trailing != norm_shape:
+        raise ValueError(
+            f"rms_norm: normalized_shape {norm_shape} does not match the "
+            f"trailing dimensions of x {trailing}"
+        )
+
+    # The engine normalises over the last axis only.  RMS over the last k axes
+    # is identical to RMS over those axes flattened into one, so collapse them,
+    # normalise, and restore the shape.  Without this ``normalized_shape`` was
+    # accepted and ignored: every call normalised over the final axis whatever
+    # was asked for.
+    C = 1
+    for d in norm_shape:
+        C *= d
     w = (
         _unwrap(weight)
         if weight is not None
         else _unwrap(ones(C, device=x.device, dtype=x.dtype))
     )
-    return _wrap(_C_engine.nn.rms_norm(_unwrap(x), w, eps))
+    if len(norm_shape) == 1:
+        return _wrap(_C_engine.nn.rms_norm(_unwrap(x), w, eps))
+
+    orig_shape = tuple(int(d) for d in x.shape)
+    lead = orig_shape[: len(orig_shape) - len(norm_shape)]
+    flat = x.reshape(*lead, C)
+    w_flat = w if len(w.shape) == 1 else _unwrap(_wrap(w).reshape(C))
+    out = _wrap(_C_engine.nn.rms_norm(_unwrap(flat), w_flat, eps))
+    return out.reshape(*orig_shape)
 
 
 def instance_norm(

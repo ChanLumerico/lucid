@@ -69,6 +69,7 @@ public:
     int K_[N];       // Pooling window size per axis.
     int stride_[N];  // Stride per axis (already resolved from 0 in forward).
     int pad_[N];     // Zero-padding per axis.
+    bool ceil_mode_ = false;  // Ceiling output sizing.
     // Winner index per output element, plane-local into the unpadded
     // input; -1 where the window covered only padding.  Verified against
     // cpu::max_pool2d_backward_typed, which writes dxb[idx] += gb[o] with
@@ -103,8 +104,11 @@ public:
     // ShapeMismatch
     //     If the input rank disagrees with ``N + 2`` or any computed
     //     output extent is non-positive.
-    static TensorImplPtr
-    forward(const TensorImplPtr& x, const int (&K)[N], const int (&stride)[N], const int (&pad)[N]);
+    static TensorImplPtr forward(const TensorImplPtr& x,
+                                 const int (&K)[N],
+                                 const int (&stride)[N],
+                                 const int (&pad)[N],
+                                 bool ceil_mode = false);
 
     // Backward — scatter ``grad_out`` into the input positions recorded
     // in ``saved_argmax_``.  Elements that did not win any window
@@ -150,6 +154,8 @@ public:
     int K_[N];
     int stride_[N];
     int pad_[N];
+    bool ceil_mode_ = false;          // Ceiling output sizing.
+    bool count_include_pad_ = true;   // Whether padding counts in the divisor.
 
     // Graph-mode backward.  Covers the non-overlapping, unpadded window —
     // which is what ``avg_pool2d(x, k)`` means — and refuses the rest
@@ -180,8 +186,12 @@ public:
     // ShapeMismatch
     //     If the input rank disagrees with ``N + 2`` or any computed
     //     output extent is non-positive.
-    static TensorImplPtr
-    forward(const TensorImplPtr& x, const int (&K)[N], const int (&stride)[N], const int (&pad)[N]);
+    static TensorImplPtr forward(const TensorImplPtr& x,
+                                 const int (&K)[N],
+                                 const int (&stride)[N],
+                                 const int (&pad)[N],
+                                 bool ceil_mode = false,
+                                 bool count_include_pad = true);
 
     // Backward — distribute ``grad_out`` evenly over each pooling
     // window (each contributing element receives ``1 / prod(K)`` of the
@@ -231,7 +241,8 @@ using AvgPool3dBackward = AvgPoolNdBackward<3>;
 LUCID_API TensorImplPtr max_pool1d_op(const TensorImplPtr& x,
                                       int KL,
                                       int stride_l = 0,
-                                      int pad_l = 0);
+                                      int pad_l = 0,
+                                      bool ceil_mode = false);
 
 // Two-dimensional max pooling over a batch of feature maps.
 //
@@ -263,7 +274,8 @@ LUCID_API TensorImplPtr max_pool2d_op(const TensorImplPtr& x,
                                       int stride_h = 0,
                                       int stride_w = 0,
                                       int pad_h = 0,
-                                      int pad_w = 0);
+                                      int pad_w = 0,
+                                      bool ceil_mode = false);
 
 // Three-dimensional max pooling over a batch of volumes.
 //
@@ -295,7 +307,8 @@ LUCID_API TensorImplPtr max_pool3d_op(const TensorImplPtr& x,
                                       int stride_w = 0,
                                       int pad_d = 0,
                                       int pad_h = 0,
-                                      int pad_w = 0);
+                                      int pad_w = 0,
+                                      bool ceil_mode = false);
 
 // One-dimensional average pooling over a batch of sequences.
 //
@@ -320,7 +333,9 @@ LUCID_API TensorImplPtr max_pool3d_op(const TensorImplPtr& x,
 LUCID_API TensorImplPtr avg_pool1d_op(const TensorImplPtr& x,
                                       int KL,
                                       int stride_l = 0,
-                                      int pad_l = 0);
+                                      int pad_l = 0,
+                                      bool ceil_mode = false,
+                                      bool count_include_pad = true);
 
 // Two-dimensional average pooling over a batch of feature maps.
 //
@@ -350,7 +365,9 @@ LUCID_API TensorImplPtr avg_pool2d_op(const TensorImplPtr& x,
                                       int stride_h = 0,
                                       int stride_w = 0,
                                       int pad_h = 0,
-                                      int pad_w = 0);
+                                      int pad_w = 0,
+                                      bool ceil_mode = false,
+                                      bool count_include_pad = true);
 
 // Three-dimensional average pooling over a batch of volumes.
 //
@@ -381,6 +398,8 @@ LUCID_API TensorImplPtr avg_pool3d_op(const TensorImplPtr& x,
                                       int stride_w = 0,
                                       int pad_d = 0,
                                       int pad_h = 0,
-                                      int pad_w = 0);
+                                      int pad_w = 0,
+                                      bool ceil_mode = false,
+                                      bool count_include_pad = true);
 
 }  // namespace lucid

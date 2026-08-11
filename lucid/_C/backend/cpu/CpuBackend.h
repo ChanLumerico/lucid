@@ -7777,8 +7777,6 @@ public:
         // weight matrix W, so the backward is fully determined by ``saved_weights``
         // and needs no mask/causal replay — the extra args exist only to match
         // the interface the MLX VJP path requires.
-        (void)attn_mask;
-        (void)mask_dtype;
         (void)is_causal;
         std::size_t B = 1;
         for (std::size_t i = 0; i + 2 < q_shape.size(); ++i)
@@ -7791,6 +7789,16 @@ public:
         CpuStorage dQ_cpu = alloc_cpu(B * Lq * Dk, dt);
         CpuStorage dK_cpu = alloc_cpu(B * Lk * Dk, dt);
         CpuStorage dV_cpu = alloc_cpu(B * Lk * Dv, dt);
+
+        // dL/dM == dL/dS, since S = QK^T·s + M.  ``dscores`` below is already
+        // that quantity, so an additive mask costs one extra buffer, not extra
+        // arithmetic.  Emitted at full score shape; the node reduces it back
+        // through whatever broadcast the caller's mask used.
+        // Always emitted so the returned vector matches the node's edge count
+        // (the same contract ``conv_nd_backward`` keeps for a null bias); the
+        // engine drops this slot when the mask edge is null.
+        const bool want_mask_grad = (attn_mask != nullptr) && (mask_dtype != Dtype::Bool);
+        CpuStorage dM_cpu = alloc_cpu(want_mask_grad ? B * Lq * Lk : 1, dt);
 
         const auto& qs = std::get<CpuStorage>(q);
         const auto& ks = std::get<CpuStorage>(k);
@@ -7820,6 +7828,7 @@ public:
             T* dQp = reinterpret_cast<T*>(dQ_cpu.ptr.get());
             T* dKp = reinterpret_cast<T*>(dK_cpu.ptr.get());
             T* dVp = reinterpret_cast<T*>(dV_cpu.ptr.get());
+            T* dMp = want_mask_grad ? reinterpret_cast<T*>(dM_cpu.ptr.get()) : nullptr;
             std::vector<T> dweights(Lq * Lk), dscores(Lq * Lk);
 
             for (std::size_t b = 0; b < B; ++b) {
@@ -7883,6 +7892,9 @@ public:
                                static_cast<int>(Lq), sc, dscores.data(), static_cast<int>(Lk), Qb,
                                static_cast<int>(Dk), 0.0, dKb, static_cast<int>(Dk));
                 }
+
+                if (dMp != nullptr)
+                    std::copy(dscores.begin(), dscores.end(), dMp + b * Lq * Lk);
             }
         };
 
@@ -7893,7 +7905,8 @@ public:
         else
             ErrorBuilder("cpu_backend::sdpa_backward").not_implemented("dtype not supported");
 
-        return {Storage{std::move(dQ_cpu)}, Storage{std::move(dK_cpu)}, Storage{std::move(dV_cpu)}};
+        return {Storage{std::move(dQ_cpu)}, Storage{std::move(dK_cpu)}, Storage{std::move(dV_cpu)},
+                Storage{std::move(dM_cpu)}};
     }
 
     Storage conv_transpose_nd_forward(const Storage& x,
@@ -8830,29 +8843,29 @@ public:
             if constexpr (std::is_same_v<T, float>) {
                 if (N == 1)
                     cpu::avg_pool1d_forward_f32(xp, yp, B, C, S[0], opts.K[0], O[0], opts.stride[0],
-                                                opts.pad[0]);
+                                                opts.pad[0], opts.count_include_pad);
                 else if (N == 2)
                     cpu::avg_pool2d_forward_f32(xp, yp, B, C, S[0], S[1], opts.K[0], opts.K[1],
                                                 O[0], O[1], opts.stride[0], opts.stride[1],
-                                                opts.pad[0], opts.pad[1]);
+                                                opts.pad[0], opts.pad[1], opts.count_include_pad);
                 else
                     cpu::avg_pool3d_forward_f32(xp, yp, B, C, S[0], S[1], S[2], opts.K[0],
                                                 opts.K[1], opts.K[2], O[0], O[1], O[2],
                                                 opts.stride[0], opts.stride[1], opts.stride[2],
-                                                opts.pad[0], opts.pad[1], opts.pad[2]);
+                                                opts.pad[0], opts.pad[1], opts.pad[2], opts.count_include_pad);
             } else {
                 if (N == 1)
                     cpu::avg_pool1d_forward_f64(xp, yp, B, C, S[0], opts.K[0], O[0], opts.stride[0],
-                                                opts.pad[0]);
+                                                opts.pad[0], opts.count_include_pad);
                 else if (N == 2)
                     cpu::avg_pool2d_forward_f64(xp, yp, B, C, S[0], S[1], opts.K[0], opts.K[1],
                                                 O[0], O[1], opts.stride[0], opts.stride[1],
-                                                opts.pad[0], opts.pad[1]);
+                                                opts.pad[0], opts.pad[1], opts.count_include_pad);
                 else
                     cpu::avg_pool3d_forward_f64(xp, yp, B, C, S[0], S[1], S[2], opts.K[0],
                                                 opts.K[1], opts.K[2], O[0], O[1], O[2],
                                                 opts.stride[0], opts.stride[1], opts.stride[2],
-                                                opts.pad[0], opts.pad[1], opts.pad[2]);
+                                                opts.pad[0], opts.pad[1], opts.pad[2], opts.count_include_pad);
             }
         };
         if (dt == Dtype::F32)
@@ -8900,29 +8913,29 @@ public:
             if constexpr (std::is_same_v<T, float>) {
                 if (N == 1)
                     cpu::avg_pool1d_backward_f32(gp, dxp, B, C, S[0], opts.K[0], O[0],
-                                                 opts.stride[0], opts.pad[0]);
+                                                 opts.stride[0], opts.pad[0], opts.count_include_pad);
                 else if (N == 2)
                     cpu::avg_pool2d_backward_f32(gp, dxp, B, C, S[0], S[1], opts.K[0], opts.K[1],
                                                  O[0], O[1], opts.stride[0], opts.stride[1],
-                                                 opts.pad[0], opts.pad[1]);
+                                                 opts.pad[0], opts.pad[1], opts.count_include_pad);
                 else
                     cpu::avg_pool3d_backward_f32(gp, dxp, B, C, S[0], S[1], S[2], opts.K[0],
                                                  opts.K[1], opts.K[2], O[0], O[1], O[2],
                                                  opts.stride[0], opts.stride[1], opts.stride[2],
-                                                 opts.pad[0], opts.pad[1], opts.pad[2]);
+                                                 opts.pad[0], opts.pad[1], opts.pad[2], opts.count_include_pad);
             } else {
                 if (N == 1)
                     cpu::avg_pool1d_backward_f64(gp, dxp, B, C, S[0], opts.K[0], O[0],
-                                                 opts.stride[0], opts.pad[0]);
+                                                 opts.stride[0], opts.pad[0], opts.count_include_pad);
                 else if (N == 2)
                     cpu::avg_pool2d_backward_f64(gp, dxp, B, C, S[0], S[1], opts.K[0], opts.K[1],
                                                  O[0], O[1], opts.stride[0], opts.stride[1],
-                                                 opts.pad[0], opts.pad[1]);
+                                                 opts.pad[0], opts.pad[1], opts.count_include_pad);
                 else
                     cpu::avg_pool3d_backward_f64(gp, dxp, B, C, S[0], S[1], S[2], opts.K[0],
                                                  opts.K[1], opts.K[2], O[0], O[1], O[2],
                                                  opts.stride[0], opts.stride[1], opts.stride[2],
-                                                 opts.pad[0], opts.pad[1], opts.pad[2]);
+                                                 opts.pad[0], opts.pad[1], opts.pad[2], opts.count_include_pad);
             }
         };
         if (dt == Dtype::F32)

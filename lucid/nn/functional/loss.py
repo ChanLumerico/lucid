@@ -1410,6 +1410,16 @@ def gaussian_nll_loss(
         half,
         _C_engine.add(_C_engine.log(vi), _C_engine.div(diff2, vi)),
     )
+    if full:
+        # The omitted constant of the Gaussian log-density, 0.5 * log(2 pi)
+        # per element.  It does not change the gradient, but it is what makes
+        # the returned number an actual negative log-likelihood rather than
+        # one shifted by a constant — which matters the moment the value is
+        # compared against another model's or reported as a likelihood.
+        const = _C_engine.full(
+            loss.shape, 0.5 * math.log(2.0 * math.pi), loss.dtype, loss.device
+        )
+        loss = _C_engine.add(loss, const)
     return _apply_reduction(loss, reduction)
 
 

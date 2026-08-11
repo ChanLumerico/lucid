@@ -4109,9 +4109,16 @@ public:
             auto dscores_t = ::mlx::core::swapaxes(dscores, -2, -1);
             auto dK = ::mlx::core::multiply(scale_arr, ::mlx::core::matmul(dscores_t, *gQ.arr));
 
+            // S = QK^T·s + M ⇒ dL/dM == dL/dS, which ``dscores`` already is.
+            // The slot is always emitted so the vector matches the node's edge
+            // count; the engine drops it when the mask edge is null.
+            auto dM = (attn_mask != nullptr && mask_dtype != Dtype::Bool)
+                          ? std::move(dscores)
+                          : ::mlx::core::zeros({1}, mlx_dt);
             return {Storage{gpu::wrap_mlx_array(std::move(dQ), dt)},
                     Storage{gpu::wrap_mlx_array(std::move(dK), dt)},
-                    Storage{gpu::wrap_mlx_array(std::move(dV), dt)}};
+                    Storage{gpu::wrap_mlx_array(std::move(dV), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(dM), dt)}};
         }
 
         // ── Fused forward saved a {1} placeholder (no-mask / causal / masked).
@@ -4130,6 +4137,25 @@ public:
         } else if (has_custom_mask) {
             mlx_mask = *std::get<GpuStorage>(*attn_mask).arr;
         }
+        // An additive mask is differentiable, so it has to enter the VJP as an
+        // *input* rather than a closure capture — captured, MLX has nothing to
+        // return a cotangent for and the bias table silently never trains.
+        if (custom_mask_is_additive) {
+            auto fwd_m =
+                [scale_f](
+                    const std::vector<::mlx::core::array>& in) -> std::vector<::mlx::core::array> {
+                return {::mlx::core::fast::scaled_dot_product_attention(
+                    in[0], in[1], in[2], scale_f, std::string{}, in[3])};
+            };
+            auto vjp_m = ::mlx::core::vjp(fwd_m, {*gQ.arr, *gK.arr, *gV.arr, *mlx_mask}, {*gG.arr});
+            std::vector<::mlx::core::array>& gm = vjp_m.second;  // {dQ, dK, dV, dM}
+
+            return {Storage{gpu::wrap_mlx_array(std::move(gm[0]), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(gm[1]), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(gm[2]), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(gm[3]), dt)}};
+        }
+
         auto fwd =
             [scale_f, mask_mode, mlx_mask](
                 const std::vector<::mlx::core::array>& in) -> std::vector<::mlx::core::array> {
@@ -4142,7 +4168,8 @@ public:
 
         return {Storage{gpu::wrap_mlx_array(std::move(grads[0]), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(grads[1]), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(grads[2]), dt)}};
+                Storage{gpu::wrap_mlx_array(std::move(grads[2]), dt)},
+                Storage{gpu::wrap_mlx_array(::mlx::core::zeros({1}, mlx_dt), dt)}};
     }
 
     // N-D transposed convolution (fractionally-strided / "deconv") forward.
@@ -4555,14 +4582,19 @@ public:
         const int N = opts.N;
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3], K[3], stride[3], Sp[3];
+        int S[3], O[3], K[3], stride[3], Sp[3], right_extra[3]{};
         int K_total = 1;
         for (int i = 0; i < N; ++i) {
             S[i] = static_cast<int>(x_shape[2 + i]);
             O[i] = static_cast<int>(out_shape[2 + i]);
             K[i] = opts.K[i];
             stride[i] = opts.stride[i];
-            Sp[i] = S[i] + 2 * opts.pad[i];
+            // Ceil mode lets the last window overhang the padded input; give
+            // it room on the right so the window view stays in bounds.  The
+            // fill is -inf, so the overhang can never win a max.
+            const int extra = gpu_ceil_overhang(S[i], K[i], stride[i], opts.pad[i], O[i]);
+            Sp[i] = S[i] + 2 * opts.pad[i] + extra;
+            right_extra[i] = extra;
             K_total *= K[i];
         }
         ::mlx::core::array neg_inf(-std::numeric_limits<double>::infinity(), gpu::to_mlx_dtype(dt));
@@ -4570,7 +4602,7 @@ public:
         pad_widths.emplace_back(0, 0);
         pad_widths.emplace_back(0, 0);
         for (int i = 0; i < N; ++i)
-            pad_widths.emplace_back(opts.pad[i], opts.pad[i]);
+            pad_widths.emplace_back(opts.pad[i], opts.pad[i] + right_extra[i]);
         auto x_pad = ::mlx::core::pad(*gx.arr, pad_widths, neg_inf);
         auto wins = gpu_build_window_view(x_pad, B, C, Sp, O, K, stride, N);
         std::vector<int> kernel_axes;
@@ -4652,7 +4684,10 @@ public:
         // Overlapping / padded pools fall through to the scatter path.
         bool nonoverlap_2d = (N == 2);
         for (int i = 0; i < N && nonoverlap_2d; ++i)
-            if (opts.stride[i] != opts.K[i] || opts.pad[i] != 0)
+            // The interleave-reshape reconstruction assumes the windows tile
+            // the input exactly.  A ceil-mode overhang breaks that (O*K > S),
+            // so such pools must take the general scatter path.
+            if (opts.stride[i] != opts.K[i] || opts.pad[i] != 0 || O[i] * opts.K[i] != S[i])
                 nonoverlap_2d = false;
         if (nonoverlap_2d) {
             const int Oh = O[0], Ow = O[1], Kh = opts.K[0], Kw = opts.K[1];
@@ -4775,27 +4810,34 @@ public:
         const int N = opts.N;
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3], K[3], stride[3], Sp[3];
+        int S[3], O[3], K[3], stride[3], Sp[3], right_extra[3]{};
         for (int i = 0; i < N; ++i) {
             S[i] = static_cast<int>(x_shape[2 + i]);
             O[i] = static_cast<int>(out_shape[2 + i]);
             K[i] = opts.K[i];
             stride[i] = opts.stride[i];
-            Sp[i] = S[i] + 2 * opts.pad[i];
+            // Ceil-mode overhang needs room on the right; the fill is zero, so
+            // it adds nothing to the sum, and the divisor below excludes it.
+            right_extra[i] = gpu_ceil_overhang(S[i], K[i], stride[i], opts.pad[i], O[i]);
+            Sp[i] = S[i] + 2 * opts.pad[i] + right_extra[i];
         }
         ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
         std::vector<std::pair<int, int>> pad_widths;
         pad_widths.emplace_back(0, 0);
         pad_widths.emplace_back(0, 0);
         for (int i = 0; i < N; ++i)
-            pad_widths.emplace_back(opts.pad[i], opts.pad[i]);
+            pad_widths.emplace_back(opts.pad[i], opts.pad[i] + right_extra[i]);
         auto x_pad = ::mlx::core::pad(*gx.arr, pad_widths, zero);
         auto wins = gpu_build_window_view(x_pad, B, C, Sp, O, K, stride, N);
         std::vector<int> kernel_axes;
         for (int i = 0; i < N; ++i)
             kernel_axes.push_back(2 + N + i);
-        auto y = ::mlx::core::mean(wins, kernel_axes, false);
-        return Storage{gpu::wrap_mlx_array(std::move(y), dt)};
+        // ``mean`` would divide by the full window everywhere.  That is only
+        // right when no window is clipped — border windows under padding, and
+        // every window under a ceil-mode overhang, divide by less.
+        auto y = ::mlx::core::sum(wins, kernel_axes, false);
+        return Storage{
+            gpu::wrap_mlx_array(gpu_apply_pool_divisor(y, B, C, S, O, K, stride, opts, N, dt), dt)};
     }
 
     Storage avg_pool_nd_backward(const Storage& grad_out,
@@ -4812,19 +4854,23 @@ public:
         for (int i = 0; i < N; ++i) {
             S[i] = static_cast<int>(x_shape[2 + i]);
             O[i] = static_cast<int>(out_shape[2 + i]);
-            Sp[i] = S[i] + 2 * opts.pad[i];
+            Sp[i] = S[i] + 2 * opts.pad[i] +
+                    gpu_ceil_overhang(S[i], opts.K[i], opts.stride[i], opts.pad[i], O[i]);
             K_total *= opts.K[i];
         }
         using SE = ::mlx::core::ShapeElem;
         const auto idt = ::mlx::core::int32;
-        auto inv_K = ::mlx::core::array(1.0 / static_cast<double>(K_total), gpu::to_mlx_dtype(dt));
         ::mlx::core::Shape g_with_k;
         g_with_k.push_back(B);
         g_with_k.push_back(C);
         for (int i = 0; i < N; ++i)
             g_with_k.push_back(O[i]);
         g_with_k.push_back(1);
-        auto g_exp = ::mlx::core::multiply(::mlx::core::reshape(*gG.arr, g_with_k), inv_K);
+        // Each output's gradient is spread over the elements that fed it, so
+        // it carries that window's own divisor — not a uniform 1/prod(K).
+        auto g_scaled =
+            gpu_apply_pool_divisor(*gG.arr, B, C, S, O, opts.K, opts.stride, opts, N, dt);
+        auto g_exp = ::mlx::core::reshape(g_scaled, g_with_k);
         ::mlx::core::Shape full_k = g_with_k;
         full_k[N + 2] = static_cast<SE>(K_total);
         auto updates = ::mlx::core::broadcast_to(g_exp, full_k);
@@ -5451,6 +5497,73 @@ private:
         return ::mlx::core::conv3d(x_nhwc, W_nhwc,
                                    std::tuple<int, int, int>{stride[0], stride[1], stride[2]},
                                    std::tuple<int, int, int>{pad[0], pad[1], pad[2]});
+    }
+
+    // Divide a summed pool by the per-output-position window span.
+    //
+    // The divisor factorises across axes, so it is built as a product of N
+    // rank-broadcast vectors rather than a dense (B,C,O...) tensor.
+    static ::mlx::core::array gpu_apply_pool_divisor(::mlx::core::array y,
+                                                     int B,
+                                                     int C,
+                                                     const int* S,
+                                                     const int* O,
+                                                     const int* K,
+                                                     const int* stride,
+                                                     const PoolOpts& opts,
+                                                     int N,
+                                                     Dtype dt) {
+        (void)B;
+        (void)C;
+        using SE = ::mlx::core::ShapeElem;
+        const auto mdt = gpu::to_mlx_dtype(dt);
+        for (int i = 0; i < N; ++i) {
+            std::vector<float> spans(static_cast<std::size_t>(O[i]));
+            bool uniform = true;
+            for (int o = 0; o < O[i]; ++o) {
+                spans[static_cast<std::size_t>(o)] = static_cast<float>(gpu_avg_pool_span(
+                    o, S[i], K[i], stride[i], opts.pad[i], opts.count_include_pad));
+                if (spans[static_cast<std::size_t>(o)] != static_cast<float>(K[i]))
+                    uniform = false;
+            }
+            ::mlx::core::Shape bshape(static_cast<std::size_t>(N) + 2, 1);
+            bshape[static_cast<std::size_t>(2 + i)] = static_cast<SE>(O[i]);
+            ::mlx::core::array vec =
+                ::mlx::core::array(spans.data(), {static_cast<SE>(O[i])}, ::mlx::core::float32);
+            if (uniform) {
+                // Every window on this axis has the full span — one scalar
+                // divide instead of a broadcast tensor.
+                y = ::mlx::core::divide(
+                    y, ::mlx::core::array(static_cast<double>(K[i]), mdt));
+                continue;
+            }
+            y = ::mlx::core::divide(
+                y, ::mlx::core::astype(::mlx::core::reshape(vec, bshape), mdt));
+        }
+        return y;
+    }
+
+    // Per-axis span of the average-pool window at output index ``o``.
+    // Mirrors the CPU kernel's ``avg_pool_span``: the window end is clamped to
+    // ``S + pad``, so a ceil-mode overhang counts toward neither the sum nor
+    // the divisor, and ``count_include_pad`` picks between the padded extent
+    // and the real-element count.
+    static int gpu_avg_pool_span(int o, int S, int K, int stride, int pad, bool count_pad) {
+        const int start = o * stride - pad;
+        const int end = std::min(start + K, S + pad);
+        if (count_pad)
+            return end - start;
+        const int lo = std::max(start, 0);
+        const int hi = std::min(end, S);
+        return hi > lo ? hi - lo : 0;
+    }
+
+    // Right-hand padding the ceil-mode overhang needs so the window view can
+    // address the final window without running off the end of the buffer.
+    static int gpu_ceil_overhang(int S, int K, int stride, int pad, int O) {
+        const int reach = (O - 1) * stride + K;
+        const int have = S + 2 * pad;
+        return reach > have ? reach - have : 0;
     }
 
     static ::mlx::core::array gpu_build_window_view(const ::mlx::core::array& padded,

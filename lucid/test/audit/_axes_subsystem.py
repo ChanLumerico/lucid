@@ -19,6 +19,7 @@ guard that snapshots and restores the global state, so they are checked
 rather than merely counted.
 """
 
+import contextlib
 import functools
 import math
 import tempfile
@@ -28,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 import lucid
-from lucid.test.audit import _probe, _surface
+from lucid.test.audit import _probe, _specs, _surface
 from lucid.test.audit._axes import Axis, Context, _try_construct
 from lucid.test.audit._result import Finding, Status
 
@@ -53,15 +54,128 @@ class StateGuard:
         ("get_default_device", "set_default_device"),
         ("get_num_threads", "set_num_threads"),
         ("get_rng_state", "set_rng_state"),
+        # Deterministic mode, which this guard did not restore.
+        #
+        # ``_smoke_arguments`` hands ``use_deterministic_algorithms`` the
+        # value ``True`` — that is the point of the guard — and nothing
+        # ever turned it off again.  Every symbol swept after it ran in
+        # deterministic mode, and the four ``dropout`` entry points then
+        # refused with "non-deterministic op called under
+        # set_deterministic(True)": they reported as uncallable, in a
+        # mode nobody had asked for and nothing in the output mentioned.
+        #
+        # Exactly the failure this class was written for, one switch
+        # short — which is the argument for deriving the list rather than
+        # writing it, and the reason the pairs are asked of ``lucid``
+        # by name rather than hard-coded to five.
+        (
+            "are_deterministic_algorithms_enabled",
+            "use_deterministic_algorithms",
+        ),
+        # Anomaly detection, the fourth switch found leaking one at a
+        # time.  Enumerated below rather than only listed here — a table
+        # of process state that a human maintains is a table that is one
+        # entry short, which is now measured rather than argued: grad
+        # mode, deterministic mode, the hook registries and this.
+        ("is_anomaly_enabled", "set_detect_anomaly"),
+    )
+
+    #: Where process state lives.  ``set_detect_anomaly`` is on
+    #: ``lucid.autograd`` and not re-exported, so a guard that looked it
+    #: up on ``lucid`` got ``None`` and **skipped it without saying so** —
+    #: the switch stayed on and the next stage's doctests failed.  A
+    #: lookup that can silently find nothing is a guard with a hole in it.
+    _NAMESPACES = ("lucid", "lucid.autograd", "lucid.metal")
+
+    @classmethod
+    def _namespaces(cls) -> "list[Any]":
+        import importlib  # noqa: PLC0415
+
+        out = []
+        for path in cls._NAMESPACES:
+            try:
+                out.append(importlib.import_module(path))
+            except Exception:  # noqa: BLE001
+                continue
+        return out
+
+    @classmethod
+    def _resolve(cls, name: str) -> Any:
+        for namespace in cls._namespaces():
+            found = getattr(namespace, name, None)
+            if callable(found):
+                return found
+        return None
+
+    @classmethod
+    def _discovered_pairs(cls) -> "tuple[tuple[str, str], ...]":
+        """Every ``is_/get_X`` with a matching ``set_X``, found not listed.
+
+        The named pairs above stay as documentation and as the ordering
+        this guard restores in; this adds whatever the package has grown
+        since.  Four switches were found leaking one at a time this
+        session — grad mode, deterministic mode, the hook registries and
+        anomaly detection — which is the argument for deriving the list:
+        a table of process state that a human maintains is a table that
+        is one entry short.
+        """
+        found: "list[tuple[str, str]]" = []
+        known = {reader for reader, _ in cls._KEYS}
+        for namespace in cls._namespaces():
+            for name in dir(namespace):
+                if not name.startswith("set_"):
+                    continue
+                for prefix in ("get_", "is_", "are_"):
+                    reader = prefix + name[4:]
+                    if reader in known:
+                        break
+                    if callable(getattr(namespace, reader, None)) and callable(
+                        getattr(namespace, name, None)
+                    ):
+                        found.append((reader, name))
+                        known.add(reader)
+                        break
+        return tuple(found)
+
+    #: Process-wide registries a call can append to.  A getter/setter
+    #: pair cannot express these — there is no setter, only a mutable
+    #: mapping — so they are snapshotted by copy and restored in place.
+    #:
+    #: Found the hard way.  ``_smoke_arguments`` calls
+    #: ``register_module_forward_pre_hook`` like every other symbol, the
+    #: call succeeds, and the hook stays installed **for the life of the
+    #: process** — so every ``Module.__call__`` after the sweep ran a
+    #: probe's throwaway hook and raised inside it.  The sweep's own
+    #: results were clean because smoke runs last; the *next stage* was
+    #: not, and the doctest stage reported 40 modules as regressions
+    #: (``nn.modules.conv`` 0 -> 52) that were nothing of the kind.
+    #:
+    #: This is the ``set_grad_enabled`` lesson a third time, and the
+    #: pattern is now explicit: **state is not only the switches with
+    #: setters.**
+    _REGISTRIES = (
+        "_GLOBAL_FORWARD_PRE_HOOKS",
+        "_GLOBAL_FORWARD_HOOKS",
+        "_GLOBAL_BACKWARD_PRE_HOOKS",
+        "_GLOBAL_BACKWARD_HOOKS",
+        "_GLOBAL_LOAD_STATE_DICT_PRE_HOOKS",
+        "_GLOBAL_LOAD_STATE_DICT_POST_HOOKS",
     )
 
     def __init__(self) -> None:
         self._saved: list[tuple[Any, Any]] = []
+        self._registries: list[tuple[Any, Any]] = []
 
     def __enter__(self) -> "StateGuard":
-        for getter_name, setter_name in self._KEYS:
-            getter = getattr(lucid, getter_name, None)
-            setter = getattr(lucid, setter_name, None)
+        import lucid.nn.hooks as hooks  # noqa: PLC0415 - avoids an import cycle
+
+        for name in self._REGISTRIES:
+            registry = getattr(hooks, name, None)
+            if registry is not None:
+                self._registries.append((registry, dict(registry)))
+        for getter_name, setter_name in (*self._KEYS, *self._discovered_pairs()):
+            getter = self._resolve(getter_name)
+            setter = self._resolve(setter_name)
             if getter is None or setter is None:
                 continue
             try:
@@ -82,6 +196,15 @@ class StateGuard:
             except Exception:  # noqa: BLE001
                 continue
         self._saved.clear()
+        # Restored in place, not rebound: the modules that read these
+        # hold the mapping itself.
+        for registry, snapshot in reversed(self._registries):
+            try:
+                registry.clear()
+                registry.update(snapshot)
+            except Exception:  # noqa: BLE001
+                continue
+        self._registries.clear()
 
 
 class SmokeAxis(Axis):
@@ -136,11 +259,50 @@ class SmokeAxis(Axis):
                 except Exception:  # noqa: BLE001 - a refusal is a fine answer here
                     continue
                 return self._finding(symbol, Status.PASS, f"called as {note}")
+
+            # A class is *constructed*, not called with a tensor.  The
+            # ladder above hands it ``(tensor)`` and ``(2, 3)``, which is
+            # right for a factory function and wrong for every
+            # distribution, tokenizer, observer and dataset in the
+            # framework — 60-odd of the 143 that reached no argument
+            # shape were classes whose signature says exactly what they
+            # want.
+            if isinstance(fn, type):
+                from lucid.test.audit._axes_data import _construct
+
+                instance, why = _construct(fn)
+                if instance is not None:
+                    return self._finding(
+                        symbol, Status.PASS, "constructed from its signature"
+                    )
+                return self._finding(symbol, Status.SKIP, f"construct: {why}")
+
             # Falling through to the op ladder covers anything with a
             # tensor-shaped signature the table above does not name.
-            if symbol.inert:
-                call, _, _ = self._working_call(fn, symbol, ctx)
-                if call is not None:
+            #
+            # Its own loop, not ``_working_call``.  That helper keeps the
+            # first candidate whose output ``to_numpy`` can read, which is
+            # exactly right for an axis that then compares numbers and
+            # exactly wrong here: this axis asks whether calling the
+            # symbol takes the process down, and ``lucid.compile(f)``
+            # answers that question perfectly well by returning a
+            # closure.  Demanding a measurable output rejected every
+            # higher-order function in the framework — ``compile``,
+            # ``odeint``, ``make_step``, ``func.jvp``, ``gradcheck`` —
+            # and reported them as uncallable.
+            #
+            # Run for stateful symbols too.  It was gated on ``inert``,
+            # which is what the guard is *for*: the whole point of
+            # snapshotting the process state is that the call can then be
+            # made.
+            for domain in ctx.domains:
+                for call in _specs.invocations(
+                    symbol.short, domain, symbol.qualname, fn
+                ):
+                    try:
+                        fn(*call.args, **call.kwargs)
+                    except Exception:  # noqa: BLE001 - a refusal is a fine answer
+                        continue
                     return self._finding(symbol, Status.PASS, f"called as {call.note}")
         return self._finding(symbol, Status.SKIP, "no argument shape worked")
 
@@ -260,11 +422,103 @@ class DistributionAxis(Axis):
             return False
         return True
 
+    @staticmethod
+    def _is_transform(obj: Any) -> bool:
+        return (
+            hasattr(obj, "inv")
+            and callable(obj)
+            and not hasattr(obj, "log_prob")
+            and not hasattr(obj, "sample")
+        )
+
+    def _check_transform(self, symbol: "Symbol", transform: Any) -> Finding:
+        """``inv(f(x))`` must be ``x``, on the transform's own codomain.
+
+        The probe is pushed through the forward map first and inverted
+        from there, so it is inside the domain by construction — an
+        inverse asked about a point its forward never produces is being
+        asked the wrong question.
+        """
+        problems: "list[str]" = []
+        source = _probe.as_f64(_probe.rng(19).uniform(0.15, 0.85, (2, 3)))
+        try:
+            forward = transform(source)
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol,
+                Status.UNSUPPORTED,
+                f"forward: {type(exc).__name__}: {str(exc)[:50]}",
+            )
+        mapped = _probe.to_numpy(forward)
+        if mapped is None:
+            return self._finding(
+                symbol, Status.SKIP, "the forward map returned no tensor"
+            )
+        if not np.isfinite(mapped).all():
+            problems.append("the forward map is not finite on (0.15, 0.85)")
+
+        inverse = getattr(transform, "inv", None)
+        if inverse is not None:
+            try:
+                back = _probe.to_numpy(inverse(forward))
+            except Exception as exc:  # noqa: BLE001
+                back = None
+                problems.append(f"inv raised {type(exc).__name__}")
+            if back is not None:
+                if not np.isfinite(back).all():
+                    problems.append("inv is not finite on the forward map's own output")
+                elif back.shape == np.shape(
+                    _probe.to_numpy(source)
+                ) and not np.allclose(
+                    back.astype(float),
+                    _probe.to_numpy(source).astype(float),
+                    rtol=1e-6,
+                    atol=1e-8,
+                ):
+                    # ``AbsTransform`` is deliberately not injective, and
+                    # says so; a transform that claims a bijection and is
+                    # not one is the finding.
+                    residual = back.astype(float) - _probe.to_numpy(source).astype(
+                        float
+                    )
+                    if np.allclose(residual - residual[..., :1], 0.0, atol=1e-8):
+                        # A constant offset along the transformed axis is
+                        # the softmax gauge: adding a constant to every
+                        # logit leaves the probabilities unchanged, so no
+                        # inverse can recover which representative went
+                        # in.  Recovering the canonical one is correct up
+                        # to that symmetry, which is what GAUGE says and
+                        # FAIL does not.
+                        return self._finding(
+                            symbol,
+                            Status.GAUGE,
+                            f"inv recovers x up to a constant shift of "
+                            f"{residual.reshape(-1)[0]:+.4f} along the transformed axis",
+                        )
+                    if getattr(transform, "bijective", True):
+                        problems.append(
+                            f"inv(forward(x)) is off by {np.abs(residual).max():.3e}"
+                        )
+        if problems:
+            return self._finding(symbol, Status.FAIL, "; ".join(problems))
+        return self._finding(
+            symbol, Status.PASS, "forward is finite and inv round trips"
+        )
+
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         if symbol.short == "kl_divergence":
             return self._check_kl(symbol)
         dist = None
-        for args, kwargs in self._PARAMS:
+        # A transform first, from its signature.  The fixed ladder below
+        # "succeeds" at ``CumulativeDistributionTransform(0.5)`` — the
+        # float is accepted and the object is then broken, so the axis
+        # reported ``'Tensor' object has no attribute 'cdf'`` about a
+        # class the signature says takes a distribution.
+        if symbol.short.endswith("Transform"):
+            from lucid.test.audit._axes_data import _construct
+
+            dist, _ = _construct(symbol.obj)
+        for args, kwargs in () if dist is not None else self._PARAMS:
             try:
                 dist = symbol.obj(
                     *(_probe.as_f64(a) if isinstance(a, float) else a for a in args),
@@ -274,7 +528,24 @@ class DistributionAxis(Axis):
             except Exception:  # noqa: BLE001
                 continue
         if dist is None:
+            # The fixed ladder cannot reach a constructor that wants a
+            # vector, a matrix or another distribution — ``MultivariateNormal``,
+            # ``Wishart``, ``MixtureSameFamily`` and the composed
+            # transforms, ten classes with no cell answered between them.
+            # The signature-driven builder already knows those names.
+            from lucid.test.audit._axes_data import _construct
+
+            dist, _ = _construct(symbol.obj)
+        if dist is None:
             return self._finding(symbol, Status.SKIP, "no constructor signature worked")
+
+        # A transform is not a distribution and is enumerated as one:
+        # it has no ``sample`` and no ``log_prob``, so every one of them
+        # reported "no probeable method".  Its own contract is the round
+        # trip, and that is a check with teeth — an inverse that returns
+        # NaN for its whole domain is a defect this framework has had.
+        if self._is_transform(dist):
+            return self._check_transform(symbol, dist)
 
         problems: list[str] = []
         checked: list[str] = []
@@ -484,7 +755,53 @@ class DiffeqAxis(Axis):
             return self._check_tableau(symbol, tableau)
         if symbol.short in ("odeint", "odeint_adjoint"):
             return self._check_convergence(symbol, obj)
-        return self._finding(symbol, Status.SKIP, "not a solver or a tableau")
+        if symbol.short in ("odeint_dense", "odeint_event"):
+            return self._check_variant(symbol, obj)
+        return self._finding(symbol, Status.NOT_APPLICABLE, "not a solver or a tableau")
+
+    def _check_variant(self, symbol: "Symbol", solver: Any) -> Finding:
+        """The dense and event solvers, against ``odeint`` on the same problem.
+
+        Neither takes a time grid the way ``odeint`` does — one returns
+        an interpolant and the other integrates until a condition — so
+        the convergence check above cannot reach them and both reported
+        "not a solver or a tableau" about the two solvers in the module.
+        The reference is ``odeint`` itself: three routes to the same
+        trajectory have to agree on it.
+        """
+
+        def rhs(t: Any, y: Any) -> Any:
+            return lucid.cos(t) * y * y
+
+        y0 = _probe.as_f64(np.array([0.5]))
+        exact = 1.0 / (1.0 / 0.5 - math.sin(1.0))
+        try:
+            if symbol.short == "odeint_dense":
+                interpolant = solver(rhs, y0, 0.0, 1.0)
+                got = _probe.to_numpy(interpolant(1.0))
+            else:
+                # Stop when y reaches the value the exact solution has at
+                # t = 1, and the stopping time must be 1.
+                def event(t: Any, y: Any) -> Any:
+                    return y.reshape(-1)[0] - exact
+
+                when, _ = solver(rhs, y0, 0.0, event_fn=event)
+                got = _probe.to_numpy(when)
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
+            )
+        if got is None:
+            return self._finding(symbol, Status.SKIP, "returned nothing measurable")
+        value = float(np.asarray(got).reshape(-1)[0])
+        want = exact if symbol.short == "odeint_dense" else 1.0
+        if abs(value - want) > 1e-5:
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"gave {value:.9g}, the exact answer is {want:.9g}",
+            )
+        return self._finding(symbol, Status.PASS, f"agrees to {abs(value - want):.2e}")
 
     def _check_tableau(self, symbol: "Symbol", tableau: Any) -> Finding:
         a = np.asarray(tableau[0], dtype=np.float64)
@@ -514,8 +831,15 @@ class DiffeqAxis(Axis):
         errors = []
         for steps in (8, 16, 32):
             grid = [i / steps for i in range(steps + 1)]
+            # ``odeint`` takes ``return_trajectory`` and ``odeint_adjoint``
+            # does not — passing it unconditionally made the adjoint
+            # solver, the one whose gradients are the reason it exists,
+            # report UNSUPPORTED on a keyword rather than run.
+            options: "dict[str, Any]" = {"method": "rk4"}
+            if symbol.short == "odeint":
+                options["return_trajectory"] = False
             try:
-                out = solver(rhs, y0, grid, method="rk4", return_trajectory=False)
+                out = solver(rhs, y0, grid, **options)
             except Exception as exc:  # noqa: BLE001
                 return self._finding(
                     symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
@@ -525,7 +849,12 @@ class DiffeqAxis(Axis):
                 return self._finding(symbol, Status.SKIP, "solver returned no tensor")
             # dy/y^2 = cos(t) dt  =>  1/y0 - 1/y = sin(t)
             exact = 1.0 / (1.0 / 0.5 - math.sin(1.0))
-            errors.append(abs(float(np.asarray(got).reshape(-1)[0]) - exact))
+            # ``odeint_adjoint`` has no ``return_trajectory`` and always
+            # answers with the whole path, so reading entry 0 read
+            # ``y0`` — a constant, and therefore a constant error at
+            # every step count and an observed order of exactly zero.
+            # The endpoint is the last entry whichever shape came back.
+            errors.append(abs(float(np.asarray(got).reshape(-1)[-1]) - exact))
 
         if errors[-1] < 1e-13:
             return self._finding(symbol, Status.PASS, "converged to round-off")
@@ -548,7 +877,17 @@ class DiffeqAxis(Axis):
 
 
 def _as_tableau(obj: Any) -> "tuple[Any, Any, Any] | None":
-    """``(A, b, c)`` if ``obj`` looks like a Butcher tableau."""
+    """``(A, b, c)`` if ``obj`` looks like a Butcher tableau.
+
+    ``A`` is stored the way the method is written on paper: strictly
+    lower triangular, so row *i* has *i* entries and the first row is
+    empty.  ``np.asarray`` on a ragged tuple-of-tuples raises, which sent
+    all twelve published tableaux — ``DOPRI5``, ``RK4``, ``TSIT5`` and
+    the rest — down the "not a solver or a tableau" path, and the
+    consistency conditions this axis exists to check were never applied
+    to a single one of them.  Padding is the whole fix: the missing
+    entries are zero by definition.
+    """
     parts = []
     for names in (("a", "A"), ("b", "B"), ("c", "C")):
         value = next((getattr(obj, n) for n in names if hasattr(obj, n)), None)
@@ -556,8 +895,14 @@ def _as_tableau(obj: Any) -> "tuple[Any, Any, Any] | None":
             return None
         parts.append(value)
     try:
+        rows = list(parts[0])
+        width = max((len(row) for row in rows), default=0)
+        square = np.zeros((len(rows), max(width, len(rows))), dtype=np.float64)
+        for index, row in enumerate(rows):
+            if len(row):
+                square[index, : len(row)] = np.asarray(row, dtype=np.float64)
         return (
-            np.asarray(parts[0], dtype=np.float64),
+            square,
             np.asarray(parts[1], dtype=np.float64),
             np.asarray(parts[2], dtype=np.float64),
         )
@@ -568,19 +913,81 @@ def _as_tableau(obj: Any) -> "tuple[Any, Any, Any] | None":
 # ── quantization, serialization, compile ─────────────────────────────────────
 
 
+def _float_model() -> Any:
+    """A small float module the quantisation flows can be run over."""
+    return lucid.nn.Sequential(
+        lucid.nn.Linear(8, 8),
+        lucid.nn.ReLU(),
+        lucid.nn.Linear(8, 4),
+    )
+
+
+def _calibration() -> Any:
+    return _probe.as_f32(_probe.rng(5).uniform(-2.0, 2.0, (4, 8)))
+
+
 class QuantizationAxis(Axis):
-    """Quantise then dequantise must land within one step of the original."""
+    """The quantisation flows must produce a model that still computes.
+
+    One of twenty-three cells answered.  The axis asked a single
+    question — does ``quantize`` round trip within a step — and dispatched
+    on the substring ``"quantize"``, so ``prepare``, ``convert``,
+    ``fuse_modules``, ``prepare_qat``, ``convert_fx``, every observer and
+    every qconfig factory fell through to "not a quantize entry point".
+    The subsystem was in the denominator and out of the audit.
+
+    Four questions now, one per kind of entry point, each with a
+    reference that is not this file's opinion:
+
+    * a **tensor** round trip must land within one step of the original;
+    * an **observer** fed a known range must report qparams that span it;
+    * a **flow** (``prepare`` / ``convert`` / ``quantize_dynamic`` /
+      ``fuse_modules``) must return a module whose output still tracks
+      the float model it came from — quantisation is lossy and it is not
+      arbitrary, so the comparison is against the float original at a
+      tolerance, and a flow that silently produces noise fails it;
+    * a **qconfig factory** must hand back something that constructs the
+      observers it names.
+    """
 
     name = "quant"
-    summary = "quantize -> dequantize round trip stays within one step"
+    summary = "observers, qconfigs and the prepare/convert flows keep the model working"
     kinds = frozenset({"quant"})
+    varies_a_tensor = False
+
+    _FLOWS = frozenset(
+        {
+            "prepare",
+            "prepare_fx",
+            "prepare_qat",
+            "convert",
+            "convert_fx",
+            "quantize",
+            "quantize_dynamic",
+            "fuse_modules",
+            "fuse_modules_qat",
+        }
+    )
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
         obj = symbol.obj
         if not callable(obj):
             return self._finding(symbol, Status.SKIP, "not callable")
-        if "quantize" not in symbol.short and "qparams" not in symbol.short:
-            return self._finding(symbol, Status.SKIP, "not a quantize entry point")
+        name = symbol.short
+        if name.startswith("get_default_q"):
+            return self._qconfig_factory(symbol, obj)
+        if isinstance(obj, type) and "Observer" in name or name == "FakeQuantize":
+            return self._observer(symbol, obj)
+        if name in ("calculate_qparams", "quantize", "fake_quantize", "dequantize"):
+            return self._tensor_level(symbol, obj, name)
+        if name in self._FLOWS:
+            return self._flow(symbol, obj, name)
+        if "quantize" not in name and "qparams" not in name:
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "a constant, a scheme or a container — no flow to run",
+            )
 
         x = _probe.as_f32(_probe.rng(3).uniform(-2.0, 2.0, (4, 8)))
         for args, kwargs in (
@@ -618,6 +1025,247 @@ class QuantizationAxis(Axis):
             return self._finding(symbol, Status.PASS, f"round trip within {error:.4f}")
         return self._finding(symbol, Status.SKIP, "no argument shape worked")
 
+    # ── the other three kinds of entry point ─────────────────────────────────
+
+    def _tensor_level(self, symbol: "Symbol", obj: Any, name: str) -> Finding:
+        """The four functions that take a tensor and explicit qparams.
+
+        Their required arguments are a scale, a zero point and a qdtype,
+        none of which any generic derivation can invent — which is why
+        they read as "no argument shape worked" while being the most
+        directly checkable things in the subsystem.  The reference is
+        arithmetic: ``dequantize(quantize(x)) - x`` must be inside half a
+        step, and ``calculate_qparams`` over a known range must produce a
+        scale that spans it.
+        """
+        quantization = lucid.quantization
+        x = _probe.as_f32(_probe.rng(3).uniform(-2.0, 2.0, (4, 8)))
+        low, high = -2.0, 2.0
+        try:
+            scale, zero_point = quantization.calculate_qparams(
+                _probe.as_f32(np.array(low)),
+                _probe.as_f32(np.array(high)),
+                quantization.QScheme.PER_TENSOR_AFFINE,
+                quantization.quint8,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol,
+                Status.UNSUPPORTED,
+                f"qparams: {type(exc).__name__}: {str(exc)[:50]}",
+            )
+
+        step = float(np.asarray(_probe.to_numpy(scale)).reshape(-1)[0])
+        if name == "calculate_qparams":
+            # 8 bits over a range of 4 is a step of about 4/255.
+            wanted = (high - low) / 255.0
+            if not 0.5 * wanted <= step <= 2.0 * wanted:
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"a range of {high - low} over 8 bits gave a step of {step:.5g}, "
+                    f"expected about {wanted:.5g}",
+                )
+            return self._finding(
+                symbol, Status.PASS, f"step {step:.5g} spans the range"
+            )
+
+        try:
+            if name == "quantize":
+                out = obj(x, scale, zero_point, quantization.quint8)
+                out = quantization.dequantize(out, scale, zero_point)
+            elif name == "dequantize":
+                out = obj(
+                    quantization.quantize(x, scale, zero_point, quantization.quint8),
+                    scale,
+                    zero_point,
+                )
+            else:  # fake_quantize
+                out = obj(x, scale, zero_point, 0, 255)
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
+            )
+        got = _probe.to_numpy(out)
+        if got is None:
+            return self._finding(symbol, Status.SKIP, "nothing measurable came back")
+        error = float(
+            np.abs(got.astype(float) - _probe.to_numpy(x).astype(float)).max()
+        )
+        if error > step:
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"the round trip is off by {error:.5g}, more than one step ({step:.5g})",
+            )
+        return self._finding(
+            symbol, Status.PASS, f"within one step: {error:.3g} <= {step:.3g}"
+        )
+
+    def _qconfig_factory(self, symbol: "Symbol", obj: Any) -> Finding:
+        try:
+            config = obj()
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
+            )
+        if config is None:
+            return self._finding(symbol, Status.FAIL, "returned None")
+        # A mapping names configs per module type; a config names two
+        # observer factories.  Either way the point is that what comes
+        # back can be *built*, not merely returned.
+        factories = [
+            getattr(config, attribute, None)
+            for attribute in ("activation", "weight")
+            if getattr(config, attribute, None) is not None
+        ]
+        if not factories:
+            lookup = getattr(config, "get_qconfig", None)
+            if lookup is None:
+                return self._finding(
+                    symbol, Status.SKIP, f"nothing to build on {type(config).__name__}"
+                )
+            # A mapping's whole job is to answer for a module type.  One
+            # that answers ``None`` for a Linear leaves every layer
+            # unquantised and reports nothing.
+            entry = lookup(lucid.nn.Linear(4, 4), "0")
+            if entry is None:
+                return self._finding(
+                    symbol, Status.FAIL, "the mapping has no qconfig for nn.Linear"
+                )
+            factories = [
+                getattr(entry, attribute)
+                for attribute in ("activation", "weight")
+                if getattr(entry, attribute, None) is not None
+            ]
+        for factory in factories:
+            try:
+                observer = factory()
+            except Exception as exc:  # noqa: BLE001
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"the qconfig names an observer that will not build: "
+                    f"{type(exc).__name__}: {str(exc)[:50]}",
+                )
+            if observer is None:
+                return self._finding(
+                    symbol, Status.FAIL, "an observer factory gave None"
+                )
+        return self._finding(symbol, Status.PASS, f"{len(factories)} observers build")
+
+    def _observer(self, symbol: "Symbol", cls: Any) -> Finding:
+        try:
+            observer = cls()
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol, Status.UNSUPPORTED, f"construct: {type(exc).__name__}"
+            )
+        # A known range in; the reported qparams have to be able to
+        # represent it.  An observer that ignores its input reports the
+        # same scale for every range, which is the failure that makes a
+        # calibrated model quietly worse than an uncalibrated one.
+        narrow = _probe.as_f32(_probe.rng(7).uniform(-0.5, 0.5, (4, 8)))
+        wide = _probe.as_f32(_probe.rng(7).uniform(-40.0, 40.0, (4, 8)))
+        scales = []
+        for probe in (narrow, wide):
+            try:
+                fresh = cls()
+                fresh(probe)
+                params = fresh.calculate_qparams()
+            except Exception as exc:  # noqa: BLE001
+                return self._finding(
+                    symbol, Status.UNSUPPORTED, f"calibrate: {type(exc).__name__}"
+                )
+            scale = _probe.to_numpy(params[0] if isinstance(params, tuple) else params)
+            if scale is None:
+                return self._finding(symbol, Status.SKIP, "no scale to compare")
+            scales.append(float(np.asarray(scale).reshape(-1)[0]))
+        if not all(s > 0 for s in scales):
+            return self._finding(symbol, Status.FAIL, f"non-positive scale: {scales}")
+        if scales[1] <= scales[0]:
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"an 80-wide range got scale {scales[1]:.3g} and a 1-wide range "
+                f"{scales[0]:.3g} — the observer is not reading its input",
+            )
+        del observer
+        return self._finding(
+            symbol,
+            Status.PASS,
+            f"scale tracks the range: {scales[0]:.3g} -> {scales[1]:.3g}",
+        )
+
+    def _flow(self, symbol: "Symbol", obj: Any, name: str) -> Finding:
+        model = _float_model()
+        model.eval()
+        probe = _calibration()
+        want = _probe.to_numpy(model(probe))
+        qconfig = None
+        with contextlib.suppress(Exception):
+            qconfig = lucid.quantization.get_default_qconfig()
+
+        attempts: "list[tuple[tuple[Any, ...], dict[str, Any]]]" = []
+        if name.startswith("fuse"):
+            attempts = [((model, [["0", "1"]]), {}), ((model, ["0", "1"]), {})]
+        elif name == "quantize_dynamic":
+            attempts = [((model,), {}), ((model,), {"qconfig": qconfig})]
+        elif name.startswith("prepare"):
+            attempts = [((model,), {"qconfig": qconfig}), ((model,), {})]
+        else:  # convert / convert_fx / quantize
+            prepared = model
+            with contextlib.suppress(Exception):
+                prepared = lucid.quantization.prepare(model, qconfig=qconfig)
+                prepared(probe)  # calibrate, or the observers have seen nothing
+            attempts = [((prepared,), {}), ((model,), {})]
+
+        for args, kwargs in attempts:
+            try:
+                out = obj(*args, **kwargs)
+            except Exception as exc:  # noqa: BLE001
+                last = f"{type(exc).__name__}: {str(exc)[:60]}"
+                continue
+            if not isinstance(out, lucid.nn.Module):
+                return self._finding(
+                    symbol, Status.PASS, f"returned {type(out).__name__}"
+                )
+            try:
+                got = _probe.to_numpy(out(probe))
+            except Exception as exc:  # noqa: BLE001
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"the returned model does not run: {type(exc).__name__}: "
+                    f"{str(exc)[:50]}",
+                )
+            if got is None or want is None:
+                return self._finding(symbol, Status.SKIP, "no output to compare")
+            if got.shape != want.shape:
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"output shape {got.shape}, float model gives {want.shape}",
+                )
+            error = float(np.abs(got.astype(float) - want.astype(float)).max())
+            scale = max(float(np.abs(want).max()), 1e-9)
+            # Quantisation is lossy; it is not arbitrary.  A tenth of the
+            # signal is far outside int8 error and inside "this flow
+            # returned something that no longer computes the model".
+            if error > 0.1 * scale + 1e-3:
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"the quantised model differs from the float one by "
+                    f"{error:.3e}, {100 * error / scale:.0f}% of the signal",
+                )
+            return self._finding(
+                symbol,
+                Status.PASS,
+                f"within {100 * error / scale:.1f}% of the float model",
+            )
+        return self._finding(symbol, Status.UNSUPPORTED, last)
+
 
 class SerializationAxis(Axis):
     """A tensor must survive a round trip through disk, bit for bit."""
@@ -626,23 +1274,44 @@ class SerializationAxis(Axis):
     summary = "save / load round trip preserves values, dtype and shape"
     kinds = frozenset({"serialize"})
 
+    #: ``(saver, loader, file suffix, what a payload looks like)``.  Every
+    #: pair is one format, and only the first of the four was audited:
+    #: ``applies`` named ``save``/``load`` literally, so the safetensors
+    #: and sharded writers — four public symbols and the two formats a
+    #: checkpoint actually ships in — had no axis at all.
+    _PAIRS: "tuple[tuple[str, str, str, bool], ...]" = (
+        ("save", "load", ".lct", False),
+        ("save_safetensors", "load_safetensors", ".safetensors", True),
+        ("save_sharded", "load_sharded", "", True),
+    )
+
     def applies(self, symbol: "Symbol") -> bool:
         # ``save`` and ``load`` touch the filesystem, so they are flagged
         # stateful and the base class would refuse them.  This axis calls
         # them on purpose, inside a temporary directory it owns.
-        return symbol.kind == "serialize" and symbol.short in ("save", "load")
+        names = {name for pair in self._PAIRS for name in pair[:2]}
+        return symbol.kind == "serialize" and symbol.short in names
+
+    def _pair_for(self, short: str) -> "tuple[str, str, str, bool] | None":
+        return next((p for p in self._PAIRS if short in p[:2]), None)
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
-        if symbol.short not in ("save", "load"):
-            return self._finding(symbol, Status.SKIP, "not the save/load pair")
-        save = getattr(lucid, "save", None)
-        load = getattr(lucid, "load", None)
+        pair = self._pair_for(symbol.short)
+        if pair is None:
+            return self._finding(symbol, Status.SKIP, "not a save/load pair")
+        saver, loader, suffix, wants_mapping = pair
+        save = getattr(lucid, saver, None)
+        load = getattr(lucid, loader, None)
         if save is None or load is None:
-            return self._finding(symbol, Status.SKIP, "save/load not exposed")
+            return self._finding(symbol, Status.SKIP, f"{saver}/{loader} not exposed")
 
-        original = _probe.as_f64(_probe.sample("moderate", (3, 4)))
+        tensor = _probe.as_f64(_probe.sample("moderate", (3, 4)))
+        # The two structured formats carry a *state dict*, not a bare
+        # tensor; handing them one is what "no argument shape worked"
+        # meant on the smoke axis for all four of them.
+        original = {"probe": tensor} if wants_mapping else tensor
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "probe.lct"
+            path = Path(folder) / ("shards" if not suffix else f"probe{suffix}")
             try:
                 save(original, str(path))
                 restored = load(str(path))
@@ -650,6 +1319,20 @@ class SerializationAxis(Axis):
                 return self._finding(
                     symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:60]}"
                 )
+            if wants_mapping:
+                if not hasattr(restored, "keys"):
+                    return self._finding(
+                        symbol,
+                        Status.FAIL,
+                        f"a mapping was written and {type(restored).__name__} came back",
+                    )
+                if set(restored) != set(original):
+                    return self._finding(
+                        symbol,
+                        Status.FAIL,
+                        f"keys {sorted(original)} became {sorted(restored)}",
+                    )
+                original, restored = tensor, restored["probe"]
             a, b = _probe.to_numpy(original), _probe.to_numpy(restored)
             if a is None or b is None:
                 return self._finding(
@@ -674,39 +1357,244 @@ class SerializationAxis(Axis):
         return self._finding(symbol, Status.PASS, "exact round trip")
 
 
+def _eager(t: Any) -> Any:
+    return lucid.tanh(t * 2.0) + lucid.exp(-t)
+
+
 class CompiledAxis(Axis):
-    """A compiled function must agree with the eager one it came from."""
+    """A compiled artefact must agree with the eager one it came from.
+
+    Zero of seven cells answered.  ``run`` began by refusing anything not
+    literally named ``compile``, so the optimizer compiler, the fused
+    training step, the two halves of the compiled-artefact save/load pair
+    and the diagnostic all skipped — the entire subsystem verified by one
+    function.
+
+    The reference is the eager route in every case, because "compiled"
+    is a claim about *equality with something already trusted* and
+    nothing else.  A compiled step that trains to a different place than
+    the eager step is the defect worth catching, and it is invisible to
+    anything that only asks whether the compiler returned.
+    """
 
     name = "compiled"
-    summary = "compiled output matches eager output"
+    summary = "compiled functions, steps and artefacts match the eager route"
     kinds = frozenset({"compiled"})
+    varies_a_tensor = False
+
+    def applies(self, symbol: "Symbol") -> bool:
+        # Stateful and checked anyway, exactly as ``save``/``load`` are.
+        #
+        # ``compile``, ``compile_optimizer``, ``compiled_step`` and the
+        # artefact pair install tracing state, so they are flagged
+        # stateful and the base class refuses them — which meant this
+        # axis never saw **the compile entry point itself**.  Seven cells
+        # ran and ``compile`` was not among them: the subsystem's
+        # headline function was outside its own axis while the axis
+        # reported on four classes that are not entry points at all.
+        return symbol.kind == "compiled"
 
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
-        if symbol.short != "compile":
-            return self._finding(symbol, Status.SKIP, "not the compile entry point")
-        compile_fn = symbol.obj
-
-        def eager(t: Any) -> Any:
-            return lucid.tanh(t * 2.0) + lucid.exp(-t)
-
-        x = _probe.as_f64(_probe.sample("moderate", (3, 4)))
+        name = symbol.short
+        obj = symbol.obj
+        if not callable(obj):
+            return self._finding(
+                symbol, Status.NOT_APPLICABLE, "not a compile entry point"
+            )
+        x = _probe.as_f32(_probe.sample("moderate", (3, 4)))
         try:
-            compiled = compile_fn(eager)
+            if name == "compile":
+                return self._function(symbol, obj, x)
+            if name in ("save_compiled", "load_compiled"):
+                return self._artefact(symbol, x)
+            if name == "diagnose":
+                return self._diagnose(symbol, obj, x)
+            if name in (
+                "compile_optimizer",
+                "compiled_step",
+                "make_step",
+                "fused_step",
+            ):
+                return self._step(symbol, obj, name)
+        except Exception as exc:  # noqa: BLE001 - surveying, not asserting
+            return self._finding(
+                symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:70]}"
+            )
+        return self._finding(symbol, Status.NOT_APPLICABLE, "not a compile entry point")
+
+    def _function(self, symbol: "Symbol", compile_fn: Any, x: Any) -> Finding:
+        try:
+            compiled = compile_fn(_eager)
             got = _probe.to_numpy(compiled(x))
         except Exception as exc:  # noqa: BLE001
             return self._finding(
                 symbol, Status.UNSUPPORTED, f"{type(exc).__name__}: {str(exc)[:70]}"
             )
-        want = _probe.to_numpy(eager(x))
+        want = _probe.to_numpy(_eager(x))
         if got is None or want is None:
             return self._finding(symbol, Status.SKIP, "no comparable output")
-        if not np.allclose(got.astype(float), want.astype(float), rtol=1e-6, atol=1e-9):
+        if not np.allclose(got.astype(float), want.astype(float), rtol=1e-5, atol=1e-7):
             return self._finding(
                 symbol,
                 Status.FAIL,
-                f"compiled and eager differ by {np.abs(got.astype(float) - want.astype(float)).max():.3e}",
+                f"compiled and eager differ by "
+                f"{np.abs(got.astype(float) - want.astype(float)).max():.3e}",
             )
         return self._finding(symbol, Status.PASS, "compiled matches eager")
+
+    def _artefact(self, symbol: "Symbol", x: Any) -> Finding:
+        save = getattr(lucid.compile, "save_compiled", None)
+        load = getattr(lucid.compile, "load_compiled", None)
+        if save is None or load is None:
+            return self._finding(symbol, Status.SKIP, "the pair is not exposed")
+        compiled = lucid.compile.compile(_eager)
+        # Warmed, on Metal, before it is saved.  ``compile`` is lazy —
+        # the graph is built on the first call, and only a GPU call
+        # builds one — so saving a freshly compiled module writes nothing
+        # and raises "the CompiledModule has no compiled graph", which
+        # reads as a defect in ``save_compiled`` and is the probe saving
+        # something that does not exist yet.
+        if _probe.metal_available():
+            x = _probe.as_f32(_probe.sample("moderate", (3, 4)), "metal")
+        want = _probe.to_numpy(compiled(x))
+        with tempfile.TemporaryDirectory() as folder:
+            path = str(Path(folder) / "artefact.lcc")
+            if not save(compiled, path):
+                return self._finding(
+                    symbol, Status.UNSUPPORTED, "the artefact declined to be saved"
+                )
+            restored = load(path)
+            if restored is None:
+                return self._finding(symbol, Status.FAIL, "saved, and loaded back None")
+            got = _probe.to_numpy(restored(x))
+        if got is None or want is None:
+            return self._finding(symbol, Status.SKIP, "no comparable output")
+        if not np.allclose(got.astype(float), want.astype(float), rtol=1e-5, atol=1e-7):
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                "the reloaded artefact computes something else",
+            )
+        return self._finding(symbol, Status.PASS, "the artefact survives a round trip")
+
+    def _diagnose(self, symbol: "Symbol", obj: Any, x: Any) -> Finding:
+        report = obj(_eager, x)
+        if report is None:
+            return self._finding(symbol, Status.FAIL, "reported nothing")
+        text = repr(report)
+        if not text:
+            return self._finding(symbol, Status.FAIL, "the report has an empty repr")
+        return self._finding(symbol, Status.PASS, f"reports {type(report).__name__}")
+
+    def _step(self, symbol: "Symbol", obj: Any, name: str) -> Finding:
+        """A compiled training step must land where the eager one lands.
+
+        Both routes start from the same weights and see the same batch,
+        so after one step the parameters have to agree.  Anything looser
+        would pass a step that runs and optimises nothing.
+        """
+        # On Metal where there is one.  ``compiled_step`` and
+        # ``fused_step`` trace into MPSGraph and say so — "only
+        # Device::GPU trace" — so a CPU probe reports UNSUPPORTED about
+        # the two functions whose whole purpose is the GPU path.
+        device = "metal" if _probe.metal_available() else "cpu"
+        probe = _probe.as_f32(_probe.rng(11).uniform(-1.0, 1.0, (4, 6)), device)
+        target = _probe.as_f32(_probe.rng(12).uniform(-1.0, 1.0, (4, 3)), device)
+
+        def build() -> "tuple[Any, Any]":
+            lucid.manual_seed(17)
+            model = lucid.nn.Linear(6, 3)
+            if device != "cpu":
+                model.to(device)
+            return model, lucid.optim.SGD(model.parameters(), lr=0.1)
+
+        def loss_fn(prediction: Any, expected: Any = target) -> Any:
+            return ((prediction - expected) ** 2).mean()
+
+        eager_model, eager_opt = build()
+        eager_opt.zero_grad()
+        loss_fn(eager_model(probe)).backward()
+        eager_opt.step()
+        want = [_probe.to_numpy(p) for p in eager_model.parameters()]
+
+        model, optimiser = build()
+        # Each of the four takes what its own signature says, and the
+        # signatures do not agree with one another — ``make_step`` wants
+        # a loss function, ``fused_step`` wants the optimizer as well,
+        # ``compiled_step`` is the step itself rather than a factory.
+        if name == "compile_optimizer":
+            # Not a step factory at all: it returns a *drop-in
+            # optimizer* with ``step`` and ``zero_grad``, so driving it
+            # like the others found "no calling convention worked" for an
+            # object whose convention is the one every optimizer has.
+            compiled_opt = obj(optimiser)
+            compiled_opt.zero_grad()
+            loss_fn(model(probe)).backward()
+            compiled_opt.step()
+            stepper = None
+        elif name == "compiled_step":
+            optimiser.zero_grad()
+            obj(model, probe, loss_fn).backward()
+            optimiser.step()
+            stepper = None
+        else:
+            stepper = {
+                "make_step": lambda: obj(model, loss_fn),
+                "fused_step": lambda: obj(model, loss_fn, optimiser),
+            }[name]()
+            if stepper is None:
+                return self._finding(
+                    symbol, Status.FAIL, "returned nothing to step with"
+                )
+
+        if stepper is not None:
+            optimiser.zero_grad()
+            for attempt in (
+                lambda: stepper(probe),
+                lambda: stepper(probe, target),
+                lambda: stepper(),
+            ):
+                try:
+                    result = attempt()
+                    if name == "make_step":
+                        # ``make_step`` returns the *loss*, with a
+                        # working ``grad_fn`` — it compiles forward and
+                        # backward and leaves both the ``backward()`` and
+                        # the update to the caller.  Stepping the
+                        # optimizer without backward first moved nothing,
+                        # and the axis reported the untouched weights as
+                        # a compiled/eager disagreement.
+                        if hasattr(result, "backward"):
+                            result.backward()
+                        optimiser.step()
+                    del result
+                    break
+                except TypeError:
+                    continue
+            else:
+                return self._finding(
+                    symbol,
+                    Status.UNSUPPORTED,
+                    "no calling convention for the step worked",
+                )
+
+        got = [_probe.to_numpy(p) for p in model.parameters()]
+        if len(got) != len(want) or any(
+            a is None or b is None for a, b in zip(got, want)
+        ):
+            return self._finding(symbol, Status.SKIP, "no parameters to compare")
+        drift = max(
+            float(np.abs(a.astype(float) - b.astype(float)).max())
+            for a, b in zip(got, want)
+        )
+        moved = max(float(np.abs(a.astype(float)).max()) for a in want)
+        if drift > 1e-4 * max(moved, 1.0):
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"after one step the compiled and eager parameters differ by {drift:.3e}",
+            )
+        return self._finding(symbol, Status.PASS, f"one step agrees to {drift:.2e}")
 
 
 class ClassContractAxis(Axis):

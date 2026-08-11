@@ -61,9 +61,27 @@ const OpSchema AvgPool3dBackward::schema_v1{"avg_pool3d", 1, AmpPolicy::KeepInpu
 
 namespace {
 
-// Standard pooling output-size formula (no dilation).
-inline int compute_out(int S, int K, int stride, int pad) {
-    return (S + 2 * pad - K) / stride + 1;
+// Division rounding toward negative infinity.  Plain C++ ``/`` truncates
+// toward zero, which differs for a negative numerator — reachable when the
+// window is larger than the padded input.
+inline int div_floor(int a, int b) {
+    int q = a / b;
+    if ((a % b != 0) && ((a < 0) != (b < 0)))
+        --q;
+    return q;
+}
+
+// Pooling output-size formula (no dilation).
+//
+// ``ceil_mode`` replaces the floor with a ceiling, which yields one extra
+// output element whenever the last window overhangs the padded input.  The
+// trailing correction is the standard guard: a window that starts entirely
+// inside the *right* padding would pool over nothing real, so it is dropped.
+inline int compute_out(int S, int K, int stride, int pad, bool ceil_mode) {
+    int out = div_floor(S + 2 * pad - K + (ceil_mode ? stride - 1 : 0), stride) + 1;
+    if (ceil_mode && (out - 1) * stride >= S + pad)
+        --out;
+    return out;
 }
 
 // Validate that x is non-null and has rank N+2.
@@ -80,7 +98,8 @@ template <int N>
 TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
                                             const int (&K)[N],
                                             const int (&stride_in)[N],
-                                            const int (&pad)[N]) {
+                                            const int (&pad)[N],
+                                            bool ceil_mode) {
     validate_input<N>(x, MaxPoolNdBackward<N>::schema_v1.name);
     int stride[N];
     // stride == 0 is a sentinel meaning "use kernel size" (non-overlapping).
@@ -93,7 +112,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
     int O_total = 1, S_total = 1;
     for (int i = 0; i < N; ++i) {
         S[i] = static_cast<int>(x->shape()[2 + i]);
-        O[i] = compute_out(S[i], K[i], stride[i], pad[i]);
+        O[i] = compute_out(S[i], K[i], stride[i], pad[i], ceil_mode);
         if (O[i] <= 0)
             throw ShapeMismatch(x->shape(), Shape{}, "max_pool: output non-positive");
         O_total *= O[i];
@@ -118,10 +137,12 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
         scope.set_attr("kernel_size", std::move(Kv));
         scope.set_attr("stride", std::move(Sv));
         scope.set_attr("padding", std::move(Pv));
+        scope.set_attr("ceil_mode", std::vector<std::int64_t>{ceil_mode ? 1 : 0});
     }
 
     backend::IBackend::PoolOpts opts{};
     opts.N = N;
+    opts.ceil_mode = ceil_mode;
     for (int i = 0; i < N; ++i) {
         opts.K[i] = K[i];
         opts.stride[i] = stride[i];
@@ -143,6 +164,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
     // hook fires regardless of GradMode (autograd is gated inside).
     auto bwd = std::make_shared<MaxPoolNdBackward<N>>();
     bwd->saved_argmax_ = std::move(saved_argmax);
+    bwd->ceil_mode_ = ceil_mode;
     for (int i = 0; i < N; ++i) {
         bwd->K_[i] = K[i];
         bwd->stride_[i] = stride[i];
@@ -156,6 +178,7 @@ template <int N>
 std::vector<Storage> MaxPoolNdBackward<N>::apply(Storage grad_out) {
     backend::IBackend::PoolOpts opts{};
     opts.N = N;
+    opts.ceil_mode = this->ceil_mode_;
     for (int i = 0; i < N; ++i) {
         opts.K[i] = this->K_[i];
         opts.stride[i] = this->stride_[i];
@@ -171,7 +194,9 @@ template <int N>
 TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
                                             const int (&K)[N],
                                             const int (&stride_in)[N],
-                                            const int (&pad)[N]) {
+                                            const int (&pad)[N],
+                                            bool ceil_mode,
+                                            bool count_include_pad) {
     validate_input<N>(x, AvgPoolNdBackward<N>::schema_v1.name);
     int stride[N];
     for (int i = 0; i < N; ++i)
@@ -183,7 +208,7 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
     int O_total = 1, S_total = 1;
     for (int i = 0; i < N; ++i) {
         S[i] = static_cast<int>(x->shape()[2 + i]);
-        O[i] = compute_out(S[i], K[i], stride[i], pad[i]);
+        O[i] = compute_out(S[i], K[i], stride[i], pad[i], ceil_mode);
         if (O[i] <= 0)
             throw ShapeMismatch(x->shape(), Shape{}, "avg_pool: output non-positive");
         O_total *= O[i];
@@ -204,10 +229,15 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
         scope.set_attr("kernel_size", std::move(Kv));
         scope.set_attr("stride", std::move(Sv));
         scope.set_attr("padding", std::move(Pv));
+        scope.set_attr("ceil_mode", std::vector<std::int64_t>{ceil_mode ? 1 : 0});
+        scope.set_attr("count_include_pad",
+                       std::vector<std::int64_t>{count_include_pad ? 1 : 0});
     }
 
     backend::IBackend::PoolOpts avg_opts{};
     avg_opts.N = N;
+    avg_opts.ceil_mode = ceil_mode;
+    avg_opts.count_include_pad = count_include_pad;
     for (int i = 0; i < N; ++i) {
         avg_opts.K[i] = K[i];
         avg_opts.stride[i] = stride[i];
@@ -224,6 +254,8 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
 
     // wire_autograd always — trace-hook visibility under no-grad.
     auto bwd = std::make_shared<AvgPoolNdBackward<N>>();
+    bwd->ceil_mode_ = ceil_mode;
+    bwd->count_include_pad_ = count_include_pad;
     for (int i = 0; i < N; ++i) {
         bwd->K_[i] = K[i];
         bwd->stride_[i] = stride[i];
@@ -237,6 +269,8 @@ template <int N>
 std::vector<Storage> AvgPoolNdBackward<N>::apply(Storage grad_out) {
     backend::IBackend::PoolOpts opts{};
     opts.N = N;
+    opts.ceil_mode = this->ceil_mode_;
+    opts.count_include_pad = this->count_include_pad_;
     for (int i = 0; i < N; ++i) {
         opts.K[i] = this->K_[i];
         opts.stride[i] = this->stride_[i];
@@ -336,18 +370,19 @@ template class AvgPoolNdBackward<2>;
 template class AvgPoolNdBackward<3>;
 
 // Entry points pack scalar parameters into fixed-size arrays.
-TensorImplPtr max_pool1d_op(const TensorImplPtr& x, int KL, int sl, int pl) {
+TensorImplPtr max_pool1d_op(const TensorImplPtr& x, int KL, int sl, int pl, bool ceil_mode) {
     int K[1]{KL};
     int s[1]{sl};
     int p[1]{pl};
-    return MaxPool1dBackward::forward(x, K, s, p);
+    return MaxPool1dBackward::forward(x, K, s, p, ceil_mode);
 }
 TensorImplPtr
-max_pool2d_op(const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw) {
+max_pool2d_op(const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw,
+              bool ceil_mode) {
     int K[2]{KH, KW};
     int s[2]{sh, sw};
     int p[2]{ph, pw};
-    return MaxPool2dBackward::forward(x, K, s, p);
+    return MaxPool2dBackward::forward(x, K, s, p, ceil_mode);
 }
 TensorImplPtr max_pool3d_op(const TensorImplPtr& x,
                             int KD,
@@ -358,24 +393,27 @@ TensorImplPtr max_pool3d_op(const TensorImplPtr& x,
                             int sw,
                             int pd,
                             int ph,
-                            int pw) {
+                            int pw,
+                            bool ceil_mode) {
     int K[3]{KD, KH, KW};
     int s[3]{sd, sh, sw};
     int p[3]{pd, ph, pw};
-    return MaxPool3dBackward::forward(x, K, s, p);
+    return MaxPool3dBackward::forward(x, K, s, p, ceil_mode);
 }
-TensorImplPtr avg_pool1d_op(const TensorImplPtr& x, int KL, int sl, int pl) {
+TensorImplPtr avg_pool1d_op(const TensorImplPtr& x, int KL, int sl, int pl, bool ceil_mode,
+                            bool count_include_pad) {
     int K[1]{KL};
     int s[1]{sl};
     int p[1]{pl};
-    return AvgPool1dBackward::forward(x, K, s, p);
+    return AvgPool1dBackward::forward(x, K, s, p, ceil_mode, count_include_pad);
 }
 TensorImplPtr
-avg_pool2d_op(const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw) {
+avg_pool2d_op(const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw,
+              bool ceil_mode, bool count_include_pad) {
     int K[2]{KH, KW};
     int s[2]{sh, sw};
     int p[2]{ph, pw};
-    return AvgPool2dBackward::forward(x, K, s, p);
+    return AvgPool2dBackward::forward(x, K, s, p, ceil_mode, count_include_pad);
 }
 TensorImplPtr avg_pool3d_op(const TensorImplPtr& x,
                             int KD,
@@ -386,11 +424,13 @@ TensorImplPtr avg_pool3d_op(const TensorImplPtr& x,
                             int sw,
                             int pd,
                             int ph,
-                            int pw) {
+                            int pw,
+                            bool ceil_mode,
+                            bool count_include_pad) {
     int K[3]{KD, KH, KW};
     int s[3]{sd, sh, sw};
     int p[3]{pd, ph, pw};
-    return AvgPool3dBackward::forward(x, K, s, p);
+    return AvgPool3dBackward::forward(x, K, s, p, ceil_mode, count_include_pad);
 }
 
 LUCID_REGISTER_OP(MaxPool1dBackward)

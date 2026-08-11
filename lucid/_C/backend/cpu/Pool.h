@@ -157,7 +157,8 @@ LUCID_INTERNAL void max_pool1d_backward_f64(
 // $$y_{b,c,o} = \frac{1}{\text{KL}} \sum_{k=0}^{\text{KL}-1}
 //   x_{b,c,\,o\cdot \text{stride\_l} + k - \text{pad\_l}}.$$
 LUCID_INTERNAL void avg_pool1d_forward_f32(
-    const float* x, float* y, int B, int C, int L, int KL, int OL, int stride_l, int pad_l);
+    const float* x, float* y, int B, int C, int L, int KL, int OL, int stride_l, int pad_l,
+                                           bool count_include_pad);
 
 // Double-precision counterpart to :cpp:func:`avg_pool1d_forward_f32`.
 //
@@ -170,7 +171,8 @@ LUCID_INTERNAL void avg_pool1d_forward_f32(
 // B, C, L, KL, OL, stride_l, pad_l : int
 //     Same meaning as :cpp:func:`avg_pool1d_forward_f32`.
 LUCID_INTERNAL void avg_pool1d_forward_f64(
-    const double* x, double* y, int B, int C, int L, int KL, int OL, int stride_l, int pad_l);
+    const double* x, double* y, int B, int C, int L, int KL, int OL, int stride_l, int pad_l,
+                                           bool count_include_pad);
 
 // Single-precision 1-D average-pool backward — broadcasts each upstream
 // gradient uniformly back into its source window with the fixed ``1/KL``
@@ -188,7 +190,8 @@ LUCID_INTERNAL void avg_pool1d_forward_f64(
 // B, C, L, KL, OL, stride_l, pad_l : int
 //     Layout and window parameters matching the forward call.
 LUCID_INTERNAL void avg_pool1d_backward_f32(
-    const float* g, float* dx, int B, int C, int L, int KL, int OL, int stride_l, int pad_l);
+    const float* g, float* dx, int B, int C, int L, int KL, int OL, int stride_l, int pad_l,
+                                            bool count_include_pad);
 
 // Double-precision counterpart to :cpp:func:`avg_pool1d_backward_f32`.
 //
@@ -201,7 +204,8 @@ LUCID_INTERNAL void avg_pool1d_backward_f32(
 // B, C, L, KL, OL, stride_l, pad_l : int
 //     Layout and window parameters matching the forward call.
 LUCID_INTERNAL void avg_pool1d_backward_f64(
-    const double* g, double* dx, int B, int C, int L, int KL, int OL, int stride_l, int pad_l);
+    const double* g, double* dx, int B, int C, int L, int KL, int OL, int stride_l, int pad_l,
+                                            bool count_include_pad);
 
 // Single-precision 2-D max-pool forward over an NCHW input.
 //
@@ -364,7 +368,8 @@ LUCID_INTERNAL void avg_pool2d_forward_f32(const float* x,
                                            int stride_h,
                                            int stride_w,
                                            int pad_h,
-                                           int pad_w);
+                                           int pad_w,
+                                           bool count_include_pad);
 
 // Double-precision counterpart to :cpp:func:`avg_pool2d_forward_f32`.
 //
@@ -389,7 +394,8 @@ LUCID_INTERNAL void avg_pool2d_forward_f64(const double* x,
                                            int stride_h,
                                            int stride_w,
                                            int pad_h,
-                                           int pad_w);
+                                           int pad_w,
+                                           bool count_include_pad);
 
 // Single-precision 2-D average-pool backward — broadcasts each upstream
 // gradient back over its source window with the fixed ``1/(KH*KW)`` weight.
@@ -418,7 +424,8 @@ LUCID_INTERNAL void avg_pool2d_backward_f32(const float* g,
                                             int stride_h,
                                             int stride_w,
                                             int pad_h,
-                                            int pad_w);
+                                            int pad_w,
+                                            bool count_include_pad);
 
 // Double-precision counterpart to :cpp:func:`avg_pool2d_backward_f32`.
 //
@@ -443,7 +450,8 @@ LUCID_INTERNAL void avg_pool2d_backward_f64(const double* g,
                                             int stride_h,
                                             int stride_w,
                                             int pad_h,
-                                            int pad_w);
+                                            int pad_w,
+                                            bool count_include_pad);
 
 // Single-precision 3-D max-pool forward over an NCDHW input.
 //
@@ -624,7 +632,8 @@ LUCID_INTERNAL void avg_pool3d_forward_f32(const float* x,
                                            int sw,
                                            int pd,
                                            int ph,
-                                           int pw);
+                                           int pw,
+                                           bool count_include_pad);
 
 // Double-precision counterpart to :cpp:func:`avg_pool3d_forward_f32`.
 //
@@ -654,7 +663,8 @@ LUCID_INTERNAL void avg_pool3d_forward_f64(const double* x,
                                            int sw,
                                            int pd,
                                            int ph,
-                                           int pw);
+                                           int pw,
+                                           bool count_include_pad);
 
 // Single-precision 3-D average-pool backward — broadcasts each upstream
 // gradient back over its source window with the fixed ``1/(KD*KH*KW)`` weight.
@@ -687,7 +697,8 @@ LUCID_INTERNAL void avg_pool3d_backward_f32(const float* g,
                                             int sw,
                                             int pd,
                                             int ph,
-                                            int pw);
+                                            int pw,
+                                            bool count_include_pad);
 
 // Double-precision counterpart to :cpp:func:`avg_pool3d_backward_f32`.
 //
@@ -717,6 +728,7 @@ LUCID_INTERNAL void avg_pool3d_backward_f64(const double* g,
                                             int sw,
                                             int pd,
                                             int ph,
-                                            int pw);
+                                            int pw,
+                                            bool count_include_pad);
 
 }  // namespace lucid::backend::cpu
