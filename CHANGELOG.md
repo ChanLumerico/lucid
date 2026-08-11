@@ -224,6 +224,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - broadcast value and batch_shape together in log_prob
 
+- keep LambdaLR's lambdas out of its state_dict
+
 ### Changed
 
 - give the engine ops one shared operand check

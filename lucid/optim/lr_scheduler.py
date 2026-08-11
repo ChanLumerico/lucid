@@ -7,6 +7,24 @@ from typing import Callable, override
 from lucid.optim.optimizer import Optimizer
 
 
+def _holds_a_callable(value: object) -> bool:
+    """Whether ``value`` carries a Python function into a checkpoint.
+
+    ``not callable(v)`` was the whole test, and ``LambdaLR`` stores its
+    lambdas as ``lr_lambdas`` — a *list* — which is not itself callable.
+    So the one scheduler the exclusion was written for was the one it
+    missed, and ``lucid.save`` on a checkpoint holding a ``LambdaLR``
+    raised out of ``pickle``.  A container is disqualified by any
+    callable in it, not by all of them: a list with one lambda in it is
+    exactly as unpicklable as a list of nothing else.
+    """
+    if callable(value):
+        return True
+    if isinstance(value, (list, tuple)):
+        return any(callable(item) for item in value)
+    return False
+
+
 class _LRScheduler:
     """Base class for all learning rate schedulers.
 
@@ -133,7 +151,9 @@ class _LRScheduler:
         are **not** captured: a Python function is not reliably serialisable,
         and silently pickling one would make a checkpoint that only reloads in
         the process that wrote it.  Reconstruct the scheduler with the same
-        lambda, then :meth:`load_state_dict` the rest.
+        lambda, then :meth:`load_state_dict` the rest.  This holds whether the
+        callables are stored singly (``MultiplicativeLR.lr_lambda``) or in a
+        list (``LambdaLR.lr_lambdas``, one per param group).
 
         Returns
         -------
@@ -143,7 +163,7 @@ class _LRScheduler:
         return {
             k: v
             for k, v in self.__dict__.items()
-            if k != "optimizer" and not callable(v)
+            if k != "optimizer" and not _holds_a_callable(v)
         }
 
     def load_state_dict(self, state_dict: dict[str, object]) -> None:
@@ -830,7 +850,7 @@ class ReduceLROnPlateau:
         return {
             k: v
             for k, v in self.__dict__.items()
-            if k != "optimizer" and not callable(v)
+            if k != "optimizer" and not _holds_a_callable(v)
         }
 
     def load_state_dict(self, state_dict: dict[str, object]) -> None:
@@ -1665,7 +1685,7 @@ class SequentialLR:
         own = {
             k: v
             for k, v in self.__dict__.items()
-            if k not in ("optimizer", "schedulers") and not callable(v)
+            if k not in ("optimizer", "schedulers") and not _holds_a_callable(v)
         }
         own["schedulers"] = [sch.state_dict() for sch in self.schedulers]
         return own
@@ -1799,7 +1819,7 @@ class ChainedScheduler:
         own = {
             k: v
             for k, v in self.__dict__.items()
-            if k not in ("optimizer", "schedulers") and not callable(v)
+            if k not in ("optimizer", "schedulers") and not _holds_a_callable(v)
         }
         own["schedulers"] = [sch.state_dict() for sch in self.schedulers]
         return own

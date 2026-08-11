@@ -70,12 +70,28 @@ def test_resume_continues_the_same_schedule(name, kwargs):
     assert resumed == reference[4:], f"{name}: schedule diverged after resume"
 
 
+def _carries_a_callable(value):
+    """A container counts too — that is exactly how the check was evaded."""
+    if callable(value):
+        return True
+    if isinstance(value, (list, tuple)):
+        return any(_carries_a_callable(item) for item in value)
+    if isinstance(value, dict):
+        return any(_carries_a_callable(item) for item in value.values())
+    return False
+
+
 @pytest.mark.parametrize("name,kwargs", SPECS, ids=[s[0] for s in SPECS])
 def test_state_dict_excludes_optimizer_and_callables(name, kwargs):
     _, sched = _build(name, kwargs)
     sd = sched.state_dict()
     assert "optimizer" not in sd, f"{name}: state_dict must not embed the optimizer"
-    assert not any(callable(v) for v in sd.values()), f"{name}: callable captured"
+    # ``any(callable(v) ...)`` was the old assertion, and it missed
+    # ``LambdaLR.lr_lambdas`` — a *list* of lambdas, which is not itself
+    # callable.  The scheduler the exclusion exists for was the one it
+    # let through.
+    offenders = {k for k, v in sd.items() if _carries_a_callable(v)}
+    assert not offenders, f"{name}: callables captured under {sorted(offenders)}"
 
 
 def test_lambda_scheduler_needs_its_lambda_supplied_again():
@@ -83,13 +99,47 @@ def test_lambda_scheduler_needs_its_lambda_supplied_again():
     opt_a, sched_a = _build("LambdaLR", dict(lr_lambda=lambda e: 0.9**e))
     reference = _advance("LambdaLR", sched_a, opt_a, 6)
     saved = sched_a.state_dict()
-    assert "lr_lambda" not in saved or not callable(saved.get("lr_lambda"))
+    # The attribute is ``lr_lambdas``, plural — asserting on the singular
+    # name passed vacuously and never looked inside the list.
+    assert "lr_lambdas" not in saved
+    assert not any(_carries_a_callable(v) for v in saved.values())
 
     opt_b, sched_b = _build("LambdaLR", dict(lr_lambda=lambda e: 0.9**e))
     sched_b.load_state_dict(saved)
-    # Already advanced 6 steps' worth of state, so the next lr repeats the last.
-    assert round(float(opt_b.param_groups[0]["lr"]), 8) is not None
+    # The lambda supplied at construction has to survive the load.
+    assert len(sched_b.lr_lambdas) == len(opt_b.param_groups)
     assert reference[-1] == round(float(opt_a.param_groups[0]["lr"]), 8)
+
+
+@pytest.mark.parametrize(
+    "name,kwargs",
+    [
+        ("LambdaLR", dict(lr_lambda=lambda e: 0.9**e)),
+        ("MultiplicativeLR", dict(lr_lambda=lambda e: 0.95)),
+    ],
+    ids=["LambdaLR", "MultiplicativeLR"],
+)
+def test_a_lambda_scheduler_checkpoint_actually_writes(tmp_path, name, kwargs):
+    """``lucid.save`` pickles the container, and a lambda is not picklable.
+
+    The round-trip test only ever exercised LinearLR + CosineAnnealingLR,
+    which hold no lambdas, so ``save`` was never asked to write one — the
+    failure was a ``PicklingError`` on any real checkpoint containing a
+    ``LambdaLR``.
+    """
+    opt_a, sched_a = _build(name, kwargs)
+    reference = _advance(name, sched_a, opt_a, 8)
+
+    opt_b, sched_b = _build(name, kwargs)
+    _advance(name, sched_b, opt_b, 4)
+    path = tmp_path / "ckpt.lcd"
+    lucid.save({"opt": opt_b.state_dict(), "sched": sched_b.state_dict()}, str(path))
+
+    loaded = lucid.load(str(path), weights_only=False)
+    opt_c, sched_c = _build(name, kwargs)
+    opt_c.load_state_dict(loaded["opt"])
+    sched_c.load_state_dict(loaded["sched"])
+    assert _advance(name, sched_c, opt_c, 4) == reference[4:]
 
 
 def _sequential():
