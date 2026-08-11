@@ -16,6 +16,41 @@ def _as_tensor(x: Tensor | float | int) -> Tensor:
     return t
 
 
+def _broadcast_shapes(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
+    """The right-aligned broadcast of two shapes, as a shape.
+
+    Wanted where the two things being aligned are not both tensors — a
+    ``log_prob`` has to reconcile a *value's* shape with the
+    distribution's ``batch_shape``, and ``broadcast_to`` alone only ever
+    grows one side, so whichever side happened to be shorter decided
+    which calls worked.
+
+    Parameters
+    ----------
+    a, b : tuple of int
+        Shapes to align.
+
+    Returns
+    -------
+    tuple of int
+        The joint shape.
+
+    Raises
+    ------
+    ValueError
+        If a dimension pair is neither equal nor has a ``1`` in it.
+    """
+    out: list[int] = []
+    for i in range(max(len(a), len(b))):
+        da = a[len(a) - 1 - i] if i < len(a) else 1
+        db = b[len(b) - 1 - i] if i < len(b) else 1
+        if da != db and da != 1 and db != 1:
+            raise ValueError(f"shapes {a} and {b} are not broadcast-compatible")
+        out.append(da if db == 1 else db)
+    out.reverse()
+    return tuple(out)
+
+
 def _broadcast_pair(a: Tensor, b: Tensor) -> tuple[Tensor, Tensor]:
     """Broadcast ``a`` and ``b`` to a common shape via arithmetic ``+ 0``.
 

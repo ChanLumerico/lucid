@@ -119,6 +119,45 @@ class TestCategoricalOneHot:
         s = D.OneHotCategorical(probs=lucid.tensor([0.2, 0.5, 0.3])).sample().numpy()
         assert s.sum() == 1.0
 
+    # ``value`` and ``batch_shape`` broadcast against each other, and each
+    # direction has a case that only it can express.  Fixing one by
+    # forcing the other used to break whichever was not being tested.
+
+    def test_scalar_index_against_a_batched_dist(self) -> None:
+        # ``value`` is lower-rank than ``batch_shape``: one category
+        # scored against every distribution in the batch.
+        c = D.Categorical(probs=lucid.tensor([[0.5, 0.5], [0.2, 0.8], [0.1, 0.9]]))
+        out = c.log_prob(lucid.tensor(1))
+        assert out.shape == (3,)
+        expected = [math.log(0.5), math.log(0.8), math.log(0.9)]
+        assert np.allclose(out.numpy(), expected, atol=1e-5)
+
+    def test_same_rank_value_against_a_batched_dist(self) -> None:
+        c = D.Categorical(probs=lucid.tensor([[0.5, 0.5], [0.2, 0.8], [0.1, 0.9]]))
+        out = c.log_prob(lucid.tensor([1, 0, 1]))
+        assert out.shape == (3,)
+        expected = [math.log(0.5), math.log(0.2), math.log(0.9)]
+        assert np.allclose(out.numpy(), expected, atol=1e-5)
+
+    def test_sample_shaped_value_against_an_unbatched_dist(self) -> None:
+        # ``value`` is higher-rank: the draw carries a sample_shape in
+        # front of an empty batch_shape.  A distribution has to be able
+        # to score its own samples.
+        c = D.Categorical(probs=lucid.tensor([0.3, 0.7]))
+        assert c.log_prob(c.sample((5,))).shape == (5,)
+
+    def test_value_and_batch_broadcast_together(self) -> None:
+        # Neither side contains the other: (2, 1) value against a (3,)
+        # batch gives (2, 3).
+        c = D.Categorical(probs=lucid.tensor([[0.5, 0.5], [0.2, 0.8], [0.1, 0.9]]))
+        out = c.log_prob(lucid.tensor([[1], [0]]))
+        assert out.shape == (2, 3)
+        expected = [
+            [math.log(0.5), math.log(0.8), math.log(0.9)],
+            [math.log(0.5), math.log(0.2), math.log(0.1)],
+        ]
+        assert np.allclose(out.numpy(), expected, atol=1e-5)
+
 
 class TestPoissonBinomial:
     def test_poisson_log_prob(self) -> None:

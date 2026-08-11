@@ -13,7 +13,7 @@ from lucid.distributions.constraints import (
 from lucid.distributions.distribution import Distribution
 
 
-from lucid.distributions._util import _as_tensor
+from lucid.distributions._util import _as_tensor, _broadcast_shapes
 
 
 def _normalize_probs(probs: Tensor) -> Tensor:
@@ -293,19 +293,20 @@ class Categorical(Distribution):
         Tensor
             Log-probabilities of shape ``batch_shape``.
         """
-        # The probabilities broadcast onto the *value*, not the other way
-        # round.  Forcing ``value`` into ``batch_shape`` could not express
-        # the ordinary case where a sample carries a sample_shape in front
-        # of it: with ``probs`` of shape (2,) the batch shape is empty, so
-        # ``sample((64,))`` gives a (64,) tensor that has no batch shape to
-        # be reshaped into, and scoring it raised a rank mismatch out of
-        # ``gather``.  A distribution that cannot evaluate its own draws is
-        # broken at the one round trip it exists for.
+        # Both sides broadcast, neither one onto the other.  Each
+        # one-directional version of this breaks the case the other one
+        # exists for: forcing ``value`` into ``batch_shape`` cannot score
+        # a draw that carries a ``sample_shape`` in front of it, and
+        # forcing ``log_p`` onto ``value`` cannot score a lower-rank
+        # ``value`` — ``broadcast_to`` grows a shape, it never shrinks
+        # one, so a scalar index against a batched distribution raised.
+        # Scoring its own draws and scoring one index are both the round
+        # trip this method exists for.
         log_p = self._log_probs
         num_categories = int(log_p.shape[-1])
-        target = tuple(value.shape) + (num_categories,)
-        log_p_broadcast = log_p.broadcast_to(target)
-        index = value.to(lucid.int64).unsqueeze(-1)
+        common = _broadcast_shapes(tuple(value.shape), tuple(log_p.shape[:-1]))
+        log_p_broadcast = log_p.broadcast_to(common + (num_categories,))
+        index = value.to(lucid.int64).broadcast_to(common).unsqueeze(-1)
         return lucid.gather(log_p_broadcast, index, dim=-1).squeeze(-1)
 
     @override
