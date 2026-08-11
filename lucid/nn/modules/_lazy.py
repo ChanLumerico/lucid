@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from lucid.nn.module import Module
 
 
-def fill(module: "Module", name: str, value: Parameter) -> None:
+def fill(module: Module, name: str, value: Parameter) -> None:
     """Give ``module.<name>`` its real value without replacing the object.
 
     Parameters
