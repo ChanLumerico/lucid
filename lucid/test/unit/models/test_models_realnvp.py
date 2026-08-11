@@ -5,6 +5,7 @@ import math
 import pytest
 
 import lucid
+from lucid._tensor.tensor import Tensor
 import lucid.linalg as linalg
 import lucid.nn as nn
 from lucid.models import (
@@ -394,3 +395,48 @@ class TestRealNVPRegistry:
             "realnvp_cifar_gen", task=AutoModelForImageGeneration._task
         )
         assert entry.model_class is RealNVPForImageGeneration
+
+
+class TestFlowBatchNormVariant:
+    """§3.7 / Appendix E's running-average batch norm.
+
+    On the *first* training batch the running estimates are still their
+    initial ``(0, 1)``, so the paper's variant leaves the input essentially
+    untouched while ordinary batch norm centres it — which makes the two
+    modes trivially distinguishable without appealing to a converged model.
+    """
+
+    @staticmethod
+    def _batch() -> Tensor:
+        # per-channel means 11 and 22
+        return lucid.tensor([[[[10.0, 12.0]], [[20.0, 24.0]]]])
+
+    def test_ordinary_mode_centres_the_batch(self) -> None:
+        from lucid.models.generative.realnvp._model import _FlowBatchNorm
+
+        bn = _FlowBatchNorm(2)
+        bn.train()
+        y, _ = bn(self._batch())
+        means = y.mean(dim=(0, 2, 3)).tolist()
+        assert all(abs(v) < 1e-5 for v in means)
+
+    def test_paper_variant_uses_the_running_estimates(self) -> None:
+        from lucid.models.generative.realnvp._model import _FlowBatchNorm
+
+        bn = _FlowBatchNorm(2, use_running_stats=True)
+        bn.train()
+        x = self._batch()
+        y, _ = bn(x)
+        # running stats are (0, 1) on the first batch, so y ~= x
+        assert float((y - x).abs().max().item()) < 1e-2
+
+    def test_both_modes_still_track_the_running_estimates(self) -> None:
+        """The variants differ in what they *use*, not in what they track."""
+        from lucid.models.generative.realnvp._model import _FlowBatchNorm
+
+        for running in (False, True):
+            bn = _FlowBatchNorm(2, use_running_stats=running)
+            bn.train()
+            bn(self._batch())
+            got = [round(v, 4) for v in bn.running_mean.reshape(-1).tolist()]
+            assert got == [1.1, 2.2]

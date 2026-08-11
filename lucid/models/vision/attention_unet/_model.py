@@ -31,16 +31,16 @@ Losses (training)
   Requires integer ``targets`` of shape (B, H, W).
   Uses cross-entropy loss: F.cross_entropy(logits, targets).
 
-Divergence, deliberate: 2-D
----------------------------
-  The paper's Implementation Details state "we propose a 3D-model to
-  capture sufficient semantic context", and every released network is
-  Conv3d / BatchNorm3d with trilinear resampling — it was built for CT
-  volumes.  This is a 2-D model: the attention gate, the encoder and the
-  decoder are all Conv2d.  The gating mechanism, which is the paper's
-  actual contribution, is unchanged; only the convolution rank differs.
-  A caller with volumetric data wants a 3-D port, not this module, and
-  no 3-D checkpoint will load into it.
+Rank
+----
+  ``spatial_dims`` selects the convolution rank: 2 for images (the
+  default, and what most callers reach for) or 3 for volumes.  The
+  paper's Implementation Details specify the 3-D form — "we propose a
+  3D-model to capture sufficient semantic context" — and every released
+  network is Conv3d / BatchNorm3d with trilinear resampling, so
+  :func:`attention_unet_3d` is the paper-faithful factory.  The gating
+  mechanism, which is the paper's actual contribution, is identical in
+  both; only the rank differs.
 """
 
 from typing import ClassVar, cast, final, override
@@ -58,17 +58,42 @@ from lucid.models.vision.attention_unet._config import AttentionUNetConfig
 # ---------------------------------------------------------------------------
 
 
+def _conv_nd(dims: int) -> type[nn.Conv2d] | type[nn.Conv3d]:
+    """``nn.Conv2d`` or ``nn.Conv3d`` for the requested rank."""
+    return nn.Conv2d if dims == 2 else nn.Conv3d
+
+
+def _norm_nd(dims: int) -> type[nn.BatchNorm2d] | type[nn.BatchNorm3d]:
+    """``nn.BatchNorm2d`` or ``nn.BatchNorm3d`` for the requested rank."""
+    return nn.BatchNorm2d if dims == 2 else nn.BatchNorm3d
+
+
+def _pool_nd(dims: int) -> type[nn.MaxPool2d] | type[nn.MaxPool3d]:
+    """``nn.MaxPool2d`` or ``nn.MaxPool3d`` for the requested rank."""
+    return nn.MaxPool2d if dims == 2 else nn.MaxPool3d
+
+
+def _deconv_nd(dims: int) -> type[nn.ConvTranspose2d] | type[nn.ConvTranspose3d]:
+    """``nn.ConvTranspose2d`` or ``nn.ConvTranspose3d`` for the rank."""
+    return nn.ConvTranspose2d if dims == 2 else nn.ConvTranspose3d
+
+
+def _interp_mode(dims: int) -> str:
+    """The interpolation mode matching the rank: bilinear or trilinear."""
+    return "bilinear" if dims == 2 else "trilinear"
+
+
 class _DoubleConv(nn.Module):
     """Two sequential Conv3x3-BN-ReLU blocks."""
 
-    def __init__(self, in_ch: int, out_ch: int) -> None:
+    def __init__(self, in_ch: int, out_ch: int, dims: int = 2) -> None:
         super().__init__()
         self.net = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False),
-            nn.BatchNorm2d(out_ch),
+            _conv_nd(dims)(in_ch, out_ch, 3, padding=1, bias=False),
+            _norm_nd(dims)(out_ch),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False),
-            nn.BatchNorm2d(out_ch),
+            _conv_nd(dims)(out_ch, out_ch, 3, padding=1, bias=False),
+            _norm_nd(dims)(out_ch),
             nn.ReLU(inplace=True),
         )
 
@@ -87,27 +112,35 @@ class _AttentionGate(nn.Module):
         inter_channels: Intermediate projection size.
     """
 
-    def __init__(self, x_channels: int, g_channels: int, inter_channels: int) -> None:
+    def __init__(
+        self,
+        x_channels: int,
+        g_channels: int,
+        inter_channels: int,
+        dims: int = 2,
+    ) -> None:
         super().__init__()
         # Section 3.2: "input feature-maps are downsampled to the resolution
         # of gating signal".  Wx therefore carries stride 2, so the whole
         # ReLU / psi / sigmoid stack runs on the coarse grid -- a quarter of
         # the activations, and the attention coefficients are decided at the
         # scale the gate actually carries semantics at.
-        self.Wx = nn.Conv2d(x_channels, inter_channels, 1, stride=2, bias=True)
-        self.Wg = nn.Conv2d(g_channels, inter_channels, 1, bias=True)
-        self.psi = nn.Conv2d(inter_channels, 1, 1, bias=True)
+        self._dims = dims
+        self.Wx = _conv_nd(dims)(x_channels, inter_channels, 1, stride=2, bias=True)
+        self.Wg = _conv_nd(dims)(g_channels, inter_channels, 1, bias=True)
+        self.psi = _conv_nd(dims)(inter_channels, 1, 1, bias=True)
 
     @override
     def forward(self, x: Tensor, g: Tensor) -> Tensor:  # type: ignore[override]
         """Apply attention gate.
 
         Args:
-            x: (B, F, H, W) — skip features (finer scale).
-            g: (B, G, H/2, W/2) — gating signal (coarser).
+            x: ``(B, F, *S)`` skip features (finer scale).
+            g: ``(B, G, *S/2)`` gating signal (coarser).  ``S`` is two axes
+                for images and three for volumes.
 
         Returns:
-            (B, F, H, W) — gated skip features.  The coefficients themselves
+            ``(B, F, *S)`` gated skip features.  The coefficients themselves
             are computed at the gating resolution and resampled back up.
         """
         # 1. Project *and* downsample the skip: (B, inter, H/2, W/2)
@@ -120,8 +153,8 @@ class _AttentionGate(nn.Module):
         wg_raw: Tensor = cast(Tensor, self.Wg(g))
         wg: Tensor = F.interpolate(
             wg_raw,
-            size=(int(wx.shape[2]), int(wx.shape[3])),
-            mode="bilinear",
+            size=tuple(int(v) for v in wx.shape[2:]),
+            mode=_interp_mode(self._dims),
             align_corners=True,
         )
         # 3. Combine and compute the attention map on the gating grid
@@ -130,8 +163,8 @@ class _AttentionGate(nn.Module):
         # 4. "Grid resampling of attention coefficients" back to x's size
         att = F.interpolate(
             att,
-            size=(int(x.shape[2]), int(x.shape[3])),
-            mode="bilinear",
+            size=tuple(int(v) for v in x.shape[2:]),
+            mode=_interp_mode(self._dims),
             align_corners=True,
         )
         return x * att
@@ -140,10 +173,10 @@ class _AttentionGate(nn.Module):
 class _EncoderBlock(nn.Module):
     """Encoder stage: DoubleConv → MaxPool."""
 
-    def __init__(self, in_ch: int, out_ch: int) -> None:
+    def __init__(self, in_ch: int, out_ch: int, dims: int = 2) -> None:
         super().__init__()
-        self.conv = _DoubleConv(in_ch, out_ch)
-        self.pool = nn.MaxPool2d(2, stride=2)
+        self.conv = _DoubleConv(in_ch, out_ch, dims)
+        self.pool = _pool_nd(dims)(2, stride=2)
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
@@ -166,6 +199,7 @@ class _DecoderBlock(nn.Module):
         out_ch: int,
         bilinear: bool = False,
         gated: bool = True,
+        dims: int = 2,
     ) -> None:
         super().__init__()
         inter_ch = out_ch // 2 if out_ch // 2 > 0 else 1
@@ -175,16 +209,16 @@ class _DecoderBlock(nn.Module):
         # reference builds 3 gates for a 4-level U-Net, passing conv1
         # straight through.
         self.gate: _AttentionGate | None = (
-            _AttentionGate(skip_ch, in_ch, inter_ch) if gated else None
+            _AttentionGate(skip_ch, in_ch, inter_ch, dims) if gated else None
         )
         if bilinear:
             self.up: nn.Module = nn.Upsample(
-                scale_factor=2, mode="bilinear", align_corners=True
+                scale_factor=2, mode=_interp_mode(dims), align_corners=True
             )
-            self.conv = _DoubleConv(in_ch + skip_ch, out_ch)
+            self.conv = _DoubleConv(in_ch + skip_ch, out_ch, dims)
         else:
-            self.up = nn.ConvTranspose2d(in_ch, in_ch // 2, 2, stride=2)
-            self.conv = _DoubleConv(in_ch // 2 + skip_ch, out_ch)
+            self.up = _deconv_nd(dims)(in_ch, in_ch // 2, 2, stride=2)
+            self.conv = _DoubleConv(in_ch // 2 + skip_ch, out_ch, dims)
 
     @override
     def forward(  # type: ignore[override]
@@ -306,7 +340,7 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
         enc_channels: list[int] = []  # output channels at each stage
         for i in range(depth):
             out_ch = ch * (2**i)
-            block = _EncoderBlock(in_ch, out_ch)
+            block = _EncoderBlock(in_ch, out_ch, config.spatial_dims)
             self.add_module(f"encoder_{i}", block)
             self.encoders.append(block)
             enc_channels.append(out_ch)
@@ -314,14 +348,15 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
 
         # Bottleneck
         bottleneck_ch = ch * (2**depth)
-        self.bottleneck = _DoubleConv(in_ch, bottleneck_ch)
+        dims = config.spatial_dims
+        self.bottleneck = _DoubleConv(in_ch, bottleneck_ch, dims)
         # The reference does not hand the raw bottleneck to the gates: a
         # ``UnetGridGatingSignal`` (1x1 conv + BN + ReLU) projects it first,
         # so the gating signal is a learned summary rather than whatever the
         # deepest convolution happened to leave behind.
         self.gating = nn.Sequential(
-            nn.Conv2d(bottleneck_ch, bottleneck_ch, 1, bias=False),
-            nn.BatchNorm2d(bottleneck_ch),
+            _conv_nd(dims)(bottleneck_ch, bottleneck_ch, 1, bias=False),
+            _norm_nd(dims)(bottleneck_ch),
             nn.ReLU(inplace=True),
         )
 
@@ -337,6 +372,7 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
                 dec_out,
                 bilinear=config.bilinear,
                 gated=i > 0,
+                dims=dims,
             )
             self.add_module(f"decoder_{i}", dec_block)
             self.decoders.append(dec_block)
@@ -351,7 +387,7 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
         # inference path is identical either way — so its absence changes no
         # forward result, but a from-scratch run will not reproduce the
         # paper's convergence without it.
-        self.head = nn.Conv2d(enc_channels[0], config.num_classes, 1)
+        self.head = _conv_nd(dims)(enc_channels[0], config.num_classes, 1)
 
     @override
     def forward(  # type: ignore[override]
@@ -362,15 +398,19 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
         """Run Attention U-Net.
 
         Args:
-            x:       (B, C, H, W) image batch.
-            targets: Optional (B, H, W) integer ground-truth masks.
+            x:       ``(B, C, H, W)`` images, or ``(B, C, D, H, W)`` volumes
+                when the model was built with ``spatial_dims=3``.
+            targets: Optional integer ground-truth masks with the same
+                spatial extent as ``x``.
 
         Returns:
-            ``SemanticSegmentationOutput`` with logits (B, num_classes, H, W)
-            and optional cross-entropy loss.
+            ``SemanticSegmentationOutput`` with logits shaped like ``x`` in
+            its spatial axes and ``num_classes`` channels, plus an optional
+            cross-entropy loss.
         """
-        iH = int(x.shape[2])
-        iW = int(x.shape[3])
+        # Rank-generic: the trailing axes are the spatial ones whatever the
+        # rank, so the same body serves images and volumes.
+        spatial = tuple(int(v) for v in x.shape[2:])
 
         # Encoder path
         skips: list[Tensor] = []
@@ -392,11 +432,12 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
         logits: Tensor = cast(Tensor, self.head(feat))  # (B, num_classes, H, W)
 
         # Ensure output matches input spatial size
-        out_H = int(logits.shape[2])
-        out_W = int(logits.shape[3])
-        if out_H != iH or out_W != iW:
+        if tuple(int(v) for v in logits.shape[2:]) != spatial:
             logits = F.interpolate(
-                logits, size=(iH, iW), mode="bilinear", align_corners=False
+                logits,
+                size=spatial,
+                mode=_interp_mode(len(spatial)),
+                align_corners=False,
             )
 
         loss: Tensor | None = None

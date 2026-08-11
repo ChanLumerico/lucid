@@ -251,29 +251,48 @@ class _FlowBatchNorm(nn.Module):
     running_mean: Tensor
     running_var: Tensor
 
-    def __init__(self, channels: int, *, momentum: float = 0.1, eps: float = 1e-4):
+    def __init__(
+        self,
+        channels: int,
+        *,
+        momentum: float = 0.1,
+        eps: float = 1e-4,
+        use_running_stats: bool = False,
+    ):
         super().__init__()
         self._momentum = momentum
         self._eps = eps
+        self._use_running_stats = use_running_stats
         self.register_buffer("running_mean", lucid.zeros(1, channels, 1, 1))
         self.register_buffer("running_var", lucid.ones(1, channels, 1, 1))
 
     def _stats(self, x: Tensor) -> tuple[Tensor, Tensor]:
         """Normalisation statistics for the current pass.
 
-        Divergence, deliberate: §3.7 / Appendix E describe a batch-norm
-        variant whose *training-time* statistics are a running average
-        over recent minibatches, for robustness at very small batch
-        sizes.  This uses the current minibatch, as ordinary batch norm
-        does — the running buffers below are kept for evaluation only.
-        The two agree in the large-batch limit and differ most where the
-        paper's variant was aimed, so a caller training at batch sizes in
-        the single digits should expect noisier log-likelihoods here.
+        Evaluation always uses the running estimates — that is what makes
+        :meth:`inverse` well-defined for a single sample.
+
+        Training has two modes.  Ordinary batch norm normalises by the
+        current minibatch; §3.7 / Appendix E's variant normalises by the
+        running average instead, which is steadier when the batch is small
+        enough that its own statistics are noisy.  ``use_running_stats``
+        selects the paper's variant.  Either way the running estimates are
+        updated from the current batch, so the two differ in what is
+        *used*, not in what is tracked.
         """
         if not self.training:
             return self.running_mean, self.running_var
         mean = x.mean(dim=(0, 2, 3), keepdim=True)
         var = ((x - mean) ** 2).mean(dim=(0, 2, 3), keepdim=True)
+        # Snapshot before the update: Appendix E normalises by the average
+        # over *recent* minibatches, which must not already include this one
+        # — folding the current batch in first would reintroduce exactly the
+        # dependence on it that the variant exists to remove.
+        used = (
+            (self.running_mean, self.running_var)
+            if self._use_running_stats
+            else (mean, var)
+        )
         with lucid.no_grad():
             # Write through ``_buffers`` — a plain attribute assignment makes
             # ``Module.__setattr__`` drop the name from the buffer registry
@@ -288,7 +307,7 @@ class _FlowBatchNorm(nn.Module):
             self._buffers["running_var"] = (
                 1.0 - self._momentum
             ) * self.running_var + self._momentum * var
-        return mean, var
+        return used
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
@@ -442,7 +461,14 @@ class RealNVPModel(PretrainedModel):
                     )
                 )
                 if config.use_batch_norm:
-                    stages.append(_FlowBatchNorm(channels))
+                    stages.append(
+                        _FlowBatchNorm(
+                            channels,
+                            use_running_stats=(
+                                config.batch_norm_running_stats_in_training
+                            ),
+                        )
+                    )
 
             self._scale_shapes.append((channels, height, width))
             if not last:
@@ -468,7 +494,14 @@ class RealNVPModel(PretrainedModel):
                         )
                     )
                     if config.use_batch_norm:
-                        stages.append(_FlowBatchNorm(squeezed))
+                        stages.append(
+                            _FlowBatchNorm(
+                                squeezed,
+                                use_running_stats=(
+                                    config.batch_norm_running_stats_in_training
+                                ),
+                            )
+                        )
                 # Half the channels are factored out; the rest carry on.
                 channels = squeezed // 2
 

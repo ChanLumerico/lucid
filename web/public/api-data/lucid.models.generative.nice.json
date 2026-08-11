@@ -223,7 +223,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.nice import (\n...     NICEConfig, NICEForImageGeneration,\n... )\n>>> cfg = NICEConfig(input_dim=64, num_coupling_layers=2,\n...                  num_hidden_layers=1, hidden_dim=16)\n>>> model = NICEForImageGeneration(cfg).eval()\n>>> out = model(lucid.rand((2, 64)))\n>>> out.loss.shape                       # scalar NLL\n()\n>>> model.generate(n_samples=3).samples.shape\n(3, 64)"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516).\n\nTraining objective (maximised in the paper, minimised here):\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{B} \\sum_{b=1}^{B}\n    \\Big[\\log p_H\\big(f(x^{(b)})\\big) + \\sum_{i=1}^{D} s_i\\Big].\n$$\n\nThe paper optimises this with Adam (learning rate $10^{-3}$)\nfor 1500 epochs and reports test log-likelihoods of 1980.50 (MNIST),\n5514.71 (TFD), 11496.55 (SVHN) and 5371.78 (CIFAR-10) nats — figures\nthat are only comparable under the paper's own preprocessing."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)).\n\nTraining objective (maximised in the paper, minimised here):\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{B} \\sum_{b=1}^{B}\n    \\Big[\\log p_H\\big(f(x^{(b)})\\big) + \\sum_{i=1}^{D} s_i\\Big].\n$$\n\nThe paper optimises this with Adam (learning rate $10^{-3}$)\nfor 1500 epochs and reports test log-likelihoods of 1980.50 (MNIST),\n5514.71 (TFD), 11496.55 (SVHN) and 5371.78 (CIFAR-10) nats — figures\nthat are only comparable under the paper's own preprocessing."
       ],
       "attributes": [
         {
@@ -428,7 +428,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.nice import NICEConfig, NICEModel\n>>> cfg = NICEConfig(input_dim=64, num_coupling_layers=2,\n...                  num_hidden_layers=1, hidden_dim=16)\n>>> model = NICEModel(cfg).eval()\n>>> x = lucid.rand((2, 64))\n>>> h, log_det = model.encode(x)\n>>> h.shape, log_det.shape\n((2, 64), (2,))\n>>> model.log_prob(x).shape\n(2,)"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516).\n\nThe exact objective, with additive couplings contributing zero:\n\n\n\n$$\n\\log p_X(x) = \\sum_{i=1}^{D}\n    \\Big[\\log p_{H_i}\\big(f_i(x)\\big) + s_i\\Big].\n$$\n\nThe model expects *dequantised* data — the paper adds uniform noise of\n`1/256` and rescales to $[0, 1]^D$ ($1/128$ and\n$[-1, 1]^D$ for CIFAR-10), and applies ZCA (SVHN, CIFAR-10) or\napproximate whitening (TFD) beforehand.  Feeding raw 8-bit integers\nlets the flow put unbounded density on the quantisation lattice, so\nthe likelihood diverges."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)).\n\nThe exact objective, with additive couplings contributing zero:\n\n\n\n$$\n\\log p_X(x) = \\sum_{i=1}^{D}\n    \\Big[\\log p_{H_i}\\big(f_i(x)\\big) + s_i\\Big].\n$$\n\nThe model expects *dequantised* data — the paper adds uniform noise of\n`1/256` and rescales to $[0, 1]^D$ ($1/128$ and\n$[-1, 1]^D$ for CIFAR-10), and applies ZCA (SVHN, CIFAR-10) or\napproximate whitening (TFD) beforehand.  Feeding raw 8-bit integers\nlets the flow put unbounded density on the quantisation lattice, so\nthe likelihood diverges."
       ],
       "attributes": [
         {
@@ -478,7 +478,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.nice import nice_cifar\n>>> model = nice_cifar(input_dim=64, hidden_dim=16).eval()\n>>> x = lucid.rand((1, 64)) * 2.0 - 1.0\n>>> model.log_prob(x).shape\n(1,)"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 5371.78 nats, on ZCA-whitened\ndata dequantised with uniform `1/128` noise and rescaled to\n$[-1, 1]^D$ (CIFAR-10 is the one dataset given the wider\nrange).  The released reference config for this dataset instead\nstacks 8 coupling layers of 2400 units with a normal prior and no\ninput reordering — see the module docstring for how far overrides\nreproduce it."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)),\nFigure 3.  Reported test log-likelihood: 5371.78 nats, on ZCA-whitened\ndata dequantised with uniform `1/128` noise and rescaled to\n$[-1, 1]^D$ (CIFAR-10 is the one dataset given the wider\nrange).  The released reference config for this dataset instead\nstacks 8 coupling layers of 2400 units with a normal prior and no\ninput reordering — see the module docstring for how far overrides\nreproduce it."
       ],
       "attributes": [],
       "warns": [],
@@ -588,7 +588,7 @@
         ">>> from lucid.models.generative.nice import nice_cifar_gen\n>>> model = nice_cifar_gen().eval()\n>>> out = model.generate(n_samples=2)\n>>> out.samples.shape\n(2, 3072)"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 5371.78 nats on ZCA-whitened\ndata in $[-1, 1]^D$."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)),\nFigure 3.  Reported test log-likelihood: 5371.78 nats on ZCA-whitened\ndata in $[-1, 1]^D$."
       ],
       "attributes": [],
       "warns": [],
@@ -706,7 +706,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.nice import nice_mnist\n>>> model = nice_mnist(input_dim=64, hidden_dim=16).eval()\n>>> x = lucid.rand((1, 64))\n>>> h, log_det = model.encode(x)\n>>> h.shape, log_det.shape\n((1, 64), (1,))"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 1980.50 nats, on data\ndequantised with uniform `1/256` noise and rescaled to\n$[0, 1]^D$ (no whitening for MNIST)."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)),\nFigure 3.  Reported test log-likelihood: 1980.50 nats, on data\ndequantised with uniform `1/256` noise and rescaled to\n$[0, 1]^D$ (no whitening for MNIST)."
       ],
       "attributes": [],
       "warns": [],
@@ -816,7 +816,7 @@
         ">>> from lucid.models.generative.nice import nice_mnist_gen\n>>> model = nice_mnist_gen(input_dim=64, hidden_dim=16).eval()\n>>> model.generate(n_samples=4).samples.shape\n(4, 64)"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Samples come back in the dequantised training space, not in\n`[0, 255]`."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)),\nFigure 3.  Samples come back in the dequantised training space, not in\n`[0, 255]`."
       ],
       "attributes": [],
       "warns": [],
@@ -934,7 +934,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.nice import nice_svhn\n>>> model = nice_svhn(input_dim=64, hidden_dim=16).eval()\n>>> model.input_dim\n64"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 11496.55 nats, on\nZCA-whitened data — the whitening is what makes this number so much\nlarger than the CIFAR-10 one, so likelihoods are comparable only\nwithin a preprocessing pipeline."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)),\nFigure 3.  Reported test log-likelihood: 11496.55 nats, on\nZCA-whitened data — the whitening is what makes this number so much\nlarger than the CIFAR-10 one, so likelihoods are comparable only\nwithin a preprocessing pipeline."
       ],
       "attributes": [],
       "warns": [],
@@ -1044,7 +1044,7 @@
         ">>> from lucid.models.generative.nice import nice_svhn_gen\n>>> model = nice_svhn_gen().eval()\n>>> model.generate(n_samples=2).samples.shape\n(2, 3072)"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Samples live in the ZCA-whitened space; apply the inverse\nZCA transform to view them as images."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)),\nFigure 3.  Samples live in the ZCA-whitened space; apply the inverse\nZCA transform to view them as images."
       ],
       "attributes": [],
       "warns": [],
@@ -1162,7 +1162,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.nice import nice_tfd\n>>> model = nice_tfd(input_dim=64, hidden_dim=16).eval()\n>>> model.prior\n'gaussian'\n>>> model.input_dim\n64"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Reported test log-likelihood: 5514.71 nats, on\napproximately whitened data — well ahead of the 5250 nats of the Deep\nMFA bound it was compared against."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)),\nFigure 3.  Reported test log-likelihood: 5514.71 nats, on\napproximately whitened data — well ahead of the 5250 nats of the Deep\nMFA bound it was compared against."
       ],
       "attributes": [],
       "warns": [],
@@ -1272,7 +1272,7 @@
         ">>> from lucid.models.generative.nice import nice_tfd_gen\n>>> model = nice_tfd_gen(input_dim=64, hidden_dim=16).eval()\n>>> model.generate(n_samples=2).samples.shape\n(2, 64)"
       ],
       "notes": [
-        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 (arXiv:1410.8516),\nFigure 3.  Samples are in the approximately whitened space the model\ntrains on — invert the whitening to view them as images."
+        "Reference: Dinh, Krueger, and Bengio, *\"NICE: Non-linear Independent\nComponents Estimation\"*, ICLR Workshop, 2015 ([arXiv:1410.8516](https://arxiv.org/abs/1410.8516)),\nFigure 3.  Samples are in the approximately whitened space the model\ntrains on — invert the whitening to view them as images."
       ],
       "attributes": [],
       "warns": [],

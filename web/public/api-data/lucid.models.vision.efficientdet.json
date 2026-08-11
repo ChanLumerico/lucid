@@ -328,7 +328,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientdet import efficientdet_d0\n>>> model = efficientdet_d0()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape[-1], out.pred_boxes.shape[-1]\n(80, 4)"
       ],
       "notes": [
-        "See Tan et al., \"EfficientDet: Scalable and Efficient Object\nDetection\", CVPR 2020 (arXiv:1911.09070).  The BiFPN's defining\nfeature is weighted feature fusion at each node:\n\n\n\n$$\nO = \\sum_{i} \\frac{w_i}{\\epsilon + \\sum_j w_j} \\cdot I_i,\n$$\n\nwith non-negative weights $w_i$ learned end-to-end (the paper\ncalls this \"fast normalized fusion\").  Compound scaling follows\n\n\n\n$$\n\\begin{aligned}\n    W_\\mathrm{BiFPN} &= 64 \\cdot 1.35^\\varphi, &\n    D_\\mathrm{BiFPN} &= 3 + \\varphi, \\\\\n    D_\\mathrm{head}  &= 3 + \\lfloor \\varphi / 3 \\rfloor, &\n    R_\\mathrm{input} &= 512 + 128\\varphi,\n\\end{aligned}\n$$\n\nso D0 ($\\varphi = 0$) trains on 512x512 inputs while D7\n($\\varphi = 7$) uses 1536x1536.  Training uses focal loss\n$\\mathrm{FL}(p_t) = -\\alpha_t (1 - p_t)^\\gamma \\log p_t$ on\nthe K-channel class output plus smooth-$L_1$ on box deltas."
+        "See Tan et al., \"EfficientDet: Scalable and Efficient Object\nDetection\", CVPR 2020 ([arXiv:1911.09070](https://arxiv.org/abs/1911.09070)).  The BiFPN's defining\nfeature is weighted feature fusion at each node:\n\n\n\n$$\nO = \\sum_{i} \\frac{w_i}{\\epsilon + \\sum_j w_j} \\cdot I_i,\n$$\n\nwith non-negative weights $w_i$ learned end-to-end (the paper\ncalls this \"fast normalized fusion\").  Compound scaling follows\n\n\n\n$$\n\\begin{aligned}\n    W_\\mathrm{BiFPN} &= 64 \\cdot 1.35^\\varphi, &\n    D_\\mathrm{BiFPN} &= 3 + \\varphi, \\\\\n    D_\\mathrm{head}  &= 3 + \\lfloor \\varphi / 3 \\rfloor, &\n    R_\\mathrm{input} &= 512 + 128\\varphi,\n\\end{aligned}\n$$\n\nso D0 ($\\varphi = 0$) trains on 512x512 inputs while D7\n($\\varphi = 7$) uses 1536x1536.  Training uses focal loss\n$\\mathrm{FL}(p_t) = -\\alpha_t (1 - p_t)^\\gamma \\log p_t$ on\nthe K-channel class output plus smooth-$L_1$ on box deltas."
       ],
       "attributes": [
         {
@@ -403,7 +403,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientdet import efficientdet_d0\n>>> model = efficientdet_d0()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.pred_boxes.shape[-1]\n4"
       ],
       "notes": [
-        "See Tan et al., \"EfficientDet: Scalable and Efficient Object Detection\",\nCVPR 2020 (arXiv:1911.09070).  D0 is the smallest of the eight\ncompound-scaled variants and the recommended baseline for\nmobile / edge deployment."
+        "See Tan et al., \"EfficientDet: Scalable and Efficient Object Detection\",\nCVPR 2020 ([arXiv:1911.09070](https://arxiv.org/abs/1911.09070)).  D0 is the smallest of the eight\ncompound-scaled variants and the recommended baseline for\nmobile / edge deployment."
       ],
       "attributes": [],
       "warns": [],
@@ -1729,7 +1729,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientdet import efficientdet_d1\n>>> model = efficientdet_d1()\n>>> x = lucid.randn(1, 3, 640, 640)\n>>> out = model(x)\n>>> out.pred_boxes.shape[-1]\n4"
       ],
       "notes": [
-        "See Tan et al., 2020 (arXiv:1911.09070), Table 2."
+        "See Tan et al., 2020 ([arXiv:1911.09070](https://arxiv.org/abs/1911.09070)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -3055,7 +3055,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientdet import efficientdet_d2\n>>> model = efficientdet_d2()\n>>> x = lucid.randn(1, 3, 768, 768)\n>>> out = model(x)\n>>> out.pred_boxes.shape[-1]\n4"
       ],
       "notes": [
-        "See Tan et al., 2020 (arXiv:1911.09070), Table 2."
+        "See Tan et al., 2020 ([arXiv:1911.09070](https://arxiv.org/abs/1911.09070)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -4381,7 +4381,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientdet import efficientdet_d3\n>>> model = efficientdet_d3()\n>>> x = lucid.randn(1, 3, 896, 896)\n>>> out = model(x)\n>>> out.pred_boxes.shape[-1]\n4"
       ],
       "notes": [
-        "See Tan et al., 2020 (arXiv:1911.09070), Table 2."
+        "See Tan et al., 2020 ([arXiv:1911.09070](https://arxiv.org/abs/1911.09070)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -5707,7 +5707,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientdet import efficientdet_d4\n>>> model = efficientdet_d4()\n>>> x = lucid.randn(1, 3, 1024, 1024)\n>>> out = model(x)\n>>> out.pred_boxes.shape[-1]\n4"
       ],
       "notes": [
-        "See Tan et al., 2020 (arXiv:1911.09070), Table 2."
+        "See Tan et al., 2020 ([arXiv:1911.09070](https://arxiv.org/abs/1911.09070)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -7033,7 +7033,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientdet import efficientdet_d5\n>>> model = efficientdet_d5()\n>>> x = lucid.randn(1, 3, 1280, 1280)\n>>> out = model(x)\n>>> out.pred_boxes.shape[-1]\n4"
       ],
       "notes": [
-        "See Tan et al., 2020 (arXiv:1911.09070), Table 2."
+        "See Tan et al., 2020 ([arXiv:1911.09070](https://arxiv.org/abs/1911.09070)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -8359,7 +8359,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientdet import efficientdet_d6\n>>> model = efficientdet_d6()\n>>> x = lucid.randn(1, 3, 1280, 1280)\n>>> out = model(x)\n>>> out.pred_boxes.shape[-1]\n4"
       ],
       "notes": [
-        "See Tan et al., 2020 (arXiv:1911.09070), Table 2."
+        "See Tan et al., 2020 ([arXiv:1911.09070](https://arxiv.org/abs/1911.09070)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -9685,7 +9685,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientdet import efficientdet_d7\n>>> model = efficientdet_d7()\n>>> x = lucid.randn(1, 3, 1536, 1536)\n>>> out = model(x)\n>>> out.pred_boxes.shape[-1]\n4"
       ],
       "notes": [
-        "See Tan et al., 2020 (arXiv:1911.09070), Table 2.  The only\narchitectural difference from D6 is the larger input resolution;\nbackbone / BiFPN / head shapes are shared."
+        "See Tan et al., 2020 ([arXiv:1911.09070](https://arxiv.org/abs/1911.09070)), Table 2.  The only\narchitectural difference from D6 is the larger input resolution;\nbackbone / BiFPN / head shapes are shared."
       ],
       "attributes": [],
       "warns": [],

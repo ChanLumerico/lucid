@@ -13251,7 +13251,7 @@
         ">>> import lucid, lucid.nn as nn\n>>> gqa = nn.GroupedQueryAttention(embed_dim=512, num_heads=8, num_kv_heads=2,\n...                                batch_first=True)\n>>> x = lucid.randn(1, 10, 512)\n>>> out, _ = gqa(x, x, x, need_weights=False)\n>>> out.shape\n(1, 10, 512)\n>>> tuple(gqa.k_proj_weight.shape)   # 2 K/V heads × head_dim 64 = 128\n(128, 512)"
       ],
       "notes": [
-        "The key/value projections are sized `(num_kv_heads * head_dim, …)` instead of\n`(embed_dim, …)` (so `k_proj_weight` / `v_proj_weight` and the K/V cache\nare smaller — the cache shrink is the main inference win: less memory bandwidth\nper decode step).  Just before the scores are formed, each K/V head is repeated\n`num_heads // num_kv_heads` times via\n`lucid.nn.functional.repeat_kv` so the head counts match; the output is\nbit-identical to standard attention with K/V heads tied within each group.\n\nReference: Ainslie, Lee-Thorp, de Jong, Zemlyanskiy, Lebrón, and Sanghai,\n*\"GQA: Training Generalized Multi-Query Transformer Models from Multi-Head\nCheckpoints\"*, EMNLP 2023 (arXiv:2305.13245)."
+        "The key/value projections are sized `(num_kv_heads * head_dim, …)` instead of\n`(embed_dim, …)` (so `k_proj_weight` / `v_proj_weight` and the K/V cache\nare smaller — the cache shrink is the main inference win: less memory bandwidth\nper decode step).  Just before the scores are formed, each K/V head is repeated\n`num_heads // num_kv_heads` times via\n`lucid.nn.functional.repeat_kv` so the head counts match; the output is\nbit-identical to standard attention with K/V heads tied within each group.\n\nReference: Ainslie, Lee-Thorp, de Jong, Zemlyanskiy, Lebrón, and Sanghai,\n*\"GQA: Training Generalized Multi-Query Transformer Models from Multi-Head\nCheckpoints\"*, EMNLP 2023 ([arXiv:2305.13245](https://arxiv.org/abs/2305.13245))."
       ],
       "attributes": [],
       "warns": [],
@@ -13708,7 +13708,7 @@
         ">>> import lucid, lucid.nn as nn\n>>> mqa = nn.MultiQueryAttention(embed_dim=512, num_heads=8, batch_first=True)\n>>> mqa.num_kv_heads\n1\n>>> tuple(mqa.k_proj_weight.shape)   # 1 K/V head × head_dim 64\n(64, 512)"
       ],
       "notes": [
-        "The single key/value head is projected once (`k_proj_weight` /\n`v_proj_weight` of shape `(head_dim, …)`) and repeated `num_heads` times\nvia `lucid.nn.functional.repeat_kv` before the attention scores, so the\noutput is bit-identical to standard attention whose K/V heads are all tied.\n\nReference: Shazeer, *\"Fast Transformer Decoding: One Write-Head is All You\nNeed\"*, 2019 (arXiv:1911.02150)."
+        "The single key/value head is projected once (`k_proj_weight` /\n`v_proj_weight` of shape `(head_dim, …)`) and repeated `num_heads` times\nvia `lucid.nn.functional.repeat_kv` before the attention scores, so the\noutput is bit-identical to standard attention whose K/V heads are all tied.\n\nReference: Shazeer, *\"Fast Transformer Decoding: One Write-Head is All You\nNeed\"*, 2019 ([arXiv:1911.02150](https://arxiv.org/abs/1911.02150))."
       ],
       "attributes": [],
       "warns": [],
@@ -22950,7 +22950,7 @@
         }
       ],
       "summary": "Full encoder-decoder Transformer architecture.",
-      "extended": "Implements the complete sequence-to-sequence model introduced in\n\"Attention Is All You Need\" (Vaswani et al., 2017, arXiv:1706.03762).\nThe model consists of:\n\n1. An `TransformerEncoder` that encodes the source sequence\n   into a continuous memory representation.\n2. A `TransformerDecoder` that generates the target sequence\n   conditioned on the encoder memory.\n\nHigh-level data flow:\n\n$$\n\\text{memory} = \\text{Encoder}(\\text{src},\\; \\text{src\\_mask},\\;\n    \\text{src\\_key\\_padding\\_mask})\n$$\n\n$$\n\\text{output} = \\text{Decoder}(\\text{tgt},\\; \\text{memory},\\;\n    \\text{tgt\\_mask},\\; \\text{memory\\_mask},\\;\n    \\text{tgt\\_key\\_padding\\_mask},\\;\n    \\text{memory\\_key\\_padding\\_mask})\n$$\n\nBoth the encoder and decoder are built with a final\n`LayerNorm` applied after the last layer.",
+      "extended": "Implements the complete sequence-to-sequence model introduced in\n\"Attention Is All You Need\" (Vaswani et al., 2017, [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)).\nThe model consists of:\n\n1. An `TransformerEncoder` that encodes the source sequence\n   into a continuous memory representation.\n2. A `TransformerDecoder` that generates the target sequence\n   conditioned on the encoder memory.\n\nHigh-level data flow:\n\n$$\n\\text{memory} = \\text{Encoder}(\\text{src},\\; \\text{src\\_mask},\\;\n    \\text{src\\_key\\_padding\\_mask})\n$$\n\n$$\n\\text{output} = \\text{Decoder}(\\text{tgt},\\; \\text{memory},\\;\n    \\text{tgt\\_mask},\\; \\text{memory\\_mask},\\;\n    \\text{tgt\\_key\\_padding\\_mask},\\;\n    \\text{memory\\_key\\_padding\\_mask})\n$$\n\nBoth the encoder and decoder are built with a final\n`LayerNorm` applied after the last layer.",
       "parameters": [
         {
           "name": "d_model",

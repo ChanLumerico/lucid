@@ -267,7 +267,7 @@
         "Inference returns class logits and normalised cxcywh boxes for every\nquery:\n>>> import lucid\n>>> from lucid.models.vision.detr import detr_resnet50\n>>> model = detr_resnet50()\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.logits.shape   # (B, num_queries, K + 1)\n(1, 100, 81)\n>>> out.pred_boxes.shape\n(1, 100, 4)\nTraining pass with normalised xyxy ground-truth boxes (Hungarian\nmatching computes the set loss):\n>>> targets = [{\n...     \"boxes\":  lucid.tensor([[0.1, 0.1, 0.5, 0.5]]),\n...     \"labels\": lucid.tensor([3], dtype=lucid.int64),\n... }]\n>>> out = model(x, targets=targets)\n>>> out.loss.shape\n()"
       ],
       "notes": [
-        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 (arXiv:2005.12872).  The bipartite Hungarian assignment\nfinds the permutation $\\hat{\\sigma} \\in \\mathfrak{S}_N$ that\nminimises\n\n\n\n$$\n\\hat{\\sigma} = \\arg\\min_{\\sigma \\in \\mathfrak{S}_N}\n               \\sum_{i=1}^{N}\n               \\mathcal{L}_\\mathrm{match}\\bigl(y_i, \\hat{y}_{\\sigma(i)}\\bigr),\n$$\n\nwith the pair cost\n\n\n\n$$\n\\mathcal{L}_\\mathrm{match}(y, \\hat{y}) =\n    -\\mathbb{1}_{c \\ne \\varnothing}\\,\\hat{p}(c)\n    + \\mathbb{1}_{c \\ne \\varnothing}\\,\n      \\bigl(\\lambda_{\\mathrm{L_1}}\\|b - \\hat{b}\\|_1\n            + \\lambda_\\mathrm{GIoU}\\,\n              (1 - \\mathrm{GIoU}(b, \\hat{b}))\\bigr).\n$$\n\nThe final loss reuses the same per-pair terms, with \"no-object\"\nmatches penalised at reduced weight.  Removing NMS / anchors makes\nDETR conceptually simple but training-data hungry — the paper\nreports needing 500 epochs to fully converge on COCO."
+        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 ([arXiv:2005.12872](https://arxiv.org/abs/2005.12872)).  The bipartite Hungarian assignment\nfinds the permutation $\\hat{\\sigma} \\in \\mathfrak{S}_N$ that\nminimises\n\n\n\n$$\n\\hat{\\sigma} = \\arg\\min_{\\sigma \\in \\mathfrak{S}_N}\n               \\sum_{i=1}^{N}\n               \\mathcal{L}_\\mathrm{match}\\bigl(y_i, \\hat{y}_{\\sigma(i)}\\bigr),\n$$\n\nwith the pair cost\n\n\n\n$$\n\\mathcal{L}_\\mathrm{match}(y, \\hat{y}) =\n    -\\mathbb{1}_{c \\ne \\varnothing}\\,\\hat{p}(c)\n    + \\mathbb{1}_{c \\ne \\varnothing}\\,\n      \\bigl(\\lambda_{\\mathrm{L_1}}\\|b - \\hat{b}\\|_1\n            + \\lambda_\\mathrm{GIoU}\\,\n              (1 - \\mathrm{GIoU}(b, \\hat{b}))\\bigr).\n$$\n\nThe final loss reuses the same per-pair terms, with \"no-object\"\nmatches penalised at reduced weight.  Removing NMS / anchors makes\nDETR conceptually simple but training-data hungry — the paper\nreports needing 500 epochs to fully converge on COCO."
       ],
       "attributes": [
         {
@@ -348,7 +348,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.detr import detr_resnet50\n>>> model = detr_resnet50()\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 100, 92)"
       ],
       "notes": [
-        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 (arXiv:2005.12872).  Pretrained weights are converted from\nthe original Facebook DETR `detr_resnet50` checkpoint and hosted\nunder `lucid-dl/detr-resnet-50`."
+        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 ([arXiv:2005.12872](https://arxiv.org/abs/2005.12872)).  Pretrained weights are converted from\nthe original Facebook DETR `detr_resnet50` checkpoint and hosted\nunder `lucid-dl/detr-resnet-50`."
       ],
       "attributes": [],
       "warns": [],
@@ -1173,7 +1173,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.detr import detr_resnet101\n>>> model = detr_resnet101()\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 100, 92)"
       ],
       "notes": [
-        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 (arXiv:2005.12872).  Switching to ResNet-101 buys ~1.5\npoints of AP at the cost of ~50% more parameters in the backbone;\nthe transformer head is unchanged.  Pretrained weights are converted\nfrom the original Facebook DETR `detr_resnet101` checkpoint and\nhosted under `lucid-dl/detr-resnet-101`."
+        "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 ([arXiv:2005.12872](https://arxiv.org/abs/2005.12872)).  Switching to ResNet-101 buys ~1.5\npoints of AP at the cost of ~50% more parameters in the backbone;\nthe transformer head is unchanged.  Pretrained weights are converted\nfrom the original Facebook DETR `detr_resnet101` checkpoint and\nhosted under `lucid-dl/detr-resnet-101`."
       ],
       "attributes": [],
       "warns": [],

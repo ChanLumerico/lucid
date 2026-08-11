@@ -4899,6 +4899,12 @@
       "module": "lucid.models.vision.attention_unet"
     }
   ],
+  "lucid.models.vision.attention_unet._pretrained.attention_unet_3d": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.attention_unet"
+    }
+  ],
   "lucid.models.vision.coatnet": [
     {
       "kind": "module",
@@ -9812,11 +9818,19 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models._utils._common"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models._utils._detection"
     },
     {
       "kind": "module",
       "module": "lucid.models._utils._generative"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models._utils._segmentation"
     },
     {
       "kind": "module",
@@ -13115,6 +13129,12 @@
     {
       "kind": "module",
       "module": "lucid.nn.utils.parametrizations"
+    }
+  ],
+  "lucid.optim": [
+    {
+      "kind": "module",
+      "module": "lucid.models._utils._common"
     }
   ],
   "lucid.optim.adam.Adam": [

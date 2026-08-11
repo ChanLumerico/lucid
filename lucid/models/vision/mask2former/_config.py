@@ -99,13 +99,27 @@ class Mask2FormerConfig(ModelConfig):
         feature_strides:       Backbone output strides.
         common_stride:         Finest pixel-decoder stride.
 
+        -- Training objective (§3.2.2) --
+        class_weight:      Weight of the classification term, and of the
+                           class cost inside the Hungarian matcher.
+        mask_weight:       Weight of the point-sampled mask BCE.
+        dice_weight:       Weight of the point-sampled dice term.
+        no_object_weight:  Class weight of the "no object" slot (0.1).
+        train_num_points:  K points per mask (12,544 = 112 x 112).
+        oversample_ratio:  Candidate multiplier for the importance sampler.
+        importance_sample_ratio: Share of K taken from the most uncertain
+                           candidates; the rest are uniform.
+        deep_supervision:  Apply the criterion to every decoder layer, not
+                           just the last.
+
     .. note::
 
-       **Inference only.**  §3.2.2's objective is unimplemented: the
-       Hungarian matcher, the class-CE / mask-BCE / dice terms, the
-       point-sampled mask loss (K = 12,544 points rather than dense) and
-       the auxiliary losses on every decoder layer.  ``forward`` raises
-       if given targets rather than discarding them.
+       **Training.**  Pass ``targets`` to :meth:`forward` for §3.2.2's
+       objective: Hungarian matching on a class + mask-BCE + dice cost,
+       the same three terms as the loss, all mask terms evaluated on
+       ``train_num_points`` importance-sampled points, and — under
+       ``deep_supervision`` — the whole criterion repeated on every
+       decoder layer.
     """
 
     model_type: ClassVar[str] = "mask2former"
@@ -130,6 +144,21 @@ class Mask2FormerConfig(ModelConfig):
     dim_feedforward: int = 2048
     dropout: float = 0.0
     num_queries: int = 100
+
+    # Training objective (§3.2.2 + the released SetCriterion / HungarianMatcher)
+    class_weight: float = 2.0
+    mask_weight: float = 5.0
+    dice_weight: float = 5.0
+    # Down-weights the "no object" class so the N - M unmatched queries do
+    # not drown the M matched ones in the classification term.
+    no_object_weight: float = 0.1
+    # §3.2.2 evaluates the mask terms on K sampled points rather than
+    # densely, cutting training memory roughly 3x.  12544 = 112 x 112.
+    train_num_points: int = 12_544
+    oversample_ratio: float = 3.0
+    importance_sample_ratio: float = 0.75
+    # Deep supervision: the same criterion on every decoder layer's output.
+    deep_supervision: bool = True
 
     # Multi-scale memory levels
     num_feature_levels: int = 3

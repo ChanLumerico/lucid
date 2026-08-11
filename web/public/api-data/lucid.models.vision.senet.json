@@ -157,7 +157,7 @@
         }
       ],
       "summary": "SE-ResNet feature-extracting backbone (no classification head).",
-      "extended": "Implements the Squeeze-and-Excitation augmentation of the\nResNet topology from Hu et al., \"Squeeze-and-Excitation\nNetworks\", CVPR 2018 (arXiv:1709.01507) — winner of the\nILSVRC 2017 classification challenge.  Each residual block in\nthe four-stage ResNet body is followed by a lightweight SE\nmodule that recalibrates the relative importance of each\nfeature-map channel:\n\n$$\n\\tilde{u}_c = s_c \\cdot u_c,\n\\qquad s = \\sigma\\big(W_2 \\,\\delta(W_1 z)\\big),\n\\quad z_c = \\frac{1}{HW} \\sum_{i, j} u_c(i, j),\n$$\n\nwhere $\\delta$ is ReLU and $\\sigma$ is the\nsigmoid.  The two-layer FC bottleneck has reduction ratio\n$r$ (default 16), making the SE module add only ~10%\nextra parameters relative to ResNet while reducing ImageNet\ntop-5 error by roughly 1.5 percentage points.\n\nBlock topology follows `config.block_type`: `\"basic\"`\nselects two-conv `_SEBasicBlock`s (SE-ResNet-18/34) and\n`\"bottleneck\"` selects three-conv `_SEBottleneck`s\n(SE-ResNet-50/101/152).",
+      "extended": "Implements the Squeeze-and-Excitation augmentation of the\nResNet topology from Hu et al., \"Squeeze-and-Excitation\nNetworks\", CVPR 2018 ([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)) — winner of the\nILSVRC 2017 classification challenge.  Each residual block in\nthe four-stage ResNet body is followed by a lightweight SE\nmodule that recalibrates the relative importance of each\nfeature-map channel:\n\n$$\n\\tilde{u}_c = s_c \\cdot u_c,\n\\qquad s = \\sigma\\big(W_2 \\,\\delta(W_1 z)\\big),\n\\quad z_c = \\frac{1}{HW} \\sum_{i, j} u_c(i, j),\n$$\n\nwhere $\\delta$ is ReLU and $\\sigma$ is the\nsigmoid.  The two-layer FC bottleneck has reduction ratio\n$r$ (default 16), making the SE module add only ~10%\nextra parameters relative to ResNet while reducing ImageNet\ntop-5 error by roughly 1.5 percentage points.\n\nBlock topology follows `config.block_type`: `\"basic\"`\nselects two-conv `_SEBasicBlock`s (SE-ResNet-18/34) and\n`\"bottleneck\"` selects three-conv `_SEBottleneck`s\n(SE-ResNet-50/101/152).",
       "parameters": [
         {
           "name": "config",
@@ -344,7 +344,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_18\n>>> model = se_resnet_18()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -1029,7 +1029,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_18_cls\n>>> model = se_resnet_18_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2.  Pretrained weights are converted\nfrom timm's `legacy_seresnet18.in1k` and hosted on the Hugging\nFace Hub under `lucid-dl/se-resnet-18`."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2.  Pretrained weights are converted\nfrom timm's `legacy_seresnet18.in1k` and hosted on the Hugging\nFace Hub under `lucid-dl/se-resnet-18`."
       ],
       "attributes": [],
       "warns": [],
@@ -1722,7 +1722,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_34\n>>> model = se_resnet_34()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -2410,7 +2410,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_34_cls\n>>> model = se_resnet_34_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2.  Pretrained weights are converted\nfrom timm's `legacy_seresnet34.in1k` and hosted on the Hugging\nFace Hub under `lucid-dl/se-resnet-34`."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2.  Pretrained weights are converted\nfrom timm's `legacy_seresnet34.in1k` and hosted on the Hugging\nFace Hub under `lucid-dl/se-resnet-34`."
       ],
       "attributes": [],
       "warns": [],
@@ -3106,7 +3106,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_50\n>>> model = se_resnet_50()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2.  Final-stage output is 2048\nchannels."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2.  Final-stage output is 2048\nchannels."
       ],
       "attributes": [],
       "warns": [],
@@ -3992,7 +3992,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_50_cls\n>>> model = se_resnet_50_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2.  Pretrained weights are converted\nfrom timm's `seresnet50.ra2_in1k` (RandAugment recipe, 78.5\ntop-1) and hosted on the Hugging Face Hub under\n`lucid-dl/se-resnet-50`."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2.  Pretrained weights are converted\nfrom timm's `seresnet50.ra2_in1k` (RandAugment recipe, 78.5\ntop-1) and hosted on the Hugging Face Hub under\n`lucid-dl/se-resnet-50`."
       ],
       "attributes": [],
       "warns": [],
@@ -4886,7 +4886,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_101\n>>> model = se_resnet_101()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -5780,7 +5780,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_101_cls\n>>> model = se_resnet_101_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2.  Pretrained weights are converted\nfrom timm's `legacy_seresnet101.in1k` and hosted on the Hugging\nFace Hub under `lucid-dl/se-resnet-101`."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2.  Pretrained weights are converted\nfrom timm's `legacy_seresnet101.in1k` and hosted on the Hugging\nFace Hub under `lucid-dl/se-resnet-101`."
       ],
       "attributes": [],
       "warns": [],
@@ -6682,7 +6682,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_152\n>>> model = se_resnet_152()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -7576,7 +7576,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.senet import se_resnet_152_cls\n>>> model = se_resnet_152_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n(arXiv:1709.01507), Table 2.  Pretrained weights are converted\nfrom timm's `legacy_seresnet152.in1k` and hosted on the Hugging\nFace Hub under `lucid-dl/se-resnet-152`."
+        "See Hu et al., \"Squeeze-and-Excitation Networks\", CVPR 2018\n([arXiv:1709.01507](https://arxiv.org/abs/1709.01507)), Table 2.  Pretrained weights are converted\nfrom timm's `legacy_seresnet152.in1k` and hosted on the Hugging\nFace Hub under `lucid-dl/se-resnet-152`."
       ],
       "attributes": [],
       "warns": [],
@@ -8467,7 +8467,7 @@
         ">>> from lucid.models import se_resnet_18_cls\n>>> model = se_resnet_18_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 (arXiv:1709.01507)."
+        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 ([arXiv:1709.01507](https://arxiv.org/abs/1709.01507))."
       ],
       "attributes": [
         {
@@ -8506,7 +8506,7 @@
         ">>> from lucid.models import se_resnet_34_cls\n>>> model = se_resnet_34_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 (arXiv:1709.01507)."
+        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 ([arXiv:1709.01507](https://arxiv.org/abs/1709.01507))."
       ],
       "attributes": [
         {
@@ -8545,7 +8545,7 @@
         ">>> from lucid.models import se_resnet_50_cls\n>>> model = se_resnet_50_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 (arXiv:1709.01507)."
+        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 ([arXiv:1709.01507](https://arxiv.org/abs/1709.01507))."
       ],
       "attributes": [
         {
@@ -8584,7 +8584,7 @@
         ">>> from lucid.models import se_resnet_101_cls\n>>> model = se_resnet_101_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 (arXiv:1709.01507)."
+        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 ([arXiv:1709.01507](https://arxiv.org/abs/1709.01507))."
       ],
       "attributes": [
         {
@@ -8623,7 +8623,7 @@
         ">>> from lucid.models import se_resnet_152_cls\n>>> model = se_resnet_152_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 (arXiv:1709.01507)."
+        "Reference: Hu, Shen, Sun, *\"Squeeze-and-Excitation Networks\"*, CVPR\n2018 ([arXiv:1709.01507](https://arxiv.org/abs/1709.01507))."
       ],
       "attributes": [
         {

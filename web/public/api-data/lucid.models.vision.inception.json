@@ -4113,7 +4113,7 @@
         ">>> from lucid.models import inception_v3_cls\n>>> model = inception_v3_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Szegedy, Vanhoucke, Ioffe, Shlens, Wojna, *\"Rethinking the\nInception Architecture for Computer Vision\"*, CVPR 2016\n(arXiv:1512.00567)."
+        "Reference: Szegedy, Vanhoucke, Ioffe, Shlens, Wojna, *\"Rethinking the\nInception Architecture for Computer Vision\"*, CVPR 2016\n([arXiv:1512.00567](https://arxiv.org/abs/1512.00567))."
       ],
       "attributes": [
         {

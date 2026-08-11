@@ -75,6 +75,18 @@ class FastRCNNConfig(ModelConfig):
         score_thresh:    Minimum class score at inference time.
         nms_thresh:      Per-class NMS IoU threshold.
         max_detections:  Maximum detections returned per image.
+
+        -- Training-time RoI sampling (§2.3) --
+        batch_size_per_image: RoIs sampled per image for the loss (64).
+        positive_fraction:    Target foreground share of that minibatch
+                              (0.25).  A shortfall of foreground is
+                              backfilled with background so the minibatch
+                              keeps its size.
+        fg_iou_thresh:        IoU at or above which a proposal is
+                              foreground.
+        bg_iou_thresh_lo:     Lower edge of the hard-negative band;
+                              proposals below it are ignored entirely
+                              rather than treated as background.
     """
 
     model_type: ClassVar[str] = "fast_rcnn"
@@ -90,6 +102,18 @@ class FastRCNNConfig(ModelConfig):
     # fast-rcnn's config.py sets __C.TEST.NMS = 0.3.
     nms_thresh: float = 0.3
     max_detections: int = 300
+
+    # §2.3's minibatch: "mini-batches of size R = 128, sampling 64 RoIs from
+    # each image ... 25% of the RoIs from object proposals that have IoU
+    # overlap with a ground-truth bounding box of at least 0.5 ... The
+    # remaining RoIs are sampled from object proposals that have a maximum
+    # IoU with ground truth in the interval [0.1, 0.5)."  The reference
+    # config spells the same thing as BATCH_SIZE=128 / FG_FRACTION=0.25 with
+    # two images per batch.
+    batch_size_per_image: int = 64
+    positive_fraction: float = 0.25
+    fg_iou_thresh: float = 0.5
+    bg_iou_thresh_lo: float = 0.1
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "bbox_reg_weights", tuple(self.bbox_reg_weights))

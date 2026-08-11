@@ -157,7 +157,7 @@
         }
       ],
       "summary": "MobileNet v3 feature-extracting backbone (no classification head).",
-      "extended": "Implements the NAS-designed topology from Howard et al.,\n\"Searching for MobileNetV3\", ICCV 2019 (arXiv:1905.02244).  The\narchitecture combines MobileNet-v2's inverted-residual block\nwith three new ingredients selected by a platform-aware\narchitecture search: a lightweight squeeze-and-excitation\nmodule in selected blocks, the **hard-swish** activation\n($x \\cdot \\mathrm{ReLU6}(x+3) / 6$) in the deeper half\nof the network, and a redesigned head that moves the expensive\n1×1 expansion *after* the global average pool.\n\nTwo hand-tuned variants are exposed: `\"large\"` (15 blocks,\ntargeting higher-accuracy mobile deployments) and `\"small\"`\n(11 blocks, targeting tight latency budgets).  Channel counts\nscale uniformly with `config.width_mult`.",
+      "extended": "Implements the NAS-designed topology from Howard et al.,\n\"Searching for MobileNetV3\", ICCV 2019 ([arXiv:1905.02244](https://arxiv.org/abs/1905.02244)).  The\narchitecture combines MobileNet-v2's inverted-residual block\nwith three new ingredients selected by a platform-aware\narchitecture search: a lightweight squeeze-and-excitation\nmodule in selected blocks, the **hard-swish** activation\n($x \\cdot \\mathrm{ReLU6}(x+3) / 6$) in the deeper half\nof the network, and a redesigned head that moves the expensive\n1×1 expansion *after* the global average pool.\n\nTwo hand-tuned variants are exposed: `\"large\"` (15 blocks,\ntargeting higher-accuracy mobile deployments) and `\"small\"`\n(11 blocks, targeting tight latency budgets).  Channel counts\nscale uniformly with `config.width_mult`.",
       "parameters": [
         {
           "name": "config",
@@ -329,7 +329,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v3 import mobilenet_v3_large\n>>> model = mobilenet_v3_large()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 960, 1, 1)"
       ],
       "notes": [
-        "See Howard et al., \"Searching for MobileNetV3\", ICCV 2019\n(arXiv:1905.02244), Table 1 (V3-Large spec) and Table 3\n(ImageNet accuracy)."
+        "See Howard et al., \"Searching for MobileNetV3\", ICCV 2019\n([arXiv:1905.02244](https://arxiv.org/abs/1905.02244)), Table 1 (V3-Large spec) and Table 3\n(ImageNet accuracy)."
       ],
       "attributes": [],
       "warns": [],
@@ -1460,7 +1460,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v3 import mobilenet_v3_large_cls\n>>> model = mobilenet_v3_large_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = mobilenet_v3_large_cls(pretrained=True)\n>>> from lucid.models.weights import MobileNetV3LargeWeights\n>>> model = mobilenet_v3_large_cls(weights=MobileNetV3LargeWeights.IMAGENET1K_V1)"
       ],
       "notes": [
-        "See Howard et al., \"Searching for MobileNetV3\", ICCV 2019\n(arXiv:1905.02244), Table 1 and Table 3.  Pretrained weights are\nconverted from reference_vision's `MobileNet_V3_Large_Weights` and\nhosted on the Hugging Face Hub under `lucid-dl/mobilenet-v3-large`."
+        "See Howard et al., \"Searching for MobileNetV3\", ICCV 2019\n([arXiv:1905.02244](https://arxiv.org/abs/1905.02244)), Table 1 and Table 3.  Pretrained weights are\nconverted from reference_vision's `MobileNet_V3_Large_Weights` and\nhosted on the Hugging Face Hub under `lucid-dl/mobilenet-v3-large`."
       ],
       "attributes": [],
       "warns": [],
@@ -2628,7 +2628,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v3 import mobilenet_v3_small\n>>> model = mobilenet_v3_small()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 576, 1, 1)"
       ],
       "notes": [
-        "See Howard et al., \"Searching for MobileNetV3\", ICCV 2019\n(arXiv:1905.02244), Table 2 (V3-Small spec) and Table 3\n(ImageNet accuracy)."
+        "See Howard et al., \"Searching for MobileNetV3\", ICCV 2019\n([arXiv:1905.02244](https://arxiv.org/abs/1905.02244)), Table 2 (V3-Small spec) and Table 3\n(ImageNet accuracy)."
       ],
       "attributes": [],
       "warns": [],
@@ -3571,7 +3571,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.mobilenet_v3 import mobilenet_v3_small_cls\n>>> model = mobilenet_v3_small_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)\nLoad ImageNet-pretrained weights:\n>>> model = mobilenet_v3_small_cls(pretrained=True)\n>>> from lucid.models.weights import MobileNetV3SmallWeights\n>>> model = mobilenet_v3_small_cls(weights=MobileNetV3SmallWeights.IMAGENET1K_V1)"
       ],
       "notes": [
-        "See Howard et al., \"Searching for MobileNetV3\", ICCV 2019\n(arXiv:1905.02244), Table 2 and Table 3.  Pretrained weights are\nconverted from reference_vision's `MobileNet_V3_Small_Weights` and\nhosted on the Hugging Face Hub under `lucid-dl/mobilenet-v3-small`."
+        "See Howard et al., \"Searching for MobileNetV3\", ICCV 2019\n([arXiv:1905.02244](https://arxiv.org/abs/1905.02244)), Table 2 and Table 3.  Pretrained weights are\nconverted from reference_vision's `MobileNet_V3_Small_Weights` and\nhosted on the Hugging Face Hub under `lucid-dl/mobilenet-v3-small`."
       ],
       "attributes": [],
       "warns": [],
@@ -4540,7 +4540,7 @@
         ">>> from lucid.models import mobilenet_v3_large_cls\n>>> model = mobilenet_v3_large_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Howard et al., *\"Searching for MobileNetV3\"*, ICCV 2019\n(arXiv:1905.02244)."
+        "Reference: Howard et al., *\"Searching for MobileNetV3\"*, ICCV 2019\n([arXiv:1905.02244](https://arxiv.org/abs/1905.02244))."
       ],
       "attributes": [
         {
@@ -4579,7 +4579,7 @@
         ">>> from lucid.models import mobilenet_v3_small_cls\n>>> model = mobilenet_v3_small_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Howard et al., *\"Searching for MobileNetV3\"*, ICCV 2019\n(arXiv:1905.02244)."
+        "Reference: Howard et al., *\"Searching for MobileNetV3\"*, ICCV 2019\n([arXiv:1905.02244](https://arxiv.org/abs/1905.02244))."
       ],
       "attributes": [
         {

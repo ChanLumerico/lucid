@@ -135,6 +135,14 @@ class RealNVPConfig(NormalizingFlowConfig):
     residual_blocks: int = 4
     base_dim: int = 32
     use_batch_norm: bool = True
+    # §3.7 / Appendix E: "a novel variant of batch normalization which is
+    # based on a running average over recent minibatches, and is thus more
+    # robust when training with very small minibatches."  Ordinary batch
+    # norm normalises by the *current* batch during training; this variant
+    # normalises by the running average instead.  Defaults off so existing
+    # runs keep their behaviour, and because the two agree in the
+    # large-batch limit where most training happens.
+    batch_norm_running_stats_in_training: bool = False
     # §4.1: "we use ... weight normalization" in the coupling networks.
     # Without it the s/t stack is a plain conv tower and the reported
     # optimisation behaviour does not reproduce.

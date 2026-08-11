@@ -152,7 +152,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import RoFormerConfig, RoFormerForMaskedLM\n>>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,\n...                      num_attention_heads=2, intermediate_size=512)\n>>> model = RoFormerForMaskedLM(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, V=50000)\n(1, 4, 50000)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 (arXiv:2104.09864).\n\nWhen `labels` is provided, the loss is the standard masked\ncross-entropy\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{MLM}} = -\\frac{1}{|M|}\n    \\sum_{i \\in M} \\log p_\\theta(x_i \\mid x_{\\setminus M}),\n$$\n\nover the set $M$ of masked positions (positions whose label\nequals `-100` are excluded)."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nWhen `labels` is provided, the loss is the standard masked\ncross-entropy\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{MLM}} = -\\frac{1}{|M|}\n    \\sum_{i \\in M} \\log p_\\theta(x_i \\mid x_{\\setminus M}),\n$$\n\nover the set $M$ of masked positions (positions whose label\nequals `-100` are excluded)."
       ],
       "attributes": [
         {
@@ -243,7 +243,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import (\n...     RoFormerConfig, RoFormerForMultipleChoice,\n... )\n>>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,\n...                      num_attention_heads=2, intermediate_size=512)\n>>> model = RoFormerForMultipleChoice(cfg).eval()\n>>> input_ids = lucid.tensor([[[101, 7592, 102], [101, 2088, 102]]])    # (N=1, C=2, L=3)\n>>> out = model(input_ids)\n>>> out.logits.shape   # (N=1, C=2)\n(1, 2)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 (arXiv:2104.09864).\n\nWhen `labels` is supplied the loss is the softmax cross-entropy over\nthe `C` candidates:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{MC}}\n    = -\\frac{1}{N} \\sum_{n=1}^{N}\n      \\log \\mathrm{softmax}(z_n)_{y_n}.\n$$"
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nWhen `labels` is supplied the loss is the softmax cross-entropy over\nthe `C` candidates:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{MC}}\n    = -\\frac{1}{N} \\sum_{n=1}^{N}\n      \\log \\mathrm{softmax}(z_n)_{y_n}.\n$$"
       ],
       "attributes": [
         {
@@ -339,7 +339,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import (\n...     RoFormerConfig, RoFormerForQuestionAnswering,\n... )\n>>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,\n...                      num_attention_heads=2, intermediate_size=512)\n>>> model = RoFormerForQuestionAnswering(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 2040, 2003, 102, 1045, 2572, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=7, 2)\n(1, 7, 2)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 (arXiv:2104.09864).\n\nWhen both `start_positions` and `end_positions` are supplied the\nloss is the symmetric average of two cross-entropies:\n\n\n\n$$\n\\mathcal{L} = \\tfrac{1}{2}\\!\\left(\n    \\mathrm{CE}(z^{\\mathrm{start}}, y^{\\mathrm{start}})\n  + \\mathrm{CE}(z^{\\mathrm{end}},   y^{\\mathrm{end}})\n\\right).\n$$\n\nThe returned `logits` tensor has shape `(B, T, 2)`; index\n`[..., 0]` for start scores and `[..., 1]` for end scores."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nWhen both `start_positions` and `end_positions` are supplied the\nloss is the symmetric average of two cross-entropies:\n\n\n\n$$\n\\mathcal{L} = \\tfrac{1}{2}\\!\\left(\n    \\mathrm{CE}(z^{\\mathrm{start}}, y^{\\mathrm{start}})\n  + \\mathrm{CE}(z^{\\mathrm{end}},   y^{\\mathrm{end}})\n\\right).\n$$\n\nThe returned `logits` tensor has shape `(B, T, 2)`; index\n`[..., 0]` for start scores and `[..., 1]` for end scores."
       ],
       "attributes": [
         {
@@ -430,7 +430,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import (\n...     RoFormerConfig, RoFormerForSequenceClassification,\n... )\n>>> cfg = RoFormerConfig(num_labels=3, num_hidden_layers=2,\n...                      hidden_size=128, num_attention_heads=2,\n...                      intermediate_size=512)\n>>> model = RoFormerForSequenceClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, num_labels=3)\n(1, 3)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 (arXiv:2104.09864).\n\nLoss (when `labels` is provided) is the standard softmax\ncross-entropy:\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{B} \\sum_{b=1}^{B}\n    \\log p_\\theta(y_b \\mid x_b).\n$$"
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nLoss (when `labels` is provided) is the standard softmax\ncross-entropy:\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{B} \\sum_{b=1}^{B}\n    \\log p_\\theta(y_b \\mid x_b).\n$$"
       ],
       "attributes": [
         {
@@ -532,7 +532,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import (\n...     RoFormerConfig, RoFormerForTokenClassification,\n... )\n>>> cfg = RoFormerConfig(num_labels=9, num_hidden_layers=2,\n...                      hidden_size=128, num_attention_heads=2,\n...                      intermediate_size=512)\n>>> model = RoFormerForTokenClassification(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (B=1, T=4, num_labels=9)\n(1, 4, 9)"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 (arXiv:2104.09864).\n\nLoss when `labels` is provided is the masked cross-entropy inherited\nfrom `MaskedLMMixin`:\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{|V|} \\sum_{(b, t) \\in V}\n    \\log p_\\theta(y_{b, t} \\mid x_b),\n$$\n\nwhere $V$ is the set of positions with `label != -100`."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nLoss when `labels` is provided is the masked cross-entropy inherited\nfrom `MaskedLMMixin`:\n\n\n\n$$\n\\mathcal{L} = -\\frac{1}{|V|} \\sum_{(b, t) \\in V}\n    \\log p_\\theta(y_{b, t} \\mid x_b),\n$$\n\nwhere $V$ is the set of positions with `label != -100`."
       ],
       "attributes": [
         {
@@ -672,7 +672,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import RoFormerConfig, RoFormerModel\n>>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,\n...                      num_attention_heads=2, intermediate_size=512)\n>>> model = RoFormerModel(cfg).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape, out.pooler_output.shape\n((1, 4, 128), (1, 128))"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024, article 127063 (arXiv:2104.09864).\n\nRotary rotation per $(\\cos\\theta_i, \\sin\\theta_i)$ pair, with\n$\\theta_i = \\mathrm{base}^{-2i/d_{\\text{head}}}$:\n\n\n\n$$\nR_\\theta = \\begin{pmatrix}\n    \\cos\\theta & -\\sin\\theta \\\\\n    \\sin\\theta & \\cos\\theta\n\\end{pmatrix}.\n$$\n\nApplied independently to every $(x_{2i}, x_{2i+1})$ pair of\n$Q$ and $K$ so $q_m^\\top k_n$ becomes a function of\n$m - n$ only."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024, article 127063 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nRotary rotation per $(\\cos\\theta_i, \\sin\\theta_i)$ pair, with\n$\\theta_i = \\mathrm{base}^{-2i/d_{\\text{head}}}$:\n\n\n\n$$\nR_\\theta = \\begin{pmatrix}\n    \\cos\\theta & -\\sin\\theta \\\\\n    \\sin\\theta & \\cos\\theta\n\\end{pmatrix}.\n$$\n\nApplied independently to every $(x_{2i}, x_{2i+1})$ pair of\n$Q$ and $K$ so $q_m^\\top k_n$ becomes a function of\n$m - n$ only."
       ],
       "attributes": [
         {
@@ -894,7 +894,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import roformer\n>>> model = roformer().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])\n>>> out = model(input_ids)\n>>> out.last_hidden_state.shape, out.pooler_output.shape\n((1, 4, 768), (1, 768))"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024, article 127063 (arXiv:2104.09864).\n\nRotary rotation matrix per $(\\cos\\theta_i, \\sin\\theta_i)$ pair:\n\n\n\n$$\nR_\\theta = \\begin{pmatrix}\n    \\cos\\theta & -\\sin\\theta \\\\\n    \\sin\\theta & \\cos\\theta\n\\end{pmatrix}.\n$$"
+        "Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, Neurocomputing,\nvol. 568, 2024, article 127063 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864)).\n\nRotary rotation matrix per $(\\cos\\theta_i, \\sin\\theta_i)$ pair:\n\n\n\n$$\nR_\\theta = \\begin{pmatrix}\n    \\cos\\theta & -\\sin\\theta \\\\\n    \\sin\\theta & \\cos\\theta\n\\end{pmatrix}.\n$$"
       ],
       "attributes": [],
       "warns": [],
@@ -1134,7 +1134,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import roformer_cls\n>>> model = roformer_cls(num_labels=3).eval()\n>>> input_ids = lucid.tensor([[101, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, num_labels=3)\n(1, 3)"
       ],
       "notes": [
-        "Reference: Su et al., *\"RoFormer: Enhanced Transformer with Rotary\nPosition Embedding\"*, Neurocomputing, vol. 568, 2024 (arXiv:2104.09864)."
+        "Reference: Su et al., *\"RoFormer: Enhanced Transformer with Rotary\nPosition Embedding\"*, Neurocomputing, vol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864))."
       ],
       "attributes": [],
       "warns": [],
@@ -1396,7 +1396,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import roformer_mlm\n>>> model = roformer_mlm().eval()\n>>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, 4, vocab=50000)\n(1, 4, 50000)"
       ],
       "notes": [
-        "Reference: Su et al., *\"RoFormer: Enhanced Transformer with Rotary\nPosition Embedding\"*, Neurocomputing, vol. 568, 2024 (arXiv:2104.09864)."
+        "Reference: Su et al., *\"RoFormer: Enhanced Transformer with Rotary\nPosition Embedding\"*, Neurocomputing, vol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864))."
       ],
       "attributes": [],
       "warns": [],
@@ -1689,7 +1689,7 @@
         ">>> import lucid\n>>> from lucid.models.text.roformer import roformer_token_cls\n>>> model = roformer_token_cls(num_labels=9).eval()\n>>> input_ids = lucid.tensor([[101, 2198, 7592, 102]])\n>>> out = model(input_ids)\n>>> out.logits.shape   # (1, T=4, num_labels=9)\n(1, 4, 9)"
       ],
       "notes": [
-        "Reference: Su et al., *\"RoFormer: Enhanced Transformer with Rotary\nPosition Embedding\"*, Neurocomputing, vol. 568, 2024 (arXiv:2104.09864)."
+        "Reference: Su et al., *\"RoFormer: Enhanced Transformer with Rotary\nPosition Embedding\"*, Neurocomputing, vol. 568, 2024 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864))."
       ],
       "attributes": [],
       "warns": [],
@@ -1934,7 +1934,7 @@
         ">>> from lucid.models import roformer_mlm\n>>> model = roformer_mlm(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, 2021 (arXiv:2104.09864)."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, 2021 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864))."
       ],
       "attributes": [
         {
@@ -1973,7 +1973,7 @@
         ">>> from lucid.models import roformer\n>>> model = roformer(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Su, Lu, Pan, Murtadha, Wen, Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, 2021 (arXiv:2104.09864)."
+        "Reference: Su, Lu, Pan, Murtadha, Wen, Liu, *\"RoFormer: Enhanced\nTransformer with Rotary Position Embedding\"*, 2021 ([arXiv:2104.09864](https://arxiv.org/abs/2104.09864))."
       ],
       "attributes": [
         {

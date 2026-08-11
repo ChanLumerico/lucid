@@ -108,13 +108,13 @@ class FasterRCNNConfig(ModelConfig):
 
     .. note::
 
-       **Inference only.**  §3.1.2's anchor assignment (highest-IoU anchor
-       per ground truth plus any anchor over IoU 0.7 as positive, under
-       0.3 as negative, cross-boundary anchors ignored), the 256-anchor
-       1:1 sampler, and the RPN and RoI losses are all unimplemented.
-       ``forward`` returns ``loss=None`` unconditionally.  The declared
-       assignment thresholds are refused by ``__post_init__`` rather than
-       silently ignored.
+       **Training.**  Pass ``targets`` to :meth:`forward` to get the
+       four-term loss — RPN objectness and box regression, plus the box
+       head's classification and regression.  Label assignment follows
+       §3.1.2 (highest-IoU anchor per ground truth, or IoU over 0.7, as
+       positive; under 0.3 as negative; the band between ignored) and the
+       samplers follow §3.1.3.  The one clause not on by default is
+       cross-boundary anchor removal — see ``rpn_ignore_cross_boundary``.
     """
 
     model_type: ClassVar[str] = "faster_rcnn"
@@ -135,13 +135,18 @@ class FasterRCNNConfig(ModelConfig):
     rpn_nms_thresh: float = 0.7
     rpn_min_size: float = 1e-3
     rpn_score_thresh: float = 0.0
-    # NOTE: the four assignment thresholds below are declared but INERT.
-    # They describe §3.1.2's label-assignment rule, which lives entirely in
-    # the training path -- and this family has no training path yet, so
-    # nothing reads them.  Rather than let a caller believe a value took
-    # effect, __post_init__ refuses any non-default setting.
+    # §3.1.2's label assignment: over 0.7 is an object, under 0.3 is
+    # background, the band between contributes to no loss term.
     rpn_fg_iou_thresh: float = 0.7
     rpn_bg_iou_thresh: float = 0.3
+    # §3.1.3: 256 anchors per image at up to 1:1 positive:negative.
+    rpn_batch_size_per_image: int = 256
+    rpn_positive_fraction: float = 0.5
+    # §3.1.2 also says "we ignore all cross-boundary anchors so they do not
+    # contribute to the loss".  The reference implementation these weights
+    # come from clips anchors instead of dropping them, and its published
+    # accuracies were trained that way, so this defaults off.
+    rpn_ignore_cross_boundary: bool = False
 
     # RoI head
     roi_size: int = 7
@@ -149,6 +154,11 @@ class FasterRCNNConfig(ModelConfig):
     roi_representation_size: int = 1024
     roi_fg_iou_thresh: float = 0.5
     roi_bg_iou_thresh: float = 0.5
+    # The box head's own minibatch.  Fast R-CNN 2.3 specifies 64 at 25%;
+    # the reference implementation raised the count to 512 at the same
+    # ratio and that is what its published detectors were trained with.
+    roi_batch_size_per_image: int = 512
+    roi_positive_fraction: float = 0.25
     bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0)
     canonical_scale: int = 224
     canonical_level: int = 4
@@ -164,20 +174,14 @@ class FasterRCNNConfig(ModelConfig):
         object.__setattr__(self, "rpn_anchor_ratios", tuple(self.rpn_anchor_ratios))
         object.__setattr__(self, "bbox_reg_weights", tuple(self.bbox_reg_weights))
 
-        # Refuse silently-ignored assignment thresholds.  Accepting a value
-        # that nothing reads is worse than refusing it: the caller walks away
-        # believing the model was configured.
-        inert = {
-            "rpn_fg_iou_thresh": 0.7,
-            "rpn_bg_iou_thresh": 0.3,
-            "roi_fg_iou_thresh": 0.5,
-            "roi_bg_iou_thresh": 0.5,
-        }
-        for field_name, default in inert.items():
-            if getattr(self, field_name) != default:
+        for name in ("rpn", "roi"):
+            fg = getattr(self, f"{name}_fg_iou_thresh")
+            bg = getattr(self, f"{name}_bg_iou_thresh")
+            if bg > fg:
                 raise ValueError(
-                    f"{field_name} is not implemented: Faster R-CNN's label "
-                    "assignment lives in the training path, which this family "
-                    f"does not have yet, so {field_name} would be ignored. "
-                    f"Leave it at its documented default ({default})."
+                    f"{name}_bg_iou_thresh ({bg}) must not exceed "
+                    f"{name}_fg_iou_thresh ({fg}); the band between them is "
+                    "the ignore region, and inverting them would make every "
+                    "prediction either a positive or a negative with no "
+                    "ambiguous zone."
                 )

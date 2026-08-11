@@ -49,15 +49,22 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
+    BalancedPositiveNegativeSampler,
+    Matcher,
     _FeaturePyramidNetwork,
     _ReferenceAnchorGenerator,
     _ResNetBody,
+    assign_anchors_to_targets,
     batched_nms,
     clip_boxes_to_image,
     decode_boxes,
+    fastrcnn_loss,
+    flatten_rpn_outputs,
     multiscale_roi_align,
     nms,
     remove_small_boxes,
+    rpn_loss,
+    select_training_samples,
 )
 from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
 
@@ -317,24 +324,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         cfg = self._cfg
         dev = logits[0].device.type
 
-        # Flatten each level to (B, H*W*A, C) in spatial-major / anchor-minor
-        # order so it lines up with the anchor grid.
-        per_level_scores: list[Tensor] = []
-        per_level_deltas: list[Tensor] = []
-        level_sizes: list[int] = []
-        for lg, dl in zip(logits, deltas):
-            A = int(lg.shape[1])
-            fH = int(lg.shape[2])
-            fW = int(lg.shape[3])
-            sc = lg.permute(0, 2, 3, 1).reshape(B, fH * fW * A)  # (B, N_l)
-            dlf = (
-                dl.reshape(B, A, 4, fH, fW)
-                .permute(0, 3, 4, 1, 2)
-                .reshape(B, fH * fW * A, 4)
-            )
-            per_level_scores.append(sc)
-            per_level_deltas.append(dlf)
-            level_sizes.append(fH * fW * A)
+        per_level_scores, per_level_deltas = flatten_rpn_outputs(logits, deltas)
 
         proposals: list[Tensor] = []
         for b in range(B):
@@ -398,6 +388,86 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         return proposals
 
     # ------------------------------------------------------------------
+    # Training (§3.1.2 assignment, §3.1.3 sampling, four-term loss)
+    # ------------------------------------------------------------------
+
+    def _matchers(self) -> tuple[Matcher, Matcher]:
+        """``(rpn_matcher, roi_matcher)`` built from this model's config."""
+        cfg = self._cfg
+        return (
+            Matcher(
+                cfg.rpn_fg_iou_thresh,
+                cfg.rpn_bg_iou_thresh,
+                allow_low_quality_matches=True,
+            ),
+            Matcher(cfg.roi_fg_iou_thresh, cfg.roi_bg_iou_thresh),
+        )
+
+    def _assign_anchors(
+        self,
+        anchors: Tensor,
+        gt_boxes: Tensor,
+        matcher: Matcher,
+        image_size: tuple[int, int],
+    ) -> tuple[Tensor, Tensor]:
+        return assign_anchors_to_targets(
+            anchors,
+            gt_boxes,
+            matcher,
+            image_size,
+            ignore_cross_boundary=self._cfg.rpn_ignore_cross_boundary,
+        )
+
+    def _rpn_loss(
+        self,
+        logits: list[Tensor],
+        deltas: list[Tensor],
+        anchors: list[Tensor],
+        targets: list[dict[str, Tensor]],
+        image_size: tuple[int, int],
+    ) -> tuple[Tensor, Tensor]:
+        cfg = self._cfg
+        rpn_matcher, _ = self._matchers()
+        return rpn_loss(
+            logits,
+            deltas,
+            anchors,
+            targets,
+            rpn_matcher,
+            BalancedPositiveNegativeSampler(
+                cfg.rpn_batch_size_per_image, cfg.rpn_positive_fraction
+            ),
+            image_size,
+            ignore_cross_boundary=cfg.rpn_ignore_cross_boundary,
+        )
+
+    def _select_training_samples(
+        self,
+        proposals: list[Tensor],
+        targets: list[dict[str, Tensor]],
+    ) -> tuple[list[Tensor], list[Tensor], list[Tensor], list[Tensor]]:
+        cfg = self._cfg
+        _, roi_matcher = self._matchers()
+        return select_training_samples(
+            proposals,
+            targets,
+            roi_matcher,
+            BalancedPositiveNegativeSampler(
+                cfg.roi_batch_size_per_image, cfg.roi_positive_fraction
+            ),
+            cfg.bbox_reg_weights,
+        )
+
+    def _roi_loss(
+        self,
+        class_logits: Tensor,
+        box_deltas: Tensor,
+        labels: list[Tensor],
+        reg_targets: list[Tensor],
+    ) -> tuple[Tensor, Tensor]:
+        return fastrcnn_loss(class_logits, box_deltas, labels, reg_targets)
+
+    # ------------------------------------------------------------------
     # Forward
     # ------------------------------------------------------------------
 
@@ -405,12 +475,18 @@ class FasterRCNNForObjectDetection(PretrainedModel):
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
+        targets: list[dict[str, Tensor]] | None = None,
         proposals: list[Tensor] | None = None,
     ) -> ObjectDetectionOutput:
         """Run Faster R-CNN on a (pre-processed) image batch.
 
         Args:
             x:         (B, C, H, W) resized + normalised image batch.
+            targets:   Optional per-image ``{"boxes": (M, 4) xyxy pixel
+                       boxes, "labels": (M,) class ids in 1..K-1}``.  When
+                       given, the four-term training loss is computed and
+                       the box head runs on a sampled minibatch rather than
+                       on every proposal.
             proposals: Optional precomputed per-image proposals.  When
                        ``None`` the RPN generates them.
 
@@ -419,6 +495,11 @@ class FasterRCNNForObjectDetection(PretrainedModel):
               ``logits``     : (Σ proposals, num_classes) class logits.
               ``pred_boxes`` : (Σ proposals, num_classes, 4) per-class boxes.
               ``proposals``  : per-image proposal tensors.
+              ``loss``       : scalar sum of the four terms, or ``None``.
+
+        Raises:
+            ValueError: If ``targets`` is given but the RPN did not run,
+                since the RPN half of the loss would then be undefined.
         """
         iH = int(x.shape[2])
         iW = int(x.shape[3])
@@ -435,12 +516,36 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         strides = [max(1, iH // int(f.shape[2])) for f in features]
 
         # 2. RPN → per-image proposals (when not supplied)
+        rpn_obj_loss: Tensor | None = None
+        rpn_reg_loss: Tensor | None = None
         if proposals is None:
             logits, deltas = self.rpn.head.forward(features)
             anchors = self._anchor_gen.forward(features, strides)
             proposals = self._rpn_proposals(logits, deltas, anchors, (iH, iW))
+            if targets is not None:
+                rpn_obj_loss, rpn_reg_loss = self._rpn_loss(
+                    logits, deltas, anchors, targets, (iH, iW)
+                )
+        elif targets is not None:
+            raise ValueError(
+                "targets were supplied together with precomputed proposals, "
+                "but the RPN half of the loss is only defined when the RPN "
+                "actually ran.  Returning just the box-head terms would "
+                "silently train half the detector.  Omit `proposals` to "
+                "train end to end, or omit `targets` to run inference on "
+                "your own proposals."
+            )
 
-        # 3. MultiScale RoI Align over the four FPN detection levels (P2-P5).
+        # 3. Training: sample the box head's minibatch *before* RoI Align, so
+        #    the expensive crop runs only on the RoIs that reach the loss.
+        roi_labels: list[Tensor] | None = None
+        roi_reg_targets: list[Tensor] | None = None
+        if targets is not None:
+            proposals, roi_labels, roi_reg_targets, _ = self._select_training_samples(
+                proposals, targets
+            )
+
+        # 4. MultiScale RoI Align over the four FPN detection levels (P2-P5).
         det_feats = features[:4]
         det_scales = [1.0 / float(s) for s in strides[:4]]
         roi_feats = multiscale_roi_align(
@@ -453,7 +558,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             canonical_level=self._cfg.canonical_level,
         )
 
-        # 4. RoI head → class logits + per-class box deltas
+        # 5. RoI head → class logits + per-class box deltas
         K = self._cfg.num_classes
         if int(roi_feats.shape[0]) > 0:
             class_logits, box_deltas = self.roi_heads(roi_feats)
@@ -461,13 +566,22 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             class_logits = lucid.zeros((0, K), device=dev)
             box_deltas = lucid.zeros((0, K * 4), device=dev)
 
-        # 5. Decode per-class boxes → (N, K, 4)
+        # 6. Decode per-class boxes → (N, K, 4)
         pred_boxes = self._decode_per_class(proposals, box_deltas, (iH, iW))
+
+        loss: Tensor | None = None
+        if targets is not None:
+            assert roi_labels is not None and roi_reg_targets is not None
+            roi_cls_loss, roi_reg_loss = self._roi_loss(
+                class_logits, box_deltas, roi_labels, roi_reg_targets
+            )
+            assert rpn_obj_loss is not None and rpn_reg_loss is not None
+            loss = rpn_obj_loss + rpn_reg_loss + roi_cls_loss + roi_reg_loss
 
         return ObjectDetectionOutput(
             logits=class_logits,
             pred_boxes=pred_boxes,
-            loss=None,
+            loss=loss,
             proposals=tuple(proposals),
         )
 

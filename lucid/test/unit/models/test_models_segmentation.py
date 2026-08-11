@@ -532,3 +532,212 @@ def test_mask2former_pretrained_load() -> None:
     out = m(lucid.randn(1, 3, 384, 384))
     # Semantic output: num_classes channels (no-object slot dropped).
     assert out.logits.shape == (1, 150, 384, 384)
+
+
+# ---------------------------------------------------------------------------
+# Mask2Former training objective (3.2.2)
+# ---------------------------------------------------------------------------
+
+
+def _m2f_tiny_config(**over: object):
+    from lucid.models.vision.mask2former._config import Mask2FormerConfig
+
+    base = dict(
+        num_classes=3,
+        num_queries=4,
+        swin_depths=(1, 1, 1, 1),
+        swin_embed_dim=24,
+        swin_num_heads=(1, 1, 1, 1),
+        d_model=32,
+        mask_feature_size=32,
+        n_head=2,
+        num_encoder_layers=1,
+        num_decoder_layers=3,
+        dim_feedforward=32,
+        encoder_feedforward_dim=32,
+        train_num_points=64,
+    )
+    base.update(over)
+    return Mask2FormerConfig(**base)  # type: ignore[arg-type]
+
+
+def _m2f_targets(side: int = 64) -> list[dict[str, object]]:
+    square = [
+        [1.0 if (8 <= r < 40 and 8 <= c < 40) else 0.0 for c in range(side)]
+        for r in range(side)
+    ]
+    return [{"labels": lucid.tensor([1]).long(), "masks": lucid.tensor([square])}]
+
+
+class TestMask2FormerTraining:
+    def test_loss_is_finite_and_inference_unchanged(self) -> None:
+        from lucid.models.vision.mask2former._model import (
+            Mask2FormerForSemanticSegmentation,
+        )
+
+        lucid.manual_seed(0)
+        m = Mask2FormerForSemanticSegmentation(_m2f_tiny_config())
+        x = lucid.randn(1, 3, 64, 64)
+        out = m(x, targets=_m2f_targets())
+        assert out.loss is not None
+        assert bool(out.loss.isfinite().all().item())
+        assert m(x).loss is None
+
+    def test_all_three_terms_are_alive(self) -> None:
+        """A term stuck at zero is a term that is not being computed."""
+        from lucid.models.vision.mask2former._model import _m2f_stage_loss
+
+        lucid.manual_seed(0)
+        cfg = _m2f_tiny_config()
+        cls_loss, ce_loss, dice = _m2f_stage_loss(
+            lucid.randn(1, 4, 4), lucid.randn(1, 4, 16, 16), _m2f_targets(), cfg
+        )
+        assert float(cls_loss.item()) > 0.0
+        assert float(ce_loss.item()) > 0.0
+        assert float(dice.item()) > 0.0
+
+    def test_matcher_picks_the_query_that_fits(self) -> None:
+        """Hand-built: only query 2 has both the right shape and class."""
+        from lucid.models._utils._segmentation import sample_point_coords
+        from lucid.models.vision.mask2former._model import _m2f_match
+
+        lucid.manual_seed(0)
+        cfg = _m2f_tiny_config(train_num_points=256)
+        side = 8
+        gt_masks = lucid.tensor(
+            [[[1.0 if c < 4 else 0.0 for c in range(side)] for _ in range(side)]]
+        )
+        gt_labels = lucid.tensor([1]).long()
+        right = [[20.0 if c < 4 else -20.0 for c in range(side)] for _ in range(side)]
+        wrong = [[-20.0 if c < 4 else 20.0 for c in range(side)] for _ in range(side)]
+        mask_logits = lucid.tensor([wrong, wrong, right, wrong])
+        class_logits = lucid.tensor(
+            [
+                [8.0, 0.0, 0.0, 0.0],
+                [8.0, 0.0, 0.0, 0.0],
+                [0.0, 8.0, 0.0, 0.0],
+                [0.0, 0.0, 8.0, 0.0],
+            ]
+        )
+        coords = sample_point_coords(cfg.train_num_points)
+        pred, gt = _m2f_match(
+            class_logits, mask_logits, gt_labels, gt_masks, coords, cfg
+        )
+        assert list(zip(pred, gt)) == [(2, 0)]
+
+    def test_deep_supervision_adds_the_auxiliary_layers(self) -> None:
+        from dataclasses import replace
+
+        from lucid.models.vision.mask2former._model import (
+            Mask2FormerForSemanticSegmentation,
+        )
+
+        lucid.manual_seed(0)
+        cfg = _m2f_tiny_config()
+        deep = Mask2FormerForSemanticSegmentation(cfg)
+        shallow = Mask2FormerForSemanticSegmentation(
+            replace(cfg, deep_supervision=False)
+        )
+        shallow.load_state_dict(deep.state_dict())
+        x = lucid.randn(1, 3, 64, 64)
+        targets = _m2f_targets()
+
+        lucid.manual_seed(1)
+        with_aux = float(deep(x, targets=targets).loss.item())
+        lucid.manual_seed(1)
+        without = float(shallow(x, targets=targets).loss.item())
+        assert with_aux > without
+
+    def test_importance_sampler_targets_the_boundary(self) -> None:
+        """The point budget is only worth spending near the decision contour."""
+        from lucid.models._utils._segmentation import (
+            point_sample,
+            uncertain_point_coords,
+        )
+
+        lucid.manual_seed(0)
+        side = 32
+        ramp = [
+            [-20.0 + 40.0 * c / (side - 1) for c in range(side)] for _ in range(side)
+        ]
+        logits = lucid.tensor([ramp])
+        coords = uncertain_point_coords(logits, 400, 3.0, 0.75)
+        values = [abs(v) for v in point_sample(logits, coords)[0].tolist()]
+        importance, uniform = values[:300], values[300:]
+        assert sum(importance) / len(importance) < sum(uniform) / len(uniform)
+
+    def test_overfits_a_single_example(self) -> None:
+        import lucid.optim as optim
+
+        from lucid.models.vision.mask2former._model import (
+            Mask2FormerForSemanticSegmentation,
+        )
+
+        lucid.manual_seed(0)
+        m = Mask2FormerForSemanticSegmentation(_m2f_tiny_config(num_decoder_layers=2))
+        m.train()
+        opt = optim.SGD(m.parameters(), lr=0.01, momentum=0.9)
+        x = lucid.randn(1, 3, 64, 64)
+        targets = _m2f_targets()
+        losses: list[float] = []
+        for _ in range(12):
+            opt.zero_grad()
+            out = m(x, targets=targets)
+            out.loss.backward()
+            opt.step()
+            losses.append(float(out.loss.item()))
+        assert all(v == v for v in losses)
+        assert losses[-1] < losses[0]
+
+
+# ---------------------------------------------------------------------------
+# Attention U-Net rank (2-D images vs the paper's 3-D volumes)
+# ---------------------------------------------------------------------------
+
+
+class TestAttentionUNetRank:
+    @staticmethod
+    def _model(dims: int):
+        from lucid.models.vision.attention_unet._config import AttentionUNetConfig
+        from lucid.models.vision.attention_unet._model import (
+            AttentionUNetForSemanticSegmentation,
+        )
+
+        return AttentionUNetForSemanticSegmentation(
+            AttentionUNetConfig(
+                num_classes=3, base_channels=8, depth=2, spatial_dims=dims
+            )
+        )
+
+    def test_two_d_shape_is_unchanged(self) -> None:
+        m = self._model(2)
+        m.eval()
+        assert tuple(m(lucid.randn(1, 1, 32, 32)).logits.shape) == (1, 3, 32, 32)
+
+    def test_three_d_preserves_every_spatial_axis(self) -> None:
+        m = self._model(3)
+        m.eval()
+        out = m(lucid.randn(1, 1, 16, 32, 32))
+        assert tuple(out.logits.shape) == (1, 3, 16, 32, 32)
+
+    def test_layers_do_not_mix_ranks(self) -> None:
+        """A stray Conv2d in the 3-D model would only surface on odd shapes."""
+        two = {type(mod).__name__ for mod in self._model(2).modules()}
+        three = {type(mod).__name__ for mod in self._model(3).modules()}
+        assert "Conv2d" in two and "Conv3d" not in two
+        assert "Conv3d" in three and "Conv2d" not in three
+        assert {"BatchNorm3d", "MaxPool3d", "ConvTranspose3d"} <= three
+
+    def test_three_d_loss_path(self) -> None:
+        m = self._model(3)
+        targets = lucid.zeros(1, 16, 32, 32).long()
+        out = m(lucid.randn(1, 1, 16, 32, 32), targets=targets)
+        assert out.loss is not None
+        assert bool(out.loss.isfinite().all().item())
+
+    def test_factory_is_registered(self) -> None:
+        import lucid.models as models
+
+        m = models.attention_unet_3d(base_channels=8, depth=2)
+        m.eval()
+        assert tuple(m(lucid.randn(1, 1, 16, 32, 32)).logits.shape)[2:] == (16, 32, 32)

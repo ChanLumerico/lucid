@@ -325,7 +325,7 @@
       "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/nn/init.py#L411",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Kaiming (He) uniform initialisation.",
-      "extended": "Draws each entry uniformly from $[-b, b]$ with the bound\nchosen so that the variance of activations is preserved across a\nstack of ReLU-family layers.  Introduced in He et al. (2015), this\nscheme corrects the Xavier formula for the fact that ReLU zeroes\nhalf of its pre-activations, which would otherwise halve the\nforward variance at every layer.",
+      "extended": "Draws each entry uniformly from $[-b, b]$ with the bound\nchosen so that the variance of activations is preserved across a\nstack of ReLU-family layers.  Introduced in [He et al. (2015)](https://arxiv.org/abs/1502.01852), this\nscheme corrects the Xavier formula for the fact that ReLU zeroes\nhalf of its pre-activations, which would otherwise halve the\nforward variance at every layer.",
       "parameters": [
         {
           "name": "tensor",
@@ -376,7 +376,7 @@
       "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/nn/init.py#L476",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Kaiming (He) normal initialisation.",
-      "extended": "Gaussian counterpart of `kaiming_uniform_`.  Draws each entry\nfrom $\\mathcal{N}(0, \\sigma^2)$ with a standard deviation\nchosen to preserve activation (or gradient) variance across a stack\nof ReLU-family layers, as proposed in He et al. (2015).",
+      "extended": "Gaussian counterpart of `kaiming_uniform_`.  Draws each entry\nfrom $\\mathcal{N}(0, \\sigma^2)$ with a standard deviation\nchosen to preserve activation (or gradient) variance across a stack\nof ReLU-family layers, as proposed in [He et al. (2015)](https://arxiv.org/abs/1502.01852).",
       "parameters": [
         {
           "name": "tensor",
@@ -622,7 +622,7 @@
       "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/nn/init.py#L846",
       "subcategory": "init",
       "summary": "Return the recommended variance-preserving gain for an activation.",
-      "extended": "The gain is a multiplicative correction applied to the standard\ndeviation of Xavier / Kaiming initialisation so the per-layer\nactivation variance is preserved after the nonlinearity.  Values\nfollow the original recommendations in Glorot & Bengio (2010) and\nHe et al. (2015).",
+      "extended": "The gain is a multiplicative correction applied to the standard\ndeviation of Xavier / Kaiming initialisation so the per-layer\nactivation variance is preserved after the nonlinearity.  Values\nfollow the original recommendations in Glorot & Bengio (2010) and\n[He et al. (2015)](https://arxiv.org/abs/1502.01852).",
       "parameters": [
         {
           "name": "nonlinearity",
@@ -787,7 +787,7 @@
       "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/nn/init.py#L476",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Kaiming (He) normal initialisation.",
-      "extended": "Gaussian counterpart of `kaiming_uniform_`.  Draws each entry\nfrom $\\mathcal{N}(0, \\sigma^2)$ with a standard deviation\nchosen to preserve activation (or gradient) variance across a stack\nof ReLU-family layers, as proposed in He et al. (2015).",
+      "extended": "Gaussian counterpart of `kaiming_uniform_`.  Draws each entry\nfrom $\\mathcal{N}(0, \\sigma^2)$ with a standard deviation\nchosen to preserve activation (or gradient) variance across a stack\nof ReLU-family layers, as proposed in [He et al. (2015)](https://arxiv.org/abs/1502.01852).",
       "parameters": [
         {
           "name": "tensor",
@@ -838,7 +838,7 @@
       "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/nn/init.py#L411",
       "subcategory": "init",
       "summary": "Initialise `tensor` in-place with Kaiming (He) uniform initialisation.",
-      "extended": "Draws each entry uniformly from $[-b, b]$ with the bound\nchosen so that the variance of activations is preserved across a\nstack of ReLU-family layers.  Introduced in He et al. (2015), this\nscheme corrects the Xavier formula for the fact that ReLU zeroes\nhalf of its pre-activations, which would otherwise halve the\nforward variance at every layer.",
+      "extended": "Draws each entry uniformly from $[-b, b]$ with the bound\nchosen so that the variance of activations is preserved across a\nstack of ReLU-family layers.  Introduced in [He et al. (2015)](https://arxiv.org/abs/1502.01852), this\nscheme corrects the Xavier formula for the fact that ReLU zeroes\nhalf of its pre-activations, which would otherwise halve the\nforward variance at every layer.",
       "parameters": [
         {
           "name": "tensor",

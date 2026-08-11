@@ -19,6 +19,9 @@ _CFG_BASE = AttentionUNetConfig(
 )
 
 
+_CFG_3D = replace(_CFG_BASE, spatial_dims=3)
+
+
 def _build(
     cfg: AttentionUNetConfig, kw: dict[str, object]
 ) -> AttentionUNetForSemanticSegmentation:
@@ -90,3 +93,53 @@ def attention_unet(
     if pretrained:
         reject_unavailable_pretrained("attention_unet")
     return _build(_CFG_BASE, overrides)
+
+
+@register_model(
+    task="semantic-segmentation",
+    family="attention_unet",
+    model_type="attention_unet",
+    model_class=AttentionUNetForSemanticSegmentation,
+    default_config=_CFG_3D,
+    params=91_866_693,
+)
+def attention_unet_3d(
+    pretrained: bool = False,
+    **overrides: object,
+) -> AttentionUNetForSemanticSegmentation:
+    r"""Attention U-Net, 3-D (Oktay et al., MIDL 2018).
+
+    The rank the paper actually specifies.  Its Implementation Details
+    state "in contrast to the state-of-the-art CNN segmentation frameworks
+    ... we propose a 3D-model to capture sufficient semantic context", and
+    every released network is ``Conv3d`` / ``BatchNorm3d`` with trilinear
+    resampling — it was built for CT volumes.
+
+    Identical to :func:`attention_unet` in every other respect; only the
+    convolution rank differs, so the attention gate that is the paper's
+    contribution is the same mechanism in both.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`AttentionUNetConfig`.
+
+    Returns
+    -------
+    AttentionUNetForSemanticSegmentation
+        Volumetric model expecting ``(B, C, D, H, W)`` input.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.attention_unet import attention_unet_3d
+    >>> model = attention_unet_3d(base_channels=8, depth=2).eval()
+    >>> out = model(lucid.randn(1, 1, 16, 32, 32))
+    >>> out.logits.shape[2:]
+    (16, 32, 32)
+    """
+    if pretrained:
+        reject_unavailable_pretrained("attention_unet_3d")
+    return _build(_CFG_3D, overrides)

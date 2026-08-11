@@ -157,7 +157,7 @@
         }
       ],
       "summary": "Xception feature-extracting backbone (no classification head).",
-      "extended": "Implements the \"Extreme Inception\" topology from Chollet,\n\"Xception: Deep Learning with Depthwise Separable Convolutions\",\nCVPR 2017 (arXiv:1610.02357).  The architecture replaces every\nInception module of Inception-v3 with a depthwise separable\nconvolution — the limiting case of an Inception block in which\nevery output channel of the pointwise convolution receives its\nown independent spatial filter.  This makes the cross-channel\nand spatial correlations *fully decoupled*, dramatically\nreducing parameters and FLOPs:\n\n$$\nD_K^2 \\cdot M \\cdot N \\;\\longrightarrow\\;\n    M \\cdot N \\;+\\; D_K^2 \\cdot M.\n$$\n\nThe body is organised into three phases — *entry flow* (3\nblocks, with 1×1 strided residuals and channel doubling from\n64 → 728), *middle flow* (8 identical 728-ch blocks with\nadditive identity shortcuts), and *exit flow* (1 strided\ntransition block plus two final separable convolutions\nexpanding to 1536 → 2048 channels).  Designed for a 299×299\ninput — the same crop size as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement.",
+      "extended": "Implements the \"Extreme Inception\" topology from Chollet,\n\"Xception: Deep Learning with Depthwise Separable Convolutions\",\nCVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  The architecture replaces every\nInception module of Inception-v3 with a depthwise separable\nconvolution — the limiting case of an Inception block in which\nevery output channel of the pointwise convolution receives its\nown independent spatial filter.  This makes the cross-channel\nand spatial correlations *fully decoupled*, dramatically\nreducing parameters and FLOPs:\n\n$$\nD_K^2 \\cdot M \\cdot N \\;\\longrightarrow\\;\n    M \\cdot N \\;+\\; D_K^2 \\cdot M.\n$$\n\nThe body is organised into three phases — *entry flow* (3\nblocks, with 1×1 strided residuals and channel doubling from\n64 → 728), *middle flow* (8 identical 728-ch blocks with\nadditive identity shortcuts), and *exit flow* (1 strided\ntransition block plus two final separable convolutions\nexpanding to 1536 → 2048 channels).  Designed for a 299×299\ninput — the same crop size as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement.",
       "parameters": [
         {
           "name": "config",
@@ -419,7 +419,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.xception import xception\n>>> model = xception()\n>>> x = lucid.randn(1, 3, 299, 299)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 10, 10)"
       ],
       "notes": [
-        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 (arXiv:1610.02357).  Designed for\n299×299 input — the same crop as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement."
+        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  Designed for\n299×299 input — the same crop as Inception-v3 — so the\nspatial-reduction schedule isolates the depthwise-separable\nfactorisation as the sole source of accuracy improvement."
       ],
       "attributes": [],
       "warns": [],
@@ -1120,7 +1120,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.xception import xception_cls\n>>> model = xception_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 299, 299)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = xception_cls(pretrained=True)            # DEFAULT tag\n>>> from lucid.models.vision.xception import XceptionWeights\n>>> model = xception_cls(weights=XceptionWeights.TF_IN1K)"
       ],
       "notes": [
-        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 (arXiv:1610.02357).  Pretrained\nweights are converted from timm's `legacy_xception.tf_in1k` and\nhosted on the Hugging Face Hub under `lucid-dl/xception`.  The\neval preset is 299 crop / 333 resize / bicubic / mean=std=0.5 (not\nImageNet stats)."
+        "See Chollet, \"Xception: Deep Learning with Depthwise Separable\nConvolutions\", CVPR 2017 ([arXiv:1610.02357](https://arxiv.org/abs/1610.02357)).  Pretrained\nweights are converted from timm's `legacy_xception.tf_in1k` and\nhosted on the Hugging Face Hub under `lucid-dl/xception`.  The\neval preset is 299 crop / 333 resize / bicubic / mean=std=0.5 (not\nImageNet stats)."
       ],
       "attributes": [],
       "warns": [],

@@ -114,12 +114,13 @@ class MaskRCNNConfig(ModelConfig):
 
     .. note::
 
-       **Inference only.**  §3's multi-task objective — ``L = L_cls +
-       L_box + L_mask``, with ``L_mask`` the per-pixel sigmoid BCE on the
-       ground-truth class's mask channel and targets from RoI-aligning
-       the ground-truth masks onto positive proposals — is unimplemented,
-       as is the proposal assignment it needs.  ``forward`` returns no
-       loss.  Use this family to run a trained detector, not to train one.
+       **Training.**  Pass ``targets`` to :meth:`forward` for §3's
+       multi-task objective ``L = L_cls + L_box + L_mask`` on top of the
+       inherited RPN terms.  ``L_mask`` is the per-pixel sigmoid BCE on the
+       ground-truth class's mask channel only, with targets from
+       RoI-aligning the ground-truth masks onto the sampled proposals.
+       ``"masks"`` may be omitted from a target to train the detector
+       alone.
     """
 
     model_type: ClassVar[str] = "mask_rcnn"
@@ -140,13 +141,11 @@ class MaskRCNNConfig(ModelConfig):
     rpn_nms_thresh: float = 0.7
     rpn_min_size: float = 1e-3
     rpn_score_thresh: float = 0.0
-    # NOTE: the four assignment thresholds below are declared but INERT.
-    # They describe the label-assignment rule, which lives entirely in the
-    # training path -- and this family has no training path yet, so nothing
-    # reads them.  Rather than let a caller believe a value took effect,
-    # __post_init__ refuses any non-default setting.
+    # Faster R-CNN 3.1.2's label assignment, inherited unchanged.
     rpn_fg_iou_thresh: float = 0.7
     rpn_bg_iou_thresh: float = 0.3
+    rpn_batch_size_per_image: int = 256
+    rpn_positive_fraction: float = 0.5
 
     # Detection head
     roi_det_size: int = 7
@@ -154,6 +153,8 @@ class MaskRCNNConfig(ModelConfig):
     roi_representation: int = 1024
     roi_fg_iou_thresh: float = 0.5
     roi_bg_iou_thresh: float = 0.5
+    roi_batch_size_per_image: int = 512
+    roi_positive_fraction: float = 0.25
     bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0)
     canonical_scale: int = 224
     canonical_level: int = 4
@@ -176,21 +177,13 @@ class MaskRCNNConfig(ModelConfig):
         object.__setattr__(self, "rpn_anchor_ratios", tuple(self.rpn_anchor_ratios))
         object.__setattr__(self, "bbox_reg_weights", tuple(self.bbox_reg_weights))
 
-        # Refuse silently-ignored assignment thresholds, as the Faster R-CNN
-        # sibling does.  Accepting a value nothing reads is worse than
-        # refusing it: the caller walks away believing the model was
-        # configured.
-        inert = {
-            "rpn_fg_iou_thresh": 0.7,
-            "rpn_bg_iou_thresh": 0.3,
-            "roi_fg_iou_thresh": 0.5,
-            "roi_bg_iou_thresh": 0.5,
-        }
-        for field_name, default in inert.items():
-            if getattr(self, field_name) != default:
+        for name in ("rpn", "roi"):
+            fg = getattr(self, f"{name}_fg_iou_thresh")
+            bg = getattr(self, f"{name}_bg_iou_thresh")
+            if bg > fg:
                 raise ValueError(
-                    f"{field_name} is not implemented: Mask R-CNN's label "
-                    "assignment lives in the training path, which this family "
-                    f"does not have yet, so {field_name} would be ignored. "
-                    f"Leave it at its documented default ({default})."
+                    f"{name}_bg_iou_thresh ({bg}) must not exceed "
+                    f"{name}_fg_iou_thresh ({fg}); the band between them is "
+                    "the ignore region, and inverting them would leave no "
+                    "ambiguous zone at all."
                 )

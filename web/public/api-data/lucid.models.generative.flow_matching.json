@@ -386,7 +386,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.flow_matching import (\n...     FlowMatchingConfig, FlowMatchingForImageGeneration,\n... )\n>>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,\n...                          channel_mult=(1, 2), num_res_blocks=1,\n...                          attention_resolutions=(), resnet_groups=8)\n>>> model = FlowMatchingForImageGeneration(cfg).eval()\n>>> model(lucid.randn((2, 3, 8, 8))).loss.shape\n()\n>>> model.generate(n_samples=2, steps=4).samples.shape\n(2, 3, 8, 8)"
       ],
       "notes": [
-        "Reference: Lipman, Chen, Ben-Hamu, Nickel, and Le, *\"Flow Matching for\nGenerative Modeling\"*, ICLR, 2023 (arXiv:2210.02747).  Reported for\nthe optimal-transport path: 6.35 FID / 2.99 bits per dimension on\nCIFAR-10, and 5.02 / 3.53, 14.45 / 3.31, 20.9 / 2.90 on ImageNet at\n32, 64 and 128."
+        "Reference: Lipman, Chen, Ben-Hamu, Nickel, and Le, *\"Flow Matching for\nGenerative Modeling\"*, ICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)).  Reported for\nthe optimal-transport path: 6.35 FID / 2.99 bits per dimension on\nCIFAR-10, and 5.02 / 3.53, 14.45 / 3.31, 20.9 / 2.90 on ImageNet at\n32, 64 and 128."
       ],
       "attributes": [
         {
@@ -799,7 +799,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.flow_matching import (\n...     FlowMatchingConfig, FlowMatchingModel,\n... )\n>>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,\n...                          channel_mult=(1, 2), num_res_blocks=1,\n...                          attention_resolutions=(), resnet_groups=8)\n>>> model = FlowMatchingModel(cfg).eval()\n>>> loss, _, _ = model.flow_matching_loss(lucid.randn((2, 3, 8, 8)))\n>>> loss.shape\n()\n>>> model.sample(n_samples=2, steps=4).shape\n(2, 3, 8, 8)"
       ],
       "notes": [
-        "Reference: Lipman, Chen, Ben-Hamu, Nickel, and Le, *\"Flow Matching for\nGenerative Modeling\"*, ICLR, 2023 (arXiv:2210.02747).  Theorem 2 gives\nthe objective's equivalence to the intractable one; Theorem 3 gives\nthe conditional field; §4.2 gives the optimal-transport path.\n\n**Where to run it.**  Training is a plain U-Net forward and backward\nwith no solve, so it behaves like any convolutional model and belongs\non `\"metal\"`.  Sampling and likelihood are solves, and inherit the\nsame guidance as any continuous flow: the GPU wins once the batch is\nreal."
+        "Reference: Lipman, Chen, Ben-Hamu, Nickel, and Le, *\"Flow Matching for\nGenerative Modeling\"*, ICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)).  Theorem 2 gives\nthe objective's equivalence to the intractable one; Theorem 3 gives\nthe conditional field; §4.2 gives the optimal-transport path.\n\n**Where to run it.**  Training is a plain U-Net forward and backward\nwith no solve, so it behaves like any convolutional model and belongs\non `\"metal\"`.  Sampling and likelihood are solves, and inherit the\nsame guidance as any continuous flow: the GPU wins once the batch is\nreal."
       ],
       "attributes": [
         {
@@ -844,7 +844,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.flow_matching import flow_matching_cifar\n>>> model = flow_matching_cifar(base_channels=16, channel_mult=(1, 2),\n...                             num_res_blocks=1, sample_size=8,\n...                             attention_resolutions=(),\n...                             resnet_groups=8).eval()\n>>> loss, _, _ = model.flow_matching_loss(lucid.randn((2, 3, 8, 8)))\n>>> model.nfe                      # training solves nothing\n0"
       ],
       "notes": [
-        "Reference: Lipman, Chen, Ben-Hamu, Nickel, and Le, *\"Flow Matching\nfor Generative Modeling\"*, ICLR, 2023 (arXiv:2210.02747), Table 1.\nReported for the optimal-transport path: **6.35 FID / 2.99 bits per\ndimension**."
+        "Reference: Lipman, Chen, Ben-Hamu, Nickel, and Le, *\"Flow Matching\nfor Generative Modeling\"*, ICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)), Table 1.\nReported for the optimal-transport path: **6.35 FID / 2.99 bits per\ndimension**."
       ],
       "attributes": [],
       "warns": [],
@@ -1740,7 +1740,7 @@
         ">>> from lucid.models.generative.flow_matching import flow_matching_cifar_gen\n>>> model = flow_matching_cifar_gen(sample_size=8, base_channels=16,\n...                                 channel_mult=(1, 2), num_res_blocks=1,\n...                                 attention_resolutions=(),\n...                                 resnet_groups=8).eval()\n>>> model.generate(n_samples=2, steps=4).samples.shape\n(2, 3, 8, 8)"
       ],
       "notes": [
-        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 (arXiv:2210.02747).  Reported: 6.35 FID / 2.99 bits/dim."
+        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)).  Reported: 6.35 FID / 2.99 bits/dim."
       ],
       "attributes": [],
       "warns": [],
@@ -2644,7 +2644,7 @@
         ">>> from lucid.models.generative.flow_matching import flow_matching_imagenet32\n>>> flow_matching_imagenet32().path\n'ot'"
       ],
       "notes": [
-        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 (arXiv:2210.02747), Table 1.  Reported: **5.02 FID / 3.53\nbits per dimension**."
+        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)), Table 1.  Reported: **5.02 FID / 3.53\nbits per dimension**."
       ],
       "attributes": [],
       "warns": [],
@@ -3540,7 +3540,7 @@
         ">>> from lucid.models.generative.flow_matching import (\n...     flow_matching_imagenet32_gen,\n... )\n>>> flow_matching_imagenet32_gen().flow_matching.path\n'ot'"
       ],
       "notes": [
-        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 (arXiv:2210.02747).  Reported: 5.02 FID / 3.53 bits/dim."
+        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)).  Reported: 5.02 FID / 3.53 bits/dim."
       ],
       "attributes": [],
       "warns": [],
@@ -4444,7 +4444,7 @@
         ">>> from lucid.models.generative.flow_matching import flow_matching_imagenet64\n>>> flow_matching_imagenet64().input_dim\n12288"
       ],
       "notes": [
-        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 (arXiv:2210.02747), Table 1.  Reported: **14.45 FID / 3.31\nbits per dimension**."
+        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)), Table 1.  Reported: **14.45 FID / 3.31\nbits per dimension**."
       ],
       "attributes": [],
       "warns": [],
@@ -6012,7 +6012,7 @@
         ">>> from lucid.models.generative.flow_matching import (\n...     flow_matching_imagenet64_gen,\n... )\n>>> flow_matching_imagenet64_gen().flow_matching.input_dim\n12288"
       ],
       "notes": [
-        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 (arXiv:2210.02747).  Reported: 14.45 FID / 3.31 bits/dim."
+        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)).  Reported: 14.45 FID / 3.31 bits/dim."
       ],
       "attributes": [],
       "warns": [],
@@ -7588,7 +7588,7 @@
         ">>> from lucid.models.generative.flow_matching import flow_matching_imagenet128\n>>> flow_matching_imagenet128().config.sample_size\n128"
       ],
       "notes": [
-        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 (arXiv:2210.02747), Table 1.  Reported: **20.9 FID / 2.90\nbits per dimension** — the best likelihood of the four, on the\nlargest images."
+        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)), Table 1.  Reported: **20.9 FID / 2.90\nbits per dimension** — the best likelihood of the four, on the\nlargest images."
       ],
       "attributes": [],
       "warns": [],
@@ -9172,7 +9172,7 @@
         ">>> from lucid.models.generative.flow_matching import (\n...     flow_matching_imagenet128_gen,\n... )\n>>> flow_matching_imagenet128_gen().flow_matching.config.sample_size\n128"
       ],
       "notes": [
-        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 (arXiv:2210.02747).  Reported: 20.9 FID / 2.90 bits/dim."
+        "Reference: Lipman et al., *\"Flow Matching for Generative Modeling\"*,\nICLR, 2023 ([arXiv:2210.02747](https://arxiv.org/abs/2210.02747)).  Reported: 20.9 FID / 2.90 bits/dim."
       ],
       "attributes": [],
       "warns": [],

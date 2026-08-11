@@ -3189,7 +3189,7 @@
         ">>> from lucid.models import cvt_13_cls\n>>> model = cvt_13_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Wu, Xiao, Codella, Liu, Dai, Yuan, Zhang, *\"CvT:\nIntroducing Convolutions to Vision Transformers\"*, ICCV 2021\n(arXiv:2103.15808)."
+        "Reference: Wu, Xiao, Codella, Liu, Dai, Yuan, Zhang, *\"CvT:\nIntroducing Convolutions to Vision Transformers\"*, ICCV 2021\n([arXiv:2103.15808](https://arxiv.org/abs/2103.15808))."
       ],
       "attributes": [
         {
@@ -3228,7 +3228,7 @@
         ">>> from lucid.models import cvt_21_cls\n>>> model = cvt_21_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Wu, Xiao, Codella, Liu, Dai, Yuan, Zhang, *\"CvT:\nIntroducing Convolutions to Vision Transformers\"*, ICCV 2021\n(arXiv:2103.15808)."
+        "Reference: Wu, Xiao, Codella, Liu, Dai, Yuan, Zhang, *\"CvT:\nIntroducing Convolutions to Vision Transformers\"*, ICCV 2021\n([arXiv:2103.15808](https://arxiv.org/abs/2103.15808))."
       ],
       "attributes": [
         {
@@ -3267,7 +3267,7 @@
         ">>> from lucid.models import cvt_w24_cls\n>>> model = cvt_w24_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Wu, Xiao, Codella, Liu, Dai, Yuan, Zhang, *\"CvT:\nIntroducing Convolutions to Vision Transformers\"*, ICCV 2021\n(arXiv:2103.15808)."
+        "Reference: Wu, Xiao, Codella, Liu, Dai, Yuan, Zhang, *\"CvT:\nIntroducing Convolutions to Vision Transformers\"*, ICCV 2021\n([arXiv:2103.15808](https://arxiv.org/abs/2103.15808))."
       ],
       "attributes": [
         {

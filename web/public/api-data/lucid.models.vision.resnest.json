@@ -157,7 +157,7 @@
         }
       ],
       "summary": "ResNeSt feature-extracting backbone (no classification head).",
-      "extended": "Implements the Split-Attention augmentation of the ResNet\ntopology from Zhang et al., \"ResNeSt: Split-Attention\nNetworks\", CVPR Workshops 2022 (arXiv:2004.08955).  Each\nbottleneck's $3 \\times 3$ is replaced by a *Split-Attention*\nblock that fuses ResNeXt cardinality, SKNet kernel selection,\nand SENet channel attention into a single unified primitive.\nThe block splits the feature map into $K$ cardinal\ngroups, then further splits each group into $R$ parallel\n*radix* branches, and computes per-radix softmax attention\nweights\n\n$$\na_{r, c} = \\frac{\\exp(z_{r, c})}{\\sum_{r'=1}^{R} \\exp(z_{r', c})},\n\\qquad V_c = \\sum_{r=1}^{R} a_{r, c} \\cdot U_{r, c}.\n$$\n\nTwo further refinements complete the architecture: a *deep\nstem* (three 3×3 convolutions replacing the original 7×7\nstem) and an *average-pool downsampling* path that replaces\nstrided convolutions in residual shortcuts and inside the\nSplit-Attention block itself.",
+      "extended": "Implements the Split-Attention augmentation of the ResNet\ntopology from Zhang et al., \"ResNeSt: Split-Attention\nNetworks\", CVPR Workshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)).  Each\nbottleneck's $3 \\times 3$ is replaced by a *Split-Attention*\nblock that fuses ResNeXt cardinality, SKNet kernel selection,\nand SENet channel attention into a single unified primitive.\nThe block splits the feature map into $K$ cardinal\ngroups, then further splits each group into $R$ parallel\n*radix* branches, and computes per-radix softmax attention\nweights\n\n$$\na_{r, c} = \\frac{\\exp(z_{r, c})}{\\sum_{r'=1}^{R} \\exp(z_{r', c})},\n\\qquad V_c = \\sum_{r=1}^{R} a_{r, c} \\cdot U_{r, c}.\n$$\n\nTwo further refinements complete the architecture: a *deep\nstem* (three 3×3 convolutions replacing the original 7×7\nstem) and an *average-pool downsampling* path that replaces\nstrided convolutions in residual shortcuts and inside the\nSplit-Attention block itself.",
       "parameters": [
         {
           "name": "config",
@@ -349,7 +349,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_14\n>>> model = resnest_14()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955).  Final-stage output is 2048\nchannels."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)).  Final-stage output is 2048\nchannels."
       ],
       "attributes": [],
       "warns": [],
@@ -1160,7 +1160,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_14_cls\n>>> model = resnest_14_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955)."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955))."
       ],
       "attributes": [],
       "warns": [],
@@ -1985,7 +1985,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_26\n>>> model = resnest_26()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955)."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955))."
       ],
       "attributes": [],
       "warns": [],
@@ -3312,7 +3312,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_26_cls\n>>> model = resnest_26_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955)."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955))."
       ],
       "attributes": [],
       "warns": [],
@@ -4653,7 +4653,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_50\n>>> model = resnest_50()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955), Table 4."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)), Table 4."
       ],
       "attributes": [],
       "warns": [],
@@ -5990,7 +5990,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_50_cls\n>>> model = resnest_50_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955), Table 4.  Pretrained weights are\nconverted from timm's `resnest50d.in1k` and hosted under\n`lucid-dl/resnest-50`."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)), Table 4.  Pretrained weights are\nconverted from timm's `resnest50d.in1k` and hosted under\n`lucid-dl/resnest-50`."
       ],
       "attributes": [],
       "warns": [],
@@ -7335,7 +7335,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_101\n>>> model = resnest_101()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955), Table 4."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)), Table 4."
       ],
       "attributes": [],
       "warns": [],
@@ -8672,7 +8672,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_101_cls\n>>> model = resnest_101_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955), Table 4.  Pretrained weights are\nconverted from timm's `resnest101e.in1k` and hosted under\n`lucid-dl/resnest-101`."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)), Table 4.  Pretrained weights are\nconverted from timm's `resnest101e.in1k` and hosted under\n`lucid-dl/resnest-101`."
       ],
       "attributes": [],
       "warns": [],
@@ -10017,7 +10017,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_200\n>>> model = resnest_200()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955), Table 4."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)), Table 4."
       ],
       "attributes": [],
       "warns": [],
@@ -11354,7 +11354,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_200_cls\n>>> model = resnest_200_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955), Table 4.  Pretrained weights are\nconverted from timm's `resnest200e.in1k` and hosted under\n`lucid-dl/resnest-200`."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)), Table 4.  Pretrained weights are\nconverted from timm's `resnest200e.in1k` and hosted under\n`lucid-dl/resnest-200`."
       ],
       "attributes": [],
       "warns": [],
@@ -12699,7 +12699,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_269\n>>> model = resnest_269()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955), Table 4.  Memory footprint\nis substantial; consider `zero_init_residual=True` for\nstable large-batch training."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)), Table 4.  Memory footprint\nis substantial; consider `zero_init_residual=True` for\nstable large-batch training."
       ],
       "attributes": [],
       "warns": [],
@@ -14036,7 +14036,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnest import resnest_269_cls\n>>> model = resnest_269_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 (arXiv:2004.08955), Table 4.  Memory footprint\nis substantial.  Pretrained weights are converted from timm's\n`resnest269e.in1k` and hosted under `lucid-dl/resnest-269`."
+        "See Zhang et al., \"ResNeSt: Split-Attention Networks\", CVPR\nWorkshops 2022 ([arXiv:2004.08955](https://arxiv.org/abs/2004.08955)), Table 4.  Memory footprint\nis substantial.  Pretrained weights are converted from timm's\n`resnest269e.in1k` and hosted under `lucid-dl/resnest-269`."
       ],
       "attributes": [],
       "warns": [],

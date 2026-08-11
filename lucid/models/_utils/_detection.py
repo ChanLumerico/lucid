@@ -1282,6 +1282,637 @@ def solve_assignment(
 
 
 # ---------------------------------------------------------------------------
+# §5.5  Training-time label assignment and sampling
+# ---------------------------------------------------------------------------
+#
+# Every two-stage detector in the zoo needs the same two steps before it can
+# compute a loss: decide which predictions correspond to which ground-truth
+# object, and then choose a class-balanced subset of them to train on.  Both
+# are pure bookkeeping over an IoU matrix — no learned parameters — so they
+# live here rather than being reimplemented per family.
+
+
+@final
+class Matcher:
+    r"""Assign each prediction to a ground-truth box, or reject it.
+
+    Given the IoU between every ground-truth box and every prediction, each
+    prediction is labelled with the index of its best-overlapping ground
+    truth, or with one of two sentinels:
+
+    * ``BELOW_LOW_THRESHOLD`` (-1) — a negative.  Its best overlap is under
+      ``low_threshold``, so it is confidently background.
+    * ``BETWEEN_THRESHOLDS`` (-2) — ignored.  Its overlap falls in the
+      ambiguous band, so it contributes to no loss term at all.
+
+    The two thresholds are what distinguishes the callers.  Faster R-CNN's
+    RPN uses ``(0.7, 0.3)``: over 0.7 is an object, under 0.3 is background,
+    and the band between is discarded (§3.1.2).  Its box head uses
+    ``(0.5, 0.5)``, which leaves the band empty so nothing is ignored.  Fast
+    R-CNN uses ``(0.5, 0.1)`` because §2.3 draws its negatives from
+    ``[0.1, 0.5)`` specifically — for that caller "between" is the useful
+    class and "below" is what gets discarded.
+
+    Parameters
+    ----------
+    high_threshold : float
+        Minimum IoU for a prediction to be matched to a ground truth.
+    low_threshold : float
+        IoU below which a prediction is a confident negative.  Must not
+        exceed ``high_threshold``.
+    allow_low_quality_matches : bool, optional, default=False
+        Also force-match, for every ground truth, whichever prediction(s)
+        overlap it most — even below ``high_threshold``.  Without this a
+        small or oddly-shaped object whose best anchor still falls short of
+        0.7 would train nothing, which is why §3.1.2 defines positives as
+        "the anchor with the highest IoU *or* any anchor over 0.7".
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import Matcher
+    >>> iou = lucid.tensor([[0.9, 0.2, 0.05]])   # 1 ground truth, 3 anchors
+    >>> Matcher(0.7, 0.3)(iou).tolist()
+    [0, -2, -1]
+    """
+
+    BELOW_LOW_THRESHOLD: int = -1
+    BETWEEN_THRESHOLDS: int = -2
+
+    def __init__(
+        self,
+        high_threshold: float,
+        low_threshold: float,
+        allow_low_quality_matches: bool = False,
+    ) -> None:
+        if low_threshold > high_threshold:
+            raise ValueError(
+                f"low_threshold ({low_threshold}) must not exceed "
+                f"high_threshold ({high_threshold}); the band between them is "
+                "the ignore region, and a negative-width band would silently "
+                "make every prediction either matched or background."
+            )
+        self.high_threshold = high_threshold
+        self.low_threshold = low_threshold
+        self.allow_low_quality_matches = allow_low_quality_matches
+
+    def __call__(self, iou: Tensor) -> Tensor:
+        """Label every prediction.
+
+        Args:
+            iou: ``(M, N)`` IoU between ``M`` ground truths and ``N``
+                predictions, as produced by :func:`box_iou`.
+
+        Returns:
+            ``(N,)`` int tensor.  Entry ``n`` is the ground-truth index
+            matched to prediction ``n``, or one of the two sentinels.
+
+        Raises:
+            ValueError: If there are no ground-truth rows.  With nothing to
+                match against, every prediction is background — but the
+                caller has to say so explicitly, because silently returning
+                all-negative hides an empty-target bug.
+        """
+        if int(iou.shape[0]) == 0:
+            raise ValueError(
+                "Matcher got an IoU matrix with no ground-truth rows.  An "
+                "image with no objects is legitimate, but the caller must "
+                "handle it: every prediction is background, and no "
+                "regression term is defined."
+            )
+
+        best_gt_iou = iou.max(dim=0)  # (N,) best overlap per prediction
+        matches = lucid.argmax(iou, dim=0)  # (N,) which ground truth it was
+
+        below = best_gt_iou < self.low_threshold
+        between = (best_gt_iou >= self.low_threshold) & (
+            best_gt_iou < self.high_threshold
+        )
+        result = lucid.where(below, self.BELOW_LOW_THRESHOLD, matches)
+        result = lucid.where(between, self.BETWEEN_THRESHOLDS, result)
+
+        if self.allow_low_quality_matches:
+            # For each ground truth, every prediction tied for its highest
+            # overlap is restored to a match.  Comparing against the row max
+            # rather than taking an argmax keeps all of the tied predictions,
+            # which is what the reference does.
+            best_per_gt = iou.max(dim=1, keepdim=True)  # (M, 1)
+            forced = (iou == best_per_gt).sum(dim=0) > 0  # (N,)
+            result = lucid.where(forced, matches, result)
+
+        return result
+
+
+@final
+class BalancedPositiveNegativeSampler:
+    r"""Draw a class-balanced subset of labelled predictions to train on.
+
+    A detector proposes far more background than foreground — an RPN sees
+    tens of thousands of anchors of which a handful are objects — so
+    training on all of them makes the classification loss almost entirely
+    background and the model learns to predict nothing.  Both papers fix
+    this the same way: sample a fixed-size minibatch per image at a target
+    foreground ratio, and take everything else as background.
+
+    When there are fewer positives than the ratio asks for, the shortfall is
+    filled with negatives rather than left empty, so the minibatch size is
+    held constant (as in Faster R-CNN §3.1.3, "if there are fewer than 128
+    positive samples in an image, we pad the mini-batch with negative ones").
+
+    Parameters
+    ----------
+    batch_size_per_image : int
+        Total number of predictions sampled per image.  256 for Faster
+        R-CNN's RPN, 64 for Fast R-CNN's box head.
+    positive_fraction : float
+        Target share of foreground, in ``[0, 1]``.  0.5 for the RPN, 0.25
+        for the box head.
+
+    Notes
+    -----
+    Selection uses :func:`lucid.randperm`, so :func:`lucid.manual_seed`
+    makes it reproducible along with everything else in a training run.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import (
+    ...     BalancedPositiveNegativeSampler,
+    ... )
+    >>> labels = lucid.tensor([1, 1, 0, 0, 0, 0, -1]).long()
+    >>> sampler = BalancedPositiveNegativeSampler(4, 0.5)
+    >>> pos, neg = sampler(labels)
+    >>> len(pos.tolist()), len(neg.tolist())
+    (2, 2)
+    """
+
+    def __init__(self, batch_size_per_image: int, positive_fraction: float) -> None:
+        if batch_size_per_image <= 0:
+            raise ValueError(
+                "batch_size_per_image is the number of predictions sampled "
+                f"per image, so it must be positive; got {batch_size_per_image}."
+            )
+        if not 0.0 <= positive_fraction <= 1.0:
+            raise ValueError(
+                "positive_fraction is a share of the minibatch, so it must "
+                f"lie in [0, 1]; got {positive_fraction}."
+            )
+        self.batch_size_per_image = batch_size_per_image
+        self.positive_fraction = positive_fraction
+
+    def __call__(self, labels: Tensor) -> tuple[Tensor, Tensor]:
+        """Sample foreground and background indices for one image.
+
+        Args:
+            labels: ``(N,)`` per-prediction labels — ``1`` foreground, ``0``
+                background, anything negative ignored.
+
+        Returns:
+            ``(positive_indices, negative_indices)``, both int tensors
+            indexing into ``labels``.  Their combined length is at most
+            ``batch_size_per_image`` and is smaller only when the image does
+            not contain that many usable predictions.
+        """
+        flat = cast(list[int], labels.reshape(-1).tolist())
+        pos = [i for i, v in enumerate(flat) if v >= 1]
+        neg = [i for i, v in enumerate(flat) if v == 0]
+
+        num_pos = min(len(pos), int(self.batch_size_per_image * self.positive_fraction))
+        # Backfill with negatives so the minibatch keeps its size when the
+        # image is object-poor; this is the padding rule from §3.1.3.
+        num_neg = min(len(neg), self.batch_size_per_image - num_pos)
+
+        pos_sel = _sample_without_replacement(pos, num_pos)
+        neg_sel = _sample_without_replacement(neg, num_neg)
+        dev = labels.device.type
+        return (
+            lucid.tensor(pos_sel, device=dev).long(),
+            lucid.tensor(neg_sel, device=dev).long(),
+        )
+
+
+def _sample_without_replacement(pool: list[int], k: int) -> list[int]:
+    """Take ``k`` distinct entries of ``pool`` uniformly at random.
+
+    Args:
+        pool: Candidate indices.
+        k:    How many to take; ``k >= len(pool)`` returns the whole pool.
+
+    Returns:
+        The chosen indices, in ascending order so downstream gathers stay
+        deterministic given the same draw.
+    """
+    if k <= 0:
+        return []
+    if k >= len(pool):
+        return list(pool)
+    perm = cast(list[int], lucid.randperm(len(pool)).tolist())  # type: ignore[attr-defined]
+    return sorted(pool[i] for i in perm[:k])
+
+
+def assign_anchors_to_targets(
+    anchors: Tensor,
+    gt_boxes: Tensor,
+    matcher: Matcher,
+    image_size: tuple[int, int],
+    *,
+    ignore_cross_boundary: bool = False,
+) -> tuple[Tensor, Tensor]:
+    """Label every anchor 1 / 0 / -1 and record which ground truth it hit.
+
+    Args:
+        anchors:    ``(N, 4)`` xyxy anchors, concatenated across levels.
+        gt_boxes:   ``(M, 4)`` xyxy ground-truth boxes.
+        matcher:    Configured :class:`Matcher`.
+        image_size: ``(H, W)``, used only for cross-boundary removal.
+        ignore_cross_boundary: Apply Faster R-CNN 3.1.2's "ignore all
+            cross-boundary anchors" clause.
+
+    Returns:
+        ``(labels, matched)`` — ``labels`` is ``1`` foreground, ``0``
+        background, ``-1`` ignored; ``matched`` gives the ground-truth index
+        per anchor and is meaningful only where ``labels == 1``.
+    """
+    n = int(anchors.shape[0])
+    dev = anchors.device.type
+    if int(gt_boxes.shape[0]) == 0:
+        # No objects: every anchor is a negative and nothing regresses.
+        zeros = lucid.zeros((n,), device=dev).long()
+        return zeros, zeros
+
+    matched = matcher(box_iou(gt_boxes, anchors))
+    labels = lucid.where(
+        matched >= 0,
+        lucid.ones_like(matched),
+        lucid.where(
+            matched == Matcher.BETWEEN_THRESHOLDS,
+            lucid.full_like(matched, -1),
+            lucid.zeros_like(matched),
+        ),
+    )
+    if ignore_cross_boundary:
+        iH, iW = image_size
+        inside = (
+            (anchors[:, 0] >= 0.0)
+            & (anchors[:, 1] >= 0.0)
+            & (anchors[:, 2] <= float(iW))
+            & (anchors[:, 3] <= float(iH))
+        )
+        labels = lucid.where(inside, labels, lucid.full_like(labels, -1))
+    return labels, matched
+
+
+def rpn_loss(
+    logits: list[Tensor],
+    deltas: list[Tensor],
+    anchors: list[Tensor],
+    targets: list[dict[str, Tensor]],
+    matcher: Matcher,
+    sampler: BalancedPositiveNegativeSampler,
+    image_size: tuple[int, int],
+    *,
+    ignore_cross_boundary: bool = False,
+) -> tuple[Tensor, Tensor]:
+    """RPN objectness + box-regression loss (Faster R-CNN 3.1.2 / 3.1.3).
+
+    Both terms are divided by the number of *sampled* anchors rather than by
+    the positive count.  Dividing the regression term by positives would let
+    it grow on images with few objects, which is the opposite of what the
+    normalisation is for.
+
+    Args:
+        logits:   Per-level objectness maps, ``(B, A, H, W)``.
+        deltas:   Per-level box deltas, ``(B, A * 4, H, W)``.
+        anchors:  Per-level anchor tensors, each ``(N_l, 4)``.
+        targets:  Per-image ``{"boxes", "labels"}``.
+        matcher:  Anchor-labelling rule.
+        sampler:  Minibatch sampler.
+        image_size: ``(H, W)`` of the input.
+        ignore_cross_boundary: Forwarded to
+            :func:`assign_anchors_to_targets`.
+
+    Returns:
+        ``(objectness_loss, regression_loss)``, both scalars.
+    """
+    dev = logits[0].device.type
+    flat_scores, flat_deltas = flatten_rpn_outputs(logits, deltas)
+    objectness = lucid.cat(flat_scores, dim=1)  # (B, N)
+    pred_deltas = lucid.cat(flat_deltas, dim=1)  # (B, N, 4)
+    anchors_cat = lucid.cat(anchors, dim=0)  # (N, 4)
+
+    obj_parts: list[Tensor] = []
+    reg_parts: list[Tensor] = []
+    n_sampled = 0
+
+    for b, tgt in enumerate(targets):
+        gt_boxes = tgt["boxes"]
+        labels, matched = assign_anchors_to_targets(
+            anchors_cat,
+            gt_boxes,
+            matcher,
+            image_size,
+            ignore_cross_boundary=ignore_cross_boundary,
+        )
+        pos, neg = sampler(labels)
+        n_pos = int(pos.shape[0])
+        n_this = n_pos + int(neg.shape[0])
+        if n_this == 0:
+            continue
+        n_sampled += n_this
+
+        sampled = lucid.cat([pos, neg], dim=0)
+        obj_parts.append(
+            F.binary_cross_entropy_with_logits(
+                objectness[b][sampled], labels[sampled].float(), reduction="sum"
+            )
+        )
+        if n_pos > 0:
+            matched_gt = gt_boxes[matched[pos].long()]
+            reg_targets = encode_boxes(
+                matched_gt, anchors_cat[pos], (1.0, 1.0, 1.0, 1.0)
+            )
+            reg_parts.append(
+                F.smooth_l1_loss(
+                    pred_deltas[b][pos],
+                    reg_targets,
+                    beta=1.0 / 9.0,
+                    reduction="sum",
+                )
+            )
+
+    if n_sampled == 0:
+        zero = lucid.zeros((), device=dev)
+        return zero, zero
+
+    denom = float(n_sampled)
+    obj = lucid.cat([t.reshape(1) for t in obj_parts]).sum() / denom
+    reg = (
+        lucid.cat([t.reshape(1) for t in reg_parts]).sum() / denom
+        if reg_parts
+        else lucid.zeros((), device=dev)
+    )
+    return obj, reg
+
+
+def select_training_samples(
+    proposals: list[Tensor],
+    targets: list[dict[str, Tensor]],
+    matcher: Matcher,
+    sampler: BalancedPositiveNegativeSampler,
+    bbox_reg_weights: tuple[float, float, float, float],
+) -> tuple[list[Tensor], list[Tensor], list[Tensor], list[Tensor]]:
+    """Sample the box head's minibatch and build its targets.
+
+    Ground-truth boxes are appended to the proposal set first, as the
+    reference does: early in training the RPN proposes nothing useful, and a
+    minibatch with no positives teaches the box head only what background
+    looks like.
+
+    Args:
+        proposals: Per-image proposal tensors, each ``(P, 4)`` xyxy.
+        targets:   Per-image ``{"boxes", "labels"}``; labels are 1-based,
+            with 0 reserved for background.
+        matcher:   Proposal-labelling rule.
+        sampler:   Minibatch sampler.
+        bbox_reg_weights: Per-component scale applied when encoding the
+            regression targets.
+
+    Returns:
+        ``(proposals, labels, regression_targets, matched_gt_indices)``,
+        each per image and already restricted to the sampled RoIs.  The
+        matched indices are what a mask branch needs to find each RoI's
+        ground-truth mask.
+    """
+    out_props: list[Tensor] = []
+    out_labels: list[Tensor] = []
+    out_reg: list[Tensor] = []
+    out_matched: list[Tensor] = []
+
+    for props, tgt in zip(proposals, targets):
+        gt_boxes = tgt["boxes"]
+        gt_labels = tgt["labels"]
+        dev = props.device.type
+
+        if int(gt_boxes.shape[0]) > 0:
+            props = lucid.cat([props, gt_boxes], dim=0)
+
+        n = int(props.shape[0])
+        if int(gt_boxes.shape[0]) == 0 or n == 0:
+            out_props.append(props)
+            out_labels.append(lucid.zeros((n,), device=dev).long())
+            out_reg.append(lucid.zeros((n, 4), device=dev))
+            out_matched.append(lucid.zeros((n,), device=dev).long())
+            continue
+
+        matched = matcher(box_iou(gt_boxes, props))
+        clamped = matched.clip(min=0).long()
+        fg = matched >= 0
+        labels = lucid.where(
+            fg, gt_labels[clamped], lucid.zeros_like(gt_labels[clamped])
+        )
+        binary = lucid.where(fg, lucid.ones_like(labels), lucid.zeros_like(labels))
+
+        pos, neg = sampler(binary)
+        keep = lucid.tensor(
+            sorted([*cast(list[int], pos.tolist()), *cast(list[int], neg.tolist())]),
+            device=dev,
+        ).long()
+
+        props_k = props[keep]
+        out_props.append(props_k)
+        out_labels.append(labels[keep])
+        out_reg.append(encode_boxes(gt_boxes[clamped[keep]], props_k, bbox_reg_weights))
+        out_matched.append(clamped[keep])
+
+    return out_props, out_labels, out_reg, out_matched
+
+
+def fastrcnn_loss(
+    class_logits: Tensor,
+    box_deltas: Tensor,
+    labels: list[Tensor],
+    reg_targets: list[Tensor],
+) -> tuple[Tensor, Tensor]:
+    """Box-head classification + regression loss.
+
+    The regression term is defined only on the ground-truth class of each
+    positive RoI — the other ``K - 1`` box predictions for that RoI receive
+    no gradient at all, which is what makes the head's outputs
+    class-specific.
+
+    Args:
+        class_logits: ``(N, K)`` class logits over the sampled RoIs.
+        box_deltas:   ``(N, K * 4)`` per-class box deltas.
+        labels:       Per-image class ids for those RoIs.
+        reg_targets:  Per-image encoded regression targets, ``(P, 4)``.
+
+    Returns:
+        ``(classification_loss, regression_loss)``, both scalars.
+    """
+    dev = class_logits.device.type
+    labels_cat = lucid.cat(labels, dim=0)
+    n_total = int(labels_cat.shape[0])
+    if n_total == 0:
+        zero = lucid.zeros((), device=dev)
+        return zero, zero
+
+    cls_loss = F.cross_entropy(class_logits, labels_cat.long())
+
+    flat = cast(list[int], labels_cat.tolist())
+    pos_idx = [i for i, v in enumerate(flat) if v > 0]
+    if not pos_idx:
+        return cls_loss, lucid.zeros((), device=dev)
+
+    pos = lucid.tensor(pos_idx, device=dev).long()
+    pos_labels = labels_cat[pos].long()
+    k = int(box_deltas.shape[1]) // 4
+    per_class = box_deltas.reshape(n_total, k, 4)
+    # Gather (row, its own class) without forming the (P, K, 4) block.
+    chosen = per_class[pos].reshape(len(pos_idx) * k, 4)
+    offsets = lucid.tensor(
+        [i * k + int(c) for i, c in enumerate(cast(list[int], pos_labels.tolist()))],
+        device=dev,
+    ).long()
+    pred = chosen[offsets]
+
+    reg_cat = lucid.cat(reg_targets, dim=0)
+    reg_loss = F.smooth_l1_loss(
+        pred, reg_cat[pos], beta=1.0 / 9.0, reduction="sum"
+    ) / float(n_total)
+    return cls_loss, reg_loss
+
+
+def project_masks_on_boxes(
+    gt_masks: Tensor,
+    proposals: Tensor,
+    matched_idxs: Tensor,
+    mask_size: int,
+) -> Tensor:
+    """Crop each proposal's ground-truth mask to the head's output grid.
+
+    Mask R-CNN 3.1: "The mask target is the intersection between an RoI and
+    its associated ground-truth mask."  Concretely, the ground-truth mask is
+    RoI-aligned with the proposal's own box, so the target lands in the same
+    ``m x m`` frame the head predicts in — which is why the head can be a
+    small fixed-size FCN at all.
+
+    Args:
+        gt_masks:     ``(M, H, W)`` binary ground-truth masks for the image.
+        proposals:    ``(P, 4)`` xyxy proposal boxes.
+        matched_idxs: ``(P,)`` ground-truth index per proposal.
+        mask_size:    Output side length ``m``.
+
+    Returns:
+        ``(P, mask_size, mask_size)`` float targets in ``[0, 1]``.
+    """
+    if int(proposals.shape[0]) == 0:
+        return lucid.zeros((0, mask_size, mask_size), device=gt_masks.device.type)
+
+    # Each proposal crops its *own* ground-truth mask, so the batch axis is
+    # the proposal axis: (P, 1, H, W) with exactly one RoI per entry.
+    p_count = int(proposals.shape[0])
+    picked = gt_masks[matched_idxs.long()].unsqueeze(1).float()
+    rois = [proposals[i : i + 1] for i in range(p_count)]
+    cropped = roi_align(
+        picked,
+        rois,
+        output_size=mask_size,
+        spatial_scale=1.0,
+        sampling_ratio=1,
+        aligned=True,
+    )
+    return cropped[:, 0]
+
+
+def maskrcnn_loss(
+    mask_logits: Tensor,
+    labels: Tensor,
+    mask_targets: Tensor,
+) -> Tensor:
+    r"""``L_mask`` — per-pixel sigmoid BCE on the ground-truth class only.
+
+    3: "The mask branch has a :math:`Km^2`-dimensional output for each RoI,
+    which encodes :math:`K` binary masks of resolution :math:`m \times m`,
+    one for each of the :math:`K` classes.  To this we apply a per-pixel
+    sigmoid, and define :math:`L_{\text{mask}}` as the average binary
+    cross-entropy loss.  For an RoI associated with ground-truth class
+    :math:`k`, :math:`L_{\text{mask}}` is only defined on the :math:`k`-th
+    mask (other mask outputs do not contribute to the loss)."
+
+    That last clause is the whole point: without it the classes compete
+    per-pixel, and the paper's ablation shows the decoupled form is worth
+    several AP.
+
+    Args:
+        mask_logits:  ``(P, K, m, m)`` raw logits for the sampled RoIs.
+        labels:       ``(P,)`` class id per RoI; only ``> 0`` contribute.
+        mask_targets: ``(P, m, m)`` binary targets from
+            :func:`project_masks_on_boxes`.
+
+    Returns:
+        Scalar loss.  Zero when the minibatch contains no positive RoI —
+        an image can legitimately sample none, and a NaN there would poison
+        the whole step.
+    """
+    dev = mask_logits.device.type
+    flat = cast(list[int], labels.reshape(-1).tolist())
+    pos_idx = [i for i, v in enumerate(flat) if v > 0]
+    if not pos_idx or int(mask_logits.shape[0]) == 0:
+        return lucid.zeros((), device=dev)
+
+    pos = lucid.tensor(pos_idx, device=dev).long()
+    k = int(mask_logits.shape[1])
+    m = int(mask_logits.shape[-1])
+
+    # Select the ground-truth class channel of each positive RoI.
+    chosen = mask_logits[pos].reshape(len(pos_idx) * k, m, m)
+    pos_labels = cast(list[int], labels[pos].long().tolist())
+    offsets = lucid.tensor(
+        [i * k + int(c) for i, c in enumerate(pos_labels)], device=dev
+    ).long()
+    pred = chosen[offsets]  # (P_pos, m, m)
+
+    return F.binary_cross_entropy_with_logits(pred, mask_targets[pos])
+
+
+def flatten_rpn_outputs(
+    logits: list[Tensor], deltas: list[Tensor]
+) -> tuple[list[Tensor], list[Tensor]]:
+    """Flatten per-level RPN maps to ``(B, H*W*A)`` / ``(B, H*W*A, 4)``.
+
+    Spatial-major, anchor-minor — the order the anchor grid is laid out in,
+    so entry ``n`` of the flattened prediction and entry ``n`` of the anchor
+    tensor describe the same box.
+
+    Shared by proposal generation and the training loss on purpose: the two
+    must index anchors identically, and a second spelling of this reshape is
+    a silent mis-assignment waiting to happen.
+
+    Args:
+        logits: Per-level objectness maps, each ``(B, A, H, W)``.
+        deltas: Per-level box deltas, each ``(B, A * 4, H, W)``.
+
+    Returns:
+        ``(scores, deltas)`` — one entry per level, flattened to
+        ``(B, H*W*A)`` and ``(B, H*W*A, 4)``.
+    """
+    per_level_scores: list[Tensor] = []
+    per_level_deltas: list[Tensor] = []
+    for lg, dl in zip(logits, deltas):
+        B = int(lg.shape[0])
+        A = int(lg.shape[1])
+        fH = int(lg.shape[2])
+        fW = int(lg.shape[3])
+        per_level_scores.append(lg.permute(0, 2, 3, 1).reshape(B, fH * fW * A))
+        per_level_deltas.append(
+            dl.reshape(B, A, 4, fH, fW)
+            .permute(0, 3, 4, 1, 2)
+            .reshape(B, fH * fW * A, 4)
+        )
+    return per_level_scores, per_level_deltas
+
+
+# ---------------------------------------------------------------------------
 # §6  Reference ResNet-50-FPN building blocks (reference_vision-exact key layout)
 # ---------------------------------------------------------------------------
 #

@@ -38,7 +38,19 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import SemanticSegmentationOutput
-from lucid.models._utils._detection import multi_scale_deformable_attention
+from lucid.models._utils._detection import (
+    multi_scale_deformable_attention,
+    solve_assignment,
+)
+from lucid.models._utils._segmentation import (
+    dice_loss,
+    pairwise_dice,
+    pairwise_sigmoid_ce,
+    point_sample,
+    sample_point_coords,
+    sigmoid_ce_loss,
+    uncertain_point_coords,
+)
 from lucid.models.vision.mask2former._config import Mask2FormerConfig
 
 # ---------------------------------------------------------------------------
@@ -1289,6 +1301,136 @@ class _TransformerModule(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+def _m2f_match(
+    class_logits: Tensor,
+    mask_logits: Tensor,
+    gt_labels: Tensor,
+    gt_masks: Tensor,
+    coords: Tensor,
+    cfg: Mask2FormerConfig,
+) -> tuple[list[int], list[int]]:
+    r"""Hungarian match between queries and ground-truth segments.
+
+    The cost is the same three terms the loss uses, which is the point of
+    the construction: matching on one objective and training on another
+    would hand each query a target it was never scored against.
+
+    .. math::
+
+        \lambda_{\mathrm{cls}}\,(-p_i(c_j))
+        + \lambda_{\mathrm{mask}}\, \mathcal{L}_{\mathrm{ce}}
+        + \lambda_{\mathrm{dice}}\, \mathcal{L}_{\mathrm{dice}}
+
+    All mask terms are evaluated on ``coords`` rather than densely, exactly
+    as in the loss.
+
+    Returns:
+        ``(pred_indices, gt_indices)``.
+    """
+    n = int(class_logits.shape[0])
+    m = int(gt_labels.shape[0])
+    if n == 0 or m == 0:
+        return [], []
+
+    probs = F.softmax(class_logits, dim=-1)
+    cost_class = -probs.index_select(1, gt_labels.long())  # (N, M)
+
+    pred_pts = point_sample(mask_logits, coords)  # (N, K)
+    gt_pts = point_sample(gt_masks.float(), coords)  # (M, K)
+
+    cost = (
+        cfg.class_weight * cost_class
+        + cfg.mask_weight * pairwise_sigmoid_ce(pred_pts, gt_pts)
+        + cfg.dice_weight * pairwise_dice(pred_pts, gt_pts)
+    )
+    pred_idx, gt_idx = solve_assignment(cast(list[list[float]], cost.tolist()))
+    return pred_idx, gt_idx
+
+
+def _m2f_stage_loss(
+    class_logits: Tensor,
+    mask_logits: Tensor,
+    targets: list[dict[str, Tensor]],
+    cfg: Mask2FormerConfig,
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Criterion for one decoder layer's predictions.
+
+    Args:
+        class_logits: ``(B, N, K + 1)`` per-query class logits.
+        mask_logits:  ``(B, N, h, w)`` per-query mask logits.
+        targets:      Per-image ``{"labels": (M,), "masks": (M, H, W)}``.
+        cfg:          Supplies the weights and the point budget.
+
+    Returns:
+        ``(class_loss, mask_ce_loss, dice_loss)``, each already summed over
+        the batch and divided by the number of images.
+    """
+    b = int(class_logits.shape[0])
+    dev = class_logits.device.type
+    bg_index = int(class_logits.shape[-1]) - 1
+
+    cls_parts: list[Tensor] = []
+    ce_parts: list[Tensor] = []
+    dice_parts: list[Tensor] = []
+
+    for i in range(b):
+        cls_i = class_logits[i]  # (N, K+1)
+        msk_i = mask_logits[i]  # (N, h, w)
+        gt_labels = targets[i]["labels"]
+        gt_masks = targets[i]["masks"]
+        n = int(cls_i.shape[0])
+
+        # Every query defaults to "no object"; matching overwrites the
+        # matched ones.  Weighting that class down by no_object_weight is
+        # what keeps the N - M unmatched queries from dominating.
+        weights = [1.0] * (bg_index + 1)
+        weights[bg_index] = cfg.no_object_weight
+        weight_t = lucid.tensor(weights, device=dev)
+
+        if int(gt_labels.shape[0]) == 0:
+            targets_i = lucid.full((n,), float(bg_index), device=dev).long()
+            cls_parts.append(F.cross_entropy(cls_i, targets_i, weight=weight_t))
+            continue
+
+        # Matching uses uniform points; the loss re-samples with the
+        # importance sampler, as the reference does.
+        match_coords = sample_point_coords(cfg.train_num_points, device=dev)
+        pred_idx, gt_idx = _m2f_match(
+            cls_i, msk_i, gt_labels, gt_masks, match_coords, cfg
+        )
+
+        label_data = [bg_index] * n
+        for p_i, g_i in zip(pred_idx, gt_idx):
+            label_data[p_i] = int(gt_labels[g_i].item())
+        cls_parts.append(
+            F.cross_entropy(
+                cls_i, lucid.tensor(label_data, device=dev).long(), weight=weight_t
+            )
+        )
+
+        if not pred_idx:
+            continue
+        pred_t = lucid.tensor(pred_idx, device=dev).long()
+        gt_t = lucid.tensor(gt_idx, device=dev).long()
+        src = msk_i[pred_t]  # (P, h, w)
+        tgt = gt_masks[gt_t].float()  # (P, H, W)
+
+        coords = uncertain_point_coords(
+            src, cfg.train_num_points, cfg.oversample_ratio, cfg.importance_sample_ratio
+        )
+        src_pts = point_sample(src, coords)
+        tgt_pts = point_sample(tgt, coords)
+        ce_parts.append(sigmoid_ce_loss(src_pts, tgt_pts))
+        dice_parts.append(dice_loss(src_pts, tgt_pts))
+
+    def _mean(parts: list[Tensor]) -> Tensor:
+        if not parts:
+            return lucid.zeros((), device=dev)
+        return lucid.cat([t.reshape(1) for t in parts]).sum() / float(b)
+
+    return _mean(cls_parts), _mean(ce_parts), _mean(dice_parts)
+
+
 class Mask2FormerForSemanticSegmentation(PretrainedModel):
     r"""Mask2Former universal segmentation model (Cheng et al., CVPR 2022).
 
@@ -1359,32 +1501,24 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
-        targets: dict[str, Tensor] | None = None,
+        targets: list[dict[str, Tensor]] | None = None,
     ) -> SemanticSegmentationOutput:
         """Run Mask2Former for semantic segmentation.
 
         Args:
             x:       (B, C, H, W) image batch.
-            targets: Rejected.  This family is inference-only — see the
-                     class docstring — so a target dict would be silently
-                     discarded, and the caller would watch a loss of
-                     ``None`` and conclude the model had converged.
+            targets: Optional per-image ``{"labels": (M,) class ids,
+                     "masks": (M, H, W) binary}``.  When given, §3.2.2's
+                     objective is computed — Hungarian matching plus the
+                     class / mask-BCE / dice terms, all mask terms on
+                     importance-sampled points, repeated on every decoder
+                     layer under ``deep_supervision``.
 
         Returns:
             ``SemanticSegmentationOutput`` with ``logits`` of shape
             ``(B, K, H, W)`` (no-object slot dropped — matching the reference
             semantic post-processing), upsampled to the input resolution.
         """
-        if targets is not None:
-            raise NotImplementedError(
-                "Mask2Former does not have a training path: the Hungarian "
-                "matcher, the class-CE / mask-BCE / dice objective, the "
-                "point-sampled mask loss and the per-decoder-layer auxiliary "
-                "losses are all unimplemented, so passing targets cannot "
-                "produce a loss.  Use this model for inference, or supply "
-                "your own criterion over the returned logits."
-            )
-
         iH = int(x.shape[2])
         iW = int(x.shape[3])
 
@@ -1433,4 +1567,30 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
         masks_flat: Tensor = masks_probs.reshape(b, n, iH * iW)  # (B, N, S)
         seg_flat: Tensor = lucid.matmul(masks_classes_t, masks_flat)  # (B, K, S)
         seg_logits: Tensor = seg_flat.reshape(b, self._cfg.num_classes, iH, iW)
-        return SemanticSegmentationOutput(logits=seg_logits, loss=None)
+        loss: Tensor | None = None
+        if targets is not None:
+            cfg = self._cfg
+            # Deep supervision: 3.2.2 applies the criterion after every
+            # decoder layer, not only the last.  ``intermediate`` already
+            # carries them, so the auxiliary terms cost no extra forward.
+            stages = (
+                range(len(intermediate))
+                if cfg.deep_supervision
+                else [len(intermediate) - 1]
+            )
+            parts: list[Tensor] = []
+            for si in stages:
+                stage_cls = cast(
+                    Tensor, self.class_predictor(intermediate[si].permute(1, 0, 2))
+                )
+                cls_l, ce_l, dice_l = _m2f_stage_loss(
+                    stage_cls, mask_predictions[si], targets, cfg
+                )
+                parts.append(
+                    cfg.class_weight * cls_l
+                    + cfg.mask_weight * ce_l
+                    + cfg.dice_weight * dice_l
+                )
+            loss = lucid.cat([t.reshape(1) for t in parts]).sum()
+
+        return SemanticSegmentationOutput(logits=seg_logits, loss=loss)

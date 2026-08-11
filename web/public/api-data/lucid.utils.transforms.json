@@ -7255,7 +7255,7 @@
           "see_also": []
         }
       ],
-      "summary": "AutoAugment (Cubuk et al., 2019 — arXiv:1805.09501).",
+      "summary": "AutoAugment (Cubuk et al., 2019 — [arXiv:1805.09501](https://arxiv.org/abs/1805.09501)).",
       "extended": "Each call samples one of 25 fixed sub-policies uniformly; each\nsub-policy is two `(op, probability, magnitude_idx)` triples\napplied sequentially with their own probability gates.  Three\npolicy tables are shipped, verbatim from the paper:\n\n* `\"imagenet\"` — Table 2 (default).  General-purpose vision\n  classification.\n* `\"cifar10\"` — Table 6.  Small-image classification.\n* `\"svhn\"` — Table 7.  Digits / OCR-style data.",
       "parameters": [
         {
@@ -7388,7 +7388,7 @@
           "see_also": []
         }
       ],
-      "summary": "RandAugment (Cubuk et al., 2020 — arXiv:1909.13719).",
+      "summary": "RandAugment (Cubuk et al., 2020 — [arXiv:1909.13719](https://arxiv.org/abs/1909.13719)).",
       "extended": "Each call samples `num_ops` ops uniformly with replacement from\nthe 14-op vocabulary and applies them sequentially, all sharing\nthe same magnitude $M$ (signed per-op for symmetric ops).\nReduces AutoAugment's two-level search space (policy + magnitude)\nto two scalar hyper-parameters that can be tuned with a simple\ngrid sweep.",
       "parameters": [
         {
@@ -7527,7 +7527,7 @@
           "see_also": []
         }
       ],
-      "summary": "Trivial Augment Wide (Müller & Hutter, 2021 — arXiv:2103.10158).",
+      "summary": "Trivial Augment Wide (Müller & Hutter, 2021 — [arXiv:2103.10158](https://arxiv.org/abs/2103.10158)).",
       "extended": "Each call draws one op uniformly from the 14-op vocabulary and one\nmagnitude uniformly from `[0, num_magnitude_bins)`.  Despite its\nsimplicity it matches the accuracy of much more elaborate policies\n(AutoAugment, RandAugment) on ImageNet — making it the default\n\"set-and-forget\" augmentation in modern recipes.",
       "parameters": [
         {

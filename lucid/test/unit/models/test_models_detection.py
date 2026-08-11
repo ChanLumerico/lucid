@@ -16,6 +16,8 @@ the CPU (Accelerate) and Metal (MLX) compute streams.
 import os
 import unittest
 
+import pytest
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.models._output import InstanceSegmentationOutput, ObjectDetectionOutput
@@ -41,6 +43,163 @@ def _build(factory, device: str):
     m = factory()
     m.eval()
     return m.to(device=device)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared label assignment / sampling
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _one_gt_iou() -> Tensor:
+    """IoU of one 10x10 ground truth against five hand-picked anchors.
+
+    The boxes are chosen so the overlaps are exact decimals — 1.00, 0.81,
+    0.49, 0.25, 0.00 — which lets the expected assignment be written down
+    rather than read off a run.
+    """
+    from lucid.models._utils._detection import box_iou
+
+    gt = lucid.tensor([[0.0, 0.0, 10.0, 10.0]])
+    anchors = lucid.tensor(
+        [
+            [0.0, 0.0, 10.0, 10.0],
+            [0.0, 0.0, 9.0, 9.0],
+            [0.0, 0.0, 7.0, 7.0],
+            [0.0, 0.0, 5.0, 5.0],
+            [50.0, 50.0, 60.0, 60.0],
+        ]
+    )
+    return box_iou(gt, anchors)
+
+
+class TestMatcher:
+    def test_overlaps_are_the_expected_decimals(self) -> None:
+        vals = [round(v, 4) for v in _one_gt_iou().reshape(-1).tolist()]
+        assert vals == [1.0, 0.81, 0.49, 0.25, 0.0]
+
+    def test_rpn_thresholds(self) -> None:
+        """Faster R-CNN 3.1.2: >0.7 object, <0.3 background, band ignored."""
+        from lucid.models._utils._detection import Matcher
+
+        got = Matcher(0.7, 0.3)(_one_gt_iou()).tolist()
+        assert got == [0, 0, -2, -1, -1]
+
+    def test_fast_rcnn_thresholds_put_negatives_in_the_band(self) -> None:
+        """Fast R-CNN 2.3 draws negatives from [0.1, 0.5), not from <0.1."""
+        from lucid.models._utils._detection import Matcher
+
+        got = Matcher(0.5, 0.1)(_one_gt_iou()).tolist()
+        # 0.49 and 0.25 land in the band; only the disjoint anchor is below.
+        assert got == [0, 0, -2, -2, -1]
+
+    def test_low_quality_rescues_the_best_anchor(self) -> None:
+        """The half of 3.1.2 that a plain threshold cannot express.
+
+        With both thresholds above every overlap, nothing is a positive and
+        the ground truth would train no anchor at all — which is exactly the
+        case the "anchor with the highest IoU" clause exists for.
+        """
+        from lucid.models._utils._detection import Matcher, box_iou
+
+        gt = lucid.tensor([[0.0, 0.0, 10.0, 10.0]])
+        anchors = lucid.tensor(
+            [
+                [0.0, 0.0, 9.0, 9.0],
+                [0.0, 0.0, 7.0, 7.0],
+                [50.0, 50.0, 60.0, 60.0],
+            ]
+        )
+        iou = box_iou(gt, anchors)
+        assert Matcher(0.90, 0.85)(iou).tolist() == [-1, -1, -1]
+        forced = Matcher(0.90, 0.85, allow_low_quality_matches=True)
+        assert forced(iou).tolist() == [0, -1, -1]
+
+    def test_low_quality_keeps_every_tied_anchor(self) -> None:
+        from lucid.models._utils._detection import Matcher, box_iou
+
+        gt = lucid.tensor([[0.0, 0.0, 10.0, 10.0]])
+        tied = lucid.tensor(
+            [
+                [0.0, 0.0, 9.0, 9.0],
+                [1.0, 1.0, 10.0, 10.0],
+                [50.0, 50.0, 60.0, 60.0],
+            ]
+        )
+        m = Matcher(0.90, 0.85, allow_low_quality_matches=True)
+        assert m(box_iou(gt, tied)).tolist() == [0, 0, -1]
+
+    def test_each_ground_truth_keeps_its_own_best(self) -> None:
+        from lucid.models._utils._detection import Matcher, box_iou
+
+        gt = lucid.tensor([[0.0, 0.0, 10.0, 10.0], [100.0, 100.0, 110.0, 110.0]])
+        anchors = lucid.tensor([[0.0, 0.0, 9.0, 9.0], [100.0, 100.0, 109.0, 109.0]])
+        m = Matcher(0.90, 0.85, allow_low_quality_matches=True)
+        assert m(box_iou(gt, anchors)).tolist() == [0, 1]
+
+    def test_empty_ground_truth_is_refused(self) -> None:
+        from lucid.models._utils._detection import Matcher, box_iou
+
+        anchors = lucid.tensor([[0.0, 0.0, 9.0, 9.0]])
+        with pytest.raises(ValueError, match="no ground-truth rows"):
+            Matcher(0.7, 0.3)(box_iou(lucid.zeros(0, 4), anchors))
+
+    def test_inverted_thresholds_are_refused(self) -> None:
+        from lucid.models._utils._detection import Matcher
+
+        with pytest.raises(ValueError, match="must not exceed"):
+            Matcher(0.3, 0.7)
+
+
+class TestBalancedPositiveNegativeSampler:
+    @staticmethod
+    def _labels(n_pos: int, n_neg: int, n_ignore: int = 0) -> Tensor:
+        return lucid.tensor([1] * n_pos + [0] * n_neg + [-1] * n_ignore).long()
+
+    def test_hits_the_requested_fraction(self) -> None:
+        """Fast R-CNN 2.3: 64 RoIs per image, 25% of them foreground."""
+        from lucid.models._utils._detection import BalancedPositiveNegativeSampler
+
+        lucid.manual_seed(0)
+        labels = self._labels(30, 200, 10)
+        pos, neg = BalancedPositiveNegativeSampler(64, 0.25)(labels)
+        p, n = pos.tolist(), neg.tolist()
+        assert (len(p), len(n)) == (16, 48)
+
+    def test_samples_are_disjoint_and_correctly_labelled(self) -> None:
+        from lucid.models._utils._detection import BalancedPositiveNegativeSampler
+
+        lucid.manual_seed(0)
+        labels = self._labels(30, 200, 10)
+        flat = labels.tolist()
+        pos, neg = BalancedPositiveNegativeSampler(64, 0.25)(labels)
+        p, n = pos.tolist(), neg.tolist()
+        assert not set(p) & set(n)
+        assert all(flat[i] == 1 for i in p)
+        assert all(flat[i] == 0 for i in n)
+
+    def test_shortfall_is_backfilled_with_negatives(self) -> None:
+        """3.1.3: an object-poor image still yields a full minibatch."""
+        from lucid.models._utils._detection import BalancedPositiveNegativeSampler
+
+        lucid.manual_seed(0)
+        pos, neg = BalancedPositiveNegativeSampler(64, 0.25)(self._labels(3, 200))
+        assert (len(pos.tolist()), len(neg.tolist())) == (3, 61)
+
+    def test_takes_what_exists_when_the_image_is_tiny(self) -> None:
+        from lucid.models._utils._detection import BalancedPositiveNegativeSampler
+
+        pos, neg = BalancedPositiveNegativeSampler(64, 0.25)(self._labels(1, 2))
+        assert (len(pos.tolist()), len(neg.tolist())) == (1, 2)
+
+    def test_reproducible_under_manual_seed(self) -> None:
+        from lucid.models._utils._detection import BalancedPositiveNegativeSampler
+
+        s = BalancedPositiveNegativeSampler(64, 0.25)
+        labels = self._labels(30, 200)
+        lucid.manual_seed(0)
+        first = s(labels)[0].tolist()
+        lucid.manual_seed(0)
+        assert s(labels)[0].tolist() == first
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -111,6 +270,78 @@ class TestFastRCNN:
 # ─────────────────────────────────────────────────────────────────────────────
 # Faster R-CNN
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestFastRCNNSampling:
+    """§2.3's minibatch: 64 RoIs per image, 25% foreground.
+
+    Proposals are built so the three assignment classes are populated by
+    construction — 40 exact overlaps, a graded ramp through the
+    ``[0.1, 0.5)`` hard-negative band, and 110 disjoint boxes that the
+    paper excludes from training entirely.
+    """
+
+    @staticmethod
+    def _fixture() -> tuple[object, list[Tensor], Tensor]:
+        from lucid.models.vision.fast_rcnn import FastRCNNForObjectDetection
+        from lucid.models.vision.fast_rcnn._config import FastRCNNConfig
+
+        m = FastRCNNForObjectDetection(FastRCNNConfig(num_classes=3))
+        props = [[0.0, 0.0, 100.0, 100.0]] * 40
+        props += [[0.0, 0.0, float(sz), float(sz)] for sz in range(55, 205)]
+        props += [[500.0, 500.0, 520.0, 520.0]] * 110
+        return m, [lucid.tensor(props)], lucid.tensor([[0.0, 0.0, 100.0, 100.0]])
+
+    def test_disjoint_proposals_are_ignored_not_background(self) -> None:
+        """A proposal overlapping nothing is too easy to be a negative."""
+        m, proposals, gt = self._fixture()
+        labels, _ = m._assign_proposals(  # type: ignore[attr-defined]
+            proposals[0], gt, lucid.tensor([1]).long()
+        )
+        lab = labels.tolist()
+        assert sum(1 for v in lab if v < 0) == 110
+
+    def test_sampled_minibatch_has_the_paper_split(self) -> None:
+        m, proposals, gt = self._fixture()
+        labels, _ = m._assign_proposals(  # type: ignore[attr-defined]
+            proposals[0], gt, lucid.tensor([1]).long()
+        )
+        lab = labels.tolist()
+        lucid.manual_seed(0)
+        keep = m._sample_proposals(labels).tolist()  # type: ignore[attr-defined]
+        assert len(keep) == 64
+        assert sum(1 for i in keep if lab[i] > 0) == 16
+        assert sum(1 for i in keep if lab[i] == 0) == 48
+        assert sum(1 for i in keep if lab[i] < 0) == 0
+
+    def test_sampled_negatives_lie_in_the_hard_band(self) -> None:
+        from lucid.models._utils._detection import box_iou
+
+        m, proposals, gt = self._fixture()
+        labels, _ = m._assign_proposals(  # type: ignore[attr-defined]
+            proposals[0], gt, lucid.tensor([1]).long()
+        )
+        lab = labels.tolist()
+        ious = box_iou(proposals[0], gt).reshape(-1).tolist()
+        lucid.manual_seed(0)
+        keep = m._sample_proposals(labels).tolist()  # type: ignore[attr-defined]
+        assert all(0.1 <= ious[i] < 0.5 for i in keep if lab[i] == 0)
+
+    def test_loss_depends_on_the_sample_and_is_seed_reproducible(self) -> None:
+        m, proposals, gt = self._fixture()
+        targets = [{"boxes": gt, "labels": lucid.tensor([1]).long()}]
+        x = lucid.randn(1, 3, 128, 128)
+
+        lucid.manual_seed(1)
+        first = float(m(x, proposals=proposals, targets=targets).loss.item())
+        lucid.manual_seed(1)
+        again = float(m(x, proposals=proposals, targets=targets).loss.item())
+        lucid.manual_seed(2)
+        other = float(m(x, proposals=proposals, targets=targets).loss.item())
+
+        assert first == again
+        # If the sampler were a no-op the seed could not move the loss.
+        assert first != other
 
 
 class TestFasterRCNN:
@@ -191,6 +422,184 @@ class TestFasterRCNNTopology:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class TestFasterRCNNTraining:
+    """§3.1.2 assignment / §3.1.3 sampling / the four-term loss."""
+
+    @staticmethod
+    def _model() -> object:
+        from lucid.models.vision.faster_rcnn import FasterRCNNForObjectDetection
+        from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
+
+        return FasterRCNNForObjectDetection(
+            FasterRCNNConfig(
+                num_classes=4,
+                backbone_layers=(1, 1, 1, 1),
+                rpn_pre_nms_top_n=100,
+                rpn_post_nms_top_n=50,
+            )
+        )
+
+    @staticmethod
+    def _targets() -> list[dict[str, Tensor]]:
+        return [
+            {
+                "boxes": lucid.tensor(
+                    [[10.0, 10.0, 60.0, 60.0], [70.0, 70.0, 110.0, 110.0]]
+                ),
+                "labels": lucid.tensor([1, 2]).long(),
+            }
+        ]
+
+    def test_loss_is_finite_and_inference_is_unchanged(self) -> None:
+        lucid.manual_seed(0)
+        m = self._model()
+        x = lucid.randn(1, 3, 128, 128)
+        out = m(x, targets=self._targets())
+        assert out.loss is not None
+        assert bool(out.loss.isfinite().all().item())
+        assert m(x).loss is None
+
+    def test_gradient_reaches_both_stages(self) -> None:
+        """End-to-end means the RPN trains too, not just the box head."""
+        lucid.manual_seed(0)
+        m = self._model()
+        m(lucid.randn(1, 3, 128, 128), targets=self._targets()).loss.backward()
+        trained = {
+            name.split(".")[0]
+            for name, prm in m.named_parameters()
+            if prm.grad is not None and float(prm.grad.abs().sum().item()) > 0
+        }
+        assert {"backbone", "rpn", "roi_heads"} <= trained
+
+    def test_all_four_terms_are_alive(self) -> None:
+        """A term stuck at zero is a term that is not being computed."""
+        lucid.manual_seed(0)
+        m = self._model()
+        x = lucid.randn(1, 3, 128, 128)
+        targets = self._targets()
+
+        feats = m.backbone(x)
+        strides = [max(1, 128 // int(f.shape[2])) for f in feats]
+        logits, deltas = m.rpn.head.forward(feats)
+        anchors = m._anchor_gen.forward(feats, strides)  # type: ignore[attr-defined]
+        obj, reg = m._rpn_loss(  # type: ignore[attr-defined]
+            logits, deltas, anchors, targets, (128, 128)
+        )
+        assert float(obj.item()) > 0.0
+        assert float(reg.item()) > 0.0
+
+        props = m._rpn_proposals(  # type: ignore[attr-defined]
+            logits, deltas, anchors, (128, 128)
+        )
+        sampled, labels, _, _ = m._select_training_samples(  # type: ignore[attr-defined]
+            props, targets
+        )
+        # Ground truths are appended to the proposals, so an untrained RPN
+        # still yields positives to learn from.
+        assert sum(1 for v in labels[0].tolist() if v > 0) >= 2
+        assert int(sampled[0].shape[0]) <= 512
+
+    def test_box_regression_is_class_specific(self) -> None:
+        """Only the ground-truth class channel of a positive RoI may learn."""
+        from lucid.nn import Parameter
+
+        m = self._model()
+        k = 4
+        deltas = Parameter(lucid.zeros(3, k * 4))
+        labels = [lucid.tensor([0, 2, 1]).long()]
+        reg_targets = [lucid.tensor([[0.1, 0.1, 0.1, 0.1]] * 3)]
+        _, reg_loss = m._roi_loss(  # type: ignore[attr-defined]
+            lucid.zeros(3, k), deltas, labels, reg_targets
+        )
+        reg_loss.backward()
+        per_class = deltas.grad.reshape(3, k, 4).abs().sum(dim=2).tolist()
+        assert [c for c, v in enumerate(per_class[0]) if v > 0] == []
+        assert [c for c, v in enumerate(per_class[1]) if v > 0] == [2]
+        assert [c for c, v in enumerate(per_class[2]) if v > 0] == [1]
+
+    def test_targets_with_precomputed_proposals_is_refused(self) -> None:
+        m = self._model()
+        x = lucid.randn(1, 3, 128, 128)
+        props = [lucid.tensor([[0.0, 0.0, 32.0, 32.0]])]
+        with pytest.raises(ValueError, match="only defined when the RPN"):
+            m(x, targets=self._targets(), proposals=props)
+
+    def test_cross_boundary_flag_changes_the_labels(self) -> None:
+        """3.1.2's clause is off by default; turning it on must do something."""
+        from lucid.models._utils._detection import Matcher
+        from lucid.models.vision.faster_rcnn import FasterRCNNForObjectDetection
+        from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
+
+        anchors = lucid.tensor(
+            [
+                [0.0, 0.0, 50.0, 50.0],  # inside
+                [-20.0, 0.0, 50.0, 50.0],  # crosses the left edge
+            ]
+        )
+        gt = lucid.tensor([[0.0, 0.0, 50.0, 50.0]])
+        matcher = Matcher(0.7, 0.3, allow_low_quality_matches=True)
+
+        off = FasterRCNNForObjectDetection(
+            FasterRCNNConfig(num_classes=2, backbone_layers=(1, 1, 1, 1))
+        )
+        on = FasterRCNNForObjectDetection(
+            FasterRCNNConfig(
+                num_classes=2,
+                backbone_layers=(1, 1, 1, 1),
+                rpn_ignore_cross_boundary=True,
+            )
+        )
+        lab_off, _ = off._assign_anchors(  # type: ignore[attr-defined]
+            anchors, gt, matcher, (128, 128)
+        )
+        lab_on, _ = on._assign_anchors(  # type: ignore[attr-defined]
+            anchors, gt, matcher, (128, 128)
+        )
+        assert lab_off.tolist()[1] != -1
+        assert lab_on.tolist()[1] == -1
+        # the in-bounds anchor is untouched either way
+        assert lab_off.tolist()[0] == lab_on.tolist()[0] == 1
+
+    def test_overfits_a_single_example(self) -> None:
+        """The loss has to be trainable, not merely finite."""
+        import lucid.optim as optim
+        from lucid.models.vision.faster_rcnn import FasterRCNNForObjectDetection
+        from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
+
+        lucid.manual_seed(0)
+        m = FasterRCNNForObjectDetection(
+            FasterRCNNConfig(
+                num_classes=3,
+                backbone_layers=(1, 1, 1, 1),
+                rpn_pre_nms_top_n=60,
+                rpn_post_nms_top_n=30,
+                rpn_batch_size_per_image=64,
+                roi_batch_size_per_image=64,
+            )
+        )
+        m.train()
+        opt = optim.SGD(m.parameters(), lr=0.005, momentum=0.9)
+        x = lucid.randn(1, 3, 128, 128)
+        targets = [
+            {
+                "boxes": lucid.tensor([[16.0, 16.0, 64.0, 64.0]]),
+                "labels": lucid.tensor([1]).long(),
+            }
+        ]
+        losses: list[float] = []
+        for _ in range(20):
+            opt.zero_grad()
+            out = m(x, targets=targets)
+            out.loss.backward()
+            opt.step()
+            losses.append(float(out.loss.item()))
+
+        assert all(v == v for v in losses)
+        # The sampler redraws every step, so the curve is noisy; compare the
+        # ends rather than asking for monotonicity.
+        assert losses[-1] < losses[0]
+
+
 class TestMaskRCNN:
     def test_factory_and_forward(self, device: str) -> None:
         from lucid.models.vision.mask_rcnn import (
@@ -259,6 +668,93 @@ class TestMaskRCNNTopology:
 # ─────────────────────────────────────────────────────────────────────────────
 # DETR
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestMaskRCNNTraining:
+    """3's ``L = L_cls + L_box + L_mask`` on top of the inherited RPN terms."""
+
+    @staticmethod
+    def _model() -> object:
+        from lucid.models.vision.mask_rcnn import MaskRCNNForObjectDetection
+        from lucid.models.vision.mask_rcnn._config import MaskRCNNConfig
+
+        return MaskRCNNForObjectDetection(
+            MaskRCNNConfig(
+                num_classes=4,
+                backbone_layers=(1, 1, 1, 1),
+                rpn_pre_nms_top_n=80,
+                rpn_post_nms_top_n=40,
+                rpn_batch_size_per_image=64,
+                roi_batch_size_per_image=32,
+            )
+        )
+
+    @staticmethod
+    def _targets(with_masks: bool = True) -> list[dict[str, Tensor]]:
+        side = 128
+        square = [
+            [1.0 if (10 <= r < 60 and 10 <= c < 60) else 0.0 for c in range(side)]
+            for r in range(side)
+        ]
+        tgt: dict[str, Tensor] = {
+            "boxes": lucid.tensor([[10.0, 10.0, 60.0, 60.0]]),
+            "labels": lucid.tensor([1]).long(),
+        }
+        if with_masks:
+            tgt["masks"] = lucid.tensor([square])
+        return [tgt]
+
+    def test_mask_term_changes_the_loss(self) -> None:
+        """Dropping "masks" must train the detector alone, not silently pass."""
+        lucid.manual_seed(0)
+        m = self._model()
+        x = lucid.randn(1, 3, 128, 128)
+        with_masks = float(m(x, targets=self._targets(True)).loss.item())
+        without = float(m(x, targets=self._targets(False)).loss.item())
+        assert with_masks != without
+        assert with_masks > without
+        assert m(x).loss is None
+
+    def test_mask_loss_is_defined_on_the_gt_class_only(self) -> None:
+        """3: "other mask outputs do not contribute to the loss"."""
+        from lucid.models._utils._detection import maskrcnn_loss
+        from lucid.nn import Parameter
+
+        logits = Parameter(lucid.zeros(3, 4, 6, 6))
+        labels = lucid.tensor([0, 2, 1]).long()
+        maskrcnn_loss(logits, labels, lucid.zeros(3, 6, 6)).backward()
+        per_channel = logits.grad.abs().sum(dim=(2, 3)).tolist()
+        assert [c for c, v in enumerate(per_channel[0]) if v > 0] == []
+        assert [c for c, v in enumerate(per_channel[1]) if v > 0] == [2]
+        assert [c for c, v in enumerate(per_channel[2]) if v > 0] == [1]
+
+    def test_mask_targets_are_cropped_into_the_roi_frame(self) -> None:
+        """3.1: the target is the RoI-aligned intersection, not the raw mask."""
+        from lucid.models._utils._detection import project_masks_on_boxes
+
+        side = 20
+        quadrant = [
+            [1.0 if (r < 10 and c < 10) else 0.0 for c in range(side)]
+            for r in range(side)
+        ]
+        gt_masks = lucid.tensor([quadrant])
+        proposals = lucid.tensor([[0.0, 0.0, 10.0, 10.0], [10.0, 10.0, 20.0, 20.0]])
+        matched = lucid.tensor([0, 0]).long()
+        target = project_masks_on_boxes(gt_masks, proposals, matched, 4)
+
+        assert tuple(target.shape) == (2, 4, 4)
+        # The proposal sitting on the square is entirely inside it; the one on
+        # the opposite quadrant sees none of it.
+        assert float(target[0].mean().item()) == 1.0
+        assert float(target[1].mean().item()) == 0.0
+
+    def test_no_positive_roi_yields_zero_not_nan(self) -> None:
+        from lucid.models._utils._detection import maskrcnn_loss
+
+        loss = maskrcnn_loss(
+            lucid.zeros(2, 4, 6, 6), lucid.tensor([0, 0]).long(), lucid.zeros(2, 6, 6)
+        )
+        assert float(loss.item()) == 0.0
 
 
 class TestDETR:
@@ -692,3 +1188,166 @@ class TestMaskRCNNPretrainedLoad(unittest.TestCase):
         out = m(lucid.randn(1, 3, 256, 256))
         assert int(out.logits.shape[-1]) == 91
         assert int(out.pred_masks.shape[-1]) == 28
+
+
+class TestTruncatedSVD:
+    """Fast R-CNN §3.1's post-training fc6/fc7 compression."""
+
+    def test_full_rank_reproduces_the_layer(self) -> None:
+        import lucid.nn as nn
+
+        from lucid.models._utils._common import truncated_svd_linear
+
+        lucid.manual_seed(0)
+        layer = nn.Linear(64, 32)
+        x = lucid.randn(4, 64)
+        exact = truncated_svd_linear(layer, rank=32)
+        assert float((exact(x) - layer(x)).abs().max().item()) < 1e-4
+
+    def test_low_rank_shrinks_the_parameter_count(self) -> None:
+        import math
+
+        import lucid.nn as nn
+
+        from lucid.models._utils._common import truncated_svd_linear
+
+        lucid.manual_seed(0)
+        layer = nn.Linear(64, 32)
+        compressed = truncated_svd_linear(layer, rank=8)
+        original = 64 * 32 + 32
+        built = sum(math.prod(p.shape) for p in compressed.parameters())
+        # t(u + v) + bias, and it must actually be a saving.
+        assert built == 8 * 64 + 32 * 8 + 32
+        assert built < original
+
+    def test_rank_beyond_the_spectrum_is_refused(self) -> None:
+        import lucid.nn as nn
+
+        from lucid.models._utils._common import truncated_svd_linear
+
+        with pytest.raises(ValueError, match=r"rank must lie in \[1, 32\]"):
+            truncated_svd_linear(nn.Linear(64, 32), rank=33)
+
+
+class TestRCNNTraining:
+    """Stages 1 and 3 of R-CNN's three-stage recipe.
+
+    The proposal set is built so the two IoU thresholds select *different*
+    subsets — otherwise Appendix C's tighter 0.6 would be untested.
+    """
+
+    @staticmethod
+    def _fixture():
+        from lucid.models.vision.rcnn import RCNNForObjectDetection
+        from lucid.models.vision.rcnn._config import RCNNConfig
+
+        model = RCNNForObjectDetection(RCNNConfig(num_classes=3))
+        gt = lucid.tensor([[10.0, 10.0, 60.0, 60.0]])
+        proposals = lucid.tensor(
+            [
+                [12.0, 12.0, 62.0, 62.0],  # IoU .855 — both stages, offset
+                [10.0, 10.0, 60.0, 101.0],  # IoU .549 — stage 1 only
+                [100.0, 100.0, 120.0, 120.0],  # IoU .000 — background
+            ]
+        )
+        targets = [{"boxes": gt, "labels": lucid.tensor([1]).long()}]
+        return model, gt, proposals, targets
+
+    def test_the_fixture_spans_both_thresholds(self) -> None:
+        from lucid.models._utils._detection import box_iou
+
+        _, gt, proposals, _ = self._fixture()
+        ious = [round(v, 3) for v in box_iou(gt, proposals).reshape(-1).tolist()]
+        assert ious == [0.855, 0.549, 0.0]
+
+    def test_loss_is_finite_and_inference_unchanged(self) -> None:
+        lucid.manual_seed(0)
+        model, _, proposals, targets = self._fixture()
+        x = lucid.randn(1, 3, 128, 128)
+        out = model(x, proposals=[proposals], targets=targets)
+        assert out.loss is not None
+        assert bool(out.loss.isfinite().all().item())
+        assert model(x, proposals=[proposals]).loss is None
+
+    def test_both_stage_terms_are_alive(self) -> None:
+        lucid.manual_seed(0)
+        model, _, proposals, targets = self._fixture()
+        x = lucid.randn(1, 3, 128, 128)
+        feats = model.conv_features(
+            model._warp_proposals(x, proposals)  # type: ignore[attr-defined]
+        )
+        logits, deltas = model.fc_head(feats)
+        cls_loss, reg_loss = model._stage_losses(  # type: ignore[attr-defined]
+            logits, deltas, proposals, targets[0]
+        )
+        assert float(cls_loss.item()) > 0.0
+        assert float(reg_loss.item()) > 0.0
+
+    def test_appendix_c_threshold_excludes_the_loose_proposal(self) -> None:
+        """Stage 3 trains on IoU > 0.6, which is stricter than stage 1's 0.5."""
+        import lucid.nn as nn
+
+        model, _, proposals, targets = self._fixture()
+        deltas = nn.Parameter(lucid.zeros(3, 3 * 4))
+        _, reg_loss = model._stage_losses(  # type: ignore[attr-defined]
+            lucid.zeros(3, 4), deltas, proposals, targets[0]
+        )
+        reg_loss.backward()
+        per_prop = deltas.grad.reshape(3, 3, 4).abs().sum(dim=2).tolist()
+        trained = [i for i, row in enumerate(per_prop) if sum(row) > 0]
+        assert trained == [0]
+
+    def test_regressor_is_class_specific(self) -> None:
+        """Appendix C trains a separate regressor per class."""
+        import lucid.nn as nn
+
+        model, _, proposals, targets = self._fixture()
+        deltas = nn.Parameter(lucid.zeros(3, 3 * 4))
+        _, reg_loss = model._stage_losses(  # type: ignore[attr-defined]
+            lucid.zeros(3, 4), deltas, proposals, targets[0]
+        )
+        reg_loss.backward()
+        rows = deltas.grad.reshape(3, 3, 4).abs().sum(dim=2).tolist()[0]
+        # label 1 is the first foreground class, so regressor row 0.
+        assert [c for c, v in enumerate(rows) if v > 0] == [0]
+
+    def test_targets_without_proposals_is_refused(self) -> None:
+        model, _, _, targets = self._fixture()
+        with pytest.raises(ValueError, match="does not generate its own regions"):
+            model(lucid.randn(1, 3, 128, 128), targets=targets)
+
+
+class TestLinearSVM:
+    """R-CNN stage 2's optimisation (the mining loop is the caller's)."""
+
+    def test_separates_a_linearly_separable_set(self) -> None:
+        from lucid.models._utils._common import fit_linear_svm
+
+        lucid.manual_seed(0)
+        pos = [[2.0 + 0.1 * i, 0.3 * (i % 3)] for i in range(20)]
+        neg = [[-2.0 - 0.1 * i, 0.3 * (i % 3)] for i in range(20)]
+        x = lucid.tensor(pos + neg)
+        y = lucid.tensor([1.0] * 20 + [-1.0] * 20)
+        w, b = fit_linear_svm(x, y, steps=300, lr=0.02)
+
+        scores = (x @ w.reshape(-1, 1)).reshape(-1) + b
+        correct = sum((v > 0) == (i < 20) for i, v in enumerate(scores.tolist()))
+        assert correct == 40
+        # The clusters differ only along x, so the separator must too.
+        assert abs(w.tolist()[0]) > abs(w.tolist()[1])
+
+    def test_zero_one_labels_are_refused(self) -> None:
+        from lucid.models._utils._common import fit_linear_svm
+
+        with pytest.raises(ValueError, match=r"exactly \+1 and -1"):
+            fit_linear_svm(
+                lucid.tensor([[1.0, 0.0], [-1.0, 0.0]]), lucid.tensor([1.0, 0.0])
+            )
+
+    def test_single_class_is_refused(self) -> None:
+        from lucid.models._utils._common import fit_linear_svm
+
+        with pytest.raises(ValueError, match="both positive and negative"):
+            fit_linear_svm(
+                lucid.tensor([[1.0, 0.0], [-1.0, 0.0]]), lucid.tensor([1.0, 1.0])
+            )

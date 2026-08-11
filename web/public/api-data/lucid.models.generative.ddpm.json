@@ -218,7 +218,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ddpm import (\n...     DDPMConfig, DDPMForImageGeneration,\n... )\n>>> cfg = DDPMConfig(sample_size=32, base_channels=32,\n...                  channel_mult=(1, 2), num_res_blocks=1,\n...                  resnet_groups=16, num_train_timesteps=100)\n>>> model = DDPMForImageGeneration(cfg).eval()\n>>> x_t = lucid.randn((1, 3, 32, 32))\n>>> t = lucid.tensor([42]).long()\n>>> out = model(x_t, t)\n>>> out.sample.shape   # (1, 3, 32, 32)\n(1, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 (arXiv:2006.11239); Improved-DDPM additions\nfrom Nichol and Dhariwal, ICML 2021 (arXiv:2102.09672).\n\nTraining loss (when `target` is supplied):\n\n\n\n$$\n\\mathcal{L}_{\\text{simple}}(\\theta)\n    = \\mathbb{E}_{t, x_0, \\epsilon}\\!\\left[\n        \\big\\lVert \\epsilon - \\epsilon_\\theta(x_t, t)\n        \\big\\rVert^2\n      \\right],\n$$\n\nwhere $x_t = \\sqrt{\\bar{\\alpha}_t} x_0 + \\sqrt{1 - \\bar{\\alpha}_t}\\, \\epsilon$."
+        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 ([arXiv:2006.11239](https://arxiv.org/abs/2006.11239)); Improved-DDPM additions\nfrom Nichol and Dhariwal, ICML 2021 ([arXiv:2102.09672](https://arxiv.org/abs/2102.09672)).\n\nTraining loss (when `target` is supplied):\n\n\n\n$$\n\\mathcal{L}_{\\text{simple}}(\\theta)\n    = \\mathbb{E}_{t, x_0, \\epsilon}\\!\\left[\n        \\big\\lVert \\epsilon - \\epsilon_\\theta(x_t, t)\n        \\big\\rVert^2\n      \\right],\n$$\n\nwhere $x_t = \\sqrt{\\bar{\\alpha}_t} x_0 + \\sqrt{1 - \\bar{\\alpha}_t}\\, \\epsilon$."
       ],
       "attributes": [
         {
@@ -318,7 +318,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ddpm import DDPMConfig, DDPMModel\n>>> cfg = DDPMConfig(sample_size=32, base_channels=32,\n...                  channel_mult=(1, 2), num_res_blocks=1,\n...                  resnet_groups=16, num_train_timesteps=100)\n>>> model = DDPMModel(cfg).eval()\n>>> x_t = lucid.randn((1, 3, 32, 32))\n>>> t = lucid.tensor([42]).long()\n>>> out = model(x_t, t)\n>>> out.sample.shape   # (1, 3, 32, 32) — predicted noise\n(1, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 (arXiv:2006.11239).\n\nThe forward Markov chain has the closed-form marginal\n\n\n\n$$\nq(x_t \\mid x_0)\n    = \\mathcal{N}\\!\\big(\n        x_t;\\;\n        \\sqrt{\\bar{\\alpha}_t}\\, x_0,\\;\n        (1 - \\bar{\\alpha}_t)\\, \\mathbf{I}\n      \\big),\n$$\n\nwith $\\bar{\\alpha}_t = \\prod_{s=1}^{t} (1 - \\beta_s)$.  The\nU-Net is trained to predict the injected noise so reverse sampling\niterates $t = T, T-1, \\ldots, 1$ via the standard ancestral\nGaussian update."
+        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 ([arXiv:2006.11239](https://arxiv.org/abs/2006.11239)).\n\nThe forward Markov chain has the closed-form marginal\n\n\n\n$$\nq(x_t \\mid x_0)\n    = \\mathcal{N}\\!\\big(\n        x_t;\\;\n        \\sqrt{\\bar{\\alpha}_t}\\, x_0,\\;\n        (1 - \\bar{\\alpha}_t)\\, \\mathbf{I}\n      \\big),\n$$\n\nwith $\\bar{\\alpha}_t = \\prod_{s=1}^{t} (1 - \\beta_s)$.  The\nU-Net is trained to predict the injected noise so reverse sampling\niterates $t = T, T-1, \\ldots, 1$ via the standard ancestral\nGaussian update."
       ],
       "attributes": [
         {
@@ -427,7 +427,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ddpm import DDPMConfig\n>>> from lucid.models.generative.ddpm._model import DDPMUNet\n>>> cfg = DDPMConfig(sample_size=32, base_channels=32,\n...                  channel_mult=(1, 2), num_res_blocks=1,\n...                  attention_resolutions=(16,), resnet_groups=16)\n>>> unet = DDPMUNet(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> t = lucid.tensor([42]).long()\n>>> out = unet(x, t)\n>>> out.shape   # (1, 3, 32, 32)\n(1, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 (arXiv:2006.11239); architecture details in\nAppendix B.  Improved-DDPM additions follow Nichol and Dhariwal, *\n\"Improved Denoising Diffusion Probabilistic Models\"*, ICML, 2021\n(arXiv:2102.09672).\n\nResBlock conditioning recipe:\n\n\n\n$$\nh = \\mathrm{Conv}_2\\!\\big(\n    \\mathrm{SiLU}(\n        \\mathrm{Norm}_2(\n            \\mathrm{SiLU}(t \\cdot W_t) + \\mathrm{Conv}_1(\n                \\mathrm{SiLU}(\\mathrm{Norm}_1(x))\n            )\n        )\n    )\n\\big)\n+ \\mathrm{Skip}(x).\n$$"
+        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 ([arXiv:2006.11239](https://arxiv.org/abs/2006.11239)); architecture details in\nAppendix B.  Improved-DDPM additions follow Nichol and Dhariwal, *\n\"Improved Denoising Diffusion Probabilistic Models\"*, ICML, 2021\n([arXiv:2102.09672](https://arxiv.org/abs/2102.09672)).\n\nResBlock conditioning recipe:\n\n\n\n$$\nh = \\mathrm{Conv}_2\\!\\big(\n    \\mathrm{SiLU}(\n        \\mathrm{Norm}_2(\n            \\mathrm{SiLU}(t \\cdot W_t) + \\mathrm{Conv}_1(\n                \\mathrm{SiLU}(\\mathrm{Norm}_1(x))\n            )\n        )\n    )\n\\big)\n+ \\mathrm{Skip}(x).\n$$"
       ],
       "attributes": [
         {
@@ -508,7 +508,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ddpm import ddpm_cifar\n>>> model = ddpm_cifar().eval()\n>>> x_t = lucid.randn((1, 3, 32, 32))\n>>> t = lucid.tensor([42]).long()\n>>> out = model(x_t, t)\n>>> out.sample.shape   # (1, 3, 32, 32) — predicted noise\n(1, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 (arXiv:2006.11239), Appendix B.1."
+        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 ([arXiv:2006.11239](https://arxiv.org/abs/2006.11239)), Appendix B.1."
       ],
       "attributes": [],
       "warns": [],
@@ -1367,7 +1367,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ddpm import ddpm_cifar_gen\n>>> model = ddpm_cifar_gen().eval()\n>>> x_t = lucid.randn((1, 3, 32, 32))\n>>> t = lucid.tensor([42]).long()\n>>> out = model(x_t, t)\n>>> out.sample.shape   # (1, 3, 32, 32)\n(1, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 (arXiv:2006.11239), Appendix B.1."
+        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 ([arXiv:2006.11239](https://arxiv.org/abs/2006.11239)), Appendix B.1."
       ],
       "attributes": [],
       "warns": [],
@@ -2220,7 +2220,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ddpm import ddpm_imagenet64\n>>> model = ddpm_imagenet64().eval()\n>>> x_t = lucid.randn((1, 3, 64, 64))\n>>> t = lucid.tensor([1234]).long()\n>>> out = model(x_t, t)\n>>> out.sample.shape   # learn_sigma=True -> 2 * 3 = 6 channels\n(1, 6, 64, 64)"
       ],
       "notes": [
-        "Reference: Nichol and Dhariwal, *\"Improved Denoising Diffusion\nProbabilistic Models\"*, ICML, 2021 (arXiv:2102.09672), Table 1."
+        "Reference: Nichol and Dhariwal, *\"Improved Denoising Diffusion\nProbabilistic Models\"*, ICML, 2021 ([arXiv:2102.09672](https://arxiv.org/abs/2102.09672)), Table 1."
       ],
       "attributes": [],
       "warns": [],
@@ -3794,7 +3794,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ddpm import ddpm_imagenet64_gen\n>>> model = ddpm_imagenet64_gen(learn_sigma=False).eval()\n>>> x_t = lucid.randn((1, 3, 64, 64))\n>>> t = lucid.tensor([1234]).long()\n>>> out = model(x_t, t)\n>>> out.sample.shape   # (1, 3, 64, 64)\n(1, 3, 64, 64)"
       ],
       "notes": [
-        "Reference: Nichol and Dhariwal, *\"Improved Denoising Diffusion\nProbabilistic Models\"*, ICML, 2021 (arXiv:2102.09672), Table 1."
+        "Reference: Nichol and Dhariwal, *\"Improved Denoising Diffusion\nProbabilistic Models\"*, ICML, 2021 ([arXiv:2102.09672](https://arxiv.org/abs/2102.09672)), Table 1."
       ],
       "attributes": [],
       "warns": [],
@@ -3840,7 +3840,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ddpm import ddpm_lsun\n>>> model = ddpm_lsun().eval()\n>>> x_t = lucid.randn((1, 3, 256, 256))\n>>> t = lucid.tensor([500]).long()\n>>> out = model(x_t, t)\n>>> out.sample.shape   # (1, 3, 256, 256)\n(1, 3, 256, 256)"
       ],
       "notes": [
-        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 (arXiv:2006.11239), Appendix B.2."
+        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 ([arXiv:2006.11239](https://arxiv.org/abs/2006.11239)), Appendix B.2."
       ],
       "attributes": [],
       "warns": [],
@@ -5033,7 +5033,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ddpm import ddpm_lsun_gen\n>>> model = ddpm_lsun_gen().eval()\n>>> x_t = lucid.randn((1, 3, 256, 256))\n>>> t = lucid.tensor([500]).long()\n>>> out = model(x_t, t)\n>>> out.sample.shape   # (1, 3, 256, 256)\n(1, 3, 256, 256)"
       ],
       "notes": [
-        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 (arXiv:2006.11239), Appendix B.2."
+        "Reference: Ho, Jain, and Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS, 2020 ([arXiv:2006.11239](https://arxiv.org/abs/2006.11239)), Appendix B.2."
       ],
       "attributes": [],
       "warns": [],
@@ -6209,7 +6209,7 @@
         ">>> from lucid.models import ddpm_lsun\n>>> model = ddpm_lsun(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Ho, Jain, Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS 2020 (arXiv:2006.11239)."
+        "Reference: Ho, Jain, Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS 2020 ([arXiv:2006.11239](https://arxiv.org/abs/2006.11239))."
       ],
       "attributes": [
         {
@@ -6248,7 +6248,7 @@
         ">>> from lucid.models import ddpm_cifar\n>>> model = ddpm_cifar(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Ho, Jain, Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS 2020 (arXiv:2006.11239)."
+        "Reference: Ho, Jain, Abbeel, *\"Denoising Diffusion Probabilistic\nModels\"*, NeurIPS 2020 ([arXiv:2006.11239](https://arxiv.org/abs/2006.11239))."
       ],
       "attributes": [
         {

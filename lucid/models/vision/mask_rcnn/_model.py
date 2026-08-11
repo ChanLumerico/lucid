@@ -55,11 +55,18 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import InstanceSegmentationOutput
 from lucid.models._utils._detection import (
+    BalancedPositiveNegativeSampler,
+    Matcher,
     paste_masks_in_image,
     remove_small_boxes,
     _ReferenceAnchorGenerator,
+    fastrcnn_loss,
+    maskrcnn_loss,
     multiscale_roi_align,
     nms,
+    project_masks_on_boxes,
+    rpn_loss,
+    select_training_samples,
 )
 from lucid.models.vision.faster_rcnn._model import (
     _BackboneWithFPN,
@@ -329,16 +336,115 @@ class MaskRCNNForObjectDetection(PretrainedModel):
     # Forward
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Training (shared assignment / sampling + the mask branch's L_mask)
+    # ------------------------------------------------------------------
+
+    def _rpn_loss(
+        self,
+        logits: list[Tensor],
+        deltas: list[Tensor],
+        anchors: list[Tensor],
+        targets: list[dict[str, Tensor]],
+        image_size: tuple[int, int],
+    ) -> tuple[Tensor, Tensor]:
+        cfg = self._cfg
+        return rpn_loss(
+            logits,
+            deltas,
+            anchors,
+            targets,
+            Matcher(
+                cfg.rpn_fg_iou_thresh,
+                cfg.rpn_bg_iou_thresh,
+                allow_low_quality_matches=True,
+            ),
+            BalancedPositiveNegativeSampler(
+                cfg.rpn_batch_size_per_image, cfg.rpn_positive_fraction
+            ),
+            image_size,
+        )
+
+    def _select_training_samples(
+        self,
+        proposals: list[Tensor],
+        targets: list[dict[str, Tensor]],
+    ) -> tuple[list[Tensor], list[Tensor], list[Tensor], list[Tensor]]:
+        cfg = self._cfg
+        return select_training_samples(
+            proposals,
+            targets,
+            Matcher(cfg.roi_fg_iou_thresh, cfg.roi_bg_iou_thresh),
+            BalancedPositiveNegativeSampler(
+                cfg.roi_batch_size_per_image, cfg.roi_positive_fraction
+            ),
+            cfg.bbox_reg_weights,
+        )
+
+    def _roi_loss(
+        self,
+        class_logits: Tensor,
+        box_deltas: Tensor,
+        labels: list[Tensor],
+        reg_targets: list[Tensor],
+    ) -> tuple[Tensor, Tensor]:
+        return fastrcnn_loss(class_logits, box_deltas, labels, reg_targets)
+
+    def _mask_loss(
+        self,
+        mask_logits: Tensor,
+        proposals: list[Tensor],
+        labels: list[Tensor],
+        matched: list[Tensor],
+        targets: list[dict[str, Tensor]],
+    ) -> Tensor:
+        """``L_mask`` over the sampled RoIs of every image in the batch.
+
+        Returns zero when no target carries ``"masks"`` — training the
+        detector without mask supervision is a legitimate configuration, and
+        it should not be mistaken for a mask branch that has converged.
+        """
+        dev = mask_logits.device.type
+        if not any("masks" in t for t in targets):
+            return lucid.zeros((), device=dev)
+
+        m = int(mask_logits.shape[-1])
+        target_parts: list[Tensor] = []
+        offset = 0
+        index_parts: list[int] = []
+        for props, lab, mt, tgt in zip(proposals, labels, matched, targets):
+            n = int(props.shape[0])
+            if "masks" in tgt and n > 0:
+                target_parts.append(project_masks_on_boxes(tgt["masks"], props, mt, m))
+                index_parts.extend(range(offset, offset + n))
+            offset += n
+
+        if not target_parts:
+            return lucid.zeros((), device=dev)
+
+        keep = lucid.tensor(index_parts, device=dev).long()
+        labels_cat = lucid.cat(labels, dim=0)[keep]
+        return maskrcnn_loss(
+            mask_logits[keep], labels_cat, lucid.cat(target_parts, dim=0)
+        )
+
     @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
+        targets: list[dict[str, Tensor]] | None = None,
         proposals: list[Tensor] | None = None,
     ) -> InstanceSegmentationOutput:
         """Run Mask R-CNN on a (pre-processed) image batch.
 
         Args:
             x:         (B, C, H, W) resized + normalised image batch.
+            targets:   Optional per-image ``{"boxes": (M, 4) xyxy, "labels":
+                       (M,), "masks": (M, H, W) binary}``.  When given, the
+                       five-term loss ``L_rpn_obj + L_rpn_reg + L_cls +
+                       L_box + L_mask`` is computed.  ``"masks"`` may be
+                       omitted, in which case ``L_mask`` is zero and only
+                       the detector trains.
             proposals: Optional precomputed per-image proposals.  When
                        ``None`` the RPN generates them.
 
@@ -347,6 +453,10 @@ class MaskRCNNForObjectDetection(PretrainedModel):
               ``logits``     : (Σ proposals, num_classes) class logits.
               ``pred_boxes`` : (Σ proposals, num_classes, 4) per-class boxes.
               ``pred_masks`` : (Σ proposals, num_classes, 28, 28) mask logits.
+              ``loss``       : scalar sum of the five terms, or ``None``.
+
+        Raises:
+            ValueError: If ``targets`` is given but the RPN did not run.
         """
         iH = int(x.shape[2])
         iW = int(x.shape[3])
@@ -356,10 +466,38 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         features = cast(list[Tensor], self.backbone(x))
 
         # 2. RPN → per-image proposals (when not supplied)
+        rpn_obj_loss: Tensor | None = None
+        rpn_reg_loss: Tensor | None = None
         if proposals is None:
             logits, deltas = self.rpn.head.forward(features)
             anchors = self._anchor_gen.forward(features, list(self._strides))
             proposals = self._rpn_proposals(logits, deltas, anchors, (iH, iW))
+            if targets is not None:
+                rpn_obj_loss, rpn_reg_loss = self._rpn_loss(
+                    logits, deltas, anchors, targets, (iH, iW)
+                )
+        elif targets is not None:
+            raise ValueError(
+                "targets were supplied together with precomputed proposals, "
+                "but the RPN half of the loss is only defined when the RPN "
+                "actually ran.  Returning just the head terms would silently "
+                "train part of the detector.  Omit `proposals` to train end "
+                "to end, or omit `targets` to run inference on your own "
+                "proposals."
+            )
+
+        # 3. Training: sample the head minibatch before either RoI Align, so
+        #    both crops run only on the RoIs that reach the loss.
+        roi_labels: list[Tensor] | None = None
+        roi_reg_targets: list[Tensor] | None = None
+        roi_matched: list[Tensor] | None = None
+        if targets is not None:
+            (
+                proposals,
+                roi_labels,
+                roi_reg_targets,
+                roi_matched,
+            ) = self._select_training_samples(proposals, targets)
 
         # 3. MultiScale RoI Align over the four FPN detection levels (P2-P5).
         det_feats = features[:4]
@@ -401,10 +539,25 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         else:
             mask_logits = lucid.zeros((0, K, mH, mH), device=dev)
 
+        loss: Tensor | None = None
+        if targets is not None:
+            assert roi_labels is not None
+            assert roi_reg_targets is not None
+            assert roi_matched is not None
+            assert rpn_obj_loss is not None and rpn_reg_loss is not None
+            cls_loss, box_loss = self._roi_loss(
+                class_logits, box_deltas, roi_labels, roi_reg_targets
+            )
+            mask_loss = self._mask_loss(
+                mask_logits, proposals, roi_labels, roi_matched, targets
+            )
+            loss = rpn_obj_loss + rpn_reg_loss + cls_loss + box_loss + mask_loss
+
         return InstanceSegmentationOutput(
             logits=class_logits,
             pred_boxes=pred_boxes,
             pred_masks=mask_logits,
+            loss=loss,
             proposals=tuple(proposals),
             hidden_states=tuple(det_feats),
         )

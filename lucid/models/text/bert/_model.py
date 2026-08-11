@@ -309,10 +309,28 @@ class _BERTEncoder(nn.Module):
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
-    ) -> Tensor:
+        output_hidden_states: bool = False,
+    ) -> tuple[Tensor, tuple[Tensor, ...] | None]:
+        """Run the layer stack, optionally keeping every intermediate state.
+
+        Args:
+            hidden:         ``(B, T, H)`` embedding output.
+            attention_mask: Additive mask, already extended.
+            output_hidden_states: Collect the input embedding plus each
+                layer's output.  Off by default so the common path holds
+                only one activation at a time.
+
+        Returns:
+            ``(last_hidden_state, hidden_states)``.  The second is ``None``
+            unless requested, and otherwise has ``num_layers + 1`` entries —
+            the embedding output first, as the reference orders them.
+        """
+        states: list[Tensor] = [hidden] if output_hidden_states else []
         for layer in self.layer:
             hidden = cast(Tensor, layer(hidden, attention_mask=attention_mask))
-        return hidden
+            if output_hidden_states:
+                states.append(hidden)
+        return hidden, (tuple(states) if output_hidden_states else None)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -441,18 +459,21 @@ class BERTModel(PretrainedModel):
         token_type_ids: Tensor | None = None,
         position_ids: Tensor | None = None,
         inputs_embeds: Tensor | None = None,
+        output_hidden_states: bool = False,
     ) -> BaseModelOutputWithPooling:
         """Encode a batch and return the sequence output plus the pooled CLS.
 
         ``position_ids`` and ``inputs_embeds`` are forwarded to the embedding
-        layer; see :meth:`_BERTEmbeddings.forward`.
+        layer; see :meth:`_BERTEmbeddings.forward`.  ``output_hidden_states``
+        additionally returns every layer's output, embedding first.
 
-        Not accepted: ``head_mask``, ``output_hidden_states`` and
-        ``output_attentions``.  All three require the encoder stack to hand
-        back its per-layer internals, which is a property of
-        :class:`lucid.nn.TransformerEncoder` rather than of BERT — adding
-        them here would mean changing that shared module's return type for
-        every model built on it.
+        Not accepted: ``head_mask`` and ``output_attentions``.  Both need the
+        per-head attention *weights*, and this encoder routes through the
+        fused scaled-dot-product kernel, which never materialises the
+        ``(B, H, T, T)`` matrix — that is precisely why it is fast and
+        memory-light.  Supporting either means running the unfused
+        ``softmax(qk^T) v`` path instead, so they are a deliberate omission
+        rather than an oversight.
         """
         if inputs_embeds is not None:
             B, T = int(inputs_embeds.shape[0]), int(inputs_embeds.shape[1])
@@ -472,12 +493,17 @@ class BERTModel(PretrainedModel):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
         )
-        sequence_output = cast(Tensor, self.encoder(hidden, attention_mask=ext_mask))
+        sequence_output, all_hidden = self.encoder.forward(
+            hidden,
+            attention_mask=ext_mask,
+            output_hidden_states=output_hidden_states,
+        )
         pooled_output = cast(Tensor, self.pooler(sequence_output))
 
         return BaseModelOutputWithPooling(
             last_hidden_state=sequence_output,
             pooler_output=pooled_output,
+            hidden_states=all_hidden,
         )
 
 
@@ -1348,9 +1374,7 @@ class BERTForCausalLM(PretrainedModel):
         hidden = cast(
             Tensor, self.bert.embeddings(input_ids, token_type_ids=token_type_ids)
         )
-        sequence_output = cast(
-            Tensor, self.bert.encoder(hidden, attention_mask=ext_mask)
-        )
+        sequence_output, _ = self.bert.encoder.forward(hidden, attention_mask=ext_mask)
         prediction_scores = cast(Tensor, self.cls(sequence_output))
 
         loss: Tensor | None = None

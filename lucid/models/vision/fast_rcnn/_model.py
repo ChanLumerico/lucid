@@ -132,13 +132,11 @@ class _FastRCNNHead(nn.Module):
         super().__init__()
         flat = in_channels * roi_size * roi_size  # 25 088 for VGG16 + 7×7
 
-        # §3.1's truncated-SVD compression — replacing each of fc6/fc7 with
-        # a rank-t factorisation to cut detection time — is deliberately not
-        # implemented.  It is a post-training inference optimisation applied
-        # to already-trained weights, it costs ~0.3 mAP, and it changes the
-        # parameter layout so compressed weights no longer load into this
-        # head.  A caller who wants it can factorise ``fc6``/``fc7`` after
-        # training without any support from the model.
+        # §3.1's truncated-SVD compression of fc6/fc7 is available as
+        # ``lucid.models._utils._common.truncated_svd_linear``.  It is a
+        # *post-training* transformation — it approximates weights that
+        # already exist and changes the parameter layout, so it is applied
+        # to a trained head rather than built in here.
         self.fc6 = nn.Linear(flat, 4096)
         self.fc7 = nn.Linear(4096, 4096)
         self.drop = nn.Dropout(p=dropout)
@@ -288,16 +286,17 @@ class FastRCNNForObjectDetection(PretrainedModel):
         proposals: Tensor,
         gt_boxes: Tensor,
         gt_labels: Tensor,
-        fg_iou_thresh: float = 0.5,
-        bg_iou_thresh_hi: float = 0.5,
-        bg_iou_thresh_lo: float = 0.1,
     ) -> tuple[Tensor, Tensor]:
         """Assign each proposal a GT class label and regression target.
 
-        Rules (§3.1 of the paper):
-          IoU ≥ fg_iou_thresh              → foreground, assigned to argmax GT
-          bg_iou_thresh_lo ≤ IoU < hi      → background (class 0)
-          IoU < bg_iou_thresh_lo           → ignored (assigned label -1)
+        Rules (§2.3):
+          IoU >= fg_iou_thresh              -> foreground, assigned to argmax GT
+          bg_iou_thresh_lo <= IoU < fg      -> background (class 0)
+          IoU < bg_iou_thresh_lo            -> ignored (label -1)
+
+        The last rule is the paper's, not a convenience: §2.3 draws negatives
+        from ``[0.1, 0.5)`` specifically, so a proposal overlapping nothing
+        is *not* a training example — it is too easy to be informative.
 
         Args:
             proposals:  (N, 4) xyxy
@@ -308,49 +307,70 @@ class FastRCNNForObjectDetection(PretrainedModel):
             assigned_labels: (N,) int labels; -1 = ignored
             assigned_boxes:  (N, 4) matched GT box per proposal
         """
-        from lucid.models._utils._detection import box_iou  # local import avoids cycle
+        from lucid.models._utils._detection import Matcher, box_iou
 
         N = int(proposals.shape[0])
         M = int(gt_boxes.shape[0])
         dev = proposals.device.type
 
         if M == 0:
+            # An image with no objects: every proposal is background, and no
+            # regression target is defined.  ``Matcher`` refuses this case on
+            # purpose, so it is handled here where "no objects" is meaningful.
             return lucid.zeros((N,), device=dev), proposals.clone()
 
-        iou = box_iou(proposals, gt_boxes)  # (N, M)
+        cfg = cast(FastRCNNConfig, self.config)
+        # (M, N) — Matcher takes ground truths as rows.
+        iou = box_iou(gt_boxes, proposals)
+        matcher = Matcher(cfg.fg_iou_thresh, cfg.bg_iou_thresh_lo)
+        matched = matcher(iou)  # (N,) >=0 fg, -1 below band, -2 in band
 
-        # For each proposal: best-matching GT index and IoU
-        best_gt_iou_list: list[float] = []
-        best_gt_idx_list: list[int] = []
-        for n in range(N):
-            best_iou_val = -1.0
-            best_idx = 0
-            for m in range(M):
-                v = float(iou[n, m].item())
-                if v > best_iou_val:
-                    best_iou_val = v
-                    best_idx = m
-            best_gt_iou_list.append(best_iou_val)
-            best_gt_idx_list.append(best_idx)
+        matched_idx = matched.clip(min=0)
+        assigned_boxes = gt_boxes[matched_idx.long()]
 
-        labels_list: list[int] = []
-        for n in range(N):
-            iou_val = best_gt_iou_list[n]
-            if iou_val >= fg_iou_thresh:
-                labels_list.append(int(gt_labels[best_gt_idx_list[n]].item()))
-            elif bg_iou_thresh_lo <= iou_val < bg_iou_thresh_hi:
-                labels_list.append(0)  # background
-            else:
-                labels_list.append(-1)  # ignored
-
-        assigned_labels = lucid.tensor(labels_list, device=dev)
-        # Build matched GT boxes
-        matched_boxes_data: list[list[float]] = [
-            [float(gt_boxes[best_gt_idx_list[n], k].item()) for k in range(4)]
-            for n in range(N)
-        ]
-        assigned_boxes = lucid.tensor(matched_boxes_data, device=dev)
+        fg = matched >= 0
+        # Matcher's "between" is Fast R-CNN's background; its "below" is the
+        # ignore class.  That inversion is the whole reason the thresholds
+        # are (0.5, 0.1) rather than (0.5, 0.5).
+        ignored = matched == Matcher.BELOW_LOW_THRESHOLD
+        fg_labels = gt_labels[matched_idx.long()]
+        assigned_labels = lucid.where(
+            fg, fg_labels, lucid.where(ignored, -1, lucid.zeros_like(fg_labels))
+        )
         return assigned_labels, assigned_boxes
+
+    def _sample_proposals(self, labels: Tensor) -> Tensor:
+        """Draw §2.3's 64-RoI, 25%-foreground minibatch from one image.
+
+        Training on every proposal makes the classification loss almost
+        entirely background — the foreground share becomes whatever the
+        proposal generator happened to produce — so the paper fixes the
+        count and the ratio instead.
+
+        Args:
+            labels: ``(N,)`` from :meth:`_assign_proposals`; ``>0``
+                foreground, ``0`` background, ``-1`` ignored.
+
+        Returns:
+            ``(S,)`` int tensor of the sampled proposal indices, ascending.
+            ``S <= batch_size_per_image``, smaller only when the image does
+            not have that many usable proposals.
+        """
+        from lucid.models._utils._detection import BalancedPositiveNegativeSampler
+
+        cfg = cast(FastRCNNConfig, self.config)
+        sampler = BalancedPositiveNegativeSampler(
+            cfg.batch_size_per_image, cfg.positive_fraction
+        )
+        # The sampler speaks 1/0/-1; class ids carry more than that.
+        binary = lucid.where(
+            labels > 0,
+            1,
+            lucid.where(labels == 0, lucid.zeros_like(labels), -1),
+        )
+        pos, neg = sampler(binary)
+        both = [*cast(list[int], pos.tolist()), *cast(list[int], neg.tolist())]
+        return lucid.tensor(sorted(both), device=labels.device.type).long()
 
     def _compute_loss(
         self,
@@ -371,24 +391,21 @@ class FastRCNNForObjectDetection(PretrainedModel):
             Scalar total loss.
 
         Note:
-            There is no **mini-batch RoI sampler**.  §2.3 trains on 64 RoIs
-            per image, 25% of them foreground (IoU >= 0.5) and the rest
-            drawn from the [0.1, 0.5) hard-negative band; the reference
-            config sets ``BATCH_SIZE=128`` and ``FG_FRACTION=0.25`` and
-            draws exactly that split.  Here *every* proposal contributes,
-            so the foreground fraction is whatever the proposal generator
-            happened to produce — typically far below 25%, which biases the
-            classifier towards background and changes what the loss
-            optimises.  Callers reproducing the paper should sample their
-            proposals to the 64/25% schedule before passing them in.
+            Only the RoIs drawn by :meth:`_sample_proposals` contribute —
+            §2.3's 64 per image at 25% foreground.  Both denominators below
+            count the *sampled* RoIs, which is what makes the two terms
+            comparable at lambda = 1.
         """
         all_cls_labels: list[Tensor] = []
         all_bbox_targets: list[Tensor] = []
         all_bbox_weights: list[Tensor] = []
         dev = all_logits.device.type
 
+        sampled_logits: list[Tensor] = []
+        sampled_deltas: list[Tensor] = []
+
         offset = 0
-        for b, (props, tgt) in enumerate(zip(proposals, targets)):
+        for props, tgt in zip(proposals, targets):
             N_i = int(props.shape[0])
             gt_boxes = tgt["boxes"]
             gt_labels = tgt["labels"]
@@ -397,19 +414,32 @@ class FastRCNNForObjectDetection(PretrainedModel):
                 props, gt_boxes, gt_labels
             )
 
+            # §2.3's minibatch.  Everything downstream sees only these RoIs.
+            keep = self._sample_proposals(labels_i)
+            sampled_index = keep + offset
+            labels_i = labels_i[keep]
+            props_s = props[keep]
+            matched_boxes_i = matched_boxes_i[keep]
+
+            sampled_logits.append(all_logits[sampled_index])
+            sampled_deltas.append(all_deltas[sampled_index])
+
             # Regression targets only for foreground (label > 0)
-            reg_tgt_i = encode_boxes(matched_boxes_i, props, self._bbox_weights)
-            # Weight mask: 1.0 for foreground, 0.0 for background/ignored
-            fg_mask: list[float] = [
-                1.0 if int(labels_i[n].item()) > 0 else 0.0 for n in range(N_i)
-            ]
-            weight_i = lucid.tensor(fg_mask, device=dev)
+            reg_tgt_i = encode_boxes(matched_boxes_i, props_s, self._bbox_weights)
+            weight_i = lucid.where(
+                labels_i > 0,
+                lucid.ones_like(labels_i).float(),
+                lucid.zeros_like(labels_i).float(),
+            )
 
             all_cls_labels.append(labels_i)
             all_bbox_targets.append(reg_tgt_i)
             all_bbox_weights.append(weight_i)
 
             offset += N_i
+
+        all_logits = lucid.cat(sampled_logits, dim=0)
+        all_deltas = lucid.cat(sampled_deltas, dim=0)
 
         cls_labels = lucid.cat(all_cls_labels, dim=0)  # (Σ N_i,)
         bbox_targets = lucid.cat(all_bbox_targets, dim=0)  # (Σ N_i, 4)

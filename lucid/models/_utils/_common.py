@@ -4,10 +4,12 @@ These helpers are task-agnostic and may be imported by any model
 regardless of its output task (classification, detection, segmentation …).
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import lucid
 import lucid.nn as nn
+import lucid.optim as optim
+import lucid.nn.functional as F
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -271,3 +273,159 @@ def reject_unavailable_pretrained(factory_name: str, *, alternative: str = "") -
         f"No pretrained weights are published for ``{factory_name}``; "
         f"``{factory_name}(pretrained=True)`` cannot be honoured.{hint}"
     )
+
+
+def truncated_svd_linear(layer: nn.Linear, rank: int) -> nn.Sequential:
+    r"""Factorise a trained ``Linear`` into two smaller ones (Fast R-CNN §3.1).
+
+    A layer :math:`W \in \mathbb{R}^{u \times v}` is replaced by its rank-``t``
+    truncated SVD, :math:`W \approx U_t \Sigma_t V_t^{\top}`, split across two
+    layers: the first applies :math:`\Sigma_t V_t^{\top}` with no bias, the
+    second applies :math:`U_t` and carries the original bias.  Parameter
+    count goes from :math:`uv` to :math:`t(u + v)`, so any
+    :math:`t < uv / (u + v)` is a saving.
+
+    §3.1 uses this on ``fc6``/``fc7`` to cut detection time — for a detector
+    that spends most of its forward pass in the per-RoI fully-connected
+    layers, "compressing them with truncated SVD reduces detection time by
+    more than 30% with only a small drop in mAP".
+
+    This is a **post-training** transformation: it approximates weights that
+    already exist and is not something to train through.  It also changes
+    the parameter layout, so the result no longer accepts the original
+    checkpoint.
+
+    Args:
+        layer: A trained :class:`~lucid.nn.Linear`.
+        rank:  ``t``.  Must lie in ``[1, min(u, v)]``; the upper end
+            reproduces the layer exactly and saves nothing.
+
+    Returns:
+        A :class:`~lucid.nn.Sequential` of two ``Linear`` layers computing
+        the same function up to the truncation error.
+
+    Raises:
+        ValueError: If ``rank`` is outside the representable range, since a
+            silently clamped rank would return a layer that is either
+            unexpectedly exact or unexpectedly degenerate.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> from lucid.models._utils._common import truncated_svd_linear
+    >>> compressed = truncated_svd_linear(nn.Linear(64, 32), rank=8)
+    >>> len(compressed)
+    2
+    """
+    out_features = int(layer.weight.shape[0])
+    in_features = int(layer.weight.shape[1])
+    limit = min(out_features, in_features)
+    if not 1 <= rank <= limit:
+        raise ValueError(
+            f"rank must lie in [1, {limit}] for a {out_features}x{in_features} "
+            f"layer; got {rank}.  Above {limit} the factorisation has no more "
+            "singular values to keep, and the compression would silently be "
+            "an exact copy."
+        )
+
+    with lucid.no_grad():
+        u, s, vh = lucid.linalg.svd(layer.weight)
+
+    first = nn.Linear(in_features, rank, bias=False)
+    second = nn.Linear(rank, out_features, bias=layer.bias is not None)
+    with lucid.no_grad():
+        # Sigma folds into the first factor, so the second is a plain
+        # projection and the bias stays where it was.
+        first.weight[:] = vh[:rank] * s[:rank].reshape(-1, 1)
+        second.weight[:] = u[:, :rank]
+        if layer.bias is not None and second.bias is not None:
+            second.bias[:] = layer.bias
+
+    return nn.Sequential(first, second)
+
+
+def fit_linear_svm(
+    features: Tensor,
+    labels: Tensor,
+    *,
+    c: float = 1e-3,
+    steps: int = 200,
+    lr: float = 0.01,
+) -> tuple[Tensor, Tensor]:
+    r"""Fit one binary linear SVM by minimising hinge loss with L2.
+
+    Solves
+
+    .. math::
+
+        \min_{w, b}\;\; \tfrac{1}{2}\lVert w \rVert^2
+        + C \sum_i \max(0,\, 1 - y_i (w^{\top} x_i + b))
+
+    by gradient descent.  R-CNN §2.3 trains one of these per class on
+    features cached from a frozen network, taking positives from
+    ground-truth boxes only and negatives from proposals below IoU 0.3.
+
+    This is the optimisation, not the pipeline.  The paper's accuracy comes
+    substantially from **hard negative mining** — repeatedly rescoring the
+    negative pool and refitting on the highest-scoring mistakes — which
+    needs the dataset, not just one feature matrix.  A caller reproducing
+    R-CNN drives that loop and calls this at each round.
+
+    Args:
+        features: ``(N, D)`` feature matrix, one row per example.
+        labels:   ``(N,)`` with ``+1`` for positives and ``-1`` for
+            negatives.  Zeros are rejected rather than silently treated as
+            negatives.
+        c:        Penalty on the hinge term, the ``C`` above.
+        steps:    Gradient steps.
+        lr:       Learning rate.
+
+    Returns:
+        ``(w, b)`` — ``w`` of shape ``(D,)`` and ``b`` a scalar tensor.
+        Score a new feature with ``x @ w + b``; positive means the class.
+
+    Raises:
+        ValueError: If ``labels`` holds anything other than +1 / -1, or if
+            it contains only one sign — a single-class fit has no margin to
+            maximise and would return an arbitrary separator.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._common import fit_linear_svm
+    >>> x = lucid.tensor([[2.0, 0.0], [-2.0, 0.0]])
+    >>> w, b = fit_linear_svm(x, lucid.tensor([1.0, -1.0]))
+    >>> bool((x @ w + b).tolist()[0] > 0)
+    True
+    """
+    values = cast(list[float], labels.reshape(-1).tolist())
+    if any(v not in (1.0, -1.0) for v in values):
+        raise ValueError(
+            "fit_linear_svm expects labels of exactly +1 and -1; got values "
+            f"{sorted(set(values))[:5]}.  Zero-or-one labels are a common "
+            "mix-up and would train against the wrong margin."
+        )
+    if len(set(values)) < 2:
+        raise ValueError(
+            "fit_linear_svm needs both positive and negative examples; the "
+            f"labels are all {values[0]:+.0f}.  With one class there is no "
+            "margin to maximise and the returned separator would be arbitrary."
+        )
+
+    d = int(features.shape[1])
+    dev = features.device.type
+    # Kept 2-D internally because ``matmul`` requires it; the caller gets the
+    # flat ``(D,)`` vector they would write ``x @ w`` with.
+    w = nn.Parameter(lucid.zeros(d, 1, device=dev))
+    b = nn.Parameter(lucid.zeros(1, device=dev))
+    opt = optim.SGD([w, b], lr=lr)
+
+    for _ in range(steps):
+        opt.zero_grad()
+        scores = (features @ w).reshape(-1) + b
+        hinge = F.relu(1.0 - labels * scores).sum()
+        loss = 0.5 * (w * w).sum() + c * hinge
+        loss.backward()
+        opt.step()
+
+    return w.detach().reshape(-1), b.detach().reshape(())

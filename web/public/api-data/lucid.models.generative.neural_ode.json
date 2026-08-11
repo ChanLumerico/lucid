@@ -336,7 +336,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.neural_ode import (\n...     NeuralODEConfig, NeuralODEForImageGeneration,\n... )\n>>> cfg = NeuralODEConfig(sample_size=2, in_channels=1, out_channels=1,\n...                       hidden_dim=8, num_blocks=1)\n>>> model = NeuralODEForImageGeneration(cfg).eval()\n>>> out = model(lucid.rand((2, 1, 2, 2)))\n>>> out.loss.shape                      # scalar bits/dim\n()\n>>> model.generate(n_samples=3).samples.shape\n(3, 1, 2, 2)"
       ],
       "notes": [
-        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 (arXiv:1806.07366).\nThe paper's own continuous-flow experiments are two-dimensional\ndensity matching rather than images; sampling at image scale is what\nthe Hutchinson trace of Grathwohl et al. (ICLR 2019) makes affordable,\nand is what `trace_method` selects by default above\n`exact_trace_max_dim`."
+        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 ([arXiv:1806.07366](https://arxiv.org/abs/1806.07366)).\nThe paper's own continuous-flow experiments are two-dimensional\ndensity matching rather than images; sampling at image scale is what\nthe Hutchinson trace of Grathwohl et al. (ICLR 2019) makes affordable,\nand is what `trace_method` selects by default above\n`exact_trace_max_dim`."
       ],
       "attributes": [
         {
@@ -620,7 +620,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.neural_ode import (\n...     NeuralODEConfig, NeuralODEModel,\n... )\n>>> cfg = NeuralODEConfig(sample_size=2, in_channels=1, out_channels=1,\n...                       hidden_dim=8, num_blocks=1)\n>>> model = NeuralODEModel(cfg).eval()\n>>> z, log_det = model.encode(lucid.rand((2, 1, 2, 2)))\n>>> z.shape, log_det.shape\n((2, 4), (2,))\n>>> model.decode(z).shape\n(2, 1, 2, 2)"
       ],
       "notes": [
-        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 (arXiv:1806.07366),\n§4.  The Hutchinson trace option follows Grathwohl et al., *\"FFJORD\"*,\nICLR, 2019 (arXiv:1810.01367).\n\n**Where to run it.**  A solve is one small right-hand side evaluated\ntens of times, so which stream wins depends entirely on how much work\neach evaluation carries.  Measured on an M1 Pro, one training step\n(forward, loss, backward) of `neural_ode_gen`:\n\n==================  ===========  ===========\nsetup               `\"cpu\"`    `\"metal\"`\n==================  ===========  ===========\nB=8, D=192            16.8 ms      38.1 ms\nB=32, D=3072         175.0 ms      56.5 ms\nB=128, D=3072        587.5 ms      70.8 ms\n==================  ===========  ===========\n\nBelow a few hundred dimensions the tensors are too small to pay for a\nGPU dispatch and Accelerate wins; at anything resembling a real\ntraining batch the ratio reverses and keeps widening — `8.3x` at the\nbottom row, where the CPU cost grows with the batch and the GPU's\nbarely does.  Train on `\"metal\"`; keep the paper's two-dimensional\ndensity experiments on `\"cpu\"`."
+        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 ([arXiv:1806.07366](https://arxiv.org/abs/1806.07366)),\n§4.  The Hutchinson trace option follows Grathwohl et al., *\"FFJORD\"*,\nICLR, 2019 ([arXiv:1810.01367](https://arxiv.org/abs/1810.01367)).\n\n**Where to run it.**  A solve is one small right-hand side evaluated\ntens of times, so which stream wins depends entirely on how much work\neach evaluation carries.  Measured on an M1 Pro, one training step\n(forward, loss, backward) of `neural_ode_gen`:\n\n==================  ===========  ===========\nsetup               `\"cpu\"`    `\"metal\"`\n==================  ===========  ===========\nB=8, D=192            16.8 ms      38.1 ms\nB=32, D=3072         175.0 ms      56.5 ms\nB=128, D=3072        587.5 ms      70.8 ms\n==================  ===========  ===========\n\nBelow a few hundred dimensions the tensors are too small to pay for a\nGPU dispatch and Accelerate wins; at anything resembling a real\ntraining batch the ratio reverses and keeps widening — `8.3x` at the\nbottom row, where the CPU cost grows with the batch and the GPU's\nbarely does.  Train on `\"metal\"`; keep the paper's two-dimensional\ndensity experiments on `\"cpu\"`."
       ],
       "attributes": [
         {
@@ -665,7 +665,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.neural_ode import neural_ode\n>>> model = neural_ode(sample_size=(1, 2), in_channels=1,\n...                    out_channels=1).eval()\n>>> z, log_det = model.encode(lucid.rand((2, 1, 1, 2)))\n>>> z.shape, log_det.shape\n((2, 2), (2,))\n>>> model.trace_method            # two-dimensional, so exact\n'exact'"
       ],
       "notes": [
-        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 (arXiv:1806.07366),\n§4.  The paper's own continuous-flow experiments are two-dimensional\ndensity matching, where the trace of the Jacobian is summed exactly;\nat the image shape this factory defaults to, the same flow switches to\nthe Hutchinson estimator of Grathwohl et al. (*FFJORD*, ICLR 2019),\nwhich is what makes the cost independent of the dimension."
+        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 ([arXiv:1806.07366](https://arxiv.org/abs/1806.07366)),\n§4.  The paper's own continuous-flow experiments are two-dimensional\ndensity matching, where the trace of the Jacobian is summed exactly;\nat the image shape this factory defaults to, the same flow switches to\nthe Hutchinson estimator of Grathwohl et al. (*FFJORD*, ICLR 2019),\nwhich is what makes the cost independent of the dimension."
       ],
       "attributes": [],
       "warns": [],
@@ -781,7 +781,7 @@
         ">>> from lucid.models.generative.neural_ode import neural_ode_gen\n>>> model = neural_ode_gen(sample_size=(1, 2), in_channels=1,\n...                        out_channels=1).eval()\n>>> model.generate(n_samples=2).samples.shape\n(2, 1, 1, 2)"
       ],
       "notes": [
-        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 (arXiv:1806.07366).\nThe paper reports no bits/dim figure for the continuous flow — its\ndensity experiments are two-dimensional and reported as KL — so there\nis no published number for this configuration to be compared against."
+        "Reference: Chen, Rubanova, Bettencourt, and Duvenaud, *\"Neural\nOrdinary Differential Equations\"*, NeurIPS, 2018 ([arXiv:1806.07366](https://arxiv.org/abs/1806.07366)).\nThe paper reports no bits/dim figure for the continuous flow — its\ndensity experiments are two-dimensional and reported as KL — so there\nis no published number for this configuration to be compared against."
       ],
       "attributes": [],
       "warns": [],

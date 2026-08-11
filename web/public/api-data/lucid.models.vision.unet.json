@@ -165,7 +165,7 @@
         "Standard 2-D U-Net for 2-class biomedical segmentation:\n>>> import lucid\n>>> from lucid.models.vision.unet import unet\n>>> model = unet()\n>>> x = lucid.randn(1, 1, 256, 256)\n>>> out = model(x)\n>>> out.logits.shape   # (B, num_classes, H, W)\n(1, 2, 256, 256)\n3-D U-Net on a volumetric input:\n>>> from lucid.models.vision.unet import unet_3d\n>>> model = unet_3d()\n>>> x = lucid.randn(1, 1, 64, 64, 64)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 2, 64, 64, 64)"
       ],
       "notes": [
-        "See Ronneberger et al., \"U-Net: Convolutional Networks for Biomedical\nImage Segmentation\", MICCAI 2015 (arXiv:1505.04597).  The defining\nskip-connection update at decoder stage $s$ is\n\n\n\n$$\nd_s = \\mathrm{DoubleConv}\\!\\bigl(\n        \\mathrm{Concat}\\bigl(\\mathrm{Up}(d_{s+1}),\\; e_s\\bigr)\n      \\bigr),\n$$\n\nwith $e_s$ the encoder feature at the same spatial scale.\nThe original paper applies the network at 572x572 input and outputs\n388x388 unpadded; this implementation uses padding throughout so\nthe output spatial size matches the input.  ResUNet (Zhang et al.,\n2018) and 3-D U-Net (Cicek et al., 2016) are covered by the\n`block` and `dim` config switches respectively."
+        "See Ronneberger et al., \"U-Net: Convolutional Networks for Biomedical\nImage Segmentation\", MICCAI 2015 ([arXiv:1505.04597](https://arxiv.org/abs/1505.04597)).  The defining\nskip-connection update at decoder stage $s$ is\n\n\n\n$$\nd_s = \\mathrm{DoubleConv}\\!\\bigl(\n        \\mathrm{Concat}\\bigl(\\mathrm{Up}(d_{s+1}),\\; e_s\\bigr)\n      \\bigr),\n$$\n\nwith $e_s$ the encoder feature at the same spatial scale.\nThe original paper applies the network at 572x572 input and outputs\n388x388 unpadded; this implementation uses padding throughout so\nthe output spatial size matches the input.  ResUNet (Zhang et al.,\n2018) and 3-D U-Net (Cicek et al., 2016) are covered by the\n`block` and `dim` config switches respectively."
       ],
       "attributes": [
         {
@@ -230,7 +230,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.unet import unet\n>>> model = unet(num_classes=4, in_channels=3)\n>>> x = lucid.randn(1, 3, 256, 256)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 4, 256, 256)"
       ],
       "notes": [
-        "See Ronneberger et al., \"U-Net: Convolutional Networks for Biomedical\nImage Segmentation\", MICCAI 2015 (arXiv:1505.04597).  The skip\nconnections that copy the encoder feature maps onto the decoder are\nthe architectural key idea."
+        "See Ronneberger et al., \"U-Net: Convolutional Networks for Biomedical\nImage Segmentation\", MICCAI 2015 ([arXiv:1505.04597](https://arxiv.org/abs/1505.04597)).  The skip\nconnections that copy the encoder feature maps onto the decoder are\nthe architectural key idea."
       ],
       "attributes": [],
       "warns": [],
@@ -863,7 +863,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.unet import res_unet_2d\n>>> model = res_unet_2d()\n>>> x = lucid.randn(1, 1, 256, 256)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 2, 256, 256)"
       ],
       "notes": [
-        "This is a residual U-Net, **not Deep ResUNet**.  The DoubleConv\nupdate with residual shortcut is\n\n\n\n$$\ny = \\mathrm{ReLU}(F(x; W) + W_s x),\n$$\n\nthe He et al. residual formulation applied at every encoder /\ndecoder stage rather than only inside a backbone.\n\nZhang, Liu, Wang, \"Road Extraction by Deep Residual U-Net\" (IEEE\nGeosci. Remote Sens. Lett. 2018, arXiv:1711.10684) describes a\ndifferent network and is deliberately *not* cited as this model's\nsource: it uses full pre-activation units (BN → ReLU → Conv twice,\nwith no activation after the addition), replaces every pooling layer\nwith a stride-2 convolution, and has three encoding levels plus a\nbridge — 15 convolutions and 7.8 M parameters against this model's\npost-activation blocks, max-pooling, four levels and 32.4 M\nparameters.  A caller wanting the paper's architecture wants a\nseparate implementation, not this factory."
+        "This is a residual U-Net, **not Deep ResUNet**.  The DoubleConv\nupdate with residual shortcut is\n\n\n\n$$\ny = \\mathrm{ReLU}(F(x; W) + W_s x),\n$$\n\nthe He et al. residual formulation applied at every encoder /\ndecoder stage rather than only inside a backbone.\n\nZhang, Liu, Wang, \"Road Extraction by Deep Residual U-Net\" (IEEE\nGeosci. Remote Sens. Lett. 2018, [arXiv:1711.10684](https://arxiv.org/abs/1711.10684)) describes a\ndifferent network and is deliberately *not* cited as this model's\nsource: it uses full pre-activation units (BN → ReLU → Conv twice,\nwith no activation after the addition), replaces every pooling layer\nwith a stride-2 convolution, and has three encoding levels plus a\nbridge — 15 convolutions and 7.8 M parameters against this model's\npost-activation blocks, max-pooling, four levels and 32.4 M\nparameters.  A caller wanting the paper's architecture wants a\nseparate implementation, not this factory."
       ],
       "attributes": [],
       "warns": [],
@@ -1559,7 +1559,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.unet import unet_3d\n>>> model = unet_3d()\n>>> x = lucid.randn(1, 1, 64, 64, 64)   # (B, C, D, H, W)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 2, 64, 64, 64)"
       ],
       "notes": [
-        "See Cicek et al., \"3D U-Net: Learning Dense Volumetric Segmentation\nfrom Sparse Annotation\", MICCAI 2016 (arXiv:1606.06650).  Volumetric\nconvolutions add a depth axis, so memory cost scales linearly with\nthe input depth — keep depth and base_channels modest."
+        "See Cicek et al., \"3D U-Net: Learning Dense Volumetric Segmentation\nfrom Sparse Annotation\", MICCAI 2016 ([arXiv:1606.06650](https://arxiv.org/abs/1606.06650)).  Volumetric\nconvolutions add a depth axis, so memory cost scales linearly with\nthe input depth — keep depth and base_channels modest."
       ],
       "attributes": [],
       "warns": [],

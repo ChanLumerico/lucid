@@ -39,6 +39,8 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
+    encode_boxes,
+    box_iou,
     batched_nms,
     clip_boxes_to_image,
     decode_boxes,
@@ -382,11 +384,82 @@ class RCNNForObjectDetection(PretrainedModel):
     # Forward
     # ------------------------------------------------------------------
 
+    def _stage_losses(
+        self,
+        logits: Tensor,
+        deltas: Tensor,
+        proposals: Tensor,
+        target: dict[str, Tensor],
+    ) -> tuple[Tensor, Tensor]:
+        """Stage-1 and stage-3 losses for one image.
+
+        Stage 1 (§2.3) is softmax cross-entropy over every proposal, with a
+        proposal counted as its best-overlapping class at IoU >=
+        ``fg_iou_thresh`` and as background otherwise.
+
+        Stage 3 (Appendix C) trains the class-specific regressors, and only
+        on proposals that already overlap a ground-truth box at IoU >
+        ``bbox_reg_iou_thresh`` — the paper learns "from a proposal P only
+        if it is near at least one ground-truth box", because a regressor
+        asked to fix a box that shares nothing with the object has no
+        signal to learn from.
+
+        Returns:
+            ``(classification_loss, regression_loss)``, both scalars.
+        """
+        cfg = cast(RCNNConfig, self.config)
+        dev = logits.device.type
+        gt_boxes = target["boxes"]
+        gt_labels = target["labels"]
+        n = int(proposals.shape[0])
+
+        if int(gt_boxes.shape[0]) == 0 or n == 0:
+            # No objects: every proposal is background and nothing regresses.
+            zeros = lucid.zeros((n,), device=dev).long()
+            return F.cross_entropy(logits, zeros), lucid.zeros((), device=dev)
+
+        iou = box_iou(gt_boxes, proposals)  # (M, N)
+        best_iou = iou.max(dim=0)  # (N,)
+        best_gt = lucid.argmax(iou, dim=0)  # (N,)
+
+        # Stage 1: class ids are 1-based, 0 is background.
+        fg = best_iou >= cfg.fg_iou_thresh
+        labels = lucid.where(
+            fg, gt_labels[best_gt.long()], lucid.zeros_like(gt_labels[best_gt.long()])
+        )
+        cls_loss = F.cross_entropy(logits, labels.long())
+
+        # Stage 3: a tighter threshold, and only the assigned class's four
+        # deltas are trained.
+        near = cast(list[float], (best_iou > cfg.bbox_reg_iou_thresh).float().tolist())
+        keep = [i for i, v in enumerate(near) if v > 0.0]
+        if not keep:
+            return cls_loss, lucid.zeros((), device=dev)
+
+        idx = lucid.tensor(keep, device=dev).long()
+        props_k = proposals[idx]
+        matched = gt_boxes[best_gt[idx].long()]
+        reg_targets = encode_boxes(matched, props_k)
+
+        k_classes = self._num_classes
+        per_class = deltas[idx].reshape(len(keep), k_classes, 4)
+        # Foreground labels are 1-based; class c's regressor is row c - 1.
+        rows = cast(list[int], labels[idx].long().tolist())
+        offsets = lucid.tensor(
+            [i * k_classes + max(0, c - 1) for i, c in enumerate(rows)], device=dev
+        ).long()
+        pred = per_class.reshape(len(keep) * k_classes, 4)[offsets]
+        reg_loss = F.smooth_l1_loss(pred, reg_targets, reduction="sum") / float(
+            len(keep)
+        )
+        return cls_loss, reg_loss
+
     @override
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
         proposals: list[Tensor] | None = None,
+        targets: list[dict[str, Tensor]] | None = None,
     ) -> ObjectDetectionOutput:
         """Run R-CNN on a batch of images.
 
@@ -394,11 +467,22 @@ class RCNNForObjectDetection(PretrainedModel):
             x:         (B, C, H, W) image batch.
             proposals: list of B tensors, each (N_i, 4) xyxy region proposals.
                        Pass ``None`` to return empty detections.
+            targets:   Optional per-image ``{"boxes": (M, 4) xyxy, "labels":
+                       (M,) 1-based class ids}``.  When given, the stage-1
+                       and stage-3 losses are computed; the stage-2 SVMs are
+                       an offline pass and are not part of this model — see
+                       :class:`RCNNConfig`.
 
         Returns:
             ``ObjectDetectionOutput`` with:
               ``logits``     : (Σ N_i, num_classes + 1) raw class logits.
               ``pred_boxes`` : (Σ N_i, 4) decoded xyxy boxes (top class).
+              ``loss``       : scalar sum of the two terms, or ``None``.
+
+        Raises:
+            ValueError: If ``targets`` is given without ``proposals``, since
+                R-CNN does not generate its own regions and there would be
+                nothing to assign them to.
         """
         B = int(x.shape[0])
         H = int(x.shape[2])
@@ -406,10 +490,19 @@ class RCNNForObjectDetection(PretrainedModel):
         dev = x.device.type
 
         if proposals is None:
+            if targets is not None:
+                raise ValueError(
+                    "targets were supplied without proposals.  R-CNN does not "
+                    "generate its own regions — the paper's pipeline feeds it "
+                    "selective-search boxes — so there is nothing to assign "
+                    "the targets to and the loss would be computed over an "
+                    "empty set."
+                )
             proposals = [lucid.zeros((0, 4), device=dev) for _ in range(B)]
 
         all_logits: list[Tensor] = []
         all_boxes: list[Tensor] = []
+        loss_parts: list[Tensor] = []
 
         for b in range(B):
             props = proposals[b]  # (N_i, 4)
@@ -439,6 +532,12 @@ class RCNNForObjectDetection(PretrainedModel):
             all_logits.append(logits_i)
             all_boxes.append(boxes_i)
 
+            if targets is not None:
+                cls_loss, reg_loss = self._stage_losses(
+                    logits_i, deltas_i, props, targets[b]
+                )
+                loss_parts.append((cls_loss + reg_loss).reshape(1))
+
         # Concatenate across batch (flat)
         if all_logits:
             final_logits = lucid.cat(all_logits, dim=0)
@@ -447,9 +546,18 @@ class RCNNForObjectDetection(PretrainedModel):
             final_logits = lucid.zeros((0, self._num_classes + 1), device=dev)
             final_boxes = lucid.zeros((0, 4), device=dev)
 
+        loss: Tensor | None = None
+        if targets is not None:
+            loss = (
+                lucid.cat(loss_parts).sum() / float(B)
+                if loss_parts
+                else lucid.zeros((), device=dev)
+            )
+
         return ObjectDetectionOutput(
             logits=final_logits,
             pred_boxes=final_boxes,
+            loss=loss,
             proposals=tuple(proposals),
         )
 

@@ -74,13 +74,23 @@ class RCNNConfig(ModelConfig):
 
     .. note::
 
-       **Inference only.**  None of the paper's three trained stages is
-       implemented: CNN fine-tuning (positives at IoU >= 0.5, §2.3), the
-       per-class linear SVMs (positives = ground-truth boxes only,
-       negatives at IoU < 0.3, §2.3), and the class-specific ridge
-       bounding-box regressors on pool5 features (proposals at IoU > 0.6,
-       Appendix C).  ``forward`` takes no targets and returns no loss.
-       Use this family to run a trained detector, not to train one.
+       **Training — two of the paper's three stages.**  Passing
+       ``targets`` to :meth:`forward` trains stage 1 (CNN fine-tuning,
+       softmax cross-entropy over proposals at IoU >= ``fg_iou_thresh``)
+       and stage 3 (the class-specific bounding-box regressors on pool5
+       features, restricted to proposals at IoU > ``bbox_reg_iou_thresh``
+       per Appendix C).
+
+       Stage 2 — the per-class linear SVMs that *replace* the softmax at
+       test time — is **not** part of the model.  It is an offline pass
+       over features cached from a frozen network, with positives drawn
+       only from ground-truth boxes, negatives at IoU < 0.3, and hard
+       negative mining across the whole dataset; the mining is what makes
+       it work, and it is a pipeline rather than a layer.
+       :func:`lucid.models._utils._common.fit_linear_svm` provides the
+       optimisation itself, so a caller can assemble that pass; scoring
+       with the resulting weights instead of the softmax is then their
+       choice.
     """
 
     model_type: ClassVar[str] = "rcnn"
@@ -98,3 +108,13 @@ class RCNNConfig(ModelConfig):
     # 0.5 is the Faster R-CNN convention, not R-CNN's.
     nms_thresh: float = 0.3
     max_detections: int = 300
+
+    # §2.3's fine-tuning assignment: a proposal at IoU >= 0.5 with any
+    # ground-truth box is a positive for that box's class, everything else
+    # is background.
+    fg_iou_thresh: float = 0.5
+    # Appendix C trains the regressors only on proposals that already
+    # overlap well — "we only learn from a proposal P if it is *near* at
+    # least one ground-truth box" — with the released code using 0.6.
+    # A looser threshold trains the regressor on boxes it cannot fix.
+    bbox_reg_iou_thresh: float = 0.6

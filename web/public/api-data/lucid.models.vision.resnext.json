@@ -4444,7 +4444,7 @@
         ">>> from lucid.models import resnext_50_32x4d_cls\n>>> model = resnext_50_32x4d_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Xie, Girshick, Dollár, Tu, He, *\"Aggregated Residual\nTransformations for Deep Neural Networks\"*, CVPR 2017\n(arXiv:1611.05431)."
+        "Reference: Xie, Girshick, Dollár, Tu, He, *\"Aggregated Residual\nTransformations for Deep Neural Networks\"*, CVPR 2017\n([arXiv:1611.05431](https://arxiv.org/abs/1611.05431))."
       ],
       "attributes": [
         {
@@ -4483,7 +4483,7 @@
         ">>> from lucid.models import resnext_101_32x4d_cls\n>>> model = resnext_101_32x4d_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Xie, Girshick, Dollár, Tu, He, *\"Aggregated Residual\nTransformations for Deep Neural Networks\"*, CVPR 2017\n(arXiv:1611.05431)."
+        "Reference: Xie, Girshick, Dollár, Tu, He, *\"Aggregated Residual\nTransformations for Deep Neural Networks\"*, CVPR 2017\n([arXiv:1611.05431](https://arxiv.org/abs/1611.05431))."
       ],
       "attributes": [
         {
@@ -4522,7 +4522,7 @@
         ">>> from lucid.models import resnext_101_32x8d_cls\n>>> model = resnext_101_32x8d_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Xie, Girshick, Dollár, Tu, He, *\"Aggregated Residual\nTransformations for Deep Neural Networks\"*, CVPR 2017\n(arXiv:1611.05431)."
+        "Reference: Xie, Girshick, Dollár, Tu, He, *\"Aggregated Residual\nTransformations for Deep Neural Networks\"*, CVPR 2017\n([arXiv:1611.05431](https://arxiv.org/abs/1611.05431))."
       ],
       "attributes": [
         {

@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - make lucid-audit the whole diagnosis, not the first half
 
+- implement the training paths the audit had only declared
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

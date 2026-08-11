@@ -511,3 +511,57 @@ class TestBERTWeightsEnums:
             resolved = weights_for(factory)
             assert resolved is not None
             assert resolved.__name__ == enum_name
+
+
+class TestBERTHiddenStates:
+    """``output_hidden_states`` is opt-in and must not perturb the output."""
+
+    @staticmethod
+    def _model():
+        from lucid.models.text.bert._config import BERTConfig
+        from lucid.models.text.bert._model import BERTModel
+
+        return BERTModel(
+            BERTConfig(
+                num_hidden_layers=3,
+                hidden_size=32,
+                num_attention_heads=2,
+                intermediate_size=64,
+                vocab_size=100,
+            )
+        ).eval()
+
+    def test_off_by_default(self) -> None:
+        m = self._model()
+        assert m(lucid.tensor([[1, 2, 3, 4]])).hidden_states is None
+
+    def test_collects_embedding_plus_every_layer(self) -> None:
+        m = self._model()
+        out = m(lucid.tensor([[1, 2, 3, 4]]), output_hidden_states=True)
+        assert out.hidden_states is not None
+        # The reference puts the embedding output first, so it is layers + 1.
+        assert len(out.hidden_states) == 4
+        assert all(tuple(h.shape) == (1, 4, 32) for h in out.hidden_states)
+
+    def test_last_state_is_the_returned_one(self) -> None:
+        m = self._model()
+        out = m(lucid.tensor([[1, 2, 3, 4]]), output_hidden_states=True)
+        assert out.hidden_states is not None
+        delta = (out.hidden_states[-1] - out.last_hidden_state).abs().max()
+        assert float(delta.item()) == 0.0
+
+    def test_first_state_is_the_embedding_not_a_copy(self) -> None:
+        """A stack that returned the same tensor N+1 times would also pass
+        the length check, so pin that the ends actually differ."""
+        m = self._model()
+        out = m(lucid.tensor([[1, 2, 3, 4]]), output_hidden_states=True)
+        assert out.hidden_states is not None
+        spread = (out.hidden_states[0] - out.hidden_states[-1]).abs().max()
+        assert float(spread.item()) > 0.0
+
+    def test_flag_does_not_change_the_result(self) -> None:
+        m = self._model()
+        ids = lucid.tensor([[1, 2, 3, 4]])
+        off = m(ids).last_hidden_state
+        on = m(ids, output_hidden_states=True).last_hidden_state
+        assert float((off - on).abs().max().item()) == 0.0

@@ -242,7 +242,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import (\n...     VAEConfig, VAEForImageGeneration,\n... )\n>>> cfg = VAEConfig(sample_size=32, in_channels=3, out_channels=3,\n...                 latent_dim=16, down_block_channels=(16, 32, 64))\n>>> model = VAEForImageGeneration(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.loss.shape   # reconstruction + scalar loss\n((1, 3, 32, 32), ())"
       ],
       "notes": [
-        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 (arXiv:1312.6114); $\\beta$-VAE in Higgins et al.,\nICLR, 2017; hierarchical extension in Sønderby et al., NeurIPS, 2016\n(arXiv:1602.02282).\n\nTraining objective — evidence lower bound:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{ELBO}}\n    = \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\\big[\\log p_\\theta(x \\mid z)\\big]\n      - \\beta \\cdot \\mathrm{KL}\\!\\big(\n            q_\\phi(z \\mid x) \\,\\big\\|\\, p(z)\n        \\big).\n$$\n\nIn hierarchical mode the KL term is the sum\n$\\sum_l \\mathrm{KL}(q_\\phi(z_l \\mid x) \\| p(z_l))$."
+        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114)); $\\beta$-VAE in Higgins et al.,\nICLR, 2017; hierarchical extension in Sønderby et al., NeurIPS, 2016\n([arXiv:1602.02282](https://arxiv.org/abs/1602.02282)).\n\nTraining objective — evidence lower bound:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{ELBO}}\n    = \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\\big[\\log p_\\theta(x \\mid z)\\big]\n      - \\beta \\cdot \\mathrm{KL}\\!\\big(\n            q_\\phi(z \\mid x) \\,\\big\\|\\, p(z)\n        \\big).\n$$\n\nIn hierarchical mode the KL term is the sum\n$\\sum_l \\mathrm{KL}(q_\\phi(z_l \\mid x) \\| p(z_l))$."
       ],
       "attributes": [
         {
@@ -418,7 +418,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import VAEConfig, VAEModel\n>>> cfg = VAEConfig(sample_size=32, in_channels=3, out_channels=3,\n...                 latent_dim=16, down_block_channels=(16, 32, 64))\n>>> model = VAEModel(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.latent.shape   # reconstruction + latent\n((1, 3, 32, 32), (1, 16))"
       ],
       "notes": [
-        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 (arXiv:1312.6114); hierarchical extension from Sønderby,\nRaiko, Maaløe, Sønderby, and Winther, *\"Ladder Variational\nAutoencoders\"*, NeurIPS, 2016 (arXiv:1602.02282).\n\nThe closed-form KL term used by the loss head is\n\n\n\n$$\n\\mathrm{KL}\\!\\big(\n    \\mathcal{N}(\\mu, \\sigma^2) \\,\\big\\|\\,\n    \\mathcal{N}(0, \\mathbf{I})\n\\big)\n    = \\tfrac{1}{2} \\sum_i \\!\\big(\n        \\mu_i^2 + \\sigma_i^2 - 1 - \\log \\sigma_i^2\n      \\big).\n$$"
+        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114)); hierarchical extension from Sønderby,\nRaiko, Maaløe, Sønderby, and Winther, *\"Ladder Variational\nAutoencoders\"*, NeurIPS, 2016 ([arXiv:1602.02282](https://arxiv.org/abs/1602.02282)).\n\nThe closed-form KL term used by the loss head is\n\n\n\n$$\n\\mathrm{KL}\\!\\big(\n    \\mathcal{N}(\\mu, \\sigma^2) \\,\\big\\|\\,\n    \\mathcal{N}(0, \\mathbf{I})\n\\big)\n    = \\tfrac{1}{2} \\sum_i \\!\\big(\n        \\mu_i^2 + \\sigma_i^2 - 1 - \\log \\sigma_i^2\n      \\big).\n$$"
       ],
       "attributes": [
         {
@@ -468,7 +468,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import hvae\n>>> model = hvae().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.latent.shape   # latent is flat concat (32+64+128)\n((1, 3, 32, 32), (1, 224))"
       ],
       "notes": [
-        "Reference: Sønderby, Raiko, Maaløe, Sønderby, and Winther, *\"Ladder\nVariational Autoencoders\"*, NeurIPS, 2016 (arXiv:1602.02282).\n\nHierarchical ELBO:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{ELBO}}\n    = \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\\big[\\log p_\\theta(x \\mid z)\\big]\n      - \\sum_{l = 1}^{L}\n        \\mathrm{KL}\\!\\big(\n            q_\\phi(z_l \\mid x) \\,\\big\\|\\, p(z_l)\n        \\big).\n$$"
+        "Reference: Sønderby, Raiko, Maaløe, Sønderby, and Winther, *\"Ladder\nVariational Autoencoders\"*, NeurIPS, 2016 ([arXiv:1602.02282](https://arxiv.org/abs/1602.02282)).\n\nHierarchical ELBO:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{ELBO}}\n    = \\mathbb{E}_{q_\\phi(z \\mid x)}\\!\\big[\\log p_\\theta(x \\mid z)\\big]\n      - \\sum_{l = 1}^{L}\n        \\mathrm{KL}\\!\\big(\n            q_\\phi(z_l \\mid x) \\,\\big\\|\\, p(z_l)\n        \\big).\n$$"
       ],
       "attributes": [],
       "warns": [],
@@ -655,7 +655,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import hvae_gen\n>>> model = hvae_gen().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.kl_loss.shape\n((1, 3, 32, 32), ())"
       ],
       "notes": [
-        "Reference: Sønderby, Raiko, Maaløe, Sønderby, and Winther, *\"Ladder\nVariational Autoencoders\"*, NeurIPS, 2016 (arXiv:1602.02282)."
+        "Reference: Sønderby, Raiko, Maaløe, Sønderby, and Winther, *\"Ladder\nVariational Autoencoders\"*, NeurIPS, 2016 ([arXiv:1602.02282](https://arxiv.org/abs/1602.02282))."
       ],
       "attributes": [],
       "warns": [],
@@ -850,7 +850,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import vae\n>>> model = vae().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.latent.shape\n((1, 3, 32, 32), (1, 128))"
       ],
       "notes": [
-        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 (arXiv:1312.6114); $\\beta$-VAE in Higgins et al.,\n*\"beta-VAE: Learning Basic Visual Concepts with a Constrained\nVariational Framework\"*, ICLR, 2017.\n\nReparameterisation trick:\n\n\n\n$$\nz = \\mu_\\phi(x) + \\sigma_\\phi(x) \\odot \\epsilon,\n\\qquad\n\\epsilon \\sim \\mathcal{N}(0, \\mathbf{I}).\n$$"
+        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114)); $\\beta$-VAE in Higgins et al.,\n*\"beta-VAE: Learning Basic Visual Concepts with a Constrained\nVariational Framework\"*, ICLR, 2017.\n\nReparameterisation trick:\n\n\n\n$$\nz = \\mu_\\phi(x) + \\sigma_\\phi(x) \\odot \\epsilon,\n\\qquad\n\\epsilon \\sim \\mathcal{N}(0, \\mathbf{I}).\n$$"
       ],
       "attributes": [],
       "warns": [],
@@ -993,7 +993,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.vae import vae_gen\n>>> model = vae_gen().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.kl_loss.shape   # reconstruction + scalar KL\n((1, 3, 32, 32), ())"
       ],
       "notes": [
-        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 (arXiv:1312.6114)."
+        "Reference: Kingma and Welling, *\"Auto-Encoding Variational Bayes\"*,\nICLR, 2014 ([arXiv:1312.6114](https://arxiv.org/abs/1312.6114))."
       ],
       "attributes": [],
       "warns": [],

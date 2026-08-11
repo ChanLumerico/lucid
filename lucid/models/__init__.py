@@ -409,6 +409,7 @@ from lucid.models.vision.unet import (
 from lucid.models.vision.attention_unet import (
     AttentionUNetConfig, AttentionUNetForSemanticSegmentation,
     attention_unet,
+    attention_unet_3d,
 )
 # 2020 — DETR (Carion et al.)
 from lucid.models.vision.detr import (
@@ -619,6 +620,7 @@ __all__ = [
     # ── Vision (2018) Attention U-Net ────────────────────────────────────────
     "AttentionUNetConfig", "AttentionUNetForSemanticSegmentation",
     "attention_unet",
+    "attention_unet_3d",
     # ── Vision (2014) R-CNN ───────────────────────────────────────────────────
     "RCNNConfig", "RCNNForObjectDetection",
     "rcnn",

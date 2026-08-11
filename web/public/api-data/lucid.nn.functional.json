@@ -188,7 +188,7 @@
       "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/nn/functional/activations.py#L167",
       "subcategory": "activations",
       "summary": "Scaled exponential linear unit activation.",
-      "extended": "Self-normalising activation from Klambauer et al. (2017): when used in\na fully-connected network with LeCun-normal initialised weights, the\nfixed scale $\\lambda$ and slope $\\alpha$ drive the\nactivations toward zero-mean, unit-variance fixed points without the\nneed for explicit batch / layer normalisation.",
+      "extended": "Self-normalising activation from [Klambauer et al. (2017)](https://arxiv.org/abs/1706.02515): when used in\na fully-connected network with LeCun-normal initialised weights, the\nfixed scale $\\lambda$ and slope $\\alpha$ drive the\nactivations toward zero-mean, unit-variance fixed points without the\nneed for explicit batch / layer normalisation.",
       "parameters": [
         {
           "name": "x",
@@ -251,7 +251,7 @@
         ">>> import lucid\n>>> from lucid.nn.functional import gelu\n>>> x = lucid.tensor([-1.0, 0.0, 1.0, 2.0])\n>>> gelu(x)\nTensor([-0.1587,  0.0000,  0.8413,  1.9545])"
       ],
       "notes": [
-        "Exact form:\n\n\n\n$$\n\\text{GELU}(x) = x \\, \\Phi(x)\n= \\frac{x}{2}\\left[1 + \\text{erf}\\!\\left(\\frac{x}{\\sqrt{2}}\\right)\\right]\n$$\n\nwhere $\\Phi$ is the standard normal CDF.  The `\"tanh\"`\napproximation is\n\n\n\n$$\n\\text{GELU}(x) \\approx \\frac{x}{2}\\left[1 +\n\\tanh\\!\\left(\\sqrt{\\tfrac{2}{\\pi}}\\,(x + 0.044715\\, x^3)\\right)\\right].\n$$\n\nUnlike ReLU, GELU has a non-zero gradient everywhere — useful for\ntraining very deep transformer stacks.  Introduced by\nHendrycks & Gimpel (2016) and adopted widely after BERT."
+        "Exact form:\n\n\n\n$$\n\\text{GELU}(x) = x \\, \\Phi(x)\n= \\frac{x}{2}\\left[1 + \\text{erf}\\!\\left(\\frac{x}{\\sqrt{2}}\\right)\\right]\n$$\n\nwhere $\\Phi$ is the standard normal CDF.  The `\"tanh\"`\napproximation is\n\n\n\n$$\n\\text{GELU}(x) \\approx \\frac{x}{2}\\left[1 +\n\\tanh\\!\\left(\\sqrt{\\tfrac{2}{\\pi}}\\,(x + 0.044715\\, x^3)\\right)\\right].\n$$\n\nUnlike ReLU, GELU has a non-zero gradient everywhere — useful for\ntraining very deep transformer stacks.  Introduced by\n[Hendrycks & Gimpel (2016)](https://arxiv.org/abs/1606.08415) and adopted widely after BERT."
       ],
       "attributes": [],
       "warns": [],
@@ -5503,7 +5503,7 @@
         {
           "name": "interleaved",
           "annotation": "bool",
-          "description": "Selects the feature-pairing convention (default `False`).  When\n`False` the half-split pairing $(x_i, x_{i+d/2})$ of the\nLLaMA / GPT-NeoX family is used and the `cos` / `sin` tables\nare expected in the half-split layout\n(`cos = [c_0, ..., c_{d/2-1}, c_0, ..., c_{d/2-1}]`).  When\n`True` the *original* RoPE pairing $(x_{2i}, x_{2i+1})$ of\nSu et al. (2021) is used and the tables are expected to repeat each\nfrequency twice (`cos = [c_0, c_0, c_1, c_1, ...]`).  RoFormer\nreference checkpoints require `interleaved=True`.",
+          "description": "Selects the feature-pairing convention (default `False`).  When\n`False` the half-split pairing $(x_i, x_{i+d/2})$ of the\nLLaMA / GPT-NeoX family is used and the `cos` / `sin` tables\nare expected in the half-split layout\n(`cos = [c_0, ..., c_{d/2-1}, c_0, ..., c_{d/2-1}]`).  When\n`True` the *original* RoPE pairing $(x_{2i}, x_{2i+1})$ of\n[Su et al. (2021)](https://arxiv.org/abs/2104.09864) is used and the tables are expected to repeat each\nfrequency twice (`cos = [c_0, c_0, c_1, c_1, ...]`).  RoFormer\nreference checkpoints require `interleaved=True`.",
           "default": "False"
         }
       ],
@@ -5572,7 +5572,7 @@
         ">>> import lucid\n>>> from lucid.nn.functional import sinusoidal_embedding\n>>> pe = sinusoidal_embedding(num_positions=128, embedding_dim=64)\n>>> pe.shape\n(128, 64)"
       ],
       "notes": [
-        "Equation (5) of Vaswani et al. (2017):\n\n\n\n$$\n\\begin{aligned}\n\\mathrm{PE}_{p,\\,2i}   &= \\sin\\!\\left(p / \\text{base}^{2i / d}\\right) \\\\\n\\mathrm{PE}_{p,\\,2i+1} &= \\cos\\!\\left(p / \\text{base}^{2i / d}\\right)\n\\end{aligned}\n$$\n\nThe table is pure (deterministic in its arguments) so callers can\nsafely share the result across model instances when dimensions match.\nFor training-time hot paths prefer the module form in\n`lucid.nn`, which caches the table as a buffer."
+        "Equation (5) of [Vaswani et al. (2017)](https://arxiv.org/abs/1706.03762):\n\n\n\n$$\n\\begin{aligned}\n\\mathrm{PE}_{p,\\,2i}   &= \\sin\\!\\left(p / \\text{base}^{2i / d}\\right) \\\\\n\\mathrm{PE}_{p,\\,2i+1} &= \\cos\\!\\left(p / \\text{base}^{2i / d}\\right)\n\\end{aligned}\n$$\n\nThe table is pure (deterministic in its arguments) so callers can\nsafely share the result across model instances when dimensions match.\nFor training-time hot paths prefer the module form in\n`lucid.nn`, which caches the table as a buffer."
       ],
       "attributes": [],
       "warns": [],
@@ -6156,7 +6156,7 @@
       "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/nn/functional/sampling.py#L886",
       "subcategory": "sampling",
       "summary": "Stateless functional multi-head attention forward pass.",
-      "extended": "Performs the full Vaswani et al. (2017) multi-head attention\ncomputation as a single pure function — useful for porting code\nthat builds attention layers without instantiating a stateful\nmodule.\n\nThe computation has four stages:\n\n1. **Input projection.**  Linear projections produce\n   $Q = X_q W_Q$, $K = X_k W_K$, $V = X_v W_V$\n   (when `use_separate_proj_weight=False`, these come from a\n   single fused `in_proj_weight`).\n2. **Head split.**  Reshape each of `Q`, `K`, `V` from\n   `(L, B, d_model)` to `(L, B·H, d_model/H)` so each of the\n   $H$ heads attends independently.\n3. **Scaled dot-product attention.**\n\n$$\n\\mathrm{Attn} = \\mathrm{softmax}\\!\\left(\n    \\frac{Q K^\\top}{\\sqrt{d_k}} + M\\right) V\n$$\n\nwhere `M` is the union of the optional `attn_mask`,\n   `key_padding_mask`, and the implicit causal mask when\n   `is_causal=True`.\n\n4. **Output projection.**  Concatenate heads and apply\n   $\\mathrm{out} = \\mathrm{Attn}_\\text{concat} W_O$.",
+      "extended": "Performs the full [Vaswani et al. (2017)](https://arxiv.org/abs/1706.03762) multi-head attention\ncomputation as a single pure function — useful for porting code\nthat builds attention layers without instantiating a stateful\nmodule.\n\nThe computation has four stages:\n\n1. **Input projection.**  Linear projections produce\n   $Q = X_q W_Q$, $K = X_k W_K$, $V = X_v W_V$\n   (when `use_separate_proj_weight=False`, these come from a\n   single fused `in_proj_weight`).\n2. **Head split.**  Reshape each of `Q`, `K`, `V` from\n   `(L, B, d_model)` to `(L, B·H, d_model/H)` so each of the\n   $H$ heads attends independently.\n3. **Scaled dot-product attention.**\n\n$$\n\\mathrm{Attn} = \\mathrm{softmax}\\!\\left(\n    \\frac{Q K^\\top}{\\sqrt{d_k}} + M\\right) V\n$$\n\nwhere `M` is the union of the optional `attn_mask`,\n   `key_padding_mask`, and the implicit causal mask when\n   `is_causal=True`.\n\n4. **Output projection.**  Concatenate heads and apply\n   $\\mathrm{out} = \\mathrm{Attn}_\\text{concat} W_O$.",
       "parameters": [
         {
           "name": "query",

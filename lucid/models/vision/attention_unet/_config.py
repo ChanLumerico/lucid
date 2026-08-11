@@ -84,6 +84,11 @@ class AttentionUNetConfig(ModelConfig):
     model_type: ClassVar[str] = "attention_unet"
 
     num_classes: int = 2
+    # 2 for images, 3 for volumes.  The paper's Implementation Details
+    # state "we propose a 3D-model to capture sufficient semantic context"
+    # and every released network is Conv3d — but the 2-D form is what most
+    # callers reach for, so it stays the default and 3-D is opt-in.
+    spatial_dims: int = 2
     in_channels: int = 1
     base_channels: int = 64
     depth: int = 4
