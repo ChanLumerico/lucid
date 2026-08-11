@@ -406,21 +406,32 @@ def _load_grad() -> dict[str, object]:
 @_register(_PREDICATE_NAMES)
 def _load_predicates() -> dict[str, object]:
     """Lazy loader for dtype predicate helpers (``is_tensor`` / ``is_floating_point`` / …)."""
-    from lucid._C import engine as _C_engine
+    from lucid import _dtype as _lucid_dtype
 
-    _FLOAT_DTYPES = frozenset([_C_engine.F16, _C_engine.F32, _C_engine.F64])
-    _COMPLEX_DTYPES = frozenset([_C_engine.C64])
+    # Derived from the dtype registry, not written out by hand.  The
+    # hand-written sets were the whole bug: ``bfloat16`` and
+    # ``complex128`` became engine dtypes of their own and nobody came
+    # back here, so ``lucid.is_floating_point(x)`` said ``False`` where
+    # ``x.is_floating_point()`` said ``True`` — and the disagreement was
+    # load-bearing, since ``autograd/_functional.py`` gates on the free
+    # function and so refused to differentiate a bfloat16 input.
+    # Reading the registry means a future dtype cannot drift out again.
+    _KINDS = {
+        engine_dtype: (
+            "complex"
+            if d._name.startswith("complex")
+            else (
+                "float"
+                if d._name.startswith(("float", "bfloat"))
+                else ("int" if d._name.startswith("int") else "bool")
+            )
+        )
+        for engine_dtype, d in _lucid_dtype._ENGINE_TO_DTYPE.items()
+    }
+    _FLOAT_DTYPES = frozenset(e for e, k in _KINDS.items() if k == "float")
+    _COMPLEX_DTYPES = frozenset(e for e, k in _KINDS.items() if k == "complex")
     _SIGNED_DTYPES = frozenset(
-        [
-            _C_engine.F16,
-            _C_engine.F32,
-            _C_engine.F64,
-            _C_engine.C64,
-            _C_engine.I8,
-            _C_engine.I16,
-            _C_engine.I32,
-            _C_engine.I64,
-        ]
+        e for e, k in _KINDS.items() if k in ("float", "complex", "int")
     )
 
     def is_tensor(obj: object) -> bool:  # type: ignore

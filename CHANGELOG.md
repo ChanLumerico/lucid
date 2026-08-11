@@ -218,6 +218,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - sample without replacement when asked to
 
+- derive the predicate sets from the dtype registry
+
 ### Changed
 
 - give the engine ops one shared operand check
