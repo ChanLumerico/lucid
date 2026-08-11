@@ -228,6 +228,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - propagate tsit5's fifth-order solution, not its embedded fourth
 
+- demangle node_name instead of stripping a digit prefix
+
 ### Changed
 
 - give the engine ops one shared operand check

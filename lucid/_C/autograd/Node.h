@@ -14,6 +14,8 @@
 #include <atomic>
 #include <cctype>
 #include <cstdint>
+#include <cstdlib>
+#include <cxxabi.h>
 #include <memory>
 #include <string>
 #include <typeinfo>
@@ -270,16 +272,49 @@ public:
         // same non-op.  A diagnostic that cannot say what it is about
         // costs more than the feature it is reporting on.
         //
-        // ``typeid`` is available because this class is polymorphic, and
-        // the mangled name is stripped to the class: ``12MulBackward``
-        // becomes ``MulBackward``.  Nodes that override this with their
-        // schema name still win.
+        // ``typeid`` is available because this class is polymorphic.
+        // Nodes that override this with their schema name still win.
+        //
+        // The name is demangled rather than had a digit prefix stripped
+        // off it.  Stripping assumed the flat Itanium form
+        // ``12MulBackward`` — a length then the identifier — and that
+        // shape only occurs for a class in the *global* namespace.
+        // Every node here lives in ``namespace lucid``, so the real
+        // mangling is ``N5lucid11MulBackwardE``: it opens with ``N``,
+        // not a digit, so the loop never advanced and the whole mangled
+        // string was handed back as the op name.  Nodes in the anonymous
+        // namespace inside it came back worse still
+        // (``N5lucid12_GLOBAL__N_113WhereBackwardE``).
         const char* mangled = typeid(*this).name();
-        std::string name(mangled ? mangled : "");
-        std::size_t start = 0;
-        while (start < name.size() && std::isdigit(static_cast<unsigned char>(name[start])))
-            ++start;
-        return start < name.size() ? name.substr(start) : "unknown";
+        if (mangled == nullptr) return "unknown";
+
+        int status = 0;
+        char* demangled = abi::__cxa_demangle(mangled, nullptr, nullptr, &status);
+        const bool demangled_ok = (status == 0 && demangled != nullptr);
+        std::string name(demangled_ok ? demangled : mangled);
+        std::free(demangled);
+
+        if (demangled_ok) {
+            // Keep the innermost component: ``lucid::MulBackward`` and
+            // ``lucid::(anonymous namespace)::WhereBackward`` both report
+            // just the node's own name.  A ``::`` inside a template
+            // argument belongs to the argument rather than to the
+            // enclosing scope, so the search stops at the first ``<``.
+            const std::size_t template_start = name.find('<');
+            const std::size_t sep = name.rfind("::", template_start);
+            if (sep != std::string::npos) name = name.substr(sep + 2);
+        } else {
+            // Demangling failed, so fall back to the flat form: it is
+            // still right for a global-namespace node, and a mangled
+            // string beats no string at all.
+            std::size_t start = 0;
+            while (start < name.size() &&
+                   std::isdigit(static_cast<unsigned char>(name[start])))
+                ++start;
+            if (start < name.size()) name = name.substr(start);
+        }
+
+        return name.empty() ? "unknown" : name;
     }
 
     // Return weak references to the forward-input :class:`TensorImpl`

@@ -319,3 +319,53 @@ def test_a_layout_copy_passes_the_gradient_through(fn) -> None:
     x.grad = None
     g.sum().backward()
     assert np.allclose(np.asarray(x.grad.numpy()), 2.0)
+
+
+# ── the name in the refusal ───────────────────────────────────────────────────
+
+
+class TestUnsupportedOpIsNamed:
+    """A refusal has to say which op refused.
+
+    ``node_name`` falls back to the C++ type name, and it derived that by
+    stripping a leading run of digits — the flat Itanium mangling
+    ``12MulBackward``.  That form only occurs for a class in the *global*
+    namespace, and every node here lives in ``namespace lucid``, so the
+    real name ``N5lucid10DetBackwardE`` starts with ``N``, the strip never
+    advanced, and the whole mangled string came back as the op name.
+    Nodes in the anonymous namespace inside ``lucid`` were worse
+    (``N5lucid12_GLOBAL__N_113WhereBackwardE``).
+    """
+
+    @staticmethod
+    def _refused_op_name(build):
+        x = lucid.tensor(np.array([[1.0, 2.0], [3.0, 4.0]]), requires_grad=True)
+        try:
+            lucid.autograd.grad(build(x).sum(), [x], create_graph=True)
+        except RuntimeError as exc:
+            message = str(exc)
+            if "not yet supported for op" not in message:
+                pytest.skip(f"different failure: {message}")
+            return message.split("op '")[1].split("'")[0]
+        pytest.skip("op now supports create_graph — nothing refuses")
+
+    @pytest.mark.parametrize(
+        "label,build",
+        [
+            # ``lucid::DetBackward`` — the plain namespaced case.
+            ("det", lambda x: lucid.linalg.det(x)),
+            # These live in an anonymous namespace inside ``lucid``, which
+            # mangles differently again and was the worse of the two.
+            ("diagonal", lambda x: lucid.diagonal(x)),
+            ("sort", lambda x: lucid.sort(x, dim=1)[0]),
+        ],
+    )
+    def test_the_message_names_the_op_not_its_mangling(self, label, build) -> None:
+        name = self._refused_op_name(build)
+        assert name != "unknown"
+        assert name.endswith("Backward"), name
+        # The tells of an unparsed mangling.
+        assert not name.startswith("N"), name
+        assert "_GLOBAL__N_" not in name, name
+        assert "lucid" not in name, name
+        assert name.isidentifier(), name
