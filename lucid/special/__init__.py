@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _real(x: "Tensor") -> "Tensor":
+def _real(x: Tensor) -> Tensor:
     """A float view of a discrete operand.
 
     Every function in this module is a real-valued special function, and
@@ -127,7 +127,7 @@ def erfcx(x: Tensor) -> Tensor:
 # ``exp`` instead of meeting it as inf times zero.
 
 
-def _erfcx_stable(x: "Tensor") -> "Tensor":
+def _erfcx_stable(x: Tensor) -> Tensor:
     """``exp(x²) erfc(x)``, without ever forming ``exp(x²)``.
 
     For large positive x the product is evaluated through the continued
@@ -1558,7 +1558,7 @@ _I0E_LARGE_COEFFS: list[float] = [
 
 # A&S 9.8.6 — the same polynomials ``_modified_bessel_k{0,1}_large`` use,
 # without the ``exp(-x)/√x`` tail.
-def _K0E_LARGE(z: "Tensor") -> "Tensor":
+def _K0E_LARGE(z: Tensor) -> Tensor:
     return (
         1.25331414
         - 0.07832358 * z
@@ -1570,7 +1570,7 @@ def _K0E_LARGE(z: "Tensor") -> "Tensor":
     )
 
 
-def _K1E_LARGE(z: "Tensor") -> "Tensor":
+def _K1E_LARGE(z: Tensor) -> Tensor:
     return (
         1.25331414
         + 0.23498619 * z
