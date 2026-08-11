@@ -446,3 +446,36 @@ def test_a_regression_loss_descends(loss):
         loss(model(inputs), targets).backward()
         optimiser.step()
     assert _f(loss(model(inputs), targets)) < first
+
+
+# ── the target dtype a caller actually has ────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [lucid.int64, lucid.int32, lucid.int16],
+    ids=["int64-the-default", "int32", "int16"],
+)
+def test_multilabel_margin_accepts_any_integer_target(dtype):
+    """``lucid.tensor`` of ints gives int64, and int64 used to raise.
+
+    The index columns are compared against int32 constants inside the
+    loss, so a target that was not already int32 died on a dtype
+    mismatch — meaning the loss rejected the dtype its own callers
+    naturally produce, and only the docstring's explicit
+    ``dtype=lucid.int32`` ever worked.
+    """
+    scores = lucid.tensor(np.array([[1.0, 0.5, -0.3, 0.2]], dtype=np.float32))
+    target = lucid.tensor(np.array([[0, 1, -1, -1]], dtype=np.int32), dtype=dtype)
+    # Positives {0,1}, negatives {2,3}: hinges 0, 0.2, 0.2, 0.7 over C=4.
+    assert _f(F.multilabel_margin_loss(scores, target)) == pytest.approx(
+        1.1 / 4, rel=1e-6
+    )
+
+
+def test_multilabel_margin_1d_accepts_a_default_int_target():
+    scores = lucid.tensor(np.array([1.0, 0.5, -0.3, 0.2], dtype=np.float32))
+    target = lucid.tensor(np.array([0, 1, -1, -1], dtype=np.int64), dtype=lucid.int64)
+    assert _f(F.multilabel_margin_loss(scores, target)) == pytest.approx(
+        1.1 / 4, rel=1e-6
+    )

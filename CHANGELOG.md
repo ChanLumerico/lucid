@@ -220,6 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - derive the predicate sets from the dtype registry
 
+- accept any integer target in multilabel_margin_loss
+
 ### Changed
 
 - give the engine ops one shared operand check

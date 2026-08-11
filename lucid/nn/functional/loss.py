@@ -1693,12 +1693,18 @@ def multilabel_margin_loss(
     >>> import lucid
     >>> from lucid.nn.functional import multilabel_margin_loss
     >>> scores = lucid.tensor([[1.0, 0.5, -0.3, 0.2]])
-    >>> target = lucid.tensor([[0, 1, -1, -1]], dtype=lucid.int32)
+    >>> target = lucid.tensor([[0, 1, -1, -1]])
     >>> multilabel_margin_loss(scores, target)
-    Tensor(0.85)
+    tensor(0.275)
     """
     xi = _unwrap(x)
     ti = _unwrap(target)
+    # Index columns gathered out of ``ti`` are compared against the I32
+    # constants below, and ``lucid.tensor([...ints...])`` hands us int64 —
+    # so the natural call raised ``DtypeMismatch`` and only an explicitly
+    # int32 target worked.  Normalize at the boundary, as ctc_loss does.
+    if ti.dtype != _C_engine.I32:
+        ti = _C_engine.astype(ti, _C_engine.I32)
 
     # Handle 1D inputs
     if len(xi.shape) == 1:
