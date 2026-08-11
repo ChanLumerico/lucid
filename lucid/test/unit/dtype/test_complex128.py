@@ -131,3 +131,52 @@ def test_complex_of_an_infinite_part_is_not_nan() -> None:
         lucid.tensor(np.array([np.inf])), lucid.tensor(np.array([np.inf]))
     )
     assert _v(out)[0] == complex(np.inf, np.inf)
+
+
+# ── abs across the whole double range ─────────────────────────────────────────
+#
+# ``complex_abs`` scales by ``m = max(|re|, |im|)`` before squaring, and clamps
+# ``m`` away from 0 and infinity so the division is safe.  Those clamp bounds
+# were FLT_MIN / FLT_MAX, hardcoded — a no-op for C64, where a finite ``float``
+# lane can never leave that range, and wrong for C128, whose ``double`` lane
+# routinely does.  The clamp then moved ``m`` while the trailing multiply used
+# the unclamped one, inflating the answer by exactly ``m / safe_m``:
+# ``abs(1e100 + 0j)`` came back 2.9e161.  The backward recomputes the forward,
+# so the gradient was wrong by the same factor.
+
+
+@pytest.mark.parametrize(
+    "value",
+    [1e300, 1e100, 1e39, 1e38, 1.0, 1e-38, 1e-39, 1e-100, 1e-300, 0.0],
+    ids=lambda v: f"{v:g}",
+)
+def test_abs_is_exact_outside_the_float32_range(value: float) -> None:
+    z = np.array([complex(value, 0.0)], dtype=np.complex128)
+    got = _v(lucid.abs(lucid.tensor(z)))
+    np.testing.assert_allclose(got, np.abs(z), rtol=1e-12)
+
+
+def test_abs_of_a_mixed_pair_far_outside_the_float_range() -> None:
+    z = np.array([3e200 + 4e200j, 3e-200 + 4e-200j], dtype=np.complex128)
+    np.testing.assert_allclose(_v(lucid.abs(lucid.tensor(z))), np.abs(z), rtol=1e-12)
+
+
+def test_abs_keeps_its_infinity_and_zero_contract() -> None:
+    z = np.array([complex(np.inf, 1.0), 0j], dtype=np.complex128)
+    np.testing.assert_array_equal(_v(lucid.abs(lucid.tensor(z))), np.abs(z))
+
+
+def test_the_gradient_is_right_at_an_extreme_magnitude() -> None:
+    # The backward recomputes |z| through the same forward, so a clamp that
+    # perturbs the value perturbs the gradient identically.
+    z = np.array([3e200 + 4e200j], dtype=np.complex128)
+    t = lucid.tensor(z, requires_grad=True)
+    lucid.abs(t).sum().backward()
+    assert t.grad is not None
+    np.testing.assert_allclose(_v(t.grad), z / np.abs(z), rtol=1e-12)
+
+
+def test_complex64_abs_is_unchanged() -> None:
+    # C64 was never affected — a finite float is always inside FLT_MIN/FLT_MAX.
+    z = np.array([3 + 4j, 1e30 + 0j, 1e-30 + 0j, 0j], dtype=np.complex64)
+    np.testing.assert_allclose(_v(lucid.abs(lucid.tensor(z))), np.abs(z), rtol=1e-6)
