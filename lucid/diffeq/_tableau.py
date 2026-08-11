@@ -519,26 +519,39 @@ TSIT5 = ButcherTableau(
             2.324710524099774,
         ),
     ),
+    # The fifth-order solution, which is the one that propagates.  These two
+    # vectors were swapped: ``b`` held the fourth-order embedded solution and
+    # the fifth-order weights sat in the last row of ``a``, so the method
+    # advertised order 5, raised the error ratio to the power 1/5, and took
+    # fourth-order steps.  Every one of the nine fifth-order conditions was
+    # violated by the vector that was propagating; all seventeen hold for this
+    # one.  ``dopri5`` above has the same shape done right — ``b`` is the
+    # high-order solution and ``a[-1] == b[:-1]``, which is what makes the pair
+    # FSAL.  Tsitouras is FSAL too, and it was not, for the same reason.
     b=(
-        0.09468075576583946,
-        0.009183565540343253,
-        0.4877705284247616,
-        1.234297566930479,
-        -2.707712349983526,
-        1.866628418170587,
-        1.0 / 66.0,
+        0.09646076681806523,
+        0.01,
+        0.4798896504144996,
+        1.379008574103742,
+        -3.290069515436081,
+        2.324710524099774,
+        0.0,
     ),
     c=(0.0, 0.161, 0.327, 0.9, 0.9800255409045097, 1.0, 1.0),
     order=5,
     name="tsit5",
+    # ``b - b_hat``, the documented direction: the fifth-order solution minus
+    # the fourth.  Only its magnitude reaches the controller (the error norm
+    # squares it), but the sign is what the field means, and ``dopri5`` writes
+    # its own that way round.
     b_error=(
-        -0.001780011052225771,
-        -0.0008164344596567469,
-        0.007880878010261996,
-        -0.1447110071732629,
-        0.5823571654525552,
-        -0.4580821059291869,
-        1.0 / 66.0,
+        0.001780011052225771,
+        0.0008164344596567469,
+        -0.007880878010261996,
+        0.1447110071732629,
+        -0.5823571654525552,
+        0.4580821059291869,
+        -1.0 / 66.0,
     ),
     mid=(
         0.10741235230100377,

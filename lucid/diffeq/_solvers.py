@@ -437,7 +437,8 @@ def odeint(
         Absolute tolerance.  Adaptive methods only.
     method : str or ButcherTableau or None, default=None
         ``None`` selects ``"dopri5"``.  Otherwise one of ``"dopri5"``,
-        ``"tsit5"``, ``"bosh3"``, ``"fehlberg2"``, ``"adaptive_heun"``,
+        ``"dopri8"``, ``"tsit5"``, ``"bosh3"``, ``"fehlberg2"``,
+        ``"adaptive_heun"``,
         ``"euler"``, ``"midpoint"``, ``"heun2"``, ``"heun3"``, ``"rk4"``,
         ``"rk4_classic"``,
         ``"explicit_adams"``, ``"implicit_adams"``, ``"fixed_adams"``,

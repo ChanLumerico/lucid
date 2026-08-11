@@ -570,10 +570,11 @@ class TestAdaptiveTableaux:
         assert diffeq.BOSH3.is_fsal
         assert not diffeq.ADAPTIVE_HEUN.is_fsal
         assert not diffeq.FEHLBERG2.is_fsal
-        # tsit5 ends with a non-zero final weight, so the last stage is
-        # not the new state's derivative — the reference library applies
-        # the same test and reaches the same conclusion.
-        assert not diffeq.TSIT5.is_fsal
+        # tsit5 is FSAL as published.  This asserted the opposite, which
+        # was true only because the fourth-order embedded weights had
+        # been put in ``b``: those end on 1/66, so the last stage was not
+        # the new state's derivative and the reuse was given up.
+        assert diffeq.TSIT5.is_fsal
         assert not diffeq.RK4.is_adaptive
 
     def test_rejects_error_weights_that_do_not_cancel(self) -> None:
@@ -2906,3 +2907,77 @@ class TestRkCombine:
         for k, c in zip(ks, coeffs):
             assert k.grad is not None
             assert float(k.grad.max().item()) == pytest.approx(0.25 * c, abs=1e-6)
+
+
+class TestPropagatedOrder:
+    """The weights that advance the state must earn the declared order.
+
+    ``tsit5`` shipped with its two embedded solutions swapped: the
+    fourth-order weights sat in ``b`` and propagated, the fifth-order
+    ones sat unused in the last row of ``a``.  Nothing caught it —
+    ``b`` still summed to 1, ``b_error`` still summed to 0, the stage
+    consistency conditions still held, and the declared ``order`` is
+    just an integer nobody checked against the coefficients.  So the
+    method took fourth-order steps, called itself fifth order, and fed
+    the step controller an exponent for an order it did not have.
+    """
+
+    # ``dopri8`` is left out on purpose: at double precision its error
+    # reaches the rounding floor before the asymptotic regime starts, so
+    # a measured slope there says more about the floor than the method.
+    MEASURABLE = [
+        ("euler", 1),
+        ("midpoint", 2),
+        ("heun2", 2),
+        ("heun3", 3),
+        ("rk4", 4),
+        ("rk4_classic", 4),
+        ("adaptive_heun", 2),
+        ("fehlberg2", 2),
+        ("bosh3", 3),
+        ("dopri5", 5),
+        ("tsit5", 5),
+    ]
+
+    @staticmethod
+    def _global_error(tab, n: int) -> float:
+        """``y' = -y`` on ``[0, 1]`` in ``n`` equal steps, stepped by hand.
+
+        Driven straight off the tableau rather than through ``odeint``, so
+        an adaptive controller cannot mask the order of the weights.
+        """
+        h, y = 1.0 / n, 1.0
+        stages = len(tab.b)
+        for _ in range(n):
+            ks: list[float] = []
+            for i in range(stages):
+                inner = sum(tab.a[i][j] * ks[j] for j in range(len(tab.a[i])))
+                ks.append(-(y + h * inner))
+            y += h * sum(tab.b[i] * ks[i] for i in range(stages))
+        return abs(y - math.exp(-1.0))
+
+    @pytest.mark.parametrize(
+        "method,declared", MEASURABLE, ids=[m for m, _ in MEASURABLE]
+    )
+    def test_measured_order_matches_the_declared_one(
+        self, method: str, declared: int
+    ) -> None:
+        tab = _METHODS[method]
+        assert tab.order == declared
+        coarse = self._global_error(tab, 20)
+        fine = self._global_error(tab, 40)
+        measured = math.log(coarse / fine) / math.log(2.0)
+        assert measured > declared - 0.3, (
+            f"{method}: declared order {declared}, measured {measured:.2f} — "
+            f"the propagating weights deliver less than advertised"
+        )
+
+    def test_tsit5_propagates_the_published_fifth_order_weights(self) -> None:
+        # The two unmistakable entries of the Tsitouras 5th-order vector:
+        # b[1] is exactly 1/100, and b[6] is zero (which is what makes the
+        # pair FSAL).  The 4th-order embedded solution has neither.
+        tab = _METHODS["tsit5"]
+        assert tab.b[1] == pytest.approx(0.01, abs=1e-15)
+        assert tab.b[6] == 0.0
+        assert tab.is_fsal
+        assert tab.a[-1] == tab.b[:-1]

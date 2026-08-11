@@ -226,6 +226,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - keep LambdaLR's lambdas out of its state_dict
 
+- propagate tsit5's fifth-order solution, not its embedded fourth
+
 ### Changed
 
 - give the engine ops one shared operand check
