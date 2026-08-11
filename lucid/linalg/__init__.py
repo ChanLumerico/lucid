@@ -1901,8 +1901,10 @@ def vector_norm(
         Input tensor.
     ord : int or float, optional
         Order of the norm.  Default ``2``.
-    dim : int, list of int or None, optional
-        Axis or axes to reduce.  ``None`` flattens first.
+    dim : int, list of int, tuple of int or None, optional
+        Axis or axes to reduce.  ``None`` reduces over every axis — the
+        rank is retained, so ``keepdim=True`` yields one size-1 axis per
+        input axis rather than a single one.
     keepdim : bool, optional
         If ``True``, reduced dimensions are retained with size 1.
     dtype : optional
