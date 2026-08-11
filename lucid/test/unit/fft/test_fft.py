@@ -52,3 +52,35 @@ class TestFreqs:
         out = lucid.fft.rfftfreq(4).numpy()
         # For n=4 rfftfreq → [0, 0.25, 0.5].
         np.testing.assert_allclose(out, [0.0, 0.25, 0.5], atol=1e-6)
+
+
+class TestIHFFT:
+    """``ihfft`` once raised ``broadcast: dtype not supported`` for every
+    real input — the whole family had never produced a value.  These pin
+    the values, not just the fact that a call returns."""
+
+    def test_matches_the_reference_1d(self) -> None:
+        a = np.arange(8, dtype=np.float32) - 3.5
+        out = lucid.fft.ihfft(lucid.tensor(a)).numpy()
+        np.testing.assert_allclose(out, np.fft.ihfft(a.astype(np.float64)), atol=1e-6)
+
+    def test_every_norm(self) -> None:
+        a = np.arange(8, dtype=np.float32)
+        for norm in ("backward", "ortho", "forward"):
+            out = lucid.fft.ihfft(lucid.tensor(a), norm=norm).numpy()
+            np.testing.assert_allclose(
+                out, np.fft.ihfft(a.astype(np.float64), norm=norm), atol=1e-6
+            )
+
+    def test_ihfft2_and_ihfftn(self) -> None:
+        # The reference has no ihfft2/ihfftn, so use the identity they are
+        # defined by: ihfft(x) = conj(rfft(x)) / N.
+        a = np.random.default_rng(0).standard_normal((4, 6)).astype(np.float32)
+        expected = np.conj(np.fft.rfft2(a.astype(np.float64))) / a.size
+        for fn in (lucid.fft.ihfft2, lucid.fft.ihfftn):
+            np.testing.assert_allclose(fn(lucid.tensor(a)).numpy(), expected, atol=1e-6)
+
+    def test_hermitian_round_trip(self) -> None:
+        a = np.arange(8, dtype=np.float32) - 3.5
+        spectrum = lucid.fft.ihfft(lucid.tensor(a))
+        np.testing.assert_allclose(lucid.fft.hfft(spectrum, n=8).numpy(), a, atol=1e-4)
