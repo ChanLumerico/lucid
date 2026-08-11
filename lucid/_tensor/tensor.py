@@ -2935,8 +2935,11 @@ class Tensor:
         Notes
         -----
         Unlike :meth:`clone`, ``copy_`` does not allocate a new tensor —
-        only ``self``'s storage is written. The autograd graph is not
-        extended by this operation. Element-wise:
+        only ``self``'s storage is written. The autograd graph *is*
+        extended: after the copy ``self`` depends on ``other``, not on
+        whatever produced ``self``, so a backward pass through ``self``
+        deposits its gradient on ``other``. That is the point of copying
+        a differentiable tensor in. Element-wise:
 
         .. math::
 
