@@ -16,6 +16,7 @@ import math
 from typing import ClassVar, cast, override
 
 import lucid
+import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import DiffusionModelOutput, GenerationOutput
@@ -24,6 +25,7 @@ from lucid.models._utils._generative import (
     resolve_generation_device,
 )
 from lucid.models.generative.ddpm._config import DDPMConfig
+from lucid.models.generative.ncsn._refinenet import RefineNetScoreNet
 from lucid.models.generative.ddpm._model import DDPMUNet
 from lucid.models.generative.ncsn._config import NCSNConfig
 
@@ -143,13 +145,23 @@ class NCSNModel(PretrainedModel):
         # Divergence, deliberate: NCSN v1 §4.1 and NCSNv2 both specify a
         # RefineNet — a 4-cascade U-Net with CondInstanceNorm++ (v1) or
         # InstanceNorm++ (v2), ELU throughout, and dilated convolutions in
-        # place of subsampling.  This uses the DDPM U-Net (GroupNorm, SiLU,
-        # self-attention, sinusoidal timestep embedding), which is what
-        # NCSN++ later moved to.  Reusing one backbone across both families
-        # is the reason; the consequence is that no released NCSN v1/v2
-        # checkpoint will load here, and the score network's inductive bias
-        # is NCSN++'s rather than the original's.
-        self.unet = DDPMUNet(_to_unet_config(config))
+        # place of subsampling.  ``backbone="refinenet"`` builds that; the
+        # default reuses the DDPM U-Net (GroupNorm, SiLU, self-attention,
+        # sinusoidal timestep embedding), which is what NCSN++ later moved
+        # to and what every factory here has always produced.  Neither
+        # loads a released v1/v2 checkpoint — the weights are not published
+        # in a form this can convert — so the choice is about inductive
+        # bias, not about weight compatibility.
+        self.unet: nn.Module
+        if config.backbone == "refinenet":
+            self.unet = RefineNetScoreNet(
+                config.in_channels,
+                base_channels=config.base_channels,
+                num_classes=config.num_noise_levels,
+                channel_mult=tuple(config.channel_mult),
+            )
+        else:
+            self.unet = DDPMUNet(_to_unet_config(config))
         sigmas = make_sigma_schedule(
             config.num_noise_levels,
             sigma_max=config.sigma_max,

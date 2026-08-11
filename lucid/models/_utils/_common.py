@@ -429,3 +429,102 @@ def fit_linear_svm(
         opt.step()
 
     return w.detach().reshape(-1), b.detach().reshape(())
+
+
+def mine_hard_negatives(
+    positives: Tensor,
+    negative_pool: Tensor,
+    *,
+    rounds: int = 5,
+    keep_per_round: int = 1000,
+    c: float = 1e-3,
+    steps: int = 200,
+    lr: float = 0.01,
+) -> tuple[Tensor, Tensor, list[int]]:
+    r"""Train one linear SVM by R-CNN's hard-negative mining loop (§2.3).
+
+    Fitting on a random slice of the negatives wastes the budget: almost
+    every background window is trivially separable, so the margin is set by
+    a handful of near-misses that a random sample is unlikely to contain.
+    The paper's answer is to keep the mistakes — score the whole negative
+    pool with the current SVM, keep the highest-scoring (most wrong) ones,
+    refit, repeat.  The working set only grows, so each round's separator is
+    at least as constrained as the last.
+
+    Args:
+        positives:     ``(P, D)`` positive features.  R-CNN takes these from
+            ground-truth boxes only, not from high-IoU proposals.
+        negative_pool: ``(N, D)`` candidate negatives — proposals below the
+            paper's IoU 0.3.
+        rounds:        Mining iterations.
+        keep_per_round: How many of the worst-scoring negatives to add each
+            round.
+        c:             Hinge penalty, forwarded to :func:`fit_linear_svm`.
+        steps:         Gradient steps per refit.
+        lr:            Learning rate per refit.
+
+    Returns:
+        ``(w, b, history)`` — the final separator and the working-set size
+        after each round, which is the cheapest way to see the loop
+        converge: it stops growing once no new negative scores above the
+        margin.
+
+    Raises:
+        ValueError: If either set is empty.  A one-class fit has no margin,
+            and returning an arbitrary separator would look like success.
+
+    Notes:
+        This is the optimisation loop over *cached* features.  Extracting
+        them from a frozen network, and doing so over a whole dataset, is
+        the caller's pipeline — the paper's stage 2 runs offline for exactly
+        that reason.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._common import mine_hard_negatives
+    >>> pos = lucid.randn(8, 4) + 3.0
+    >>> neg = lucid.randn(200, 4) - 3.0
+    >>> w, b, history = mine_hard_negatives(pos, neg, rounds=2)
+    >>> len(history)
+    2
+    """
+    n_pos = int(positives.shape[0])
+    n_neg = int(negative_pool.shape[0])
+    if n_pos == 0 or n_neg == 0:
+        raise ValueError(
+            "mine_hard_negatives needs both positives and negatives; got "
+            f"{n_pos} and {n_neg}.  With one class there is no margin to "
+            "maximise and the returned separator would be arbitrary."
+        )
+
+    dev = positives.device.type
+    # Seed the working set so round 1 has something to be wrong about.
+    working: list[int] = list(range(min(keep_per_round, n_neg)))
+    history: list[int] = []
+    w = lucid.zeros(int(positives.shape[1]), device=dev)
+    b = lucid.zeros((), device=dev)
+
+    for _ in range(rounds):
+        idx = lucid.tensor(working, device=dev).long()
+        feats = lucid.cat([positives, negative_pool[idx]], dim=0)
+        labels = lucid.tensor([1.0] * n_pos + [-1.0] * len(working), device=dev)
+        w, b = fit_linear_svm(feats, labels, c=c, steps=steps, lr=lr)
+        history.append(len(working))
+
+        # A negative scoring above -1 is inside the margin: the SVM either
+        # calls it foreground or is not confident enough about it.
+        scores = cast(
+            list[float],
+            ((negative_pool @ w.reshape(-1, 1)).reshape(-1) + b).tolist(),
+        )
+        seen = set(working)
+        offenders = sorted(
+            (i for i, v in enumerate(scores) if v > -1.0 and i not in seen),
+            key=lambda i: -scores[i],
+        )
+        if not offenders:
+            break
+        working.extend(offenders[:keep_per_round])
+
+    return w, b, history

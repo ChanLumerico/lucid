@@ -78,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - implement the training paths the audit had only declared
 
+- close the last three gaps the audit had left as judgement calls
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

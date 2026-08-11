@@ -10,6 +10,7 @@ import math
 import pytest
 
 import lucid
+from lucid._tensor.tensor import Tensor
 from lucid.models import (
     DiffusionModelOutput,
     GenerationOutput,
@@ -239,3 +240,87 @@ class TestNCSNRegistry:
             "ncsn_cifar_gen", task=AutoModelForImageGeneration._task
         )
         assert entry.model_class is NCSNForImageGeneration
+
+
+class TestNCSNRefineNetBackbone:
+    """The backbone v1/v2 specify, behind ``backbone="refinenet"``."""
+
+    @staticmethod
+    def _config(**over: object):
+        from lucid.models.generative.ncsn._config import NCSNConfig
+
+        base: dict[str, object] = dict(
+            in_channels=3,
+            base_channels=16,
+            channel_mult=(1, 2, 2, 2),
+            num_noise_levels=4,
+            num_res_blocks=1,
+            attention_resolutions=(),
+            resnet_groups=8,
+        )
+        base.update(over)
+        return NCSNConfig(**base)  # type: ignore[arg-type]
+
+    def test_default_backbone_is_unchanged(self) -> None:
+        assert self._config().backbone == "ddpm_unet"
+
+    def test_refinenet_produces_a_score_of_the_input_shape(self) -> None:
+        from lucid.models.generative.ncsn._model import NCSNModel
+
+        lucid.manual_seed(0)
+        m = NCSNModel(self._config(backbone="refinenet"))
+        m.eval()
+        out = m(lucid.randn(2, 3, 32, 32), lucid.tensor([0, 3]).long())
+        assert tuple(out.sample.shape) == (2, 3, 32, 32)
+        assert bool(out.sample.isfinite().all().item())
+
+    def test_the_two_backbones_are_actually_different_networks(self) -> None:
+        """Not merely a renamed flag: the layer kinds must not overlap."""
+        from lucid.models.generative.ncsn._model import NCSNModel
+
+        default = {type(mod).__name__ for mod in NCSNModel(self._config()).modules()}
+        refine = {
+            type(mod).__name__
+            for mod in NCSNModel(self._config(backbone="refinenet")).modules()
+        }
+        assert "GroupNorm" in default and "CondInstanceNormPlusPlus" not in default
+        assert "CondInstanceNormPlusPlus" in refine and "GroupNorm" not in refine
+
+    def test_conditional_gains_all_receive_gradient(self) -> None:
+        """A per-noise-level gain that never trains is a dead parameter."""
+        from lucid.models.generative.ncsn._model import NCSNModel
+
+        lucid.manual_seed(0)
+        m = NCSNModel(self._config(backbone="refinenet"))
+        m.train()
+        m(
+            lucid.randn(2, 3, 32, 32), lucid.tensor([0, 3]).long()
+        ).sample.sum().backward()
+        gains = [n for n, _ in m.named_parameters() if "gamma" in n or "alpha" in n]
+        assert gains
+        for name in gains:
+            grad = m.get_parameter(name).grad
+            assert grad is not None and float(grad.abs().sum().item()) > 0.0
+
+    def test_instance_norm_plus_plus_keeps_the_brightness_pattern(self) -> None:
+        """§3.3's whole point: plain instance norm throws this away."""
+        from lucid.models.generative.ncsn._refinenet import (
+            CondInstanceNormPlusPlus,
+        )
+
+        def make(means: list[float]) -> Tensor:
+            return lucid.tensor([[[[m - 0.5, m + 0.5]] for m in means]])
+
+        norm = CondInstanceNormPlusPlus(3, num_classes=1)
+        label = lucid.tensor([0]).long()
+        a, b = make([1.0, 2.0, 3.0]), make([1.0, 2.0, 9.0])
+
+        def plain(x: Tensor) -> Tensor:
+            mu = x.mean(dim=(2, 3), keepdim=True)
+            var = ((x - mu) ** 2).mean(dim=(2, 3), keepdim=True)
+            return (x - mu) / var.sqrt()
+
+        # The two differ only in their channel-mean pattern, which plain
+        # instance norm removes entirely.
+        assert float((plain(a) - plain(b)).abs().max().item()) == 0.0
+        assert float((norm(a, label) - norm(b, label)).abs().max().item()) > 0.1

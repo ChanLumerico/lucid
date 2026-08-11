@@ -9484,6 +9484,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.ncsn._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ncsn._refinenet"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.neural_ode._model"
     },
     {
@@ -9843,6 +9851,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ncsn._refinenet"
     },
     {
       "kind": "module",

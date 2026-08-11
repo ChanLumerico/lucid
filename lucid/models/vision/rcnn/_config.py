@@ -87,10 +87,13 @@ class RCNNConfig(ModelConfig):
        only from ground-truth boxes, negatives at IoU < 0.3, and hard
        negative mining across the whole dataset; the mining is what makes
        it work, and it is a pipeline rather than a layer.
-       :func:`lucid.models._utils._common.fit_linear_svm` provides the
-       optimisation itself, so a caller can assemble that pass; scoring
-       with the resulting weights instead of the softmax is then their
-       choice.
+       :func:`lucid.models._utils._common.mine_hard_negatives` implements
+       that loop over cached features — score the pool, keep the
+       highest-scoring mistakes, refit, repeat — on top of
+       :func:`~lucid.models._utils._common.fit_linear_svm`.  Extracting the
+       features from a frozen network over a whole dataset, and scoring
+       with the resulting weights instead of the softmax, remain the
+       caller's pipeline.
     """
 
     model_type: ClassVar[str] = "rcnn"

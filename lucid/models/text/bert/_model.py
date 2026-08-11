@@ -173,34 +173,81 @@ class _BERTSelfAttention(nn.Module):
         # (B, T, hidden) → (B, H, T, head_dim)
         return x.reshape(B, T, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
 
+    def _unfused_attention(
+        self,
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
+        attention_mask: Tensor | None,
+        head_mask: Tensor | None,
+    ) -> tuple[Tensor, Tensor]:
+        """``softmax(q kᵀ / scale + mask) v``, keeping the weights.
+
+        The fused kernel is faster precisely because it never forms the
+        ``(B, H, T, T)`` score matrix.  Anything that needs to *see* or
+        *edit* those weights — returning them, or masking whole heads — has
+        to pay for materialising them, so this path exists alongside rather
+        than replacing the fused one.
+
+        Args:
+            q, k, v:        ``(B, H, T, D)`` projected heads.
+            attention_mask: Additive mask (0 keep / -inf drop).
+            head_mask:      ``(H,)`` or ``(B, H, 1, 1)`` multiplier applied
+                to the post-softmax weights.  Zeroing an entry removes that
+                head's contribution entirely, which is what the probing
+                literature uses it for.
+
+        Returns:
+            ``(context, attention_weights)`` with weights ``(B, H, T, T)``.
+        """
+        scores = q @ k.permute(0, 1, 3, 2) / self.scale
+        if attention_mask is not None:
+            scores = scores + attention_mask
+        weights = F.softmax(scores, dim=-1)
+        if head_mask is not None:
+            shaped = (
+                head_mask.reshape(1, -1, 1, 1) if head_mask.ndim == 1 else head_mask
+            )
+            weights = weights * shaped
+        dropped = cast(Tensor, self.dropout(weights)) if self.training else weights
+        return dropped @ v, weights
+
     @override
     def forward(  # type: ignore[override]
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
-    ) -> Tensor:
+        head_mask: Tensor | None = None,
+        output_attentions: bool = False,
+    ) -> tuple[Tensor, Tensor | None]:
         B, T, _ = hidden.shape
         q = self._shape(cast(Tensor, self.query(hidden)), B, T)
         k = self._shape(cast(Tensor, self.key(hidden)), B, T)
         v = self._shape(cast(Tensor, self.value(hidden)), B, T)
 
-        # Fused scaled-dot-product attention: one kernel that skips
-        # materializing the (B, H, T, T) scores tensor.  ``attention_mask`` is
-        # the standard additive mask (0 keep / -inf drop).  Q/K/V stay separate
-        # so weight porting is a direct rename, and this is bit-exact with the
-        # earlier manual ``softmax(q kᵀ / scale + mask) v`` path.
-        ctx: Tensor = F.scaled_dot_product_attention(
-            q,
-            k,
-            v,
-            attn_mask=attention_mask,
-            dropout_p=self.dropout.p if self.training else 0.0,
-            scale=1.0 / self.scale,
-        )
+        weights: Tensor | None = None
+        if output_attentions or head_mask is not None:
+            ctx, weights = self._unfused_attention(q, k, v, attention_mask, head_mask)
+            if not output_attentions:
+                weights = None
+        else:
+            # Fused scaled-dot-product attention: one kernel that skips
+            # materializing the (B, H, T, T) scores tensor.  ``attention_mask``
+            # is the standard additive mask (0 keep / -inf drop).  Q/K/V stay
+            # separate so weight porting is a direct rename, and this is
+            # bit-exact with the manual path above.
+            ctx = F.scaled_dot_product_attention(
+                q,
+                k,
+                v,
+                attn_mask=attention_mask,
+                dropout_p=self.dropout.p if self.training else 0.0,
+                scale=1.0 / self.scale,
+            )
 
         # (B, H, T, D) → (B, T, H*D)
         ctx = ctx.permute(0, 2, 1, 3).reshape(B, T, self.num_heads * self.head_dim)
-        return ctx
+        return ctx, weights
 
 
 @final
@@ -234,9 +281,16 @@ class _BERTAttention(nn.Module):
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
-    ) -> Tensor:
-        attn_out = cast(Tensor, self.self(hidden, attention_mask=attention_mask))
-        return cast(Tensor, self.output(attn_out, hidden))
+        head_mask: Tensor | None = None,
+        output_attentions: bool = False,
+    ) -> tuple[Tensor, Tensor | None]:
+        attn_out, weights = self.self.forward(
+            hidden,
+            attention_mask=attention_mask,
+            head_mask=head_mask,
+            output_attentions=output_attentions,
+        )
+        return cast(Tensor, self.output(attn_out, hidden)), weights
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -290,10 +344,17 @@ class _BERTLayer(nn.Module):
         self,
         hidden: Tensor,
         attention_mask: Tensor | None = None,
-    ) -> Tensor:
-        attn_out = cast(Tensor, self.attention(hidden, attention_mask=attention_mask))
+        head_mask: Tensor | None = None,
+        output_attentions: bool = False,
+    ) -> tuple[Tensor, Tensor | None]:
+        attn_out, weights = self.attention.forward(
+            hidden,
+            attention_mask=attention_mask,
+            head_mask=head_mask,
+            output_attentions=output_attentions,
+        )
         inter = cast(Tensor, self.intermediate(attn_out))
-        return cast(Tensor, self.output(inter, attn_out))
+        return cast(Tensor, self.output(inter, attn_out)), weights
 
 
 @final
@@ -310,7 +371,9 @@ class _BERTEncoder(nn.Module):
         hidden: Tensor,
         attention_mask: Tensor | None = None,
         output_hidden_states: bool = False,
-    ) -> tuple[Tensor, tuple[Tensor, ...] | None]:
+        head_mask: Tensor | None = None,
+        output_attentions: bool = False,
+    ) -> tuple[Tensor, tuple[Tensor, ...] | None, tuple[Tensor, ...] | None]:
         """Run the layer stack, optionally keeping every intermediate state.
 
         Args:
@@ -326,11 +389,30 @@ class _BERTEncoder(nn.Module):
             the embedding output first, as the reference orders them.
         """
         states: list[Tensor] = [hidden] if output_hidden_states else []
-        for layer in self.layer:
-            hidden = cast(Tensor, layer(hidden, attention_mask=attention_mask))
+        attentions: list[Tensor] = []
+        for i, layer in enumerate(self.layer):
+            # A per-layer head mask is indexed by depth; a single (H,) mask
+            # applies to every layer, which is the usual probing setup.
+            layer_head_mask = (
+                head_mask[i]
+                if head_mask is not None and head_mask.ndim > 1
+                else head_mask
+            )
+            hidden, weights = layer.forward(
+                hidden,
+                attention_mask=attention_mask,
+                head_mask=layer_head_mask,
+                output_attentions=output_attentions,
+            )
             if output_hidden_states:
                 states.append(hidden)
-        return hidden, (tuple(states) if output_hidden_states else None)
+            if output_attentions and weights is not None:
+                attentions.append(weights)
+        return (
+            hidden,
+            tuple(states) if output_hidden_states else None,
+            tuple(attentions) if output_attentions else None,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -460,6 +542,8 @@ class BERTModel(PretrainedModel):
         position_ids: Tensor | None = None,
         inputs_embeds: Tensor | None = None,
         output_hidden_states: bool = False,
+        head_mask: Tensor | None = None,
+        output_attentions: bool = False,
     ) -> BaseModelOutputWithPooling:
         """Encode a batch and return the sequence output plus the pooled CLS.
 
@@ -467,13 +551,12 @@ class BERTModel(PretrainedModel):
         layer; see :meth:`_BERTEmbeddings.forward`.  ``output_hidden_states``
         additionally returns every layer's output, embedding first.
 
-        Not accepted: ``head_mask`` and ``output_attentions``.  Both need the
-        per-head attention *weights*, and this encoder routes through the
-        fused scaled-dot-product kernel, which never materialises the
-        ``(B, H, T, T)`` matrix — that is precisely why it is fast and
-        memory-light.  Supporting either means running the unfused
-        ``softmax(qk^T) v`` path instead, so they are a deliberate omission
-        rather than an oversight.
+        ``head_mask`` and ``output_attentions`` both need the per-head
+        attention weights, so requesting either switches that layer to the
+        unfused ``softmax(qk^T) v`` path — the fused kernel never
+        materialises the ``(B, H, T, T)`` matrix, which is exactly why it
+        is fast.  Neither flag changes the result when off, and the fused
+        path stays the default.
         """
         if inputs_embeds is not None:
             B, T = int(inputs_embeds.shape[0]), int(inputs_embeds.shape[1])
@@ -493,10 +576,12 @@ class BERTModel(PretrainedModel):
             position_ids=position_ids,
             inputs_embeds=inputs_embeds,
         )
-        sequence_output, all_hidden = self.encoder.forward(
+        sequence_output, all_hidden, all_attn = self.encoder.forward(
             hidden,
             attention_mask=ext_mask,
             output_hidden_states=output_hidden_states,
+            head_mask=head_mask,
+            output_attentions=output_attentions,
         )
         pooled_output = cast(Tensor, self.pooler(sequence_output))
 
@@ -504,6 +589,7 @@ class BERTModel(PretrainedModel):
             last_hidden_state=sequence_output,
             pooler_output=pooled_output,
             hidden_states=all_hidden,
+            attentions=all_attn,
         )
 
 
@@ -1374,7 +1460,9 @@ class BERTForCausalLM(PretrainedModel):
         hidden = cast(
             Tensor, self.bert.embeddings(input_ids, token_type_ids=token_type_ids)
         )
-        sequence_output, _ = self.bert.encoder.forward(hidden, attention_mask=ext_mask)
+        sequence_output, _, _ = self.bert.encoder.forward(
+            hidden, attention_mask=ext_mask
+        )
         prediction_scores = cast(Tensor, self.cls(sequence_output))
 
         loss: Tensor | None = None

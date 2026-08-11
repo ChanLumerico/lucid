@@ -565,3 +565,68 @@ class TestBERTHiddenStates:
         off = m(ids).last_hidden_state
         on = m(ids, output_hidden_states=True).last_hidden_state
         assert float((off - on).abs().max().item()) == 0.0
+
+
+class TestBERTAttentionWeights:
+    """``output_attentions`` / ``head_mask`` and the unfused path they need."""
+
+    @staticmethod
+    def _model():
+        from lucid.models.text.bert._config import BERTConfig
+        from lucid.models.text.bert._model import BERTModel
+
+        return BERTModel(
+            BERTConfig(
+                num_hidden_layers=3,
+                hidden_size=32,
+                num_attention_heads=4,
+                intermediate_size=64,
+                vocab_size=100,
+            )
+        ).eval()
+
+    def test_off_by_default(self) -> None:
+        assert self._model()(lucid.tensor([[1, 2, 3, 4]])).attentions is None
+
+    def test_one_matrix_per_layer_and_rows_are_a_distribution(self) -> None:
+        out = self._model()(lucid.tensor([[1, 2, 3, 4]]), output_attentions=True)
+        assert out.attentions is not None
+        assert len(out.attentions) == 3
+        assert tuple(out.attentions[0].shape) == (1, 4, 4, 4)
+        # Post-softmax, every query row sums to 1.
+        assert abs(float(out.attentions[0].sum(dim=-1).mean().item()) - 1.0) < 1e-5
+
+    def test_unfused_path_matches_the_fused_one(self) -> None:
+        """Asking for the weights must not change the answer."""
+        m = self._model()
+        ids = lucid.tensor([[1, 2, 3, 4]])
+        fused = m(ids).last_hidden_state
+        unfused = m(ids, output_attentions=True).last_hidden_state
+        assert float((fused - unfused).abs().max().item()) < 1e-5
+
+    def test_all_ones_head_mask_is_a_no_op(self) -> None:
+        m = self._model()
+        ids = lucid.tensor([[1, 2, 3, 4]])
+        base = m(ids).last_hidden_state
+        masked = m(ids, head_mask=lucid.ones(4)).last_hidden_state
+        assert float((base - masked).abs().max().item()) < 1e-5
+
+    def test_zeroed_head_contributes_no_weight(self) -> None:
+        """A masked head must be gone, not merely down-weighted."""
+        m = self._model()
+        out = m(
+            lucid.tensor([[1, 2, 3, 4]]),
+            head_mask=lucid.tensor([1.0, 0.0, 1.0, 1.0]),
+            output_attentions=True,
+        )
+        assert out.attentions is not None
+        per_head = out.attentions[0].sum(dim=(0, 2, 3)).tolist()
+        assert per_head[1] == 0.0
+        assert all(v > 0.0 for i, v in enumerate(per_head) if i != 1)
+
+    def test_masking_every_head_changes_the_output(self) -> None:
+        m = self._model()
+        ids = lucid.tensor([[1, 2, 3, 4]])
+        base = m(ids).last_hidden_state
+        killed = m(ids, head_mask=lucid.zeros(4)).last_hidden_state
+        assert float((base - killed).abs().max().item()) > 0.0

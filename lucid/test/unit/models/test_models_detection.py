@@ -1351,3 +1351,71 @@ class TestLinearSVM:
             fit_linear_svm(
                 lucid.tensor([[1.0, 0.0], [-1.0, 0.0]]), lucid.tensor([1.0, 1.0])
             )
+
+
+class TestHardNegativeMining:
+    """R-CNN §2.3's stage-2 loop.
+
+    The pool is built so the hard cases are *planted*: 360 trivially
+    separable negatives far from the boundary, and 40 sitting right on it.
+    A loop that never finds those 40 would still look fine on the easy ones,
+    so the planted set is what makes the test able to fail.
+    """
+
+    @staticmethod
+    def _pool() -> tuple[Tensor, Tensor]:
+        positives = lucid.tensor([[3.0 + 0.1 * i, 0.0] for i in range(20)])
+        easy = [[-6.0 - 0.1 * i, 0.0] for i in range(360)]
+        hard = [[0.5, 0.05 * i] for i in range(40)]
+        return positives, lucid.tensor(easy + hard)
+
+    def test_working_set_grows_then_converges(self) -> None:
+        from lucid.models._utils._common import mine_hard_negatives
+
+        lucid.manual_seed(0)
+        pos, neg = self._pool()
+        _, _, history = mine_hard_negatives(pos, neg, rounds=4, keep_per_round=50)
+        assert history[0] == 50
+        assert history[-1] > history[0]
+        # It stops early once no negative scores inside the margin, so it
+        # must not have used all four rounds.
+        assert len(history) < 4
+
+    def test_separates_the_planted_hard_negatives(self) -> None:
+        from lucid.models._utils._common import mine_hard_negatives
+
+        lucid.manual_seed(0)
+        pos, neg = self._pool()
+        w, b, _ = mine_hard_negatives(pos, neg, rounds=4, keep_per_round=50)
+
+        neg_scores = ((neg @ w.reshape(-1, 1)).reshape(-1) + b).tolist()
+        pos_scores = ((pos @ w.reshape(-1, 1)).reshape(-1) + b).tolist()
+        assert all(v < 0 for v in neg_scores)
+        assert all(v > 0 for v in pos_scores)
+
+    def test_mining_beats_fitting_on_an_easy_slice(self) -> None:
+        """Without mining the boundary cases are simply never seen."""
+        from lucid.models._utils._common import fit_linear_svm, mine_hard_negatives
+
+        lucid.manual_seed(0)
+        pos, neg = self._pool()
+        w_mined, b_mined, _ = mine_hard_negatives(pos, neg, rounds=4, keep_per_round=50)
+        w_plain, b_plain = fit_linear_svm(
+            lucid.cat([pos, neg[:50]], dim=0),
+            lucid.tensor([1.0] * 20 + [-1.0] * 50),
+        )
+        hard = neg[360:]
+        mined_worst = max(
+            ((hard @ w_mined.reshape(-1, 1)).reshape(-1) + b_mined).tolist()
+        )
+        plain_worst = max(
+            ((hard @ w_plain.reshape(-1, 1)).reshape(-1) + b_plain).tolist()
+        )
+        assert plain_worst > 0.0  # the easy-slice fit gets them wrong
+        assert mined_worst < plain_worst
+
+    def test_empty_side_is_refused(self) -> None:
+        from lucid.models._utils._common import mine_hard_negatives
+
+        with pytest.raises(ValueError, match="both positives and negatives"):
+            mine_hard_negatives(lucid.zeros(0, 4), lucid.randn(10, 4))

@@ -16,7 +16,7 @@ the same modern U-Net as diffusion).  The differences live in:
 """
 
 from dataclasses import dataclass, field
-from typing import ClassVar, override
+from typing import ClassVar, override, Literal
 
 from lucid.models._meta import model_family_meta
 from lucid.models.generative._config import GenerativeModelConfig
@@ -122,6 +122,13 @@ class NCSNConfig(GenerativeModelConfig):
     num_heads: int = 1
     dropout: float = 0.0
     resnet_groups: int = 32
+    # "ddpm_unet" reuses the diffusion U-Net (GroupNorm / SiLU / attention /
+    # sinusoidal t), which is what NCSN++ moved to and what every factory
+    # here has always built.  "refinenet" is the backbone v1/v2 actually
+    # specify — a 4-cascade RefineNet with conditional InstanceNorm++, ELU,
+    # and dilation in place of subsampling.  Default unchanged so no
+    # existing run shifts under a caller.
+    backbone: Literal["ddpm_unet", "refinenet"] = "ddpm_unet"
 
     # Score-based: sigma schedule + Langevin sampler.
     # v1 defaults: sigma_1 = 1.0 with L = 10.  The registered factories
