@@ -28,10 +28,17 @@ def set_num_threads(n: int) -> None:
     """Record the desired number of intra-op threads.  Advisory only —
     Accelerate threading is configured via ``VECLIB_MAXIMUM_THREADS`` at
     process start, not via runtime API.
+
+    ``n = 0`` restores the "library default" sentinel, which is what
+    :func:`get_num_threads` reports before anything has been set.  The
+    setter has to accept it: a getter whose value its own setter rejects
+    cannot be snapshotted and put back, and every save/restore around
+    this pair — checkpointing, test fixtures, the audit's state guard —
+    silently leaves the count changed instead.
     """
     global _intra_op_threads
-    if int(n) <= 0:
-        raise ValueError(f"set_num_threads requires n >= 1, got {n}")
+    if int(n) < 0:
+        raise ValueError(f"set_num_threads requires n >= 0, got {n}")
     _intra_op_threads = int(n)
 
 
@@ -43,10 +50,14 @@ def get_num_threads() -> int:
 
 def set_num_interop_threads(n: int) -> None:
     """Record the desired inter-op thread count.  Advisory only — Lucid
-    does not maintain a separate inter-op pool."""
+    does not maintain a separate inter-op pool.
+
+    ``n = 0`` restores the "library default" sentinel, for the same
+    round-trip reason as :func:`set_num_threads`.
+    """
     global _inter_op_threads
-    if int(n) <= 0:
-        raise ValueError(f"set_num_interop_threads requires n >= 1, got {n}")
+    if int(n) < 0:
+        raise ValueError(f"set_num_interop_threads requires n >= 0, got {n}")
     _inter_op_threads = int(n)
 
 

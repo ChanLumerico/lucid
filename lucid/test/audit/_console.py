@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
+    from pathlib import Path
     from types import TracebackType
+    from typing import TextIO
 
 # ── palette ──────────────────────────────────────────────────────────────────
 # 256-colour indices, chosen to stay legible on both light and dark
@@ -65,6 +67,12 @@ class Console:
         Force a terminal width.  ``None`` measures it.
     quiet : bool, default=False
         Suppress everything except the final summary and findings.
+    log : Path, optional
+        Mirror every line to this file as it is printed, without colour.
+        The transcript ignores ``quiet``: a run reduced to its summary on
+        screen still records in full, which is the point of having one.
+        Opening failures are reported and then ignored — a missing log is
+        not a reason to lose the run that would have been written to it.
     """
 
     def __init__(
@@ -72,12 +80,58 @@ class Console:
         colour: bool | None = None,
         width: int | None = None,
         quiet: bool = False,
+        log: "Path | None" = None,
     ) -> None:
         self.colour = supports_colour(colour)
         self.live = self.colour and sys.stdout.isatty()
         self._width = width
         self.quiet = quiet
         self._live_lines = 0
+        self.log_path = log
+        self._log: "TextIO | None" = None
+        if log is not None:
+            try:
+                log.parent.mkdir(parents=True, exist_ok=True)
+                # Truncating, not appending: the question a transcript
+                # answers is "what did *this* run do", and a file that grows
+                # across runs answers it only after the reader finds the
+                # right boundary.
+                self._log = open(log, "w", encoding="utf-8", buffering=1)
+            except OSError as exc:
+                self.log_path = None
+                sys.stdout.write(f"  could not open {log} for the transcript: {exc}\n")
+
+    def _record(self, text: str) -> None:
+        """Mirror one line into the transcript, stripped of styling."""
+        if self._log is None:
+            return
+        try:
+            self._log.write(_strip(text) + "\n")
+            # Flushed per line rather than per run.  A transcript is worth
+            # having while the run is still going — the stages this gate is
+            # slowest in are exactly the ones that get killed before the
+            # end, and a buffered file loses precisely those.
+            self._log.flush()
+        except OSError:
+            self._log = None
+            self.log_path = None
+
+    def note(self, text: str) -> None:
+        """Put a line in the transcript that is not printed to the screen.
+
+        For provenance the reader needs and the operator already knows —
+        which command produced this file, and when.
+        """
+        self._record(text)
+
+    def close(self) -> None:
+        """Release the transcript.  Safe to call more than once."""
+        if self._log is not None:
+            try:
+                self._log.close()
+            except OSError:
+                pass
+            self._log = None
 
     @property
     def width(self) -> int:
@@ -95,6 +149,9 @@ class Console:
         return "".join(_C[s] for s in styles if s in _C) + text + _C["reset"]
 
     def write(self, text: str = "") -> None:
+        # Recorded before the quiet check, so the transcript is the whole
+        # run whatever the screen was asked to show.
+        self._record(text)
         if self.quiet:
             return
         sys.stdout.write(text + "\n")
@@ -102,15 +159,20 @@ class Console:
 
     def always(self, text: str = "") -> None:
         """Write even in quiet mode — summaries and findings."""
+        self._record(text)
         sys.stdout.write(text + "\n")
         sys.stdout.flush()
 
     # ── structure ────────────────────────────────────────────────────────────
 
     def banner(self, title: str, subtitle: str = "") -> None:
-        """The block at the top of a run."""
-        if self.quiet:
-            return
+        """The block at the top of a run.
+
+        The structural methods below do not gate on ``quiet`` themselves —
+        they hand every line to ``write``, which suppresses the screen and
+        still records.  Returning early here instead would cost the
+        transcript its shape on exactly the runs that are hardest to read.
+        """
         w = self.width
         self.write()
         self.write(self.paint("╭" + "─" * (w - 2) + "╮", "grey"))
@@ -132,8 +194,6 @@ class Console:
         self.write(self.paint("╰" + "─" * (w - 2) + "╯", "grey"))
 
     def rule(self, title: str = "", style: str = "grey") -> None:
-        if self.quiet:
-            return
         w = self.width
         if not title:
             self.write(self.paint("─" * w, style))
@@ -142,8 +202,6 @@ class Console:
         self.write(self.paint(left + "─" * max(w - len(left), 0), style))
 
     def kv(self, key: str, value: str, key_width: int = 22) -> None:
-        if self.quiet:
-            return
         self.write(
             "  " + self.paint(key.ljust(key_width), "grey") + self.paint(value, "white")
         )
@@ -160,8 +218,6 @@ class Console:
         ``aligns`` is one of ``"l"`` / ``"r"`` / ``"c"`` per column.
         """
         emit = self.always if always else self.write
-        if self.quiet and not always:
-            return
         if not rows:
             return
         cols = len(headers)

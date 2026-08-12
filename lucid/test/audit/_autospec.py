@@ -39,8 +39,11 @@ framework — the unevaluated text is both sufficient and always available.
 """
 
 import annotationlib
+import atexit
 import inspect
 import re
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -226,6 +229,81 @@ _MODULE_PARAMS = frozenset(
 _TENSOR_SEQUENCE_PARAMS = frozenset(
     {"tensors", "sequences", "arrays", "inputs", "seq", "primals", "tangents"}
 )
+
+
+#: Parameter names that mean "a place on disk" rather than "a word".  The
+#: annotation still has to look like a path for these to apply — ``f`` is
+#: also the conventional name for a *function*, and handing ``lucid.func``
+#: a filename would be a worse guess than the one this replaces.
+_PATH_NAMES: frozenset[str] = frozenset(
+    {
+        "f",
+        "fp",
+        "file",
+        "filename",
+        "filepath",
+        "path",
+        "dst",
+        "src",
+        "dir",
+        "folder",
+        "directory",
+        "save_dir",
+        "out_dir",
+        "ckpt_dir",
+        "checkpoint",
+    }
+)
+
+_SCRATCH: "tempfile.TemporaryDirectory[str] | None" = None
+
+
+def _scratch_dir() -> Path:
+    """A process-lifetime directory for probes that write to disk.
+
+    Created once, removed at interpreter exit.  The sweep must leave the
+    checkout exactly as it found it, and a derived path is the one place
+    a probe can write without meaning to.
+    """
+    global _SCRATCH
+    if _SCRATCH is None:
+        _SCRATCH = tempfile.TemporaryDirectory(prefix="lucid-audit-")
+        atexit.register(_SCRATCH.cleanup)
+    return Path(_SCRATCH.name)
+
+
+def _is_path_param(name: str, text: str) -> bool:
+    """Whether this parameter names a location rather than a value."""
+    if re.search(r"PathLike|IOBase", text):
+        return True
+    return name in _PATH_NAMES and bool(re.search(r"\bstr\b|\bbytes\b", text))
+
+
+def _scratch_path(op_name: str, name: str) -> str:
+    """A concrete path for ``op_name``'s ``name`` parameter.
+
+    Every ``str`` parameter used to fall through to the generic ``"mean"``,
+    which for a *path* meant the probe wrote a file called ``mean`` into
+    the working directory — the sweep's one unexplained artefact, and the
+    reason ``smoke::lucid.load`` was flaky: ``load("mean")`` succeeded
+    exactly when a previous run's ``save("mean")`` had left the file
+    behind, so the cell passed on a dirty checkout and skipped on a clean
+    one.
+
+    Readers are pointed at a file that exists, writers at a fresh name in
+    the same directory, so a save/load pair is answerable in either order
+    instead of depending on one having run first.
+    """
+    folder = _scratch_dir()
+    if re.search(r"load|read|open|restore|from_file", op_name):
+        seeded = folder / "seeded.checkpoint"
+        if not seeded.exists():
+            try:
+                lucid.save(lucid.zeros((2, 2)), str(seeded))
+            except Exception:  # noqa: BLE001 - a probe input, not a check
+                return str(folder / f"{op_name}.{name}")
+        return str(seeded)
+    return str(folder / f"{op_name}.{name}")
 
 
 def _literal_choice(text: str) -> "str | None":
@@ -783,6 +861,8 @@ def _value_for(
         return True, 2, False
     if re.search(r"\bfloat\b", text):
         return True, 0.5, False
+    if _is_path_param(name, text):
+        return True, _scratch_path(op_name, name), False
     if re.search(r"\bstr\b", text):
         return True, "mean", False
     if re.search(r"\bdtype\b|Dtype", text):

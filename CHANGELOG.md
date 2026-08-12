@@ -82,6 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - implement the four features the zoo only declared
 
+- chunk the suite, and un-break the RealNVP mirror
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

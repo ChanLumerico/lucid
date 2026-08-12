@@ -22,11 +22,13 @@ the work queue for extending :mod:`~lucid.test.audit._specs`.
 """
 
 import argparse
+import atexit
 import contextlib
 import json
 import re
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -41,6 +43,11 @@ _DEFAULT_KNOWN = Path(__file__).with_name("known.json")
 _DEFAULT_COVERAGE = Path(__file__).with_name("coverage.json")
 _DEFAULT_SUITE = Path(__file__).with_name("suite.json")
 _DEFAULT_DOCTEST = Path(__file__).with_name("doctest.json")
+# Beside the suite it reports on, not beside the harness that produces it —
+# ``lucid/test/audit.log`` is where someone looking for "what did the last
+# run say" will look first.  Git-ignored: the gate is required to leave the
+# checkout as it found it, and this is the one file it deliberately writes.
+_DEFAULT_LOG = Path(__file__).resolve().parents[1] / "audit.log"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -172,6 +179,17 @@ def build_parser() -> argparse.ArgumentParser:
     out.add_argument("--no-color", action="store_true")
     out.add_argument(
         "--quiet", action="store_true", help="only the summary and findings"
+    )
+    out.add_argument(
+        "--log",
+        type=Path,
+        default=_DEFAULT_LOG,
+        help=f"mirror the run to this file as it happens (default {_DEFAULT_LOG})",
+    )
+    out.add_argument(
+        "--no-log",
+        action="store_true",
+        help="do not write the transcript",
     )
     out.add_argument("--width", type=int, default=None)
     out.add_argument(
@@ -673,7 +691,13 @@ def summarise(report: Report, console: Console, show: "Sequence[str]") -> None:
                 "  "
                 + console.paint(label, colour)
                 + "  "
-                + console.paint(f.symbol.ljust(34), "white")
+                # The gap is part of the string being padded, not padding
+                # that a long name can consume.  ``ljust`` on a name wider
+                # than the column returns it unchanged, which ran symbol
+                # and detail together for every name over 34 characters —
+                # and the widest names are the deeply-qualified ones whose
+                # detail matters most.
+                + console.paint(f"{f.symbol}  ".ljust(34), "white")
                 + console.paint(f.detail, "grey")
             )
 
@@ -1013,7 +1037,7 @@ def _run_doctest_stage(args: argparse.Namespace, console: Console) -> int:
         "  "
         + console.paint("examples".ljust(22), "grey")
         + console.paint(
-            f"{result.attempted - result.failed}/{result.attempted} run " "as written ",
+            f"{result.attempted - result.failed}/{result.attempted} run as written ",
             "white",
         )
         + console.paint(
@@ -1124,9 +1148,30 @@ def _verdict(console: Console, tallies: "dict[str, int]") -> int:
 
 def main(argv: "Sequence[str] | None" = None) -> int:
     args = build_parser().parse_args(argv)
-    console = Console(
-        colour=False if args.no_color else None, width=args.width, quiet=args.quiet
+
+    # The informational modes answer a question about the harness rather
+    # than running the gate.  They get no transcript: the log is truncated
+    # on open, and losing the last real run to a ``--list-axes`` typed
+    # afterwards is the one way this feature could destroy what it exists
+    # to preserve.
+    informational = bool(
+        args.list_axes
+        or args.list_subsystems
+        or args.self_check
+        or args.coverage
+        or args.list_uncovered
     )
+    console = Console(
+        colour=False if args.no_color else None,
+        width=args.width,
+        quiet=args.quiet,
+        log=None if (args.no_log or informational) else args.log,
+    )
+    if console.log_path is not None:
+        atexit.register(console.close)
+        stamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+        console.note(f"# lucid-audit  {stamp}")
+        console.note("# " + " ".join([Path(sys.argv[0]).name, *(argv or sys.argv[1:])]))
 
     if args.list_axes:
         return _list_axes(console)

@@ -21,6 +21,7 @@ What you get for free in any test:
 import pytest
 
 import lucid
+from lucid.test import _memory
 
 # Re-export every fixture from the per-area modules so test files just
 # need to declare the fixture name in their argument list.
@@ -39,6 +40,31 @@ from lucid.test._fixtures.dtypes import (  # noqa: F401
 from lucid.test._fixtures.ref_framework import ref  # noqa: F401
 from lucid.test._fixtures.tensors import tensor_factory  # noqa: F401
 from lucid.test._fixtures.perf import bench  # noqa: F401
+
+_GOVERNOR = _memory.Governor()
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Reclaim before the machine runs out, and skip only if it still has.
+
+    See :mod:`lucid.test._memory` for the measurements this is sized
+    from.  The short version: the suite was being ``SIGKILL``-ed by
+    jetsam partway through the model zoo, and two thirds of what it was
+    holding was a reclaimable MLX buffer cache.
+    """
+    reason = _GOVERNOR.before_test(item.nodeid)
+    if reason is not None:
+        pytest.skip(reason)
+
+
+def pytest_runtest_teardown(item: pytest.Item, nextitem: "pytest.Item | None") -> None:
+    _GOVERNOR.after_test()
+
+
+def pytest_terminal_summary(terminalreporter: object) -> None:
+    """Say what the governor did.  A run that checked less has to admit it."""
+    for line in _GOVERNOR.summary():
+        terminalreporter.write_line(line)  # type: ignore[attr-defined]
 
 
 @pytest.fixture(autouse=True)

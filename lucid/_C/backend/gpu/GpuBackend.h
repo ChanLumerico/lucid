@@ -6879,10 +6879,19 @@ private:
             auto in_flat = ::mlx::core::reshape(*gx.arr, {N * C * H_in * W_in});
             auto vals = ::mlx::core::take(in_flat, flat_idx_b);
             if (zero_oob) {
-                auto in_b_dt = ::mlx::core::astype(in_bounds, mlx_dt);
+                // Select, not multiply.  The gather above clamps the index,
+                // so an out-of-bounds tap still fetches a real pixel, and
+                // scaling it by a 0.0 mask leaves ``value * 0`` — which is
+                // 0 for finite pixels and NaN for an infinite one.  The CPU
+                // path substitutes a hard zero for these taps, so the two
+                // devices disagreed on any image containing an infinity:
+                // a single-pixel ``inf`` sampled exactly on itself came back
+                // ``inf`` on CPU and ``NaN`` on Metal, because its
+                // zero-weight neighbours poisoned the sum.
                 auto in_b_b = ::mlx::core::broadcast_to(
-                    ::mlx::core::reshape(in_b_dt, {N, 1, H_out, W_out}), {N, C, H_out, W_out});
-                vals = ::mlx::core::multiply(vals, in_b_b);
+                    ::mlx::core::reshape(in_bounds, {N, 1, H_out, W_out}), {N, C, H_out, W_out});
+                auto zero_v = ::mlx::core::astype(::mlx::core::array(0.0f), mlx_dt);
+                vals = ::mlx::core::where(in_b_b, vals, zero_v);
             }
             return vals;
         };

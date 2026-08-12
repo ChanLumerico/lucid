@@ -85,3 +85,8 @@ CLAUDE.md
 
 # workspace sync harness (local tooling, not part of the project)
 .sync/
+
+# The audit's live transcript.  ``lucid-audit`` writes it as it runs so a
+# run can be read while it is still going, and shared afterwards; it is a
+# record of one machine's run, never a source artefact.
+/lucid/test/audit.log

@@ -78,7 +78,12 @@ def _ref_coupling_net(ref: ModuleType, net: Any, x: Any) -> tuple[Any, Any]:
     out = _ref_conv(ref, net.head, h)
 
     channels = x.shape[1]
-    rescale = float(net.rescale.item())
+    # ``rescale`` is per-channel — ``(1, C, 1, 1)``, broadcast over the
+    # coupling output — not the single scalar it started as.  Reading it
+    # with ``.item()`` raised "item() can only be called on a tensor with
+    # one element" and took all eight parity checks with it, which is a
+    # mirror that stopped mirroring rather than a defect in the model.
+    rescale = ref.tensor(net.rescale.numpy(), dtype=ref.float64)
     log_scale = rescale * ref.tanh(out[:, :channels])
     return log_scale, out[:, channels:]
 

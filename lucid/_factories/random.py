@@ -25,11 +25,23 @@ _default_generator: _C_engine.Generator | None = None
 
 
 def _active_default_gen() -> _C_engine.Generator:
-    r"""Return the generator that random ops *actually* read from.  Lazy-
-    initialised on first access to mirror the C++ singleton's seed=0 default."""
-    global _default_generator
+    r"""Return the generator that random ops *actually* read from.
+
+    ``_default_generator`` is an *override*, not a cache.  While it is
+    ``None`` the factories pass no generator and the engine samples from
+    its own singleton, so the singleton is what "actually reads" means —
+    and this must report it rather than manufacture a rival.
+
+    It used to lazily install ``Generator(0)`` here, which made reading
+    the state change the stream: :func:`get_rng_state` and
+    :func:`initial_seed` are pure queries, but the first call to either
+    replaced the engine's singleton with a fresh seed-0 generator for
+    every draw afterwards.  The visible symptom was
+    ``lucid.metal.manual_seed`` going quietly dead, because it seeds the
+    singleton that nothing consulted any more.
+    """
     if _default_generator is None:
-        _default_generator = _C_engine.Generator(0)
+        return _C_engine.default_generator()
     return _default_generator
 
 

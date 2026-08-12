@@ -67,10 +67,16 @@ class Module:
 
     1. If the value is a :class:`~lucid.nn.Parameter` → stored in ``_parameters``.
     2. If the value is a :class:`Module` → stored in ``_modules``.
-    3. Otherwise → plain Python attribute.
+    3. If the name is *already a registered buffer* and the value is a
+       :class:`~lucid.Tensor` or ``None`` → stays in ``_buffers``.
+    4. Otherwise → plain Python attribute.
 
     To register a non-parameter tensor (e.g. a running mean), call
-    :meth:`register_buffer` explicitly.
+    :meth:`register_buffer` explicitly.  Rule 3 is what makes the
+    registration survive: assigning to a buffer updates it rather than
+    demoting it to a plain attribute, so it stays in ``state_dict`` and
+    keeps moving with :meth:`to`.  Assigning something that is neither a
+    tensor nor ``None`` does un-register it, which is the escape hatch.
 
     Examples
     --------
@@ -374,6 +380,12 @@ class Module:
         if name == "":
             raise KeyError("module attribute name cannot be empty")
 
+        # Whether this name is *already* a buffer decides where a plain
+        # Tensor goes below, so it has to be read before the de-registration
+        # loop wipes the evidence.
+        was_buffer = name in self._buffers
+        was_non_persistent = name in self._non_persistent_buffers
+
         # Remove from existing dicts before re-routing
         for d in (self._parameters, self._buffers, self._modules):
             if name in d:
@@ -393,6 +405,22 @@ class Module:
         elif isinstance(value, Module):
             self.__dict__.pop(name, None)
             self._modules[name] = value
+        elif was_buffer and (value is None or isinstance(value, Tensor)):
+            # Assigning to a registered buffer updates it; it does not
+            # un-register it.  Without this branch the de-registration
+            # above was permanent for buffers — the tensor landed in
+            # ``__dict__``, vanished from ``state_dict`` and from
+            # ``.to(device)``, and the next checkpoint silently omitted
+            # it.  ``spectral_norm`` hit exactly this: its power-iteration
+            # hook assigns ``<name>_u`` / ``<name>_v`` every forward, so
+            # the two buffers it registers were evicted immediately and
+            # ``remove_spectral_norm`` could not find them to clean up.
+            # ``None`` is allowed through because clearing a buffer while
+            # keeping the slot is how optional running stats are spelled.
+            self.__dict__.pop(name, None)
+            self._buffers[name] = value
+            if was_non_persistent:
+                self._non_persistent_buffers.add(name)
         else:
             object.__setattr__(self, name, value)
 

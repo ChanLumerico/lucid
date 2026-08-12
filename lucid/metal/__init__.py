@@ -13,6 +13,7 @@ import mlx.core as _mx
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._factories import random as _random
 
 if TYPE_CHECKING:
     import lucid
@@ -70,20 +71,33 @@ def empty_cache() -> None:
 
 
 def manual_seed(seed: int) -> None:
-    """Set the Metal GPU random-number generator seed.
+    """Set the random-number generator seed for Metal sampling.
 
-    Re-seeds the engine's default ``Generator`` so subsequent random
-    ops (``rand``, ``randn``, dropout, weight init) produce a
-    reproducible sequence.  Combine with :func:`lucid.manual_seed`
-    when you need both CPU and GPU streams pinned.
+    Re-seeds the default ``Generator`` so subsequent random ops
+    (``rand``, ``randn``, dropout, weight init) produce a reproducible
+    sequence.
+
+    There is one generator, not one per device: seeding here pins the
+    CPU stream too, and :func:`lucid.manual_seed` equally pins Metal.
+    The two are interchangeable, and this is kept for the symmetry of
+    saying which device you care about.
 
     Parameters
     ----------
     seed : int
         Non-negative seed value.  Identical seeds produce identical
         sequences across runs on the same GPU.
+
+    Notes
+    -----
+    Delegates rather than writing ``_C_engine.default_generator()``
+    directly.  Doing that reached only the engine singleton, while the
+    factories sample from the Python-side override whenever one exists —
+    so after any call that installed one (``lucid.manual_seed``, and at
+    one point ``get_rng_state``) this seeded a generator that nothing
+    read, and reported success while changing nothing.
     """
-    _C_engine.default_generator().set_seed(seed)
+    _random.manual_seed(seed)
 
 
 def memory_allocated() -> int:

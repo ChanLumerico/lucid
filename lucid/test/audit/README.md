@@ -145,6 +145,36 @@ lucid-audit --select 'conv|pool'
 Exit status is `0` when no defect survived, `1` when one did, `2` when
 the harness itself broke.
 
+### The transcript
+
+Every run mirrors itself to `lucid/test/audit.log`, without colour, as it
+happens:
+
+```bash
+tail -f lucid/test/audit.log     # while it runs
+lucid-audit --log /tmp/run.log   # somewhere else
+lucid-audit --no-log             # not at all
+```
+
+Three properties it is built to have, each for a reason:
+
+- **Written line by line, flushed each time.** The stages this gate is
+  slowest in are the ones most likely to be killed before the end, and a
+  buffered file loses exactly those. After a `SIGKILL` the log still ends
+  at the axis the run died in, which is the only record of where it got
+  to.
+- **Complete under `--quiet`.** The screen is reduced to the summary; the
+  transcript is not. A run worth sharing is worth recording in full.
+- **Truncated per run, and not written by the informational modes.**
+  `--list-axes` and its neighbours answer a question about the harness
+  rather than running the gate, so they leave the last real run's log
+  alone — otherwise the feature could destroy what it exists to preserve.
+
+The log is git-ignored. It is the one file the gate writes into the
+checkout on purpose; everything else it needs, including the coverage
+scratch, goes to a temporary directory and is gone when the stage ends,
+whether or not the run survived to clean up after itself.
+
 ### Through pytest
 
 Every cell is also a collectable pytest case, deselected by default

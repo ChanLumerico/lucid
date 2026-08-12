@@ -28,6 +28,7 @@ Five axes, each over a group the numeric sweep cannot reach:
 
 import contextlib
 import copy
+import math
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -77,7 +78,12 @@ class StateAxis(Axis):
     _PAIRS: "tuple[tuple[str, str, tuple[Any, ...]], ...]" = (
         ("get_default_dtype", "set_default_dtype", (lucid.float64, lucid.float32)),
         ("get_num_threads", "set_num_threads", (1, 2)),
-        ("get_num_interop_threads", "set_num_interop_threads", (1,)),
+        # Two values, like every other pair.  It was one, which is the
+        # VACUOUS condition this axis exists to refuse: a getter returning
+        # a constant would have passed.  A second value became available
+        # once the setter stopped rejecting its own getter's "unset"
+        # sentinel, so the pair is answerable now.
+        ("get_num_interop_threads", "set_num_interop_threads", (1, 2)),
         (
             "are_deterministic_algorithms_enabled",
             "use_deterministic_algorithms",
@@ -980,10 +986,12 @@ class NnUtilsAxis(Axis):
     def _unparametrise(
         self, symbol: "Symbol", fn: Any, name: str, probe: Any
     ) -> Finding:
+        if name == "remove_spectral_norm":
+            return self._unparametrise_spectral(symbol, fn, probe)
+
         module = self._linear()
         apply = {
             "remove_weight_norm": lucid.nn.utils.weight_norm,
-            "remove_spectral_norm": lucid.nn.utils.spectral_norm,
         }.get(name)
         if apply is not None:
             apply(module)
@@ -1007,6 +1015,67 @@ class NnUtilsAxis(Axis):
             )
         return self._finding(symbol, Status.PASS, "removed without changing the output")
 
+    def _unparametrise_spectral(self, symbol: "Symbol", fn: Any, probe: Any) -> Finding:
+        """Check ``remove_spectral_norm`` against what it actually promises.
+
+        The sibling removals put the *effective* weight back, so the
+        module computes the same thing afterwards and "output unchanged"
+        is the right question to ask them.  This one documents the
+        opposite: it restores ``weight_orig``, the unnormalised matrix
+        that was being trained behind the parametrisation, and warns the
+        caller to copy the rescaled one out first if they wanted it.  So
+        a changed output is the contract being kept, not broken, and the
+        shared check called it a defect on every run.
+
+        What is verifiable is that the restored weight *is* the original
+        and that the machinery is gone.
+        """
+        module = self._linear()
+        lucid.nn.utils.spectral_norm(module, "weight")
+        module.eval()
+
+        orig = _probe.to_numpy(getattr(module, "weight_orig", None))
+        if orig is None:
+            return self._finding(symbol, Status.SKIP, "no weight_orig to compare")
+        normed = _probe.to_numpy(module(probe))
+
+        fn(module)
+
+        restored = _probe.to_numpy(getattr(module, "weight", None))
+        if restored is None or normed is None:
+            return self._finding(symbol, Status.SKIP, "no weight to inspect")
+        if not np.allclose(orig, restored, rtol=1e-5, atol=1e-6):
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"restored weight is not weight_orig — differs by "
+                f"{np.abs(orig - restored).max():.3e}",
+            )
+
+        left = [
+            attr
+            for attr in ("weight_orig", "weight_u", "weight_v")
+            if hasattr(module, attr)
+        ]
+        if left:
+            return self._finding(
+                symbol, Status.FAIL, f"the machinery survived removal: {left}"
+            )
+
+        # The normalisation divided by sigma > 1 here, so the two must
+        # differ; if they do not, spectral_norm never applied and the
+        # check above compared a weight with itself.
+        plain = _probe.to_numpy(module(probe))
+        if plain is not None and np.allclose(normed, plain, rtol=1e-5, atol=1e-6):
+            return self._finding(
+                symbol,
+                Status.VACUOUS,
+                "normed and unnormed outputs agree — nothing was being normalised",
+            )
+        return self._finding(
+            symbol, Status.PASS, "weight_orig restored and the buffers are gone"
+        )
+
     def _prune(self, symbol: "Symbol", fn: Any, name: str, probe: Any) -> Finding:
         module = self._linear()
         if name == "remove":
@@ -1027,6 +1096,9 @@ class NnUtilsAxis(Axis):
             return self._finding(
                 symbol, Status.PASS, "the pruned values survive removal"
             )
+
+        if name == "random_unstructured":
+            return self._prune_bernoulli(symbol, fn)
 
         fn(module, "weight") if name == "identity" else fn(module, "weight", amount=0.5)
         weight = _probe.to_numpy(module.weight)
@@ -1049,6 +1121,64 @@ class NnUtilsAxis(Axis):
                 f"amount=0.5 zeroed {zeros} of {weight.size}, expected {wanted}",
             )
         return self._finding(symbol, Status.PASS, f"zeroed {zeros} of {weight.size}")
+
+    def _prune_bernoulli(self, symbol: "Symbol", fn: Any) -> Finding:
+        """Check ``random_unstructured``, which is not a count-based prune.
+
+        Its documented contract samples every element independently and
+        keeps it iff ``u >= amount``, so the realised sparsity is a
+        binomial draw, not ``amount * n``.  Demanding an exact count made
+        this axis fail roughly two runs in five on a 12-element weight
+        while the op did exactly what it says — a red light nobody could
+        act on.  What is actually promised is checked instead:
+
+        * the two endpoints are deterministic.  ``amount=0`` keeps every
+          element and ``amount=1`` drops every one, for any draw;
+        * in between, the count concentrates.  On 4096 elements a six
+          sigma band around the mean is +/-192, so a run inside it is
+          ordinary and a run outside it is a broken ``amount`` rather
+          than bad luck — a false red here is a once-in-a-billion event.
+        """
+        wide = lucid.nn.Linear(64, 64)
+        size = int(_probe.to_numpy(wide.weight).size)
+
+        for amount, want, what in (
+            (0.0, 0, "keep everything"),
+            (1.0, size, "drop all"),
+        ):
+            module = lucid.nn.Linear(64, 64)
+            base = _probe.to_numpy(module.weight)
+            already = int((base == 0.0).sum())
+            fn(module, "weight", amount=amount)
+            after = _probe.to_numpy(module.weight)
+            if after is None:
+                return self._finding(symbol, Status.SKIP, "no weight to inspect")
+            zeros = int((after == 0.0).sum()) - already
+            if zeros != want:
+                return self._finding(
+                    symbol,
+                    Status.FAIL,
+                    f"amount={amount} should {what}: zeroed {zeros} of {size}, "
+                    f"expected {want}",
+                )
+
+        fn(wide, "weight", amount=0.5)
+        weight = _probe.to_numpy(wide.weight)
+        if weight is None:
+            return self._finding(symbol, Status.SKIP, "no weight to inspect")
+        zeros = int((weight == 0.0).sum())
+        mean = size / 2.0
+        band = 6.0 * math.sqrt(size * 0.25)
+        if abs(zeros - mean) > band:
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"amount=0.5 zeroed {zeros} of {size}, outside the six-sigma "
+                f"band {mean - band:.0f}-{mean + band:.0f}",
+            )
+        return self._finding(
+            symbol, Status.PASS, f"endpoints exact, zeroed {zeros} of {size} at 0.5"
+        )
 
     def _fuse(self, symbol: "Symbol", fn: Any, name: str) -> Finding:
         if name == "fuse_conv_bn_eval":
