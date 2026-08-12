@@ -370,6 +370,23 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
                 ids.append(tid)
             elif unk_id is not None:
                 ids.append(unk_id)
+        return self._merge_ids(ids)
+
+    def _merge_ids(self, ids: list[int]) -> list[int]:
+        """Greedily apply the lowest-rank merge until none applies.
+
+        Split out from :meth:`_encode_chunk` so a subclass can change how
+        the symbol sequence is *seeded* without restating the merge loop —
+        GPT-1's end-of-word marker is exactly that case, and a second copy
+        of this loop would be free to drift from the first.
+
+        Args:
+            ids: Seed symbol ids, in order.
+
+        Returns:
+            The merged id sequence.  Fewer than two symbols cannot merge,
+            so they are returned unchanged.
+        """
         if len(ids) < 2:
             return ids
         while True:

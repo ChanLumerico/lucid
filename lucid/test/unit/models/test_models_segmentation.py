@@ -741,3 +741,83 @@ class TestAttentionUNetRank:
         m = models.attention_unet_3d(base_channels=8, depth=2)
         m.eval()
         assert tuple(m(lucid.randn(1, 1, 16, 32, 32)).logits.shape)[2:] == (16, 32, 32)
+
+
+class TestAttentionUNetDeepSupervision:
+    """``unet_CT_multi_att_dsv`` — per-level classifiers fused by a 1x1 conv.
+
+    Despite the "deep supervision" name the reference does not add auxiliary
+    losses; it concatenates each level's upsampled class map and fuses them,
+    so the mechanism is part of the prediction, not only of training.
+    """
+
+    @staticmethod
+    def _model(*, deep_supervision: bool, dims: int = 2):
+        from lucid.models.vision.attention_unet._config import AttentionUNetConfig
+        from lucid.models.vision.attention_unet._model import (
+            AttentionUNetForSemanticSegmentation,
+        )
+
+        return AttentionUNetForSemanticSegmentation(
+            AttentionUNetConfig(
+                num_classes=3,
+                base_channels=8,
+                depth=3,
+                spatial_dims=dims,
+                deep_supervision=deep_supervision,
+            )
+        )
+
+    def test_default_is_off(self) -> None:
+        """Existing checkpoints have no ``dsv``/``fuse`` tensors, so the
+        feature must not appear unless it is asked for."""
+        from lucid.models.vision.attention_unet._config import AttentionUNetConfig
+
+        assert AttentionUNetConfig().deep_supervision is False
+        keys = self._model(deep_supervision=False).state_dict().keys()
+        assert not [k for k in keys if "dsv" in k or "fuse" in k]
+
+    def test_is_purely_additive(self) -> None:
+        off = set(self._model(deep_supervision=False).state_dict().keys())
+        on = set(self._model(deep_supervision=True).state_dict().keys())
+        assert off < on
+        assert sorted(on - off) == [
+            "dsv_1.bias",
+            "dsv_1.weight",
+            "dsv_2.bias",
+            "dsv_2.weight",
+            "fuse.bias",
+            "fuse.weight",
+        ]
+
+    def test_output_shape_is_unchanged(self) -> None:
+        m = self._model(deep_supervision=True)
+        m.eval()
+        assert tuple(m(lucid.randn(1, 1, 64, 64)).logits.shape) == (1, 3, 64, 64)
+
+    def test_each_level_reaches_the_output(self) -> None:
+        """A level wired in but never read would still build, still train,
+        and still produce the right shape — only the gradient shows it."""
+        m = self._model(deep_supervision=True)
+        out = m(lucid.randn(1, 1, 64, 64), targets=lucid.zeros(1, 64, 64).long())
+        assert out.loss is not None
+        out.loss.backward()
+        for name in ("head", "dsv_1", "dsv_2", "fuse"):
+            grad = getattr(m, name).weight.grad
+            assert grad is not None, name
+            assert float(grad.abs().max().item()) > 0.0, name
+
+    def test_classifiers_match_their_decoder_widths(self) -> None:
+        """``dsv_i`` reads decoder level ``i``, whose width is
+        ``base_channels * 2**i`` — a mismatch here silently classifies the
+        wrong stage."""
+        m = self._model(deep_supervision=True)
+        assert int(m.dsv_1.weight.shape[1]) == 16
+        assert int(m.dsv_2.weight.shape[1]) == 32
+        assert int(m.fuse.weight.shape[1]) == 3 * 3  # num_classes * depth
+
+    def test_three_d_path(self) -> None:
+        m = self._model(deep_supervision=True, dims=3)
+        m.eval()
+        out = m(lucid.randn(1, 1, 16, 32, 32))
+        assert tuple(out.logits.shape) == (1, 3, 16, 32, 32)

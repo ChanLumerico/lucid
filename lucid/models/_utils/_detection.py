@@ -2314,3 +2314,107 @@ def multiscale_roi_align(
 
     parts: list[Tensor] = [r for r in out_rows if r is not None]
     return lucid.cat(parts, dim=0)
+
+
+# ---------------------------------------------------------------------------
+# §5.6  Multi-scale training schedule
+# ---------------------------------------------------------------------------
+
+
+@final
+class MultiScaleResolution:
+    r"""The input-size schedule of YOLOv2's multi-scale training (§2).
+
+    The paper does not train at one resolution: *"every 10 batches our
+    network randomly chooses a new image dimension size ... from the
+    multiples of 32: {320, 352, ..., 608}"*.  The same weights then have to
+    work from 320x320 to 608x608, which is what lets one trained model
+    trade accuracy for speed at test time by simply being fed a smaller
+    image.
+
+    Nothing about the network needs to change to support this — it is fully
+    convolutional, and the anchors are expressed relative to a 32-pixel
+    cell — so all that was missing is the schedule itself.  This class is
+    it: a training loop asks for the size before each batch and resizes its
+    own images.
+
+    Args:
+        sizes:  Candidate side lengths.  Defaults to the paper's
+            ``range(320, 609, 32)``.  Every entry must be a positive
+            multiple of ``stride``, or the stride-32 feature map — and the
+            passthrough layer that halves it again — would not come out
+            integral.
+        period: How many batches to hold a size before redrawing (paper: 10).
+        stride: The network's total downsampling factor, used to validate
+            ``sizes``.
+
+    Notes
+    -----
+    Expect the loss to move with the resolution.  ``_compute_loss`` sums
+    squared errors over cells rather than averaging — deliberately, because
+    that is what darknet's region layer does and what ``lambda_noobj``
+    is calibrated against — so the number of terms grows with the grid.
+    On a fixed two-image batch the loss measured 69.9 at 320x320, 115.8 at
+    416x416 and 239.3 at 608x608: a 3.4x swing across the schedule, tracking
+    the cell count (500 / 845 / 1805) almost exactly.  Gradient magnitudes
+    swing with it, so a learning rate tuned at one end of the range will be
+    off at the other; scale the rate by the batch's cell count if that
+    matters for your run.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn.functional as F
+    >>> from lucid.models.vision.yolo import MultiScaleResolution
+    >>> schedule = MultiScaleResolution()
+    >>> images = lucid.randn(2, 3, 416, 416)
+    >>> for batch in range(3):                      # doctest: +SKIP
+    ...     side = schedule.size_for(batch)
+    ...     batch_images = F.interpolate(
+    ...         images, size=(side, side), mode="bilinear", align_corners=False
+    ...     )
+    ...     out = model(batch_images, targets=targets)
+    >>> schedule.size_for(0) == schedule.size_for(9)   # same 10-batch window
+    True
+    """
+
+    def __init__(
+        self,
+        sizes: tuple[int, ...] = tuple(range(320, 609, 32)),
+        *,
+        period: int = 10,
+        stride: int = 32,
+    ) -> None:
+        if not sizes:
+            raise ValueError("sizes must contain at least one resolution")
+        if period <= 0:
+            raise ValueError(f"period must be positive, got {period}")
+        bad = [s for s in sizes if s <= 0 or s % stride != 0]
+        if bad:
+            raise ValueError(
+                f"every size must be a positive multiple of {stride}, got {bad}"
+            )
+        self.sizes = sizes
+        self.period = period
+        self.stride = stride
+        self._window = -1
+        self._size = sizes[0]
+
+    def size_for(self, batch_index: int) -> int:
+        """Side length to train batch ``batch_index`` at.
+
+        Stable within a window of ``period`` batches and redrawn when the
+        window rolls over — asking twice for the same batch gives the same
+        answer, so a caller may query it for images and targets separately.
+        """
+        window = batch_index // self.period
+        if window != self._window:
+            self._window = window
+            self._size = self._draw()
+        return self._size
+
+    def _draw(self) -> int:
+        if len(self.sizes) == 1:
+            return self.sizes[0]
+        pick = cast(list[int], lucid.randperm(len(self.sizes)).tolist())  # type: ignore[attr-defined]
+        return self.sizes[pick[0]]

@@ -14,6 +14,7 @@ from lucid.models.vision.yolo._v1 import (
     yolo_v1,
     yolo_v1_tiny,
 )
+from lucid.models._utils._detection import MultiScaleResolution
 from lucid.models.vision.yolo._v2 import (
     YOLOV2Config,
     YOLOV2ForObjectDetection,
@@ -38,6 +39,7 @@ __all__ = [
     "yolo_v1",
     "yolo_v1_tiny",
     # YOLOv2
+    "MultiScaleResolution",
     "YOLOV2Config",
     "YOLOV2ForObjectDetection",
     "yolo_v2",

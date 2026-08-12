@@ -11,6 +11,13 @@ runs in under a second.
 import pytest
 
 import lucid
+from lucid._tensor.tensor import Tensor
+from lucid.models._utils._generative import (
+    diffusion_posterior,
+    diffusion_posterior_constants,
+    diffusion_vlb_term,
+    make_beta_schedule,
+)
 from lucid.models import (
     DDPMConfig,
     DDPMForImageGeneration,
@@ -182,14 +189,148 @@ class TestDDPMForImageGeneration:
         )
         assert out.loss is None
 
-    def test_learn_sigma_raises_not_implemented(self) -> None:
-        """Improved-DDPM ``learn_sigma=True`` requires the hybrid
-        ``L_simple + L_vlb`` loss that Lucid does not yet implement —
-        the constructor refuses rather than silently emitting an unusable
-        variance head."""
+
+class TestDDPMHybridObjective:
+    """Improved-DDPM §4 — ``L_simple + λ·L_vlb`` for the learned variance."""
+
+    @staticmethod
+    def _fixture() -> tuple[DDPMConfig, DDPMForImageGeneration]:
         cfg = _tiny_cfg(learn_sigma=True)
-        with pytest.raises(NotImplementedError):
-            DDPMForImageGeneration(cfg)
+        return cfg, DDPMForImageGeneration(cfg)
+
+    @staticmethod
+    def _batch() -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        return (
+            lucid.randn((2, 3, 16, 16)),  # x_t
+            lucid.tensor([4, 17]).long(),  # t
+            lucid.randn((2, 3, 16, 16)),  # target noise
+            lucid.randn((2, 3, 16, 16)).clip(-1, 1),  # x_0
+        )
+
+    def test_bound_is_zero_only_at_the_true_posterior(self) -> None:
+        """KL(q‖q) = 0, and any other model scores strictly worse.
+
+        This pins the sign and the normalisation of the whole bound: a
+        term that were mis-derived would not bottom out exactly here.
+        """
+        betas = make_beta_schedule(20, "linear", beta_start=1e-4, beta_end=0.02)
+        post = diffusion_posterior_constants(betas)
+        x0 = lucid.randn((3, 3, 8, 8)).clip(-1, 1)
+        x_t = lucid.randn((3, 3, 8, 8))
+        t = lucid.tensor([5, 11, 19]).long()
+
+        mean, logvar = diffusion_posterior(x_start=x0, x_t=x_t, t=t, posterior=post)
+        logvar = logvar + lucid.zeros_like(x0)
+        at_optimum = diffusion_vlb_term(
+            x_start=x0,
+            x_t=x_t,
+            t=t,
+            model_mean=mean,
+            model_log_variance=logvar,
+            posterior=post,
+        )
+        assert float(at_optimum.abs().max().item()) < 1e-6
+
+        shifted = diffusion_vlb_term(
+            x_start=x0,
+            x_t=x_t,
+            t=t,
+            model_mean=mean + 0.5,
+            model_log_variance=logvar,
+            posterior=post,
+        )
+        assert float(shifted.min().item()) > 0.0
+
+    def test_t_zero_uses_the_decoder_likelihood(self) -> None:
+        """At ``t=0`` there is no ``x_{-1}``, so the KL is replaced by the
+        discretised decoder NLL — which is *not* zero at the optimum."""
+        betas = make_beta_schedule(20, "linear", beta_start=1e-4, beta_end=0.02)
+        post = diffusion_posterior_constants(betas)
+        x0 = lucid.randn((2, 3, 8, 8)).clip(-1, 1)
+        x_t = lucid.randn((2, 3, 8, 8))
+        t = lucid.zeros(2).long()
+
+        mean, logvar = diffusion_posterior(x_start=x0, x_t=x_t, t=t, posterior=post)
+        term = diffusion_vlb_term(
+            x_start=x0,
+            x_t=x_t,
+            t=t,
+            model_mean=mean,
+            model_log_variance=logvar + lucid.zeros_like(x0),
+            posterior=post,
+        )
+        assert float(term.mean().item()) > 0.1
+
+    def test_posterior_at_t_zero_is_x_start_exactly(self) -> None:
+        """``coef1 = β_0/(1-ᾱ_0) = 1`` and ``coef2 = 0`` — algebraically
+        exact.  Taking ``ᾱ`` from a float32 tensor instead of accumulating
+        it in double loses so much of ``1-ᾱ_0`` that this lands ~5e-4 off.
+        """
+        betas = make_beta_schedule(20, "linear", beta_start=1e-4, beta_end=0.02)
+        post = diffusion_posterior_constants(betas)
+        x0 = lucid.randn((2, 3, 8, 8))
+        mean, _ = diffusion_posterior(
+            x_start=x0,
+            x_t=lucid.randn((2, 3, 8, 8)),
+            t=lucid.zeros(2).long(),
+            posterior=post,
+        )
+        assert float((mean - x0).abs().max().item()) == 0.0
+
+    def test_learn_sigma_constructs_and_reports_both_terms(self) -> None:
+        cfg, model = self._fixture()
+        x_t, t, target, x0 = self._batch()
+        out = model(x_t, t, target=target, x_start=x0)
+
+        assert out.loss_simple is not None and out.loss_vlb is not None
+        assert float(out.loss_simple.item()) > 0.0
+        expected = float(
+            out.loss_simple.item()
+            + cfg.vlb_weight * cfg.num_train_timesteps * out.loss_vlb.item()
+        )
+        assert abs(float(out.loss.item()) - expected) < 1e-5
+
+    def test_fixed_variance_reports_no_vlb_term(self) -> None:
+        """With ``learn_sigma=False`` there is no variance to train, so the
+        bound is not computed at all."""
+        model = DDPMForImageGeneration(_tiny_cfg()).eval()
+        x_t, t, target, _ = self._batch()
+        out = model(x_t, t, target=target)
+        assert out.loss is not None
+        assert out.loss_vlb is None
+
+    def test_sampling_runs_with_a_learned_variance(self) -> None:
+        """``generate`` feeds the scheduler ``out.sample``.  With the
+        variance head on, the network emits ``2*in_channels`` — handing the
+        whole thing to the sampler would double the image's channels."""
+        _, model = self._fixture()
+        model.eval()
+        out = model.generate(
+            DDPMScheduler(num_train_timesteps=20),
+            n_samples=1,
+            num_inference_steps=4,
+        )
+        assert tuple(out.samples.shape) == (1, 3, 16, 16)
+
+    def test_vlb_gradient_reaches_the_variance_head_only(self) -> None:
+        """Nichol & Dhariwal §4 stop-gradient the mean inside ``L_vlb``.
+
+        Without it the noisy variational term steers the mean too and
+        training destabilises — so the first half of ``conv_out``'s
+        gradient must be exactly zero, not merely small.
+        """
+        _, model = self._fixture()
+        x_t, t, target, x0 = self._batch()
+        out = model(x_t, t, target=target, x_start=x0)
+        assert out.loss_vlb is not None
+        out.loss_vlb.backward()
+
+        bias = model.unet.conv_out.bias
+        assert bias is not None and bias.grad is not None
+        grads = [float(bias.grad[i].item()) for i in range(int(bias.shape[0]))]
+        mean_half, var_half = grads[:3], grads[3:]
+        assert all(g == 0.0 for g in mean_half), mean_half
+        assert any(g != 0.0 for g in var_half), var_half
 
 
 class TestDDPMSampling:

@@ -3175,6 +3175,12 @@
       "module": "lucid.models.vision.zfnet._pretrained"
     }
   ],
+  "lucid.models._utils._detection.MultiScaleResolution": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo"
+    }
+  ],
   "lucid.models.generative": [
     {
       "kind": "module",
@@ -3223,6 +3229,12 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._pretrained"
+    }
+  ],
+  "lucid.models.generative.ddpm._model.DDPMOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ddpm"
     }
   ],
   "lucid.models.generative.ddpm._model.DDPMUNet": [
@@ -14354,6 +14366,10 @@
   "lucid.utils.tokenizer._bpe.BPETokenizer": [
     {
       "kind": "module",
+      "module": "lucid.models.text.gpt._tokenizer"
+    },
+    {
+      "kind": "module",
       "module": "lucid.utils.tokenizer"
     },
     {
@@ -14386,10 +14402,6 @@
   "lucid.utils.tokenizer._byte_bpe.ByteLevelBPETokenizer": [
     {
       "kind": "module",
-      "module": "lucid.models.text.gpt._tokenizer"
-    },
-    {
-      "kind": "module",
       "module": "lucid.models.text.gpt2._tokenizer"
     },
     {
@@ -14398,10 +14410,6 @@
     }
   ],
   "lucid.utils.tokenizer._byte_bpe.ByteLevelBPETokenizerFast": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt._tokenizer"
-    },
     {
       "kind": "module",
       "module": "lucid.models.text.gpt2._tokenizer"

@@ -4,6 +4,7 @@ from lucid.models.generative.ddpm._config import DDPMConfig
 from lucid.models.generative.ddpm._model import (
     DDPMForImageGeneration,
     DDPMModel,
+    DDPMOutput,
     DDPMUNet,
 )
 from lucid.models.generative.ddpm._pretrained import (
@@ -25,6 +26,7 @@ __all__ = [
     "DDPMConfig",
     "DDPMModel",
     "DDPMForImageGeneration",
+    "DDPMOutput",
     "DDPMUNet",
     "ddpm_cifar",
     "ddpm_lsun",

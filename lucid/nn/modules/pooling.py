@@ -1010,7 +1010,8 @@ class AvgPool3d(Module):
         Include zero-padded elements in the denominator.  Default: ``True``.
     divisor_override : int or None, optional
         If set, use this value as the divisor instead of the window size.
-        (Stored but not yet applied in the current implementation.)
+        Forwarded to :func:`~lucid.nn.functional.avg_pool3d`, which does
+        not support it and raises — the window size is always the divisor.
         Default: ``None``.
 
     Attributes
@@ -1071,6 +1072,7 @@ class AvgPool3d(Module):
         self.padding = padding
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
+        self.divisor_override = divisor_override
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -1087,12 +1089,24 @@ class AvgPool3d(Module):
         Tensor
             Pooled output tensor.
         """
-        return avg_pool3d(x, self.kernel_size, self.stride, self.padding)
+        return avg_pool3d(
+            x,
+            self.kernel_size,
+            self.stride,
+            self.padding,
+            self.ceil_mode,
+            self.count_include_pad,
+            self.divisor_override,
+        )
 
     @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
-        return f"kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}"
+        return (
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self.padding}, ceil_mode={self.ceil_mode}, "
+            f"count_include_pad={self.count_include_pad}"
+        )
 
 
 class AdaptiveAvgPool3d(Module):

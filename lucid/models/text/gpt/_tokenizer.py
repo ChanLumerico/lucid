@@ -1,76 +1,75 @@
-"""GPT-1 family tokenizer wrappers — Byte-Level BPE.
+"""GPT-1 family tokenizer wrappers — lowercased word-level BPE.
 
-GPT-1 (Radford et al., 2018) shipped a BPE vocabulary with the
-byte-mapped Unicode pre-tokenization scheme that GPT-2 / RoBERTa /
-BART later popularised.  These wrappers subclass
-:class:`~lucid.utils.tokenizer.ByteLevelBPETokenizer` /
-:class:`~lucid.utils.tokenizer.ByteLevelBPETokenizerFast` with GPT-1's
-defaults:
+GPT-1 (Radford et al., 2018) §4.1 uses "a bytepair encoding (BPE)
+vocabulary with 40,000 merges", built over *words*: the text is cleaned,
+pre-tokenised, lowercased, and each word is split into characters with the
+final one carrying an end-of-word marker ``</w>``.  Byte-level BPE — the
+``Ġ``-prefixed scheme these wrappers used to inherit — arrived with GPT-2
+and is a different tokenizer entirely.
 
-* ``add_prefix_space=False`` — the first word does not implicitly
-  get a leading byte-mapped space.  Set ``True`` to mimic the
-  RoBERTa convention if you need uniform space-prefixing.
-* No mandatory end-of-text marker.  GPT-1 was trained without one;
-  pass an explicit ``special_tokens`` if your downstream code expects
-  bos/eos.
+Divergence, deliberate: the paper cleans text with **ftfy** and
+pre-tokenises with **spaCy**, and H4 forbids both inside ``lucid/``.  The
+reference implementation already provides for their absence — its
+tokenizer "uses SpaCy tokenizer and ftfy for pre-BPE tokenization if they
+are installed, fallback to BERT's ``BasicTokenizer`` if not" — and that
+fallback is what is built here, out of pieces Lucid already has:
+:class:`~lucid.utils.tokenizer.WhitespacePunctuationSplit` for the
+BasicTokenizer role and :class:`~lucid.utils.tokenizer.Lowercase` for the
+casing.  So ids match the published vocabulary wherever the fallback and
+spaCy agree on word boundaries, and diverge where they do not — mostly
+contractions and unusual punctuation runs.
 
-Loads any HF GPT-1 ``vocab.json`` + ``merges.txt`` pair (or unified
-``tokenizer.json``) without modification.
-
-Two flavours, bit-identical encode output:
-
-* :class:`GPTTokenizer` — pure-Python reference.
-* :class:`GPTTokenizerFast` — C++-backed; the BPE merge loop runs
-  in the engine-side ``BPE`` binding.
+Loads a GPT-1 ``vocab.json`` + ``merges.txt`` pair unmodified.
 """
 
+from typing import override
+
 from lucid.utils.tokenizer._base import SpecialTokens
-from lucid.utils.tokenizer._byte_bpe import (
-    ByteLevelBPETokenizer,
-    ByteLevelBPETokenizerFast,
+from lucid.utils.tokenizer._bpe import BPETokenizer
+from lucid.utils.tokenizer._normalizers import Lowercase, NFC, Normalizer, Sequence
+from lucid.utils.tokenizer._pre_tokenizers import (
+    PreTokenizer,
+    WhitespacePunctuationSplit,
 )
-from lucid.utils.tokenizer._normalizers import Normalizer
+
+__all__ = ["GPTTokenizer", "GPTTokenizerFast", "END_OF_WORD"]
+
+END_OF_WORD = "</w>"
+"""GPT-1's end-of-word marker, glued to a word's final character."""
 
 
-class GPTTokenizer(ByteLevelBPETokenizer):
-    r"""GPT-1 tokenizer — pure-Python reference.
+class GPTTokenizer(BPETokenizer):
+    r"""GPT-1 tokenizer — lowercased word-level BPE with ``</w>``.
 
-    A thin convenience subclass of
-    :class:`~lucid.utils.tokenizer.ByteLevelBPETokenizer` with GPT-1's
-    default ``add_prefix_space=False``.
-
-    Divergence, deliberate: this is **byte-level** BPE, the scheme GPT-2
-    introduced.  GPT-1 §4.1 uses word-level BPE over text cleaned with
-    ftfy and pre-tokenised with spaCy, lowercased, with ``</w>`` end-of-word
-    markers rather than the ``Ġ`` space marker.  Reproducing it would mean
-    importing ftfy and spaCy, which H4 forbids anywhere in ``lucid/``
-    outside the six bridge points — so there is no compliant way to
-    implement the original.  Text tokenised here will not match ids
-    produced by the published GPT-1 vocabulary; a caller needing that must
-    tokenise outside Lucid and feed ``input_ids`` directly.
+    The end-of-word marker is what distinguishes this from generic BPE:
+    a word is seeded as ``list(word[:-1]) + [word[-1] + "</w>"]``, so the
+    merge table can tell ``"in"`` inside *inside* from ``"in</w>"`` as a
+    whole word.  Without it a subword and a complete word share an id and
+    the vocabulary silently means two things.
 
     Parameters
     ----------
     vocab : dict[str, int]
-        Token-string → id map.  Tokens are byte-mapped Unicode
-        strings (e.g. ``"Ġworld"`` for `` world``), NOT raw bytes.
+        Token-string → id map from GPT-1's ``vocab.json``.  Entries ending
+        in ``</w>`` are whole-word forms.
     merges : list[tuple[str, str]]
-        Ordered BPE merges; index = rank, lower = applied earlier.
-    add_prefix_space : bool, default ``False``
-        Prepend a space to the input so the first word also receives
-        the ``Ġ`` byte-mapped marker.  Off in GPT-1 (matches the
-        published vocab); on in RoBERTa.
+        Ordered BPE merges; index = rank, lower applied first.
     normalizer : Normalizer, optional
-        Default :class:`~lucid.utils.tokenizer.normalizers.NFC`.
+        Defaults to ``NFC`` then ``Lowercase`` — §4.1 lowercases.
+    pre_tokenizer : PreTokenizer, optional
+        Defaults to :class:`WhitespacePunctuationSplit`, the
+        ``BasicTokenizer`` role in the reference's no-spaCy fallback.
     special_tokens : SpecialTokens, optional
-        GPT-1 ships no canonical special tokens; pass your own if
-        the downstream model expects bos / eos.
+        GPT-1 trained without bos/eos; pass them only if downstream code
+        needs them.
 
-    See Also
+    Examples
     --------
-    GPTTokenizerFast : C++-backed variant with identical output.
-    lucid.models.text.gpt2.GPT2Tokenizer : Successor with
-        ``<|endoftext|>`` as the default bos / eos / unk marker.
+    >>> from lucid.models.text.gpt import GPTTokenizer
+    >>> vocab = {"l": 0, "o": 1, "o</w>": 2, "lo</w>": 3}
+    >>> tok = GPTTokenizer(vocab=vocab, merges=[("l", "o</w>")])
+    >>> tok.encode("lo").ids
+    [3]
     """
 
     def __init__(
@@ -78,43 +77,64 @@ class GPTTokenizer(ByteLevelBPETokenizer):
         vocab: dict[str, int],
         merges: list[tuple[str, str]],
         *,
-        add_prefix_space: bool = False,
         normalizer: Normalizer | None = None,
+        pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> None:
         super().__init__(
             vocab,
             merges,
-            add_prefix_space=add_prefix_space,
-            normalizer=normalizer,
+            normalizer=normalizer or Sequence([NFC(), Lowercase()]),
+            pre_tokenizer=pre_tokenizer or WhitespacePunctuationSplit(),
             special_tokens=special_tokens,
         )
 
+    @override
+    def _encode_chunk(self, chunk: str) -> list[int]:
+        """Seed with GPT-1's end-of-word symbol, then merge as usual.
 
-class GPTTokenizerFast(ByteLevelBPETokenizerFast):
-    """GPT-1 tokenizer — C++-backed.
+        Only the seeding differs from :class:`BPETokenizer`; the merge
+        loop is inherited, so the two stay in step if it ever changes.
+        """
+        if not chunk:
+            return []
+        symbols = list(chunk[:-1]) + [chunk[-1] + END_OF_WORD]
+        ids: list[int] = []
+        unk_id = self.unk_token_id
+        for sym in symbols:
+            tid = self._vocab.get(sym)
+            if tid is not None:
+                ids.append(tid)
+            elif unk_id is not None:
+                ids.append(unk_id)
+        return self._merge_ids(ids)
 
-    Bit-identical to :class:`GPTTokenizer`.  The BPE merge loop runs
-    in C++ via the engine-side ``BPE`` binding for production
-    throughput.
+    @override
+    def _decode_one(self, ids: list[int]) -> str:
+        """Join surfaces, turning each ``</w>`` back into a space.
 
-    Constructor parameters mirror :class:`GPTTokenizer` — see that
-    class for the full reference.
+        The marker *is* the word boundary, so dropping it without
+        substituting a space would run every word together.
+        """
+        out: list[str] = []
+        for i in ids:
+            tok = self._id_to_token.get(i)
+            if tok is not None:
+                out.append(tok)
+        return "".join(out).replace(END_OF_WORD, " ").strip()
+
+
+class GPTTokenizerFast(GPTTokenizer):
+    """GPT-1 tokenizer — same results, same Python merge loop.
+
+    There is no C++ acceleration for this scheme.  The engine's ``BPE``
+    seeds per codepoint, which was measured directly: encoding
+    ``"hello</w>"`` against a vocabulary containing ``"o</w>"`` returns
+    ``['he', 'l', 'l', 'o', '<', '/', 'w', '>']`` — the marker is torn
+    into four symbols.  Expressing GPT-1's end-of-word symbol there needs
+    an engine change, so this subclass exists to keep the name working and
+    the output correct, not because it is faster.
+
+    Byte-level families (GPT-2, RoBERTa) do have a genuine fast path; see
+    :class:`~lucid.utils.tokenizer.ByteLevelBPETokenizerFast`.
     """
-
-    def __init__(
-        self,
-        vocab: dict[str, int],
-        merges: list[tuple[str, str]],
-        *,
-        add_prefix_space: bool = False,
-        normalizer: Normalizer | None = None,
-        special_tokens: SpecialTokens | None = None,
-    ) -> None:
-        super().__init__(
-            vocab,
-            merges,
-            add_prefix_space=add_prefix_space,
-            normalizer=normalizer,
-            special_tokens=special_tokens,
-        )

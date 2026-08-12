@@ -27,6 +27,7 @@ ResBlock conditioning recipe (Ho 2020 §3.2 + Appendix B):
 """
 
 import math
+from dataclasses import dataclass
 from typing import ClassVar, cast, final, override
 
 import lucid
@@ -36,6 +37,13 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import DiffusionMixin
 from lucid.models._output import DiffusionModelOutput
+from lucid.models._utils._generative import (
+    diffusion_posterior,
+    diffusion_posterior_constants,
+    diffusion_vlb_term,
+    extract_into_tensor,
+    make_beta_schedule,
+)
 from lucid.models.generative.ddpm._config import DDPMConfig
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -603,6 +611,58 @@ class DDPMModel(PretrainedModel, DiffusionMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@dataclass(slots=True)
+class DDPMOutput(DiffusionModelOutput):
+    r"""Training output of :class:`DDPMForImageGeneration`.
+
+    Adds the two halves of Improved-DDPM's hybrid objective alongside the
+    inherited total, so a training loop can watch them separately —
+    :math:`L_{\text{vlb}}` is far noisier than :math:`L_{\text{simple}}` and
+    a single blended number hides which one is moving.
+
+    Attributes
+    ----------
+    loss_simple : Tensor or None, optional
+        The Ho 2020 Eq. 14 MSE term on its own.
+    loss_vlb : Tensor or None, optional
+        The variational term :math:`L_{t-1}` at the sampled timesteps, in
+        bits, *before* the :math:`\lambda T` scaling folded into ``loss``.
+        ``None`` unless ``learn_sigma=True``.
+
+    Examples
+    --------
+    >>> out = model(x_t, t, target=noise)      # doctest: +SKIP
+    >>> float(out.loss_simple.item()) > 0      # doctest: +SKIP
+    True
+    """
+
+    loss_simple: Tensor | None = None
+    loss_vlb: Tensor | None = None
+
+
+def _x0_recovery_constants(betas: Tensor) -> tuple[Tensor, Tensor]:
+    r"""Constants for inverting :math:`x_t = \sqrt{\bar\alpha_t}x_0 +
+    \sqrt{1 - \bar\alpha_t}\varepsilon`.
+
+    Returns ``(sqrt(1/ᾱ_t), sqrt(1/ᾱ_t - 1))``, so that
+    :math:`x_0 = \sqrt{1/\bar\alpha_t}\,x_t -
+    \sqrt{1/\bar\alpha_t - 1}\,\varepsilon`.  Accumulated in Python floats
+    for the same reason as :func:`diffusion_posterior_constants` — ``ᾱ_t``
+    reaches ~4e-5 at ``t = T``, and its reciprocal square root magnifies
+    whatever error it carries.
+    """
+    T = int(betas.shape[0])
+    recip: list[float] = []
+    recipm1: list[float] = []
+    acc = 1.0
+    for i in range(T):
+        acc *= 1.0 - float(betas[i].item())
+        recip.append(math.sqrt(1.0 / acc))
+        recipm1.append(math.sqrt(1.0 / acc - 1.0))
+    dev = betas.device.type
+    return lucid.tensor(recip, device=dev), lucid.tensor(recipm1, device=dev)
+
+
 class DDPMForImageGeneration(PretrainedModel, DiffusionMixin):
     r"""DDPM with the noise-prediction training loss and Markov-chain sampler.
 
@@ -618,6 +678,11 @@ class DDPMForImageGeneration(PretrainedModel, DiffusionMixin):
           noise for ``epsilon`` parameterisation) additionally fills the
           ``loss`` field with the MSE loss of the paper's simple objective
           (Ho 2020 Eq. 14).
+        * With ``config.learn_sigma=True`` the loss becomes Improved-DDPM's
+          hybrid :math:`L_{\text{simple}} + \lambda L_{\text{vlb}}`, and
+          ``loss_simple`` / ``loss_vlb`` report the two terms separately.
+          Pass ``x_start=`` when you have the clean image — see
+          :meth:`forward`.
 
     Sampling
         * Use :meth:`generate` from :class:`DiffusionMixin` — pass any
@@ -626,10 +691,10 @@ class DDPMForImageGeneration(PretrainedModel, DiffusionMixin):
     Parameters
     ----------
     config : DDPMConfig
-        Hyperparameters.  ``config.learn_sigma=True`` is rejected at
-        construction time — Improved-DDPM's hybrid
-        :math:`L_{\text{simple}} + \lambda L_{\text{vlb}}` loss is not yet
-        implemented in Lucid.
+        Hyperparameters.  ``config.learn_sigma=True`` switches on the learned
+        variance head and the hybrid objective; ``config.vlb_weight`` is the
+        :math:`\lambda` that weights its variational term (default ``1e-3``,
+        the value in Nichol & Dhariwal §4).
 
     Attributes
     ----------
@@ -680,18 +745,23 @@ class DDPMForImageGeneration(PretrainedModel, DiffusionMixin):
         self.unet = DDPMUNet(config)
         self._in_channels = config.in_channels
         self._learn_sigma = config.learn_sigma
+        self._prediction_type = config.prediction_type
+        self._vlb_weight = config.vlb_weight
+        self._num_train_timesteps = config.num_train_timesteps
+
         if config.learn_sigma:
-            # Improved-DDPM (Nichol & Dhariwal 2021) trains the learned
-            # variance branch with a hybrid L_simple + λ·L_vlb objective.
-            # We currently only emit the L_simple term, so silently learning
-            # the variance head would produce a model that *can't* be used
-            # for sampling with the predicted variance.  Refuse outright
-            # rather than ship a half-implementation.
-            raise NotImplementedError(
-                "DDPM learn_sigma=True is not yet supported — Improved-DDPM "
-                "requires the hybrid L_simple + L_vlb loss (Nichol & Dhariwal "
-                "2021 §3.1) which Lucid does not implement yet."
+            # The bound needs the forward-process schedule, which the U-Net
+            # itself never sees.  Build it once — the constants depend only
+            # on ``betas``, not on any parameter.
+            betas = make_beta_schedule(
+                config.num_train_timesteps,
+                config.beta_schedule,
+                beta_start=config.beta_start,
+                beta_end=config.beta_end,
             )
+            self._log_betas = lucid.log(betas)
+            self._posterior = diffusion_posterior_constants(betas)
+            self._sqrt_recip_ab, self._sqrt_recipm1_ab = _x0_recovery_constants(betas)
 
     def _split_output(self, raw: Tensor) -> tuple[Tensor, Tensor | None]:
         """When ``learn_sigma=True`` the network emits ``2·in_channels`` —
@@ -702,22 +772,95 @@ class DDPMForImageGeneration(PretrainedModel, DiffusionMixin):
         half = C // 2
         return raw[:, :half], raw[:, half:]
 
+    def _to_x_start(self, prediction: Tensor, x_t: Tensor, t: Tensor) -> Tensor:
+        r"""Invert the parameterisation to recover :math:`x_0`.
+
+        The bound is written in terms of the clean signal whichever way the
+        network is parameterised, so ``epsilon`` and ``v`` predictions get
+        converted; a ``sample`` prediction already *is* :math:`x_0`.
+        """
+        if self._prediction_type == "sample":
+            return prediction
+
+        shape = tuple(int(s) for s in x_t.shape)
+        sqrt_recip = extract_into_tensor(self._sqrt_recip_ab, t, shape)
+        sqrt_recipm1 = extract_into_tensor(self._sqrt_recipm1_ab, t, shape)
+        if self._prediction_type == "epsilon":
+            return sqrt_recip * x_t - sqrt_recipm1 * prediction
+
+        # ``v = sqrt(ᾱ)·ε - sqrt(1-ᾱ)·x_0``  ⟹  ``x_0 = sqrt(ᾱ)·x_t - sqrt(1-ᾱ)·v``
+        sqrt_ab = 1.0 / sqrt_recip
+        sqrt_one_minus_ab = sqrt_recipm1 * sqrt_ab
+        return sqrt_ab * x_t - sqrt_one_minus_ab * prediction
+
+    def _learned_log_variance(self, raw_logvar: Tensor, t: Tensor) -> Tensor:
+        r"""Map the raw variance channels onto :math:`[\log\tilde\beta_t,
+        \log\beta_t]`.
+
+        Improved-DDPM §3.1 does not have the network emit a log-variance
+        directly — the useful range spans several orders of magnitude and is
+        strongly ``t``-dependent.  Instead the output ``v`` interpolates
+        between the two natural bounds,
+        :math:`\Sigma_\theta = \exp(v\log\beta_t + (1-v)\log\tilde\beta_t)`,
+        which keeps the prediction inside a range that is always sane.
+        """
+        shape = tuple(int(s) for s in raw_logvar.shape)
+        min_log = extract_into_tensor(self._posterior.log_variance, t, shape)
+        max_log = extract_into_tensor(self._log_betas, t, shape)
+        # ``v`` arrives in [-1, 1] from the network; rescale to [0, 1].
+        frac = (raw_logvar + 1.0) / 2.0
+        return frac * max_log + (1.0 - frac) * min_log
+
     @override
     def forward(  # type: ignore[override]
         self,
         sample: Tensor,
         timestep: Tensor,
         target: Tensor | None = None,
-    ) -> DiffusionModelOutput:
+        x_start: Tensor | None = None,
+    ) -> DDPMOutput:
         raw = cast(Tensor, self.unet(sample, timestep))
-        mean_pred, _logvar_pred = self._split_output(raw)
+        mean_pred, logvar_pred = self._split_output(raw)
 
-        loss: Tensor | None = None
-        if target is not None:
-            # Ho 2020 §3.2 "simple" objective — MSE on ε (or x_0 / v,
-            # depending on ``prediction_type``; caller decides what's in
-            # ``target``).
-            diff = (mean_pred - target) ** 2
-            loss = diff.mean()
+        if target is None:
+            return DDPMOutput(sample=mean_pred)
 
-        return DiffusionModelOutput(sample=mean_pred, loss=loss)
+        # Ho 2020 §3.2 "simple" objective — MSE on ε (or x_0 / v, depending
+        # on ``prediction_type``; the caller decides what's in ``target``).
+        loss_simple = ((mean_pred - target) ** 2).mean()
+        if logvar_pred is None:
+            return DDPMOutput(sample=mean_pred, loss=loss_simple)
+
+        if x_start is None:
+            # ``target`` pins down x_0 exactly given x_t and t, so the caller
+            # need not pass it — but recovering it divides by sqrt(ᾱ_t),
+            # which is ~6e-3 at t=T, amplifying rounding error 160×.  Pass
+            # ``x_start`` explicitly when you have it.
+            x_start = self._to_x_start(target, sample, timestep).detach()
+
+        model_log_variance = self._learned_log_variance(logvar_pred, timestep)
+        # Freeze the mean inside the bound.  L_vlb is a far noisier signal
+        # than L_simple, and Nichol & Dhariwal §4 found that letting it reach
+        # the mean destabilises training — the variational term is there to
+        # train the *variance* head and nothing else.
+        model_mean, _ = diffusion_posterior(
+            x_start=self._to_x_start(mean_pred.detach(), sample, timestep),
+            x_t=sample,
+            t=timestep,
+            posterior=self._posterior,
+        )
+        vlb = diffusion_vlb_term(
+            x_start=x_start,
+            x_t=sample,
+            t=timestep,
+            model_mean=model_mean,
+            model_log_variance=model_log_variance,
+            posterior=self._posterior,
+        ).mean()
+
+        # ``vlb`` is one term L_t at a uniformly drawn t, so its expectation
+        # is L_vlb/T; scaling by λ·T recovers the paper's λ·L_vlb.
+        loss = loss_simple + (self._vlb_weight * self._num_train_timesteps) * vlb
+        return DDPMOutput(
+            sample=mean_pred, loss=loss, loss_simple=loss_simple, loss_vlb=vlb
+        )

@@ -302,6 +302,28 @@ def test_pack_sequence_takes_the_ragged_list_directly():
     assert list(np.asarray(_v(lengths)).ravel()) == [5, 3, 1]
 
 
+def test_pack_sequence_sorts_for_you_and_gives_the_batch_back_in_order():
+    """``enforce_sorted=False`` used to raise, so callers had to sort and
+    then undo the permutation themselves — easy to get subtly wrong when
+    the labels live in a separate tensor."""
+    ragged = _ragged()
+    unsorted = [ragged[2], ragged[0], ragged[1]]  # lengths 1, 5, 3
+
+    packed = pack_sequence(unsorted, enforce_sorted=False)
+    restored, lengths = pad_packed_sequence(packed, batch_first=True)
+
+    assert list(np.asarray(_v(lengths)).ravel()) == [1, 5, 3]
+    for i, seq in enumerate(unsorted):
+        n = int(seq.shape[0])
+        assert np.allclose(_v(restored)[i, :n], _v(seq), atol=1e-6)
+
+
+def test_pack_sequence_still_rejects_an_unsorted_list_when_told_to():
+    ragged = _ragged()
+    with pytest.raises(ValueError, match="decreasing order"):
+        pack_sequence([ragged[2], ragged[0], ragged[1]], enforce_sorted=True)
+
+
 @pytest.mark.parametrize("kind", ["RNN", "LSTM", "GRU"])
 def test_a_packed_sequence_is_refused_rather_than_silently_padded(kind):
     """Recorded, not a defect — the good failure mode.

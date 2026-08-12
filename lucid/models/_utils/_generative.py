@@ -2,6 +2,9 @@
 
     * Beta-schedule construction (``make_beta_schedule``)        — diffusion
     * Per-batch schedule indexing (``extract_into_tensor``)      — diffusion
+    * Variational bound terms (``normal_kl`` /
+      ``discretized_gaussian_log_likelihood`` /
+      ``diffusion_vlb_term``)                                    — diffusion
     * Diagonal Gaussian KL divergence (``gaussian_kl_divergence``) — VAE
     * Reparameterisation sample (``reparameterize``)              — VAE
     * Flow prior density / sampling (``flow_prior_log_prob`` /
@@ -14,6 +17,7 @@ All operations are stateless and side-effect free.
 """
 
 import math
+from typing import NamedTuple
 
 import lucid
 import lucid.autograd
@@ -26,6 +30,12 @@ __all__ = [
     "make_beta_schedule",
     "make_sigma_schedule",
     "extract_into_tensor",
+    "normal_kl",
+    "discretized_gaussian_log_likelihood",
+    "DiffusionPosterior",
+    "diffusion_posterior_constants",
+    "diffusion_posterior",
+    "diffusion_vlb_term",
     "gaussian_kl_divergence",
     "reparameterize",
     "flow_prior_log_prob",
@@ -115,6 +125,246 @@ def extract_into_tensor(
     while out.ndim < len(broadcast_shape):
         out = out.unsqueeze(-1)
     return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Diffusion: variational bound terms
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def normal_kl(mean1: Tensor, logvar1: Tensor, mean2: Tensor, logvar2: Tensor) -> Tensor:
+    """Elementwise KL divergence between two diagonal Gaussians, in nats.
+
+    Unlike :func:`gaussian_kl_divergence` — which fixes the second
+    distribution at ``N(0, I)`` and sums over the feature axis — this keeps
+    both distributions free and returns one value *per element*, which is
+    what the diffusion variational bound needs before it reduces.
+
+    Args:
+        mean1:   Mean of the first Gaussian.
+        logvar1: Log-variance of the first Gaussian.
+        mean2:   Mean of the second.  Broadcast against the first.
+        logvar2: Log-variance of the second.  Broadcast against the first.
+
+    Returns:
+        Elementwise ``KL(N(mean1, exp(logvar1)) ‖ N(mean2, exp(logvar2)))``.
+    """
+    return 0.5 * (
+        -1.0
+        + logvar2
+        - logvar1
+        + (logvar1 - logvar2).exp()
+        + ((mean1 - mean2) ** 2) * (-logvar2).exp()
+    )
+
+
+def _approx_standard_normal_cdf(x: Tensor) -> Tensor:
+    """Tanh approximation of the standard normal CDF.
+
+    The reference implementation uses this rather than ``erf``; keeping the
+    same approximation keeps our bound numerically comparable to published
+    bits/dim figures.
+    """
+    return 0.5 * (1.0 + (math.sqrt(2.0 / math.pi) * (x + 0.044715 * x**3)).tanh())
+
+
+def discretized_gaussian_log_likelihood(
+    x: Tensor, *, means: Tensor, log_scales: Tensor
+) -> Tensor:
+    """Log-likelihood of 8-bit data under a Gaussian, discretised to bins.
+
+    The final reverse step ``p(x_0 | x_1)`` is a *discrete* likelihood: the
+    image lives on a 256-value grid, so the density is integrated over each
+    pixel's bin rather than evaluated at a point.  Evaluating the continuous
+    density instead makes the last term of the bound meaningless (it can go
+    arbitrarily positive as the variance shrinks).
+
+    Args:
+        x:          Target, assumed rescaled to ``[-1, 1]``.
+        means:      Predicted bin centres.
+        log_scales: Predicted log standard deviations.
+
+    Returns:
+        Elementwise log probability, in nats.
+    """
+    centered = x - means
+    inv_stdv = (-log_scales).exp()
+    # Half a bin either side: 1/255 in [-1, 1] coordinates.
+    plus_in = inv_stdv * (centered + 1.0 / 255.0)
+    min_in = inv_stdv * (centered - 1.0 / 255.0)
+    cdf_plus = _approx_standard_normal_cdf(plus_in)
+    cdf_min = _approx_standard_normal_cdf(min_in)
+
+    log_cdf_plus = lucid.log(cdf_plus.clip(1e-12, None))
+    log_one_minus_cdf_min = lucid.log((1.0 - cdf_min).clip(1e-12, None))
+    log_cdf_delta = lucid.log((cdf_plus - cdf_min).clip(1e-12, None))
+
+    # The two edge bins are open-ended — everything below -0.999 falls in the
+    # first bin, everything above 0.999 in the last.
+    return lucid.where(
+        x < -0.999,
+        log_cdf_plus,
+        lucid.where(x > 0.999, log_one_minus_cdf_min, log_cdf_delta),
+    )
+
+
+def _mean_flat(x: Tensor) -> Tensor:
+    """Mean over every axis except the batch axis."""
+    out = x
+    while out.ndim > 1:
+        out = out.mean(dim=-1)
+    return out
+
+
+class DiffusionPosterior(NamedTuple):
+    r"""Per-timestep constants of :math:`q(x_{t-1} \mid x_t, x_0)`.
+
+    Built once per noise schedule by :func:`diffusion_posterior_constants`
+    and reused every step — the constants depend only on ``betas``.
+
+    Attributes:
+        mean_coef_start: ``(T,)`` weight on :math:`x_0` in the mean.
+        mean_coef_t:     ``(T,)`` weight on :math:`x_t` in the mean.
+        log_variance:    ``(T,)`` :math:`\log \tilde\beta_t`, with the ``t=0``
+            entry substituted (see :func:`diffusion_posterior_constants`).
+    """
+
+    mean_coef_start: Tensor
+    mean_coef_t: Tensor
+    log_variance: Tensor
+
+
+def diffusion_posterior_constants(
+    betas: Tensor, *, device: str = "cpu"
+) -> DiffusionPosterior:
+    r"""Precompute the closed-form posterior constants (Ho 2020 Eq. 6–7):
+
+    .. math::
+
+        \tilde\beta_t = \frac{1 - \bar\alpha_{t-1}}{1 - \bar\alpha_t}\beta_t,
+        \qquad
+        \tilde\mu_t = \frac{\beta_t\sqrt{\bar\alpha_{t-1}}}{1 - \bar\alpha_t}x_0
+                    + \frac{(1 - \bar\alpha_{t-1})\sqrt{\alpha_t}}
+                           {1 - \bar\alpha_t}x_t.
+
+    Every quotient here divides by :math:`1 - \bar\alpha_t`, which at small
+    ``t`` is a difference of two nearly equal numbers.  Taking
+    :math:`\bar\alpha` from a float32 tensor loses most of that difference's
+    significant digits — at ``t=0`` with ``beta_start=1e-4`` the resulting
+    mean is off by ~5e-4 instead of matching :math:`x_0` exactly.  So the
+    cumulative product is accumulated here in Python floats (doubles) from
+    ``betas`` alone, and only the finished coefficients are cast down.
+
+    Args:
+        betas:  ``(T,)`` forward-process variances.
+        device: Where to allocate the resulting ``(T,)`` buffers.
+
+    Returns:
+        A :class:`DiffusionPosterior` of three ``(T,)`` tensors.
+    """
+    T = int(betas.shape[0])
+    beta_l = [float(betas[i].item()) for i in range(T)]
+
+    ab_l: list[float] = []
+    acc = 1.0
+    for b in beta_l:
+        acc *= 1.0 - b
+        ab_l.append(acc)
+    ab_prev_l = [1.0] + ab_l[:-1]
+
+    coef1_l: list[float] = []
+    coef2_l: list[float] = []
+    post_var_l: list[float] = []
+    for i in range(T):
+        one_minus_ab = 1.0 - ab_l[i]
+        post_var_l.append(beta_l[i] * (1.0 - ab_prev_l[i]) / one_minus_ab)
+        coef1_l.append(beta_l[i] * math.sqrt(ab_prev_l[i]) / one_minus_ab)
+        coef2_l.append((1.0 - ab_prev_l[i]) * math.sqrt(1.0 - beta_l[i]) / one_minus_ab)
+
+    # β̃_0 is exactly 0 — the posterior at t=0 is a point mass, so its log is
+    # -inf.  Substitute β̃_1 for that one entry, as the reference does; a
+    # t=0 sample takes the decoder-NLL branch anyway, where the value only
+    # sets the likelihood's scale.
+    if T > 1:
+        post_var_l[0] = post_var_l[1]
+
+    return DiffusionPosterior(
+        mean_coef_start=lucid.tensor(coef1_l, device=device),
+        mean_coef_t=lucid.tensor(coef2_l, device=device),
+        log_variance=lucid.tensor([math.log(v) for v in post_var_l], device=device),
+    )
+
+
+def diffusion_posterior(
+    *,
+    x_start: Tensor,
+    x_t: Tensor,
+    t: Tensor,
+    posterior: DiffusionPosterior,
+) -> tuple[Tensor, Tensor]:
+    r"""Mean and log-variance of :math:`q(x_{t-1} \mid x_t, x_0)` at ``t``.
+
+    Args:
+        x_start:   ``(B, C, H, W)`` clean data :math:`x_0`.
+        x_t:       ``(B, C, H, W)`` noised sample at step ``t``.
+        t:         ``(B,)`` integer timesteps.
+        posterior: Schedule constants from
+            :func:`diffusion_posterior_constants`.
+
+    Returns:
+        ``(mean, log_variance)``, both broadcast against ``x_start``'s rank.
+    """
+    shape = tuple(int(s) for s in x_start.shape)
+    c1 = extract_into_tensor(posterior.mean_coef_start, t, shape)
+    c2 = extract_into_tensor(posterior.mean_coef_t, t, shape)
+    lv = extract_into_tensor(posterior.log_variance, t, shape)
+    return c1 * x_start + c2 * x_t, lv
+
+
+def diffusion_vlb_term(
+    *,
+    x_start: Tensor,
+    x_t: Tensor,
+    t: Tensor,
+    model_mean: Tensor,
+    model_log_variance: Tensor,
+    posterior: DiffusionPosterior,
+) -> Tensor:
+    r"""One term :math:`L_{t-1}` of the diffusion variational bound, in bits.
+
+    For :math:`t > 0` this is
+    :math:`\mathrm{KL}(q(x_{t-1} \mid x_t, x_0) \,\|\, p_\theta(x_{t-1} \mid x_t))`;
+    at :math:`t = 0` the KL is replaced by the discretised decoder
+    negative log-likelihood :math:`-\log p_\theta(x_0 \mid x_1)`, because
+    there is no ``x_{-1}`` to compare against.
+
+    Args:
+        x_start:            ``(B, C, H, W)`` clean data :math:`x_0`.
+        x_t:                ``(B, C, H, W)`` noised sample at step ``t``.
+        t:                  ``(B,)`` integer timesteps.
+        model_mean:         Predicted posterior mean of ``p_θ``.
+        model_log_variance: Predicted posterior log-variance of ``p_θ``.
+        posterior:          Schedule constants from
+            :func:`diffusion_posterior_constants`.
+
+    Returns:
+        ``(B,)`` per-sample bound term, divided by ``log 2`` so the units are
+        bits rather than nats.
+    """
+    true_mean, true_log_var = diffusion_posterior(
+        x_start=x_start, x_t=x_t, t=t, posterior=posterior
+    )
+
+    kl = normal_kl(true_mean, true_log_var, model_mean, model_log_variance)
+    kl = _mean_flat(kl) / math.log(2.0)
+
+    decoder_nll = -discretized_gaussian_log_likelihood(
+        x_start, means=model_mean, log_scales=0.5 * model_log_variance
+    )
+    decoder_nll = _mean_flat(decoder_nll) / math.log(2.0)
+
+    # Both branches are already (B,); ``t`` selects between them per sample.
+    return lucid.where(t == 0, decoder_nll, kl)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

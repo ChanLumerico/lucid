@@ -1419,3 +1419,81 @@ class TestHardNegativeMining:
 
         with pytest.raises(ValueError, match="both positives and negatives"):
             mine_hard_negatives(lucid.zeros(0, 4), lucid.randn(10, 4))
+
+
+class TestYOLOV2MultiScale:
+    """YOLOv2 §2 — a new input size drawn every 10 batches."""
+
+    @staticmethod
+    def _schedule():
+        from lucid.models.vision.yolo import MultiScaleResolution
+
+        return MultiScaleResolution()
+
+    def test_candidate_set_is_the_papers(self) -> None:
+        sched = self._schedule()
+        assert sched.sizes == tuple(range(320, 609, 32))
+        assert sched.period == 10
+
+    def test_size_holds_for_ten_batches_then_redraws(self) -> None:
+        """The point of the period: resizing every batch would thrash the
+        data pipeline, and querying twice for one batch must not shift the
+        size out from under the targets."""
+        sched = self._schedule()
+        window = [sched.size_for(i) for i in range(10)]
+        assert len(set(window)) == 1
+        assert sched.size_for(3) == window[0]  # idempotent within the window
+        assert sched.size_for(10) in sched.sizes
+
+    def test_rejects_sizes_off_the_stride_grid(self) -> None:
+        """A side that is not a multiple of 32 gives a fractional feature
+        map, which fails far from here with a confusing shape error."""
+        from lucid.models.vision.yolo import MultiScaleResolution
+
+        for bad in ((300,), (0,), (-32,)):
+            with pytest.raises(ValueError, match="multiple of 32"):
+                MultiScaleResolution(bad)
+        with pytest.raises(ValueError, match="at least one"):
+            MultiScaleResolution(())
+        with pytest.raises(ValueError, match="period"):
+            MultiScaleResolution(period=0)
+
+    def test_model_runs_at_every_candidate_size(self) -> None:
+        """The schedule is only usable because the network is fully
+        convolutional — check that claim rather than assume it."""
+        import lucid.nn.functional as F
+        from lucid.models.vision.yolo import YOLOV2ForObjectDetection
+        from lucid.models.vision.yolo._v2 import YOLOV2Config
+
+        model = YOLOV2ForObjectDetection(YOLOV2Config(num_classes=4)).eval()
+        base = lucid.randn(1, 3, 320, 320)
+        for side in (320, 448, 608):
+            x = F.interpolate(
+                base, size=(side, side), mode="bilinear", align_corners=False
+            )
+            out = model(x)
+            assert int(out.pred_boxes.shape[1]) == (side // 32) ** 2 * 5
+
+    def test_training_path_is_live_off_the_default_resolution(self) -> None:
+        import lucid.nn.functional as F
+        from lucid.models.vision.yolo import YOLOV2ForObjectDetection
+        from lucid.models.vision.yolo._v2 import YOLOV2Config
+
+        model = YOLOV2ForObjectDetection(YOLOV2Config(num_classes=4))
+        targets = [
+            {
+                "boxes": lucid.tensor([[0.2, 0.2, 0.6, 0.7]]),
+                "labels": lucid.tensor([1]).long(),
+            }
+        ]
+        x = F.interpolate(
+            lucid.randn(1, 3, 416, 416),
+            size=(320, 320),
+            mode="bilinear",
+            align_corners=False,
+        )
+        out = model(x, targets=targets)
+        assert out.loss is not None
+        assert bool(out.loss.isfinite().all().item())
+        out.loss.backward()
+        assert float(model.pred.weight.grad.abs().max().item()) > 0.0

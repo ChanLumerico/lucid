@@ -79,6 +79,13 @@ class AttentionUNetConfig(ModelConfig):
                        Doubles at each depth level.
         depth:         Number of encoder/decoder stages (excluding bottleneck).
         bilinear:      If True, use bilinear upsampling; otherwise ConvTranspose2d.
+        deep_supervision: Attach a 1x1 classifier to *every* decoder level,
+            resample each to the input resolution, and fuse the stack with a
+            final 1x1 convolution — the ``dsv`` in the reference's
+            ``unet_CT_multi_att_dsv`` model.  Despite the name this is not a
+            training-only auxiliary loss: the prediction itself comes out of
+            the fusion, so switching it on changes inference too.  Defaults
+            off so existing checkpoints keep loading.
     """
 
     model_type: ClassVar[str] = "attention_unet"
@@ -93,3 +100,4 @@ class AttentionUNetConfig(ModelConfig):
     base_channels: int = 64
     depth: int = 4
     bilinear: bool = False
+    deep_supervision: bool = False

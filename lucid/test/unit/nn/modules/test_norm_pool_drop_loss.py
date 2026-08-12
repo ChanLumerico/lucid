@@ -171,3 +171,41 @@ class TestTripletMarginWithDistance:
         p = lucid.tensor([[1.0, 0.0]])
         n = lucid.tensor([[0.0, 1.0]])
         assert abs(m(a, p, n).item()) < 1e-6
+
+
+class TestAvgPool3dForwardsItsArguments:
+    """``AvgPool3d.forward`` used to call the kernel with only
+    ``kernel_size``/``stride``/``padding``.
+
+    The other arguments were accepted, stored (or in ``divisor_override``'s
+    case, silently dropped), and never reached the kernel — so the module
+    returned a *differently shaped* tensor than the functional it wraps,
+    with no error anywhere.  ``AvgPool1d`` and ``AvgPool2d`` never had this.
+    """
+
+    def test_ceil_mode_reaches_the_kernel(self) -> None:
+        import lucid.nn.functional as F
+
+        x = lucid.ones(1, 1, 3, 3, 3)
+        module = nn.AvgPool3d(kernel_size=2, ceil_mode=True)(x)
+        functional = F.avg_pool3d(x, 2, None, 0, ceil_mode=True)
+        assert module.shape == functional.shape == (1, 1, 2, 2, 2)
+
+    def test_count_include_pad_reaches_the_kernel(self) -> None:
+        x = lucid.ones(1, 1, 2, 2, 2)
+        included = nn.AvgPool3d(2, stride=1, padding=1, count_include_pad=True)(x)
+        excluded = nn.AvgPool3d(2, stride=1, padding=1, count_include_pad=False)(x)
+        assert float((included - excluded).abs().max().item()) > 0.0
+
+    def test_divisor_override_errors_rather_than_being_dropped(self) -> None:
+        """The kernel does not support it.  Saying so beats returning a
+        plain average and letting the caller believe the divisor applied."""
+        import pytest
+
+        with pytest.raises(NotImplementedError, match="divisor_override"):
+            nn.AvgPool3d(2, divisor_override=4)(lucid.ones(1, 1, 4, 4, 4))
+
+    def test_repr_shows_the_arguments_that_change_the_result(self) -> None:
+        text = repr(nn.AvgPool3d(2, ceil_mode=True))
+        assert "ceil_mode=True" in text
+        assert "count_include_pad=True" in text

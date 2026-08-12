@@ -416,9 +416,10 @@ def pack_sequence(
     enforce_sorted : bool, optional
         If ``True`` (the default), the caller must supply sequences in
         non-increasing length order; mismatches raise
-        :class:`ValueError`.  ``False`` is *not* currently supported
-        and raises :class:`NotImplementedError` — sort externally for
-        now.
+        :class:`ValueError`.  With ``False`` the batch is sorted for you
+        and the permutation is recorded on the result, so
+        :func:`pad_packed_sequence` returns the batch in the order you
+        passed it.
 
     Returns
     -------
@@ -430,8 +431,6 @@ def pack_sequence(
     ValueError
         If ``sequences`` is empty, or if it is not sorted while
         ``enforce_sorted=True``.
-    NotImplementedError
-        If ``enforce_sorted=False`` is requested.
 
     Notes
     -----
@@ -454,10 +453,11 @@ def pack_sequence(
                     "pack_sequence: lengths must be sorted in decreasing order "
                     "when enforce_sorted=True"
                 )
-    elif sorted(lengths, reverse=True) != lengths:
-        raise NotImplementedError(
-            "pack_sequence: enforce_sorted=False not yet implemented; "
-            "sort sequences by descending length before calling"
-        )
     padded: Tensor = pad_sequence(sequences, batch_first=False)
-    return pack_padded_sequence(padded, lengths, batch_first=False)
+    # ``pack_padded_sequence`` already does the whole unsorted path — it
+    # sorts, gathers the batch axis, and records ``sorted_indices`` so
+    # ``pad_packed_sequence`` can put the batch back the way it came.  All
+    # that was missing here was forwarding the flag.
+    return pack_padded_sequence(
+        padded, lengths, batch_first=False, enforce_sorted=enforce_sorted
+    )

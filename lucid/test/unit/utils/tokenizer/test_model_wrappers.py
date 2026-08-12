@@ -97,10 +97,36 @@ class TestRoFormerTokenizer:
 
 
 class TestGPTTokenizer:
-    def test_default_add_prefix_space_false(self) -> None:
-        for cls in (GPTTokenizer, GPTTokenizerFast):
-            tok = cls(vocab={}, merges=[])
-            assert tok._add_prefix_space is False
+    """GPT-1 is word BPE with ``</w>``, not GPT-2's byte-level scheme."""
+
+    @staticmethod
+    def _marked(cls: type = GPTTokenizer) -> GPTTokenizer:
+        vocab = {"i": 0, "n": 1, "n</w>": 2, "in": 3, "in</w>": 4, "s": 5, "s</w>": 6}
+        return cls(vocab=vocab, merges=[("i", "n</w>"), ("i", "n")])
+
+    def test_end_of_word_separates_word_from_subword(self) -> None:
+        """The same letters must not collapse onto the same id.
+
+        Without the marker, ``in`` the word and ``in`` inside ``ins`` share
+        one entry, and that entry silently means two things.
+        """
+        tok = self._marked()
+        assert [tok.id_to_token(i) for i in tok.encode("in")] == ["in</w>"]
+        assert [tok.id_to_token(i) for i in tok.encode("ins")] == ["in", "s</w>"]
+
+    def test_round_trip_restores_word_boundaries(self) -> None:
+        tok = self._marked()
+        assert tok.decode(tok.encode("in ins")) == "in ins"
+
+    def test_input_is_lowercased(self) -> None:
+        """§4.1 lowercases the text, so the default normalizer must too."""
+        tok = self._marked()
+        assert tok.encode("IN") == tok.encode("in")
+
+    def test_fast_matches_python(self) -> None:
+        assert self._marked(GPTTokenizerFast).encode("ins") == self._marked().encode(
+            "ins"
+        )
 
     def test_train_encode(self) -> None:
         for cls in (GPTTokenizer, GPTTokenizerFast):

@@ -378,16 +378,28 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
             self.decoders.append(dec_block)
             dec_in = dec_out
 
-        # Segmentation head.
-        #
-        # Deep supervision is NOT implemented.  The paper's own model
-        # (``unet_CT_multi_att_dsv``) attaches a per-level 1x1 conv, upsamples
-        # each to the input resolution and sums the losses; the "dsv" in its
-        # name is that mechanism.  It is a training-time signal only — the
-        # inference path is identical either way — so its absence changes no
-        # forward result, but a from-scratch run will not reproduce the
-        # paper's convergence without it.
+        # Segmentation head — also the level-0 classifier when deep
+        # supervision is on, since that level needs no resampling and the
+        # op is identical.
         self.head = _conv_nd(dims)(enc_channels[0], config.num_classes, 1)
+
+        # Deep supervision (``unet_CT_multi_att_dsv``).  Every *other* decoder
+        # level gets its own 1x1 classifier; the results are resampled to the
+        # input resolution, concatenated, and fused by a final 1x1 conv.
+        #
+        # The name is misleading: this is not an auxiliary loss bolted onto
+        # training.  The reference returns the fused map as *the* prediction,
+        # so the deeper levels reach the output directly and the mechanism is
+        # part of inference.
+        self.dsv: list[nn.Module] = []
+        if config.deep_supervision:
+            for level in range(1, depth):
+                proj = _conv_nd(dims)(enc_channels[level], config.num_classes, 1)
+                self.add_module(f"dsv_{level}", proj)
+                self.dsv.append(proj)
+            self.fuse = _conv_nd(dims)(
+                config.num_classes * depth, config.num_classes, 1
+            )
 
     @override
     def forward(  # type: ignore[override]
@@ -423,22 +435,41 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
         feat = self.bottleneck.forward(feat)
         gating: Tensor = cast(Tensor, self.gating(feat))
 
-        # Decoder path
+        # Decoder path.  Deep supervision classifies every stage, so keep
+        # the outputs when it is on — but only then: holding them under
+        # ``no_grad`` would pin intermediates the default path is done with.
+        deep = self._cfg.deep_supervision
+        dec_outputs: list[Tensor] = []
         for i, dec in enumerate(self.decoders):
             skip = skips[-(i + 1)]
             feat = dec.forward(feat, skip, gating if i == 0 else None)
+            if deep:
+                dec_outputs.append(feat)
 
         # Segmentation head
         logits: Tensor = cast(Tensor, self.head(feat))  # (B, num_classes, H, W)
 
-        # Ensure output matches input spatial size
-        if tuple(int(v) for v in logits.shape[2:]) != spatial:
-            logits = F.interpolate(
-                logits,
+        def to_input_size(t: Tensor) -> Tensor:
+            if tuple(int(v) for v in t.shape[2:]) == spatial:
+                return t
+            return F.interpolate(
+                t,
                 size=spatial,
                 mode=_interp_mode(len(spatial)),
                 align_corners=False,
             )
+
+        if deep:
+            # ``decoders`` is ordered deepest-first, so ``dec_outputs[-1]`` is
+            # the full-resolution level already classified by ``head``; walk
+            # backwards from there to reach the coarser ones.
+            maps = [to_input_size(logits)]
+            for level, proj in enumerate(self.dsv, start=1):
+                coarse = cast(Tensor, proj(dec_outputs[-(level + 1)]))
+                maps.append(to_input_size(coarse))
+            logits = cast(Tensor, self.fuse(lucid.cat(maps, dim=1)))
+
+        logits = to_input_size(logits)
 
         loss: Tensor | None = None
         if targets is not None:

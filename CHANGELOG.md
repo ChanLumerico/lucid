@@ -80,6 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - close the last three gaps the audit had left as judgement calls
 
+- implement the four features the zoo only declared
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
@@ -250,6 +252,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - find the event time by Illinois rather than bisection
 - make the implicit solve stop on the step, and fuse rk_combine
 - vectorise the error norm and thin the per-stage Python
+
+### Tooling
+
+- drop the artefact fence now that nothing writes them
 
 ---
 

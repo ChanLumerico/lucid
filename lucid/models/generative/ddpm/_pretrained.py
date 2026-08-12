@@ -423,14 +423,9 @@ def ddpm_imagenet64_gen(
     r"""Construct an Improved-DDPM ImageNet 64x64 model with training loss and ``.generate()``.
 
     Same trunk as :func:`ddpm_imagenet64` (sample size 64x64, 4-stage U-Net
-    with ``learn_sigma=True``).
-
-    .. warning::
-        This factory currently raises :class:`NotImplementedError` at
-        construction time — the default config has ``learn_sigma=True``,
-        which requires the Improved-DDPM hybrid
-        :math:`L_{\text{simple}} + \lambda L_{\text{vlb}}` loss not yet
-        implemented in Lucid.  Pass ``learn_sigma=False`` to override.
+    with ``learn_sigma=True``), trained with the hybrid
+    :math:`L_{\text{simple}} + \lambda L_{\text{vlb}}` objective that the
+    learned variance head requires.
 
     Parameters
     ----------
@@ -454,20 +449,13 @@ def ddpm_imagenet64_gen(
     --------
     >>> import lucid
     >>> from lucid.models.generative.ddpm import ddpm_imagenet64_gen
-    >>> model = ddpm_imagenet64_gen(learn_sigma=False).eval()
+    >>> model = ddpm_imagenet64_gen().eval()
     >>> x_t = lucid.randn((1, 3, 64, 64))
     >>> t = lucid.tensor([1234]).long()
     >>> out = model(x_t, t)
-    >>> out.sample.shape   # (1, 3, 64, 64)
+    >>> out.sample.shape   # mean half only — the variance half is split off
     (1, 3, 64, 64)
     """
     if pretrained:
         reject_unavailable_pretrained("ddpm_imagenet64_gen")
-    # ``DDPMForImageGeneration`` refuses ``learn_sigma=True`` because the
-    # hybrid L_simple + L_vlb objective is not implemented, so this factory
-    # raised unconditionally — a registered name that can never be built.
-    # Sampling uses the fixed-small variance regardless, so the generation
-    # wrapper gets the same U-Net with the variance head off; the base
-    # ``ddpm_imagenet64`` keeps ``learn_sigma=True`` for weight compatibility.
-    cfg = replace(_CFG_IMAGENET64, learn_sigma=False)
-    return DDPMForImageGeneration(_apply(cfg, overrides))
+    return DDPMForImageGeneration(_apply(_CFG_IMAGENET64, overrides))

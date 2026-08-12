@@ -113,7 +113,12 @@ class DDPMConfig(DiffusionModelConfig):
             default: 32).  Must divide every per-stage channel count.
         learn_sigma: Improved-DDPM (Nichol 2021) — when ``True``, the
             network predicts the variance in addition to the mean.  Output
-            channels become ``2 * in_channels``.
+            channels become ``2 * in_channels``, and training switches to
+            the hybrid objective (see ``vlb_weight``), since the fixed
+            simple loss carries no signal for a variance head.
+        vlb_weight: The λ on the variational term of
+            ``L_simple + λ·L_vlb`` (Nichol & Dhariwal 2021 §4; default
+            ``1e-3``).  Only read when ``learn_sigma=True``.
         clip_denoised: Clip the predicted ``x_0`` to ``[-1, 1]`` during
             sampling (default True).
     """
@@ -141,6 +146,11 @@ class DDPMConfig(DiffusionModelConfig):
     # — the range the sinusoidal embedding was designed for.
     rescale_timesteps: bool = False
     learn_sigma: bool = False
+    # Weight λ on the variational term of Improved-DDPM's hybrid objective
+    # ``L_simple + λ·L_vlb`` (Nichol & Dhariwal 2021 §4).  Only consulted when
+    # ``learn_sigma=True`` — with a fixed variance there is nothing for the
+    # bound to train.
+    vlb_weight: float = 1e-3
 
     # Sampling.
     clip_denoised: bool = True
@@ -182,6 +192,8 @@ class DDPMConfig(DiffusionModelConfig):
             raise ValueError(
                 f"resnet_groups must be positive, got {self.resnet_groups}"
             )
+        if self.vlb_weight < 0.0:
+            raise ValueError(f"vlb_weight must be non-negative, got {self.vlb_weight}")
 
         # Spatial divisibility: ``2 ** (L - 1)`` because the last stage has
         # no downsample.

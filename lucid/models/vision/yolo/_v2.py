@@ -13,7 +13,10 @@ Key innovations over YOLOv1
   fine-grained spatial detail.
 - **Direct location prediction**: tx, ty are passed through sigmoid so
   they stay in the cell [0,1]; tw, th remain raw (log-space anchor offsets).
-- Multi-scale training (not implemented here — static 416×416).
+- **Multi-scale training**: the network is fully convolutional, so it runs
+  at any multiple of 32 without rebuilding.  ``MultiScaleResolution``
+  supplies the paper's schedule — a fresh size drawn from
+  {320, 352, …, 608} every 10 batches — for a training loop to apply.
 
 Architecture (Darknet-19)
 -------------------------
