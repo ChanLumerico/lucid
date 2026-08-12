@@ -244,6 +244,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - stop the doctests writing checkpoints into the repo
 
+- refuse the shapes lstsq and householder_product cannot compute
+
 ### Changed
 
 - give the engine ops one shared operand check
