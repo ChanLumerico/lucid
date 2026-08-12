@@ -57,6 +57,17 @@ def _built(cfg: RealNVPConfig) -> tuple[RealNVPModel, np.ndarray]:
     rng = np.random.default_rng(0)
     c, h, w = cfg.image_shape
     x = rng.uniform(0.05, 0.95, size=(3, c, h, w)).astype(np.float32)
+
+    # One forward before anything reads the model.  The coupling convs are
+    # weight-normalised, so ``conv.weight`` is not a parameter at all — it
+    # is ``g · v/‖v‖``, cached on the module and refreshed by a forward
+    # pre-hook.  Randomising ``weight_v`` above therefore leaves the cache
+    # holding the value from *before* the initialisation, and the mirror
+    # below reads ``layer.weight`` directly.  Lucid's own forward never
+    # notices, because it runs the hook first; the mirror does not, so it
+    # was building its reference out of pre-init weights and disagreeing
+    # with a model that was behaving correctly.
+    model.encode(lucid.tensor(x))
     return model, x
 
 
@@ -234,8 +245,14 @@ def test_bits_per_dim_parity(ref: ModuleType) -> None:
     cfg = _cfg()
     model, x_np = _built(cfg)
     got = model.bits_per_dim(lucid.tensor(x_np)).numpy()
+    # ``+ num_bits`` is the 8-bit discretisation offset.  ``log_prob`` is a
+    # density over ``[0, 1]^D``; the paper reports against the discrete
+    # data, and the ``x / 256`` inside the squash is exactly that change of
+    # variables — worth ``num_bits`` in bits/dim.  Omitting it here put the
+    # reference a full 8 bits/dim below the model and below Table 1.
     expected = (
         -_ref_log_prob(ref, model, x_np).numpy() / (cfg.input_dim * math.log(2.0))
+        + float(cfg.num_bits)
     ).astype(np.float32)
     np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-4)
 
@@ -249,9 +266,12 @@ def test_loss_parity(ref: ModuleType) -> None:
 
     out = head(lucid.tensor(x_np))
     assert out.loss is not None
+    # Mean bits/dim carries the same discretisation offset as
+    # ``bits_per_dim`` — the head applies it so the reported loss is on the
+    # paper's scale.
     expected = float(
         (-_ref_log_prob(ref, model, x_np) / (cfg.input_dim * math.log(2.0)))
         .mean()
         .item()
-    )
+    ) + float(cfg.num_bits)
     assert abs(float(out.loss.item()) - expected) < 1e-3

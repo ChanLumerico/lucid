@@ -883,6 +883,29 @@ class TokenizerAxis(Axis):
         # mutation: a decoder that silently drops the last character is
         # lossy and perfectly stable, and this branch passed it.
         #
+        # There is one more thing a *lossy* round trip still owes, and it
+        # is not weaker: re-encoding the decoded text must land on the same
+        # ids.  ``decode(encode(t))`` is the tokenizer's own rendering of
+        # ``t``, so encoding it again is asking whether that rendering is a
+        # fixed point — and the truncating decoder above is not one, since
+        # the dropped character comes back as fewer ids.  Where it holds,
+        # the cell has a verdict rather than a shrug.
+        try:
+            reencoded = [int(i) for i in instance.encode(text)]
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"re-encoding its own output raised: {type(exc).__name__}: {exc}",
+            )
+        if reencoded == [int(i) for i in ids]:
+            return self._finding(
+                symbol,
+                Status.PASS,
+                f"round trip is lossy but a fixed point: {len(ids)} ids survive "
+                f"re-encoding unchanged",
+            )
+
         # VACUOUS rather than FAIL because a probe vocabulary genuinely
         # cannot spell every input, so an inexact round trip here is not
         # by itself evidence against the tokenizer — it is evidence that
@@ -890,8 +913,8 @@ class TokenizerAxis(Axis):
         return self._finding(
             symbol,
             Status.VACUOUS,
-            f"round trip is lossy and only stability was checked: "
-            f"{len(ids)} ids, decode repeatable",
+            f"round trip is lossy and not a fixed point either: {len(ids)} ids "
+            f"in, {len(reencoded)} out; only decode stability was checked",
         )
 
 

@@ -280,6 +280,33 @@ def _compiler_that_disagrees() -> "Iterator[None]":
 
 
 @contextlib.contextmanager
+def _slice_that_takes_the_wrong_stride() -> "Iterator[None]":
+    """``x[..., ::2]`` comes back holding ``x[..., 1::2]``.
+
+    The failure a *materialised* view can actually have: the right shape
+    and the wrong elements.  The layout axis builds its strided operand by
+    interleaving a −7 sentinel into the odd columns and slicing the even
+    ones back out, so a slice that takes the wrong stride returns the
+    sentinel — which is exactly what that axis now checks for, and why it
+    is no longer unprovable on an engine with no lazy views.
+    """
+    real = lucid.Tensor.__getitem__
+
+    def broken(self: Any, key: Any) -> Any:
+        if (
+            isinstance(key, tuple)
+            and key
+            and isinstance(key[-1], slice)
+            and key[-1] == slice(None, None, 2)
+        ):
+            return real(self, key[:-1] + (slice(1, None, 2),))
+        return real(self, key)
+
+    with _patched(lucid.Tensor, "__getitem__", broken):
+        yield
+
+
+@contextlib.contextmanager
 def _prune_that_misses_its_target() -> "Iterator[None]":
     real = lucid.nn.utils.prune.l1_unstructured
 
@@ -521,6 +548,14 @@ MUTANTS: "tuple[Mutant, ...]" = (
         qualname="lucid.compile.compile",
     ),
     Mutant(
+        "layout",
+        "slice_takes_the_wrong_stride",
+        "x[..., ::2] comes back holding the interleaved sentinel",
+        lambda: lucid.Tensor.__getitem__,
+        patch=_slice_that_takes_the_wrong_stride,
+        qualname="lucid.Tensor.__getitem__",
+    ),
+    Mutant(
         "nnutils",
         "prune_misses_its_target",
         "amount=0.5 zeroes a quarter of the weights",
@@ -741,11 +776,6 @@ def verify(ctx: "_axes.Context | None" = None) -> "list[Verdict]":
 #: a finding about the framework and belongs in the report, not in a
 #: backlog.
 UNPROVEN_REASONS: "dict[str, str]" = {
-    "layout": (
-        "this engine materialises every view, so the packed and strided "
-        "operands are byte-identical and no op can tell them apart — the "
-        "axis reports VACUOUS for every symbol and cannot be made to fail"
-    ),
     "extreme": (
         "the axis dispatches on a fixed list of named limits (softmax, "
         "log1p, logsumexp); a mutant would have to be one of those ops, "

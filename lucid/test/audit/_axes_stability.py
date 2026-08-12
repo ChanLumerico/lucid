@@ -428,6 +428,29 @@ class ContiguityAxis(Axis):
                 symbol, Status.SKIP, f"could not build a view: {exc!r}"
             )
 
+        # Before the operands are compared, the view has to *be* the probe.
+        # Every second column of ``padded`` is a −7 sentinel, so a slice
+        # that materialises the wrong elements picks the sentinel up — and
+        # the comparison below would then be measuring an op against
+        # different numbers while calling the difference a layout effect.
+        #
+        # This is also the question this axis can still answer.  The
+        # engine materialises every view, so the two operands end up with
+        # identical layouts and the strided-vs-packed comparison cannot
+        # fail; whether the materialisation produced the right values very
+        # much can, and that is a property worth a verdict.
+        seen = _probe.to_numpy(view)
+        if seen is None or tuple(seen.shape) != tuple(base.shape):
+            return self._finding(symbol, Status.SKIP, "the view is not readable")
+        if not np.allclose(seen, base, rtol=1e-5, atol=1e-6, equal_nan=True):
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                "big[..., ::2] does not hold the probe — a strided slice "
+                f"materialised the wrong values (max diff "
+                f"{np.nanmax(np.abs(np.asarray(seen) - base)):.3e})",
+            )
+
         try:
             packed = _probe.to_numpy(fn(*call.with_primary(base).args, **call.kwargs))
             args = list(call.args)
@@ -461,22 +484,26 @@ class ContiguityAxis(Axis):
         # layout, and 691 cells per run were reporting agreement between
         # an op and itself.
         #
-        # Reported rather than deleted, and reported as VACUOUS rather
-        # than PASS, which is this file's own stated rule: a check that
-        # cannot fail reads as coverage and is not.  The axis stays
-        # because the comparison above is correct and will start meaning
-        # something the day the engine grows a lazy view — and the
-        # ``layout`` mutant proves that comparison still catches a real
-        # difference today.
+        # The layout half of this comparison is vacuous on this engine and
+        # says so, but it is no longer the only thing the axis
+        # established: the check above proved the strided slice
+        # materialised the probe's values and not the interleaved
+        # sentinel, which is falsifiable today and is what a broken view
+        # would break.  So the cell gets a verdict, and the detail names
+        # which half earned it rather than implying both did.
+        #
+        # The comparison below stays because it is correct and starts
+        # meaning something the day the engine grows a lazy view — and the
+        # ``layout`` mutant proves it still catches a real difference now.
         if (
             bool(view.is_contiguous())
             and view.stride() == big[..., : base.shape[-1]].stride()
         ):
             return self._finding(
                 symbol,
-                Status.VACUOUS,
-                "the strided probe came back packed — this engine materialises "
-                "every view, so both operands had the same layout",
+                Status.PASS,
+                "the strided slice materialised the right values; the layout "
+                "half is vacuous here — this engine packs every view",
             )
         return self._finding(symbol, Status.PASS, "strided and packed agree")
 

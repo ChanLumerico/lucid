@@ -638,6 +638,24 @@ def _linalg_extra(name: str, domain: str) -> "Iterator[Call]":
         yield Call(
             [_probe.as_f64(square), _probe.as_f64(rhs)], {}, 0, "lu_solve(LU, B)"
         )
+    elif name in ("householder_product",):
+        # ``H`` is a single 2-D reflector block and ``tau`` a *vector* of
+        # min(m, n) coefficients.  Derived independently, the two came out
+        # the same shape — a 1-D H with a 1-D tau, or a batched H with a
+        # batched tau — and the op answered both instead of refusing:
+        # rank-1 came back as an empty ``(0, 0)`` and a batch came back as
+        # its first matrix alone.  Every axis was therefore recording a
+        # verdict about a call no caller would make.
+        m, n = 4, 3
+        yield Call(
+            [
+                _probe.as_f64(gen.uniform(-1.0, 1.0, (m, n))),
+                _probe.as_f64(gen.uniform(-0.5, 0.5, (min(m, n),))),
+            ],
+            {},
+            0,
+            "householder_product(H(4,3), tau(3,))",
+        )
     elif name in ("vander",):
         yield Call([_probe.as_f64(gen.uniform(0.5, 1.5, (4,)))], {}, 0, "vander(1-D)")
 
@@ -879,7 +897,7 @@ _FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
     (
         r"^(cholesky(_ex)?|eig|eigh|eigvals|eigvalsh|inv|det|slogdet|matrix_exp|"
         r"matrix_power|lu|lu_factor|lu_solve|ldl_factor|ldl_solve|solve|"
-        r"solve_triangular|lstsq)$",
+        r"solve_triangular|lstsq|householder_product|vander)$",
         _linalg_extra,
     ),
     (
