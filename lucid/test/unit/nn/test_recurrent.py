@@ -325,18 +325,97 @@ def test_pack_sequence_still_rejects_an_unsorted_list_when_told_to():
 
 
 @pytest.mark.parametrize("kind", ["RNN", "LSTM", "GRU"])
-def test_a_packed_sequence_is_refused_rather_than_silently_padded(kind):
-    """Recorded, not a defect — the good failure mode.
+def test_a_packed_sequence_keeps_padding_out_of_the_recurrence(kind):
+    """The reason packing exists, stated as an assertion.
 
-    Packing exists so that padded steps do not reach the recurrence.  A
-    layer that accepted a ``PackedSequence`` and quietly treated it as a
-    padded batch would return the right shape and let the padding into
-    every hidden state.  This refuses, names the limitation, and says
-    what to do instead — and it is the *builtin* ``NotImplementedError``,
-    so the obvious ``except NotImplementedError`` around a fallback
-    actually fires.
+    A layer that accepted a ``PackedSequence`` and quietly treated it as a
+    padded batch would return the right shape while letting ``T - len_i``
+    steps of zeros walk each short sequence's hidden state forward.  The
+    check that catches that is not a shape: it is that every sequence
+    comes out identical to running it on its own, where no padding exists
+    to leak in.
     """
-    padded = pad_sequence(_ragged(), batch_first=True)
-    packed = pack_padded_sequence(padded, [5, 3, 1], batch_first=True)
-    with pytest.raises(NotImplementedError, match="PackedSequence"):
-        getattr(nn, kind)(4, 6, batch_first=True)(packed)
+    seqs = _ragged()
+    layer = getattr(nn, kind)(4, 6)
+    packed = pack_sequence(seqs)
+
+    out_packed, state = layer(packed)
+    padded, lengths = pad_packed_sequence(out_packed)
+    h_n = state[0] if kind == "LSTM" else state
+    assert list(np.asarray(_v(lengths)).ravel()) == [5, 3, 1]
+
+    for i, seq in enumerate(seqs):
+        n = int(seq.shape[0])
+        solo_out, solo_state = layer(seq.unsqueeze(1))
+        solo_h = solo_state[0] if kind == "LSTM" else solo_state
+        assert np.allclose(_v(padded)[:n, i], _v(solo_out)[:, 0], atol=1e-5)
+        assert np.allclose(_v(h_n)[:, i], _v(solo_h)[:, 0], atol=1e-5)
+
+
+@pytest.mark.parametrize("kind", ["RNN", "LSTM", "GRU"])
+def test_a_packed_sequence_survives_padding_being_longer_than_the_data(kind):
+    """The failure mode the previous test rules out, made concrete.
+
+    Sequence 2 has one real step and four of padding.  Treating the padded
+    batch as dense would run those four through the cell, so its final
+    state would differ from the one-step run — by a lot, not by epsilon.
+    """
+    seqs = _ragged()
+    layer = getattr(nn, kind)(4, 6)
+
+    packed_state = layer(pack_sequence(seqs))[1]
+    dense_state = layer(pad_sequence(seqs))[1]
+    packed_h = packed_state[0] if kind == "LSTM" else packed_state
+    dense_h = dense_state[0] if kind == "LSTM" else dense_state
+
+    solo_state = layer(seqs[2].unsqueeze(1))[1]
+    solo_h = solo_state[0] if kind == "LSTM" else solo_state
+
+    assert np.allclose(_v(packed_h)[:, 2], _v(solo_h)[:, 0], atol=1e-5)
+    assert not np.allclose(_v(dense_h)[:, 2], _v(solo_h)[:, 0], atol=1e-5)
+
+
+@pytest.mark.parametrize("kind", ["RNN", "LSTM", "GRU"])
+def test_packed_input_returns_the_batch_in_the_callers_order(kind):
+    """``enforce_sorted=False`` permutes internally; ``h_n`` must not."""
+    seqs = _ragged()
+    unsorted = [seqs[2], seqs[0], seqs[1]]  # lengths 1, 5, 3
+    layer = getattr(nn, kind)(4, 6)
+
+    state = layer(pack_sequence(unsorted, enforce_sorted=False))[1]
+    h_n = state[0] if kind == "LSTM" else state
+
+    for i, seq in enumerate(unsorted):
+        solo_state = layer(seq.unsqueeze(1))[1]
+        solo_h = solo_state[0] if kind == "LSTM" else solo_state
+        assert np.allclose(_v(h_n)[:, i], _v(solo_h)[:, 0], atol=1e-5), i
+
+
+@pytest.mark.parametrize("kind", ["RNN", "LSTM", "GRU"])
+def test_packed_bidirectional_reverse_starts_at_the_real_end(kind):
+    """The reverse pass must begin at each sequence's own last element.
+
+    Reversing the padded block instead would start the backward direction
+    on padding and reach the real data late, which no shape check sees.
+    """
+    seqs = _ragged()
+    layer = getattr(nn, kind)(4, 6, num_layers=2, bidirectional=True)
+
+    out_packed, _ = layer(pack_sequence(seqs))
+    padded, _ = pad_packed_sequence(out_packed)
+
+    for i, seq in enumerate(seqs):
+        n = int(seq.shape[0])
+        solo_out, _ = layer(seq.unsqueeze(1))
+        assert np.allclose(_v(padded)[:n, i], _v(solo_out)[:, 0], atol=1e-5), i
+
+
+@pytest.mark.parametrize("kind", ["RNN", "LSTM", "GRU"])
+def test_packed_output_is_a_packed_sequence(kind):
+    from lucid.nn.utils.rnn import PackedSequence
+
+    layer = getattr(nn, kind)(4, 6)
+    out, _ = layer(pack_sequence(_ragged()))
+    assert isinstance(out, PackedSequence)
+    # The data carries only real steps: 5 + 3 + 1, never 3 * 5.
+    assert int(out.data.shape[0]) == 9

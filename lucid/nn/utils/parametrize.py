@@ -14,10 +14,11 @@ single-parametrization registration, ``is_parametrized`` introspection, and
 leaf parameter.
 """
 
-from typing import override
+from typing import cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
+from lucid.nn.modules.container import ModuleList
 from lucid.nn.parameter import Parameter
 
 # Sentinel attribute on a parametrized module.  Maps original-parameter
@@ -27,25 +28,49 @@ _PARAM_HOOK_ATTR: str = "parametrizations"
 
 
 class ParametrizationContainer(Module):
-    """Holds one ``Parametrization`` (the transformation) plus the
-    untransformed weight tensor as ``original``.
+    """Holds the transformation chain plus the untransformed weight.
 
     The container is attached to ``module.parametrizations[name]`` so users
     can introspect / mutate the underlying parameter through the standard
     module-tree mechanisms.
+
+    Registering a second parametrization on the same name appends to the
+    chain rather than replacing it, so the read becomes ``g(f(original))``
+    for registration order ``f`` then ``g`` — the same order in which the
+    constraints were asked for.
+
+    Attributes
+    ----------
+    parametrizations : ModuleList
+        The transformations, in application order.
+    parametrization : Module
+        The first transformation.  Kept for the common single-entry case.
+    original : Parameter
+        The trainable pre-transformation weight.
     """
 
     def __init__(self, parametrization: Module, original: Parameter) -> None:
         """Initialise the instance.  See the class docstring for parameter semantics."""
         super().__init__()
-        self.parametrization: Module = parametrization
+        self.parametrizations: ModuleList = ModuleList([parametrization])
         self.original: Parameter = original
+
+    @property
+    def parametrization(self) -> Module:
+        """The first transformation in the chain."""
+        return self.parametrizations[0]
+
+    def append(self, parametrization: Module) -> None:
+        """Add a transformation to the end of the chain."""
+        self.parametrizations.append(parametrization)
 
     @override
     def forward(self, *args: object, **kwargs: object) -> Tensor:
-        # Apply the transformation to the cached ``original`` weight.
-        """Apply the layer / parametrization to the input."""
-        return self.parametrization(self.original)  # type: ignore[return-value]
+        """Fold the chain over the cached ``original`` weight."""
+        out: Tensor = self.original
+        for step in self.parametrizations:
+            out = cast(Tensor, step(out))
+        return out
 
 
 def register_parametrization(
@@ -93,9 +118,9 @@ def register_parametrization(
     AttributeError
         If ``tensor_name`` is not present on the module.
     RuntimeError
-        If a parametrisation is already registered on ``tensor_name``
-        (chaining is not yet supported) or, when ``unsafe`` is ``False``,
-        the produced tensor shape differs from the original.
+        When ``unsafe`` is ``False`` and the produced tensor shape
+        differs from the original.  Registering onto an already
+        parametrised name is *not* an error — it appends to the chain.
 
     Notes
     -----
@@ -122,19 +147,34 @@ def register_parametrization(
     """
     if not hasattr(module, tensor_name):
         raise AttributeError(f"module has no parameter '{tensor_name}'")
+
+    container_dict: dict[str, ParametrizationContainer] = getattr(
+        module, _PARAM_HOOK_ATTR, {}
+    )
+    # Check for an existing chain *before* the Parameter test: after the
+    # first registration ``module.<tensor_name>`` is the derived tensor, not
+    # a leaf, so that test would reject every attempt to chain.
+    if tensor_name in container_dict:
+        # Chain rather than reject: the second constraint composes onto the
+        # first, so the read becomes ``g(f(original))``.  The original stays
+        # put — it is still the only trainable leaf.
+        existing = container_dict[tensor_name]
+        if not unsafe:
+            probe = cast(Tensor, parametrization(cast(Tensor, existing())))
+            if tuple(probe.shape) != tuple(cast(Tensor, existing()).shape):
+                raise RuntimeError(
+                    f"parametrization changes the shape of '{tensor_name}' "
+                    f"from {tuple(cast(Tensor, existing()).shape)} to "
+                    f"{tuple(probe.shape)}; pass unsafe=True if intended"
+                )
+        existing.append(parametrization)
+        return module
+
     weight: Parameter = getattr(module, tensor_name)
     if not isinstance(weight, Parameter):
         raise TypeError(
             f"'{tensor_name}' must be a Parameter to parametrise, got "
             f"{type(weight).__name__}"
-        )
-
-    container_dict: dict[str, ParametrizationContainer] = getattr(
-        module, _PARAM_HOOK_ATTR, {}
-    )
-    if tensor_name in container_dict:
-        raise RuntimeError(
-            f"'{tensor_name}' is already parametrised; chaining is not yet supported"
         )
 
     container: ParametrizationContainer = ParametrizationContainer(

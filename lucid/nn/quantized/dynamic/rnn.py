@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, cast, override
 
 import lucid
 import lucid.nn as nn
+from lucid.nn.utils.rnn import PackedSequence
 from lucid.nn.parameter import Parameter
 from lucid.quantization._functional import dequantize, quantize
 from lucid.quantization._qscheme import QDtype, per_channel_symmetric, qint8
@@ -64,9 +65,14 @@ class LSTM(nn.Module):
 
     @override
     def forward(  # type: ignore[override]  # LSTM-shaped (x, hx) signature
-        self, x: Tensor, hx: tuple[Tensor, Tensor] | None = None
-    ) -> tuple[Tensor, tuple[Tensor, Tensor]]:
-        """Inject dequantized weights into the shell and run it."""
+        self,
+        x: Tensor | PackedSequence,
+        hx: tuple[Tensor, Tensor] | None = None,
+    ) -> tuple[Tensor | PackedSequence, tuple[Tensor, Tensor]]:
+        """Inject dequantized weights into the shell and run it.
+
+        Packed input passes straight through — the shell is a real
+        :class:`~lucid.nn.LSTM`, so it handles it."""
         shell: nn.LSTM = object.__getattribute__(self, "_shell")
         for name in self._weight_names:
             codes = cast("Tensor", getattr(self, name + "_int8"))

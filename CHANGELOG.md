@@ -84,6 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - chunk the suite, and un-break the RealNVP mirror
 
+- take PackedSequence into the recurrence, and chain parametrizations
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

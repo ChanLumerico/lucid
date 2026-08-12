@@ -366,3 +366,79 @@ def test_the_flat_vector_has_one_entry_per_parameter():
     layer = nn.Linear(5, 3)
     flat = _v(U.parameters_to_vector(layer.parameters()))
     assert flat.shape == (5 * 3 + 3,)
+
+
+# ── chained parametrizations ──────────────────────────────────────────────────
+
+
+class _Scale(nn.Module):
+    def __init__(self, k):
+        super().__init__()
+        self.k = k
+
+    def forward(self, W):
+        return W * self.k
+
+
+class _Symmetric(nn.Module):
+    def forward(self, W):
+        return 0.5 * (W + W.mT)
+
+
+def _chained():
+    layer = nn.Linear(4, 4, bias=False)
+    base = _v(layer.weight).copy()
+    register_parametrization(layer, "weight", _Symmetric())
+    first = _v(layer.parametrizations["weight"]()).copy()
+    register_parametrization(layer, "weight", _Scale(3.0))
+    return layer, base, first
+
+
+def test_a_second_parametrization_composes_onto_the_first():
+    """Registering twice used to raise.  The risk in allowing it is that
+    the second silently *replaces* the first, which looks fine — the shape
+    is right and the values move — until the first constraint quietly
+    stops holding."""
+    layer, base, first = _chained()
+    chained = _v(layer.parametrizations["weight"]())
+
+    assert np.allclose(chained, 3.0 * first, atol=1e-6)
+    # If Symmetric had been dropped, this would be 3 * the raw weight.
+    assert not np.allclose(chained, 3.0 * base, atol=1e-4)
+
+
+def test_the_earlier_constraint_still_holds_after_chaining():
+    layer, _, _ = _chained()
+    chained = _v(layer.parametrizations["weight"]())
+    assert np.allclose(chained, chained.T, atol=1e-6)
+
+
+def test_chaining_keeps_exactly_one_trainable_leaf():
+    """Composing must not mint a second copy of the weight."""
+    layer, _, _ = _chained()
+    container = layer.parametrizations["weight"]
+    assert len(container.parametrizations) == 2
+    assert isinstance(container.original, nn.Parameter)
+
+    layer(_x(2, 4)).sum().backward()
+    assert np.abs(_v(container.original.grad)).max() > 0
+
+
+def test_chaining_rejects_a_shape_change_unless_asked():
+    class _Widen(nn.Module):
+        def forward(self, W):
+            return lucid.cat([W, W], 1)
+
+    layer = nn.Linear(4, 4, bias=False)
+    register_parametrization(layer, "weight", _Symmetric())
+    with pytest.raises(RuntimeError, match="shape"):
+        register_parametrization(layer, "weight", _Widen())
+    register_parametrization(layer, "weight", _Widen(), unsafe=True)
+    assert _v(layer.parametrizations["weight"]()).shape == (4, 8)
+
+
+def test_the_first_parametrization_is_still_reachable():
+    layer, _, _ = _chained()
+    container = layer.parametrizations["weight"]
+    assert container.parametrization is container.parametrizations[0]
+    assert isinstance(container.parametrization, _Symmetric)

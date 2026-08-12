@@ -11823,6 +11823,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.modules"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.utils.parametrize"
     }
   ],
   "lucid.nn.modules.container.ParameterDict": [
@@ -13087,6 +13091,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.modules.rnn"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.dynamic.rnn"
     },
     {
       "kind": "module",
