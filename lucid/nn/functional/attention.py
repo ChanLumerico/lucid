@@ -45,9 +45,13 @@ def scaled_dot_product_attention(
     value : Tensor
         Shape ``(B, H, S, V)``.  ``V`` may differ from ``E``.
     attn_mask : Tensor, optional
-        Additive mask broadcast-compatible with ``(B, H, T, S)``.  Use
-        large negative values (or ``-inf``) at positions to mask out.
-        Mutually exclusive with ``is_causal``.
+        Mask broadcast-compatible with ``(B, H, T, S)``, in either of two
+        forms.  **Additive** (any float dtype): the values are added to
+        the scores, so use large negatives (or ``-inf``) at positions to
+        mask out.  **Boolean**: a *keep*-mask — ``True`` attends, ``False``
+        is masked out — converted internally to the additive form it
+        stands for, so the two spellings are exactly equivalent on every
+        path, fused or not.  Mutually exclusive with ``is_causal``.
     dropout_p : float, optional
         Dropout probability applied to attention weights during training.
         Default ``0.0``.
@@ -83,6 +87,20 @@ def scaled_dot_product_attention(
     (2, 8, 16, 64)
     """
     import math
+
+    import lucid as _lucid
+
+    if attn_mask is not None and attn_mask.dtype == _lucid.bool_:
+        # Normalise a boolean mask to the additive form *once*, before
+        # either path can form its own opinion about what ``True`` means.
+        # They had opposite ones: the fused kernel treated ``True`` as
+        # "mask this out", while the dropout branch below treated it as
+        # "this attends" — so the same mask inverted the moment dropout
+        # was switched on, which is a training-time flip no shape or
+        # dtype check would catch.  Keep-semantics wins because it is
+        # what this function's own branch documented and what a boolean
+        # mask conventionally means for scaled-dot-product attention.
+        attn_mask = (attn_mask.to(query.dtype) - 1.0) * 1e9
 
     if attn_mask is not None and attn_mask.ndim >= 2:
         # The engine SDPA kernels (fused and manual) mishandle a mask that is
@@ -141,11 +159,10 @@ def scaled_dot_product_attention(
             keep = lucid.tril(lucid.ones((lq, lk), device=query.device.type))
             scores = scores + (keep - 1.0) * 1e9
         if attn_mask is not None:
-            if attn_mask.dtype == lucid.bool_:
-                # Bool masks are keep-masks: True attends, False is dropped.
-                scores = scores + (attn_mask.to(scores.dtype) - 1.0) * 1e9
-            else:
-                scores = scores + attn_mask
+            # Additive unconditionally: a boolean mask was converted to
+            # this form at the top of the function, so there is one
+            # meaning of ``True`` in play rather than one per path.
+            scores = scores + attn_mask
         weights = _dropout(softmax(scores, dim=-1), p=dropout_p, training=True)
         return lucid.matmul(weights, value)
 

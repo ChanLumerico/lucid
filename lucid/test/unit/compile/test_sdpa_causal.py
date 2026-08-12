@@ -14,8 +14,9 @@ Two correctness properties are pinned here:
   2. **Additive float masks compile** — the tracer wires the auxiliary mask
      tensor into the graph (a non-differentiable SDPA input), so masked
      attention (BERT padding masks, cross-attention) compiles and adds the
-     mask before the softmax.  A bool mask, which the eager backend treats as
-     a set-mask rather than an additive one, still falls back to eager.
+     mask before the softmax.  A bool mask compiles too: it is normalised to
+     the equivalent additive mask before the tracer sees it, so there is only
+     one mask form for the emitter to handle.
 """
 
 import lucid
@@ -131,10 +132,14 @@ def test_causal_plus_mask_lets_mask_win() -> None:
     assert _maxdiff(eager, out) < 1e-5
 
 
-def test_bool_mask_falls_back_to_eager() -> None:
-    # A bool mask is a set-mask in eager (−inf where false), not an additive
-    # add — the emitter can't reproduce that with a plain add, so it bails to
-    # eager rather than emit a wrong executable.
+def test_bool_mask_compiles_like_the_additive_one() -> None:
+    # A bool mask used to reach the emitter as a *set*-mask, which it
+    # could not reproduce with a plain add, so it bailed to eager rather
+    # than emit a wrong executable.  ``scaled_dot_product_attention`` now
+    # converts bool to the equivalent additive mask up front — it had to,
+    # because the fused and dropout paths were reading ``True`` in
+    # opposite directions — so what the emitter sees is the additive form
+    # it already handles, and the fallback is no longer needed.
     class _BoolMask(nn.Module):
         def forward(
             self, q: lucid.Tensor, k: lucid.Tensor, v: lucid.Tensor, m: lucid.Tensor
@@ -147,8 +152,14 @@ def test_bool_mask_falls_back_to_eager() -> None:
     eager = m(q, k, v, bool_mask)
     cm = lucid.compile(m)
     out = cm(q, k, v, bool_mask)
-    assert cm.cache_info()["eager_only"], "bool-mask SDPA must fall back to eager"
-    assert _maxdiff(eager, out) == 0.0
+
+    assert not cm.cache_info()["eager_only"], "bool-mask SDPA no longer needs eager"
+    assert _maxdiff(eager, out) < 1e-5
+
+    # And it is the *right* answer, not merely a self-consistent one: a
+    # lower-triangular keep-mask is causal attention.
+    causal = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+    assert _maxdiff(causal, out) < 1e-5
 
 
 def test_multihead_attention_causal_compiles() -> None:

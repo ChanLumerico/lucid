@@ -246,6 +246,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - refuse the shapes lstsq and householder_product cannot compute
 
+- one meaning for a bool attn_mask, whichever path runs
+
 ### Changed
 
 - give the engine ops one shared operand check
