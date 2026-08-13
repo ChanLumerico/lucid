@@ -25,6 +25,7 @@ import numpy as np
 import lucid
 import lucid.fft
 import lucid.linalg
+import lucid.nn.utils.rnn
 from lucid.test.audit import _probe
 
 if TYPE_CHECKING:
@@ -598,6 +599,52 @@ def _matmul(name: str, domain: str) -> "Iterator[Call]":
         yield Call([mat, other], {}, 0, "matmul(a, b)")
 
 
+def _sequences(name: str, domain: str) -> "Iterator[Call]":
+    """Ops whose argument is a *list* of tensors, not a tensor.
+
+    The signature says ``list[Tensor]`` and the autospec builds one
+    tensor, so every one of these reported "no argument shape worked" or
+    "no dtype accepted" — a refusal the probe had provoked.  ``primary``
+    stays 0 even though args[0] is a list: the numeric axes read
+    ``Call.base`` and get a TypeError, which they already treat as
+    "nothing to differentiate here".
+    """
+    if name == "multi_dot":
+        yield Call(
+            [[_f((4, 3), domain), _f((3, 5), domain), _f((5, 2), domain)]],
+            {},
+            0,
+            "multi_dot([A, B, C])",
+        )
+        return
+    # pad_sequence / pack_sequence / pad_packed_sequence want *ragged*
+    # sequences; equal lengths would make the padding a no-op.
+    seqs = [_f((5, _CIN), domain), _f((3, _CIN), domain), _f((2, _CIN), domain)]
+    if name == "pad_sequence":
+        yield Call([seqs], {"batch_first": True}, 0, "pad_sequence(ragged)")
+        yield Call([seqs], {}, 0, "pad_sequence(ragged) defaults")
+    elif name == "pack_sequence":
+        yield Call([seqs], {"enforce_sorted": True}, 0, "pack_sequence(sorted)")
+    elif name == "pad_packed_sequence":
+        packed = lucid.nn.utils.rnn.pack_sequence(seqs, enforce_sorted=True)
+        yield Call([packed], {"batch_first": True}, 0, "pad_packed_sequence(packed)")
+
+
+def _fused_linear(name: str, domain: str) -> "Iterator[Call]":
+    """``fused_linear_*`` takes the three operands a Linear layer holds."""
+    x = _f((_N, _CIN), domain)
+    w = _f((_COUT, _CIN), domain)
+    b = _f((_COUT,), domain)
+    yield Call([x, w, b], {}, 0, "fused_linear(x, weight, bias)")
+
+
+def _unfold(name: str, domain: str) -> "Iterator[Call]":
+    """``unfold`` is im2col — a 4-D image and a kernel size."""
+    x = _f((_N, _CIN, _H, _W), domain)
+    yield Call([x, 3], {"padding": 1}, 0, "unfold(x, 3, padding=1)")
+    yield Call([x, (3, 3)], {}, 0, "unfold(x, (3,3))")
+
+
 def _linalg_extra(name: str, domain: str) -> "Iterator[Call]":
     """Decompositions, each with the matrix property it requires."""
     n = 4
@@ -899,6 +946,18 @@ _FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
         r"matrix_power|lu|lu_factor|lu_solve|ldl_factor|ldl_solve|solve|"
         r"solve_triangular|lstsq|householder_product|vander)$",
         _linalg_extra,
+    ),
+    (
+        r"^(multi_dot|pad_sequence|pack_sequence|pad_packed_sequence)$",
+        _sequences,
+    ),
+    (
+        r"^fused_linear_(relu|gelu)$",
+        _fused_linear,
+    ),
+    (
+        r"^unfold$",
+        _unfold,
     ),
     (
         r"^i?(rfft|hfft|fft)[2n]?$|^ifft[2n]?$|^irfft[2n]?$|^ihfft[2n]?$|"
