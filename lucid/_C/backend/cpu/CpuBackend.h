@@ -5738,6 +5738,12 @@ public:
                                       Dtype dt) override {
         if (dt != Dtype::F32 && dt != Dtype::F64)
             ErrorBuilder("cpu_backend::linalg_lstsq").not_implemented("only F32/F64");
+        // Rank first: ``a_shape.size() - 2`` is unsigned, so a rank-1 A wraps to a
+        // colossal index, reads past the shape, and hands the garbage on as ``m`` —
+        // which then sizes every buffer here.  Seen as both a 1.8e19-byte allocation
+        // request and a SIGSEGV, depending on what the garbage happened to be.
+        if (a_shape.size() < 2)
+            ErrorBuilder("cpu_backend::linalg_lstsq").fail("A must be at least 2-D");
         const auto& a_cpu = std::get<CpuStorage>(a);
         const auto& b_cpu = std::get<CpuStorage>(b);
         const int m = static_cast<int>(a_shape[a_shape.size() - 2]);
@@ -5749,6 +5755,13 @@ public:
         std::size_t a_nb = static_cast<std::size_t>(m) * n * dtype_size(dt);
         std::size_t b_nb = static_cast<std::size_t>(ldb) * nrhs * dtype_size(dt);
         auto a_ptr = allocate_aligned_bytes(a_nb, Device::CPU);
+        // The copy below takes ``m`` rows out of B without asking how many B has.
+        // When B was shorter the read ran off the end — returning a plausible answer
+        // whenever it landed on mapped memory, and segfaulting inside ``memmove``
+        // when it did not.
+        if (b_cpu.nbytes < static_cast<std::size_t>(m) * nrhs * dtype_size(dt))
+            ErrorBuilder("cpu_backend::linalg_lstsq").fail("B has fewer rows than A");
+
         auto b_ptr = allocate_aligned_bytes(b_nb, Device::CPU);
         std::memset(b_ptr.get(), 0, b_nb);  // zero-pad to max(m,n)
 
@@ -5826,6 +5839,12 @@ public:
                                        Dtype dt) override {
         if (dt != Dtype::F32 && dt != Dtype::F64)
             ErrorBuilder("cpu_backend::linalg_householder_product").not_implemented("only F32/F64");
+        // Same unsigned wrap as ``linalg_lstsq``: a rank-1 H indexed at
+        // ``size() - 2`` reads past the shape, and what it finds becomes the row
+        // count every buffer here is sized from.
+        if (h_shape.size() < 2)
+            ErrorBuilder("cpu_backend::linalg_householder_product")
+                .fail("H must be at least 2-D");
         const auto& h_cpu = std::get<CpuStorage>(H);
         const auto& tau_cpu = std::get<CpuStorage>(tau);
         const int m = static_cast<int>(h_shape[h_shape.size() - 2]);

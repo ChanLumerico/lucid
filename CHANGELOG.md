@@ -250,6 +250,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - one meaning for a bool attn_mask, whichever path runs
 
+- check rank before it becomes a buffer size
+
 ### Changed
 
 - give the engine ops one shared operand check
