@@ -638,13 +638,6 @@ def _fused_linear(name: str, domain: str) -> "Iterator[Call]":
     yield Call([x, w, b], {}, 0, "fused_linear(x, weight, bias)")
 
 
-def _unfold(name: str, domain: str) -> "Iterator[Call]":
-    """``unfold`` is im2col — a 4-D image and a kernel size."""
-    x = _f((_N, _CIN, _H, _W), domain)
-    yield Call([x, 3], {"padding": 1}, 0, "unfold(x, 3, padding=1)")
-    yield Call([x, (3, 3)], {}, 0, "unfold(x, (3,3))")
-
-
 def _linalg_extra(name: str, domain: str) -> "Iterator[Call]":
     """Decompositions, each with the matrix property it requires."""
     n = 4
@@ -954,10 +947,6 @@ _FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
     (
         r"^fused_linear_(relu|gelu)$",
         _fused_linear,
-    ),
-    (
-        r"^unfold$",
-        _unfold,
     ),
     (
         r"^i?(rfft|hfft|fft)[2n]?$|^ifft[2n]?$|^irfft[2n]?$|^ihfft[2n]?$|"

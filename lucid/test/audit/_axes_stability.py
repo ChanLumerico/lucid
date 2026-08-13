@@ -591,16 +591,121 @@ class DeterminismAxis(Axis):
         return self._finding(symbol, Status.SKIP, "no candidate invocation ran")
 
 
+class RankAxis(Axis):
+    """A rank the op cannot use must be refused, not answered.
+
+    Every crash this suite has had came from the same place, and neither
+    was reported as a crash the first time it happened:
+
+        householder_product(H(4,), tau(4,))  ->  Q(0, 0)
+        lstsq(A(4,), B(4,))                  ->  1.8e19 bytes requested
+        lstsq(A(6,3), B(2,2))                ->  (3, 2), six rows read out of two
+
+    The C++ backends take ``m`` from ``shape[shape.size() - 2]``.  That
+    subtraction is unsigned, so a rank-1 input wraps it, reads past the
+    shape, and the value it finds becomes the size every buffer in the
+    function is allocated and copied at.  When the resulting over-read
+    lands on mapped memory the op **returns a plausible answer**; when it
+    does not, the process dies.  Thirty-six sites index a shape that way.
+
+    So this axis degrades the rank of a working call's primary tensor and
+    asks for one of two outcomes:
+
+    * **refused** — an exception, which is the correct answer and by far
+      the most common one; or
+    * **answered consistently** — a result whose element count is not
+      absurd for the input it was given.
+
+    What it will not accept is the third outcome: an answer that is
+    *empty or degenerate* while the input was not.  That is the shape of
+    a size computed from a wrapped index, and it is the half of this bug
+    that does not announce itself.
+
+    A crash is not caught here — it takes the process with it — but the
+    gate reports a stage that died as a stage that died, so the sweep
+    ending inside this axis is itself the signal.
+    """
+
+    name = "rank"
+    summary = "an unusable rank is refused, not answered with a degenerate result"
+    kinds = frozenset({"op", "method"})
+
+    def applies(self, symbol: "Symbol") -> bool:
+        return super().applies(symbol) and "stochastic" not in symbol.flags
+
+    def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+        fn = _surface.resolve(symbol)
+        if fn is None:
+            return self._finding(symbol, Status.SKIP, "not resolvable")
+        call, _, why = self._working_call(fn, symbol, ctx)
+        if call is None:
+            return self._no_call(symbol, why)
+        try:
+            base = call.base
+        except TypeError:
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                "the varied argument is not a tensor — no rank to reduce",
+            )
+        if base.ndim < 2:
+            return self._finding(
+                symbol,
+                Status.NOT_APPLICABLE,
+                f"already rank {base.ndim} — nothing to take away",
+            )
+
+        # Flatten to rank 1, keeping every element.  A reduced *shape*
+        # rather than a reduced *size* is the point: the values are all
+        # still there, so an op that legitimately accepts rank 1 can go
+        # on computing, and only the shape arithmetic changes.
+        flat = base.reshape(-1)
+        try:
+            args = list(call.with_primary(flat).args)
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol, Status.SKIP, f"could not rebuild the call: {exc!r}"
+            )
+
+        try:
+            out = fn(*args, **call.kwargs)
+        except Exception as exc:  # noqa: BLE001
+            return self._finding(
+                symbol,
+                Status.PASS,
+                f"rank {base.ndim} -> 1 refused: {type(exc).__name__}",
+            )
+
+        got = _probe.to_numpy(out)
+        if got is None:
+            return self._finding(
+                symbol, Status.PASS, "answered with something not readable as an array"
+            )
+        if got.size == 0 and flat.size != 0:
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                f"rank {base.ndim} -> 1 was accepted and returned an empty "
+                f"{tuple(got.shape)} from a {flat.size}-element input — the "
+                f"size was computed from a shape index that wrapped",
+            )
+        return self._finding(
+            symbol, Status.PASS, f"rank {base.ndim} -> 1 answered {tuple(got.shape)}"
+        )
+
+
 STABILITY_AXES: tuple[Axis, ...] = (
     StabilityAxis(),
     ExtremeValueAxis(),
     ContiguityAxis(),
+    RankAxis(),
     DeterminismAxis(),
 )
 
 __all__ = [
     "STABILITY_AXES",
     "ContiguityAxis",
+    "RankAxis",
     "DeterminismAxis",
     "ExtremeValueAxis",
     "StabilityAxis",
