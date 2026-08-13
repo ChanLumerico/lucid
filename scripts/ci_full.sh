@@ -88,6 +88,25 @@ echo "==> H4 numpy guard (sanctioned bridge files only)"
 echo "==> Model-zoo family contract"
 "$PYTHON_BIN" -m tools.validate_model_zoo --runtime
 
+# Model summaries — the layer tree and parameter count the docs site renders
+# per factory.  ``validate_model_zoo`` checks the *declared* ``params=`` against
+# what a factory actually builds, and passes; it never looks at this cache, and
+# neither does the api-data drift gate, which only hashes the Griffe slugs.  So
+# nothing tied web/public/api-data/_summaries.json to the code, and it drifted
+# unseen: by 2026-08-14 it was missing 5 factories, still listed 3 that had been
+# deleted, and had the wrong parameter count for dozens — efficientdet_d7 read
+# 16.1M against a real 74.3M.  A rebuild is ~1 min because the shadow path never
+# allocates real storage, so just do it and require the result to be committed.
+echo "==> Model summaries (docs layer trees)"
+"$PYTHON_BIN" -m tools.build_model_summaries --force >/dev/null
+if ! git diff --quiet -- web/public/api-data/_summaries.json; then
+    echo "  ✗ _summaries.json is stale — regenerated output differs from the commit." >&2
+    echo "    Run: python -m tools.build_model_summaries --force  and commit the result." >&2
+    git --no-pager diff --stat -- web/public/api-data/_summaries.json >&2
+    exit 1
+fi
+echo "  ✓ summaries match the current factories"
+
 # ── 8. Build tools ────────────────────────────────────────────────────────────
 echo "==> Compile commands"
 ./scripts/build_compile_commands.sh

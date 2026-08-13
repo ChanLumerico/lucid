@@ -260,6 +260,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - validate rank before indexing a shape with it
 
+- rebuild the model summaries, and gate them so they cannot drift again
+
 ### Changed
 
 - give the engine ops one shared operand check
