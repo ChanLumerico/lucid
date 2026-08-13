@@ -2350,16 +2350,16 @@ class MultiScaleResolution:
 
     Notes
     -----
-    Expect the loss to move with the resolution.  ``_compute_loss`` sums
-    squared errors over cells rather than averaging — deliberately, because
-    that is what darknet's region layer does and what ``lambda_noobj``
-    is calibrated against — so the number of terms grows with the grid.
-    On a fixed two-image batch the loss measured 69.9 at 320x320, 115.8 at
-    416x416 and 239.3 at 608x608: a 3.4x swing across the schedule, tracking
-    the cell count (500 / 845 / 1805) almost exactly.  Gradient magnitudes
-    swing with it, so a learning rate tuned at one end of the range will be
-    off at the other; scale the rate by the batch's cell count if that
-    matters for your run.
+    The YOLOv2 loss used to make this schedule unusable on its own: the
+    objectness term is evaluated at every cell and was summed raw, so the
+    total tracked the cell count almost exactly — 69.9 at 320x320 against
+    239.3 at 608x608 on a fixed batch, a 3.4x swing that no single learning
+    rate can serve.  ``_compute_loss`` now divides the objectness pair by
+    the cell count and the localisation terms by the positive count, which
+    leaves the obj/noobj ratio ``lambda_noobj`` sets untouched and takes the
+    grid out of the total.  Measured as ``loss / cells``, the spread across
+    the schedule went from 1.05x — near-constant, which is what proportional
+    means — to 5.9x.
 
     Examples
     --------

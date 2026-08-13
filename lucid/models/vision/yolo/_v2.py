@@ -782,7 +782,23 @@ class YOLOV2ForObjectDetection(PretrainedModel):
             loss_conf_n = ln * _mean_or_zero(conf_noobj)
             loss_cls = _mean_or_zero(cls_terms)
 
-            img_loss: Tensor = loss_xy + loss_wh + loss_conf_o + loss_conf_n + loss_cls
+            # Two denominators, not five.  The comment above rules out giving
+            # each group its own divisor, because ``conf_noobj``'s would be
+            # ~S²·A while ``conf_obj``'s would be the object count, and the
+            # ratio between those two is precisely what ``lambda_noobj``
+            # exists to set.  Dividing the pair by the *same* count leaves
+            # that ratio alone — as it does for ``lambda_coord`` across the
+            # localisation terms — while removing the grid size from the
+            # total.  Without this the loss tracks the cell count almost
+            # exactly (69.9 at 320², 239.3 at 608² on a fixed batch), so no
+            # single learning rate serves the multi-scale schedule the paper
+            # trains with.  This is what YOLOv3 does; v2 predates it.
+            n_pos = max(1.0, float(len(xy_terms) // 2))
+            n_cells = float(fH * fW * A)
+
+            img_loss: Tensor = (loss_xy + loss_wh + loss_cls) / n_pos + (
+                loss_conf_o + loss_conf_n
+            ) / n_cells
             loss_parts.append(img_loss.reshape(1))
 
         return lucid.cat(loss_parts).mean()

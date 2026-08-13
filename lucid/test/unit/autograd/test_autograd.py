@@ -491,3 +491,90 @@ class TestCheckpointMultiOutput:
 
         assert direct.grad is not None and saved.grad is not None
         np.testing.assert_allclose(saved.grad.numpy(), direct.grad.numpy(), atol=1e-6)
+
+
+class TestCheckpointNonReentrant:
+    """``use_reentrant=False`` — the mode that keeps closed-over parameters
+    in the graph.
+
+    The reentrant form takes the output's ``requires_grad`` from its
+    positional inputs.  Feed it constants — raw data into a first layer, a
+    block behind a frozen stem — and backward never runs, so the segment is
+    never recomputed and the parameters it closed over get no gradient at
+    all.  Nothing raises; the layer simply stops training.
+    """
+
+    @staticmethod
+    def _run(use_reentrant: bool | None):
+        import lucid.nn as nn
+        from lucid.autograd import checkpoint
+
+        lucid.manual_seed(0)
+        layer = nn.Linear(3, 3)
+        x = lucid.randn(2, 3)  # deliberately not requiring grad
+        if use_reentrant is None:
+            out = layer(x)
+        else:
+            out = checkpoint(lambda t: layer(t), x, use_reentrant=use_reentrant)
+        out.sum().backward()
+        grad = layer.weight.grad
+        return None if grad is None else np.asarray(grad.numpy())
+
+    def test_closed_over_parameters_still_get_gradients(self) -> None:
+        direct = self._run(None)
+        non_reentrant = self._run(False)
+        assert non_reentrant is not None
+        assert np.allclose(non_reentrant, direct, atol=1e-6)
+
+    def test_the_reentrant_default_still_behaves_as_it_did(self) -> None:
+        """Recorded, not endorsed.  Changing the default would silently
+        alter existing training runs, so the old behaviour stays reachable
+        and this pins it."""
+        assert self._run(True) is None
+
+    def test_it_matches_the_reentrant_result_when_inputs_do_require_grad(
+        self,
+    ) -> None:
+        from lucid.autograd import checkpoint
+
+        def block(t):
+            return (t * t).sum()
+
+        grads = []
+        for reentrant in (True, False):
+            x = lucid.tensor([[1.0, -2.0]], requires_grad=True)
+            checkpoint(block, x, use_reentrant=reentrant).backward()
+            grads.append(np.asarray(x.grad.numpy()))
+        assert np.allclose(grads[0], grads[1], atol=1e-6)
+        assert np.allclose(grads[0], [[2.0, -4.0]], atol=1e-6)
+
+    def test_the_anchor_does_not_change_the_value(self) -> None:
+        """Non-reentrant mode passes an extra scalar the segment never
+        reads; the output must be identical either way."""
+        from lucid.autograd import checkpoint
+
+        def block(t):
+            return t * 3.0 + 1.0
+
+        x = lucid.tensor([[1.0, -2.0]], requires_grad=True)
+        a = checkpoint(block, x, use_reentrant=True)
+        b = checkpoint(block, x, use_reentrant=False)
+        assert np.allclose(np.asarray(a.numpy()), np.asarray(b.numpy()))
+
+    def test_a_segment_returning_a_scalar_can_be_checkpointed(self) -> None:
+        """Pre-existing, and not specific to either mode.
+
+        ``Function`` seeds a 0-d output's gradient as shape ``(1,)`` — fine
+        for an ordinary backward, which broadcasts — but ``checkpoint``
+        handed that seed to ``Tensor.backward``, which checks the shape
+        exactly.  Any segment ending in a reduction (a loss block, a pooled
+        embedding) raised instead of running.
+        """
+        from lucid.autograd import checkpoint
+
+        for reentrant in (True, False):
+            x = lucid.tensor([[1.0, -2.0]], requires_grad=True)
+            out = checkpoint(lambda t: (t * t).sum(), x, use_reentrant=reentrant)
+            assert tuple(out.shape) == ()
+            out.backward()
+            assert np.allclose(np.asarray(x.grad.numpy()), [[2.0, -4.0]], atol=1e-6)

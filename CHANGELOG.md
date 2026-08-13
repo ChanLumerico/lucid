@@ -256,6 +256,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - stop quantization dropping the padding spec; open up polygamma
 
+- checkpoint a segment whose inputs are constants, or a scalar
+
 ### Changed
 
 - give the engine ops one shared operand check

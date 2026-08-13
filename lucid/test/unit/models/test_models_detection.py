@@ -1474,6 +1474,48 @@ class TestYOLOV2MultiScale:
             out = model(x)
             assert int(out.pred_boxes.shape[1]) == (side // 32) ** 2 * 5
 
+    def test_loss_is_not_proportional_to_the_grid(self) -> None:
+        """Multi-scale training is unusable if the loss tracks the grid.
+
+        The objectness term is evaluated at every cell, so summing it raw
+        made the total scale with resolution — 69.9 at 320, 239.3 at 608 —
+        and no single learning rate serves both ends of the schedule.
+        Dividing the objectness pair by the cell count and the localisation
+        terms by the positive count removes that, without touching the
+        obj/noobj ratio that ``lambda_noobj`` exists to set.
+
+        Stated as ``loss / cells``: it used to be near-constant across
+        resolutions, which is exactly what proportional means.
+        """
+        import lucid.nn.functional as F
+        from lucid.models.vision.yolo import YOLOV2ForObjectDetection
+        from lucid.models.vision.yolo._v2 import YOLOV2Config
+
+        lucid.manual_seed(0)
+        model = YOLOV2ForObjectDetection(YOLOV2Config(num_classes=4))
+        base = lucid.randn(2, 3, 416, 416)
+        targets = [
+            {
+                "boxes": lucid.tensor([[0.2, 0.2, 0.6, 0.7]]),
+                "labels": lucid.tensor([1]).long(),
+            },
+            {
+                "boxes": lucid.tensor([[0.1, 0.3, 0.4, 0.9]]),
+                "labels": lucid.tensor([2]).long(),
+            },
+        ]
+
+        per_cell = []
+        for side in (320, 416, 608):
+            x = F.interpolate(
+                base, size=(side, side), mode="bilinear", align_corners=False
+            )
+            out = model(x, targets=targets)
+            assert out.loss is not None
+            per_cell.append(float(out.loss.item()) / ((side // 32) ** 2 * 5))
+
+        assert max(per_cell) / min(per_cell) > 3.0, per_cell
+
     def test_training_path_is_live_off_the_default_resolution(self) -> None:
         import lucid.nn.functional as F
         from lucid.models.vision.yolo import YOLOV2ForObjectDetection
