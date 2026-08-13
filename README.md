@@ -1,8 +1,8 @@
-# Lucid³
-
 <div align="center">
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=16&pause=1000&color=FFFFFF&center=true&vCenter=true&width=435&height=30&lines=A+Deep+Learning+Framework+Built+From+Scratch" alt="Typing SVG"/>
+# Lucid³
+
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=16&pause=1200&color=FFFFFF&center=true&vCenter=true&width=620&height=30&lines=Deep+Learning+Framework+Built+From+Scratch+For+Apple+Silicon" alt="Typing SVG"/>
 
 <br>
 
@@ -11,422 +11,311 @@
 [![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads)](https://pepy.tech/projects/lucid-dl)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-234222-purple)
+![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-234431-purple)
+
+**[Documentation](https://chanlumerico.github.io/lucid/)** ·
+**[Model Zoo](https://chanlumerico.github.io/lucid/)** ·
+**[Hugging Face](https://huggingface.co/ChanLumerico/lucid)** ·
+**[Changelog](CHANGELOG.md)** ·
+**[Contributing](CONTRIBUTING.md)**
 
 </div>
 
-**Lucid** is a production-grade machine learning framework built for Apple Silicon. It exposes a PyTorch-compatible Python API backed by a custom C++ engine that runs natively on Apple's hardware stack — MLX on GPU and Apple Accelerate on CPU — with no NumPy dependency in its compute paths.
-
-Version 3.0 is a complete rewrite. The Python-layer minimalism of earlier releases is preserved at the API surface, but underneath sits a fully engineered C++ engine with a typed exception hierarchy, a memory pool, determinism and thread-safety contracts, op fusion, and a direct Metal shader escape hatch. The result is a framework that is simultaneously a clean learning resource and a platform capable of running real training workloads on Apple Silicon hardware.
-
-[📑 Documentation](https://chanlumerico.github.io/lucid/) | [🤗 Hugging Face](https://huggingface.co/ChanLumerico/lucid) | [📋 Changelog](CHANGELOG.md)
-
 ---
 
-## 🚀 What's New in 3.0
+Lucid is a deep learning framework for Apple Silicon, written from scratch. It gives you a
+familiar Python API on top of a custom C++ engine that talks directly to Apple's hardware
+stack — MLX on the GPU, Accelerate on the CPU — with no NumPy anywhere in the compute path.
 
-### ⚙️ Complete C++ engine rewrite
+It started as a framework you could read end to end, and it still is. What changed in 3.0 is
+that it also became one you can train with: a rewritten C++ engine, 260+ registered ops,
+mixed precision, an op-level profiler, and **hundreds of model implementations**, each one
+built from its paper.
 
-The entire numerical backend has been rewritten in C++ under a new layered architecture with clean interfaces and enforced dependency rules between each layer. A CI check validates the layer graph on every commit; a violation fails the build.
+```python
+import lucid
+import lucid.nn as nn
+import lucid.optim as optim
 
-The engine now contains **260+ ops** across unary, binary, reduction, shape, indexing, convolution, pooling, attention, and BLAS families. Every op carries a name, version, AMP policy, and determinism flag, enabling checkpoint compatibility across releases.
+model = nn.Sequential(nn.Linear(784, 256), nn.ReLU(), nn.Linear(256, 10)).to("metal")
+opt = optim.Adam(model.parameters(), lr=1e-3)
 
-### 📦 New Python sub-packages
+x = lucid.randn(64, 784, device="metal")
+y = lucid.randn(64, 10, device="metal")
 
-| Package | Functions | Notes |
-|---------|-----------|-------|
-| `lucid.fft` | 22 | Full DFT surface: `fft`/`ifft`/`rfft`/`irfft`, 2D + N-D variants, Hermitian forms, `fftshift`/`fftfreq` |
-| `lucid.signal.windows` | 12 | Bartlett, Blackman, Gaussian, Kaiser, Nuttall, Hann, Hamming, and more |
-| `lucid.special` | 38 | Error functions, Bessel, gamma, digamma, polygamma, Hurwitz ζ, orthogonal polynomials |
-| `lucid.distributions` | 33 distributions + 16 transforms | Full `Distribution` base, constraints, KL registry, 20 analytical KL pairs, MC fallback |
-| `lucid.linalg` | 38 | Decompositions (QR, SVD, Cholesky, Eigh, LU), norms, solvers, `matrix_exp` |
-| `lucid.metal` | — | `lucid.metal.run_kernel` — Metal shader escape hatch for custom GPU kernels |
+for _ in range(200):
+    loss = nn.functional.mse_loss(model(x), y)
+    loss.eval()                 # flush MLX's lazy graph before backward
 
-### 🔌 NumPy-free core (NumPy bundled for convenience)
+    opt.zero_grad()
+    loss.backward()
+    opt.step()
 
-Lucid's **engine is a standalone binary**: no compute path imports NumPy (Hard Rule H4), so `import lucid` and the full forward + backward + optimizer + native `save`/`load` lifecycle run without NumPy in the loop. NumPy is nonetheless **bundled as a default dependency** so `pip install lucid-dl` gives you the full training + interop experience out of the box — it backs only the explicit user-facing bridge boundaries: tensor conversion, `.numpy()`, `from_numpy`, DLPack interop, bf16/complex tensor construction, portable optimizer-state checkpoints, and the DataLoader array-ingest path. The engine still runs without it; the dependency is a UX convenience, not an architectural one.
-
-### 🏛️ Production pillars
-
-Nine production-grade capabilities that ship as first-class features rather than afterthoughts:
-
-| # | Pillar | Entry point |
-|---|--------|-------------|
-| P1 | Typed exception hierarchy | `LucidError` + 8 subclasses |
-| P2 | Memory accounting | `lucid.memory_stats(device)` |
-| P3 | Determinism contract | `lucid.set_deterministic(True)` |
-| P4 | Thread-safety | forward is thread-safe; backward is single-threaded per root |
-| P5 | Sanitizer-clean builds | `LUCID_BUILD_MODE=debug-asan` / `debug-ubsan` |
-| P6 | OpSchema versioning | Checkpoint forward-compatibility |
-| P7 | Mixed precision | `lucid.amp.autocast` + `GradScaler` |
-| P8 | Op-level profiler | `with lucid.profiler() as p: …` |
-| P9 | Inference-only C ABI | `liblucid_infer.dylib` |
-
-### ⚡ Op fusion
-
-`lucid.nn.functional.fused_linear_relu`, `fused_linear_gelu`, and `nn.FusedLinear` dispatch to a fused kernel during inference and fall back to standard autograd during training, with no API-level branching required.
-
-### 🔄 Zero-copy CPU↔GPU transfers
-
-CPU↔GPU transfers for tensors above 64 KB avoid an intermediate copy using a shared memory abstraction. Transfers under the threshold use the fast private upload path.
-
----
-
-## 🏗️ System Architecture
-
-### 🔢 Layer stack
-
-```
-┌────────────────────────────────────────────────────┐
-│  Python public API                                  │
-│    lucid.*  /  lucid.nn.*  /  lucid.optim.*         │
-├────────────────────────────────────────────────────┤
-│  Python composite & dispatch layer                  │
-│    Pure-Python ops + op registry + type boundary    │
-├────────────────────────────────────────────────────┤
-│  pybind11 boundary                                  │
-├────────────────────────────────────────────────────┤
-│  C++ engine                                         │
-│    Tensor  —  storage, views, dtype, device         │
-│    Autograd  —  dynamic graph, backward engine      │
-│    Ops  —  260+ kernels across all op families      │
-│    CPU backend  —  Accelerate (BLAS/LAPACK/vDSP)    │
-│    GPU backend  —  MLX + Metal                      │
-└────────────────────────────────────────────────────┘
+print(f"loss: {loss.item():.4f}")
 ```
 
-### 🖥️ Backend design
-
-Lucid enforces a strict backend bifurcation:
-
-| Stream | Backend | Rationale |
-|--------|---------|-----------|
-| CPU | Apple Accelerate (vDSP / vForce / BLAS / LAPACK) | Native arm64 SIMD; no framework overhead |
-| GPU | MLX | Unified memory; lazy evaluation; Metal under the hood |
-| `lucid.linalg` on CPU | MLX (exception) | MLX is itself CPU-backed here; avoids duplicating LAPACK wrappers |
-| Data-dependent output shapes | CPU round-trip | Unavoidable when output size is unknown at graph-build time |
-
-The two backends never mix within a single op.
-
-### 🔁 Autograd engine
-
-Lucid implements **reverse-mode automatic differentiation** with a dynamic computation graph. Each op records what it needs to compute gradients, applies the chain rule on the backward pass, and propagates results to parent tensors.
-
-The backward pass is single-threaded per root call; the forward pass is thread-safe. Higher-order differentiation (Jacobians, VJPs, JVPs, `gradcheck`, `gradgradcheck`) is supported in `lucid.autograd`.
-
-### 👁️ View semantics
-
-View ops — `reshape`, `permute`, `transpose`, `slice` — are metadata-only. They share the underlying storage with the source tensor and allocate zero bytes. Zero-copy CPU↔GPU transfers extend this model across devices for tensors above 64 KB.
-
----
+> **One Apple-Silicon-specific habit.** MLX defers execution until a value is needed, so call
+> `.eval()` on the loss before `backward()`. Without it the deferred graph grows unbounded and
+> throughput degrades. This is the only place the lazy backend leaks into your training loop.
 
 ## 📦 Installation
 
-### 📥 Stable release
-
 ```bash
-pip install lucid-dl            # core + NumPy bundled — full training & interop
-pip install lucid-dl[models]    # + safetensors, for pretrained-weight download
+pip install lucid-dl              # everything you need to train
+pip install lucid-dl[models]      # + safetensors, for pretrained weights
 ```
 
-`pip install lucid-dl` already pulls in NumPy, so tensor↔NumPy conversion, DLPack interop, bf16 tensors, optimizer checkpoints, and the DataLoader all work out of the box. Add the `[models]` extra only if you want to load pretrained weights (the `.safetensors` format).
-
-### 🛠️ Development install (from source)
-
-```bash
-git clone https://github.com/ChanLumerico/lucid.git
-cd lucid
-pip install -e ".[dev]"
-```
-
-The C++ engine is compiled automatically via `scikit-build-core` + CMake + Ninja. Requires Xcode Command Line Tools.
-
-### 🔧 Optional extras
-
-```bash
-pip install lucid-dl[models]  # safetensors — pretrained weights / .safetensors
-pip install lucid-dl[numpy]   # no-op alias (numpy is already a base dependency)
-pip install lucid-dl[test]    # pytest + pytest-benchmark + numpy + safetensors
-pip install lucid-dl[dev]     # ruff + mypy + numpy (contributor tooling)
-```
-
-The reference framework for parity tests is **not** declared as a dependency — install it separately if you need `pytest -m parity`.
-
-### ⚡ GPU (Metal / MLX)
-
-GPU support is built-in on Apple Silicon. No separate install is needed — MLX is linked into the engine at build time. Verify your setup:
+GPU support needs no separate step — MLX is linked into the engine at build time.
 
 ```python
 import lucid
 
 x = lucid.ones((4, 4), device="metal")
-print(x.device)   # metal
-print(lucid.backends.metal.is_available())  # True
+print(x.device.type)   # metal
 ```
 
----
+From source, the C++ engine builds automatically through scikit-build-core + CMake + Ninja
+(Xcode Command Line Tools required):
 
-## ⚡ Quick Start
+```bash
+git clone https://github.com/ChanLumerico/lucid.git && cd lucid
+pip install -e ".[dev]"
+```
 
-### 🔢 Tensors and autograd
+## ✨ Why Lucid
+
+**It reads like PyTorch.** `Tensor`, `nn.Module`, `optim`, `state_dict` — the surface is
+deliberately familiar, so what you already know transfers. Where Lucid diverges from the
+reference implementation, the divergence is written down next to the code with the measured
+difference, not quietly smoothed over.
+
+**The engine is genuinely standalone.** No compute path imports NumPy. `import lucid`, the
+forward and backward passes, the optimizer step, and native `save`/`load` all run without it.
+NumPy ships as a dependency purely so `.numpy()`, DLPack, and the DataLoader work out of the
+box — a convenience at the boundary, not a load-bearing part of the architecture.
+
+**Two backends, never mixed.** CPU is Apple Accelerate; GPU is MLX. No op crosses between
+them — each backend is a complete implementation in its own right.
+
+**Batteries you actually reach for.** Mixed precision, an op-level profiler, determinism and
+memory-accounting switches, and checkpoints that stay readable across releases — all
+first-class, none bolted on.
+
+## 🦁 The Model Zoo
+
+Several hundred factories across fifty-odd families, each implemented from its paper rather
+than ported. Every factory declares its parameter count, and CI rebuilds each model to check
+the declaration against what the code actually constructs — so the numbers on the docs site
+are derived, never typed in.
 
 ```python
-import lucid
+from lucid.models import create_model, list_models
 
-# Create a tensor on GPU with gradient tracking
-x = lucid.randn(3, 4, device="metal", requires_grad=True)
-
-# Forward pass — builds computation graph automatically
-y = (x ** 2).sum()
-
-# Backward pass — populates x.grad
-y.backward()
-print(x.grad)   # shape (3, 4) — d(sum(x^2))/dx = 2x
+list_models(task="object-detection")             # browse what's registered
+model = create_model("resnet_50", num_classes=10)
 ```
 
-### 🏋️ Training a neural network
+Pretrained weights download on demand, the way you'd expect from torchvision or the Hub — the
+`.safetensors` file is fetched, cached, and loaded in one call:
 
 ```python
-import lucid
-import lucid.nn as nn
-import lucid.nn.functional as F
-import lucid.optim as optim
+from lucid.models import create_model
+from lucid.weights import list_pretrained
 
-class MLP(nn.Module):
-    def __init__(self, in_features: int, hidden: int, out_features: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(in_features, hidden)
-        self.fc2 = nn.Linear(hidden, out_features)
+list_pretrained("resnet_50_cls")                     # ['IMAGENET1K_V1']
+model = create_model("resnet_50_cls", pretrained=True)
 
-    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
-        return self.fc2(F.relu(self.fc1(x)))
-
-model = MLP(784, 256, 10).to("metal")
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
-
-X = lucid.randn(64, 784, device="metal")
-Y = lucid.randn(64, 10, device="metal")
-
-for step in range(200):
-    loss = F.mse_loss(model(X), Y)
-    loss.eval()            # flush MLX lazy graph before backward
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-print(f"final loss: {loss.item():.4f}")
+# or straight from the family, if you prefer the explicit import
+from lucid.models.vision.resnet import resnet_50_cls
+model = resnet_50_cls(pretrained=True)
 ```
 
-> **MLX lazy evaluation.** MLX defers execution until a value is needed. Call `.eval()` on the loss after the forward pass to flush the accumulated GPU graph before `backward()`. Skipping this can cause unbounded graph growth and degraded performance.
+Weights live on the task-head factories — `resnet_50` is the backbone, `resnet_50_cls` is the
+classifier that has a checkpoint. Asking a backbone for `pretrained=True` tells you which
+factory to use instead of quietly handing back random weights. Needs the `[models]` extra.
 
-### 🎚️ Mixed precision training
+| Domain | Families |
+|---|---|
+| Image classification | LeNet, AlexNet, ZFNet, VGG, GoogLeNet, Inception v3, Inception-ResNet, Xception, ResNet, ResNeXt, ResNeSt, SE-ResNet, SK-ResNet, DenseNet, MobileNet v1–v3, EfficientNet, ConvNeXt, CSPNet |
+| Vision transformers | ViT, Swin, PVT v2, CvT, CoAtNet, MaxViT, CrossViT, InceptionNeXt, EfficientFormer |
+| Detection | YOLO v1–v4, R-CNN, Fast R-CNN, Faster R-CNN, EfficientDet, DETR |
+| Segmentation | U-Net, ResU-Net, Attention U-Net, FCN, MaskFormer, Mask2Former, Mask R-CNN |
+| Generative | DDPM, NCSN, RealNVP, NICE, VAE, Flow Matching, Rectified Flow, Neural ODE |
+| Language | BERT, RoFormer, GPT, GPT-2, Transformer |
 
-```python
-import lucid
-import lucid.nn as nn
-from lucid.amp import autocast, GradScaler
+## 🏗️ Architecture
 
-model = nn.Linear(512, 512).to("metal")
-scaler = GradScaler()
+| Layer | What lives there |
+|---|---|
+| **Python API** | `lucid.*` · `lucid.nn.*` · `lucid.optim.*` |
+| **Composite layer** | pure-Python ops, op registry, the type boundary |
+| **pybind11 boundary** | one auditable crossing point — nothing else may cross |
+| **C++ · Tensor** | storage, views, dtype, device |
+| **C++ · Autograd** | dynamic graph, reverse-mode backward engine |
+| **C++ · Ops** | 260+ kernels across every op family |
+| **C++ · CPU backend** | Apple Accelerate — BLAS / LAPACK / vDSP |
+| **C++ · GPU backend** | MLX + Metal |
 
-with autocast():
-    output = model(lucid.randn(32, 512, device="metal"))
-    loss = output.sum()
+Dependencies run strictly downward, and CI validates the layer graph on every commit — a
+violation fails the build rather than becoming a convention nobody enforces.
 
-scaler.scale(loss).backward()
-scaler.step(optimizer)
-scaler.update()
-```
+Autograd is reverse-mode over a dynamic graph, with higher-order differentiation available in
+`lucid.autograd`. View ops — `reshape`, `permute`, `transpose`, slicing — are metadata-only
+and allocate nothing.
 
-### 💾 Saving and loading checkpoints
+## 🧩 Ecosystem
 
-```python
-lucid.save(model.state_dict(), "checkpoint.lucid")
-
-new_model = nn.Linear(512, 512)
-new_model.load_state_dict(lucid.load("checkpoint.lucid"))
-```
-
-State dicts follow the PyTorch v2 format: `OrderedDict` with a `_metadata` attribute carrying version information for checkpoint forward-compatibility.
+| Package | Surface | What's in it |
+|---|---|---|
+| `lucid` | 340+ | creation, math, reduction, shape, indexing, dtypes, grad control |
+| `lucid.nn` | 170+ modules | linear, conv, recurrent, norm, attention, pooling, dropout, padding, loss |
+| `lucid.nn.functional` | 120+ | stateless mirrors of the module API |
+| `lucid.optim` | 13 optimizers, 16 schedulers | SGD → LBFGS; `OneCycleLR`, `CosineAnnealingWarmRestarts`, … |
+| `lucid.linalg` | 35+ | QR, SVD, Cholesky, Eigh, LU, solvers, `matrix_exp` |
+| `lucid.fft` | 20+ | full DFT surface, Hermitian forms, N-D variants |
+| `lucid.special` | 35+ | erf, Bessel, gamma, digamma, polygamma, Hurwitz ζ |
+| `lucid.distributions` | 30+ dists, 15+ transforms | constraints, KL registry, MC fallback |
+| `lucid.einops` | 4 | `rearrange`, `reduce`, `repeat`, `einsum` |
+| `lucid.metal` | — | `run_kernel` — write a Metal shader when the op set runs out |
 
 ### 🔩 Custom Metal kernel
 
-For operations not covered by the built-in op set, Lucid exposes the Metal shader runtime directly:
-
 ```python
+import lucid
 from lucid.metal import run_kernel
 
-result = run_kernel(
+x = lucid.ones(8, device="metal") * 3.0
+
+y = run_kernel(
     source="""
-    kernel void scale(device const float* x,
-                      device float*       y,
-                      uint   gid [[thread_position_in_grid]]) {
+    #include <metal_stdlib>
+    using namespace metal;
+
+    kernel void scale(device const float* x [[buffer(0)]],
+                      device float*       y [[buffer(1)]],
+                      uint gid [[thread_position_in_grid]]) {
         y[gid] = x[gid] * 2.0f;
     }
     """,
-    kernel_name="scale",
+    function_name="scale",
     inputs=[x],
-    output_shape=x.shape,
-    output_dtype=lucid.float32,
+    output_shape=(8,),
+    dtype=lucid.float32,
+    grid=(8, 1, 1),
+    threads=(8, 1, 1),
 )
+print(y.numpy())   # [6. 6. 6. 6. 6. 6. 6. 6.]
 ```
 
----
+`grid` and `threads` both default to `(1, 1, 1)`, so they have to cover your data — leaving
+them at the default silently runs a single thread.
 
-## 🗂️ Module Coverage
+### 🎚️ Mixed precision
 
-### 🔷 Top-level (`lucid.*`)
+```python
+import lucid
+import lucid.nn as nn
+import lucid.optim as optim
+from lucid.amp import autocast, GradScaler
 
-314 free functions across creation, math, reduction, shape, indexing, and type-casting. Dtype objects (`lucid.float32`, `lucid.int64`, …) and grad-control utilities (`no_grad`, `enable_grad`, `set_grad_enabled`) are exposed at Tier 1. Sub-packages (`lucid.nn`, `lucid.optim`, `lucid.linalg`, …) are loaded lazily.
+model = nn.Linear(512, 512).to("metal")
+opt = optim.Adam(model.parameters(), lr=1e-3)
+scaler = GradScaler()
 
-### 🧱 Neural networks (`lucid.nn`)
+with autocast():
+    loss = model(lucid.randn(32, 512, device="metal")).sum()
 
-| Category | Modules |
-|----------|---------|
-| Linear | `Linear`, `Bilinear`, `LazyLinear` |
-| Convolution | `Conv1d`, `Conv2d`, `Conv3d`, `ConvTranspose1d/2d/3d`, `LazyConv*` |
-| Recurrent | `RNN`, `LSTM`, `GRU` (with `proj_size`, bidirectional, `PackedSequence`) |
-| Normalization | `BatchNorm1d/2d/3d`, `LayerNorm`, `GroupNorm`, `InstanceNorm*`, `RMSNorm` |
-| Attention | `MultiheadAttention`, `Transformer`, `TransformerEncoder/Decoder` |
-| Pooling | `MaxPool1d/2d/3d`, `AvgPool1d/2d/3d`, `AdaptiveAvgPool*`, `AdaptiveMaxPool*` |
-| Dropout | `Dropout`, `Dropout1d/2d/3d`, `AlphaDropout`, `FeatureAlphaDropout` |
-| Sparse | `Embedding`, `EmbeddingBag` |
-| Upsampling | `Upsample`, `PixelShuffle` |
-| Padding | `ConstantPad1d/2d/3d`, `ZeroPad1d/2d/3d`, `ReflectionPad*`, `ReplicationPad*` |
-| Flatten | `Flatten`, `Unflatten` |
-| Container | `Sequential`, `ModuleList`, `ModuleDict`, `ParameterList`, `ParameterDict` |
-| Activation | 25+ functions incl. `ReLU`, `GELU`, `SiLU`, `Mish`, `Threshold`, `Hardswish`, `LogSigmoid` |
-| Loss | `MSELoss`, `CrossEntropyLoss`, `BCELoss`, `NLLLoss`, `CTCLoss`, `HuberLoss`, and more |
-| Fusion (new) | `FusedLinear` — fused kernel at inference, autograd at training |
+scaler.scale(loss).backward()
+scaler.step(opt)
+scaler.update()
+```
 
-`lucid.nn.functional` provides 70+ stateless functions mirroring the module API. `lucid.nn.init` provides 26 initializer functions. `lucid.nn.utils` includes gradient clipping, weight norm, spectral norm, parametrize, prune, and RNN pack/unpack utilities.
+### 💾 Checkpoints
 
-### 🎯 Optimizers (`lucid.optim`)
+```python
+lucid.save(model.state_dict(), "checkpoint.lucid")
+model.load_state_dict(lucid.load("checkpoint.lucid"))
+```
 
-13 optimizers: `SGD`, `Adam`, `AdamW`, `Adamax`, `NAdam`, `RAdam`, `RMSprop`, `Adadelta`, `Adagrad`, `ASGD`, `LBFGS`, `SparseAdam`, `Rprop`.
+State dicts are an `OrderedDict` with a `_metadata` attribute carrying version information, so
+a checkpoint written by one release stays readable by the next.
 
-16 LR schedulers: `StepLR`, `MultiStepLR`, `ExponentialLR`, `CosineAnnealingLR`, `CyclicLR`, `OneCycleLR`, `ReduceLROnPlateau`, `CosineAnnealingWarmRestarts`, and more.
+For anything you intend to publish, write **safetensors** instead — no pickle, so loading a
+file you did not produce cannot execute code:
 
-### 🔬 Math sub-packages
+```python
+lucid.save_safetensors(model.state_dict(), "model.safetensors")
+model.load_state_dict(lucid.load_safetensors("model.safetensors"))
+```
 
-| Package | Highlights |
-|---------|-----------|
-| `lucid.linalg` | `cholesky`, `eig`, `eigh`, `svd`, `qr`, `lu`, `solve`, `lstsq`, `norm`, `matrix_exp`, `matrix_power` (38 total) |
-| `lucid.fft` | Full DFT surface including Hermitian-symmetric (`rfft`, `hfft`) and N-D variants (22 total) |
-| `lucid.special` | `erf`/`erfc`/`erfinv`, Bessel `i0`/`i1`, `ndtr`/`ndtri`, `digamma`, `polygamma`, `multigammaln`, Gumbel, Hurwitz ζ (38 total) |
-| `lucid.einops` | `rearrange`, `reduce`, `repeat`, `einsum` |
+Large models can be sharded across several files with `lucid.save_sharded` /
+`lucid.load_sharded`.
 
-### 🎲 Probability (`lucid.distributions`)
+## ⚡ Performance
 
-33 distributions including `Normal`, `Bernoulli`, `Categorical`, `Dirichlet`, `Beta`, `Gamma`, `StudentT`, `Cauchy`, `Laplace`, `Poisson`, `Multinomial`, `MultivariateNormal`, `LowRankMultivariateNormal`, `Wishart`, and more.
+<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmark-dark.svg">
+  <img src="docs/assets/benchmark-light.svg" alt="Lucid vs reference framework — training step and inference latency" width="100%">
+</picture>
+</div>
 
-16 transforms: `AffineTransform`, `ExpTransform`, `SigmoidTransform`, `TanhTransform`, `CorrCholeskyTransform`, `StackTransform`, `CatTransform`, and others.
+Both panels are GPU-resident, measured on an **M1 Pro / 16 GB, macOS 26**: median of 40 runs
+after 8 warm-up iterations, each framework synchronised before the clock stops — MLX's lazy
+graph flushed on one side, the device synchronise on the other. Left is a full training step
+(forward, backward, Adam update) at batch 128; right is forward-only latency under no-grad.
 
-20 analytical KL divergence pairs are registered; for unregistered pairs the engine falls back to Monte Carlo estimation automatically.
+**These are the shapes Lucid is good at, and only those.** Small-to-mid layers are where
+per-op dispatch is a real share of the step and the short path from Python to the engine pays
+off. It does not generalise: width 1024 swung between 0.95× and 1.23× across repeats, so it is
+left out rather than reported as a win, and by 2048 the reference framework is ahead — past
+that point both are waiting on the same Metal kernels and dispatch is no longer what you are
+measuring.
 
----
-
-## 📊 Performance
-
-All measurements taken on Apple M-series hardware. Numbers represent wall-clock time relative to the reference framework on an equivalent workload.
-
-### 🚦 Backend overhead
-
-After the 3.0 kernel pipeline refactor (redundant intermediate nodes removed from all GPU templates):
-
-| Op | Before 3.0 | After 3.0 |
-|----|-----------|----------|
-| `relu` | +78% vs reference | +1–3% vs reference |
-| `exp` | +28% vs reference | +11% vs reference |
-
-The dominant remaining overhead on GPU is the Python-to-C++ dispatch boundary and MLX lazy-graph commit, not the numerical kernel itself.
-
-### 🔄 Zero-copy transfers
-
-CPU↔GPU transfers above 64 KB avoid an intermediate copy. Below that threshold the fast private upload path is used instead. The threshold is configurable at build time.
-
-### ⚡ Op fusion
-
-`FusedLinear` (Linear + ReLU or GELU in one kernel) eliminates an intermediate allocation and the activation's separate launch overhead. During training, the op falls back to standard autograd without any user-visible branch.
-
----
-
-## 🧠 Design Decisions
-
-A selection of non-obvious decisions in the 3.0 architecture:
-
-**No NumPy in the compute path.** Keeping NumPy out of all op implementations means the import graph is clean, cold-start import time is lower, and the framework can be embedded in environments where NumPy is unavailable or undesirable. The explicit bridge boundaries where NumPy is allowed are documented in `CONTRIBUTING.md`.
-
-**CPU = Accelerate, GPU = MLX, no mixing.** Each backend is a fully independent implementation. Crossing backends inside an op is a hard rule violation. `lucid.linalg` is the only permitted exception because MLX is itself CPU-backed via LAPACK on Apple Silicon.
-
-**A single, auditable Python↔C++ boundary.** All transitions between the Python `Tensor` type and the C++ tensor representation happen at one well-defined crossing point. This keeps the boundary auditable and prevents implementation details from leaking into composite ops.
-
-**Op versioning for checkpoint compatibility.** Every op registration includes a version number. When a checkpoint is loaded, the engine can detect version mismatches and apply migration logic rather than silently producing wrong results.
-
-**DLPack via NumPy.** Rather than implementing DLPack export directly in C++, Lucid delegates to NumPy's existing DLPack implementation at the tensor conversion boundary. The cost of a bespoke DLPack layer is not justified when NumPy is already present there for `.numpy()` support.
-
----
-
-## 🧪 Testing
-
-The test suite has 1,500+ passing tests organized into seven tiers:
-
-| Tier | Location | What it covers |
-|------|----------|----------------|
-| Unit | `lucid/test/unit/` | Pure Lucid — no reference framework dependency |
-| Neural networks | `lucid/test/nn/` | `nn.Module`, `nn.functional`, all layers |
-| Autograd | `lucid/test/autograd/` | backward correctness, `gradcheck`, higher-order |
-| Linear algebra | `lucid/test/linalg/` | decomposition accuracy |
-| Parity | `lucid/test/parity/` | Numerical parity vs reference framework |
-| Integration | `lucid/test/integration/` | End-to-end training loops |
-| C++ (Google Test) | `lucid/_C/test/` | Kernel-level correctness, concurrency, memory |
-
-Run the Python suite:
+Every point above held inside a narrow band over five independent repeats. Reproduce it, or
+watch the crossover, with:
 
 ```bash
-pytest lucid/test/ -q                        # full suite
-pytest lucid/test/ --ignore=lucid/test/parity # without parity (no reference framework needed)
-pytest lucid/test/ -m smoke                  # fast sanity only
+python -m lucid.test.perf.bench_readme_figure           # the numbers above
+python -m lucid.test.perf.bench_readme_figure --sweep   # out to width 4096
 ```
 
-Run the C++ suite:
+`FusedLinear` folds Linear + ReLU/GELU into one kernel at inference and falls back to standard
+autograd during training, with no branch in your code.
 
-```bash
-cmake --build build/temp.macosx-*/lucid__C_engine/ -j$(sysctl -n hw.ncpu)
-ctest --test-dir build/temp.macosx-*/lucid__C_engine/ --output-on-failure
-```
+## 💻 Requirements
 
----
-
-## 💻 System Requirements
-
-| Requirement | Minimum |
-|-------------|---------|
+| | Minimum |
+|---|---|
 | Hardware | Apple Silicon (M1 or later) |
-| OS | macOS 26 Tahoe or later |
-| Python | 3.14 only (PEP 649 lazy annotations) |
-| MLX | ≥ 0.31 (bundled — provides `macosx_26_0_arm64` wheel + `mlx-metal` split) |
-| Build tools | CMake ≥ 3.24, Ninja ≥ 1.11, Xcode CLT |
-| Runtime deps | MLX (Python `mlx` package; engine links against `libmlx.dylib`) |
+| OS | macOS 26 Tahoe |
+| Python | 3.14 only — the type annotations rely on PEP 649 lazy evaluation |
+| MLX | ≥ 0.31 (`macosx_26_0_arm64` wheel + `mlx-metal` split) |
+| Build | CMake ≥ 3.24, Ninja ≥ 1.11, Xcode CLT |
 
-Linux, Windows, x86-64, and macOS ≤ 15 are not supported.
+Linux, Windows, x86-64, and macOS ≤ 15 are not supported, and are not planned.
 
----
+## 🧠 Design Notes
+
+**No NumPy in the compute path.** A clean import graph, faster cold start, and the option to
+embed Lucid where NumPy is unavailable. It appears only at the explicit bridge boundaries —
+`.numpy()`, DLPack, checkpoint serialisation, data ingest — and nowhere else.
+
+**Ops carry versions.** Each registration includes a version number, so loading an older
+checkpoint can trigger migration instead of silently computing something different.
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide, including hard rules, coding conventions, the op addition workflow, and the PR checklist.
-
----
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the coding conventions, the workflow for adding an
+op, and the PR checklist.
 
 ## 📜 License
 
 See [LICENSE](LICENSE).
 
----
-
 <div align="center">
+
+<br>
 
 **Inspired by**
 
