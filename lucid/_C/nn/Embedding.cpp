@@ -188,6 +188,14 @@ TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
     Validator::input(indices, "embedding_bag.indices").non_null();
     Validator::input(offsets, "embedding_bag.offsets").non_null();
 
+    // ``embedding`` has always checked this; ``embedding_bag`` did not, and
+    // read ``shape()[1]`` off a rank-1 table anyway.  What came back sized
+    // the output, so a 1-D weight produced an empty ``(B, 0)`` — the right
+    // dtype, a plausible shape, and no embeddings in it.
+    if (weight->shape().size() != 2)
+        throw ShapeMismatch(weight->shape(), Shape{},
+                            "embedding_bag: weight must be 2-D (num_embeddings, dim)");
+
     const int B = static_cast<int>(offsets->shape()[0]);
     const int D = static_cast<int>(weight->shape()[1]);
     Shape out_shape = {static_cast<std::int64_t>(B), static_cast<std::int64_t>(D)};
