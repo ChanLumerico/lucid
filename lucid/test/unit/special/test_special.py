@@ -99,9 +99,57 @@ class TestPolygamma:
         v = lucid.special.polygamma(1, lucid.tensor([1.0])).item()
         assert abs(v - math.pi**2 / 6.0) < 1e-3
 
-    def test_n_ge_4_not_implemented(self) -> None:
-        with pytest.raises(NotImplementedError):
-            lucid.special.polygamma(4, lucid.tensor([1.0]))
+    @staticmethod
+    def _direct(n: int, x: float, terms: int = 200_000) -> float:
+        """psi^(n)(x) = (-1)^(n+1) n! sum_k (x+k)^-(n+1), summed head-on.
+
+        Independent of the asymptotic machinery under test — no Bernoulli
+        numbers, no recurrence shift — so agreement is evidence rather than
+        a restatement.  Euler-Maclaurin tail keeps truncation off the
+        result.
+        """
+        total = math.fsum(1.0 / (x + k) ** (n + 1) for k in range(terms))
+        a = x + terms
+        total += 1.0 / (n * a**n) - 0.5 / a ** (n + 1)
+        return (1.0 if n % 2 else -1.0) * math.factorial(n) * total
+
+    @pytest.mark.parametrize("n", [1, 2, 3, 4, 5, 8, 12])
+    def test_matches_a_direct_summation(self, n: int) -> None:
+        """n >= 4 used to raise; the coefficients were tabulated by hand
+        for n = 1, 2, 3 even though they are closed-form in n."""
+        xs = [0.3, 1.0, 2.5, 7.0]
+        got = lucid.special.polygamma(n, lucid.tensor(xs)).numpy()
+        for i, x in enumerate(xs):
+            ref = self._direct(n, x)
+            assert abs(float(got[i]) - ref) <= 4e-6 * abs(ref), (n, x)
+
+    @pytest.mark.parametrize("n", [1, 4, 7, 10])
+    def test_satisfies_the_recurrence(self, n: int) -> None:
+        """psi^(n)(x+1) - psi^(n)(x) = (-1)^n n! / x^(n+1), exactly.
+
+        Holds whatever the evaluation method, so it catches an error that
+        a reference sharing the same derivation would not.
+        """
+        x = lucid.tensor([0.6, 1.3, 4.0])
+        lhs = (
+            lucid.special.polygamma(n, x + 1.0) - lucid.special.polygamma(n, x)
+        ).numpy()
+        rhs = ((-1.0) ** n * math.factorial(n) / (x ** (n + 1))).numpy()
+        np.testing.assert_allclose(lhs, rhs, rtol=4e-6)
+
+    def test_large_orders_overflow_rather_than_going_nan(self) -> None:
+        """psi^(35)(1) = 35! zeta(36) ~ 1e40 genuinely exceeds float32.
+
+        Reaching that as ``inf`` is the dtype's limit honestly reported;
+        it used to arrive as ``nan`` from n = 33, because an intermediate
+        coefficient overflowed while the answer was still representable.
+        """
+        assert np.isfinite(lucid.special.polygamma(34, lucid.tensor([1.0])).item())
+        assert np.isinf(lucid.special.polygamma(35, lucid.tensor([1.0])).item())
+
+    def test_negative_order_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="n must be"):
+            lucid.special.polygamma(-1, lucid.tensor([1.0]))
 
 
 class TestSphericalBesselJ0:

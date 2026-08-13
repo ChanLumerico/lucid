@@ -388,6 +388,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.modules.sparse"
+    },
+    {
+      "kind": "module",
       "module": "lucid.quantization._functional"
     },
     {
@@ -12685,6 +12689,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.quantized._utils"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized.conv"
     },
     {
       "kind": "module",

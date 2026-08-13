@@ -234,3 +234,71 @@ class TestTransformerBlock:
         m = nn.TransformerEncoderLayer(d_model=8, nhead=2, batch_first=True)
         out = m(lucid.zeros(1, 4, 8))
         assert out.shape == (1, 4, 8)
+
+
+class TestEmbeddingScaleGradByFreq:
+    """``scale_grad_by_freq=True`` used to be refused at construction.
+
+    A token seen fifty times in a batch accumulates fifty gradient
+    contributions, so without this it takes a step fifty times larger than
+    a token seen once — the rare words, which are the ones that need the
+    most movement, learn the slowest.
+    """
+
+    IDX = [1, 1, 1, 2, 4, 4]  # counts: 1 -> 3, 2 -> 1, 4 -> 2
+    COUNTS = {1: 3, 2: 1, 4: 2}
+
+    @staticmethod
+    def _grad(scale: bool):
+        lucid.manual_seed(0)
+        emb = nn.Embedding(5, 3, scale_grad_by_freq=scale)
+        emb(lucid.tensor(TestEmbeddingScaleGradByFreq.IDX).long()).sum().backward()
+        return emb.weight.grad.numpy()
+
+    def test_each_row_is_divided_by_its_own_count(self) -> None:
+        off, on = self._grad(False), self._grad(True)
+        for row, count in self.COUNTS.items():
+            assert np.allclose(on[row], off[row] / count, atol=1e-6), row
+
+    def test_a_row_seen_once_is_left_alone(self) -> None:
+        """Guards against scaling by something other than the count — a
+        blanket 1/len(batch), say, which would still look 'scaled'."""
+        off, on = self._grad(False), self._grad(True)
+        assert np.allclose(on[2], off[2], atol=1e-6)
+
+    def test_rows_never_looked_up_stay_zero(self) -> None:
+        on = self._grad(True)
+        assert np.allclose(on[0], 0.0) and np.allclose(on[3], 0.0)
+
+    def test_the_default_is_unchanged(self) -> None:
+        lucid.manual_seed(0)
+        a = nn.Embedding(5, 3)
+        lucid.manual_seed(0)
+        b = nn.Embedding(5, 3, scale_grad_by_freq=False)
+        idx = lucid.tensor(self.IDX).long()
+        a(idx).sum().backward()
+        b(idx).sum().backward()
+        assert np.array_equal(a.weight.grad.numpy(), b.weight.grad.numpy())
+
+    def test_two_forwards_before_backward_are_refused(self) -> None:
+        """The divisor belongs to a lookup, not to the weight.  Once two
+        lookups' gradients have summed there is no divisor that is right
+        for both, so guessing one would be worse than saying so."""
+        import pytest
+
+        lucid.manual_seed(0)
+        emb = nn.Embedding(5, 3, scale_grad_by_freq=True)
+        total = (
+            emb(lucid.tensor([1, 1]).long()).sum() + emb(lucid.tensor([2]).long()).sum()
+        )
+        with pytest.raises(RuntimeError, match="forward passes before backward"):
+            total.backward()
+
+    def test_repeated_train_steps_each_scale_on_their_own_batch(self) -> None:
+        lucid.manual_seed(0)
+        emb = nn.Embedding(5, 3, scale_grad_by_freq=True)
+        for idx, count in ([1, 1, 1], 3), ([1, 1], 2):
+            emb.zero_grad()
+            emb(lucid.tensor(idx).long()).sum().backward()
+            got = emb.weight.grad.numpy()[1]
+            assert np.allclose(got, np.ones(3) * (count / count), atol=1e-6), count

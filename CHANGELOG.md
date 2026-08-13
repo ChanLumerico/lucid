@@ -254,6 +254,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - encoding nothing produces nothing
 
+- stop quantization dropping the padding spec; open up polygamma
+
 ### Changed
 
 - give the engine ops one shared operand check

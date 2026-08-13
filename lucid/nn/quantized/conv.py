@@ -3,9 +3,11 @@
 Same sidecar recipe as the quantized :class:`~lucid.nn.quantized.Linear`:
 the kernel is stored as int8 codes with per-output-channel ``scale`` /
 ``zero_point``; the forward dequantizes it, runs the ordinary convolution,
-and fake-quantizes the output to the calibrated activation grid.  Integer /
-tuple padding with ``padding_mode="zeros"`` is supported (covers the vision
-zoo); string ``"same"`` / ``"valid"`` padding is deferred.
+and fake-quantizes the output to the calibrated activation grid.  Padding
+follows the float module it came from: integer / tuple, the ``"same"`` /
+``"valid"`` strings, and every ``padding_mode`` — all of which the float
+conv resolves per input, so the quantized one carries the spec rather than
+a baked-in number.
 """
 
 from typing import TYPE_CHECKING, Protocol, cast, override
@@ -13,6 +15,13 @@ from typing import TYPE_CHECKING, Protocol, cast, override
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
+from lucid.nn.modules.conv import (
+    _ConvFn,
+    _conv_forward_with_mode,
+    _same_pad_pair,
+)
+from lucid.nn.parameter import Parameter
+from lucid._types import PaddingMode
 from lucid.nn.quantized._utils import activation_qparams, quantize_weight
 from lucid.quantization._functional import dequantize, fake_quantize
 from lucid.quantization._qscheme import QDtype, quint8
@@ -29,12 +38,29 @@ if TYPE_CHECKING:
         out_channels: int
         kernel_size: _IntTuple
         stride: _IntTuple
-        padding: _IntTuple | str
+        # Never a string.  ``Conv*d.__init__`` splits a string spec off into
+        # ``_padding_str`` and leaves this at 0 — declaring ``| str`` here is
+        # what let a dead ``isinstance(f.padding, str)`` guard look correct.
+        padding: _IntTuple
+        _padding_str: str | None
+        padding_mode: PaddingMode
         dilation: _IntTuple
         groups: int
         weight: Tensor
         bias: Tensor | None
         qconfig: object
+
+
+def _as_tuple(value: object, rank: int) -> tuple[int, ...]:
+    """Normalise an int-or-tuple conv argument to a ``rank``-long tuple.
+
+    ``Conv1d`` stores these as bare ints while 2d/3d store tuples, so the
+    shared padding path has to accept either.
+    """
+    if isinstance(value, int):
+        return (value,) * rank
+    out = tuple(int(v) for v in cast("tuple[int, ...]", value))
+    return out if len(out) == rank else (out[0],) * rank
 
 
 class _QuantizedConvNd(nn.Module):
@@ -65,6 +91,11 @@ class _QuantizedConvNd(nn.Module):
         self.padding = padding
         self.dilation = dilation
         self.groups = groups
+        # ``from_float`` fills these in from the float module.  They default
+        # to the plain case so a directly-constructed quantized conv behaves
+        # as it always did.
+        self.padding_str: str | None = None
+        self.padding_mode: PaddingMode = "zeros"
         self.weight_ch_axis = 0
         self.out_qdtype: QDtype = quint8
         # ``nn.Conv1d`` stores ``kernel_size`` as a bare int; the 2d/3d convs
@@ -84,6 +115,51 @@ class _QuantizedConvNd(nn.Module):
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
         """Run the rank-specific convolution — overridden per subclass."""
         raise NotImplementedError
+
+    def _resolve_pad(
+        self, x: Tensor, rank: int
+    ) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        """Padding amounts for this input, mirroring the float module.
+
+        ``"same"`` depends on the input's spatial size and can be
+        asymmetric, so it cannot be baked into a single integer at
+        construction time — which is why the quantized module has to carry
+        the string rather than the number the float module happened to
+        store beside it.
+        """
+        if self.padding_str == "valid":
+            return (0,) * rank, (0,) * rank
+        if self.padding_str == "same":
+            ks = _as_tuple(self.kernel_size, rank)
+            st = _as_tuple(self.stride, rank)
+            dl = _as_tuple(self.dilation, rank)
+            los: list[int] = []
+            his: list[int] = []
+            for i in range(rank):
+                lo, hi = _same_pad_pair(int(x.shape[2 + i]), ks[i], st[i], dl[i])
+                los.append(lo)
+                his.append(hi)
+            return tuple(los), tuple(his)
+        pad = _as_tuple(self.padding, rank)
+        return pad, pad
+
+    def _conv_with_mode(
+        self, x: Tensor, weight: Tensor, rank: int, conv_fn: object
+    ) -> Tensor:
+        """Convolve honouring ``padding_str`` and ``padding_mode``."""
+        pad_lo, pad_hi = self._resolve_pad(x, rank)
+        return _conv_forward_with_mode(
+            x,
+            cast("Parameter", weight),
+            cast("Parameter | None", self.bias),
+            _as_tuple(self.stride, rank),
+            pad_lo,
+            pad_hi,
+            _as_tuple(self.dilation, rank),
+            self.groups,
+            self.padding_mode,
+            cast("_ConvFn", conv_fn),
+        )
 
     def _activation(self, y: Tensor) -> Tensor:
         """Post-conv activation hook (identity; ReLU in the fused variant)."""
@@ -111,10 +187,6 @@ class _QuantizedConvNd(nn.Module):
     def from_float(cls, mod: nn.Module) -> _QuantizedConvNd:
         """Quantize a calibrated float convolution module."""
         f = cast("_FloatConv", mod)
-        if isinstance(f.padding, str):
-            raise NotImplementedError(
-                "quantized conv: string padding ('same'/'valid') is not supported yet"
-            )
         has_bias = f.bias is not None
         qmod = cls(
             f.in_channels,
@@ -131,6 +203,15 @@ class _QuantizedConvNd(nn.Module):
         qmod.register_buffer("weight_scale", w_scale)
         qmod.register_buffer("weight_zero_point", w_zp)
         qmod.weight_ch_axis = ch_axis
+        # ``Conv*d`` moves a string padding into ``_padding_str`` and leaves
+        # ``padding`` at 0, so the old ``isinstance(f.padding, str)`` guard
+        # could never fire: a ``padding="same"`` conv was quantized as
+        # ``"valid"`` and simply came out a different shape.  ``padding_mode``
+        # was never looked at at all, which was quieter still — a reflect-
+        # padded conv quantized to a zeros-padded one with no shape change to
+        # give it away.  Carry both.
+        qmod.padding_str = getattr(f, "_padding_str", None)
+        qmod.padding_mode = getattr(f, "padding_mode", "zeros")
         if f.bias is not None:
             qmod.register_buffer("bias", f.bias.detach())
 
@@ -301,15 +382,7 @@ class Conv1d(_QuantizedConvNd):
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
-        return F.conv1d(
-            x,
-            weight,
-            self.bias,
-            cast("tuple[int]", self.stride),
-            cast("tuple[int]", self.padding),
-            cast("tuple[int]", self.dilation),
-            self.groups,
-        )
+        return self._conv_with_mode(x, weight, 1, F.conv1d)
 
 
 class Conv2d(_QuantizedConvNd):
@@ -466,15 +539,7 @@ class Conv2d(_QuantizedConvNd):
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
-        return F.conv2d(
-            x,
-            weight,
-            self.bias,
-            cast("tuple[int, int]", self.stride),
-            cast("tuple[int, int]", self.padding),
-            cast("tuple[int, int]", self.dilation),
-            self.groups,
-        )
+        return self._conv_with_mode(x, weight, 2, F.conv2d)
 
 
 class Conv3d(_QuantizedConvNd):
@@ -631,12 +696,4 @@ class Conv3d(_QuantizedConvNd):
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
-        return F.conv3d(
-            x,
-            weight,
-            self.bias,
-            cast("tuple[int, int, int]", self.stride),
-            cast("tuple[int, int, int]", self.padding),
-            cast("tuple[int, int, int]", self.dilation),
-            self.groups,
-        )
+        return self._conv_with_mode(x, weight, 3, F.conv3d)
