@@ -2,7 +2,7 @@
 Sparse / embedding modules.
 """
 
-from typing import cast, override
+from typing import NamedTuple, cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -12,7 +12,8 @@ from lucid._factories.creation import empty
 import lucid as _lucid
 import lucid.nn.init as init
 from lucid.autograd import is_grad_enabled
-from lucid.nn.functional.sparse import embedding
+from lucid.nn.functional.activations import straight_through
+from lucid.nn.functional.sparse import embedding, nearest_codebook, one_hot
 
 
 def _index_counts(x: Tensor) -> dict[int, int]:
@@ -474,4 +475,201 @@ class EmbeddingBag(Module):
         return (
             f"{self.num_embeddings}, {self.embedding_dim}, "
             f"mode={self.mode!r}, padding_idx={self.padding_idx}"
+        )
+
+
+class VectorQuantizerOutput(NamedTuple):
+    r"""What :class:`VectorQuantizer` returns.
+
+    Attributes
+    ----------
+    quantized : Tensor
+        The quantised field, same shape as the input.  Numerically equal
+        to the selected codebook entries, but differentiable with respect
+        to the input via the straight-through estimator.
+    indices : Tensor
+        Selected entry per position — the input's shape with the trailing
+        feature axis dropped, ``int64`` dtype.
+    codebook_loss : Tensor
+        Scalar :math:`\| \mathrm{sg}[x] - e \|_2^2`, which trains the
+        codebook and is detached from the input.
+    commitment_loss : Tensor
+        Scalar :math:`\| x - \mathrm{sg}[e] \|_2^2`, which trains the
+        input's producer and is detached from the codebook.  Reported
+        *unweighted* — apply ``commitment_cost`` when summing the terms.
+    perplexity : Tensor
+        Scalar :math:`\exp(-\sum_k p_k \log p_k)` over the batch's usage
+        histogram, in ``[1, num_embeddings]``.  A value falling toward 1
+        means the codebook is collapsing to a few live entries.
+    """
+
+    quantized: Tensor
+    indices: Tensor
+    codebook_loss: Tensor
+    commitment_loss: Tensor
+    perplexity: Tensor
+
+
+class VectorQuantizer(Module):
+    r"""Nearest-neighbour codebook lookup with a straight-through gradient.
+
+    Maps each position of a continuous feature field to the closest entry
+    of a learned codebook :math:`e \in \mathbb{R}^{K \times D}`:
+
+    .. math::
+
+        k = \arg\min_j \big\| x - e_j \big\|_2,
+        \qquad
+        z_q = e_k .
+
+    This is the discretisation layer of van den Oord, Vinyals, and
+    Kavukcuoglu, *"Neural Discrete Representation Learning"* (2017) — the
+    bottleneck that turns an auto-encoder into a **tokeniser** whose
+    latent is an integer field a downstream model can treat as a
+    vocabulary.
+
+    Like :class:`Linear` and :class:`Embedding`, the layer acts on the
+    **trailing** axis: an input of shape ``(*, embedding_dim)`` produces a
+    quantised field of the same shape and an index field of shape ``(*)``.
+    Image models holding ``(N, C, H, W)`` should permute the channel axis
+    last before calling and back afterwards.
+
+    Because :math:`\arg\min` has zero gradient almost everywhere, the
+    forward value is routed through :func:`lucid.nn.functional.
+    straight_through`, so the producer of ``x`` trains as if the
+    quantisation were the identity.  The codebook itself receives *no*
+    gradient from that path, which is why the layer also returns the two
+    terms that train it — see :class:`VectorQuantizerOutput`.
+
+    Parameters
+    ----------
+    num_embeddings : int
+        Codebook size :math:`K`.
+    embedding_dim : int
+        Code dimension :math:`D`; must match the input's trailing axis.
+    commitment_cost : float, optional
+        The coefficient :math:`\beta` the caller is expected to apply to
+        ``commitment_loss``.  Stored for introspection and reused by
+        :meth:`loss`; the returned ``commitment_loss`` is unweighted so
+        callers can log the raw term.  Default ``0.25`` (the paper's
+        value).
+    device : DeviceLike, optional
+        Device for the codebook parameter.
+    dtype : DTypeLike, optional
+        Dtype for the codebook parameter.
+
+    Attributes
+    ----------
+    weight : Parameter
+        The codebook, shaped ``(num_embeddings, embedding_dim)``.
+        Initialised ``Uniform(-1/K, 1/K)``: entries must start inside the
+        range the producer emits early in training, or a subset is never
+        selected and never receives gradient.
+
+    Notes
+    -----
+    Reference: van den Oord, Vinyals, and Kavukcuoglu, NeurIPS, 2017
+    (arXiv:1711.00937).  The straight-through estimator is Bengio,
+    Léonard, and Courville (arXiv:1308.3432).
+
+    Distances go through :func:`lucid.cdist`, whose ``p=2`` path uses the
+    numerically stable expansion
+    :math:`\|a-b\|^2 = \|a\|^2 + \|b\|^2 - 2 a b^\top` rather than
+    materialising an ``(N, K, D)`` difference.
+
+    Perplexity is computed on every forward.  It costs one ``(N, K)``
+    one-hot, the same order as the distance matrix already built, so it is
+    always on rather than gated behind a flag — codebook collapse is the
+    dominant failure mode of this layer and is invisible in the loss.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> vq = nn.VectorQuantizer(num_embeddings=64, embedding_dim=8)
+    >>> x = lucid.randn((2, 5, 8))           # (batch, positions, D)
+    >>> out = vq(x)
+    >>> out.quantized.shape, out.indices.shape
+    ((2, 5, 8), (2, 5))
+    >>> bool((out.indices.max() < 64).item())
+    True
+    """
+
+    def __init__(
+        self,
+        num_embeddings: int,
+        embedding_dim: int,
+        commitment_cost: float = 0.25,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        """Initialise the VectorQuantizer. See the class docstring for parameter semantics."""
+        super().__init__()
+        if num_embeddings <= 0:
+            raise ValueError(f"num_embeddings must be positive, got {num_embeddings}")
+        if embedding_dim <= 0:
+            raise ValueError(f"embedding_dim must be positive, got {embedding_dim}")
+        if commitment_cost < 0.0:
+            raise ValueError(
+                f"commitment_cost must be non-negative, got {commitment_cost}"
+            )
+
+        self.num_embeddings: int = num_embeddings
+        self.embedding_dim: int = embedding_dim
+        self.commitment_cost: float = commitment_cost
+
+        self.weight: Parameter = Parameter(
+            empty(num_embeddings, embedding_dim, dtype=dtype, device=device)
+        )
+        bound = 1.0 / float(num_embeddings)
+        init.uniform_(self.weight, -bound, bound)
+
+    def assign(self, x: Tensor) -> Tensor:
+        """Return the nearest-entry index field for ``x``, shape ``(*)``."""
+        return nearest_codebook(x, self.weight)
+
+    def lookup(self, indices: Tensor) -> Tensor:
+        """Map an index field ``(*)`` back to codes ``(*, embedding_dim)``."""
+        lead = tuple(int(s) for s in indices.shape)
+        flat = embedding(indices.reshape(-1), self.weight)
+        return flat.reshape(*lead, self.embedding_dim)
+
+    @override
+    def forward(self, x: Tensor) -> VectorQuantizerOutput:  # type: ignore[override]
+        """Quantise ``x`` along its trailing axis."""
+        indices = nearest_codebook(x, self.weight)
+        # The *hard* lookup, not the straight-through result: both loss
+        # terms need one side genuinely detached, and reading them off the
+        # estimator's output would leak a gradient path back into ``x``.
+        # ``F.vector_quantize`` is the same two calls for callers who only
+        # want the quantised field.
+        hard = self.lookup(indices)
+
+        codebook_loss = ((hard - x.detach()) ** 2).mean()
+        commitment_loss = ((x - hard.detach()) ** 2).mean()
+
+        onehot = one_hot(indices.reshape(-1), num_classes=self.num_embeddings).to(
+            x.dtype
+        )
+        probs = onehot.mean(dim=0)
+        perplexity = _lucid.exp(-(probs * (probs + 1e-10).log()).sum())
+
+        return VectorQuantizerOutput(
+            quantized=straight_through(hard, x),
+            indices=indices,
+            codebook_loss=codebook_loss,
+            commitment_loss=commitment_loss,
+            perplexity=perplexity,
+        )
+
+    def loss(self, out: VectorQuantizerOutput) -> Tensor:
+        """Combine the two codebook terms using this layer's ``commitment_cost``."""
+        return out.codebook_loss + self.commitment_cost * out.commitment_loss
+
+    @override
+    def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
+        return (
+            f"{self.num_embeddings}, {self.embedding_dim}, "
+            f"commitment_cost={self.commitment_cost}"
         )

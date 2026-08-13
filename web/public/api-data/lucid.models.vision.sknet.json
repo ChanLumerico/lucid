@@ -3,7 +3,7 @@
   "name": "sknet",
   "path": "lucid.models.vision.sknet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/__init__.py#L1",
   "members": [
     {
       "name": "SKNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "SKNetConfig(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), block_type: str = 'bottleneck', cardinality: int = 1, base_width: int = 64, split_input: bool = True, rd_ratio: float = 1.0 / 16, rd_divisor: int = 8, label_smoothing: float = 0.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), block_type: str = 'bottleneck', cardinality: int = 1, base_width: int = 64, split_input: bool = True, rd_ratio: float = 1.0 / 16, rd_divisor: int = 8, label_smoothing: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "SKNet(config: SKNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_model.py#L488",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_model.py#L488",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: SKNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_model.py#L561",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_model.py#L561",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_model.py#L580",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_model.py#L580",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_model.py#L583",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_model.py#L583",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_model.py#L593",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_model.py#L593",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -215,7 +215,7 @@
       ],
       "labels": [],
       "signature": "SKNetForImageClassification(config: SKNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_model.py#L603",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_model.py#L603",
       "subcategory": "model",
       "methods": [
         {
@@ -224,7 +224,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: SKNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_model.py#L660",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_model.py#L660",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -246,7 +246,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_model.py#L686",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_model.py#L686",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -312,7 +312,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_18(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L75",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L75",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-18 feature-extracting backbone (no classification head).",
       "extended": "Builds an `SKNet` with ResNet-18 topology\n(`_SelectiveKernelBasic` blocks stacked `[2, 2, 2, 2]`).\nBoth $3 \\times 3$ convolutions inside every block are\nreplaced by Selective Kernel units, giving full SK treatment\nof the basic-block design.  Approximately 24.7M parameters.",
@@ -348,7 +348,7 @@
       "model_summary": {
         "name": "SKNet",
         "type": "SKNet",
-        "params": 11445056,
+        "params": 11463616,
         "own_params": 0,
         "children": [
           {
@@ -390,19 +390,19 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 154432,
+            "params": 160640,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 77216,
+                "params": 80320,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 40224,
+                    "params": 43328,
                     "own_params": 0,
                     "children": [
                       {
@@ -446,21 +446,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3104,
+                        "params": 6208,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -473,8 +473,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -525,19 +525,19 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 538432,
+            "params": 550784,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 236576,
+                "params": 242752,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 80416,
+                    "params": 86592,
                     "own_params": 0,
                     "children": [
                       {
@@ -581,21 +581,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6176,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -608,8 +608,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -679,13 +679,13 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBasic",
-                "params": 301856,
+                "params": 308032,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 154144,
+                    "params": 160320,
                     "own_params": 0,
                     "children": [
                       {
@@ -729,21 +729,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6176,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -756,8 +756,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -1377,7 +1377,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_18_cls(pretrained: bool | str = False, weights: SKResNet18Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L381",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L381",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-18 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `SKNetForImageClassification` with the\nSK-ResNet-18 backbone (basic blocks stacked `[2, 2, 2, 2]`;\nthe first $3 \\times 3$ of each block is a Selective Kernel\nunit, the second a plain conv) followed by global average pooling\nand a linear projection to `config.num_classes`.  Approximately\n11.96M parameters.",
@@ -1419,7 +1419,7 @@
       "model_summary": {
         "name": "SKNetForImageClassification",
         "type": "SKNetForImageClassification",
-        "params": 11958056,
+        "params": 11976616,
         "own_params": 0,
         "children": [
           {
@@ -1461,19 +1461,19 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 154432,
+            "params": 160640,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 77216,
+                "params": 80320,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 40224,
+                    "params": 43328,
                     "own_params": 0,
                     "children": [
                       {
@@ -1517,21 +1517,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3104,
+                        "params": 6208,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -1544,8 +1544,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -1596,19 +1596,19 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 538432,
+            "params": 550784,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 236576,
+                "params": 242752,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 80416,
+                    "params": 86592,
                     "own_params": 0,
                     "children": [
                       {
@@ -1652,21 +1652,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6176,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -1679,8 +1679,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -1750,13 +1750,13 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBasic",
-                "params": 301856,
+                "params": 308032,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 154144,
+                    "params": 160320,
                     "own_params": 0,
                     "children": [
                       {
@@ -1800,21 +1800,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6176,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -1827,8 +1827,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -2462,7 +2462,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_34(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L136",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L136",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-34 feature-extracting backbone (no classification head).",
       "extended": "Builds an `SKNet` with ResNet-34 topology\n(`_SelectiveKernelBasic` blocks stacked `[3, 4, 6, 3]`).\nOnly the *first* $3 \\times 3$ of each basic block is a\nSelective Kernel unit; the second stays a plain conv-BN-act.\nApproximately 21.8M parameters.",
@@ -2498,7 +2498,7 @@
       "model_summary": {
         "name": "SKNet",
         "type": "SKNet",
-        "params": 21769376,
+        "params": 21803392,
         "own_params": 0,
         "children": [
           {
@@ -2540,19 +2540,19 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 231648,
+            "params": 240960,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 77216,
+                "params": 80320,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 40224,
+                    "params": 43328,
                     "own_params": 0,
                     "children": [
                       {
@@ -2596,21 +2596,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3104,
+                        "params": 6208,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -2623,8 +2623,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -2675,19 +2675,19 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 1142144,
+            "params": 1166848,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 236576,
+                "params": 242752,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 80416,
+                    "params": 86592,
                     "own_params": 0,
                     "children": [
                       {
@@ -2731,21 +2731,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6176,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -2758,8 +2758,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -2829,13 +2829,13 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBasic",
-                "params": 301856,
+                "params": 308032,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 154144,
+                    "params": 160320,
                     "own_params": 0,
                     "children": [
                       {
@@ -2879,21 +2879,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6176,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -2906,8 +2906,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -3530,7 +3530,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_34_cls(pretrained: bool | str = False, weights: SKResNet34Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L463",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L463",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-34 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `SKNetForImageClassification` with the\nSK-ResNet-34 backbone (basic blocks stacked `[3, 4, 6, 3]`;\nthe first $3 \\times 3$ of each block is a Selective Kernel\nunit, the second a plain conv) followed by global average pooling\nand a linear projection.  Approximately 22.28M parameters.",
@@ -3572,7 +3572,7 @@
       "model_summary": {
         "name": "SKNetForImageClassification",
         "type": "SKNetForImageClassification",
-        "params": 22282376,
+        "params": 22316392,
         "own_params": 0,
         "children": [
           {
@@ -3614,19 +3614,19 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 231648,
+            "params": 240960,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 77216,
+                "params": 80320,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 40224,
+                    "params": 43328,
                     "own_params": 0,
                     "children": [
                       {
@@ -3670,21 +3670,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3104,
+                        "params": 6208,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -3697,8 +3697,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -3749,19 +3749,19 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 1142144,
+            "params": 1166848,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 236576,
+                "params": 242752,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 80416,
+                    "params": 86592,
                     "own_params": 0,
                     "children": [
                       {
@@ -3805,21 +3805,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6176,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -3832,8 +3832,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -3903,13 +3903,13 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBasic",
-                "params": 301856,
+                "params": 308032,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 154144,
+                    "params": 160320,
                     "own_params": 0,
                     "children": [
                       {
@@ -3953,21 +3953,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6176,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -3980,8 +3980,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -4618,7 +4618,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_50(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L192",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L192",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-50 feature-extracting backbone (no classification head).",
       "extended": "Builds an `SKNet` with ResNet-50 bottleneck topology\n(`_SelectiveKernelBottleneck` blocks stacked\n`[3, 4, 6, 3]`).  The central $3 \\times 3$ of every\nbottleneck is replaced by a two-branch Selective Kernel unit\nwith `split_input=True` (each branch receives half the\nchannels — matching timm's `skresnet50` layout).\nApproximately 25.8M parameters.",
@@ -4654,7 +4654,7 @@
       "model_summary": {
         "name": "SKNet",
         "type": "SKNet",
-        "params": 23754160,
+        "params": 23879104,
         "own_params": 0,
         "children": [
           {
@@ -4696,13 +4696,13 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 220848,
+            "params": 234816,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 76688,
+                "params": 81344,
                 "own_params": 0,
                 "children": [
                   {
@@ -4737,7 +4737,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 38672,
+                    "params": 43328,
                     "own_params": 0,
                     "children": [
                       {
@@ -4781,21 +4781,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 1552,
+                        "params": 6208,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 512,
-                            "own_params": 512,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -4808,8 +4808,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -4879,7 +4879,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 72080,
+                "params": 76736,
                 "own_params": 0,
                 "children": [
                   {
@@ -4914,7 +4914,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 38672,
+                    "params": 43328,
                     "own_params": 0,
                     "children": [
                       {
@@ -4958,21 +4958,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 1552,
+                        "params": 6208,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 512,
-                            "own_params": 512,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -4985,8 +4985,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -5037,13 +5037,13 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 1232960,
+            "params": 1270016,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 382736,
+                "params": 392000,
                 "own_params": 0,
                 "children": [
                   {
@@ -5078,7 +5078,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 151056,
+                    "params": 160320,
                     "own_params": 0,
                     "children": [
                       {
@@ -5122,21 +5122,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3088,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -5149,8 +5149,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -5220,7 +5220,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 283408,
+                "params": 292672,
                 "own_params": 0,
                 "children": [
                   {
@@ -5255,7 +5255,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 151056,
+                    "params": 160320,
                     "own_params": 0,
                     "children": [
                       {
@@ -5299,21 +5299,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3088,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -5326,8 +5326,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -5378,13 +5378,13 @@
           {
             "name": "layer3",
             "type": "Sequential",
-            "params": 7175360,
+            "params": 7249280,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 1525280,
+                "params": 1537600,
                 "own_params": 0,
                 "children": [
                   {
@@ -5419,7 +5419,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 603168,
+                    "params": 615488,
                     "own_params": 0,
                     "children": [
                       {
@@ -5463,21 +5463,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12320,
+                        "params": 24640,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -5490,8 +5490,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 16384,
+                            "own_params": 16384,
                             "children": []
                           },
                           {
@@ -5561,7 +5561,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 1130016,
+                "params": 1142336,
                 "own_params": 0,
                 "children": [
                   {
@@ -5596,7 +5596,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 603168,
+                    "params": 615488,
                     "own_params": 0,
                     "children": [
                       {
@@ -5640,21 +5640,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12320,
+                        "params": 24640,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -5667,8 +5667,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 16384,
+                            "own_params": 16384,
                             "children": []
                           },
                           {
@@ -6066,7 +6066,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_50_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L534",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L534",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-50 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `SKNetForImageClassification` with the\nSK-ResNet-50 backbone (bottleneck blocks stacked\n`[3, 4, 6, 3]`, one SK unit per bottleneck) followed by\nglobal average pooling and a linear projection.  Approximately\n25.8M parameters.",
@@ -6102,7 +6102,7 @@
       "model_summary": {
         "name": "SKNetForImageClassification",
         "type": "SKNetForImageClassification",
-        "params": 25803160,
+        "params": 25928104,
         "own_params": 0,
         "children": [
           {
@@ -6144,13 +6144,13 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 220848,
+            "params": 234816,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 76688,
+                "params": 81344,
                 "own_params": 0,
                 "children": [
                   {
@@ -6185,7 +6185,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 38672,
+                    "params": 43328,
                     "own_params": 0,
                     "children": [
                       {
@@ -6229,21 +6229,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 1552,
+                        "params": 6208,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 512,
-                            "own_params": 512,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -6256,8 +6256,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -6327,7 +6327,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 72080,
+                "params": 76736,
                 "own_params": 0,
                 "children": [
                   {
@@ -6362,7 +6362,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 38672,
+                    "params": 43328,
                     "own_params": 0,
                     "children": [
                       {
@@ -6406,21 +6406,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 1552,
+                        "params": 6208,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 512,
-                            "own_params": 512,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -6433,8 +6433,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -6485,13 +6485,13 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 1232960,
+            "params": 1270016,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 382736,
+                "params": 392000,
                 "own_params": 0,
                 "children": [
                   {
@@ -6526,7 +6526,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 151056,
+                    "params": 160320,
                     "own_params": 0,
                     "children": [
                       {
@@ -6570,21 +6570,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3088,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -6597,8 +6597,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -6668,7 +6668,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 283408,
+                "params": 292672,
                 "own_params": 0,
                 "children": [
                   {
@@ -6703,7 +6703,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 151056,
+                    "params": 160320,
                     "own_params": 0,
                     "children": [
                       {
@@ -6747,21 +6747,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3088,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -6774,8 +6774,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -6826,13 +6826,13 @@
           {
             "name": "layer3",
             "type": "Sequential",
-            "params": 7175360,
+            "params": 7249280,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 1525280,
+                "params": 1537600,
                 "own_params": 0,
                 "children": [
                   {
@@ -6867,7 +6867,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 603168,
+                    "params": 615488,
                     "own_params": 0,
                     "children": [
                       {
@@ -6911,21 +6911,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12320,
+                        "params": 24640,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -6938,8 +6938,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 16384,
+                            "own_params": 16384,
                             "children": []
                           },
                           {
@@ -7009,7 +7009,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 1130016,
+                "params": 1142336,
                 "own_params": 0,
                 "children": [
                   {
@@ -7044,7 +7044,7 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 603168,
+                    "params": 615488,
                     "own_params": 0,
                     "children": [
                       {
@@ -7088,21 +7088,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12320,
+                        "params": 24640,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -7115,8 +7115,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 16384,
+                            "own_params": 16384,
                             "children": []
                           },
                           {
@@ -7528,7 +7528,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_101(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L251",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L251",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-101 feature-extracting backbone (no classification head).",
       "extended": "Builds an `SKNet` with ResNet-101 bottleneck topology\n(`_SelectiveKernelBottleneck` blocks stacked\n`[3, 4, 23, 3]`).  Approximately 45M parameters.  Deeper\nvariant of SK-ResNet-50 for higher-accuracy budgets.",
@@ -7564,7 +7564,7 @@
       "model_summary": {
         "name": "SKNet",
         "type": "SKNet",
-        "params": 42964432,
+        "params": 44019008,
         "own_params": 0,
         "children": [
           {
@@ -7606,33 +7606,33 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 220848,
+            "params": 243648,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 76688,
+                "params": 76096,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_ConvBnAct",
-                    "params": 4224,
+                    "params": 8448,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "conv",
                         "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
+                        "params": 8192,
+                        "own_params": 8192,
                         "children": []
                       },
                       {
                         "name": "bn",
                         "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "params": 256,
+                        "own_params": 256,
                         "children": []
                       },
                       {
@@ -7647,33 +7647,33 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 38672,
+                    "params": 17472,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 37120,
+                        "params": 5120,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 18560,
+                            "params": 2560,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 18432,
-                                "own_params": 18432,
+                                "params": 2304,
+                                "own_params": 2304,
                                 "children": []
                               },
                               {
                                 "name": "bn",
                                 "type": "BatchNorm2d",
-                                "params": 128,
-                                "own_params": 128,
+                                "params": 256,
+                                "own_params": 256,
                                 "children": []
                               },
                               {
@@ -7691,21 +7691,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 1552,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 512,
-                            "own_params": 512,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -7718,8 +7718,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -7736,14 +7736,14 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 16896,
+                    "params": 33280,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "conv",
                         "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
+                        "params": 32768,
+                        "own_params": 32768,
                         "children": []
                       },
                       {
@@ -7789,171 +7789,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 72080,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv1",
-                    "type": "_ConvBnAct",
-                    "params": 16512,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "act",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv2",
-                    "type": "_SelectiveKernel",
-                    "params": 38672,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "paths",
-                        "type": "ModuleList",
-                        "params": 37120,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "_ConvBnAct",
-                            "params": 18560,
-                            "own_params": 0,
-                            "children": [
-                              {
-                                "name": "conv",
-                                "type": "Conv2d",
-                                "params": 18432,
-                                "own_params": 18432,
-                                "children": []
-                              },
-                              {
-                                "name": "bn",
-                                "type": "BatchNorm2d",
-                                "params": 128,
-                                "own_params": 128,
-                                "children": []
-                              },
-                              {
-                                "name": "act",
-                                "type": "ReLU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              }
-                            ],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_SelectiveKernelAttn",
-                        "params": 1552,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc_reduce",
-                            "type": "Conv2d",
-                            "params": 512,
-                            "own_params": 512,
-                            "children": []
-                          },
-                          {
-                            "name": "bn",
-                            "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
-                            "children": []
-                          },
-                          {
-                            "name": "act",
-                            "type": "ReLU",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          },
-                          {
-                            "name": "fc_select",
-                            "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
-                          },
-                          {
-                            "name": "gap",
-                            "type": "AdaptiveAvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv3",
-                    "type": "_ConvBnAct",
-                    "params": 16896,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "act",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ],
-                "repeat": 2
-              }
-            ]
-          },
-          {
-            "name": "layer2",
-            "type": "Sequential",
-            "params": 1232960,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_SelectiveKernelBottleneck",
-                "params": 382736,
+                "params": 83776,
                 "own_params": 0,
                 "children": [
                   {
@@ -7988,26 +7824,26 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 151056,
+                    "params": 17472,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 147968,
+                        "params": 5120,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 73984,
+                            "params": 2560,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 73728,
-                                "own_params": 73728,
+                                "params": 2304,
+                                "own_params": 2304,
                                 "children": []
                               },
                               {
@@ -8032,21 +7868,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3088,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -8059,8 +7895,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -8077,7 +7913,53 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 66560,
+                    "params": 33280,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "act",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "layer2",
+            "type": "Sequential",
+            "params": 1297664,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_SelectiveKernelBottleneck",
+                "params": 374336,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "_ConvBnAct",
+                    "params": 66048,
                     "own_params": 0,
                     "children": [
                       {
@@ -8085,6 +7967,124 @@
                         "type": "Conv2d",
                         "params": 65536,
                         "own_params": 65536,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "_SelectiveKernel",
+                    "params": 44096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "paths",
+                        "type": "ModuleList",
+                        "params": 19456,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ConvBnAct",
+                            "params": 9728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "conv",
+                                "type": "Conv2d",
+                                "params": 9216,
+                                "own_params": 9216,
+                                "children": []
+                              },
+                              {
+                                "name": "bn",
+                                "type": "BatchNorm2d",
+                                "params": 512,
+                                "own_params": 512,
+                                "children": []
+                              },
+                              {
+                                "name": "act",
+                                "type": "ReLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_SelectiveKernelAttn",
+                        "params": 24640,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc_reduce",
+                            "type": "Conv2d",
+                            "params": 8192,
+                            "own_params": 8192,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          },
+                          {
+                            "name": "act",
+                            "type": "ReLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "fc_select",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "gap",
+                            "type": "AdaptiveAvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv3",
+                    "type": "_ConvBnAct",
+                    "params": 132096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 131072,
+                        "own_params": 131072,
                         "children": []
                       },
                       {
@@ -8130,171 +8130,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 283408,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv1",
-                    "type": "_ConvBnAct",
-                    "params": 65792,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "act",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv2",
-                    "type": "_SelectiveKernel",
-                    "params": 151056,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "paths",
-                        "type": "ModuleList",
-                        "params": 147968,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "_ConvBnAct",
-                            "params": 73984,
-                            "own_params": 0,
-                            "children": [
-                              {
-                                "name": "conv",
-                                "type": "Conv2d",
-                                "params": 73728,
-                                "own_params": 73728,
-                                "children": []
-                              },
-                              {
-                                "name": "bn",
-                                "type": "BatchNorm2d",
-                                "params": 256,
-                                "own_params": 256,
-                                "children": []
-                              },
-                              {
-                                "name": "act",
-                                "type": "ReLU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              }
-                            ],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_SelectiveKernelAttn",
-                        "params": 3088,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc_reduce",
-                            "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
-                          },
-                          {
-                            "name": "bn",
-                            "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
-                            "children": []
-                          },
-                          {
-                            "name": "act",
-                            "type": "ReLU",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          },
-                          {
-                            "name": "fc_select",
-                            "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
-                            "children": []
-                          },
-                          {
-                            "name": "gap",
-                            "type": "AdaptiveAvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv3",
-                    "type": "_ConvBnAct",
-                    "params": 66560,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "act",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ],
-                "repeat": 3
-              }
-            ]
-          },
-          {
-            "name": "layer3",
-            "type": "Sequential",
-            "params": 26385632,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_SelectiveKernelBottleneck",
-                "params": 1525280,
+                "params": 307776,
                 "own_params": 0,
                 "children": [
                   {
@@ -8329,26 +8165,26 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 603168,
+                    "params": 44096,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 590848,
+                        "params": 19456,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 295424,
+                            "params": 9728,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 294912,
-                                "own_params": 294912,
+                                "params": 9216,
+                                "own_params": 9216,
                                 "children": []
                               },
                               {
@@ -8373,21 +8209,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12320,
+                        "params": 24640,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -8400,8 +8236,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 16384,
+                            "own_params": 16384,
                             "children": []
                           },
                           {
@@ -8418,7 +8254,53 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 264192,
+                    "params": 132096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 131072,
+                        "own_params": 131072,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "act",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "layer3",
+            "type": "Sequential",
+            "params": 27326912,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_SelectiveKernelBottleneck",
+                "params": 1440832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "_ConvBnAct",
+                    "params": 263168,
                     "own_params": 0,
                     "children": [
                       {
@@ -8426,6 +8308,124 @@
                         "type": "Conv2d",
                         "params": 262144,
                         "own_params": 262144,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "_SelectiveKernel",
+                    "params": 124992,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "paths",
+                        "type": "ModuleList",
+                        "params": 75776,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ConvBnAct",
+                            "params": 37888,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "conv",
+                                "type": "Conv2d",
+                                "params": 36864,
+                                "own_params": 36864,
+                                "children": []
+                              },
+                              {
+                                "name": "bn",
+                                "type": "BatchNorm2d",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "act",
+                                "type": "ReLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_SelectiveKernelAttn",
+                        "params": 49216,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc_reduce",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          },
+                          {
+                            "name": "act",
+                            "type": "ReLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "fc_select",
+                            "type": "Conv2d",
+                            "params": 32768,
+                            "own_params": 32768,
+                            "children": []
+                          },
+                          {
+                            "name": "gap",
+                            "type": "AdaptiveAvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv3",
+                    "type": "_ConvBnAct",
+                    "params": 526336,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 524288,
+                        "own_params": 524288,
                         "children": []
                       },
                       {
@@ -8471,171 +8471,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 1130016,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv1",
-                    "type": "_ConvBnAct",
-                    "params": 262656,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "act",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv2",
-                    "type": "_SelectiveKernel",
-                    "params": 603168,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "paths",
-                        "type": "ModuleList",
-                        "params": 590848,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "_ConvBnAct",
-                            "params": 295424,
-                            "own_params": 0,
-                            "children": [
-                              {
-                                "name": "conv",
-                                "type": "Conv2d",
-                                "params": 294912,
-                                "own_params": 294912,
-                                "children": []
-                              },
-                              {
-                                "name": "bn",
-                                "type": "BatchNorm2d",
-                                "params": 512,
-                                "own_params": 512,
-                                "children": []
-                              },
-                              {
-                                "name": "act",
-                                "type": "ReLU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              }
-                            ],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_SelectiveKernelAttn",
-                        "params": 12320,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc_reduce",
-                            "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
-                            "children": []
-                          },
-                          {
-                            "name": "bn",
-                            "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
-                            "children": []
-                          },
-                          {
-                            "name": "act",
-                            "type": "ReLU",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          },
-                          {
-                            "name": "fc_select",
-                            "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
-                            "children": []
-                          },
-                          {
-                            "name": "gap",
-                            "type": "AdaptiveAvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv3",
-                    "type": "_ConvBnAct",
-                    "params": 264192,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "act",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ],
-                "repeat": 22
-              }
-            ]
-          },
-          {
-            "name": "layer4",
-            "type": "Sequential",
-            "params": 15115456,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_SelectiveKernelBottleneck",
-                "params": 6089792,
+                "params": 1176640,
                 "own_params": 0,
                 "children": [
                   {
@@ -8670,26 +8506,26 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 2410560,
+                    "params": 124992,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 2361344,
+                        "params": 75776,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 1180672,
+                            "params": 37888,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 1179648,
-                                "own_params": 1179648,
+                                "params": 36864,
+                                "own_params": 36864,
                                 "children": []
                               },
                               {
@@ -8759,7 +8595,53 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 1052672,
+                    "params": 526336,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 524288,
+                        "own_params": 524288,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "act",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 22
+              }
+            ]
+          },
+          {
+            "name": "layer4",
+            "type": "Sequential",
+            "params": 15141248,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_SelectiveKernelBottleneck",
+                "params": 5748864,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "_ConvBnAct",
+                    "params": 1050624,
                     "own_params": 0,
                     "children": [
                       {
@@ -8767,6 +8649,124 @@
                         "type": "Conv2d",
                         "params": 1048576,
                         "own_params": 1048576,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "_SelectiveKernel",
+                    "params": 495744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "paths",
+                        "type": "ModuleList",
+                        "params": 299008,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ConvBnAct",
+                            "params": 149504,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "conv",
+                                "type": "Conv2d",
+                                "params": 147456,
+                                "own_params": 147456,
+                                "children": []
+                              },
+                              {
+                                "name": "bn",
+                                "type": "BatchNorm2d",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "act",
+                                "type": "ReLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_SelectiveKernelAttn",
+                        "params": 196736,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc_reduce",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "act",
+                            "type": "ReLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "fc_select",
+                            "type": "Conv2d",
+                            "params": 131072,
+                            "own_params": 131072,
+                            "children": []
+                          },
+                          {
+                            "name": "gap",
+                            "type": "AdaptiveAvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv3",
+                    "type": "_ConvBnAct",
+                    "params": 2101248,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 2097152,
+                        "own_params": 2097152,
                         "children": []
                       },
                       {
@@ -8812,27 +8812,27 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 4512832,
+                "params": 4696192,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_ConvBnAct",
-                    "params": 1049600,
+                    "params": 2099200,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "conv",
                         "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
+                        "params": 2097152,
+                        "own_params": 2097152,
                         "children": []
                       },
                       {
                         "name": "bn",
                         "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "params": 2048,
+                        "own_params": 2048,
                         "children": []
                       },
                       {
@@ -8847,33 +8847,33 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 2410560,
+                    "params": 495744,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 2361344,
+                        "params": 299008,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 1180672,
+                            "params": 149504,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 1179648,
-                                "own_params": 1179648,
+                                "params": 147456,
+                                "own_params": 147456,
                                 "children": []
                               },
                               {
                                 "name": "bn",
                                 "type": "BatchNorm2d",
-                                "params": 1024,
-                                "own_params": 1024,
+                                "params": 2048,
+                                "own_params": 2048,
                                 "children": []
                               },
                               {
@@ -8891,21 +8891,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 49216,
+                        "params": 196736,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 16384,
-                            "own_params": 16384,
+                            "params": 65536,
+                            "own_params": 65536,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 128,
+                            "own_params": 128,
                             "children": []
                           },
                           {
@@ -8918,8 +8918,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 32768,
-                            "own_params": 32768,
+                            "params": 131072,
+                            "own_params": 131072,
                             "children": []
                           },
                           {
@@ -8936,14 +8936,14 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 1052672,
+                    "params": 2101248,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "conv",
                         "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
+                        "params": 2097152,
+                        "own_params": 2097152,
                         "children": []
                       },
                       {
@@ -8976,7 +8976,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_101_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L592",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L592",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-101 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `SKNetForImageClassification` with the\nSK-ResNet-101 backbone (bottleneck blocks stacked\n`[3, 4, 23, 3]`) followed by global average pooling and a\nlinear classifier.  Approximately 45M parameters.",
@@ -9012,7 +9012,7 @@
       "model_summary": {
         "name": "SKNetForImageClassification",
         "type": "SKNetForImageClassification",
-        "params": 45013432,
+        "params": 46068008,
         "own_params": 0,
         "children": [
           {
@@ -9054,33 +9054,33 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 220848,
+            "params": 243648,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 76688,
+                "params": 76096,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_ConvBnAct",
-                    "params": 4224,
+                    "params": 8448,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "conv",
                         "type": "Conv2d",
-                        "params": 4096,
-                        "own_params": 4096,
+                        "params": 8192,
+                        "own_params": 8192,
                         "children": []
                       },
                       {
                         "name": "bn",
                         "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
+                        "params": 256,
+                        "own_params": 256,
                         "children": []
                       },
                       {
@@ -9095,33 +9095,33 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 38672,
+                    "params": 17472,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 37120,
+                        "params": 5120,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 18560,
+                            "params": 2560,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 18432,
-                                "own_params": 18432,
+                                "params": 2304,
+                                "own_params": 2304,
                                 "children": []
                               },
                               {
                                 "name": "bn",
                                 "type": "BatchNorm2d",
-                                "params": 128,
-                                "own_params": 128,
+                                "params": 256,
+                                "own_params": 256,
                                 "children": []
                               },
                               {
@@ -9139,21 +9139,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 1552,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 512,
-                            "own_params": 512,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -9166,8 +9166,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -9184,14 +9184,14 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 16896,
+                    "params": 33280,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "conv",
                         "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
+                        "params": 32768,
+                        "own_params": 32768,
                         "children": []
                       },
                       {
@@ -9237,171 +9237,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 72080,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv1",
-                    "type": "_ConvBnAct",
-                    "params": 16512,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "act",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv2",
-                    "type": "_SelectiveKernel",
-                    "params": 38672,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "paths",
-                        "type": "ModuleList",
-                        "params": 37120,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "_ConvBnAct",
-                            "params": 18560,
-                            "own_params": 0,
-                            "children": [
-                              {
-                                "name": "conv",
-                                "type": "Conv2d",
-                                "params": 18432,
-                                "own_params": 18432,
-                                "children": []
-                              },
-                              {
-                                "name": "bn",
-                                "type": "BatchNorm2d",
-                                "params": 128,
-                                "own_params": 128,
-                                "children": []
-                              },
-                              {
-                                "name": "act",
-                                "type": "ReLU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              }
-                            ],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_SelectiveKernelAttn",
-                        "params": 1552,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc_reduce",
-                            "type": "Conv2d",
-                            "params": 512,
-                            "own_params": 512,
-                            "children": []
-                          },
-                          {
-                            "name": "bn",
-                            "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
-                            "children": []
-                          },
-                          {
-                            "name": "act",
-                            "type": "ReLU",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          },
-                          {
-                            "name": "fc_select",
-                            "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
-                          },
-                          {
-                            "name": "gap",
-                            "type": "AdaptiveAvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv3",
-                    "type": "_ConvBnAct",
-                    "params": 16896,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 16384,
-                        "own_params": 16384,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "act",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ],
-                "repeat": 2
-              }
-            ]
-          },
-          {
-            "name": "layer2",
-            "type": "Sequential",
-            "params": 1232960,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_SelectiveKernelBottleneck",
-                "params": 382736,
+                "params": 83776,
                 "own_params": 0,
                 "children": [
                   {
@@ -9436,26 +9272,26 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 151056,
+                    "params": 17472,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 147968,
+                        "params": 5120,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 73984,
+                            "params": 2560,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 73728,
-                                "own_params": 73728,
+                                "params": 2304,
+                                "own_params": 2304,
                                 "children": []
                               },
                               {
@@ -9480,21 +9316,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 3088,
+                        "params": 12352,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -9507,8 +9343,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
@@ -9525,7 +9361,53 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 66560,
+                    "params": 33280,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "act",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "layer2",
+            "type": "Sequential",
+            "params": 1297664,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_SelectiveKernelBottleneck",
+                "params": 374336,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "_ConvBnAct",
+                    "params": 66048,
                     "own_params": 0,
                     "children": [
                       {
@@ -9533,6 +9415,124 @@
                         "type": "Conv2d",
                         "params": 65536,
                         "own_params": 65536,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "_SelectiveKernel",
+                    "params": 44096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "paths",
+                        "type": "ModuleList",
+                        "params": 19456,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ConvBnAct",
+                            "params": 9728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "conv",
+                                "type": "Conv2d",
+                                "params": 9216,
+                                "own_params": 9216,
+                                "children": []
+                              },
+                              {
+                                "name": "bn",
+                                "type": "BatchNorm2d",
+                                "params": 512,
+                                "own_params": 512,
+                                "children": []
+                              },
+                              {
+                                "name": "act",
+                                "type": "ReLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_SelectiveKernelAttn",
+                        "params": 24640,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc_reduce",
+                            "type": "Conv2d",
+                            "params": 8192,
+                            "own_params": 8192,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          },
+                          {
+                            "name": "act",
+                            "type": "ReLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "fc_select",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "gap",
+                            "type": "AdaptiveAvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv3",
+                    "type": "_ConvBnAct",
+                    "params": 132096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 131072,
+                        "own_params": 131072,
                         "children": []
                       },
                       {
@@ -9578,171 +9578,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 283408,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv1",
-                    "type": "_ConvBnAct",
-                    "params": 65792,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 256,
-                        "own_params": 256,
-                        "children": []
-                      },
-                      {
-                        "name": "act",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv2",
-                    "type": "_SelectiveKernel",
-                    "params": 151056,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "paths",
-                        "type": "ModuleList",
-                        "params": 147968,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "_ConvBnAct",
-                            "params": 73984,
-                            "own_params": 0,
-                            "children": [
-                              {
-                                "name": "conv",
-                                "type": "Conv2d",
-                                "params": 73728,
-                                "own_params": 73728,
-                                "children": []
-                              },
-                              {
-                                "name": "bn",
-                                "type": "BatchNorm2d",
-                                "params": 256,
-                                "own_params": 256,
-                                "children": []
-                              },
-                              {
-                                "name": "act",
-                                "type": "ReLU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              }
-                            ],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_SelectiveKernelAttn",
-                        "params": 3088,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc_reduce",
-                            "type": "Conv2d",
-                            "params": 1024,
-                            "own_params": 1024,
-                            "children": []
-                          },
-                          {
-                            "name": "bn",
-                            "type": "BatchNorm2d",
-                            "params": 16,
-                            "own_params": 16,
-                            "children": []
-                          },
-                          {
-                            "name": "act",
-                            "type": "ReLU",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          },
-                          {
-                            "name": "fc_select",
-                            "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
-                            "children": []
-                          },
-                          {
-                            "name": "gap",
-                            "type": "AdaptiveAvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv3",
-                    "type": "_ConvBnAct",
-                    "params": 66560,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 65536,
-                        "own_params": 65536,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "act",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ],
-                "repeat": 3
-              }
-            ]
-          },
-          {
-            "name": "layer3",
-            "type": "Sequential",
-            "params": 26385632,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_SelectiveKernelBottleneck",
-                "params": 1525280,
+                "params": 307776,
                 "own_params": 0,
                 "children": [
                   {
@@ -9777,26 +9613,26 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 603168,
+                    "params": 44096,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 590848,
+                        "params": 19456,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 295424,
+                            "params": 9728,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 294912,
-                                "own_params": 294912,
+                                "params": 9216,
+                                "own_params": 9216,
                                 "children": []
                               },
                               {
@@ -9821,21 +9657,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12320,
+                        "params": 24640,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 8192,
+                            "own_params": 8192,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
+                            "params": 64,
+                            "own_params": 64,
                             "children": []
                           },
                           {
@@ -9848,8 +9684,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 16384,
+                            "own_params": 16384,
                             "children": []
                           },
                           {
@@ -9866,7 +9702,53 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 264192,
+                    "params": 132096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 131072,
+                        "own_params": 131072,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "act",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "layer3",
+            "type": "Sequential",
+            "params": 27326912,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_SelectiveKernelBottleneck",
+                "params": 1440832,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "_ConvBnAct",
+                    "params": 263168,
                     "own_params": 0,
                     "children": [
                       {
@@ -9874,6 +9756,124 @@
                         "type": "Conv2d",
                         "params": 262144,
                         "own_params": 262144,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "_SelectiveKernel",
+                    "params": 124992,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "paths",
+                        "type": "ModuleList",
+                        "params": 75776,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ConvBnAct",
+                            "params": 37888,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "conv",
+                                "type": "Conv2d",
+                                "params": 36864,
+                                "own_params": 36864,
+                                "children": []
+                              },
+                              {
+                                "name": "bn",
+                                "type": "BatchNorm2d",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "act",
+                                "type": "ReLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_SelectiveKernelAttn",
+                        "params": 49216,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc_reduce",
+                            "type": "Conv2d",
+                            "params": 16384,
+                            "own_params": 16384,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 64,
+                            "own_params": 64,
+                            "children": []
+                          },
+                          {
+                            "name": "act",
+                            "type": "ReLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "fc_select",
+                            "type": "Conv2d",
+                            "params": 32768,
+                            "own_params": 32768,
+                            "children": []
+                          },
+                          {
+                            "name": "gap",
+                            "type": "AdaptiveAvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv3",
+                    "type": "_ConvBnAct",
+                    "params": 526336,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 524288,
+                        "own_params": 524288,
                         "children": []
                       },
                       {
@@ -9919,171 +9919,7 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 1130016,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "conv1",
-                    "type": "_ConvBnAct",
-                    "params": 262656,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 512,
-                        "own_params": 512,
-                        "children": []
-                      },
-                      {
-                        "name": "act",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv2",
-                    "type": "_SelectiveKernel",
-                    "params": 603168,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "paths",
-                        "type": "ModuleList",
-                        "params": 590848,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "0",
-                            "type": "_ConvBnAct",
-                            "params": 295424,
-                            "own_params": 0,
-                            "children": [
-                              {
-                                "name": "conv",
-                                "type": "Conv2d",
-                                "params": 294912,
-                                "own_params": 294912,
-                                "children": []
-                              },
-                              {
-                                "name": "bn",
-                                "type": "BatchNorm2d",
-                                "params": 512,
-                                "own_params": 512,
-                                "children": []
-                              },
-                              {
-                                "name": "act",
-                                "type": "ReLU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              }
-                            ],
-                            "repeat": 2
-                          }
-                        ]
-                      },
-                      {
-                        "name": "attn",
-                        "type": "_SelectiveKernelAttn",
-                        "params": 12320,
-                        "own_params": 0,
-                        "children": [
-                          {
-                            "name": "fc_reduce",
-                            "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
-                            "children": []
-                          },
-                          {
-                            "name": "bn",
-                            "type": "BatchNorm2d",
-                            "params": 32,
-                            "own_params": 32,
-                            "children": []
-                          },
-                          {
-                            "name": "act",
-                            "type": "ReLU",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          },
-                          {
-                            "name": "fc_select",
-                            "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
-                            "children": []
-                          },
-                          {
-                            "name": "gap",
-                            "type": "AdaptiveAvgPool2d",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          }
-                        ]
-                      }
-                    ]
-                  },
-                  {
-                    "name": "conv3",
-                    "type": "_ConvBnAct",
-                    "params": 264192,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "conv",
-                        "type": "Conv2d",
-                        "params": 262144,
-                        "own_params": 262144,
-                        "children": []
-                      },
-                      {
-                        "name": "bn",
-                        "type": "BatchNorm2d",
-                        "params": 2048,
-                        "own_params": 2048,
-                        "children": []
-                      }
-                    ]
-                  },
-                  {
-                    "name": "act",
-                    "type": "ReLU",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
-                  }
-                ],
-                "repeat": 22
-              }
-            ]
-          },
-          {
-            "name": "layer4",
-            "type": "Sequential",
-            "params": 15115456,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "0",
-                "type": "_SelectiveKernelBottleneck",
-                "params": 6089792,
+                "params": 1176640,
                 "own_params": 0,
                 "children": [
                   {
@@ -10118,26 +9954,26 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 2410560,
+                    "params": 124992,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 2361344,
+                        "params": 75776,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 1180672,
+                            "params": 37888,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 1179648,
-                                "own_params": 1179648,
+                                "params": 36864,
+                                "own_params": 36864,
                                 "children": []
                               },
                               {
@@ -10207,7 +10043,53 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 1052672,
+                    "params": 526336,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 524288,
+                        "own_params": 524288,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "act",
+                    "type": "ReLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 22
+              }
+            ]
+          },
+          {
+            "name": "layer4",
+            "type": "Sequential",
+            "params": 15141248,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_SelectiveKernelBottleneck",
+                "params": 5748864,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "_ConvBnAct",
+                    "params": 1050624,
                     "own_params": 0,
                     "children": [
                       {
@@ -10215,6 +10097,124 @@
                         "type": "Conv2d",
                         "params": 1048576,
                         "own_params": 1048576,
+                        "children": []
+                      },
+                      {
+                        "name": "bn",
+                        "type": "BatchNorm2d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "_SelectiveKernel",
+                    "params": 495744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "paths",
+                        "type": "ModuleList",
+                        "params": 299008,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ConvBnAct",
+                            "params": 149504,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "conv",
+                                "type": "Conv2d",
+                                "params": 147456,
+                                "own_params": 147456,
+                                "children": []
+                              },
+                              {
+                                "name": "bn",
+                                "type": "BatchNorm2d",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "act",
+                                "type": "ReLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_SelectiveKernelAttn",
+                        "params": 196736,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc_reduce",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          },
+                          {
+                            "name": "bn",
+                            "type": "BatchNorm2d",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": []
+                          },
+                          {
+                            "name": "act",
+                            "type": "ReLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "fc_select",
+                            "type": "Conv2d",
+                            "params": 131072,
+                            "own_params": 131072,
+                            "children": []
+                          },
+                          {
+                            "name": "gap",
+                            "type": "AdaptiveAvgPool2d",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv3",
+                    "type": "_ConvBnAct",
+                    "params": 2101248,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 2097152,
+                        "own_params": 2097152,
                         "children": []
                       },
                       {
@@ -10260,27 +10260,27 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBottleneck",
-                "params": 4512832,
+                "params": 4696192,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_ConvBnAct",
-                    "params": 1049600,
+                    "params": 2099200,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "conv",
                         "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
+                        "params": 2097152,
+                        "own_params": 2097152,
                         "children": []
                       },
                       {
                         "name": "bn",
                         "type": "BatchNorm2d",
-                        "params": 1024,
-                        "own_params": 1024,
+                        "params": 2048,
+                        "own_params": 2048,
                         "children": []
                       },
                       {
@@ -10295,33 +10295,33 @@
                   {
                     "name": "conv2",
                     "type": "_SelectiveKernel",
-                    "params": 2410560,
+                    "params": 495744,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "paths",
                         "type": "ModuleList",
-                        "params": 2361344,
+                        "params": 299008,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_ConvBnAct",
-                            "params": 1180672,
+                            "params": 149504,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
-                                "params": 1179648,
-                                "own_params": 1179648,
+                                "params": 147456,
+                                "own_params": 147456,
                                 "children": []
                               },
                               {
                                 "name": "bn",
                                 "type": "BatchNorm2d",
-                                "params": 1024,
-                                "own_params": 1024,
+                                "params": 2048,
+                                "own_params": 2048,
                                 "children": []
                               },
                               {
@@ -10339,21 +10339,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 49216,
+                        "params": 196736,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 16384,
-                            "own_params": 16384,
+                            "params": 65536,
+                            "own_params": 65536,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 128,
+                            "own_params": 128,
                             "children": []
                           },
                           {
@@ -10366,8 +10366,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 32768,
-                            "own_params": 32768,
+                            "params": 131072,
+                            "own_params": 131072,
                             "children": []
                           },
                           {
@@ -10384,14 +10384,14 @@
                   {
                     "name": "conv3",
                     "type": "_ConvBnAct",
-                    "params": 1052672,
+                    "params": 2101248,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "conv",
                         "type": "Conv2d",
-                        "params": 1048576,
-                        "own_params": 1048576,
+                        "params": 2097152,
+                        "own_params": 2097152,
                         "children": []
                       },
                       {
@@ -10438,7 +10438,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnext_50_32x4d(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L306",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L306",
       "subcategory": "pretrained",
       "summary": "SK-ResNeXt-50 32×4d feature-extracting backbone (the paper's SKNet-50).",
       "extended": "Builds an `SKNet` with ResNet-50 bottleneck topology\nand ResNeXt-style grouped widening: `cardinality = 32`,\n`base_width = 4`, `split_input = False`.  The bottleneck\nwidth per stage follows the ResNeXt formula\n\n$$\n\\text{width} = \\lfloor \\mathrm{planes} \\cdot\n    \\tfrac{\\text{base\\_width}}{64} \\rfloor \\cdot\n    \\text{cardinality},\n$$\n\nmatching the `SKNet-50` entry in Li et al., 2019.  Table 2 gives\nthat entry 27.5M parameters, 4.47 GFLOPs and top-1 *error* 20.79 at\na 224 centre crop — i.e. 79.21% accuracy, not the 77.5% previously\nquoted here (the paper reports error, not accuracy).",
@@ -11886,7 +11886,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnext_50_32x4d_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_pretrained.py#L649",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_pretrained.py#L649",
       "subcategory": "pretrained",
       "summary": "SK-ResNeXt-50 32×4d image classifier — the paper's SKNet-50.",
       "extended": "Builds an `SKNetForImageClassification` with the\nResNeXt-style SK backbone (`cardinality = 32`,\n`base_width = 4`) followed by global average pooling and a\nlinear projection to `config.num_classes`.  Approximately\n27.5M parameters and 79.21% ImageNet-1k top-1 accuracy\n(Table 2 reports 20.79 top-1 *error*) in\nLi et al., 2019 (Table 1, SKNet-50 row).",
@@ -13352,7 +13352,7 @@
       ],
       "labels": [],
       "signature": "SKResNet18Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_weights.py#L18",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_weights.py#L18",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.sk_resnet_18_cls`.",
@@ -13376,7 +13376,7 @@
       ],
       "labels": [],
       "signature": "SKResNet34Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/sknet/_weights.py#L44",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/sknet/_weights.py#L44",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.sk_resnet_34_cls`.",

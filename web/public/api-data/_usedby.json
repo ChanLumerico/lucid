@@ -1744,6 +1744,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.vq_vae._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.text.bert._model"
     },
     {
@@ -2555,6 +2559,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.vae._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae._model"
     }
   ],
   "lucid.models._output.ImageClassificationOutput": [
@@ -2703,6 +2711,10 @@
     {
       "kind": "module",
       "module": "lucid.models"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae._model"
     },
     {
       "kind": "module",
@@ -2981,6 +2993,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.vae._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae._pretrained"
     },
     {
       "kind": "module",
@@ -3869,6 +3885,64 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.vae"
+    }
+  ],
+  "lucid.models.generative.vq_vae": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.vq_vae._config.VQVAEConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae._pretrained"
+    }
+  ],
+  "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae._pretrained"
+    }
+  ],
+  "lucid.models.generative.vq_vae._model.VQVAEModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae._pretrained"
+    }
+  ],
+  "lucid.models.generative.vq_vae._model.VQVAEOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae"
+    }
+  ],
+  "lucid.models.generative.vq_vae._pretrained.vq_vae": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae"
+    }
+  ],
+  "lucid.models.generative.vq_vae._pretrained.vq_vae_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae"
     }
   ],
   "lucid.models.text": [
@@ -9528,6 +9602,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.vq_vae._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.text.bert._model"
     },
     {
@@ -9883,6 +9961,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.vae._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vq_vae._model"
     },
     {
       "kind": "module",
@@ -10507,6 +10589,20 @@
     {
       "kind": "module",
       "module": "lucid.nn.functional"
+    }
+  ],
+  "lucid.nn.functional.activations.straight_through": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional.sparse"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.sparse"
     }
   ],
   "lucid.nn.functional.activations.tanh": [
@@ -11343,11 +11439,31 @@
       "module": "lucid.nn.modules.sparse"
     }
   ],
+  "lucid.nn.functional.sparse.nearest_codebook": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.sparse"
+    }
+  ],
   "lucid.nn.functional.sparse.one_hot": [
     {
       "kind": "module",
       "module": "lucid.distributions.categorical"
     },
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.sparse"
+    }
+  ],
+  "lucid.nn.functional.sparse.vector_quantize": [
     {
       "kind": "module",
       "module": "lucid.nn.functional"
@@ -12562,6 +12678,18 @@
     }
   ],
   "lucid.nn.modules.sparse.EmbeddingBag": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules"
+    }
+  ],
+  "lucid.nn.modules.sparse.VectorQuantizer": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules"
+    }
+  ],
+  "lucid.nn.modules.sparse.VectorQuantizerOutput": [
     {
       "kind": "module",
       "module": "lucid.nn.modules"

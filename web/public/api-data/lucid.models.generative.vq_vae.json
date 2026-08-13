@@ -1,0 +1,1035 @@
+{
+  "slug": "lucid.models.generative.vq_vae",
+  "name": "vq_vae",
+  "path": "lucid.models.generative.vq_vae",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/__init__.py#L1",
+  "members": [
+    {
+      "name": "VQVAEConfig",
+      "path": "lucid.models.generative.vq_vae._config.VQVAEConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "GenerativeModelConfig"
+      ],
+      "labels": [],
+      "signature": "VQVAEConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: Literal['silu', 'swish', 'relu', 'gelu'] = 'relu', num_embeddings: int = 512, embedding_dim: int = 256, hidden_channels: int = 256, num_downsample_layers: int = 2, num_residual_layers: int = 2, residual_hidden_channels: int = 256, commitment_cost: float = 0.25, recon_loss: Literal['mse', 'bce'] = 'mse')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_config.py#L21",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "latent_grid_size",
+          "path": "lucid.models.generative.vq_vae._config.VQVAEConfig.latent_grid_size",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "latent_grid_size: tuple[int, int]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_config.py#L229",
+          "summary": "Spatial `(H, W)` of the discrete latent field.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[int, int]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.vq_vae._config.VQVAEConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: Literal['silu', 'swish', 'relu', 'gelu'] = 'relu', num_embeddings: int = 512, embedding_dim: int = 256, hidden_channels: int = 256, num_downsample_layers: int = 2, num_residual_layers: int = 2, residual_hidden_channels: int = 256, commitment_cost: float = 0.25, recon_loss: Literal['mse', 'bce'] = 'mse')",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen configuration for the VQ-VAE family.",
+      "extended": "Defaults reproduce the image experiments of van den Oord et al., 2017\n(Section 4.1): two stride-2 encoder convolutions with a 4x4 window,\ntwo residual blocks, 256 hidden units throughout, a `512 x 256`\ncodebook, and `commitment_cost = 0.25`.",
+      "parameters": [
+        {
+          "name": "sample_size",
+          "annotation": "int or tuple of int",
+          "description": "Input spatial resolution.  Inherited from\n`GenerativeModelConfig`.  Must be divisible by\n`2 ** num_downsample_layers`.",
+          "default": "32"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Input image channels.",
+          "default": "3"
+        },
+        {
+          "name": "out_channels",
+          "annotation": "int",
+          "description": "Reconstruction channels; normally equal to `in_channels`.",
+          "default": "3"
+        },
+        {
+          "name": "act_fn",
+          "annotation": "(silu, swish, relu, gelu)",
+          "description": "Trunk activation.  The paper uses ReLU throughout, which is why\nthis family overrides the generative-domain default of `\"silu\"`.",
+          "default": "\"silu\""
+        },
+        {
+          "name": "num_embeddings",
+          "annotation": "int",
+          "description": "Codebook size $K$ — the number of discrete latent codes.",
+          "default": "512"
+        },
+        {
+          "name": "embedding_dim",
+          "annotation": "int",
+          "description": "Code dimension $D$.  The encoder's final projection emits\nthis many channels so encoder outputs and codebook entries live in\nthe same space.",
+          "default": "256"
+        },
+        {
+          "name": "hidden_channels",
+          "annotation": "int",
+          "description": "Width of the encoder / decoder trunk.",
+          "default": "256"
+        },
+        {
+          "name": "num_downsample_layers",
+          "annotation": "int",
+          "description": "Number of stride-2 convolutions.  The latent grid is\n`sample_size / 2 ** num_downsample_layers` on a side.",
+          "default": "2"
+        },
+        {
+          "name": "num_residual_layers",
+          "annotation": "int",
+          "description": "Number of residual blocks after the downsampling stack (and,\nmirrored, before the decoder's upsampling stack).",
+          "default": "2"
+        },
+        {
+          "name": "residual_hidden_channels",
+          "annotation": "int",
+          "description": "Inner width of each residual block's 3x3 convolution.",
+          "default": "256"
+        },
+        {
+          "name": "commitment_cost",
+          "annotation": "float",
+          "description": "The coefficient $\\beta$ weighting the commitment term.",
+          "default": "0.25"
+        },
+        {
+          "name": "recon_loss",
+          "annotation": "(mse, bce)",
+          "description": "Reconstruction likelihood — Gaussian (`\"mse\"`) or Bernoulli\n(`\"bce\"`, for data in `[0, 1]`).",
+          "default": "\"mse\""
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.vq_vae import VQVAEConfig\n>>> cfg = VQVAEConfig(sample_size=32)\n>>> cfg.latent_grid_size\n(8, 8)\n>>> cfg.num_embeddings, cfg.embedding_dim\n(512, 256)"
+      ],
+      "notes": [
+        "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nThe paper reports a single image architecture rather than a table of\nsized variants, so this family exposes one nominal factory rather than\n`_small` / `_base` / `_large` siblings.  Scale it by overriding\nthe fields above at `create_model` time.\n\nThe paper's Appendix A.1 also describes an exponential-moving-average\nalternative to the codebook loss.  That variant changes how the\ncodebook is *updated* rather than what the network computes, so it\nbelongs to a training loop rather than to the architecture, and is not\nmodelled here."
+      ],
+      "attributes": [
+        {
+          "name": "latent_grid_size",
+          "annotation": "tuple of int",
+          "description": "Spatial `(H, W)` of the discrete latent field, derived from\n`sample_size` and `num_downsample_layers`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VQVAEForImageGeneration",
+      "path": "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "VQVAEForImageGeneration(config: VQVAEConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L397",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VQVAEConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L469",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L493",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "VQVAEOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "generate",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration.generate",
+          "kind": "function",
+          "labels": [],
+          "signature": "generate(n_samples: int = 1, device: str | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L514",
+          "subcategory": "model",
+          "summary": "Sample `n_samples` images from the uniform codebook prior.",
+          "extended": "Draws an index field uniformly over $[0, K)$ and decodes it.",
+          "parameters": [
+            {
+              "name": "n_samples",
+              "annotation": "int",
+              "description": "Number of images to draw.",
+              "default": "1"
+            },
+            {
+              "name": "device",
+              "annotation": "(str or None, optional, keyword - only)",
+              "description": "Device to sample on.  `None` resolves to the device the\nmodel's parameters already live on.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "GenerationOutput",
+            "description": "`samples` of shape `(n_samples, out_channels, H, W)`,\nsquashed through a sigmoid when `recon_loss=\"bce\"` so the\nresult matches the space `forward` reports."
+          },
+          "raises": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.vq_vae import VQVAEConfig\n>>> from lucid.models.generative.vq_vae import VQVAEForImageGeneration\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=16,\n...                   residual_hidden_channels=16, embedding_dim=8,\n...                   num_embeddings=32)\n>>> VQVAEForImageGeneration(cfg).eval().generate(2).samples.shape\n(2, 3, 32, 32)"
+          ],
+          "notes": [
+            "This is the *training-time* prior — uniform is what makes the KL\nterm the constant $\\log K$ and drops it from the objective.\nIt is not the paper's generative prior, which is a PixelCNN fit\nover the latent grid afterwards, so these samples are expected to\nbe incoherent.  Fitting such a prior is a separate model over\n`VQVAEModel.encode_indices` output."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "VQ-VAE with the full training objective and a codebook sampler.",
+      "extended": "Wraps `VQVAEModel` with the three-term objective of van den\nOord et al., 2017 — reconstruction, codebook, and\n$\\beta$-weighted commitment — and a convenience sampler.\n\n`forward(x)` returns a `VQVAEOutput` carrying the\nreconstruction, the quantised latent, the integer code field, the\ncodebook perplexity, and all four loss tensors.\n\nUnder `recon_loss=\"bce\"` the decoder emits logits, which is what the\nBernoulli likelihood needs; `out.sample` and `generate().samples`\nare squashed through a sigmoid so every reconstruction handed back\nlives in the same `[0, 1]` space as the input, while the loss is\nstill computed from the raw logits.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "VQVAEConfig",
+          "description": "Hyperparameters.  `config.commitment_cost` is the $\\beta$\ncoefficient; `config.recon_loss` selects the likelihood.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import (\n...     VQVAEConfig, VQVAEForImageGeneration,\n... )\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=32,\n...                   residual_hidden_channels=32, embedding_dim=16,\n...                   num_embeddings=64)\n>>> model = VQVAEForImageGeneration(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.loss.shape\n((1, 3, 32, 32), ())"
+      ],
+      "notes": [
+        "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nTraining objective:\n\n\n\n$$\nL = \\log p(x \\mid z_q(x))\n    + \\big\\| \\mathrm{sg}[z_e(x)] - e \\big\\|_2^2\n    + \\beta \\big\\| z_e(x) - \\mathrm{sg}[e] \\big\\|_2^2 .\n$$\n\n**On `generate`.** The prior over the discrete latents is uniform\n*during training* — that is the paper's choice, and it is why the KL\nterm is the constant $\\log K$ and drops out of the objective.\n`generate` samples from exactly that uniform prior, so it is\nfaithful to what this model was trained against, but it is not how\nthe paper produces its figures: there, a PixelCNN is fit over the\nlatent grid afterwards and sampled autoregressively.  Expect\nincoherent images from the uniform sampler.  Fitting a prior is a\nseparate model over `encode_indices` output, deliberately outside\nthis family."
+      ],
+      "attributes": [
+        {
+          "name": "vq_vae",
+          "annotation": "VQVAEModel",
+          "description": "Underlying trunk providing `encode` / `decode` and the\ncodebook."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VQVAEModel",
+      "path": "lucid.models.generative.vq_vae._model.VQVAEModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "VQVAEModel(config: VQVAEConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L256",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VQVAEConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L325",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "latent_grid_size",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.latent_grid_size",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "latent_grid_size: tuple[int, int]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L337",
+          "summary": "Spatial `(H', W')` of the discrete latent field.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[int, int]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "num_embeddings",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.num_embeddings",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "num_embeddings: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L342",
+          "summary": "Codebook size $K$.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L346",
+          "subcategory": "model",
+          "summary": "Return the *continuous* pre-quantisation latent `z_e(x)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "decode",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.decode",
+          "kind": "function",
+          "labels": [],
+          "signature": "decode(z_q: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L350",
+          "subcategory": "model",
+          "summary": "Decode a quantised latent field back to image space.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "quantize",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.quantize",
+          "kind": "function",
+          "labels": [],
+          "signature": "quantize(z_e: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L354",
+          "subcategory": "model",
+          "summary": "Quantise an `(B, D, H', W')` latent field.",
+          "extended": "`lucid.nn.VectorQuantizer` follows the framework's\ntrailing-axis convention, so the channel axis is moved last for\nthe lookup and moved back afterwards; the returned `quantized`\nis in image layout, while `indices` is `(B, H', W')`.",
+          "parameters": [],
+          "returns": {
+            "annotation": "nn.VectorQuantizerOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode_indices",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.encode_indices",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode_indices(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L365",
+          "subcategory": "model",
+          "summary": "Tokenise `x` into codebook indices shaped `(B, H', W')`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "decode_indices",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.decode_indices",
+          "kind": "function",
+          "labels": [],
+          "signature": "decode_indices(indices: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L370",
+          "subcategory": "model",
+          "summary": "Detokenise an index field `(B, H', W')` back to an image.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L375",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "VQVAEOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Bare discrete-latent auto-encoder — encoder, codebook, decoder.",
+      "extended": "Implements the VQ-VAE of van den Oord, Vinyals, and Kavukcuoglu, 2017.\nAn image is encoded to a spatial field of continuous vectors, each\nsnapped to its nearest entry in a learned codebook of\n`VQVAEConfig.num_embeddings` codes, and decoded back.  The\nquantisation step is non-differentiable, so `forward` routes the\ndecoder's gradient onto the encoder with the straight-through\nestimator.\n\nThis class computes no loss.  Use\n`VQVAEForImageGeneration` for the training objective, or read\nthe `codebook_loss` / `commitment_loss` terms off the returned\n`VQVAEOutput` and combine them yourself.\n\nThe pair `encode_indices` / `decode_indices` is the\ntokeniser interface: images in, an integer field out, and back again.\nDownstream discrete models over the latent grid — the paper's own\nPixelCNN prior among them — consume exactly that.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "VQVAEConfig",
+          "description": "Hyperparameters controlling image shape, trunk width, codebook\nsize, and the commitment coefficient.  See `VQVAEConfig`.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import VQVAEConfig, VQVAEModel\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=32,\n...                   residual_hidden_channels=32, embedding_dim=16,\n...                   num_embeddings=64)\n>>> model = VQVAEModel(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.indices.shape\n((1, 3, 32, 32), (1, 8, 8))"
+      ],
+      "notes": [
+        "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nThe straight-through estimator used here is\n\n\n\n$$\nz_q^{\\mathrm{st}} = z_e + \\mathrm{sg}\\!\\big[z_q - z_e\\big],\n$$\n\nwhich equals $z_q$ in the forward pass and has the identity\nJacobian with respect to $z_e$ in the backward pass."
+      ],
+      "attributes": [
+        {
+          "name": "encoder",
+          "annotation": "nn.Module",
+          "description": "Strided-conv encoder emitting `(B, embedding_dim, H', W')`."
+        },
+        {
+          "name": "quantizer",
+          "annotation": "nn.VectorQuantizer",
+          "description": "Core-API codebook layer holding `(num_embeddings,\nembedding_dim)` entries."
+        },
+        {
+          "name": "decoder",
+          "annotation": "nn.Module",
+          "description": "Transposed-conv decoder mapping the quantised field back to image\nspace."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VQVAEOutput",
+      "path": "lucid.models.generative.vq_vae._model.VQVAEOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "VQVAEOutput(sample: Tensor, latent: Tensor, indices: Tensor, perplexity: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, codebook_loss: Tensor | None = None, commitment_loss: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L54",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.vq_vae._model.VQVAEOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample: Tensor, latent: Tensor, indices: Tensor, perplexity: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, codebook_loss: Tensor | None = None, commitment_loss: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L1",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Forward output of the discrete-latent auto-encoder.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import (\n...     VQVAEConfig, VQVAEForImageGeneration,\n... )\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=16,\n...                   residual_hidden_channels=16, embedding_dim=8,\n...                   num_embeddings=32)\n>>> out = VQVAEForImageGeneration(cfg).eval()(lucid.randn((4, 3, 32, 32)))\n>>> out.sample.shape, out.indices.shape\n((4, 3, 32, 32), (4, 8, 8))"
+      ],
+      "notes": [
+        "Returned by `VQVAEModel.forward` (losses `None`) and by\n`VQVAEForImageGeneration.forward` (losses populated)."
+      ],
+      "attributes": [
+        {
+          "name": "sample",
+          "annotation": "Tensor",
+          "description": "Reconstruction $\\hat{x}$ shaped `(B, C, H, W)`."
+        },
+        {
+          "name": "latent",
+          "annotation": "Tensor",
+          "description": "Quantised latent field $z_q(x)$ shaped\n`(B, embedding_dim, H', W')`, carrying the straight-through\ngradient path back to the encoder."
+        },
+        {
+          "name": "indices",
+          "annotation": "Tensor",
+          "description": "Codebook assignment per spatial position, shaped `(B, H', W')`\nwith `int64` dtype and values in `[0, num_embeddings)`.  This\nis the discrete token field a downstream prior would model."
+        },
+        {
+          "name": "perplexity",
+          "annotation": "Tensor",
+          "description": "Scalar $\\exp(-\\sum_k p_k \\log p_k)$ over the batch's\ncodebook usage histogram.  Ranges over `[1, num_embeddings]`;\na value collapsing toward 1 means the codebook has died down to a\nhandful of live entries."
+        },
+        {
+          "name": "loss",
+          "annotation": "(Tensor or None, optional)",
+          "description": "Total objective — `recon_loss + codebook_loss + beta *\ncommitment_loss`.  `None` on the bare\n`VQVAEModel`, which does not build a loss."
+        },
+        {
+          "name": "recon_loss",
+          "annotation": "(Tensor or None, optional)",
+          "description": "Reconstruction term alone."
+        },
+        {
+          "name": "codebook_loss",
+          "annotation": "(Tensor or None, optional)",
+          "description": "$\\| \\mathrm{sg}[z_e] - e \\|_2^2$ — moves the codebook\ntoward the encoder outputs assigned to it."
+        },
+        {
+          "name": "commitment_loss",
+          "annotation": "(Tensor or None, optional)",
+          "description": "$\\| z_e - \\mathrm{sg}[e] \\|_2^2$ — moves the encoder\ntoward the entry it selected.  Reported *unweighted*; the\n$\\beta$ scaling is applied only inside `loss`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "vq_vae",
+      "path": "lucid.models.generative.vq_vae._pretrained.vq_vae",
+      "kind": "function",
+      "labels": [],
+      "signature": "vq_vae(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_pretrained.py#L54",
+      "subcategory": "pretrained",
+      "summary": "Construct a VQ-VAE trunk — encoder, codebook, decoder, no loss.",
+      "extended": "Discrete-latent auto-encoder following van den Oord, Vinyals, and\nKavukcuoglu, 2017, Section 4.1: two stride-2 convolutions with a 4x4\nwindow, two pre-activation residual blocks, 256 hidden units\nthroughout, and a `512 x 256` codebook.  At the default\n`sample_size=32` the latent grid is `8 x 8`.\n\nUse `VQVAEModel.encode_indices` and\n`VQVAEModel.decode_indices` for the tokeniser interface — an\nimage in, an integer code field out, and back.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises\nrather than returning a randomly initialised model.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VQVAEConfig` field overrides (e.g.\n`sample_size=128` for the paper's ImageNet setting,\n`num_embeddings=...`, `commitment_cost=...`) forwarded into\nthe underlying config.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VQVAEModel",
+        "description": "VQ-VAE trunk configured with the paper defaults and any\noverrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import vq_vae\n>>> model = vq_vae().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.indices.shape\n((1, 3, 32, 32), (1, 8, 8))"
+      ],
+      "notes": [
+        "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nQuantisation snaps each spatial position of the encoder output to its\nnearest codebook entry:\n\n\n\n$$\nz_q(x) = e_k,\n\\qquad\nk = \\arg\\min_j \\big\\| z_e(x) - e_j \\big\\|_2 .\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VQVAEModel",
+        "type": "VQVAEModel",
+        "params": 5530883,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_VQVAEEncoder",
+            "params": 2437888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "down_blocks",
+                "type": "ModuleList",
+                "params": 1061376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12544,
+                    "own_params": 12544,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 1048832,
+                    "own_params": 1048832,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "residuals",
+                "type": "ModuleList",
+                "params": 1310720,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_VQVAEResidualBlock",
+                    "params": 655360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "quantizer",
+            "type": "VectorQuantizer",
+            "params": 131072,
+            "own_params": 131072,
+            "children": []
+          },
+          {
+            "name": "decoder",
+            "type": "_VQVAEDecoder",
+            "params": 2961923,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lift",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "residuals",
+                "type": "ModuleList",
+                "params": 1310720,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_VQVAEResidualBlock",
+                    "params": 655360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "up_blocks",
+                "type": "ModuleList",
+                "params": 1061123,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 1048832,
+                    "own_params": 1048832,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 12291,
+                    "own_params": 12291,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "vq_vae_gen",
+      "path": "lucid.models.generative.vq_vae._pretrained.vq_vae_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "vq_vae_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_pretrained.py#L123",
+      "subcategory": "pretrained",
+      "summary": "Construct a VQ-VAE with the full training objective and a sampler.",
+      "extended": "Same trunk as `vq_vae`, wrapped with the three-term objective of\nvan den Oord et al., 2017 — reconstruction, codebook, and\n$\\beta$-weighted commitment — plus a convenience sampler over\nthe uniform codebook prior.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises\nrather than returning a randomly initialised model.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VQVAEConfig` field overrides forwarded into the\nunderlying config.  Pass `recon_loss=\"bce\"` for Bernoulli\nlikelihoods on `[0, 1]` data, or `commitment_cost=...` to\nretune $\\beta$.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VQVAEForImageGeneration",
+        "description": "VQ-VAE wrapped with the full objective and prior sampler."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import vq_vae_gen\n>>> model = vq_vae_gen().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.perplexity.shape\n((1, 3, 32, 32), ())"
+      ],
+      "notes": [
+        "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nTraining objective:\n\n\n\n$$\nL = \\log p(x \\mid z_q(x))\n    + \\big\\| \\mathrm{sg}[z_e(x)] - e \\big\\|_2^2\n    + \\beta \\big\\| z_e(x) - \\mathrm{sg}[e] \\big\\|_2^2 .\n$$\n\n`generate` samples the *uniform* prior the model was trained\nagainst, not a learned one — the paper fits a PixelCNN over the latent\ngrid for its figures.  Samples from the uniform prior are expected to\nbe incoherent; see `VQVAEForImageGeneration`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VQVAEForImageGeneration",
+        "type": "VQVAEForImageGeneration",
+        "params": 5530883,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vq_vae",
+            "type": "VQVAEModel",
+            "params": 5530883,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_VQVAEEncoder",
+                "params": 2437888,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "down_blocks",
+                    "type": "ModuleList",
+                    "params": 1061376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 12544,
+                        "own_params": 12544,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 1048832,
+                        "own_params": 1048832,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "residuals",
+                    "type": "ModuleList",
+                    "params": 1310720,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_VQVAEResidualBlock",
+                        "params": 655360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 589824,
+                            "own_params": 589824,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "quantizer",
+                "type": "VectorQuantizer",
+                "params": 131072,
+                "own_params": 131072,
+                "children": []
+              },
+              {
+                "name": "decoder",
+                "type": "_VQVAEDecoder",
+                "params": 2961923,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "lift",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "residuals",
+                    "type": "ModuleList",
+                    "params": 1310720,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_VQVAEResidualBlock",
+                        "params": 655360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv1",
+                            "type": "Conv2d",
+                            "params": 589824,
+                            "own_params": 589824,
+                            "children": []
+                          },
+                          {
+                            "name": "conv2",
+                            "type": "Conv2d",
+                            "params": 65536,
+                            "own_params": 65536,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "up_blocks",
+                    "type": "ModuleList",
+                    "params": 1061123,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ConvTranspose2d",
+                        "params": 1048832,
+                        "own_params": 1048832,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "ConvTranspose2d",
+                        "params": 12291,
+                        "own_params": 12291,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "VQ-VAE family — van den Oord, Vinyals & Kavukcuoglu, 2017.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "VQ-VAE",
+  "citation": "van den Oord, Aaron, Oriol Vinyals, and Koray Kavukcuoglu. \"Neural Discrete Representation Learning.\" Advances in Neural Information Processing Systems, vol. 30, 2017, pp. 6306-6315.",
+  "theory": "The Vector-Quantised Variational Auto-Encoder replaces the continuous\nGaussian bottleneck of a VAE with a **discrete** one.  An encoder\n$z_e(x)$ maps an image to a spatial grid of $D$-dimensional\nvectors, and each grid position is snapped to its nearest neighbour in\na learned codebook $e \\in \\mathbb{R}^{K \\times D}$:\n\n\n\n$$\nq(z = k \\mid x) =\n    \\begin{cases}\n        1 & \\text{if } k = \\arg\\min_j \\| z_e(x) - e_j \\|_2 \\\\\n        0 & \\text{otherwise},\n    \\end{cases}\n\\qquad\nz_q(x) = e_k .\n$$\n\nThe decoder then reconstructs from $z_q(x)$.  Because the\n$\\arg\\min$ has zero gradient almost everywhere, training uses the\n**straight-through estimator** — the forward pass carries the quantised\nvector while the backward pass copies the decoder's gradient directly\nonto the encoder output, which is implemented as\n$z_q = z_e + \\mathrm{sg}[z_q - z_e]$ with $\\mathrm{sg}$\nthe stop-gradient operator.\n\nThe codebook receives no gradient from that path, so it is trained by\ntwo additional terms.  The **codebook loss** pulls each selected entry\ntoward the encoder output it was matched to, and the **commitment\nloss** pulls the encoder output toward the entry it chose, preventing\nthe encoder's output space from growing without bound.  The full\nobjective is\n\n\n\n$$\nL = \\underbrace{\\log p(x \\mid z_q(x))}_{\\text{reconstruction}}\n    + \\underbrace{\\big\\| \\mathrm{sg}[z_e(x)] - e \\big\\|_2^2}\n                _{\\text{codebook}}\n    + \\beta \\underbrace{\\big\\| z_e(x) - \\mathrm{sg}[e] \\big\\|_2^2}\n                _{\\text{commitment}},\n$$\n\nwith $\\beta = 0.25$ in the paper's experiments.  Note the\nasymmetry: the codebook term is unweighted because the codebook has no\nother learning signal, while $\\beta$ scales how strongly the\nencoder is held to its current assignment.\n\nUnlike a Gaussian VAE there is no KL term to anneal.  The prior over\nthe discrete latents is held **uniform** during training, which makes\nits KL the constant $\\log K$ and removes posterior collapse as a\nfailure mode entirely — the paper's central practical claim.  A\nfaithful *generative* prior is fit afterwards as a separate\nautoregressive model (PixelCNN over the latent grid), so the\nauto-encoder trained here is a representation learner and a discrete\ntokeniser rather than a stand-alone sampler.  That tokeniser role is\nwhat later made the architecture load-bearing across discrete\ngenerative modelling.",
+  "tasks": [
+    "image-generation"
+  ]
+}

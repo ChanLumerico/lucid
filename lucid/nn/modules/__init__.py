@@ -93,7 +93,12 @@ from lucid.nn.modules.dropout import (
     AlphaDropout,
     FeatureAlphaDropout,
 )
-from lucid.nn.modules.sparse import Embedding, EmbeddingBag
+from lucid.nn.modules.sparse import (
+    Embedding,
+    EmbeddingBag,
+    VectorQuantizer,
+    VectorQuantizerOutput,
+)
 from lucid.nn.modules.positional import (
     RotaryEmbedding,
     SinusoidalEmbedding,
@@ -262,6 +267,8 @@ __all__ = [
     "AlphaDropout",
     "FeatureAlphaDropout",
     "Embedding",
+    "VectorQuantizer",
+    "VectorQuantizerOutput",
     "EmbeddingBag",
     "RotaryEmbedding",
     "SinusoidalEmbedding",

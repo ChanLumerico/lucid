@@ -3,7 +3,7 @@
   "name": "unet",
   "path": "lucid.models.vision.unet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/__init__.py#L1",
   "members": [
     {
       "name": "UNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "UNetConfig(num_classes: int = 2, in_channels: int = 1, base_channels: int = 64, depth: int = 4, bilinear: bool = False, dropout: float = 0.0, dim: Literal[2, 3] = 2, block: Literal['basic', 'res'] = 'basic', double_before_pool: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 2, in_channels: int = 1, base_channels: int = 64, depth: int = 4, bilinear: bool = False, dropout: float = 0.0, dim: Literal[2, 3] = 2, block: Literal['basic', 'res'] = 'basic', double_before_pool: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -101,7 +101,7 @@
       ],
       "labels": [],
       "signature": "UNetForSemanticSegmentation(config: UNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/_model.py#L261",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/_model.py#L261",
       "subcategory": "model",
       "methods": [
         {
@@ -110,7 +110,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: UNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/_model.py#L349",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/_model.py#L349",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -132,7 +132,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/_model.py#L409",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/_model.py#L409",
           "subcategory": "model",
           "summary": "Run U-Net forward pass.",
           "extended": null,
@@ -203,7 +203,7 @@
       "kind": "function",
       "labels": [],
       "signature": "unet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/_pretrained.py#L64",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/_pretrained.py#L64",
       "subcategory": "pretrained",
       "summary": "U-Net (Ronneberger et al., MICCAI 2015).",
       "extended": "Builds the canonical 2-D U-Net: 4-level encoder / decoder with\n`base_channels = 64` (channel schedule 64 -> 128 -> 256 -> 512 ->\n1024), `in_channels = 1` (single-channel biomedical default), and\n`num_classes = 2`.  ConvTranspose2d upsampling in the decoder\n(set `bilinear=True` to use bilinear interpolation instead).\nApproximately 31M parameters.",
@@ -836,7 +836,7 @@
       "kind": "function",
       "labels": [],
       "signature": "res_unet_2d(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/_pretrained.py#L121",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/_pretrained.py#L121",
       "subcategory": "pretrained",
       "summary": "ResUNet — U-Net with residual DoubleConv blocks, 2-D.",
       "extended": "Builds a 2-D U-Net with the standard channel / depth schedule but\nevery DoubleConv block wraps an identity shortcut around its two\n3x3 convs.  This residual variant trains more reliably at greater\ndepth and is a common drop-in upgrade for medical-imaging U-Nets.",
@@ -871,19 +871,19 @@
       "model_summary": {
         "name": "UNetForSemanticSegmentation",
         "type": "UNetForSemanticSegmentation",
-        "params": 32429250,
+        "params": 32435138,
         "own_params": 0,
         "children": [
           {
             "name": "encoder_0",
             "type": "_EncoderBlock",
-            "params": 37760,
+            "params": 37888,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 37760,
+                "params": 37888,
                 "own_params": 0,
                 "children": [
                   {
@@ -931,10 +931,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv2d",
-                    "params": 64,
-                    "own_params": 64,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 192,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -950,13 +965,13 @@
           {
             "name": "encoder_1",
             "type": "_EncoderBlock",
-            "params": 229888,
+            "params": 230144,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 229888,
+                "params": 230144,
                 "own_params": 0,
                 "children": [
                   {
@@ -1004,10 +1019,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv2d",
-                    "params": 8192,
-                    "own_params": 8192,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 8448,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 8192,
+                        "own_params": 8192,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -1023,13 +1053,13 @@
           {
             "name": "encoder_2",
             "type": "_EncoderBlock",
-            "params": 918528,
+            "params": 919040,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 918528,
+                "params": 919040,
                 "own_params": 0,
                 "children": [
                   {
@@ -1077,10 +1107,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv2d",
-                    "params": 32768,
-                    "own_params": 32768,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 33280,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -1096,13 +1141,13 @@
           {
             "name": "encoder_3",
             "type": "_EncoderBlock",
-            "params": 3672064,
+            "params": 3673088,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 3672064,
+                "params": 3673088,
                 "own_params": 0,
                 "children": [
                   {
@@ -1150,10 +1195,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv2d",
-                    "params": 131072,
-                    "own_params": 131072,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 132096,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 131072,
+                        "own_params": 131072,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -1169,7 +1229,7 @@
           {
             "name": "bottleneck",
             "type": "_DoubleConv",
-            "params": 14684160,
+            "params": 14686208,
             "own_params": 0,
             "children": [
               {
@@ -1217,17 +1277,32 @@
               },
               {
                 "name": "shortcut",
-                "type": "Conv2d",
-                "params": 524288,
-                "own_params": 524288,
-                "children": []
+                "type": "Sequential",
+                "params": 526336,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 524288,
+                    "own_params": 524288,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm2d",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
               }
             ]
           },
           {
             "name": "decoder_3",
             "type": "_DecoderBlock",
-            "params": 9701888,
+            "params": 9702912,
             "own_params": 0,
             "children": [
               {
@@ -1240,7 +1315,7 @@
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 7604224,
+                "params": 7605248,
                 "own_params": 0,
                 "children": [
                   {
@@ -1288,10 +1363,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv2d",
-                    "params": 524288,
-                    "own_params": 524288,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 525312,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 524288,
+                        "own_params": 524288,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               }
@@ -1300,7 +1390,7 @@
           {
             "name": "decoder_2",
             "type": "_DecoderBlock",
-            "params": 2426112,
+            "params": 2426624,
             "own_params": 0,
             "children": [
               {
@@ -1313,7 +1403,7 @@
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 1901568,
+                "params": 1902080,
                 "own_params": 0,
                 "children": [
                   {
@@ -1361,10 +1451,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv2d",
-                    "params": 131072,
-                    "own_params": 131072,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 131584,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 131072,
+                        "own_params": 131072,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               }
@@ -1373,7 +1478,7 @@
           {
             "name": "decoder_1",
             "type": "_DecoderBlock",
-            "params": 606848,
+            "params": 607104,
             "own_params": 0,
             "children": [
               {
@@ -1386,7 +1491,7 @@
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 475648,
+                "params": 475904,
                 "own_params": 0,
                 "children": [
                   {
@@ -1434,10 +1539,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv2d",
-                    "params": 32768,
-                    "own_params": 32768,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 33024,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               }
@@ -1446,7 +1566,7 @@
           {
             "name": "decoder_0",
             "type": "_DecoderBlock",
-            "params": 151872,
+            "params": 152000,
             "own_params": 0,
             "children": [
               {
@@ -1459,7 +1579,7 @@
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 119040,
+                "params": 119168,
                 "own_params": 0,
                 "children": [
                   {
@@ -1507,10 +1627,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv2d",
-                    "params": 8192,
-                    "own_params": 8192,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 8320,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 8192,
+                        "own_params": 8192,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm2d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               }
@@ -1532,7 +1667,7 @@
       "kind": "function",
       "labels": [],
       "signature": "unet_3d(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/_pretrained.py#L191",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/_pretrained.py#L191",
       "subcategory": "pretrained",
       "summary": "3-D U-Net for volumetric segmentation (Cicek et al., MICCAI 2016).",
       "extended": "Builds the volumetric U-Net variant: all Conv2d / BatchNorm2d /\nMaxPool2d ops are replaced with their 3-D counterparts; \"bilinear\"\nupsampling becomes \"trilinear\".  Default `base_channels = 32` and\n`depth = 3` to keep memory tractable on volumetric inputs.",
@@ -1567,25 +1702,25 @@
       "model_summary": {
         "name": "UNetForSemanticSegmentation",
         "type": "UNetForSemanticSegmentation",
-        "params": 5601154,
+        "params": 11888162,
         "own_params": 0,
         "children": [
           {
             "name": "encoder_0",
             "type": "_EncoderBlock",
-            "params": 28640,
+            "params": 56352,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 28640,
+                "params": 56352,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "body",
                     "type": "Sequential",
-                    "params": 28640,
+                    "params": 56352,
                     "own_params": 0,
                     "children": [
                       {
@@ -1612,15 +1747,15 @@
                       {
                         "name": "3",
                         "type": "Conv3d",
-                        "params": 27648,
-                        "own_params": 27648,
+                        "params": 55296,
+                        "own_params": 55296,
                         "children": []
                       },
                       {
                         "name": "4",
                         "type": "BatchNorm3d",
-                        "params": 64,
-                        "own_params": 64,
+                        "params": 128,
+                        "own_params": 128,
                         "children": []
                       }
                     ]
@@ -1639,26 +1774,26 @@
           {
             "name": "encoder_1",
             "type": "_EncoderBlock",
-            "params": 166144,
+            "params": 332160,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 166144,
+                "params": 332160,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "body",
                     "type": "Sequential",
-                    "params": 166144,
+                    "params": 332160,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "Conv3d",
-                        "params": 55296,
-                        "own_params": 55296,
+                        "params": 110592,
+                        "own_params": 110592,
                         "children": []
                       },
                       {
@@ -1678,15 +1813,15 @@
                       {
                         "name": "3",
                         "type": "Conv3d",
-                        "params": 110592,
-                        "own_params": 110592,
+                        "params": 221184,
+                        "own_params": 221184,
                         "children": []
                       },
                       {
                         "name": "4",
                         "type": "BatchNorm3d",
-                        "params": 128,
-                        "own_params": 128,
+                        "params": 256,
+                        "own_params": 256,
                         "children": []
                       }
                     ]
@@ -1705,26 +1840,26 @@
           {
             "name": "encoder_2",
             "type": "_EncoderBlock",
-            "params": 664064,
+            "params": 1327872,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 664064,
+                "params": 1327872,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "body",
                     "type": "Sequential",
-                    "params": 664064,
+                    "params": 1327872,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "Conv3d",
-                        "params": 221184,
-                        "own_params": 221184,
+                        "params": 442368,
+                        "own_params": 442368,
                         "children": []
                       },
                       {
@@ -1744,15 +1879,15 @@
                       {
                         "name": "3",
                         "type": "Conv3d",
-                        "params": 442368,
-                        "own_params": 442368,
+                        "params": 884736,
+                        "own_params": 884736,
                         "children": []
                       },
                       {
                         "name": "4",
                         "type": "BatchNorm3d",
-                        "params": 256,
-                        "own_params": 256,
+                        "params": 512,
+                        "own_params": 512,
                         "children": []
                       }
                     ]
@@ -1771,20 +1906,20 @@
           {
             "name": "bottleneck",
             "type": "_DoubleConv",
-            "params": 2655232,
+            "params": 5309952,
             "own_params": 0,
             "children": [
               {
                 "name": "body",
                 "type": "Sequential",
-                "params": 2655232,
+                "params": 5309952,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "Conv3d",
-                    "params": 884736,
-                    "own_params": 884736,
+                    "params": 1769472,
+                    "own_params": 1769472,
                     "children": []
                   },
                   {
@@ -1804,15 +1939,15 @@
                   {
                     "name": "3",
                     "type": "Conv3d",
-                    "params": 1769472,
-                    "own_params": 1769472,
+                    "params": 3538944,
+                    "own_params": 3538944,
                     "children": []
                   },
                   {
                     "name": "4",
                     "type": "BatchNorm3d",
-                    "params": 512,
-                    "own_params": 512,
+                    "params": 1024,
+                    "own_params": 1024,
                     "children": []
                   }
                 ]
@@ -1822,7 +1957,73 @@
           {
             "name": "decoder_2",
             "type": "_DecoderBlock",
-            "params": 1589888,
+            "params": 3703808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "up",
+                "type": "ConvTranspose3d",
+                "params": 1048832,
+                "own_params": 1048832,
+                "children": []
+              },
+              {
+                "name": "conv",
+                "type": "_DoubleConv",
+                "params": 2654976,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "body",
+                    "type": "Sequential",
+                    "params": 2654976,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 1769472,
+                        "own_params": 1769472,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ReLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv3d",
+                        "params": 884736,
+                        "own_params": 884736,
+                        "children": []
+                      },
+                      {
+                        "name": "4",
+                        "type": "BatchNorm3d",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder_1",
+            "type": "_DecoderBlock",
+            "params": 926208,
             "own_params": 0,
             "children": [
               {
@@ -1835,27 +2036,27 @@
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 1327616,
+                "params": 663936,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "body",
                     "type": "Sequential",
-                    "params": 1327616,
+                    "params": 663936,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "Conv3d",
-                        "params": 884736,
-                        "own_params": 884736,
+                        "params": 442368,
+                        "own_params": 442368,
                         "children": []
                       },
                       {
                         "name": "1",
                         "type": "BatchNorm3d",
-                        "params": 256,
-                        "own_params": 256,
+                        "params": 128,
+                        "own_params": 128,
                         "children": []
                       },
                       {
@@ -1868,8 +2069,8 @@
                       {
                         "name": "3",
                         "type": "Conv3d",
-                        "params": 442368,
-                        "own_params": 442368,
+                        "params": 221184,
+                        "own_params": 221184,
                         "children": []
                       },
                       {
@@ -1886,9 +2087,9 @@
             ]
           },
           {
-            "name": "decoder_1",
+            "name": "decoder_0",
             "type": "_DecoderBlock",
-            "params": 397632,
+            "params": 231680,
             "own_params": 0,
             "children": [
               {
@@ -1901,89 +2102,23 @@
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 332032,
+                "params": 166080,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "body",
                     "type": "Sequential",
-                    "params": 332032,
+                    "params": 166080,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
-                        "type": "Conv3d",
-                        "params": 221184,
-                        "own_params": 221184,
-                        "children": []
-                      },
-                      {
-                        "name": "1",
-                        "type": "BatchNorm3d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      },
-                      {
-                        "name": "2",
-                        "type": "ReLU",
-                        "params": 0,
-                        "own_params": 0,
-                        "children": []
-                      },
-                      {
-                        "name": "3",
                         "type": "Conv3d",
                         "params": 110592,
                         "own_params": 110592,
                         "children": []
                       },
                       {
-                        "name": "4",
-                        "type": "BatchNorm3d",
-                        "params": 128,
-                        "own_params": 128,
-                        "children": []
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "name": "decoder_0",
-            "type": "_DecoderBlock",
-            "params": 99488,
-            "own_params": 0,
-            "children": [
-              {
-                "name": "up",
-                "type": "ConvTranspose3d",
-                "params": 16416,
-                "own_params": 16416,
-                "children": []
-              },
-              {
-                "name": "conv",
-                "type": "_DoubleConv",
-                "params": 83072,
-                "own_params": 0,
-                "children": [
-                  {
-                    "name": "body",
-                    "type": "Sequential",
-                    "params": 83072,
-                    "own_params": 0,
-                    "children": [
-                      {
-                        "name": "0",
-                        "type": "Conv3d",
-                        "params": 55296,
-                        "own_params": 55296,
-                        "children": []
-                      },
-                      {
                         "name": "1",
                         "type": "BatchNorm3d",
                         "params": 64,
@@ -2000,15 +2135,15 @@
                       {
                         "name": "3",
                         "type": "Conv3d",
-                        "params": 27648,
-                        "own_params": 27648,
+                        "params": 55296,
+                        "own_params": 55296,
                         "children": []
                       },
                       {
                         "name": "4",
                         "type": "BatchNorm3d",
-                        "params": 64,
-                        "own_params": 64,
+                        "params": 128,
+                        "own_params": 128,
                         "children": []
                       }
                     ]
@@ -2020,8 +2155,8 @@
           {
             "name": "head",
             "type": "Conv3d",
-            "params": 66,
-            "own_params": 66,
+            "params": 130,
+            "own_params": 130,
             "children": []
           }
         ]
@@ -2033,7 +2168,7 @@
       "kind": "function",
       "labels": [],
       "signature": "res_unet_3d(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/unet/_pretrained.py#L245",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/unet/_pretrained.py#L245",
       "subcategory": "pretrained",
       "summary": "3-D ResUNet — volumetric residual U-Net.",
       "extended": "H11 marker: **not a paper variant.**  No single paper defines a 3-D\nresidual U-Net with this depth and channel schedule; it is the\nvolumetric counterpart of `res_unet_2d`, assembled from the\nsame building blocks rather than reproduced from a publication.  It\nships no weights and no accuracy claim.  Treat it as a starting\npoint to configure, not as a reproduction of any published result.\n\nBuilds a 3-D U-Net with residual DoubleConv blocks: the volumetric\ncounterpart to `res_unet_2d`.  Useful for deeper variants on\nbiomedical volumes where the residual shortcut materially helps\noptimisation stability.",
@@ -2068,19 +2203,19 @@
       "model_summary": {
         "name": "UNetForSemanticSegmentation",
         "type": "UNetForSemanticSegmentation",
-        "params": 5687202,
+        "params": 5688610,
         "own_params": 0,
         "children": [
           {
             "name": "encoder_0",
             "type": "_EncoderBlock",
-            "params": 28672,
+            "params": 28736,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 28672,
+                "params": 28736,
                 "own_params": 0,
                 "children": [
                   {
@@ -2128,10 +2263,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv3d",
-                    "params": 32,
-                    "own_params": 32,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 96,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 32,
+                        "own_params": 32,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -2147,13 +2297,13 @@
           {
             "name": "encoder_1",
             "type": "_EncoderBlock",
-            "params": 168192,
+            "params": 168320,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 168192,
+                "params": 168320,
                 "own_params": 0,
                 "children": [
                   {
@@ -2201,10 +2351,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv3d",
-                    "params": 2048,
-                    "own_params": 2048,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 2176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -2220,13 +2385,13 @@
           {
             "name": "encoder_2",
             "type": "_EncoderBlock",
-            "params": 672256,
+            "params": 672512,
             "own_params": 0,
             "children": [
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 672256,
+                "params": 672512,
                 "own_params": 0,
                 "children": [
                   {
@@ -2274,10 +2439,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv3d",
-                    "params": 8192,
-                    "own_params": 8192,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 8448,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 8192,
+                        "own_params": 8192,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               },
@@ -2293,7 +2473,7 @@
           {
             "name": "bottleneck",
             "type": "_DoubleConv",
-            "params": 2688000,
+            "params": 2688512,
             "own_params": 0,
             "children": [
               {
@@ -2341,17 +2521,32 @@
               },
               {
                 "name": "shortcut",
-                "type": "Conv3d",
-                "params": 32768,
-                "own_params": 32768,
-                "children": []
+                "type": "Sequential",
+                "params": 33280,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv3d",
+                    "params": 32768,
+                    "own_params": 32768,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "BatchNorm3d",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  }
+                ]
               }
             ]
           },
           {
             "name": "decoder_2",
             "type": "_DecoderBlock",
-            "params": 1622656,
+            "params": 1622912,
             "own_params": 0,
             "children": [
               {
@@ -2364,7 +2559,7 @@
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 1360384,
+                "params": 1360640,
                 "own_params": 0,
                 "children": [
                   {
@@ -2412,10 +2607,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv3d",
-                    "params": 32768,
-                    "own_params": 32768,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 33024,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 32768,
+                        "own_params": 32768,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               }
@@ -2424,7 +2634,7 @@
           {
             "name": "decoder_1",
             "type": "_DecoderBlock",
-            "params": 405824,
+            "params": 405952,
             "own_params": 0,
             "children": [
               {
@@ -2437,7 +2647,7 @@
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 340224,
+                "params": 340352,
                 "own_params": 0,
                 "children": [
                   {
@@ -2485,10 +2695,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv3d",
-                    "params": 8192,
-                    "own_params": 8192,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 8320,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 8192,
+                        "own_params": 8192,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               }
@@ -2497,7 +2722,7 @@
           {
             "name": "decoder_0",
             "type": "_DecoderBlock",
-            "params": 101536,
+            "params": 101600,
             "own_params": 0,
             "children": [
               {
@@ -2510,7 +2735,7 @@
               {
                 "name": "conv",
                 "type": "_DoubleConv",
-                "params": 85120,
+                "params": 85184,
                 "own_params": 0,
                 "children": [
                   {
@@ -2558,10 +2783,25 @@
                   },
                   {
                     "name": "shortcut",
-                    "type": "Conv3d",
-                    "params": 2048,
-                    "own_params": 2048,
-                    "children": []
+                    "type": "Sequential",
+                    "params": 2112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv3d",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "BatchNorm3d",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               }
