@@ -1474,6 +1474,68 @@ def threshold(
     return _l.where(replaced, replacement, x)
 
 
+def straight_through(hard: Tensor, soft: Tensor) -> Tensor:
+    r"""Straight-through estimator — ``hard`` forward, ``soft`` backward.
+
+    Returns a tensor numerically equal to ``hard`` whose gradient is the
+    gradient of ``soft``:
+
+    .. math::
+
+        \mathrm{ST}(h, s) = s + \mathrm{sg}\!\big[h - s\big],
+
+    where :math:`\mathrm{sg}` is the stop-gradient operator.  The forward
+    value is exactly :math:`h`, and :math:`\partial \mathrm{ST} /
+    \partial s` is the identity, so a discrete or otherwise
+    non-differentiable ``hard`` can sit in the middle of a network while
+    the surrounding layers still train.
+
+    Parameters
+    ----------
+    hard : Tensor
+        The value the forward pass should carry — typically the output of
+        a non-differentiable step such as a one-hot ``argmax`` or a
+        nearest-codebook lookup.
+    soft : Tensor
+        The differentiable surrogate whose gradient is borrowed.  Must be
+        broadcast-compatible with ``hard``; in practice the two have the
+        same shape.
+
+    Returns
+    -------
+    Tensor
+        Equal to ``hard`` in value, differentiable with respect to
+        whatever ``soft`` depends on.
+
+    Notes
+    -----
+    Introduced by Bengio, Léonard, and Courville, *"Estimating or
+    Propagating Gradients Through Stochastic Neurons for Conditional
+    Computation"* (arXiv:1308.3432).  It is the mechanism behind
+    :func:`gumbel_softmax` with ``hard=True`` and behind
+    :class:`lucid.nn.VectorQuantizer`, which is why it lives here rather
+    than being rewritten at each call site.
+
+    The estimator is biased — the returned gradient is not the gradient of
+    the discrete function, which has none — but it is low-variance and
+    empirically trains where the true gradient does not exist.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn.functional as F
+    >>> soft = lucid.tensor([0.3, 0.7], requires_grad=True)
+    >>> hard = lucid.tensor([0.0, 1.0])
+    >>> out = F.straight_through(hard, soft)
+    >>> out.tolist()               # the forward value is ``hard``
+    [0.0, 1.0]
+    >>> out.sum().backward()
+    >>> soft.grad.tolist()         # gradient passed through untouched
+    [1.0, 1.0]
+    """
+    return soft + (hard - soft).detach()
+
+
 def gumbel_softmax(
     logits: Tensor,
     tau: float = 1.0,
@@ -1547,12 +1609,11 @@ def gumbel_softmax(
     if not hard:
         return y_soft
 
-    # Straight-through: build a one-hot at argmax, then re-attach
-    # ``y_soft``'s gradient via ``y_hard − y_soft.detach() + y_soft``.
+    # Build a one-hot at argmax, then re-attach ``y_soft``'s gradient.
     idx: Tensor = y_soft.argmax(dim=dim, keepdim=True)
     y_hard: Tensor = _l.zeros_like(y_soft)
     y_hard = y_hard.scatter(dim, idx, _l.ones_like(idx, dtype=y_soft.dtype))
-    return y_hard - y_soft.detach() + y_soft
+    return straight_through(y_hard, y_soft)
 
 
 def rrelu(

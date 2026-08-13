@@ -354,5 +354,7 @@
   "yolo_v3_tiny": "e86cd5459f0a0dbc",
   "yolo_v4": "e86cd5459f0a0dbc",
   "zfnet": "3aa36edf7c305dc7",
-  "zfnet_cls": "3aa36edf7c305dc7"
+  "zfnet_cls": "3aa36edf7c305dc7",
+  "vq_vae": "ed999e879d93ef37",
+  "vq_vae_gen": "ed999e879d93ef37"
 }

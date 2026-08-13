@@ -8,6 +8,7 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._unsupported import unsupported_if
+from lucid.nn.functional.activations import straight_through
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -215,3 +216,118 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
             [0, 0, 1]])
     """
     return _wrap(_C_engine.nn.one_hot(_unwrap(tensor), num_classes))
+
+
+def nearest_codebook(x: Tensor, codebook: Tensor) -> Tensor:
+    r"""Index of the closest codebook entry for each row of ``x``.
+
+    .. math::
+
+        k_i = \arg\min_j \big\| x_i - e_j \big\|_2
+
+    The search is the non-differentiable half of vector quantisation:
+    the result is an integer field, so no gradient flows through it and
+    none is defined.  :func:`vector_quantize` pairs it with the
+    straight-through estimator to make the surrounding network trainable.
+
+    Parameters
+    ----------
+    x : Tensor
+        Query field of shape ``(*, D)``.  Only the trailing axis is
+        treated as the feature dimension; everything before it is
+        flattened into the search's row axis.
+    codebook : Tensor
+        Codebook of shape ``(K, D)``.
+
+    Returns
+    -------
+    Tensor
+        ``int64`` index field of shape ``(*)`` with values in ``[0, K)``.
+
+    Notes
+    -----
+    Distances go through :func:`lucid.cdist`, whose ``p=2`` path uses the
+    stable expansion :math:`\|a-b\|^2 = \|a\|^2 + \|b\|^2 - 2ab^\top`
+    rather than materialising an ``(N, K, D)`` difference.  It does
+    still build the ``(N, K)`` matrix, which at a large latent grid and
+    a large codebook is the dominant allocation of a quantiser; a fused
+    engine kernel that reduces over ``K`` without materialising it is the
+    natural next step and would slot in behind this exact signature.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn.functional as F
+    >>> codebook = lucid.tensor([[0.0, 0.0], [1.0, 1.0]])
+    >>> x = lucid.tensor([[0.9, 1.1], [0.1, 0.0]])
+    >>> F.nearest_codebook(x, codebook).tolist()
+    [1, 0]
+    """
+    if codebook.ndim != 2:
+        raise ValueError(f"codebook must be 2-D (K, D), got shape {codebook.shape}")
+    dim = int(codebook.shape[-1])
+    if int(x.shape[-1]) != dim:
+        raise ValueError(
+            f"x's trailing axis must match the codebook's, got "
+            f"{int(x.shape[-1])} and {dim}"
+        )
+
+    lead = tuple(int(s) for s in x.shape[:-1])
+    flat = x.reshape(-1, dim)
+    idx = lucid.argmin(lucid.cdist(flat, codebook), dim=1)
+    return idx.reshape(*lead) if lead else idx
+
+
+def vector_quantize(x: Tensor, codebook: Tensor) -> tuple[Tensor, Tensor]:
+    r"""Snap ``x`` to its nearest codebook entries, straight-through.
+
+    The functional core of :class:`lucid.nn.VectorQuantizer` — van den
+    Oord, Vinyals, and Kavukcuoglu, *"Neural Discrete Representation
+    Learning"* (2017).  Each row of ``x`` is replaced by the closest
+    entry of ``codebook``, and the result is routed through
+    :func:`straight_through` so the producer of ``x`` trains as though
+    quantisation were the identity.
+
+    Parameters
+    ----------
+    x : Tensor
+        Field of shape ``(*, D)``; the trailing axis is the feature
+        dimension.
+    codebook : Tensor
+        Codebook of shape ``(K, D)``.
+
+    Returns
+    -------
+    quantized : Tensor
+        Shape ``(*, D)``, numerically equal to the selected entries and
+        differentiable with respect to ``x``.
+    indices : Tensor
+        ``int64`` field of shape ``(*)`` naming the selected entries.
+
+    Notes
+    -----
+    The returned ``quantized`` carries **no** gradient to ``codebook`` —
+    the straight-through path routes past it by construction.  Training
+    the codebook needs the separate term
+    :math:`\|\mathrm{sg}[x] - e\|_2^2`, which
+    :class:`lucid.nn.VectorQuantizer` builds and returns alongside the
+    commitment term.  Calling this function directly and optimising only
+    a reconstruction loss leaves the codebook frozen at its
+    initialisation — a silent failure that looks like a model which
+    simply will not learn.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn.functional as F
+    >>> codebook = lucid.tensor([[0.0, 0.0], [1.0, 1.0]])
+    >>> x = lucid.tensor([[0.9, 1.1]], requires_grad=True)
+    >>> quantized, indices = F.vector_quantize(x, codebook)
+    >>> quantized.tolist(), indices.tolist()
+    ([[1.0, 1.0]], [1])
+    """
+    indices = nearest_codebook(x, codebook)
+    dim = int(codebook.shape[-1])
+    lead = tuple(int(s) for s in x.shape[:-1])
+    hard = embedding(indices.reshape(-1), codebook).reshape(*lead, dim)
+    return straight_through(hard, x), indices

@@ -48,6 +48,7 @@ from lucid.nn.functional.activations import (
     threshold,
     rrelu,
     gumbel_softmax,
+    straight_through,
     relu_,
     elu_,
     selu_,
@@ -132,7 +133,12 @@ from lucid.nn.functional.loss import (
     soft_margin_loss,
     multilabel_soft_margin_loss,
 )
-from lucid.nn.functional.sparse import embedding, one_hot
+from lucid.nn.functional.sparse import (
+    embedding,
+    nearest_codebook,
+    one_hot,
+    vector_quantize,
+)
 from lucid.nn.functional.positional import (
     apply_rotary_emb,
     sinusoidal_embedding,
@@ -187,6 +193,7 @@ __all__ = [
     "threshold",
     "rrelu",
     "gumbel_softmax",
+    "straight_through",
     # in-place activation variants (already imported above; previously
     # absent from __all__ caused them to fall through Griffe's static
     # AST walk → docs site missed the public surface).
@@ -272,6 +279,8 @@ __all__ = [
     # sparse
     "embedding",
     "one_hot",
+    "nearest_codebook",
+    "vector_quantize",
     # positional encodings
     "apply_rotary_emb",
     "sinusoidal_embedding",

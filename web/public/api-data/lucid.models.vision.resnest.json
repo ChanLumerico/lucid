@@ -3,7 +3,7 @@
   "name": "resnest",
   "path": "lucid.models.vision.resnest",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/__init__.py#L1",
   "members": [
     {
       "name": "ResNeStConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "ResNeStConfig(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), radix: int = 2, groups: int = 1, bottleneck_width: int = 64, avg_down: bool = True, avd: bool = True, avd_first: bool = False, stem_width: int = 32, deep_stem: bool = True, dropout: float = 0.0, drop_block_rate: float = 0.0, drop_block_size: int = 3, zero_init_residual: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), radix: int = 2, groups: int = 1, bottleneck_width: int = 64, avg_down: bool = True, avd: bool = True, avd_first: bool = False, stem_width: int = 32, deep_stem: bool = True, dropout: float = 0.0, drop_block_rate: float = 0.0, drop_block_size: int = 3, zero_init_residual: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "ResNeSt(config: ResNeStConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_model.py#L577",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_model.py#L577",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ResNeStConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_model.py#L655",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_model.py#L655",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_model.py#L679",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_model.py#L679",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_model.py#L682",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_model.py#L682",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_model.py#L693",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_model.py#L693",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -225,7 +225,7 @@
       ],
       "labels": [],
       "signature": "ResNeStForImageClassification(config: ResNeStConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_model.py#L703",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_model.py#L703",
       "subcategory": "model",
       "methods": [
         {
@@ -234,7 +234,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ResNeStConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_model.py#L762",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_model.py#L762",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -256,7 +256,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_model.py#L778",
+          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_model.py#L778",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -322,7 +322,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_14(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L42",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L42",
       "subcategory": "pretrained",
       "summary": "ResNeSt-14 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNeSt` with block repeats `[1, 1, 1, 1]`\nover four stages — a lightweight variant of the ResNeSt family\ntargeted at low-latency deployments.  Uses `radix = 2` and\n`stem_width = 32`.  Approximately 10.6M parameters.",
@@ -574,11 +574,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -740,11 +747,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -913,11 +926,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -1086,11 +1105,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -1133,7 +1158,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_14_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L366",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L366",
       "subcategory": "pretrained",
       "summary": "ResNeSt-14 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNeStForImageClassification` with the\nResNeSt-14 backbone (block repeats `[1, 1, 1, 1]`) followed\nby global average pooling and a linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\nApproximately 10.6M parameters — the lightweight variant of\nthe ResNeSt family.",
@@ -1385,11 +1410,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -1551,11 +1583,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -1724,11 +1762,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -1897,11 +1941,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -1958,7 +2008,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_26(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L94",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L94",
       "subcategory": "pretrained",
       "summary": "ResNeSt-26 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNeSt` with block repeats `[2, 2, 2, 2]`\nover four stages — a middle-ground variant between the\nlightweight ResNeSt-14 and the canonical ResNeSt-50.  Uses\n`radix = 2` and `stem_width = 32`.  Approximately 17.1M\nparameters.",
@@ -2210,11 +2260,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -2339,11 +2396,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -2505,11 +2569,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -2641,11 +2711,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -2807,11 +2884,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -2943,11 +3026,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -3109,11 +3199,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -3245,11 +3341,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -3285,7 +3388,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_26_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L421",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L421",
       "subcategory": "pretrained",
       "summary": "ResNeSt-26 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNeStForImageClassification` with the\nResNeSt-26 backbone (block repeats `[2, 2, 2, 2]`) followed\nby global average pooling and a linear projection.\nApproximately 17.1M parameters.",
@@ -3537,11 +3640,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -3666,11 +3776,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -3832,11 +3949,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -3968,11 +4091,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -4134,11 +4264,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -4270,11 +4406,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -4436,11 +4579,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -4572,11 +4721,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -4626,7 +4782,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_50(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L146",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L146",
       "subcategory": "pretrained",
       "summary": "ResNeSt-50 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNeSt` with ResNet-50 topology\n(`[3, 4, 6, 3]`), `radix = 2`, and the canonical\n`stem_width = 32` deep stem.  Approximately 27.5M parameters\nand 81.1% ImageNet-1k top-1 accuracy in Zhang et al., 2022\n(Table 4) — roughly 5 points higher than plain ResNet-50 at\nthe same parameter budget.  The default ResNeSt configuration.",
@@ -4878,11 +5034,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -5007,11 +5170,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -5174,11 +5344,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -5310,11 +5486,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -5477,11 +5660,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -5613,11 +5802,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -5780,11 +5976,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -5916,11 +6118,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -5957,7 +6166,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_50_cls(pretrained: bool | str = False, weights: ResNeSt50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L476",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L476",
       "subcategory": "pretrained",
       "summary": "ResNeSt-50 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNeStForImageClassification` with the\ncanonical ResNeSt-50 backbone (`[3, 4, 6, 3]`, `radix = 2`)\nfollowed by global average pooling and a linear projection.\nApproximately 27.5M parameters and 81.1% ImageNet-1k top-1\naccuracy in Zhang et al., 2022 (Table 4) — the canonical\nResNeSt configuration.",
@@ -6215,11 +6424,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -6344,11 +6560,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -6511,11 +6734,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -6647,11 +6876,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -6814,11 +7050,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -6950,11 +7192,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -7117,11 +7366,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -7253,11 +7508,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -7308,7 +7570,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_101(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L200",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L200",
       "subcategory": "pretrained",
       "summary": "ResNeSt-101 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNeSt` with ResNet-101 topology\n(`[3, 4, 23, 3]`), `radix = 2`, and a wider\n`stem_width = 64` deep stem.  Approximately 48.3M parameters\nand 82.8% ImageNet-1k top-1 accuracy in Zhang et al., 2022\n(Table 4).  Higher-accuracy drop-in replacement for ResNeSt-50.",
@@ -7560,11 +7822,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -7689,11 +7958,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -7856,11 +8132,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -7992,11 +8274,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -8159,11 +8448,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -8295,11 +8590,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -8462,11 +8764,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -8598,11 +8906,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -8639,7 +8954,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_101_cls(pretrained: bool | str = False, weights: ResNeSt101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L546",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L546",
       "subcategory": "pretrained",
       "summary": "ResNeSt-101 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNeStForImageClassification` with the\nResNeSt-101 backbone (`[3, 4, 23, 3]`, `stem_width = 64`)\nfollowed by global average pooling and a linear classifier.\nApproximately 48.3M parameters and 82.8% ImageNet-1k top-1\naccuracy in Zhang et al., 2022 (Table 4).",
@@ -8897,11 +9212,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -9026,11 +9348,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -9193,11 +9522,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -9329,11 +9664,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -9496,11 +9838,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -9632,11 +9980,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -9799,11 +10154,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -9935,11 +10296,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -9990,7 +10358,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_200(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L254",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L254",
       "subcategory": "pretrained",
       "summary": "ResNeSt-200 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNeSt` with the deep topology\n`[3, 24, 36, 3]`, `radix = 2`, and `stem_width = 64`.\nApproximately 70.2M parameters and 83.9% ImageNet-1k top-1\naccuracy in Zhang et al., 2022 (Table 4).",
@@ -10242,11 +10610,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -10371,11 +10746,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -10538,11 +10920,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -10674,11 +11062,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -10841,11 +11236,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -10977,11 +11378,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -11144,11 +11552,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -11280,11 +11694,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -11321,7 +11742,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_200_cls(pretrained: bool | str = False, weights: ResNeSt200Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L616",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L616",
       "subcategory": "pretrained",
       "summary": "ResNeSt-200 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNeStForImageClassification` with the\nResNeSt-200 backbone (`[3, 24, 36, 3]`, `stem_width = 64`)\nfollowed by global average pooling and a linear classifier.\nApproximately 70.2M parameters and 83.9% ImageNet-1k top-1\naccuracy in Zhang et al., 2022 (Table 4).",
@@ -11579,11 +12000,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -11708,11 +12136,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -11875,11 +12310,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -12011,11 +12452,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -12178,11 +12626,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -12314,11 +12768,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -12481,11 +12942,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -12617,11 +13084,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -12658,10 +13132,25 @@
           },
           {
             "name": "classifier",
-            "type": "Linear",
+            "type": "Sequential",
             "params": 2049000,
-            "own_params": 2049000,
-            "children": []
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 2049000,
+                "own_params": 2049000,
+                "children": []
+              }
+            ]
           }
         ]
       }
@@ -12672,7 +13161,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_269(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L307",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L307",
       "subcategory": "pretrained",
       "summary": "ResNeSt-269 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNeSt` with the very deep topology\n`[3, 30, 48, 8]`, `radix = 2`, and `stem_width = 64` —\nthe deepest variant from Zhang et al., 2022.  Approximately\n110.9M parameters and 84.5% ImageNet-1k top-1 accuracy\n(Table 4) at 416×416 input resolution.",
@@ -12924,11 +13413,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -13053,11 +13549,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -13220,11 +13723,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -13356,11 +13865,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -13523,11 +14039,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -13659,11 +14181,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -13826,11 +14355,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -13962,11 +14497,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -14003,7 +14545,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnest_269_cls(pretrained: bool | str = False, weights: ResNeSt269Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_pretrained.py#L686",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_pretrained.py#L686",
       "subcategory": "pretrained",
       "summary": "ResNeSt-269 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNeStForImageClassification` with the\ndeepest paper-cited backbone (`[3, 30, 48, 8]`,\n`stem_width = 64`) followed by global average pooling and a\nlinear classifier.  Approximately 110.9M parameters and 84.5%\nImageNet-1k top-1 accuracy in Zhang et al., 2022 (Table 4) at\n416×416 input resolution.",
@@ -14261,11 +14803,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -14390,11 +14939,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -14557,11 +15113,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -14693,11 +15255,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -14860,11 +15429,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -14996,11 +15571,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -15163,11 +15745,17 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
-                    "children": [],
-                    "repeat": 2
+                    "children": []
                   },
                   {
                     "name": "avd_last",
@@ -15299,11 +15887,18 @@
                   },
                   {
                     "name": "bn2",
+                    "type": "_DropBlock2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "act2",
                     "type": "Identity",
                     "params": 0,
                     "own_params": 0,
                     "children": [],
-                    "repeat": 3
+                    "repeat": 2
                   },
                   {
                     "name": "conv3",
@@ -15340,10 +15935,25 @@
           },
           {
             "name": "classifier",
-            "type": "Linear",
+            "type": "Sequential",
             "params": 2049000,
-            "own_params": 2049000,
-            "children": []
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 2049000,
+                "own_params": 2049000,
+                "children": []
+              }
+            ]
           }
         ]
       }
@@ -15358,7 +15968,7 @@
       ],
       "labels": [],
       "signature": "ResNeSt50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_weights.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_weights.py#L21",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.resnest_50_cls`.",
@@ -15382,7 +15992,7 @@
       ],
       "labels": [],
       "signature": "ResNeSt101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_weights.py#L48",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_weights.py#L48",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.resnest_101_cls`.",
@@ -15406,7 +16016,7 @@
       ],
       "labels": [],
       "signature": "ResNeSt200Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_weights.py#L75",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_weights.py#L75",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.resnest_200_cls`.",
@@ -15430,7 +16040,7 @@
       ],
       "labels": [],
       "signature": "ResNeSt269Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/cf7dcc424/lucid/models/vision/resnest/_weights.py#L102",
+      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/vision/resnest/_weights.py#L102",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.resnest_269_cls`.",
