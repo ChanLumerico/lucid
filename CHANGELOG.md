@@ -252,6 +252,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - check rank before it becomes a buffer size
 
+- encoding nothing produces nothing
+
 ### Changed
 
 - give the engine ops one shared operand check

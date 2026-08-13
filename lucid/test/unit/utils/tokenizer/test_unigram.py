@@ -160,5 +160,41 @@ class TestUnigramSpecialTokens:
         assert isinstance(ids, list)
 
 
+# ── the empty document ───────────────────────────────────────────────
+
+
+_PIECES = [(w, -1.0) for w in ("the", "quick", "brown", "fox")] + [("<unk>", -10.0)]
+
+
+@pytest.mark.parametrize("cls", [UnigramTokenizer, UnigramTokenizerFast])
+def test_encoding_nothing_produces_nothing(cls) -> None:
+    """``encode("")`` must be empty, as it is for BPE and WordPiece.
+
+    The SentencePiece pre-tokenizer prepended its ``▁`` marker even to an
+    empty string, so the empty document came back holding one token — a
+    marker that matches no piece and lands on ``<unk>``.  Every
+    length-based caller downstream (padding, truncation, attention masks)
+    reads that as a document with content.
+    """
+    assert cls(_PIECES).encode("") == []
+
+
+@pytest.mark.parametrize("cls", [UnigramTokenizer, UnigramTokenizerFast])
+def test_the_dummy_prefix_still_reaches_real_text(cls) -> None:
+    """Fixing the empty case must not cost the marker everywhere else."""
+    chunks = SentencePiecePreTokenizer().pre_tokenize("the quick")
+    assert [c for c, _ in chunks] == ["▁the", "▁quick"]
+    assert cls(_PIECES).encode("the") != []
+
+
+def test_a_sentencepiece_vocabulary_round_trips() -> None:
+    """With ``▁``-prefixed pieces the encoding is a fixed point."""
+    pieces = [("▁" + w, -1.0) for w in ("the", "quick", "brown", "fox")]
+    pieces.append(("<unk>", -10.0))
+    tok = UnigramTokenizer(pieces)
+    ids = tok.encode("the quick brown fox")
+    assert ids == tok.encode(tok.decode(ids))
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

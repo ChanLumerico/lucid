@@ -90,7 +90,16 @@ class SentencePiecePreTokenizer(PreTokenizer):
         # prepend SP_SPACE so the first word also carries the
         # word-start marker.
         text = "".join(self.SP_SPACE if c.isspace() else c for c in text)
-        if self._add_dummy_prefix and (not text or not text.startswith(self.SP_SPACE)):
+        # Empty in, empty out.  The ``not text`` arm used to prepend the
+        # marker to the empty string, so ``encode("")`` came back holding
+        # one token — a ``▁`` that matches nothing and lands on ``<unk>``.
+        # BPE and WordPiece both return ``[]`` here, and a tokenizer that
+        # invents a token for no input breaks every length-based caller
+        # (padding, truncation, attention masks) on the empty document.
+        # The arm was redundant besides: ``"".startswith("▁")`` is already
+        # False, so the second condition covered every non-empty case on
+        # its own.
+        if self._add_dummy_prefix and text and not text.startswith(self.SP_SPACE):
             text = self.SP_SPACE + text
         # Split on SP_SPACE boundaries, keeping the SP_SPACE prefix
         # attached to each word for round-trip decode.
