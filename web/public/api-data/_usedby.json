@@ -1744,7 +1744,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._model"
+      "module": "lucid.models.generative.vqvae._model"
     },
     {
       "kind": "module",
@@ -2562,7 +2562,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._model"
+      "module": "lucid.models.generative.vqvae._model"
     }
   ],
   "lucid.models._output.ImageClassificationOutput": [
@@ -2714,7 +2714,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._model"
+      "module": "lucid.models.generative.vqvae._model"
     },
     {
       "kind": "module",
@@ -2996,7 +2996,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._pretrained"
+      "module": "lucid.models.generative.vqvae._pretrained"
     },
     {
       "kind": "module",
@@ -3887,62 +3887,62 @@
       "module": "lucid.models.generative.vae"
     }
   ],
-  "lucid.models.generative.vq_vae": [
+  "lucid.models.generative.vqvae": [
     {
       "kind": "module",
       "module": "lucid.models"
     }
   ],
-  "lucid.models.generative.vq_vae._config.VQVAEConfig": [
+  "lucid.models.generative.vqvae._config.VQVAEConfig": [
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae"
+      "module": "lucid.models.generative.vqvae"
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._model"
+      "module": "lucid.models.generative.vqvae._model"
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._pretrained"
+      "module": "lucid.models.generative.vqvae._pretrained"
     }
   ],
-  "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration": [
+  "lucid.models.generative.vqvae._model.VQVAEForImageGeneration": [
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae"
+      "module": "lucid.models.generative.vqvae"
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._pretrained"
+      "module": "lucid.models.generative.vqvae._pretrained"
     }
   ],
-  "lucid.models.generative.vq_vae._model.VQVAEModel": [
+  "lucid.models.generative.vqvae._model.VQVAEModel": [
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae"
+      "module": "lucid.models.generative.vqvae"
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._pretrained"
+      "module": "lucid.models.generative.vqvae._pretrained"
     }
   ],
-  "lucid.models.generative.vq_vae._model.VQVAEOutput": [
+  "lucid.models.generative.vqvae._model.VQVAEOutput": [
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae"
+      "module": "lucid.models.generative.vqvae"
     }
   ],
-  "lucid.models.generative.vq_vae._pretrained.vq_vae": [
+  "lucid.models.generative.vqvae._pretrained.vqvae": [
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae"
+      "module": "lucid.models.generative.vqvae"
     }
   ],
-  "lucid.models.generative.vq_vae._pretrained.vq_vae_gen": [
+  "lucid.models.generative.vqvae._pretrained.vqvae_gen": [
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae"
+      "module": "lucid.models.generative.vqvae"
     }
   ],
   "lucid.models.text": [
@@ -9602,7 +9602,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._model"
+      "module": "lucid.models.generative.vqvae._model"
     },
     {
       "kind": "module",
@@ -9964,7 +9964,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.vq_vae._model"
+      "module": "lucid.models.generative.vqvae._model"
     },
     {
       "kind": "module",

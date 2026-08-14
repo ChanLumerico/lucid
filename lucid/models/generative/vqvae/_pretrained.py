@@ -6,8 +6,8 @@ hidden units, a 512 x 256 codebook, beta = 0.25 — so this family follows
 the project rule for paper-nominal models and exposes one trunk plus one
 task head rather than ``_small`` / ``_base`` / ``_large`` siblings:
 
-    * ``vq_vae``     — bare encoder / codebook / decoder.
-    * ``vq_vae_gen`` — the same trunk with the three-term objective.
+    * ``vqvae``     — bare encoder / codebook / decoder.
+    * ``vqvae_gen`` — the same trunk with the three-term objective.
 
 The paper's ImageNet setting is ``sample_size=128`` (a 32 x 32 latent
 grid); the defaults here use the generative domain's 32 x 32 images (an
@@ -24,8 +24,8 @@ from typing import Any, cast
 
 from lucid.models._registry import register_model
 from lucid.models._utils._common import reject_unavailable_pretrained
-from lucid.models.generative.vq_vae._config import VQVAEConfig
-from lucid.models.generative.vq_vae._model import VQVAEForImageGeneration, VQVAEModel
+from lucid.models.generative.vqvae._config import VQVAEConfig
+from lucid.models.generative.vqvae._model import VQVAEForImageGeneration, VQVAEModel
 
 # Paper defaults (Section 4.1) at the generative domain's 32 x 32 image
 # size: two stride-2 stages, two residual blocks, 256 hidden units, a
@@ -53,12 +53,12 @@ def _apply(cfg: VQVAEConfig, overrides: dict[str, object]) -> VQVAEConfig:
 
 @register_model(
     task="base",
-    family="vq_vae",
-    model_type="vq_vae",
+    family="vqvae",
+    model_type="vqvae",
     model_class=VQVAEModel,
     default_config=_CFG_VQ_VAE,
 )
-def vq_vae(pretrained: bool = False, **overrides: object) -> VQVAEModel:
+def vqvae(pretrained: bool = False, **overrides: object) -> VQVAEModel:
     r"""Construct a VQ-VAE trunk — encoder, codebook, decoder, no loss.
 
     Discrete-latent auto-encoder following van den Oord, Vinyals, and
@@ -105,15 +105,15 @@ def vq_vae(pretrained: bool = False, **overrides: object) -> VQVAEModel:
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative.vq_vae import vq_vae
-    >>> model = vq_vae().eval()
+    >>> from lucid.models.generative.vqvae import vqvae
+    >>> model = vqvae().eval()
     >>> x = lucid.randn((1, 3, 32, 32))
     >>> out = model(x)
     >>> out.sample.shape, out.indices.shape
     ((1, 3, 32, 32), (1, 8, 8))
     """
     if pretrained:
-        reject_unavailable_pretrained("vq_vae")
+        reject_unavailable_pretrained("vqvae")
     return VQVAEModel(_apply(_CFG_VQ_VAE, overrides))
 
 
@@ -122,17 +122,15 @@ def vq_vae(pretrained: bool = False, **overrides: object) -> VQVAEModel:
 
 @register_model(
     task="image-generation",
-    family="vq_vae",
-    model_type="vq_vae",
+    family="vqvae",
+    model_type="vqvae",
     model_class=VQVAEForImageGeneration,
     default_config=_CFG_VQ_VAE,
 )
-def vq_vae_gen(
-    pretrained: bool = False, **overrides: object
-) -> VQVAEForImageGeneration:
+def vqvae_gen(pretrained: bool = False, **overrides: object) -> VQVAEForImageGeneration:
     r"""Construct a VQ-VAE with the full training objective and a sampler.
 
-    Same trunk as :func:`vq_vae`, wrapped with the three-term objective of
+    Same trunk as :func:`vqvae`, wrapped with the three-term objective of
     van den Oord et al., 2017 — reconstruction, codebook, and
     :math:`\beta`-weighted commitment — plus a convenience sampler over
     the uniform codebook prior.
@@ -174,13 +172,13 @@ def vq_vae_gen(
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative.vq_vae import vq_vae_gen
-    >>> model = vq_vae_gen().eval()
+    >>> from lucid.models.generative.vqvae import vqvae_gen
+    >>> model = vqvae_gen().eval()
     >>> x = lucid.randn((1, 3, 32, 32))
     >>> out = model(x)
     >>> out.sample.shape, out.perplexity.shape
     ((1, 3, 32, 32), ())
     """
     if pretrained:
-        reject_unavailable_pretrained("vq_vae_gen")
+        reject_unavailable_pretrained("vqvae_gen")
     return VQVAEForImageGeneration(_apply(_CFG_VQ_VAE, overrides))

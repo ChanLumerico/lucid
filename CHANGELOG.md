@@ -269,6 +269,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - give the engine ops one shared operand check
 - name the package's callables and cache its derived flags
 
+- rename the VQ-VAE family identifier to vqvae
+
 ### Performance
 
 - find the event time by Illinois rather than bisection

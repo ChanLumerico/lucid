@@ -44,7 +44,7 @@ from lucid.models._utils._generative import (
     generative_activation,
     resolve_generation_device,
 )
-from lucid.models.generative.vq_vae._config import VQVAEConfig
+from lucid.models.generative.vqvae._config import VQVAEConfig
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Output dataclass
@@ -94,7 +94,7 @@ class VQVAEOutput(ModelOutput):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative.vq_vae import (
+    >>> from lucid.models.generative.vqvae import (
     ...     VQVAEConfig, VQVAEForImageGeneration,
     ... )
     >>> cfg = VQVAEConfig(sample_size=32, hidden_channels=16,
@@ -308,7 +308,7 @@ class VQVAEModel(PretrainedModel):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative.vq_vae import VQVAEConfig, VQVAEModel
+    >>> from lucid.models.generative.vqvae import VQVAEConfig, VQVAEModel
     >>> cfg = VQVAEConfig(sample_size=32, hidden_channels=32,
     ...                   residual_hidden_channels=32, embedding_dim=16,
     ...                   num_embeddings=64)
@@ -320,7 +320,7 @@ class VQVAEModel(PretrainedModel):
     """
 
     config_class: ClassVar[type[VQVAEConfig]] = VQVAEConfig
-    base_model_prefix: ClassVar[str] = "vq_vae"
+    base_model_prefix: ClassVar[str] = "vqvae"
 
     def __init__(self, config: VQVAEConfig) -> None:
         super().__init__(config)
@@ -419,7 +419,7 @@ class VQVAEForImageGeneration(PretrainedModel):
 
     Attributes
     ----------
-    vq_vae : VQVAEModel
+    vqvae : VQVAEModel
         Underlying trunk providing ``encode`` / ``decode`` and the
         codebook.
 
@@ -450,7 +450,7 @@ class VQVAEForImageGeneration(PretrainedModel):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative.vq_vae import (
+    >>> from lucid.models.generative.vqvae import (
     ...     VQVAEConfig, VQVAEForImageGeneration,
     ... )
     >>> cfg = VQVAEConfig(sample_size=32, hidden_channels=32,
@@ -464,11 +464,11 @@ class VQVAEForImageGeneration(PretrainedModel):
     """
 
     config_class: ClassVar[type[VQVAEConfig]] = VQVAEConfig
-    base_model_prefix: ClassVar[str] = "vq_vae"
+    base_model_prefix: ClassVar[str] = "vqvae"
 
     def __init__(self, config: VQVAEConfig) -> None:
         super().__init__(config)
-        self.vq_vae = VQVAEModel(config)
+        self.vqvae = VQVAEModel(config)
         self._recon_loss = config.recon_loss
         self._latent_grid_size = config.latent_grid_size
         self._num_embeddings = config.num_embeddings
@@ -492,13 +492,13 @@ class VQVAEForImageGeneration(PretrainedModel):
 
     @override
     def forward(self, x: Tensor) -> VQVAEOutput:  # type: ignore[override]
-        q = self.vq_vae.quantize(self.vq_vae.encode(x))
-        recon = self.vq_vae.decode(q.quantized)
+        q = self.vqvae.quantize(self.vqvae.encode(x))
+        recon = self.vqvae.decode(q.quantized)
 
         recon_l = self._reconstruction_loss(recon, x)
         # ``VectorQuantizer.loss`` applies the layer's own commitment_cost,
         # which the config seeded — so the beta lives in exactly one place.
-        total = recon_l + self.vq_vae.quantizer.loss(q)
+        total = recon_l + self.vqvae.quantizer.loss(q)
 
         return VQVAEOutput(
             sample=self._to_data_space(recon),
@@ -549,8 +549,8 @@ class VQVAEForImageGeneration(PretrainedModel):
         Examples
         --------
         >>> import lucid
-        >>> from lucid.models.generative.vq_vae import VQVAEConfig
-        >>> from lucid.models.generative.vq_vae import VQVAEForImageGeneration
+        >>> from lucid.models.generative.vqvae import VQVAEConfig
+        >>> from lucid.models.generative.vqvae import VQVAEForImageGeneration
         >>> cfg = VQVAEConfig(sample_size=32, hidden_channels=16,
         ...                   residual_hidden_channels=16, embedding_dim=8,
         ...                   num_embeddings=32)
@@ -562,7 +562,7 @@ class VQVAEForImageGeneration(PretrainedModel):
         indices = lucid.randint(
             0, self._num_embeddings, size=(n_samples, h, w), device=device
         )
-        samples = self.vq_vae.decode_indices(indices)
+        samples = self.vqvae.decode_indices(indices)
         if self._recon_loss == "bce":
             samples = F.sigmoid(samples)
         return GenerationOutput(samples=samples)

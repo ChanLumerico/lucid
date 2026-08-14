@@ -52,7 +52,7 @@ class TestVQVAEConfig:
         assert cfg.commitment_cost == 0.25
         assert cfg.act_fn == "relu"
         assert cfg.recon_loss == "mse"
-        assert cfg.model_type == "vq_vae"
+        assert cfg.model_type == "vqvae"
 
     def test_latent_grid_size(self) -> None:
         assert VQVAEConfig(sample_size=32).latent_grid_size == (8, 8)
@@ -310,27 +310,27 @@ class TestLikelihoodsAndSampling:
 
 
 class TestRegistry:
-    @pytest.mark.parametrize("name", ["vq_vae", "vq_vae_gen"])
+    @pytest.mark.parametrize("name", ["vqvae", "vqvae_gen"])
     def test_registered(self, name: str) -> None:
         assert is_model(name)
 
     def test_create_model_defaults(self) -> None:
-        model = create_model("vq_vae")
+        model = create_model("vqvae")
         assert isinstance(model, VQVAEModel)
         assert model.config.num_embeddings == 512
         assert model.latent_grid_size == (8, 8)
 
     def test_create_model_head(self) -> None:
-        model = create_model("vq_vae_gen")
+        model = create_model("vqvae_gen")
         assert isinstance(model, VQVAEForImageGeneration)
 
     def test_config_override_through_registry(self) -> None:
-        model = create_model("vq_vae", num_embeddings=64, embedding_dim=32)
+        model = create_model("vqvae", num_embeddings=64, embedding_dim=32)
         assert model.config.num_embeddings == 64
         assert model.num_embeddings == 64
         assert model.config.embedding_dim == 32
 
-    @pytest.mark.parametrize("name", ["vq_vae", "vq_vae_gen"])
+    @pytest.mark.parametrize("name", ["vqvae", "vqvae_gen"])
     def test_pretrained_is_refused_rather_than_faked(self, name: str) -> None:
         # Silently returning random weights under ``pretrained=True`` is a
         # worse failure than raising: it surfaces as poor accuracy, not an

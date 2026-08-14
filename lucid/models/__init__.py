@@ -56,9 +56,9 @@ from lucid.models.generative.nice import (
     nice_mnist_gen, nice_tfd_gen, nice_svhn_gen, nice_cifar_gen,
 )
 # 2017 — VQ-VAE (van den Oord, Vinyals & Kavukcuoglu)
-from lucid.models.generative.vq_vae import (
+from lucid.models.generative.vqvae import (
     VQVAEConfig, VQVAEModel, VQVAEForImageGeneration, VQVAEOutput,
-    vq_vae, vq_vae_gen,
+    vqvae, vqvae_gen,
 )
 # 2020 — DDPM (Ho et al.)
 from lucid.models.generative.ddpm import (
@@ -714,7 +714,7 @@ __all__ = [
     "nice_mnist_gen", "nice_tfd_gen", "nice_svhn_gen", "nice_cifar_gen",
     # ── Generative (2017) VQ-VAE ──────────────────────────────────────────────
     "VQVAEConfig", "VQVAEModel", "VQVAEForImageGeneration", "VQVAEOutput",
-    "vq_vae", "vq_vae_gen",
+    "vqvae", "vqvae_gen",
     # ── Generative (2020) DDPM ────────────────────────────────────────────────
     "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "DDPMUNet",
     "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",

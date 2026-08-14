@@ -150,7 +150,7 @@ class VQVAEConfig(GenerativeModelConfig):
 
     Examples
     --------
-    >>> from lucid.models.generative.vq_vae import VQVAEConfig
+    >>> from lucid.models.generative.vqvae import VQVAEConfig
     >>> cfg = VQVAEConfig(sample_size=32)
     >>> cfg.latent_grid_size
     (8, 8)
@@ -158,7 +158,7 @@ class VQVAEConfig(GenerativeModelConfig):
     (512, 256)
     """
 
-    model_type: ClassVar[str] = "vq_vae"
+    model_type: ClassVar[str] = "vqvae"
 
     act_fn: Literal["silu", "swish", "relu", "gelu"] = "relu"
 

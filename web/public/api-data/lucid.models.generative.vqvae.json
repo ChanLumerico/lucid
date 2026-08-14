@@ -1,13 +1,13 @@
 {
-  "slug": "lucid.models.generative.vq_vae",
-  "name": "vq_vae",
-  "path": "lucid.models.generative.vq_vae",
+  "slug": "lucid.models.generative.vqvae",
+  "name": "vqvae",
+  "path": "lucid.models.generative.vqvae",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/__init__.py#L1",
   "members": [
     {
       "name": "VQVAEConfig",
-      "path": "lucid.models.generative.vq_vae._config.VQVAEConfig",
+      "path": "lucid.models.generative.vqvae._config.VQVAEConfig",
       "kind": "class",
       "class_kind": "dataclass",
       "bases": [
@@ -15,18 +15,18 @@
       ],
       "labels": [],
       "signature": "VQVAEConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: Literal['silu', 'swish', 'relu', 'gelu'] = 'relu', num_embeddings: int = 512, embedding_dim: int = 256, hidden_channels: int = 256, num_downsample_layers: int = 2, num_residual_layers: int = 2, residual_hidden_channels: int = 256, commitment_cost: float = 0.25, recon_loss: Literal['mse', 'bce'] = 'mse')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_config.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_config.py#L21",
       "subcategory": "config",
       "methods": [
         {
           "name": "latent_grid_size",
-          "path": "lucid.models.generative.vq_vae._config.VQVAEConfig.latent_grid_size",
+          "path": "lucid.models.generative.vqvae._config.VQVAEConfig.latent_grid_size",
           "kind": "function",
           "labels": [
             "property"
           ],
           "signature": "latent_grid_size: tuple[int, int]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_config.py#L229",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_config.py#L229",
           "summary": "Spatial `(H, W)` of the discrete latent field.",
           "extended": null,
           "parameters": [],
@@ -43,11 +43,11 @@
         },
         {
           "name": "__init__",
-          "path": "lucid.models.generative.vq_vae._config.VQVAEConfig.__init__",
+          "path": "lucid.models.generative.vqvae._config.VQVAEConfig.__init__",
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: Literal['silu', 'swish', 'relu', 'gelu'] = 'relu', num_embeddings: int = 512, embedding_dim: int = 256, hidden_channels: int = 256, num_downsample_layers: int = 2, num_residual_layers: int = 2, residual_hidden_channels: int = 256, commitment_cost: float = 0.25, recon_loss: Literal['mse', 'bce'] = 'mse')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -143,7 +143,7 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> from lucid.models.generative.vq_vae import VQVAEConfig\n>>> cfg = VQVAEConfig(sample_size=32)\n>>> cfg.latent_grid_size\n(8, 8)\n>>> cfg.num_embeddings, cfg.embedding_dim\n(512, 256)"
+        ">>> from lucid.models.generative.vqvae import VQVAEConfig\n>>> cfg = VQVAEConfig(sample_size=32)\n>>> cfg.latent_grid_size\n(8, 8)\n>>> cfg.num_embeddings, cfg.embedding_dim\n(512, 256)"
       ],
       "notes": [
         "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nThe paper reports a single image architecture rather than a table of\nsized variants, so this family exposes one nominal factory rather than\n`_small` / `_base` / `_large` siblings.  Scale it by overriding\nthe fields above at `create_model` time.\n\nThe paper's Appendix A.1 also describes an exponential-moving-average\nalternative to the codebook loss.  That variant changes how the\ncodebook is *updated* rather than what the network computes, so it\nbelongs to a training loop rather than to the architecture, and is not\nmodelled here."
@@ -160,7 +160,7 @@
     },
     {
       "name": "VQVAEForImageGeneration",
-      "path": "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration",
+      "path": "lucid.models.generative.vqvae._model.VQVAEForImageGeneration",
       "kind": "class",
       "class_kind": "regular",
       "bases": [
@@ -168,16 +168,16 @@
       ],
       "labels": [],
       "signature": "VQVAEForImageGeneration(config: VQVAEConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L397",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L397",
       "subcategory": "model",
       "methods": [
         {
           "name": "__init__",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration.__init__",
+          "path": "lucid.models.generative.vqvae._model.VQVAEForImageGeneration.__init__",
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VQVAEConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L469",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L469",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -195,11 +195,11 @@
         },
         {
           "name": "forward",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration.forward",
+          "path": "lucid.models.generative.vqvae._model.VQVAEForImageGeneration.forward",
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L493",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L493",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -217,11 +217,11 @@
         },
         {
           "name": "generate",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEForImageGeneration.generate",
+          "path": "lucid.models.generative.vqvae._model.VQVAEForImageGeneration.generate",
           "kind": "function",
           "labels": [],
           "signature": "generate(n_samples: int = 1, device: str | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L514",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L514",
           "subcategory": "model",
           "summary": "Sample `n_samples` images from the uniform codebook prior.",
           "extended": "Draws an index field uniformly over $[0, K)$ and decodes it.",
@@ -245,7 +245,7 @@
           },
           "raises": [],
           "examples": [
-            ">>> import lucid\n>>> from lucid.models.generative.vq_vae import VQVAEConfig\n>>> from lucid.models.generative.vq_vae import VQVAEForImageGeneration\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=16,\n...                   residual_hidden_channels=16, embedding_dim=8,\n...                   num_embeddings=32)\n>>> VQVAEForImageGeneration(cfg).eval().generate(2).samples.shape\n(2, 3, 32, 32)"
+            ">>> import lucid\n>>> from lucid.models.generative.vqvae import VQVAEConfig\n>>> from lucid.models.generative.vqvae import VQVAEForImageGeneration\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=16,\n...                   residual_hidden_channels=16, embedding_dim=8,\n...                   num_embeddings=32)\n>>> VQVAEForImageGeneration(cfg).eval().generate(2).samples.shape\n(2, 3, 32, 32)"
           ],
           "notes": [
             "This is the *training-time* prior — uniform is what makes the KL\nterm the constant $\\log K$ and drops it from the objective.\nIt is not the paper's generative prior, which is a PixelCNN fit\nover the latent grid afterwards, so these samples are expected to\nbe incoherent.  Fitting such a prior is a separate model over\n`VQVAEModel.encode_indices` output."
@@ -268,14 +268,14 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import (\n...     VQVAEConfig, VQVAEForImageGeneration,\n... )\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=32,\n...                   residual_hidden_channels=32, embedding_dim=16,\n...                   num_embeddings=64)\n>>> model = VQVAEForImageGeneration(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.loss.shape\n((1, 3, 32, 32), ())"
+        ">>> import lucid\n>>> from lucid.models.generative.vqvae import (\n...     VQVAEConfig, VQVAEForImageGeneration,\n... )\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=32,\n...                   residual_hidden_channels=32, embedding_dim=16,\n...                   num_embeddings=64)\n>>> model = VQVAEForImageGeneration(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.loss.shape\n((1, 3, 32, 32), ())"
       ],
       "notes": [
         "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nTraining objective:\n\n\n\n$$\nL = \\log p(x \\mid z_q(x))\n    + \\big\\| \\mathrm{sg}[z_e(x)] - e \\big\\|_2^2\n    + \\beta \\big\\| z_e(x) - \\mathrm{sg}[e] \\big\\|_2^2 .\n$$\n\n**On `generate`.** The prior over the discrete latents is uniform\n*during training* — that is the paper's choice, and it is why the KL\nterm is the constant $\\log K$ and drops out of the objective.\n`generate` samples from exactly that uniform prior, so it is\nfaithful to what this model was trained against, but it is not how\nthe paper produces its figures: there, a PixelCNN is fit over the\nlatent grid afterwards and sampled autoregressively.  Expect\nincoherent images from the uniform sampler.  Fitting a prior is a\nseparate model over `encode_indices` output, deliberately outside\nthis family."
       ],
       "attributes": [
         {
-          "name": "vq_vae",
+          "name": "vqvae",
           "annotation": "VQVAEModel",
           "description": "Underlying trunk providing `encode` / `decode` and the\ncodebook."
         }
@@ -285,7 +285,7 @@
     },
     {
       "name": "VQVAEModel",
-      "path": "lucid.models.generative.vq_vae._model.VQVAEModel",
+      "path": "lucid.models.generative.vqvae._model.VQVAEModel",
       "kind": "class",
       "class_kind": "regular",
       "bases": [
@@ -293,16 +293,16 @@
       ],
       "labels": [],
       "signature": "VQVAEModel(config: VQVAEConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L256",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L256",
       "subcategory": "model",
       "methods": [
         {
           "name": "__init__",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.__init__",
+          "path": "lucid.models.generative.vqvae._model.VQVAEModel.__init__",
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: VQVAEConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L325",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L325",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -320,13 +320,13 @@
         },
         {
           "name": "latent_grid_size",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.latent_grid_size",
+          "path": "lucid.models.generative.vqvae._model.VQVAEModel.latent_grid_size",
           "kind": "function",
           "labels": [
             "property"
           ],
           "signature": "latent_grid_size: tuple[int, int]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L337",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L337",
           "summary": "Spatial `(H', W')` of the discrete latent field.",
           "extended": null,
           "parameters": [],
@@ -343,13 +343,13 @@
         },
         {
           "name": "num_embeddings",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.num_embeddings",
+          "path": "lucid.models.generative.vqvae._model.VQVAEModel.num_embeddings",
           "kind": "function",
           "labels": [
             "property"
           ],
           "signature": "num_embeddings: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L342",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L342",
           "summary": "Codebook size $K$.",
           "extended": null,
           "parameters": [],
@@ -366,11 +366,11 @@
         },
         {
           "name": "encode",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.encode",
+          "path": "lucid.models.generative.vqvae._model.VQVAEModel.encode",
           "kind": "function",
           "labels": [],
           "signature": "encode(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L346",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L346",
           "subcategory": "model",
           "summary": "Return the *continuous* pre-quantisation latent `z_e(x)`.",
           "extended": null,
@@ -388,11 +388,11 @@
         },
         {
           "name": "decode",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.decode",
+          "path": "lucid.models.generative.vqvae._model.VQVAEModel.decode",
           "kind": "function",
           "labels": [],
           "signature": "decode(z_q: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L350",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L350",
           "subcategory": "model",
           "summary": "Decode a quantised latent field back to image space.",
           "extended": null,
@@ -410,11 +410,11 @@
         },
         {
           "name": "quantize",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.quantize",
+          "path": "lucid.models.generative.vqvae._model.VQVAEModel.quantize",
           "kind": "function",
           "labels": [],
           "signature": "quantize(z_e: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L354",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L354",
           "subcategory": "model",
           "summary": "Quantise an `(B, D, H', W')` latent field.",
           "extended": "`lucid.nn.VectorQuantizer` follows the framework's\ntrailing-axis convention, so the channel axis is moved last for\nthe lookup and moved back afterwards; the returned `quantized`\nis in image layout, while `indices` is `(B, H', W')`.",
@@ -432,11 +432,11 @@
         },
         {
           "name": "encode_indices",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.encode_indices",
+          "path": "lucid.models.generative.vqvae._model.VQVAEModel.encode_indices",
           "kind": "function",
           "labels": [],
           "signature": "encode_indices(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L365",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L365",
           "subcategory": "model",
           "summary": "Tokenise `x` into codebook indices shaped `(B, H', W')`.",
           "extended": null,
@@ -454,11 +454,11 @@
         },
         {
           "name": "decode_indices",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.decode_indices",
+          "path": "lucid.models.generative.vqvae._model.VQVAEModel.decode_indices",
           "kind": "function",
           "labels": [],
           "signature": "decode_indices(indices: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L370",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L370",
           "subcategory": "model",
           "summary": "Detokenise an index field `(B, H', W')` back to an image.",
           "extended": null,
@@ -476,11 +476,11 @@
         },
         {
           "name": "forward",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEModel.forward",
+          "path": "lucid.models.generative.vqvae._model.VQVAEModel.forward",
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L375",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L375",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -510,7 +510,7 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import VQVAEConfig, VQVAEModel\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=32,\n...                   residual_hidden_channels=32, embedding_dim=16,\n...                   num_embeddings=64)\n>>> model = VQVAEModel(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.indices.shape\n((1, 3, 32, 32), (1, 8, 8))"
+        ">>> import lucid\n>>> from lucid.models.generative.vqvae import VQVAEConfig, VQVAEModel\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=32,\n...                   residual_hidden_channels=32, embedding_dim=16,\n...                   num_embeddings=64)\n>>> model = VQVAEModel(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.indices.shape\n((1, 3, 32, 32), (1, 8, 8))"
       ],
       "notes": [
         "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nThe straight-through estimator used here is\n\n\n\n$$\nz_q^{\\mathrm{st}} = z_e + \\mathrm{sg}\\!\\big[z_q - z_e\\big],\n$$\n\nwhich equals $z_q$ in the forward pass and has the identity\nJacobian with respect to $z_e$ in the backward pass."
@@ -537,7 +537,7 @@
     },
     {
       "name": "VQVAEOutput",
-      "path": "lucid.models.generative.vq_vae._model.VQVAEOutput",
+      "path": "lucid.models.generative.vqvae._model.VQVAEOutput",
       "kind": "class",
       "class_kind": "dataclass",
       "bases": [
@@ -545,16 +545,16 @@
       ],
       "labels": [],
       "signature": "VQVAEOutput(sample: Tensor, latent: Tensor, indices: Tensor, perplexity: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, codebook_loss: Tensor | None = None, commitment_loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L54",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L54",
       "subcategory": "model",
       "methods": [
         {
           "name": "__init__",
-          "path": "lucid.models.generative.vq_vae._model.VQVAEOutput.__init__",
+          "path": "lucid.models.generative.vqvae._model.VQVAEOutput.__init__",
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample: Tensor, latent: Tensor, indices: Tensor, perplexity: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, codebook_loss: Tensor | None = None, commitment_loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -577,7 +577,7 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import (\n...     VQVAEConfig, VQVAEForImageGeneration,\n... )\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=16,\n...                   residual_hidden_channels=16, embedding_dim=8,\n...                   num_embeddings=32)\n>>> out = VQVAEForImageGeneration(cfg).eval()(lucid.randn((4, 3, 32, 32)))\n>>> out.sample.shape, out.indices.shape\n((4, 3, 32, 32), (4, 8, 8))"
+        ">>> import lucid\n>>> from lucid.models.generative.vqvae import (\n...     VQVAEConfig, VQVAEForImageGeneration,\n... )\n>>> cfg = VQVAEConfig(sample_size=32, hidden_channels=16,\n...                   residual_hidden_channels=16, embedding_dim=8,\n...                   num_embeddings=32)\n>>> out = VQVAEForImageGeneration(cfg).eval()(lucid.randn((4, 3, 32, 32)))\n>>> out.sample.shape, out.indices.shape\n((4, 3, 32, 32), (4, 8, 8))"
       ],
       "notes": [
         "Returned by `VQVAEModel.forward` (losses `None`) and by\n`VQVAEForImageGeneration.forward` (losses populated)."
@@ -628,12 +628,12 @@
       "see_also": []
     },
     {
-      "name": "vq_vae",
-      "path": "lucid.models.generative.vq_vae._pretrained.vq_vae",
+      "name": "vqvae",
+      "path": "lucid.models.generative.vqvae._pretrained.vqvae",
       "kind": "function",
       "labels": [],
-      "signature": "vq_vae(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_pretrained.py#L54",
+      "signature": "vqvae(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_pretrained.py#L54",
       "subcategory": "pretrained",
       "summary": "Construct a VQ-VAE trunk — encoder, codebook, decoder, no loss.",
       "extended": "Discrete-latent auto-encoder following van den Oord, Vinyals, and\nKavukcuoglu, 2017, Section 4.1: two stride-2 convolutions with a 4x4\nwindow, two pre-activation residual blocks, 256 hidden units\nthroughout, and a `512 x 256` codebook.  At the default\n`sample_size=32` the latent grid is `8 x 8`.\n\nUse `VQVAEModel.encode_indices` and\n`VQVAEModel.decode_indices` for the tokeniser interface — an\nimage in, an integer code field out, and back.",
@@ -657,7 +657,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import vq_vae\n>>> model = vq_vae().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.indices.shape\n((1, 3, 32, 32), (1, 8, 8))"
+        ">>> import lucid\n>>> from lucid.models.generative.vqvae import vqvae\n>>> model = vqvae().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.indices.shape\n((1, 3, 32, 32), (1, 8, 8))"
       ],
       "notes": [
         "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nQuantisation snaps each spatial position of the encoder output to its\nnearest codebook entry:\n\n\n\n$$\nz_q(x) = e_k,\n\\qquad\nk = \\arg\\min_j \\big\\| z_e(x) - e_j \\big\\|_2 .\n$$"
@@ -818,15 +818,15 @@
       }
     },
     {
-      "name": "vq_vae_gen",
-      "path": "lucid.models.generative.vq_vae._pretrained.vq_vae_gen",
+      "name": "vqvae_gen",
+      "path": "lucid.models.generative.vqvae._pretrained.vqvae_gen",
       "kind": "function",
       "labels": [],
-      "signature": "vq_vae_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/ad07f86dd/lucid/models/generative/vq_vae/_pretrained.py#L123",
+      "signature": "vqvae_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7eeb537fb/lucid/models/generative/vqvae/_pretrained.py#L123",
       "subcategory": "pretrained",
       "summary": "Construct a VQ-VAE with the full training objective and a sampler.",
-      "extended": "Same trunk as `vq_vae`, wrapped with the three-term objective of\nvan den Oord et al., 2017 — reconstruction, codebook, and\n$\\beta$-weighted commitment — plus a convenience sampler over\nthe uniform codebook prior.",
+      "extended": "Same trunk as `vqvae`, wrapped with the three-term objective of\nvan den Oord et al., 2017 — reconstruction, codebook, and\n$\\beta$-weighted commitment — plus a convenience sampler over\nthe uniform codebook prior.",
       "parameters": [
         {
           "name": "pretrained",
@@ -847,7 +847,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.generative.vq_vae import vq_vae_gen\n>>> model = vq_vae_gen().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.perplexity.shape\n((1, 3, 32, 32), ())"
+        ">>> import lucid\n>>> from lucid.models.generative.vqvae import vqvae_gen\n>>> model = vqvae_gen().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.perplexity.shape\n((1, 3, 32, 32), ())"
       ],
       "notes": [
         "Reference: van den Oord, Vinyals, and Kavukcuoglu, *\"Neural Discrete\nRepresentation Learning\"*, NeurIPS, 2017 ([arXiv:1711.00937](https://arxiv.org/abs/1711.00937)).\n\nTraining objective:\n\n\n\n$$\nL = \\log p(x \\mid z_q(x))\n    + \\big\\| \\mathrm{sg}[z_e(x)] - e \\big\\|_2^2\n    + \\beta \\big\\| z_e(x) - \\mathrm{sg}[e] \\big\\|_2^2 .\n$$\n\n`generate` samples the *uniform* prior the model was trained\nagainst, not a learned one — the paper fits a PixelCNN over the latent\ngrid for its figures.  Samples from the uniform prior are expected to\nbe incoherent; see `VQVAEForImageGeneration`."
@@ -862,7 +862,7 @@
         "own_params": 0,
         "children": [
           {
-            "name": "vq_vae",
+            "name": "vqvae",
             "type": "VQVAEModel",
             "params": 5530883,
             "own_params": 0,

@@ -301432,5 +301432,315 @@
         ]
       }
     ]
+  },
+  "vqvae": {
+    "name": "VQVAEModel",
+    "type": "VQVAEModel",
+    "params": 5530883,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "encoder",
+        "type": "_VQVAEEncoder",
+        "params": 2437888,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "down_blocks",
+            "type": "ModuleList",
+            "params": 1061376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 12544,
+                "own_params": 12544,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Conv2d",
+                "params": 1048832,
+                "own_params": 1048832,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "residuals",
+            "type": "ModuleList",
+            "params": 1310720,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_VQVAEResidualBlock",
+                "params": 655360,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 589824,
+                    "own_params": 589824,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 65536,
+                    "own_params": 65536,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "proj",
+            "type": "Conv2d",
+            "params": 65792,
+            "own_params": 65792,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "quantizer",
+        "type": "VectorQuantizer",
+        "params": 131072,
+        "own_params": 131072,
+        "children": []
+      },
+      {
+        "name": "decoder",
+        "type": "_VQVAEDecoder",
+        "params": 2961923,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "lift",
+            "type": "Conv2d",
+            "params": 590080,
+            "own_params": 590080,
+            "children": []
+          },
+          {
+            "name": "residuals",
+            "type": "ModuleList",
+            "params": 1310720,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_VQVAEResidualBlock",
+                "params": 655360,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 589824,
+                    "own_params": 589824,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 65536,
+                    "own_params": 65536,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "up_blocks",
+            "type": "ModuleList",
+            "params": 1061123,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "ConvTranspose2d",
+                "params": 1048832,
+                "own_params": 1048832,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ConvTranspose2d",
+                "params": 12291,
+                "own_params": 12291,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "vqvae_gen": {
+    "name": "VQVAEForImageGeneration",
+    "type": "VQVAEForImageGeneration",
+    "params": 5530883,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "vqvae",
+        "type": "VQVAEModel",
+        "params": 5530883,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_VQVAEEncoder",
+            "params": 2437888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "down_blocks",
+                "type": "ModuleList",
+                "params": 1061376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 12544,
+                    "own_params": 12544,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 1048832,
+                    "own_params": 1048832,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "residuals",
+                "type": "ModuleList",
+                "params": 1310720,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_VQVAEResidualBlock",
+                    "params": 655360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "quantizer",
+            "type": "VectorQuantizer",
+            "params": 131072,
+            "own_params": 131072,
+            "children": []
+          },
+          {
+            "name": "decoder",
+            "type": "_VQVAEDecoder",
+            "params": 2961923,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lift",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "residuals",
+                "type": "ModuleList",
+                "params": 1310720,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_VQVAEResidualBlock",
+                    "params": 655360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 589824,
+                        "own_params": 589824,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 65536,
+                        "own_params": 65536,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "up_blocks",
+                "type": "ModuleList",
+                "params": 1061123,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 1048832,
+                    "own_params": 1048832,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 12291,
+                    "own_params": 12291,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 }
