@@ -118,14 +118,34 @@ class PlaNetConfig(GenerativeModelConfig):
         knob — the spatial schedule is fixed.
     min_std : float, default=0.1
         Floor on the latent standard deviation.
+    mean_only : bool, default=False
+        Take the latent's mean instead of sampling it, making the whole
+        recurrence deterministic.  ``plan`` always does this regardless —
+        see Notes — so the flag matters for training and for
+        :meth:`PlaNetModel.observe` / :meth:`PlaNetModel.imagine`.
     free_nats : float, default=3.0
         The KL is clamped below at this value before it enters the loss.
     kl_weight : float, default=1.0
         Multiplier :math:`\beta` on the clamped KL.
+    overshoot_distance : int or None, default=None
+        How many steps ahead **latent overshooting** trains the dynamics.
+        ``None`` overshoots as far as each batch allows (the paper's full
+        setting); ``1`` disables it, leaving the ordinary one-step bound.
+        Costs one extra recurrence sweep per distance — see Notes.
+    overshoot_weight : float, default=1.0
+        Multiplier on the averaged multi-step divergence.
+    overshoot_reward_weight : float, default=1.0
+        Multiplier on reward prediction at the overshot states.  Without
+        it the reward head only ever sees posterior states while the
+        planner only ever evaluates prior ones — see Notes.
     reward_hidden : int, default=200
         Width of each reward-head hidden layer.
     reward_layers : int, default=2
         Number of reward-head hidden layers.
+    reward_loss_scale : float, default=1.0
+        Multiplier on the reward likelihood.  The paper states none, so
+        the default is 1; the released implementation uses 10 — see
+        Notes.
 
     Notes
     -----
@@ -164,12 +184,18 @@ class PlaNetConfig(GenerativeModelConfig):
     hidden_size: int = 200
     cnn_depth: int = 32
     min_std: float = 0.1
+    mean_only: bool = False
 
     free_nats: float = 3.0
     kl_weight: float = 1.0
 
+    overshoot_distance: int | None = None
+    overshoot_weight: float = 1.0
+    overshoot_reward_weight: float = 1.0
+
     reward_hidden: int = 200
     reward_layers: int = 2
+    reward_loss_scale: float = 1.0
 
     @override
     def __post_init__(self) -> None:
@@ -207,6 +233,25 @@ class PlaNetConfig(GenerativeModelConfig):
             raise ValueError(f"free_nats must be non-negative, got {self.free_nats}")
         if self.kl_weight < 0.0:
             raise ValueError(f"kl_weight must be non-negative, got {self.kl_weight}")
+        if self.overshoot_distance is not None and self.overshoot_distance < 1:
+            raise ValueError(
+                "overshoot_distance must be at least 1 (1 disables overshooting) "
+                f"or None for the full sequence, got {self.overshoot_distance}"
+            )
+        if self.overshoot_weight < 0.0:
+            raise ValueError(
+                f"overshoot_weight must be non-negative, got {self.overshoot_weight}"
+            )
+        if self.reward_loss_scale < 0.0:
+            raise ValueError(
+                f"reward_loss_scale must be non-negative, got "
+                f"{self.reward_loss_scale}"
+            )
+        if self.overshoot_reward_weight < 0.0:
+            raise ValueError(
+                "overshoot_reward_weight must be non-negative, got "
+                f"{self.overshoot_reward_weight}"
+            )
 
     @property
     def embed_size(self) -> int:

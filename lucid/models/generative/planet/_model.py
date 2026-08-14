@@ -32,6 +32,7 @@ per-frame, and only the RSSM is sequential.
 from dataclasses import dataclass
 from typing import ClassVar, cast, final, override
 
+import lucid
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
@@ -72,8 +73,13 @@ class PlaNetOutput(ModelOutput):
         ``recon_loss + reward_loss + kl_weight * kl_loss``.  ``None`` on
         :class:`PlaNetModel`, which builds no objective.
     recon_loss, reward_loss, kl_loss : Tensor or None, optional
-        The three terms separately.  ``kl_loss`` is already clamped at
-        ``free_nats``.
+        The one-step terms separately.  ``kl_loss`` is already clamped
+        at ``free_nats``.
+    overshoot_kl_loss, overshoot_reward_loss : Tensor or None, optional
+        The latent-overshooting terms, averaged over distances.  ``None``
+        when overshooting is off or the sequence is too short.  Reported
+        separately because they enter ``loss`` with their own weights
+        and are otherwise invisible.
 
     Notes
     -----
@@ -104,6 +110,8 @@ class PlaNetOutput(ModelOutput):
     recon_loss: Tensor | None = None
     reward_loss: Tensor | None = None
     kl_loss: Tensor | None = None
+    overshoot_kl_loss: Tensor | None = None
+    overshoot_reward_loss: Tensor | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -299,6 +307,7 @@ class PlaNetModel(PretrainedModel):
         )
         self.decoder = _PlaNetDecoder(config)
         self.reward_head = _PlaNetRewardHead(config)
+        self._sample = not config.mean_only
 
     def encode(self, observations: Tensor) -> Tensor:
         """Embed a frame sequence — ``(B, T, C, 64, 64) -> (B, T, embed_size)``."""
@@ -309,13 +318,56 @@ class PlaNetModel(PretrainedModel):
         observations: Tensor,
         actions: Tensor,
         state: RSSMState | None = None,
+        *,
+        sample: bool | None = None,
     ) -> tuple[RSSMState, RSSMState]:
-        """Filter a trajectory into posterior states — returns ``(priors, posteriors)``."""
-        return self.rssm.observe(self.encode(observations), actions, state)
+        """Filter a trajectory into posterior states.
 
-    def imagine(self, state: RSSMState, actions: Tensor) -> RSSMState:
-        """Roll the dynamics forward with no observations at all."""
-        return self.rssm.imagine(state, actions)
+        Parameters
+        ----------
+        observations : Tensor
+            Frames, ``(B, T, C, 64, 64)``.
+        actions : Tensor
+            Actions taken *into* each step, ``(B, T, action_dim)`` — see the
+            class docstring on alignment.
+        state : RSSMState or None, optional
+            Starting belief; ``None`` starts from zeros.
+        sample : bool or None, optional, keyword-only
+            Draw the latent (``True``) or take its mean (``False``).
+            ``None`` follows the config's ``mean_only`` setting.
+
+        Returns
+        -------
+        priors : RSSMState
+            What the dynamics predicted, ``(B, T, ·)``.
+        posteriors : RSSMState
+            What they believed after seeing each frame, ``(B, T, ·)``.
+        """
+        draw = self._sample if sample is None else sample
+        return self.rssm.observe(self.encode(observations), actions, state, sample=draw)
+
+    def imagine(
+        self, state: RSSMState, actions: Tensor, *, sample: bool | None = None
+    ) -> RSSMState:
+        """Roll the dynamics forward with no observations at all.
+
+        Parameters
+        ----------
+        state : RSSMState
+            The belief to roll from, ``(B, ·)``.
+        actions : Tensor
+            Actions to imagine taking, ``(B, T, action_dim)``.
+        sample : bool or None, optional, keyword-only
+            Draw the latent (``True``) or take its mean (``False``).
+            ``None`` follows the config's ``mean_only`` setting.
+
+        Returns
+        -------
+        RSSMState
+            The imagined prior states, ``(B, T, ·)``.
+        """
+        draw = self._sample if sample is None else sample
+        return self.rssm.imagine(state, actions, sample=draw)
 
     def decode(self, state: RSSMState) -> Tensor:
         """Reconstruct frames from a state — ``(B, T, C, 64, 64)``."""
@@ -417,6 +469,88 @@ class PlaNetForWorldModeling(PretrainedModel):
         self.planet = PlaNetModel(config)
         self._free_nats = config.free_nats
         self._kl_weight = config.kl_weight
+        self._overshoot_distance = config.overshoot_distance
+        self._overshoot_weight = config.overshoot_weight
+        self._overshoot_reward_weight = config.overshoot_reward_weight
+        self._reward_scale = config.reward_loss_scale
+
+    def _overshooting(
+        self, posteriors: RSSMState, actions: Tensor, rewards: Tensor | None
+    ) -> tuple[Tensor | None, Tensor | None]:
+        r"""Latent overshooting — train the dynamics beyond one step ahead.
+
+        The ordinary bound only ever asks the prior to predict the *next*
+        state, so nothing stops multi-step predictions drifting: the model
+        is never scored on where it thinks it will be in ten steps, which
+        is exactly what planning needs.  Overshooting closes that by
+        rolling the prior :math:`d` steps forward from each posterior and
+        scoring it against the posterior that actually arrived:
+
+        .. math::
+
+            \frac{1}{D-1} \sum_{d=2}^{D} \sum_t
+                \mathrm{KL}\big(
+                    \mathrm{sg}\big[q(s_{t+d} \mid o_{\le t+d})\big]
+                    \,\big\|\,
+                    p(s_{t+d} \mid s_t, a_{t+1:t+d})
+                \big).
+
+        The posterior is stop-gradiented, so this term teaches the
+        transition and never pulls the encoder toward being easier to
+        predict.  ``d = 1`` is excluded because it *is* the ordinary KL,
+        which the caller already charges.
+
+        The reward head is supervised on the overshot states too.  It is
+        otherwise trained only on posteriors while the planner evaluates it
+        only on priors, and that mismatch is exactly what a planner scoring
+        imagined trajectories would trip over.
+
+        Returns ``(kl, reward)``, either of which may be ``None`` when the
+        sequence is too short, overshooting is off, or no rewards were
+        supplied.
+        """
+        t = int(actions.shape[1])
+        limit = t - 1 if self._overshoot_distance is None else self._overshoot_distance
+        limit = min(limit, t - 1)
+        if limit < 2:
+            return None, None
+
+        b = int(actions.shape[0])
+        # ``cur`` holds one rollout per start position; after step d, the
+        # rollout that began at t is standing at t + d.  Advancing them all
+        # at once keeps this to one recurrence call per distance rather
+        # than one per (start, distance) pair.
+        # Detached: the rollout *starts* from the posterior, so without
+        # this the term would also push the encoder toward states that
+        # happen to be easy to roll forward.  Both ends are held fixed
+        # so only the transition learns.
+        cur = RSSMState(*(x.detach() for x in posteriors))
+        total: Tensor | None = None
+        reward_total: Tensor | None = None
+        counted = 0
+        for d in range(1, limit + 1):
+            span = t - d
+            state = RSSMState(*(x[:, :span].reshape(b * span, -1) for x in cur[:4]))
+            step = self.planet.rssm.prior_step(
+                state, actions[:, d : d + span].reshape(b * span, -1)
+            )
+            cur = RSSMState(*(x.reshape(b, span, -1) for x in step[:4]))
+            if d < 2:
+                continue
+            target = RSSMState(*(x[:, d : d + span].detach() for x in posteriors[:4]))
+            term = rssm_kl(target, cur, free_nats=0.0)
+            total = term if total is None else total + term
+            if rewards is not None and self._overshoot_reward_weight > 0.0:
+                predicted = self.planet.predict_reward(cur)
+                actual = rewards[:, d : d + span].detach()
+                rterm = 0.5 * ((predicted - actual) ** 2).mean()
+                reward_total = rterm if reward_total is None else reward_total + rterm
+            counted += 1
+        n = float(counted)
+        return (
+            None if total is None else total / n,
+            None if reward_total is None else reward_total / n,
+        )
 
     @override
     def forward(  # type: ignore[override]
@@ -440,8 +574,14 @@ class PlaNetForWorldModeling(PretrainedModel):
         reward_loss = None
         total = recon_loss + self._kl_weight * kl_loss
         if rewards is not None:
-            reward_loss = 0.5 * ((predicted - rewards) ** 2).mean()
+            reward_loss = self._reward_scale * 0.5 * ((predicted - rewards) ** 2).mean()
             total = total + reward_loss
+
+        overshoot, overshoot_reward = self._overshooting(posteriors, actions, rewards)
+        if overshoot is not None:
+            total = total + self._overshoot_weight * overshoot
+        if overshoot_reward is not None:
+            total = total + self._overshoot_reward_weight * overshoot_reward
 
         return PlaNetOutput(
             observation=reconstruction,
@@ -456,4 +596,141 @@ class PlaNetForWorldModeling(PretrainedModel):
             recon_loss=recon_loss,
             reward_loss=reward_loss,
             kl_loss=kl_loss,
+            overshoot_kl_loss=overshoot,
+            overshoot_reward_loss=overshoot_reward,
         )
+
+    @lucid.no_grad()
+    def plan(
+        self,
+        state: RSSMState,
+        *,
+        horizon: int = 12,
+        iterations: int = 10,
+        candidates: int = 1000,
+        elites: int = 100,
+    ) -> Tensor:
+        r"""Choose an action by searching imagined trajectories (CEM).
+
+        The paper's planner.  It never touches an environment: candidate
+        action sequences are rolled forward through the learned dynamics
+        and scored by the learned reward head, so the entire search is a
+        forward pass over this model's own parameters.
+
+        The cross-entropy method fits a diagonal Gaussian over action
+        sequences to its own best samples, repeatedly:
+
+        .. math::
+
+            \mu, \sigma \;\leftarrow\;
+                \mathrm{mean}, \mathrm{std}\Big(
+                    \operatorname*{top-K}_{a^{(j)} \sim
+                        \mathcal{N}(\mu, \sigma^2)}
+                    \textstyle\sum_{\tau} r\big(s_\tau^{(j)}\big)
+                \Big),
+
+        and the first action of the final mean is returned.  Searching in
+        a compact latent rather than in pixels is what makes a thousand
+        candidates per step affordable.
+
+        Parameters
+        ----------
+        state : RSSMState
+            The belief to plan from, ``(B, ·)`` — typically one step of a
+            posterior produced by :meth:`PlaNetModel.observe`.
+        horizon : int, default=12
+            How many steps ahead to imagine.
+        iterations : int, default=10
+            Refits of the action distribution.
+        candidates : int, default=1000
+            Sequences sampled per refit.
+        elites : int, default=100
+            Best sequences kept to refit from.
+
+        Returns
+        -------
+        Tensor
+            The first action of the planned sequence, ``(B, action_dim)``.
+
+        Notes
+        -----
+        Defaults are the paper's: :math:`H = 12`, :math:`I = 10`,
+        :math:`J = 1000`, :math:`K = 100`.
+
+        The search is unbounded — the paper clips actions to the
+        environment's range, which this model cannot know.  Clip the
+        result yourself if your action space is bounded.
+
+        Exploration noise is also the caller's: the paper adds Gaussian
+        noise to the planned action when collecting episodes, which is a
+        property of the data-collection loop rather than of the planner.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.planet import (
+        ...     PlaNetConfig, PlaNetForWorldModeling,
+        ... )
+        >>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,
+        ...                    hidden_size=8, cnn_depth=4, reward_hidden=8)
+        >>> model = PlaNetForWorldModeling(cfg).eval()
+        >>> start = model.planet.rssm.initial(1)
+        >>> model.plan(start, horizon=3, iterations=2, candidates=8,
+        ...            elites=2).shape
+        (1, 2)
+        """
+        if elites > candidates:
+            raise ValueError(
+                f"elites ({elites}) cannot exceed candidates ({candidates})"
+            )
+        for name, value in (
+            ("horizon", horizon),
+            ("iterations", iterations),
+            ("candidates", candidates),
+            ("elites", elites),
+        ):
+            if value < 1:
+                raise ValueError(f"{name} must be at least 1, got {value}")
+
+        b = int(state.deter.shape[0])
+        action_dim = self.planet.rssm.action_dim
+        device = state.deter.device.type
+
+        mean = lucid.zeros(b, horizon, action_dim, device=device)
+        std = lucid.ones(b, horizon, action_dim, device=device)
+        # One rollout per (batch item, candidate); the dynamics only know
+        # how to advance a flat batch, so the candidate axis is folded in.
+        tiled = RSSMState(
+            *(
+                lucid.cat([x] * candidates, dim=0)
+                for x in (state.deter, state.stoch, state.mean, state.std)
+            )
+        )
+
+        for _ in range(iterations):
+            noise = lucid.randn(
+                (candidates, b, horizon, action_dim), device=device, dtype=mean.dtype
+            )
+            samples = mean + std * noise
+            flat = samples.reshape(candidates * b, horizon, action_dim)
+
+            rollout = self.planet.rssm.imagine(tiled, flat, sample=False)
+            returns = self.planet.predict_reward(rollout).sum(dim=-1)
+            returns = returns.reshape(candidates, b)
+
+            order = lucid.argsort(returns, dim=0)
+            keep = order[candidates - elites :]
+            chosen = lucid.stack(
+                [
+                    lucid.stack(
+                        [samples[int(keep[k, i].item()), i] for k in range(elites)],
+                        dim=0,
+                    )
+                    for i in range(b)
+                ],
+                dim=1,
+            )
+            mean = chosen.mean(dim=0)
+            std = ((chosen - mean) ** 2).mean(dim=0) ** 0.5 + 1e-6
+
+        return mean[:, 0]

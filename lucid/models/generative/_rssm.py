@@ -240,8 +240,16 @@ class RSSM(nn.Module):
         return mean, std
 
     @staticmethod
-    def _draw(mean: Tensor, std: Tensor) -> Tensor:
-        """Reparameterised draw — gradient flows through ``mean`` and ``std``."""
+    def _draw(mean: Tensor, std: Tensor, sample: bool) -> Tensor:
+        """Reparameterised draw — gradient flows through ``mean`` and ``std``.
+
+        With ``sample=False`` the mean is returned instead, which makes the
+        whole recurrence deterministic.  Training wants the draw; planning
+        wants the mean, because a search that re-samples every candidate is
+        ranking its own noise rather than the actions.
+        """
+        if not sample:
+            return mean
         noise = lucid.randn(
             tuple(int(s) for s in mean.shape), device=mean.device, dtype=mean.dtype
         )
@@ -255,16 +263,41 @@ class RSSM(nn.Module):
         stoch = lucid.zeros(batch_size, self.stoch_size, device=device)
         return RSSMState(deter=deter, stoch=stoch, mean=stoch, std=stoch)
 
-    def prior_step(self, state: RSSMState, action: Tensor) -> RSSMState:
-        r"""Advance one step without an observation — :math:`p(s_t \mid h_t)`."""
+    def prior_step(
+        self, state: RSSMState, action: Tensor, *, sample: bool = True
+    ) -> RSSMState:
+        r"""Advance one step without an observation — :math:`p(s_t \mid h_t)`.
+
+        Parameters
+        ----------
+        state : RSSMState
+            The previous step's state, ``(B, ·)``.
+        action : Tensor
+            The action taken into this step, ``(B, action_dim)``.
+        sample : bool, default=True
+            Draw the latent, or take its mean when ``False``, which makes
+            the step deterministic.
+
+        Returns
+        -------
+        RSSMState
+            The predicted state, ``(B, ·)``.
+        """
         x = lucid.cat([state.stoch, action], dim=-1)
         x = generative_activation(self._act_name, cast(Tensor, self.pre_cell(x)))
         deter = cast(Tensor, self.cell(x, state.deter))
         mean, std = self._head(self.prior_head, deter)
-        return RSSMState(deter=deter, stoch=self._draw(mean, std), mean=mean, std=std)
+        return RSSMState(
+            deter=deter, stoch=self._draw(mean, std, sample), mean=mean, std=std
+        )
 
     def posterior_step(
-        self, state: RSSMState, action: Tensor, embed: Tensor
+        self,
+        state: RSSMState,
+        action: Tensor,
+        embed: Tensor,
+        *,
+        sample: bool = True,
     ) -> tuple[RSSMState, RSSMState]:
         r"""Advance one step *with* an observation.
 
@@ -276,6 +309,8 @@ class RSSM(nn.Module):
             The action taken into this step, ``(B, action_dim)``.
         embed : Tensor
             The encoded observation at this step, ``(B, embed_size)``.
+        sample : bool, default=True
+            Draw both latents, or take their means when ``False``.
 
         Returns
         -------
@@ -291,11 +326,11 @@ class RSSM(nn.Module):
         The pair is returned together because the KL term needs both, and
         computing them apart would mean running the recurrence twice.
         """
-        prior = self.prior_step(state, action)
+        prior = self.prior_step(state, action, sample=sample)
         x = lucid.cat([prior.deter, embed], dim=-1)
         mean, std = self._head(self.posterior_head, x)
         posterior = RSSMState(
-            deter=prior.deter, stoch=self._draw(mean, std), mean=mean, std=std
+            deter=prior.deter, stoch=self._draw(mean, std, sample), mean=mean, std=std
         )
         return prior, posterior
 
@@ -316,6 +351,8 @@ class RSSM(nn.Module):
         embed: Tensor,
         actions: Tensor,
         state: RSSMState | None = None,
+        *,
+        sample: bool = True,
     ) -> tuple[RSSMState, RSSMState]:
         r"""Filter a sequence of observations into posterior states.
 
@@ -330,6 +367,9 @@ class RSSM(nn.Module):
             normally a zero action.
         state : RSSMState or None, optional
             Starting state; ``None`` starts from :meth:`initial`.
+        sample : bool, default=True
+            Draw each latent, or take its mean when ``False``, which makes
+            the whole filter deterministic.
 
         Returns
         -------
@@ -354,12 +394,16 @@ class RSSM(nn.Module):
         priors: list[RSSMState] = []
         posteriors: list[RSSMState] = []
         for t in range(int(embed.shape[1])):
-            prior, state = self.posterior_step(state, actions[:, t], embed[:, t])
+            prior, state = self.posterior_step(
+                state, actions[:, t], embed[:, t], sample=sample
+            )
             priors.append(prior)
             posteriors.append(state)
         return self._stack(priors), self._stack(posteriors)
 
-    def imagine(self, state: RSSMState, actions: Tensor) -> RSSMState:
+    def imagine(
+        self, state: RSSMState, actions: Tensor, *, sample: bool = True
+    ) -> RSSMState:
         r"""Roll the prior forward with no observations at all.
 
         This is the model dreaming: every step's latent comes from the
@@ -373,6 +417,10 @@ class RSSM(nn.Module):
             :meth:`observe`.
         actions : Tensor
             Actions to imagine taking, ``(B, T, action_dim)``.
+        sample : bool, default=True
+            Draw each latent, or take its mean when ``False``.  Planning
+            wants the mean: a search that re-samples every candidate ranks
+            its own noise instead of the actions.
 
         Returns
         -------
@@ -383,7 +431,7 @@ class RSSM(nn.Module):
             raise ValueError(f"imagine expects (B, T, ·) actions, got {actions.shape}")
         states: list[RSSMState] = []
         for t in range(int(actions.shape[1])):
-            state = self.prior_step(state, actions[:, t])
+            state = self.prior_step(state, actions[:, t], sample=sample)
             states.append(state)
         return self._stack(states)
 

@@ -24,7 +24,7 @@ from lucid.models import (
     list_models,
 )
 from lucid.models._utils._generative import generative_activation
-from lucid.models.generative._rssm import rssm_kl
+from lucid.models.generative._rssm import RSSMState, rssm_kl
 
 
 def _tiny_cfg(**overrides: object) -> PlaNetConfig:
@@ -285,7 +285,7 @@ class TestObjective:
         assert with_rewards.reward_loss is not None
 
     def test_total_is_the_sum_of_its_terms(self) -> None:
-        cfg = _tiny_cfg(free_nats=0.0, kl_weight=1.0)
+        cfg = _tiny_cfg(free_nats=0.0, kl_weight=1.0, overshoot_distance=1)
         out = PlaNetForWorldModeling(cfg).eval()(*_batch())
 
         assert out.loss is not None and out.recon_loss is not None
@@ -300,9 +300,9 @@ class TestObjective:
     def test_kl_weight_scales_the_divergence(self) -> None:
         obs, act, rew = _batch()
         lucid.manual_seed(0)
-        a = PlaNetForWorldModeling(_tiny_cfg(free_nats=0.0, kl_weight=0.0)).eval()(
-            obs, act, rewards=rew
-        )
+        a = PlaNetForWorldModeling(
+            _tiny_cfg(free_nats=0.0, kl_weight=0.0, overshoot_distance=1)
+        ).eval()(obs, act, rewards=rew)
         assert a.loss is not None and a.kl_loss is not None
         assert a.recon_loss is not None and a.reward_loss is not None
         # With the weight at zero the KL is reported but does not enter.
@@ -388,3 +388,207 @@ class TestRegistry:
     def test_pretrained_is_refused_rather_than_faked(self, name: str) -> None:
         with pytest.raises(NotImplementedError, match="No pretrained weights"):
             create_model(name, pretrained=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Deterministic rollouts
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestMeanOnly:
+    def test_mean_only_is_reproducible(self) -> None:
+        model = PlaNetModel(_tiny_cfg(mean_only=True)).eval()
+        obs, act, _ = _batch()
+        a = model.observe(obs, act)[1]
+        b = model.observe(obs, act)[1]
+        assert float((a.stoch - b.stoch).abs().max().item()) == 0.0
+
+    def test_mean_only_takes_the_mean(self) -> None:
+        model = PlaNetModel(_tiny_cfg(mean_only=True)).eval()
+        _, post = model.observe(*_batch()[:2])
+        assert float((post.stoch - post.mean).abs().max().item()) == 0.0
+
+    def test_sampling_is_the_default(self) -> None:
+        model = PlaNetModel(_tiny_cfg()).eval()
+        obs, act, _ = _batch()
+        a = model.observe(obs, act)[1]
+        b = model.observe(obs, act)[1]
+        assert float((a.stoch - b.stoch).abs().max().item()) > 0.0
+
+    def test_per_call_override_beats_the_config(self) -> None:
+        model = PlaNetModel(_tiny_cfg()).eval()  # config says sample
+        obs, act, _ = _batch()
+        a = model.observe(obs, act, sample=False)[1]
+        b = model.observe(obs, act, sample=False)[1]
+        assert float((a.stoch - b.stoch).abs().max().item()) == 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Latent overshooting
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestOvershooting:
+    def test_one_step_rollout_reproduces_the_observed_prior(self) -> None:
+        # The invariant that pins the indexing: advancing every posterior by
+        # a single step must land exactly on what ``observe`` already called
+        # the prior. Off-by-one in either the start state or the action
+        # would still produce correctly shaped garbage.
+        model = PlaNetModel(_tiny_cfg(mean_only=True)).eval()
+        obs, act, _ = _batch(t=5)
+        priors, posts = model.observe(obs, act)
+
+        b, span = 2, 4
+        state = RSSMState(*(x[:, :span].reshape(b * span, -1) for x in posts))
+        step = model.rssm.prior_step(
+            state, act[:, 1 : 1 + span].reshape(b * span, -1), sample=False
+        )
+        rolled = RSSMState(*(x.reshape(b, span, -1) for x in step))
+
+        assert float((rolled.mean - priors.mean[:, 1:]).abs().max().item()) == 0.0
+        assert float((rolled.deter - priors.deter[:, 1:]).abs().max().item()) == 0.0
+
+    def test_overshooting_adds_a_term(self) -> None:
+        obs, act, rew = _batch(t=5)
+        lucid.manual_seed(0)
+        on = PlaNetForWorldModeling(_tiny_cfg()).eval()(obs, act, rewards=rew)
+        lucid.manual_seed(0)
+        off = PlaNetForWorldModeling(_tiny_cfg(overshoot_distance=1)).eval()(
+            obs, act, rewards=rew
+        )
+        assert on.loss is not None and off.loss is not None
+        assert float(on.loss.item()) > float(off.loss.item())
+
+    def test_reward_overshooting_adds_a_term(self) -> None:
+        obs, act, rew = _batch(t=5)
+        lucid.manual_seed(0)
+        on = PlaNetForWorldModeling(_tiny_cfg()).eval()(obs, act, rewards=rew)
+        lucid.manual_seed(0)
+        off = PlaNetForWorldModeling(_tiny_cfg(overshoot_reward_weight=0.0)).eval()(
+            obs, act, rewards=rew
+        )
+        assert on.loss is not None and off.loss is not None
+        assert float(on.loss.item()) > float(off.loss.item())
+
+    def test_too_short_a_sequence_skips_overshooting(self) -> None:
+        # T = 2 leaves no distance beyond the ordinary one-step KL.
+        obs, act, rew = _batch(t=2)
+        lucid.manual_seed(0)
+        a = PlaNetForWorldModeling(_tiny_cfg()).eval()(obs, act, rewards=rew)
+        lucid.manual_seed(0)
+        b = PlaNetForWorldModeling(_tiny_cfg(overshoot_distance=1)).eval()(
+            obs, act, rewards=rew
+        )
+        assert a.loss is not None and b.loss is not None
+        assert abs(float(a.loss.item()) - float(b.loss.item())) < 1e-4
+
+    def test_overshooting_trains_the_dynamics_not_the_encoder(self) -> None:
+        # The posterior is stop-gradiented in the multi-step term, so it
+        # teaches the transition and never pulls the encoder toward being
+        # easier to predict.
+        model = PlaNetForWorldModeling(_tiny_cfg(overshoot_reward_weight=0.0))
+        obs, act, _ = _batch(t=5)
+        _, posts = model.planet.observe(obs, act)
+        term, _ = model._overshooting(posts, act, None)
+        assert term is not None
+        term.backward()
+
+        assert model.planet.rssm.prior_head[0].weight.grad is not None
+        assert model.planet.encoder.convs[0].weight.grad is None
+
+    def test_reward_loss_scale(self) -> None:
+        obs, act, rew = _batch()
+        lucid.manual_seed(0)
+        one = PlaNetForWorldModeling(_tiny_cfg()).eval()(obs, act, rewards=rew)
+        lucid.manual_seed(0)
+        ten = PlaNetForWorldModeling(_tiny_cfg(reward_loss_scale=10.0)).eval()(
+            obs, act, rewards=rew
+        )
+        assert one.reward_loss is not None and ten.reward_loss is not None
+        ratio = float(ten.reward_loss.item()) / float(one.reward_loss.item())
+        assert abs(ratio - 10.0) < 1e-3
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Planning
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestPlanner:
+    def test_returns_one_action_per_batch_item(self) -> None:
+        model = PlaNetForWorldModeling(_tiny_cfg()).eval()
+        action = model.plan(
+            model.planet.rssm.initial(3),
+            horizon=3,
+            iterations=2,
+            candidates=8,
+            elites=2,
+        )
+        assert action.shape == (3, 2)
+
+    def test_rollouts_are_deterministic(self) -> None:
+        # plan() imagines with sample=False; without that the search ranks
+        # its own sampling noise rather than the actions.
+        lucid.manual_seed(0)
+        model = PlaNetForWorldModeling(_tiny_cfg()).eval()
+        kw = dict(horizon=3, iterations=2, candidates=8, elites=2)
+        lucid.manual_seed(1)
+        a = model.plan(model.planet.rssm.initial(1), **kw)  # type: ignore[arg-type]
+        lucid.manual_seed(1)
+        b = model.plan(model.planet.rssm.initial(1), **kw)  # type: ignore[arg-type]
+        assert float((a - b).abs().max().item()) == 0.0
+
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"elites": 9, "candidates": 8}, "cannot exceed"),
+            ({"horizon": 0}, "horizon"),
+            ({"iterations": 0}, "iterations"),
+            ({"candidates": 0}, "candidates"),
+        ],
+    )
+    def test_rejects_invalid_arguments(
+        self, kwargs: dict[str, object], match: str
+    ) -> None:
+        model = PlaNetForWorldModeling(_tiny_cfg()).eval()
+        base: dict[str, object] = {
+            "horizon": 3,
+            "iterations": 2,
+            "candidates": 8,
+            "elites": 2,
+        }
+        base.update(kwargs)
+        with pytest.raises(ValueError, match=match):
+            model.plan(model.planet.rssm.initial(1), **base)  # type: ignore[arg-type]
+
+    def test_planner_finds_high_reward_actions(self) -> None:
+        """The only way to check a planner *plans*.
+
+        On an untrained model the reward head barely responds to actions —
+        measured, the action-driven share of return variance is ~0 — so the
+        search has nothing to climb and "beats random" is unprovable. Give
+        the reward a signal it can chase and the planner must find it.
+        """
+        lucid.manual_seed(0)
+        model = PlaNetForWorldModeling(
+            _tiny_cfg(reward_hidden=16, overshoot_distance=1)
+        )
+        opt = lucid.optim.Adam(model.parameters(), lr=3e-3)
+        model.train()
+        for _ in range(120):
+            act = lucid.randn((8, 4, 2))
+            out = model(lucid.rand((8, 4, 3, 64, 64)), act, rewards=act[:, :, 0])
+            opt.zero_grad()
+            assert out.loss is not None
+            out.loss.backward()
+            opt.step()
+        model.eval()
+
+        chosen = model.plan(
+            model.planet.rssm.initial(1),
+            horizon=4,
+            iterations=6,
+            candidates=128,
+            elites=16,
+        )
+        assert float(chosen[0, 0].item()) > 0.5
