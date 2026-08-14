@@ -376,3 +376,115 @@ def test_neural_ode_trains_one_step_on_device(device):
     assert grads, "neural_ode: no parameter received a gradient"
     for g in grads:
         assert str(g.device) == f"device('{device}')"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Discrete latents
+#
+# VQ-VAE is the one family whose forward *computes indices on the device and
+# then indexes with them* — ``argmin`` over a distance matrix, straight into a
+# codebook gather.  That is the exact shape of the bug this file was opened
+# for (``crossvit`` built sampling coordinates on the CPU and indexed a Metal
+# feature map with them), so it does not belong in the tolerance-based sweep
+# above: the interesting output is an integer field, and a float tolerance
+# cannot see a single entry landing on the wrong codebook row.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_VQVAE_SMALL = {
+    "sample_size": 16,
+    "num_embeddings": 32,
+    "embedding_dim": 8,
+    "hidden_channels": 16,
+    "residual_hidden_channels": 16,
+}
+
+
+def test_vqvae_matches_across_devices():
+    """Encoder, quantiser and decoder must agree wherever they run."""
+    cpu, metal = _paired("vqvae", **_VQVAE_SMALL)
+    x = lucid.rand((2, 3, 16, 16))
+    x_gpu = x.to("metal")
+
+    z_cpu, z_metal = cpu.encode(x), metal.encode(x_gpu)
+    _agree(z_cpu, z_metal, 1e-4, "vqvae encode")
+
+    q_cpu, q_metal = cpu.quantize(z_cpu), metal.quantize(z_metal)
+    _agree(q_cpu.quantized, q_metal.quantized, 1e-4, "vqvae quantized")
+    _agree(
+        cpu.decode(q_cpu.quantized),
+        metal.decode(q_metal.quantized),
+        1e-4,
+        "vqvae decode",
+    )
+
+
+def test_vqvae_codebook_indices_match_across_devices():
+    """The discrete field is exact or it is wrong — no tolerance applies.
+
+    One entry picking a different codebook row changes the reconstruction
+    outright, and every float comparison in this file would still pass: the
+    two rows are both plausible vectors of the same magnitude.
+    """
+    cpu, metal = _paired("vqvae", **_VQVAE_SMALL)
+    x = lucid.rand((2, 3, 16, 16))
+
+    idx_cpu = cpu.encode_indices(x)
+    idx_metal = metal.encode_indices(x.to("metal"))
+    assert str(idx_cpu.device) == "device('cpu')"
+    assert str(idx_metal.device) == "device('metal')"
+
+    a = idx_cpu.numpy()
+    b = idx_metal.to("cpu").numpy()
+    assert a.shape == b.shape == (2, 4, 4)
+    assert (a == b).all(), f"{int((a != b).sum())} of {a.size} positions disagree"
+
+
+def test_vqvae_detokenises_from_device_indices():
+    """A gather driven by indices that were produced on the device."""
+    cpu, metal = _paired("vqvae", **_VQVAE_SMALL)
+    x = lucid.rand((2, 3, 16, 16))
+
+    out_cpu = cpu.decode_indices(cpu.encode_indices(x))
+    out_metal = metal.decode_indices(metal.encode_indices(x.to("metal")))
+    _agree(out_cpu, out_metal, 1e-4, "vqvae decode_indices")
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_vqvae_trains_one_step_on_device(device):
+    """The three-term objective, and the codebook's own gradient path.
+
+    Asserted separately from the rest: the codebook is the one parameter the
+    reconstruction term cannot reach — straight-through routes past it — so a
+    device bug in the codebook term alone would leave every other parameter
+    looking healthy.
+    """
+    lucid.manual_seed(0)
+    model = M.create_model("vqvae_gen", **_VQVAE_SMALL).to(device)
+    model.train()
+    optimizer = lucid.optim.SGD(model.parameters(), lr=1e-4)
+
+    out = model(lucid.rand((2, 3, 16, 16), device=device))
+    optimizer.zero_grad()
+    out.loss.backward()
+    optimizer.step()
+
+    codebook = model.vqvae.quantizer.weight
+    assert codebook.grad is not None, "vqvae: the codebook received no gradient"
+    assert float(abs(codebook.grad).sum()) > 0.0
+
+    grads = [p.grad for p in model.parameters() if p.grad is not None]
+    assert grads, "vqvae: no parameter received a gradient"
+    for g in grads:
+        assert str(g.device) == f"device('{device}')"
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_vqvae_generate_runs_on_device(device):
+    """Sampling draws integer codes and gathers with them, on-device."""
+    lucid.manual_seed(0)
+    model = M.create_model("vqvae_gen", **_VQVAE_SMALL).to(device).eval()
+    samples = model.generate(2).samples
+
+    assert str(samples.device) == f"device('{device}')"
+    assert samples.shape == (2, 3, 16, 16)
+    assert not np.isnan(samples.to("cpu").numpy()).any()

@@ -12,7 +12,7 @@
     "Regenerate with:  lucid-audit --update-coverage",
     "Do that only when the new state is the intended one."
   ],
-  "cells": 7346,
+  "cells": 7370,
   "answered": {
     "broadcast::F.gumbel_softmax": "pass",
     "broadcast::Tensor.add": "pass",
@@ -7359,6 +7359,30 @@
     "weights::lucid.weights.list_pretrained": "pass",
     "weights::lucid.weights.register_weights": "pass",
     "weights::lucid.weights.resolve_weights": "pass",
-    "weights::lucid.weights.weights_for": "pass"
+    "weights::lucid.weights.weights_for": "pass",
+    "broadcast::F.straight_through": "pass",
+    "creategraph::F.vector_quantize": "pass",
+    "device::F.nearest_codebook": "pass",
+    "device::F.straight_through": "pass",
+    "device::F.vector_quantize": "pass",
+    "dtype::F.nearest_codebook": "pass",
+    "dtype::F.straight_through": "pass",
+    "dtype::F.vector_quantize": "pass",
+    "edge::F.nearest_codebook": "pass",
+    "edge::F.straight_through": "pass",
+    "edge::F.vector_quantize": "pass",
+    "layout::F.nearest_codebook": "pass",
+    "layout::F.straight_through": "pass",
+    "layout::F.vector_quantize": "pass",
+    "nonfinite::F.straight_through": "pass",
+    "nonfinite::F.vector_quantize": "pass",
+    "rank::F.nearest_codebook": "pass",
+    "rank::F.straight_through": "pass",
+    "rank::F.vector_quantize": "pass",
+    "smoke::F.nearest_codebook": "pass",
+    "smoke::F.straight_through": "pass",
+    "smoke::F.vector_quantize": "pass",
+    "stability::F.straight_through": "pass",
+    "stability::F.vector_quantize": "pass"
   }
 }

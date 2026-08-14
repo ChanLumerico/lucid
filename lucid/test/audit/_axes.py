@@ -1734,6 +1734,7 @@ class BroadcastAxis(Axis):
         failures: list[str] = []
         follows_first = True
         follows_second = True
+        answered = 0
         for sa, sb in self._PAIRS:
             a = _probe.as_f64(_probe.rng(1).uniform(0.5, 1.5, sa))
             b = _probe.as_f64(_probe.rng(2).uniform(0.5, 1.5, sb))
@@ -1741,11 +1742,22 @@ class BroadcastAxis(Axis):
             try:
                 got = _probe.to_numpy(fn(a, b))
             except Exception as exc:  # noqa: BLE001
+                # A refusal is recorded, but it must not clear the
+                # follows-flags below.  It used to, and that punished the
+                # better-behaved op: ``vector_quantize(x, codebook)``
+                # consults a (K, D) table per row, so its answer has *x*'s
+                # shape whatever K is — the same shape as ``isin``, which
+                # this axis already exempts.  The only thing keeping it out
+                # of that exemption was that it *validates* the feature
+                # dimension and raises on a mismatched pair, where ``isin``
+                # silently accepts anything.  Refusing an incompatible pair
+                # is evidence the op is not broadcasting, not evidence that
+                # it is.
                 failures.append(f"{sa}x{sb}: {type(exc).__name__}")
-                follows_first = follows_second = False
                 continue
             if got is None:
                 continue
+            answered += 1
             follows_first &= tuple(got.shape) == sa
             follows_second &= tuple(got.shape) == sb
             if tuple(got.shape) != want:
@@ -1800,7 +1812,10 @@ class BroadcastAxis(Axis):
         # Read off the results rather than listed: an op whose output
         # follows one operand in *every* direction is shaped by that
         # operand, not by the pair.
-        if failures and (follows_first or follows_second):
+        # ``answered`` guards the vacuous case: an op that refuses *every*
+        # direction leaves both flags untouched at True, and exempting it
+        # would hide an op that ought to broadcast and raises instead.
+        if failures and answered and (follows_first or follows_second):
             which = "first" if follows_first else "second"
             return self._finding(
                 symbol,
