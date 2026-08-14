@@ -1465,6 +1465,7 @@ _TASK_SUFFIX_MAP: dict[str, str] = {
     "ForNextSentencePrediction":   "next-sentence-prediction",
     "ForMultipleChoice":           "multiple-choice",
     "ForPreTraining":              "pretraining",
+    "ForWorldModeling":            "world-modeling",
     # Alternative head-style naming (GPT / GPT-2 follow reference-framework
     # conventions: ``GPTLMHeadModel`` rather than ``GPTForCausalLM``).
     "LMHeadModel":                 "text-generation",

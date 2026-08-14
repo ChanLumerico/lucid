@@ -88,6 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add VQ-VAE, with vector quantisation as a core nn layer
 
+- add the world-model framework and PlaNet as its first user
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

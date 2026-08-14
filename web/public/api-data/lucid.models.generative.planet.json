@@ -1,0 +1,1094 @@
+{
+  "slug": "lucid.models.generative.planet",
+  "name": "planet",
+  "path": "lucid.models.generative.planet",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/__init__.py#L1",
+  "members": [
+    {
+      "name": "PlaNetConfig",
+      "path": "lucid.models.generative.planet._config.PlaNetConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "GenerativeModelConfig"
+      ],
+      "labels": [],
+      "signature": "PlaNetConfig(sample_size: int | tuple[int, int] = PLANET_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: Literal['silu', 'swish', 'relu', 'gelu'] = 'relu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, free_nats: float = 3.0, kl_weight: float = 1.0, reward_hidden: int = 200, reward_layers: int = 2)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_config.py#L23",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "embed_size",
+          "path": "lucid.models.generative.planet._config.PlaNetConfig.embed_size",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "embed_size: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_config.py#L212",
+          "summary": "Width of the encoder output — `8 * cnn_depth` over a 2x2 grid.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "latent_size",
+          "path": "lucid.models.generative.planet._config.PlaNetConfig.latent_size",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "latent_size: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_config.py#L217",
+          "summary": "Width of the full latent `[h; s]` the decoder and reward head read.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.planet._config.PlaNetConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample_size: int | tuple[int, int] = PLANET_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: Literal['silu', 'swish', 'relu', 'gelu'] = 'relu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, free_nats: float = 3.0, kl_weight: float = 1.0, reward_hidden: int = 200, reward_layers: int = 2)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen configuration for the PlaNet family.",
+      "extended": "Defaults reproduce Hafner et al., 2019 on the DeepMind Control Suite.",
+      "parameters": [
+        {
+          "name": "sample_size",
+          "annotation": "int or tuple of int",
+          "description": "Frame resolution.  Must be 64 — see Notes.",
+          "default": "64"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Observation channels.",
+          "default": "3"
+        },
+        {
+          "name": "out_channels",
+          "annotation": "int",
+          "description": "Reconstruction channels.",
+          "default": "3"
+        },
+        {
+          "name": "act_fn",
+          "annotation": "(silu, swish, relu, gelu)",
+          "description": "Activation throughout.  The paper uses ReLU, which is why this\nfamily overrides the generative-domain default of `\"silu\"`.",
+          "default": "\"silu\""
+        },
+        {
+          "name": "action_dim",
+          "annotation": "int",
+          "description": "Width of the action vector conditioning the transition.  Genuinely\ntask-dependent — the Control Suite tasks range from 1 to 12 — so\nthere is no paper value to inherit and it must be set per use.",
+          "default": "1"
+        },
+        {
+          "name": "stoch_size",
+          "annotation": "int",
+          "description": "Width of the stochastic latent $s$.",
+          "default": "30"
+        },
+        {
+          "name": "deter_size",
+          "annotation": "int",
+          "description": "Width of the deterministic latent $h$.",
+          "default": "200"
+        },
+        {
+          "name": "hidden_size",
+          "annotation": "int",
+          "description": "Width of the hidden layer inside the RSSM heads.",
+          "default": "200"
+        },
+        {
+          "name": "cnn_depth",
+          "annotation": "int",
+          "description": "Channel width of the first encoder convolution; the stack widens\n`depth, 2*depth, 4*depth, 8*depth`.  A scale knob, not a shape\nknob — the spatial schedule is fixed.",
+          "default": "32"
+        },
+        {
+          "name": "min_std",
+          "annotation": "float",
+          "description": "Floor on the latent standard deviation.",
+          "default": "0.1"
+        },
+        {
+          "name": "free_nats",
+          "annotation": "float",
+          "description": "The KL is clamped below at this value before it enters the loss.",
+          "default": "3.0"
+        },
+        {
+          "name": "kl_weight",
+          "annotation": "float",
+          "description": "Multiplier $\\beta$ on the clamped KL.",
+          "default": "1.0"
+        },
+        {
+          "name": "reward_hidden",
+          "annotation": "int",
+          "description": "Width of each reward-head hidden layer.",
+          "default": "200"
+        },
+        {
+          "name": "reward_layers",
+          "annotation": "int",
+          "description": "Number of reward-head hidden layers.",
+          "default": "2"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.planet import PlaNetConfig\n>>> cfg = PlaNetConfig(action_dim=6)\n>>> cfg.stoch_size, cfg.deter_size, cfg.free_nats\n(30, 200, 3.0)\n>>> cfg.latent_size\n230"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\n`sample_size` is pinned to 64 rather than made general.  The encoder\nis four stride-2 convolutions with 4x4 kernels and the decoder four\ntransposed convolutions with kernels `5, 5, 6, 6` — an irregular\nschedule that lands on `64` exactly (`1 -> 5 -> 13 -> 30 -> 64`) and\non nothing else.  Generalising it would mean inventing a schedule the\npaper does not give, so an unsupported size raises here instead of\nsilently reconstructing to the wrong shape.  Scale the model with\n`cnn_depth` / `deter_size` / `stoch_size`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "PlaNetForWorldModeling",
+      "path": "lucid.models.generative.planet._model.PlaNetForWorldModeling",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "PlaNetForWorldModeling(config: PlaNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L350",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.planet._model.PlaNetForWorldModeling.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: PlaNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L415",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.planet._model.PlaNetForWorldModeling.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(observations: Tensor, actions: Tensor, rewards: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L421",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "PlaNetOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "PlaNet with the variational training objective.",
+      "extended": "Wraps `PlaNetModel` with the bound of Hafner et al., 2019:\n\n$$\n\\mathcal{L} =\n    \\underbrace{\\mathbb{E}_q\\big[\\log p(o_t \\mid h_t, s_t)\n                      + \\log p(r_t \\mid h_t, s_t)\\big]}\n               _{\\text{reconstruction}}\n    \\;-\\;\n    \\beta\\,\\underbrace{\\mathrm{KL}\\big(q(s_t \\mid h_t, o_t)\n                      \\,\\|\\, p(s_t \\mid h_t)\\big)}_{\\text{consistency}} .\n$$\n\nBoth likelihoods are unit-variance Gaussians, so their log-densities\nreduce to one-half squared error up to constants that do not affect the\ngradient — the observation term summed over pixels, the reward term a\nscalar.  The KL carries a free-nats floor; see `rssm_kl`.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "PlaNetConfig",
+          "description": "Hyperparameters.  `free_nats` and `kl_weight` shape the KL term.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.planet import (\n...     PlaNetConfig, PlaNetForWorldModeling,\n... )\n>>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,\n...                    hidden_size=8, cnn_depth=4, reward_hidden=8)\n>>> model = PlaNetForWorldModeling(cfg).eval()\n>>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)\n>>> out = model(obs, act, rewards=lucid.zeros(1, 3))\n>>> out.loss.shape, out.observation.shape\n((), (1, 3, 3, 64, 64))"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\n**The reconstruction term never reaches the prior head.**  Nothing\nreconstructed is computed from the prior — the decoder and the reward\nhead both read the posterior — so the KL is the prior's only teacher.\nTrain without it and the dynamics never learn to predict, while every\nshape and every loss value still looks reasonable.\n\nThe released implementation scales the reward term by 10 and uses\n3-layer, 300-unit heads.  Neither appears in the paper, which specifies\n\"two fully connected layers of size 200\"; the paper's values are used\nhere, and the discrepancy is recorded rather than silently split."
+      ],
+      "attributes": [
+        {
+          "name": "planet",
+          "annotation": "PlaNetModel",
+          "description": "The underlying trunk."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "PlaNetModel",
+      "path": "lucid.models.generative.planet._model.PlaNetModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "PlaNetModel(config: PlaNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L224",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.planet._model.PlaNetModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: PlaNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L288",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.generative.planet._model.PlaNetModel.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(observations: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L303",
+          "subcategory": "model",
+          "summary": "Embed a frame sequence — `(B, T, C, 64, 64) -> (B, T, embed_size)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "observe",
+          "path": "lucid.models.generative.planet._model.PlaNetModel.observe",
+          "kind": "function",
+          "labels": [],
+          "signature": "observe(observations: Tensor, actions: Tensor, state: RSSMState | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L307",
+          "subcategory": "model",
+          "summary": "Filter a trajectory into posterior states — returns `(priors, posteriors)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[RSSMState, RSSMState]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "imagine",
+          "path": "lucid.models.generative.planet._model.PlaNetModel.imagine",
+          "kind": "function",
+          "labels": [],
+          "signature": "imagine(state: RSSMState, actions: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L316",
+          "subcategory": "model",
+          "summary": "Roll the dynamics forward with no observations at all.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "RSSMState",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "decode",
+          "path": "lucid.models.generative.planet._model.PlaNetModel.decode",
+          "kind": "function",
+          "labels": [],
+          "signature": "decode(state: RSSMState)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L320",
+          "subcategory": "model",
+          "summary": "Reconstruct frames from a state — `(B, T, C, 64, 64)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "predict_reward",
+          "path": "lucid.models.generative.planet._model.PlaNetModel.predict_reward",
+          "kind": "function",
+          "labels": [],
+          "signature": "predict_reward(state: RSSMState)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L324",
+          "subcategory": "model",
+          "summary": "Predict reward from a state — `(B, T)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.planet._model.PlaNetModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(observations: Tensor, actions: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L328",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "PlaNetOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "PlaNet's latent dynamics model (Hafner et al., 2019).",
+      "extended": "A convolutional encoder embeds each frame, a recurrent state-space\nmodel carries the belief forward, and a decoder plus a reward head read\npredictions back off that belief.  The point of the architecture is\nthat everything downstream of the encoder happens in a compact latent —\nwhich is what makes searching over thousands of imagined action\nsequences affordable.\n\nThis class computes no loss.  Use `PlaNetForWorldModeling` for\nthe training objective, or read the distributions off the returned\n`PlaNetOutput` and build your own.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "PlaNetConfig",
+          "description": "Hyperparameters.  See `PlaNetConfig`.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.planet import PlaNetConfig, PlaNetModel\n>>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,\n...                    hidden_size=8, cnn_depth=4, reward_hidden=8)\n>>> model = PlaNetModel(cfg).eval()\n>>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)\n>>> priors, posteriors = model.observe(obs, act)\n>>> posteriors.stoch.shape\n(1, 3, 4)\n>>> model.imagine(model.rssm.initial(1), act).stoch.shape\n(1, 3, 4)"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\n**Action alignment.**  `actions[:, t]` is the action taken *into*\nstep `t` — the one that produced `observations[:, t]`.  A caller\nholding $(o_0, a_0, o_1, a_1, \\dots)$ shifts by one and passes a\nzero action at index 0.\n\nPlanning is **not** implemented.  The paper pairs this model with a\ncross-entropy-method planner, which is a control algorithm rather than\na network; `imagine` is the piece of it that belongs to the\nmodel, and the search on top is left to the caller."
+      ],
+      "attributes": [
+        {
+          "name": "encoder",
+          "annotation": "nn.Module",
+          "description": "Per-frame convolutional embedding."
+        },
+        {
+          "name": "rssm",
+          "annotation": "lucid.models.generative.RSSM",
+          "description": "The dynamics.  Shared with the Dreamer families by design."
+        },
+        {
+          "name": "decoder",
+          "annotation": "nn.Module",
+          "description": "Reconstructs a frame from `[h; s]`."
+        },
+        {
+          "name": "reward_head",
+          "annotation": "nn.Module",
+          "description": "Predicts reward from `[h; s]`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "PlaNetOutput",
+      "path": "lucid.models.generative.planet._model.PlaNetOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "PlaNetOutput(observation: Tensor, reward: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L48",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.planet._model.PlaNetOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(observation: Tensor, reward: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L1",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Forward output of the latent dynamics model.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.planet import PlaNetConfig, PlaNetModel\n>>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,\n...                    hidden_size=8, cnn_depth=4, reward_hidden=8)\n>>> model = PlaNetModel(cfg).eval()\n>>> out = model(lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2))\n>>> out.observation.shape, out.reward.shape\n((1, 3, 3, 64, 64), (1, 3))"
+      ],
+      "notes": [
+        "Returned by both `PlaNetModel.forward` (losses `None`) and\n`PlaNetForWorldModeling.forward` (losses populated)."
+      ],
+      "attributes": [
+        {
+          "name": "observation",
+          "annotation": "Tensor",
+          "description": "Reconstruction $\\hat{o}$ shaped `(B, T, C, 64, 64)`, decoded\nfrom the posterior."
+        },
+        {
+          "name": "reward",
+          "annotation": "Tensor",
+          "description": "Predicted reward shaped `(B, T)`."
+        },
+        {
+          "name": "posterior_stoch",
+          "annotation": "Tensor",
+          "description": "The sampled latent $s$, `(B, T, stoch_size)`."
+        },
+        {
+          "name": "posterior_mean, posterior_std",
+          "annotation": "Tensor",
+          "description": "Parameters of $q(s_t \\mid h_t, o_t)$."
+        },
+        {
+          "name": "prior_mean, prior_std",
+          "annotation": "Tensor",
+          "description": "Parameters of $p(s_t \\mid h_t)$ — what the dynamics predicted\nbefore seeing the frame."
+        },
+        {
+          "name": "deter",
+          "annotation": "Tensor",
+          "description": "The deterministic path $h$, `(B, T, deter_size)`.  Carried\nonce, not twice: prior and posterior share it by construction,\nbecause the observation refines the belief about $s_t$\nwithout changing the path that led there."
+        },
+        {
+          "name": "loss",
+          "annotation": "(Tensor or None, optional)",
+          "description": "`recon_loss + reward_loss + kl_weight * kl_loss`.  `None` on\n`PlaNetModel`, which builds no objective."
+        },
+        {
+          "name": "recon_loss, reward_loss, kl_loss",
+          "annotation": "(Tensor or None, optional)",
+          "description": "The three terms separately.  `kl_loss` is already clamped at\n`free_nats`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "planet",
+      "path": "lucid.models.generative.planet._pretrained.planet",
+      "kind": "function",
+      "labels": [],
+      "signature": "planet(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_pretrained.py#L58",
+      "subcategory": "pretrained",
+      "summary": "Construct PlaNet's latent dynamics model — no training objective.",
+      "extended": "The architecture of Hafner et al., 2019: a four-layer stride-2\nconvolutional encoder, a recurrent state-space model with a 200-unit\ndeterministic path and a 30-unit stochastic state, a mirrored\ntransposed-convolutional decoder, and a two-layer reward head.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises\nrather than returning a randomly initialised model.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `PlaNetConfig` field overrides.  `action_dim` is\nthe one you almost always need — it is set by the environment, not\nby the paper.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "PlaNetModel",
+        "description": "The trunk, configured with the paper defaults and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.planet import planet\n>>> model = planet(action_dim=6).eval()\n>>> model.config.stoch_size, model.config.deter_size\n(30, 200)"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\nThe recurrence carries both a deterministic and a stochastic path:\n\n\n\n$$\nh_t = f\\big(h_{t-1},\\, s_{t-1},\\, a_{t-1}\\big),\n\\qquad\ns_t \\sim p\\big(s_t \\mid h_t\\big).\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "PlaNetModel",
+        "type": "PlaNetModel",
+        "params": 5129220,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_PlaNetEncoder",
+            "params": 690144,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "convs",
+                "type": "ModuleList",
+                "params": 690144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 1568,
+                    "own_params": 1568,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 32832,
+                    "own_params": 32832,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 131200,
+                    "own_params": 131200,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 524544,
+                    "own_params": 524544,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rssm",
+            "type": "RSSM",
+            "params": 556920,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pre_cell",
+                "type": "Linear",
+                "params": 6400,
+                "own_params": 6400,
+                "children": []
+              },
+              {
+                "name": "cell",
+                "type": "GRUCell",
+                "params": 241200,
+                "own_params": 241200,
+                "children": []
+              },
+              {
+                "name": "prior_head",
+                "type": "Sequential",
+                "params": 52260,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 40200,
+                    "own_params": 40200,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 12060,
+                    "own_params": 12060,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "posterior_head",
+                "type": "Sequential",
+                "params": 257060,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 245000,
+                    "own_params": 245000,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 12060,
+                    "own_params": 12060,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder",
+            "type": "_PlaNetDecoder",
+            "params": 3795555,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lift",
+                "type": "Linear",
+                "params": 236544,
+                "own_params": 236544,
+                "children": []
+              },
+              {
+                "name": "deconvs",
+                "type": "ModuleList",
+                "params": 3559011,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 3276928,
+                    "own_params": 3276928,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 204864,
+                    "own_params": 204864,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ConvTranspose2d",
+                    "params": 73760,
+                    "own_params": 73760,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ConvTranspose2d",
+                    "params": 3459,
+                    "own_params": 3459,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "reward_head",
+            "type": "_PlaNetRewardHead",
+            "params": 86601,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 86400,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 46200,
+                    "own_params": 46200,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 40200,
+                    "own_params": 40200,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 201,
+                "own_params": 201,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "planet_world_model",
+      "path": "lucid.models.generative.planet._pretrained.planet_world_model",
+      "kind": "function",
+      "labels": [],
+      "signature": "planet_world_model(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_pretrained.py#L117",
+      "subcategory": "pretrained",
+      "summary": "Construct PlaNet with its variational objective.",
+      "extended": "Same trunk as `planet`, wrapped with the bound of Hafner et al.,\n2019 — reconstruction and reward likelihoods against a KL between the\nposterior and the dynamics' own prior, floored at `free_nats`.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `PlaNetConfig` field overrides.  `free_nats` and\n`kl_weight` shape the divergence term; `action_dim` is set by\nthe environment.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "PlaNetForWorldModeling",
+        "description": "The trunk plus the objective."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.planet import planet_world_model\n>>> model = planet_world_model(action_dim=6).eval()\n>>> model.config.free_nats\n3.0"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\nTraining objective:\n\n\n\n$$\n\\mathcal{L} = \\mathbb{E}_q\\big[\\log p(o_t \\mid h_t, s_t)\n                  + \\log p(r_t \\mid h_t, s_t)\\big]\n              - \\beta\\,\\mathrm{KL}\\big(q(s_t \\mid h_t, o_t)\n                  \\,\\|\\, p(s_t \\mid h_t)\\big).\n$$"
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "PlaNetForWorldModeling",
+        "type": "PlaNetForWorldModeling",
+        "params": 5129220,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "planet",
+            "type": "PlaNetModel",
+            "params": 5129220,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_PlaNetEncoder",
+                "params": 690144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "convs",
+                    "type": "ModuleList",
+                    "params": 690144,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 1568,
+                        "own_params": 1568,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 32832,
+                        "own_params": 32832,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Conv2d",
+                        "params": 131200,
+                        "own_params": 131200,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 524544,
+                        "own_params": 524544,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "rssm",
+                "type": "RSSM",
+                "params": 556920,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "pre_cell",
+                    "type": "Linear",
+                    "params": 6400,
+                    "own_params": 6400,
+                    "children": []
+                  },
+                  {
+                    "name": "cell",
+                    "type": "GRUCell",
+                    "params": 241200,
+                    "own_params": 241200,
+                    "children": []
+                  },
+                  {
+                    "name": "prior_head",
+                    "type": "Sequential",
+                    "params": 52260,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 40200,
+                        "own_params": 40200,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 12060,
+                        "own_params": 12060,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "posterior_head",
+                    "type": "Sequential",
+                    "params": 257060,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 245000,
+                        "own_params": 245000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 12060,
+                        "own_params": 12060,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "_PlaNetDecoder",
+                "params": 3795555,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "lift",
+                    "type": "Linear",
+                    "params": 236544,
+                    "own_params": 236544,
+                    "children": []
+                  },
+                  {
+                    "name": "deconvs",
+                    "type": "ModuleList",
+                    "params": 3559011,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ConvTranspose2d",
+                        "params": 3276928,
+                        "own_params": 3276928,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "ConvTranspose2d",
+                        "params": 204864,
+                        "own_params": 204864,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ConvTranspose2d",
+                        "params": 73760,
+                        "own_params": 73760,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "ConvTranspose2d",
+                        "params": 3459,
+                        "own_params": 3459,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "reward_head",
+                "type": "_PlaNetRewardHead",
+                "params": 86601,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 86400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 46200,
+                        "own_params": 46200,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 40200,
+                        "own_params": 40200,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 201,
+                    "own_params": 201,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "PlaNet family — Hafner et al., 2019.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "PlaNet",
+  "citation": "Hafner, Danijar, et al. \"Learning Latent Dynamics for Planning from Pixels.\" Proceedings of the 36th International Conference on Machine Learning, 2019, pp. 2555-2565.",
+  "theory": "PlaNet learns the dynamics of an environment *in latent space* and plans\nthere, never reconstructing a frame in order to choose an action.  The\ndifficulty it addresses is that pixels are a partial observation: the\nagent must both remember what it has seen and stay uncertain about what\nit has not.\n\nIts answer is the **recurrent state-space model**, which refuses to pick\nbetween a deterministic and a stochastic latent and carries both.  A\ndeterministic path $h_t$ is updated by a gated recurrence, and a\nstochastic latent $s_t$ is drawn conditioned on it:\n\n\n\n$$\nh_t = f\\big(h_{t-1},\\, s_{t-1},\\, a_{t-1}\\big),\n\\qquad\ns_t \\sim p\\big(s_t \\mid h_t\\big).\n$$\n\nThe motivation is stated as an ablation in the paper: a purely\nstochastic model cannot retain information over many steps, because each\nstep's sampling noise degrades it; a purely deterministic model cannot\nrepresent the several futures a partially-observed environment permits,\nso it averages them and blurs.  Only the model carrying both matches the\nreported performance.\n\nTraining maximises a variational bound.  An encoder supplies an\napproximate posterior $q(s_t \\mid h_t, o_t)$ that has seen the\nframe; the objective rewards reconstructing the observation and the\nreward from that posterior while pulling the dynamics' own prior toward\nit:\n\n\n\n$$\n\\mathcal{L} =\n    \\underbrace{\\mathbb{E}_q\\big[\\log p(o_t \\mid h_t, s_t)\n                            + \\log p(r_t \\mid h_t, s_t)\\big]}\n               _{\\text{reconstruction}}\n    \\;-\\;\n    \\beta \\underbrace{\\mathrm{KL}\\big(q(s_t \\mid h_t, o_t)\n                      \\,\\big\\|\\, p(s_t \\mid h_t)\\big)}\n               _{\\text{consistency}} .\n$$\n\nThe KL is clamped below at a **free-nats** threshold, so no gradient is\nspent driving an already-small divergence lower — without it the\nposterior collapses onto the prior and the latent stops carrying the\nobservation.  The asymmetry is worth noting: the reconstruction term\nnever reaches the prior head at all, since nothing reconstructed is\ncomputed from the prior.  The KL is the prior's only teacher.\n\nOnce trained, planning runs the prior forward alone — the model\nimagines action sequences and scores them without touching the\nenvironment.  That the rollout happens entirely in a compact latent\nmakes searching over thousands of candidate trajectories affordable,\nwhich is what lets PlaNet match model-free agents at a fraction of the\nepisodes.",
+  "tasks": [
+    "world-modeling"
+  ]
+}

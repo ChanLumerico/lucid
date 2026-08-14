@@ -699,3 +699,33 @@ class AutoModelForImageGeneration(_BaseAutoClass):
     """
 
     _task: ClassVar[str] = "image-generation"
+
+
+class AutoModelForWorldModeling(_BaseAutoClass):
+    r"""Auto-dispatching wrapper that loads a world model.
+
+    Resolves names like ``"planet_world_model"`` to their concrete
+    ``{Family}ForWorldModeling`` subclass.
+
+    A world model here is a *latent dynamics* model: it consumes a
+    trajectory of observations and actions and predicts how the latent
+    state evolves, rather than mapping one input to one label.  Its
+    forward therefore takes two sequences, not a single tensor.
+
+    Notes
+    -----
+    All ``ForWorldModeling`` subclasses expose ``observe(...)`` — filter a
+    trajectory into posterior states — and ``imagine(...)`` — roll the
+    dynamics forward from a state with no observations at all.  The second
+    is what planning and policy learning are built on: it is a forward pass
+    over the model's own parameters, with no environment involved.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForWorldModeling
+    >>> model = AutoModelForWorldModeling.from_pretrained("planet_world_model")
+    >>> type(model).__name__
+    'PlaNetForWorldModeling'
+    """
+
+    _task: ClassVar[str] = "world-modeling"

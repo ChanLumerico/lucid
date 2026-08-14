@@ -356,5 +356,7 @@
   "zfnet": "3aa36edf7c305dc7",
   "zfnet_cls": "3aa36edf7c305dc7",
   "vqvae": "b7ea6f256032e4f1",
-  "vqvae_gen": "b7ea6f256032e4f1"
+  "vqvae_gen": "b7ea6f256032e4f1",
+  "planet": "5bb25ea821988697",
+  "planet_world_model": "5bb25ea821988697"
 }

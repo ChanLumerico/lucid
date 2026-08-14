@@ -67,6 +67,7 @@ KNOWN_TASK_SUFFIXES: set[str] = {
     "ForNextSentencePrediction",
     "ForMultipleChoice",
     "ForPreTraining",
+    "ForWorldModeling",
     # Alternative head-style naming (GPT/GPT-2 use reference-framework names).
     "LMHeadModel",
     "DoubleHeadsModel",

@@ -302,6 +302,7 @@ const TASK_LABEL_OVERRIDES: Record<string, string> = {
   "semantic-segmentation":      "Semantic Segmentation",
   "panoptic-segmentation":      "Panoptic Segmentation",
   "image-generation":           "Image Generation",
+  "world-modeling":             "World Modeling",
   "text-generation":            "Text Generation",
   "text-classification":        "Text Classification",
   "token-classification":       "Token Classification",
@@ -336,6 +337,7 @@ const TASK_SWATCH: Record<string, string> = {
   "multiple-choice":          "text-8",
   // ── Generative ────────────────────────────────────────────────────────────
   "image-generation":         "generative-1",
+  "world-modeling":           "generative-2",
   // ── Multi / meta ──────────────────────────────────────────────────────────
   "pretraining":              "meta-1",
 };

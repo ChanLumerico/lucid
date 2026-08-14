@@ -1,0 +1,459 @@
+"""PlaNet model + task wrapper + output dataclass.
+
+Shapes, following Hafner et al., 2019 and the released implementation's
+``conv_ha.py`` (which the paper cites as "the convolutional and
+deconvolutional networks from Ha & Schmidhuber, 2018")::
+
+    encoder:  (B, T, 3, 64, 64)
+              -> [Conv2d 4x4 s2 -> act] x 4   channels d, 2d, 4d, 8d
+              -> flatten                       (B, T, 32d)      = 1024 at d=32
+
+    dynamics: RSSM over (embed, action)        -> prior, posterior
+
+    decoder:  feature = [h; s]
+              -> Linear -> reshape (N, 32d, 1, 1)
+              -> ConvT 5x5 s2 -> act           4d
+              -> ConvT 5x5 s2 -> act           2d
+              -> ConvT 6x6 s2 -> act           d
+              -> ConvT 6x6 s2                  out_channels
+
+    reward:   feature -> [Linear -> act] x L -> Linear -> (B, T)
+
+The spatial chains are ``64 -> 31 -> 14 -> 6 -> 2`` down and
+``1 -> 5 -> 13 -> 30 -> 64`` up, with no padding anywhere.  Both land on
+their targets exactly, which is why the kernel schedule is irregular and
+why :class:`PlaNetConfig` refuses any resolution other than 64.
+
+The convolutions only ever see 4-D input, so the time axis is folded into
+the batch before them and unfolded after — the encoder and decoder are
+per-frame, and only the RSSM is sequential.
+"""
+
+from dataclasses import dataclass
+from typing import ClassVar, cast, final, override
+
+import lucid.nn as nn
+from lucid._tensor.tensor import Tensor
+from lucid.models._base import PretrainedModel
+from lucid.models._output import ModelOutput
+from lucid.models._utils._generative import generative_activation
+from lucid.models.generative._rssm import RSSM, RSSMState, rssm_kl
+from lucid.models.generative.planet._config import PlaNetConfig
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Output dataclass
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(slots=True)
+class PlaNetOutput(ModelOutput):
+    r"""Forward output of the latent dynamics model.
+
+    Attributes
+    ----------
+    observation : Tensor
+        Reconstruction :math:`\hat{o}` shaped ``(B, T, C, 64, 64)``, decoded
+        from the posterior.
+    reward : Tensor
+        Predicted reward shaped ``(B, T)``.
+    posterior_stoch : Tensor
+        The sampled latent :math:`s`, ``(B, T, stoch_size)``.
+    posterior_mean, posterior_std : Tensor
+        Parameters of :math:`q(s_t \mid h_t, o_t)`.
+    prior_mean, prior_std : Tensor
+        Parameters of :math:`p(s_t \mid h_t)` — what the dynamics predicted
+        before seeing the frame.
+    deter : Tensor
+        The deterministic path :math:`h`, ``(B, T, deter_size)``.  Carried
+        once, not twice: prior and posterior share it by construction,
+        because the observation refines the belief about :math:`s_t`
+        without changing the path that led there.
+    loss : Tensor or None, optional
+        ``recon_loss + reward_loss + kl_weight * kl_loss``.  ``None`` on
+        :class:`PlaNetModel`, which builds no objective.
+    recon_loss, reward_loss, kl_loss : Tensor or None, optional
+        The three terms separately.  ``kl_loss`` is already clamped at
+        ``free_nats``.
+
+    Notes
+    -----
+    Returned by both :meth:`PlaNetModel.forward` (losses ``None``) and
+    :meth:`PlaNetForWorldModeling.forward` (losses populated).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.planet import PlaNetConfig, PlaNetModel
+    >>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,
+    ...                    hidden_size=8, cnn_depth=4, reward_hidden=8)
+    >>> model = PlaNetModel(cfg).eval()
+    >>> out = model(lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2))
+    >>> out.observation.shape, out.reward.shape
+    ((1, 3, 3, 64, 64), (1, 3))
+    """
+
+    observation: Tensor
+    reward: Tensor
+    posterior_stoch: Tensor
+    posterior_mean: Tensor
+    posterior_std: Tensor
+    prior_mean: Tensor
+    prior_std: Tensor
+    deter: Tensor
+    loss: Tensor | None = None
+    recon_loss: Tensor | None = None
+    reward_loss: Tensor | None = None
+    kl_loss: Tensor | None = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Private building blocks
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _fold(x: Tensor) -> tuple[Tensor, int, int]:
+    """``(B, T, ...) -> (B * T, ...)``, returning the split for :func:`_unfold`."""
+    b, t = int(x.shape[0]), int(x.shape[1])
+    rest = tuple(int(s) for s in x.shape[2:])
+    return x.reshape(b * t, *rest), b, t
+
+
+def _unfold(x: Tensor, b: int, t: int) -> Tensor:
+    """``(B * T, ...) -> (B, T, ...)``."""
+    rest = tuple(int(s) for s in x.shape[1:])
+    return x.reshape(b, t, *rest)
+
+
+@final
+class _PlaNetEncoder(nn.Module):
+    """Four stride-2 convolutions with 4x4 kernels, widening ``d, 2d, 4d, 8d``.
+
+    No padding: ``64 -> 31 -> 14 -> 6 -> 2``, so the flattened output is
+    ``8d * 2 * 2 = 32d`` — 1024 at the paper's ``cnn_depth=32``.
+    """
+
+    def __init__(self, config: PlaNetConfig) -> None:
+        super().__init__()
+        self._act_name = config.act_fn
+        d = config.cnn_depth
+        widths = (config.in_channels, d, 2 * d, 4 * d, 8 * d)
+        self.convs = nn.ModuleList(
+            [
+                nn.Conv2d(widths[i], widths[i + 1], kernel_size=4, stride=2)
+                for i in range(4)
+            ]
+        )
+        self.embed_size = config.embed_size
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        h, b, t = _fold(x)
+        for conv in self.convs:
+            h = generative_activation(self._act_name, cast(Tensor, conv(h)))
+        return _unfold(h.reshape(int(h.shape[0]), self.embed_size), b, t)
+
+
+@final
+class _PlaNetDecoder(nn.Module):
+    """Linear lift to a 1x1 grid, then four transposed convolutions.
+
+    Kernels ``5, 5, 6, 6`` at stride 2 take ``1 -> 5 -> 13 -> 30 -> 64``.
+    The last one is unactivated: its output is the reconstruction mean of a
+    unit-variance Gaussian, not a hidden layer.
+    """
+
+    def __init__(self, config: PlaNetConfig) -> None:
+        super().__init__()
+        self._act_name = config.act_fn
+        d = config.cnn_depth
+        self._lift_width = config.embed_size
+
+        self.lift = nn.Linear(config.latent_size, config.embed_size)
+        specs = (
+            (config.embed_size, 4 * d, 5),
+            (4 * d, 2 * d, 5),
+            (2 * d, d, 6),
+            (d, config.out_channels, 6),
+        )
+        self.deconvs = nn.ModuleList(
+            [
+                nn.ConvTranspose2d(cin, cout, kernel_size=k, stride=2)
+                for cin, cout, k in specs
+            ]
+        )
+
+    @override
+    def forward(self, feature: Tensor) -> Tensor:  # type: ignore[override]
+        h, b, t = _fold(feature)
+        h = cast(Tensor, self.lift(h))
+        h = h.reshape(int(h.shape[0]), self._lift_width, 1, 1)
+        last = len(self.deconvs) - 1
+        for i, deconv in enumerate(self.deconvs):
+            h = cast(Tensor, deconv(h))
+            if i != last:
+                h = generative_activation(self._act_name, h)
+        return _unfold(h, b, t)
+
+
+@final
+class _PlaNetRewardHead(nn.Module):
+    """Feed-forward mean of a unit-variance Gaussian over the reward."""
+
+    def __init__(self, config: PlaNetConfig) -> None:
+        super().__init__()
+        self._act_name = config.act_fn
+        widths = [config.latent_size] + [config.reward_hidden] * config.reward_layers
+        self.layers = nn.ModuleList(
+            [nn.Linear(widths[i], widths[i + 1]) for i in range(config.reward_layers)]
+        )
+        self.out = nn.Linear(config.reward_hidden, 1)
+
+    @override
+    def forward(self, feature: Tensor) -> Tensor:  # type: ignore[override]
+        h, b, t = _fold(feature)
+        for layer in self.layers:
+            h = generative_activation(self._act_name, cast(Tensor, layer(h)))
+        return cast(Tensor, self.out(h)).reshape(b, t)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Direct model — encoder, dynamics, decoder, reward head; no objective
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PlaNetModel(PretrainedModel):
+    r"""PlaNet's latent dynamics model (Hafner et al., 2019).
+
+    A convolutional encoder embeds each frame, a recurrent state-space
+    model carries the belief forward, and a decoder plus a reward head read
+    predictions back off that belief.  The point of the architecture is
+    that everything downstream of the encoder happens in a compact latent —
+    which is what makes searching over thousands of imagined action
+    sequences affordable.
+
+    This class computes no loss.  Use :class:`PlaNetForWorldModeling` for
+    the training objective, or read the distributions off the returned
+    :class:`PlaNetOutput` and build your own.
+
+    Parameters
+    ----------
+    config : PlaNetConfig
+        Hyperparameters.  See :class:`PlaNetConfig`.
+
+    Attributes
+    ----------
+    encoder : nn.Module
+        Per-frame convolutional embedding.
+    rssm : lucid.models.generative.RSSM
+        The dynamics.  Shared with the Dreamer families by design.
+    decoder : nn.Module
+        Reconstructs a frame from ``[h; s]``.
+    reward_head : nn.Module
+        Predicts reward from ``[h; s]``.
+
+    Notes
+    -----
+    Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,
+    *"Learning Latent Dynamics for Planning from Pixels"*, ICML, 2019
+    (arXiv:1811.04551).
+
+    **Action alignment.**  ``actions[:, t]`` is the action taken *into*
+    step ``t`` — the one that produced ``observations[:, t]``.  A caller
+    holding :math:`(o_0, a_0, o_1, a_1, \dots)` shifts by one and passes a
+    zero action at index 0.
+
+    Planning is **not** implemented.  The paper pairs this model with a
+    cross-entropy-method planner, which is a control algorithm rather than
+    a network; :meth:`imagine` is the piece of it that belongs to the
+    model, and the search on top is left to the caller.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.planet import PlaNetConfig, PlaNetModel
+    >>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,
+    ...                    hidden_size=8, cnn_depth=4, reward_hidden=8)
+    >>> model = PlaNetModel(cfg).eval()
+    >>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)
+    >>> priors, posteriors = model.observe(obs, act)
+    >>> posteriors.stoch.shape
+    (1, 3, 4)
+    >>> model.imagine(model.rssm.initial(1), act).stoch.shape
+    (1, 3, 4)
+    """
+
+    config_class: ClassVar[type[PlaNetConfig]] = PlaNetConfig
+    base_model_prefix: ClassVar[str] = "planet"
+
+    def __init__(self, config: PlaNetConfig) -> None:
+        super().__init__(config)
+        self.encoder = _PlaNetEncoder(config)
+        self.rssm = RSSM(
+            stoch_size=config.stoch_size,
+            deter_size=config.deter_size,
+            hidden_size=config.hidden_size,
+            action_dim=config.action_dim,
+            embed_size=config.embed_size,
+            act_fn=config.act_fn,
+            min_std=config.min_std,
+        )
+        self.decoder = _PlaNetDecoder(config)
+        self.reward_head = _PlaNetRewardHead(config)
+
+    def encode(self, observations: Tensor) -> Tensor:
+        """Embed a frame sequence — ``(B, T, C, 64, 64) -> (B, T, embed_size)``."""
+        return cast(Tensor, self.encoder(observations))
+
+    def observe(
+        self,
+        observations: Tensor,
+        actions: Tensor,
+        state: RSSMState | None = None,
+    ) -> tuple[RSSMState, RSSMState]:
+        """Filter a trajectory into posterior states — returns ``(priors, posteriors)``."""
+        return self.rssm.observe(self.encode(observations), actions, state)
+
+    def imagine(self, state: RSSMState, actions: Tensor) -> RSSMState:
+        """Roll the dynamics forward with no observations at all."""
+        return self.rssm.imagine(state, actions)
+
+    def decode(self, state: RSSMState) -> Tensor:
+        """Reconstruct frames from a state — ``(B, T, C, 64, 64)``."""
+        return cast(Tensor, self.decoder(state.feature))
+
+    def predict_reward(self, state: RSSMState) -> Tensor:
+        """Predict reward from a state — ``(B, T)``."""
+        return cast(Tensor, self.reward_head(state.feature))
+
+    @override
+    def forward(  # type: ignore[override]
+        self, observations: Tensor, actions: Tensor
+    ) -> PlaNetOutput:
+        priors, posteriors = self.observe(observations, actions)
+        return PlaNetOutput(
+            observation=self.decode(posteriors),
+            reward=self.predict_reward(posteriors),
+            posterior_stoch=posteriors.stoch,
+            posterior_mean=posteriors.mean,
+            posterior_std=posteriors.std,
+            prior_mean=priors.mean,
+            prior_std=priors.std,
+            deter=posteriors.deter,
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task wrapper — the variational objective
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PlaNetForWorldModeling(PretrainedModel):
+    r"""PlaNet with the variational training objective.
+
+    Wraps :class:`PlaNetModel` with the bound of Hafner et al., 2019:
+
+    .. math::
+
+        \mathcal{L} =
+            \underbrace{\mathbb{E}_q\big[\log p(o_t \mid h_t, s_t)
+                              + \log p(r_t \mid h_t, s_t)\big]}
+                       _{\text{reconstruction}}
+            \;-\;
+            \beta\,\underbrace{\mathrm{KL}\big(q(s_t \mid h_t, o_t)
+                              \,\|\, p(s_t \mid h_t)\big)}_{\text{consistency}} .
+
+    Both likelihoods are unit-variance Gaussians, so their log-densities
+    reduce to one-half squared error up to constants that do not affect the
+    gradient — the observation term summed over pixels, the reward term a
+    scalar.  The KL carries a free-nats floor; see :func:`rssm_kl`.
+
+    Parameters
+    ----------
+    config : PlaNetConfig
+        Hyperparameters.  ``free_nats`` and ``kl_weight`` shape the KL term.
+
+    Attributes
+    ----------
+    planet : PlaNetModel
+        The underlying trunk.
+
+    Notes
+    -----
+    Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,
+    *"Learning Latent Dynamics for Planning from Pixels"*, ICML, 2019
+    (arXiv:1811.04551).
+
+    **The reconstruction term never reaches the prior head.**  Nothing
+    reconstructed is computed from the prior — the decoder and the reward
+    head both read the posterior — so the KL is the prior's only teacher.
+    Train without it and the dynamics never learn to predict, while every
+    shape and every loss value still looks reasonable.
+
+    The released implementation scales the reward term by 10 and uses
+    3-layer, 300-unit heads.  Neither appears in the paper, which specifies
+    "two fully connected layers of size 200"; the paper's values are used
+    here, and the discrepancy is recorded rather than silently split.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.planet import (
+    ...     PlaNetConfig, PlaNetForWorldModeling,
+    ... )
+    >>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,
+    ...                    hidden_size=8, cnn_depth=4, reward_hidden=8)
+    >>> model = PlaNetForWorldModeling(cfg).eval()
+    >>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)
+    >>> out = model(obs, act, rewards=lucid.zeros(1, 3))
+    >>> out.loss.shape, out.observation.shape
+    ((), (1, 3, 3, 64, 64))
+    """
+
+    config_class: ClassVar[type[PlaNetConfig]] = PlaNetConfig
+    base_model_prefix: ClassVar[str] = "planet"
+
+    def __init__(self, config: PlaNetConfig) -> None:
+        super().__init__(config)
+        self.planet = PlaNetModel(config)
+        self._free_nats = config.free_nats
+        self._kl_weight = config.kl_weight
+
+    @override
+    def forward(  # type: ignore[override]
+        self,
+        observations: Tensor,
+        actions: Tensor,
+        rewards: Tensor | None = None,
+    ) -> PlaNetOutput:
+        priors, posteriors = self.planet.observe(observations, actions)
+        reconstruction = self.planet.decode(posteriors)
+        predicted = self.planet.predict_reward(posteriors)
+
+        b = int(observations.shape[0])
+        t = int(observations.shape[1])
+        # Unit-variance Gaussian log-densities: one-half squared error,
+        # summed over pixels for the frame and averaged over (B, T).
+        diff = (reconstruction - observations) ** 2
+        recon_loss = 0.5 * diff.reshape(b, t, -1).sum(dim=-1).mean()
+        kl_loss = rssm_kl(posteriors, priors, free_nats=self._free_nats)
+
+        reward_loss = None
+        total = recon_loss + self._kl_weight * kl_loss
+        if rewards is not None:
+            reward_loss = 0.5 * ((predicted - rewards) ** 2).mean()
+            total = total + reward_loss
+
+        return PlaNetOutput(
+            observation=reconstruction,
+            reward=predicted,
+            posterior_stoch=posteriors.stoch,
+            posterior_mean=posteriors.mean,
+            posterior_std=posteriors.std,
+            prior_mean=priors.mean,
+            prior_std=priors.std,
+            deter=posteriors.deter,
+            loss=total,
+            recon_loss=recon_loss,
+            reward_loss=reward_loss,
+            kl_loss=kl_loss,
+        )

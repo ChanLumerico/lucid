@@ -17,6 +17,7 @@ import pytest
 
 import lucid
 import lucid.models as M
+from lucid.models.generative._rssm import RSSMState
 
 DEVICES = ["cpu", "metal"]
 
@@ -488,3 +489,109 @@ def test_vqvae_generate_runs_on_device(device):
     assert str(samples.device) == f"device('{device}')"
     assert samples.shape == (2, 3, 16, 16)
     assert not np.isnan(samples.to("cpu").numpy()).any()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# World models
+#
+# PlaNet does not fit the sweep above: its forward takes two sequences and
+# returns neither ``logits`` nor ``last_hidden_state``.  It also cannot be
+# compared trajectory-for-trajectory across devices — every step draws a
+# fresh ``randn`` for the reparameterised latent, and the two RNG streams
+# do not agree, so the sequences diverge after step 0 by design rather than
+# by defect.
+#
+# What *is* deterministic gets compared exactly: the encoder over the whole
+# sequence, the decoder and the reward head from a fixed feature tensor,
+# and the first dynamics step, which depends only on the zero-initialised
+# state and ``actions[:, 0]``.  Between them they cover every layer.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PLANET_SMALL = {
+    "action_dim": 2,
+    "stoch_size": 4,
+    "deter_size": 8,
+    "hidden_size": 8,
+    "cnn_depth": 4,
+    "reward_hidden": 8,
+}
+
+
+def test_planet_encoder_matches_across_devices():
+    """The convolutional embedding is sampling-free, so it must agree in full."""
+    cpu, metal = _paired("planet", **_PLANET_SMALL)
+    obs = lucid.rand((2, 3, 3, 64, 64))
+    _agree(cpu.encode(obs), metal.encode(obs.to("metal")), 1e-4, "planet encode")
+
+
+def test_planet_first_dynamics_step_matches_across_devices():
+    """Step 0 is deterministic — nothing sampled has entered it yet."""
+    cpu, metal = _paired("planet", **_PLANET_SMALL)
+    obs = lucid.rand((2, 1, 3, 64, 64))
+    act = lucid.rand((2, 1, 2))
+
+    p_cpu, q_cpu = cpu.observe(obs, act)
+    p_metal, q_metal = metal.observe(obs.to("metal"), act.to("metal"))
+
+    _agree(p_cpu.deter, p_metal.deter, 1e-4, "planet deter")
+    _agree(p_cpu.mean, p_metal.mean, 1e-4, "planet prior mean")
+    _agree(p_cpu.std, p_metal.std, 1e-4, "planet prior std")
+    _agree(q_cpu.mean, q_metal.mean, 1e-4, "planet posterior mean")
+    _agree(q_cpu.std, q_metal.std, 1e-4, "planet posterior std")
+
+
+def test_planet_decoder_and_reward_match_across_devices():
+    """Both heads read a state; feed them the same one on each device."""
+    cpu, metal = _paired("planet", **_PLANET_SMALL)
+    feature = lucid.rand((2, 3, cpu.config.latent_size))
+    state = RSSMState(
+        deter=feature[..., : cpu.config.deter_size],
+        stoch=feature[..., cpu.config.deter_size :],
+        mean=feature[..., cpu.config.deter_size :],
+        std=feature[..., cpu.config.deter_size :],
+    )
+    gpu_state = RSSMState(*(t.to("metal") for t in state))
+
+    _agree(cpu.decode(state), metal.decode(gpu_state), 1e-4, "planet decode")
+    _agree(
+        cpu.predict_reward(state),
+        metal.predict_reward(gpu_state),
+        1e-4,
+        "planet reward",
+    )
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_planet_imagines_on_device(device):
+    """The longest recurrence in the zoo — a place a CPU index could leak."""
+    lucid.manual_seed(0)
+    model = M.create_model("planet", **_PLANET_SMALL).to(device).eval()
+    actions = lucid.rand((2, 6, 2), device=device)
+
+    imagined = model.imagine(model.rssm.initial(2, device=device), actions)
+    assert str(imagined.stoch.device) == f"device('{device}')"
+    assert imagined.stoch.shape == (2, 6, 4)
+    assert not np.isnan(imagined.stoch.to("cpu").numpy()).any()
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_planet_trains_one_step_on_device(device):
+    """Forward, backward and step over the full unroll, staying on-device."""
+    lucid.manual_seed(0)
+    model = M.create_model("planet_world_model", **_PLANET_SMALL).to(device)
+    model.train()
+    optimizer = lucid.optim.SGD(model.parameters(), lr=1e-5)
+
+    out = model(
+        lucid.rand((2, 3, 3, 64, 64), device=device),
+        lucid.rand((2, 3, 2), device=device),
+        rewards=lucid.rand((2, 3), device=device),
+    )
+    optimizer.zero_grad()
+    out.loss.backward()
+    optimizer.step()
+
+    grads = [p.grad for p in model.parameters() if p.grad is not None]
+    assert grads, "planet: no parameter received a gradient"
+    for g in grads:
+        assert str(g.device) == f"device('{device}')"

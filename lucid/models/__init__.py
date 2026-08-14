@@ -12,6 +12,7 @@ from lucid.models._auto import (
     AutoModelForSeq2SeqLM,
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
+    AutoModelForWorldModeling,
 )
 from lucid.models._base   import ModelConfig, PretrainedModel
 from lucid.models._meta   import ModelFamilyMeta, model_family_meta
@@ -40,7 +41,7 @@ from lucid.models._registry import create_model, is_model, list_models, model_en
 from lucid.models.text import LanguageModelConfig, TextActivation
 # Generative-domain infrastructure (Phase 5 base layer).
 from lucid.models.generative import (
-    BetaSchedule, DDPMScheduler,
+    BetaSchedule, DDPMScheduler, RSSM, RSSMState,
     DiffusionModelConfig, FlowPrior, GenerativeActivation, GenerativeModelConfig,
     NormalizingFlowConfig, DiffusionScheduler,
 )
@@ -59,6 +60,11 @@ from lucid.models.generative.nice import (
 from lucid.models.generative.vqvae import (
     VQVAEConfig, VQVAEModel, VQVAEForImageGeneration, VQVAEOutput,
     vqvae, vqvae_gen,
+)
+# 2019 — PlaNet (Hafner et al.)
+from lucid.models.generative.planet import (
+    PlaNetConfig, PlaNetModel, PlaNetForWorldModeling, PlaNetOutput,
+    planet, planet_world_model,
 )
 # 2020 — DDPM (Ho et al.)
 from lucid.models.generative.ddpm import (
@@ -459,7 +465,7 @@ __all__ = [
     "LanguageModelConfig", "TextActivation",
     "GenerativeModelConfig", "DiffusionModelConfig", "NormalizingFlowConfig",
     "GenerativeActivation", "BetaSchedule", "FlowPrior",
-    "DiffusionScheduler", "DDPMScheduler",
+    "DiffusionScheduler", "DDPMScheduler", "RSSM", "RSSMState",
     "ModelOutput", "BaseModelOutput", "BaseModelOutputWithPooling",
     "ImageClassificationOutput", "ObjectDetectionOutput", "InstanceSegmentationOutput",
     "SemanticSegmentationOutput", "CausalLMOutput", "MaskedLMOutput", "Seq2SeqLMOutput",
@@ -473,6 +479,7 @@ __all__ = [
     "AutoModelForSequenceClassification", "AutoModelForTokenClassification",
     "AutoModelForQuestionAnswering",
     "AutoModelForImageGeneration",
+    "AutoModelForWorldModeling",
     "create_model", "is_model", "list_models", "model_entrypoint", "register_model",
     # Structural-typing contracts (advisory; see arch-models-family-contract).
     "HasModelType", "HasFamilyMeta", "HasConfigClass",
@@ -715,6 +722,9 @@ __all__ = [
     # ── Generative (2017) VQ-VAE ──────────────────────────────────────────────
     "VQVAEConfig", "VQVAEModel", "VQVAEForImageGeneration", "VQVAEOutput",
     "vqvae", "vqvae_gen",
+    # ── Generative (2019) PlaNet ──────────────────────────────────────────────
+    "PlaNetConfig", "PlaNetModel", "PlaNetForWorldModeling", "PlaNetOutput",
+    "planet", "planet_world_model",
     # ── Generative (2020) DDPM ────────────────────────────────────────────────
     "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "DDPMUNet",
     "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",

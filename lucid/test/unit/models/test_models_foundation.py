@@ -475,7 +475,9 @@ class TestAutoModelTaskCoverage:
             AutoModelForSemanticSegmentation,
             AutoModelForSeq2SeqLM,
             AutoModelForSequenceClassification,
+            AutoModelForImageGeneration,
             AutoModelForTokenClassification,
+            AutoModelForWorldModeling,
         )
         from lucid.models._registry import list_models
 
@@ -490,6 +492,11 @@ class TestAutoModelTaskCoverage:
             AutoModelForSequenceClassification,
             AutoModelForTokenClassification,
             AutoModelForQuestionAnswering,
+            # Both were absent: ImageGeneration predates this list's last
+            # edit, WorldModeling is new. The guard only works if every
+            # Auto class is in it.
+            AutoModelForImageGeneration,
+            AutoModelForWorldModeling,
         ]
         for auto_cls in autos:
             registered = list_models(task=auto_cls._task)

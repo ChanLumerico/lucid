@@ -1,0 +1,390 @@
+"""Unit tests for PlaNet (Hafner et al., 2019).
+
+The gradient-routing tests are the load-bearing ones, for the same reason
+they were in VQ-VAE: the reconstruction path never touches the prior head,
+so a model with the KL term removed or mis-wired still returns correct
+shapes, a finite loss, and a plausible reconstruction — and never learns to
+predict anything.
+
+The composition tests exist because a duplicated activation is invisible
+under ReLU, which is idempotent and is this family's default. They pin the
+exact composition instead of the output shape.
+"""
+
+import pytest
+
+import lucid
+from lucid.models import (
+    PlaNetConfig,
+    PlaNetForWorldModeling,
+    PlaNetModel,
+    PlaNetOutput,
+    create_model,
+    is_model,
+    list_models,
+)
+from lucid.models._utils._generative import generative_activation
+from lucid.models.generative._rssm import rssm_kl
+
+
+def _tiny_cfg(**overrides: object) -> PlaNetConfig:
+    base: dict[str, object] = {
+        "action_dim": 2,
+        "stoch_size": 4,
+        "deter_size": 8,
+        "hidden_size": 8,
+        "cnn_depth": 4,
+        "reward_hidden": 8,
+    }
+    base.update(overrides)
+    return PlaNetConfig(**base)  # type: ignore[arg-type]
+
+
+def _batch(b: int = 2, t: int = 3, action_dim: int = 2) -> tuple[lucid.Tensor, ...]:
+    return (
+        lucid.randn((b, t, 3, 64, 64)),
+        lucid.randn((b, t, action_dim)),
+        lucid.randn((b, t)),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Config
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestPlaNetConfig:
+    def test_defaults_match_the_paper(self) -> None:
+        cfg = PlaNetConfig()
+        assert cfg.stoch_size == 30
+        assert cfg.deter_size == 200
+        assert cfg.hidden_size == 200
+        assert cfg.reward_hidden == 200
+        assert cfg.reward_layers == 2
+        assert cfg.free_nats == 3.0
+        assert cfg.min_std == 0.1
+        assert cfg.act_fn == "relu"
+        assert cfg.sample_size == 64
+        assert cfg.model_type == "planet"
+
+    def test_derived_sizes(self) -> None:
+        cfg = PlaNetConfig()
+        assert cfg.embed_size == 32 * cfg.cnn_depth == 1024
+        assert cfg.latent_size == cfg.deter_size + cfg.stoch_size == 230
+
+    def test_only_64px_is_accepted(self) -> None:
+        # The decoder kernel schedule (5, 5, 6, 6) reaches 64 and nothing
+        # else; refusing beats silently reconstructing the wrong shape.
+        with pytest.raises(ValueError, match="64x64"):
+            PlaNetConfig(sample_size=32)
+        with pytest.raises(ValueError, match="64x64"):
+            PlaNetConfig(sample_size=(64, 32))
+        assert PlaNetConfig(sample_size=(64, 64)).sample_size == (64, 64)
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("action_dim", 0),
+            ("stoch_size", 0),
+            ("deter_size", 0),
+            ("hidden_size", 0),
+            ("cnn_depth", 0),
+            ("reward_hidden", 0),
+            ("reward_layers", 0),
+            ("min_std", 0.0),
+            ("free_nats", -1.0),
+            ("kl_weight", -1.0),
+        ],
+    )
+    def test_rejects_invalid_fields(self, field: str, value: object) -> None:
+        with pytest.raises(ValueError, match=field):
+            PlaNetConfig(**{field: value})  # type: ignore[arg-type]
+
+    def test_frozen(self) -> None:
+        cfg = PlaNetConfig()
+        with pytest.raises(Exception):
+            cfg.stoch_size = 4  # type: ignore[misc]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shapes
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestPlaNetForward:
+    def test_forward_shapes(self) -> None:
+        cfg = _tiny_cfg()
+        model = PlaNetModel(cfg).eval()
+        obs, act, _ = _batch()
+        out = model(obs, act)
+
+        assert isinstance(out, PlaNetOutput)
+        assert out.observation.shape == (2, 3, 3, 64, 64)
+        assert out.reward.shape == (2, 3)
+        assert out.posterior_stoch.shape == (2, 3, cfg.stoch_size)
+        assert out.prior_mean.shape == (2, 3, cfg.stoch_size)
+        assert out.deter.shape == (2, 3, cfg.deter_size)
+
+    def test_encode_decode_reward_shapes(self) -> None:
+        cfg = _tiny_cfg()
+        model = PlaNetModel(cfg).eval()
+        obs, act, _ = _batch()
+
+        assert model.encode(obs).shape == (2, 3, cfg.embed_size)
+        _, posteriors = model.observe(obs, act)
+        assert model.decode(posteriors).shape == (2, 3, 3, 64, 64)
+        assert model.predict_reward(posteriors).shape == (2, 3)
+        assert posteriors.feature.shape == (2, 3, cfg.latent_size)
+
+    def test_bare_model_builds_no_objective(self) -> None:
+        out = PlaNetModel(_tiny_cfg()).eval()(*_batch()[:2])
+        assert out.loss is None
+        assert out.recon_loss is None
+        assert out.kl_loss is None
+
+    def test_std_is_always_positive(self) -> None:
+        cfg = _tiny_cfg()
+        out = PlaNetModel(cfg).eval()(*_batch()[:2])
+        assert float(out.posterior_std.min().item()) >= cfg.min_std
+        assert float(out.prior_std.min().item()) >= cfg.min_std
+
+    def test_imagine_runs_without_observations(self) -> None:
+        model = PlaNetModel(_tiny_cfg()).eval()
+        actions = lucid.randn((2, 5, 2))
+        imagined = model.imagine(model.rssm.initial(2), actions)
+        assert imagined.stoch.shape == (2, 5, 4)
+        assert imagined.deter.shape == (2, 5, 8)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dynamics semantics
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestDynamics:
+    def test_prior_and_posterior_share_the_deterministic_path(self) -> None:
+        # The observation refines the belief about s_t; it does not change
+        # the path that led there. A shape check cannot see this.
+        model = PlaNetModel(_tiny_cfg()).eval()
+        priors, posteriors = model.observe(*_batch()[:2])
+        assert float((priors.deter - posteriors.deter).abs().max().item()) == 0.0
+
+    def test_imagine_matches_a_manual_prior_unroll(self) -> None:
+        model = PlaNetModel(_tiny_cfg()).eval()
+        actions = lucid.randn((2, 4, 2))
+
+        lucid.manual_seed(0)
+        rolled = model.imagine(model.rssm.initial(2), actions)
+
+        lucid.manual_seed(0)
+        state = model.rssm.initial(2)
+        steps = []
+        for t in range(4):
+            state = model.rssm.prior_step(state, actions[:, t])
+            steps.append(state.stoch)
+        manual = lucid.stack(steps, dim=1)
+
+        assert float((rolled.stoch - manual).abs().max().item()) < 1e-6
+
+    def test_actions_change_the_state(self) -> None:
+        # Pins the action-alignment contract: actions[:, t] is consumed at
+        # step t. If the unroll dropped or mis-indexed them, this passes
+        # nothing and every shape still checks out.
+        model = PlaNetModel(_tiny_cfg()).eval()
+        obs = lucid.randn((2, 1, 3, 64, 64))
+
+        lucid.manual_seed(0)
+        _, zero = model.observe(obs, lucid.zeros(2, 1, 2))
+        lucid.manual_seed(0)
+        _, nonzero = model.observe(obs, lucid.ones(2, 1, 2) * 5.0)
+
+        assert float((zero.deter - nonzero.deter).abs().max().item()) > 1e-4
+
+    def test_kl_is_non_negative_and_free_nats_clamps_it(self) -> None:
+        model = PlaNetModel(_tiny_cfg()).eval()
+        priors, posteriors = model.observe(*_batch()[:2])
+
+        raw = rssm_kl(posteriors, priors, free_nats=0.0)
+        assert float(raw.item()) >= 0.0
+        assert float(rssm_kl(posteriors, priors, free_nats=1e9).item()) == 0.0
+        # Not exactly zero: normal_kl's terms cancel analytically but not in
+        # float32, leaving round-off around 1e-8.
+        assert float(rssm_kl(posteriors, posteriors, free_nats=0.0).item()) < 1e-6
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Gradient routing — what makes the objective necessary
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestGradientRouting:
+    def test_reconstruction_alone_never_reaches_the_prior_head(self) -> None:
+        # Nothing reconstructed is computed from the prior — the decoder
+        # and the reward head both read the posterior. So the KL is the
+        # prior's only teacher, and a model trained without it predicts
+        # nothing while every shape and loss still looks healthy.
+        model = PlaNetModel(_tiny_cfg())
+        obs, act, _ = _batch()
+        out = model(obs, act)
+        ((out.observation - obs) ** 2).mean().backward()
+
+        prior_grads = [p.grad for n, p in model.named_parameters() if "prior_head" in n]
+        assert prior_grads and all(g is None for g in prior_grads)
+
+        posterior_grads = [
+            p.grad for n, p in model.named_parameters() if "posterior_head" in n
+        ]
+        assert posterior_grads and all(g is not None for g in posterior_grads)
+
+    def test_the_kl_is_what_trains_the_prior_head(self) -> None:
+        model = PlaNetModel(_tiny_cfg())
+        priors, posteriors = model.observe(*_batch()[:2])
+        rssm_kl(posteriors, priors, free_nats=0.0).backward()
+
+        reached = [n for n, p in model.named_parameters() if p.grad is not None]
+        assert any("prior_head" in n for n in reached)
+
+    def test_full_objective_reaches_every_parameter(self) -> None:
+        model = PlaNetForWorldModeling(_tiny_cfg())
+        obs, act, rew = _batch()
+        out = model(obs, act, rewards=rew)
+        assert out.loss is not None
+        out.loss.backward()
+
+        missing = [n for n, p in model.named_parameters() if p.grad is None]
+        assert not missing, f"no gradient reached: {missing}"
+
+    def test_gradient_reaches_the_recurrence_from_the_last_step(self) -> None:
+        # A broken unroll — an accidental detach, or rebuilding the carried
+        # state from a stacked tensor — still returns the right shapes and
+        # simply stops learning across time.
+        model = PlaNetModel(_tiny_cfg())
+        obs, act, _ = _batch(t=4)
+        _, posteriors = model.observe(obs, act)
+        posteriors.stoch[:, -1].sum().backward()
+
+        assert model.rssm.cell.weight_hh.grad is not None
+        assert float(abs(model.rssm.cell.weight_hh.grad).sum()) > 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Objective
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestObjective:
+    def test_losses_populated_only_with_rewards(self) -> None:
+        model = PlaNetForWorldModeling(_tiny_cfg()).eval()
+        obs, act, rew = _batch()
+
+        without = model(obs, act)
+        assert without.reward_loss is None
+        assert without.loss is not None
+
+        with_rewards = model(obs, act, rewards=rew)
+        assert with_rewards.reward_loss is not None
+
+    def test_total_is_the_sum_of_its_terms(self) -> None:
+        cfg = _tiny_cfg(free_nats=0.0, kl_weight=1.0)
+        out = PlaNetForWorldModeling(cfg).eval()(*_batch())
+
+        assert out.loss is not None and out.recon_loss is not None
+        assert out.kl_loss is not None and out.reward_loss is not None
+        expected = (
+            float(out.recon_loss.item())
+            + float(out.kl_loss.item())
+            + float(out.reward_loss.item())
+        )
+        assert abs(float(out.loss.item()) - expected) < 1e-2
+
+    def test_kl_weight_scales_the_divergence(self) -> None:
+        obs, act, rew = _batch()
+        lucid.manual_seed(0)
+        a = PlaNetForWorldModeling(_tiny_cfg(free_nats=0.0, kl_weight=0.0)).eval()(
+            obs, act, rewards=rew
+        )
+        assert a.loss is not None and a.kl_loss is not None
+        assert a.recon_loss is not None and a.reward_loss is not None
+        # With the weight at zero the KL is reported but does not enter.
+        assert (
+            abs(
+                float(a.loss.item())
+                - (float(a.recon_loss.item()) + float(a.reward_loss.item()))
+            )
+            < 1e-3
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Composition — what a shape check cannot see
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestComposition:
+    @pytest.mark.parametrize("act", ["relu", "silu", "gelu"])
+    def test_encoder_activates_once_per_convolution(self, act: str) -> None:
+        model = PlaNetModel(_tiny_cfg(act_fn=act)).eval()
+        enc = model.encoder
+        x = lucid.randn((1, 1, 3, 64, 64))
+
+        h = x.reshape(1, 3, 64, 64)
+        for conv in enc.convs:
+            h = generative_activation(act, conv(h))
+        want = h.reshape(1, 1, model.config.embed_size)
+
+        assert float((enc(x) - want).abs().max().item()) < 1e-4
+
+    @pytest.mark.parametrize("act", ["relu", "silu", "gelu"])
+    def test_decoder_leaves_its_last_layer_unactivated(self, act: str) -> None:
+        # The final transposed convolution emits the reconstruction mean of
+        # a unit-variance Gaussian, not a hidden layer — activating it
+        # would clamp the output to a half-line.
+        cfg = _tiny_cfg(act_fn=act)
+        model = PlaNetModel(cfg).eval()
+        dec = model.decoder
+        feature = lucid.randn((1, 1, cfg.latent_size))
+
+        h = dec.lift(feature.reshape(1, cfg.latent_size))
+        h = h.reshape(1, cfg.embed_size, 1, 1)
+        last = len(dec.deconvs) - 1
+        for i, deconv in enumerate(dec.deconvs):
+            h = deconv(h)
+            if i != last:
+                h = generative_activation(act, h)
+        want = h.reshape(1, 1, 3, 64, 64)
+
+        assert float((dec(feature) - want).abs().max().item()) < 1e-4
+
+    def test_decoder_output_is_not_one_sided(self) -> None:
+        out = PlaNetModel(_tiny_cfg()).eval()(*_batch()[:2])
+        assert float(out.observation.min().item()) < 0.0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Registry
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestRegistry:
+    @pytest.mark.parametrize("name", ["planet", "planet_world_model"])
+    def test_registered(self, name: str) -> None:
+        assert is_model(name)
+
+    def test_task_bucket(self) -> None:
+        assert "planet_world_model" in list_models(task="world-modeling")
+        assert "planet" in list_models(task="base")
+
+    def test_create_model_defaults(self) -> None:
+        model = create_model("planet")
+        assert isinstance(model, PlaNetModel)
+        assert model.config.deter_size == 200
+
+    def test_config_override_through_registry(self) -> None:
+        model = create_model("planet", action_dim=6, stoch_size=8)
+        assert model.config.action_dim == 6
+        assert model.config.stoch_size == 8
+
+    @pytest.mark.parametrize("name", ["planet", "planet_world_model"])
+    def test_pretrained_is_refused_rather_than_faked(self, name: str) -> None:
+        with pytest.raises(NotImplementedError, match="No pretrained weights"):
+            create_model(name, pretrained=True)

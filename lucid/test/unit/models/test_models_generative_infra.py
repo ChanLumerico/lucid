@@ -20,6 +20,7 @@ from lucid.models import (
     VAEOutput,
 )
 from lucid.models._base import PretrainedModel
+from lucid.models.generative._rssm import RSSM, rssm_kl
 from lucid.models._utils import (
     extract_into_tensor,
     gaussian_kl_divergence,
@@ -338,3 +339,155 @@ class TestSchedulerABC:
 
     def test_ddpm_satisfies_contract(self) -> None:
         assert issubclass(DDPMScheduler, DiffusionScheduler)
+
+
+class TestRSSM:
+    """The recurrent state-space model shared by the world-model families.
+
+    The structural properties here are the ones a shape check cannot see:
+    that prior and posterior share the deterministic path, that the unroll
+    keeps the autograd chain intact across time, and that the KL is the
+    only thing training the prior.
+    """
+
+    @staticmethod
+    def _rssm() -> RSSM:
+        return RSSM(
+            stoch_size=4, deter_size=8, hidden_size=8, action_dim=2, embed_size=6
+        )
+
+    def test_observe_shapes(self) -> None:
+        rssm = self._rssm().eval()
+        priors, posteriors = rssm.observe(
+            lucid.randn((2, 5, 6)), lucid.randn((2, 5, 2))
+        )
+        for state in (priors, posteriors):
+            assert state.stoch.shape == (2, 5, 4)
+            assert state.deter.shape == (2, 5, 8)
+            assert state.mean.shape == (2, 5, 4)
+            assert state.std.shape == (2, 5, 4)
+
+    def test_posterior_shares_the_deterministic_path(self) -> None:
+        rssm = self._rssm().eval()
+        priors, posteriors = rssm.observe(
+            lucid.randn((2, 3, 6)), lucid.randn((2, 3, 2))
+        )
+        assert float((priors.deter - posteriors.deter).abs().max().item()) == 0.0
+
+    def test_std_is_floored_at_min_std(self) -> None:
+        rssm = RSSM(
+            stoch_size=4,
+            deter_size=8,
+            hidden_size=8,
+            action_dim=2,
+            embed_size=6,
+            min_std=0.5,
+        ).eval()
+        _, posteriors = rssm.observe(lucid.randn((2, 3, 6)), lucid.randn((2, 3, 2)))
+        assert float(posteriors.std.min().item()) >= 0.5
+
+    def test_feature_concatenates_deter_then_stoch(self) -> None:
+        rssm = self._rssm().eval()
+        _, posteriors = rssm.observe(lucid.randn((1, 2, 6)), lucid.randn((1, 2, 2)))
+        assert posteriors.feature.shape == (1, 2, 12)
+        assert (
+            float((posteriors.feature[..., :8] - posteriors.deter).abs().max().item())
+            == 0.0
+        )
+
+    def test_logvar_round_trips_the_std(self) -> None:
+        rssm = self._rssm().eval()
+        _, posteriors = rssm.observe(lucid.randn((1, 2, 6)), lucid.randn((1, 2, 2)))
+        recovered = (0.5 * posteriors.logvar).exp()
+        assert float((recovered - posteriors.std).abs().max().item()) < 1e-5
+
+    def test_imagine_matches_a_manual_prior_unroll(self) -> None:
+        rssm = self._rssm().eval()
+        actions = lucid.randn((2, 4, 2))
+
+        lucid.manual_seed(0)
+        rolled = rssm.imagine(rssm.initial(2), actions)
+        lucid.manual_seed(0)
+        state = rssm.initial(2)
+        steps = [
+            (state := rssm.prior_step(state, actions[:, t])).stoch for t in range(4)
+        ]
+
+        assert (
+            float((rolled.stoch - lucid.stack(steps, dim=1)).abs().max().item()) < 1e-6
+        )
+
+    def test_gradient_survives_the_whole_unroll(self) -> None:
+        # A detach anywhere in the loop, or rebuilding the carried state
+        # from a stacked tensor, leaves every shape correct and silently
+        # stops the model learning across time.
+        rssm = self._rssm()
+        _, posteriors = rssm.observe(lucid.randn((2, 4, 6)), lucid.randn((2, 4, 2)))
+        posteriors.stoch[:, -1].sum().backward()
+
+        assert rssm.cell.weight_hh.grad is not None
+        assert float(abs(rssm.cell.weight_hh.grad).sum()) > 0.0
+
+    def test_reconstruction_path_never_reaches_the_prior_head(self) -> None:
+        rssm = self._rssm()
+        _, posteriors = rssm.observe(lucid.randn((2, 3, 6)), lucid.randn((2, 3, 2)))
+        posteriors.stoch.sum().backward()
+
+        prior_grads = [p.grad for n, p in rssm.named_parameters() if "prior_head" in n]
+        assert prior_grads and all(g is None for g in prior_grads)
+
+    def test_kl_trains_the_prior_head(self) -> None:
+        rssm = self._rssm()
+        priors, posteriors = rssm.observe(
+            lucid.randn((2, 3, 6)), lucid.randn((2, 3, 2))
+        )
+        rssm_kl(posteriors, priors, free_nats=0.0).backward()
+
+        reached = [n for n, p in rssm.named_parameters() if p.grad is not None]
+        assert any("prior_head" in n for n in reached)
+
+    def test_rssm_kl_clamps_at_free_nats(self) -> None:
+        rssm = self._rssm().eval()
+        priors, posteriors = rssm.observe(
+            lucid.randn((2, 3, 6)), lucid.randn((2, 3, 2))
+        )
+
+        assert float(rssm_kl(posteriors, priors, free_nats=0.0).item()) >= 0.0
+        assert float(rssm_kl(posteriors, priors, free_nats=1e9).item()) == 0.0
+
+    def test_initial_state_is_zero(self) -> None:
+        state = self._rssm().initial(3)
+        assert state.deter.shape == (3, 8)
+        assert state.stoch.shape == (3, 4)
+        assert float(state.deter.abs().max().item()) == 0.0
+
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"stoch_size": 0}, "stoch_size"),
+            ({"deter_size": 0}, "deter_size"),
+            ({"action_dim": 0}, "action_dim"),
+            ({"min_std": 0.0}, "min_std"),
+        ],
+    )
+    def test_rejects_invalid_arguments(
+        self, kwargs: dict[str, object], match: str
+    ) -> None:
+        base: dict[str, object] = {
+            "stoch_size": 4,
+            "deter_size": 8,
+            "hidden_size": 8,
+            "action_dim": 2,
+            "embed_size": 6,
+        }
+        base.update(kwargs)
+        with pytest.raises(ValueError, match=match):
+            RSSM(**base)  # type: ignore[arg-type]
+
+    def test_observe_rejects_mismatched_sequence_lengths(self) -> None:
+        with pytest.raises(ValueError, match="agree on T"):
+            self._rssm().observe(lucid.randn((2, 5, 6)), lucid.randn((2, 3, 2)))
+
+    def test_observe_rejects_non_sequence_input(self) -> None:
+        with pytest.raises(ValueError, match=r"\(B, T"):
+            self._rssm().observe(lucid.randn((2, 6)), lucid.randn((2, 2)))

@@ -21,11 +21,14 @@ from lucid.models.generative._config import (
     GenerativeModelConfig,
     NormalizingFlowConfig,
 )
+from lucid.models.generative._rssm import RSSM, RSSMState
 from lucid.models.generative._schedulers import DDPMScheduler, DiffusionScheduler
 
 __all__ = [
     "BetaSchedule",
     "DDPMScheduler",
+    "RSSM",
+    "RSSMState",
     "DiffusionModelConfig",
     "FlowPrior",
     "GenerativeActivation",

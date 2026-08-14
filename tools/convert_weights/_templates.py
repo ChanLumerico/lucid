@@ -51,6 +51,10 @@ _HF_PIPELINE_TAG: dict[str, str] = {
     "object-detection": "object-detection",
     "semantic-segmentation": "image-segmentation",
     "instance-segmentation": "image-segmentation",
+    # World models. The Hub has no latent-dynamics pipeline, and the card
+    # generator passes an unmapped task straight through as the tag, which
+    # would be invalid; "reinforcement-learning" is the closest valid one.
+    "world-modeling": "reinforcement-learning",
     # Text tasks (Lucid task string → HF Hub pipeline_tag).
     "base": "feature-extraction",
     "masked-lm": "fill-mask",

@@ -1495,6 +1495,12 @@
       "module": "lucid.models"
     }
   ],
+  "lucid.models._auto.AutoModelForWorldModeling": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
   "lucid.models._base.ModelConfig": [
     {
       "kind": "module",
@@ -1729,6 +1735,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.nice._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet._model"
     },
     {
       "kind": "module",
@@ -2714,6 +2724,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.planet._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vqvae._model"
     },
     {
@@ -2981,6 +2995,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.nice._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet._pretrained"
     },
     {
       "kind": "module",
@@ -3621,6 +3639,64 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.nice"
+    }
+  ],
+  "lucid.models.generative.planet": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.planet._config.PlaNetConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet._pretrained"
+    }
+  ],
+  "lucid.models.generative.planet._model.PlaNetForWorldModeling": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet._pretrained"
+    }
+  ],
+  "lucid.models.generative.planet._model.PlaNetModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet._pretrained"
+    }
+  ],
+  "lucid.models.generative.planet._model.PlaNetOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet"
+    }
+  ],
+  "lucid.models.generative.planet._pretrained.planet": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet"
+    }
+  ],
+  "lucid.models.generative.planet._pretrained.planet_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet"
     }
   ],
   "lucid.models.generative.realnvp": [
@@ -9566,6 +9642,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative._rssm"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
     },
     {
@@ -9587,6 +9667,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.nice._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.planet._model"
     },
     {
       "kind": "module",
