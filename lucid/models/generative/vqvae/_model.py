@@ -127,7 +127,14 @@ class _VQVAEResidualBlock(nn.Module):
     Ordering follows the paper's parenthetical description of the image
     experiments; the leading activation is what makes it pre-activation,
     so a stack of these can be composed without an activation between
-    them and the trunk's output stays unactivated.
+    them and the trunk's output stays unactivated — and nothing may
+    activate immediately before one, or the boundary gets the activation
+    twice.
+
+    Both convolutions are bias-free.  The paper does not say either way;
+    the bias is redundant here because every path out of this block is
+    summed with ``x``, which carries its own, and dropping it is the
+    common choice in residual stacks.
     """
 
     def __init__(self, channels: int, hidden: int, act_fn: str) -> None:
@@ -186,9 +193,21 @@ class _VQVAEEncoder(nn.Module):
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         h = x
-        for blk in self.down_blocks:
+        last = len(self.down_blocks) - 1
+        for i, blk in enumerate(self.down_blocks):
             h = cast(Tensor, blk(h))
-            h = generative_activation(self._act_name, h)
+            # Not after the last one.  What follows is either a
+            # pre-activation residual block or the trailing activation
+            # below, and both open with an activation of their own — so
+            # activating here too applied it twice at that boundary.  With
+            # the default ReLU that is idempotent and invisible; with the
+            # ``silu`` / ``gelu`` this config also accepts it is not
+            # (silu(silu(x)) differs from silu(x) by up to 0.26), and with
+            # ``num_residual_layers=0`` it doubled for every activation.
+            # The decoder never had this — nothing activates between its
+            # lift and its residual stack.
+            if i != last:
+                h = generative_activation(self._act_name, h)
         for res in self.residuals:
             h = cast(Tensor, res(h))
         h = generative_activation(self._act_name, h)

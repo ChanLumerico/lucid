@@ -264,6 +264,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - rebuild the model summaries, and gate them so they cannot drift again
 
+- stop the encoder activating twice at the residual boundary
+
 ### Changed
 
 - give the engine ops one shared operand check

@@ -11,6 +11,7 @@ shapes, and never learns.
 import pytest
 
 import lucid
+from lucid.models._utils._generative import generative_activation
 from lucid.models import (
     GenerationOutput,
     VQVAEConfig,
@@ -337,3 +338,49 @@ class TestRegistry:
         # error.
         with pytest.raises(NotImplementedError, match="No pretrained weights"):
             create_model(name, pretrained=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Encoder composition
+#
+# Shape checks cannot see an activation applied twice, and at the default
+# ReLU neither can the numbers — it is idempotent.  These pin the exact
+# composition instead, which is what caught the encoder activating once in
+# its downsample loop and again at the head of the pre-activation residual
+# block that follows.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestEncoderComposition:
+    @pytest.mark.parametrize("act", ["relu", "silu", "gelu"])
+    def test_no_residuals_applies_the_activation_once(self, act: str) -> None:
+        cfg = _tiny_cfg(num_downsample_layers=1, num_residual_layers=0, act_fn=act)
+        enc = VQVAEModel(cfg).eval().encoder
+        x = lucid.randn((2, 3, 16, 16))
+
+        got = enc(x)
+        want = enc.proj(generative_activation(act, enc.down_blocks[0](x)))
+        assert float((got - want).abs().max().item()) < 1e-5
+
+    @pytest.mark.parametrize("act", ["relu", "silu", "gelu"])
+    def test_residual_block_supplies_the_boundary_activation(self, act: str) -> None:
+        cfg = _tiny_cfg(num_downsample_layers=1, num_residual_layers=1, act_fn=act)
+        enc = VQVAEModel(cfg).eval().encoder
+        x = lucid.randn((2, 3, 16, 16))
+
+        # The block opens with an activation of its own, so nothing may
+        # activate between the convolution and it.
+        got = enc(x)
+        inner = enc.residuals[0](enc.down_blocks[0](x))
+        want = enc.proj(generative_activation(act, inner))
+        assert float((got - want).abs().max().item()) < 1e-5
+
+    def test_decoder_does_not_activate_before_its_residual_stack(self) -> None:
+        cfg = _tiny_cfg(num_downsample_layers=1, num_residual_layers=1, act_fn="silu")
+        dec = VQVAEModel(cfg).eval().decoder
+        z = lucid.randn((2, cfg.embedding_dim, 8, 8))
+
+        got = dec(z)
+        h = generative_activation("silu", dec.residuals[0](dec.lift(z)))
+        want = dec.up_blocks[0](h)
+        assert float((got - want).abs().max().item()) < 1e-5
