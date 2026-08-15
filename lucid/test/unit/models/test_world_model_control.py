@@ -12,12 +12,16 @@ collect with the policy being learned, and check the return beats random.
 **What this does not establish.** The target here is fixed, so a policy
 that ignores its observation entirely and pushes in one direction already
 scores 15.78 against random's 5.77 — measured, and pinned below. Passing
-this therefore shows the agent found a good *constant* action, not that it
-learned to read a state and respond to it. On a variant with the target
-moved each episode, where a constant action cannot work, this same setup
-peaks at 0.87x the best constant and then degrades: state-dependent
-control is not demonstrated here, and whether that is scale or a defect
-is open.
+these therefore shows the agent found a good *constant* action, not that
+it learned to read a state and respond to it.
+
+State-dependent control **is** achieved, but not here and not this
+cheaply. On a variant with the target moved each episode, where no
+constant action works, DreamerV2 with proper interleaved collection
+reaches 2.34x the best constant policy and 71% of the greedy optimum —
+8000 gradient steps, seventeen minutes on Metal. That is a benchmark, not
+a unit test, so what lives in the suite is this cheaper check with its
+limitation written down rather than assumed away.
 
 The tests are kept because "finds the best constant action" is still far
 more than the rest of the suite establishes — a mis-wired recurrence
