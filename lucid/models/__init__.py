@@ -71,6 +71,11 @@ from lucid.models.generative.dreamer import (
     DreamerConfig, DreamerModel, DreamerForWorldModeling, DreamerOutput,
     DreamerBehaviorOutput, dreamer, dreamer_world_model,
 )
+# 2021 — DreamerV2 (Hafner et al.)
+from lucid.models.generative.dreamer_v2 import (
+    DreamerV2Config, DreamerV2Model, DreamerV2ForWorldModeling, DreamerV2Output,
+    DreamerV2BehaviorOutput, dreamer_v2, dreamer_v2_world_model,
+)
 # 2020 — DDPM (Ho et al.)
 from lucid.models.generative.ddpm import (
     DDPMConfig, DDPMModel, DDPMForImageGeneration, DDPMUNet,
@@ -733,6 +738,10 @@ __all__ = [
     # ── Generative (2020) Dreamer ─────────────────────────────────────────────
     "DreamerConfig", "DreamerModel", "DreamerForWorldModeling", "DreamerOutput",
     "DreamerBehaviorOutput", "dreamer", "dreamer_world_model",
+    # ── Generative (2021) DreamerV2 ───────────────────────────────────────────
+    "DreamerV2Config", "DreamerV2Model", "DreamerV2ForWorldModeling",
+    "DreamerV2Output", "DreamerV2BehaviorOutput",
+    "dreamer_v2", "dreamer_v2_world_model",
     # ── Generative (2020) DDPM ────────────────────────────────────────────────
     "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "DDPMUNet",
     "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",

@@ -31,7 +31,7 @@ from lucid.models import (
     list_models,
 )
 from lucid.models.generative._rssm import RSSMState
-from lucid.models.generative.dreamer._model import _lambda_return
+from lucid.models.generative._returns import lambda_return
 
 
 def _tiny_cfg(**overrides: object) -> DreamerConfig:
@@ -226,20 +226,18 @@ class TestLambdaReturn:
     @pytest.mark.parametrize("gamma", [1.0, 0.99, 0.5])
     @pytest.mark.parametrize("lam", [0.0, 0.5, 0.95, 1.0])
     def test_matches_closed_form(self, gamma: float, lam: float) -> None:
-        mine = _lambda_return(
-            lucid.tensor([self.R]), lucid.tensor([self.V]), gamma, lam
-        )
+        mine = lambda_return(lucid.tensor([self.R]), lucid.tensor([self.V]), gamma, lam)
         expected = self._closed_form(self.R, self.V, gamma, lam)
         for got, want in zip([float(x) for x in mine[0]], expected):
             assert abs(got - want) < 1e-4
 
     def test_lambda_zero_is_one_step_td(self) -> None:
-        mine = _lambda_return(lucid.tensor([self.R]), lucid.tensor([self.V]), 0.99, 0.0)
+        mine = lambda_return(lucid.tensor([self.R]), lucid.tensor([self.V]), 0.99, 0.0)
         for t, got in enumerate([float(x) for x in mine[0]]):
             assert abs(got - (self.R[t] + 0.99 * self.V[t + 1])) < 1e-4
 
     def test_lambda_one_is_bootstrapped_monte_carlo(self) -> None:
-        mine = _lambda_return(lucid.tensor([self.R]), lucid.tensor([self.V]), 0.99, 1.0)
+        mine = lambda_return(lucid.tensor([self.R]), lucid.tensor([self.V]), 0.99, 1.0)
         horizon = len(self.R) - 1
         for t, got in enumerate([float(x) for x in mine[0]]):
             want = (
@@ -264,12 +262,12 @@ class TestLambdaReturn:
         assert out.behavior.lambda_return.shape == (6, 5)  # one per step, incl. start
 
     def test_shape_drops_the_bootstrap(self) -> None:
-        out = _lambda_return(lucid.randn((3, 6)), lucid.randn((3, 6)), 0.99, 0.95)
+        out = lambda_return(lucid.randn((3, 6)), lucid.randn((3, 6)), 0.99, 0.95)
         assert out.shape == (3, 5)
 
     def test_needs_two_states(self) -> None:
         with pytest.raises(ValueError):
-            _lambda_return(lucid.randn((2, 1)), lucid.randn((2, 1)), 0.99, 0.95)
+            lambda_return(lucid.randn((2, 1)), lucid.randn((2, 1)), 0.99, 0.95)
 
 
 class TestImagination:
@@ -473,14 +471,14 @@ class TestDiscountHead:
         """The semantics, not the plumbing: gamma == 0 leaves only the reward."""
         reward = lucid.tensor([[0.5, -1.2, 2.0, 0.3]])
         value = lucid.tensor([[0.9, 0.2, -0.7, 1.5]])
-        dead = _lambda_return(reward, value, lucid.zeros((1, 4)), 0.95)
+        dead = lambda_return(reward, value, lucid.zeros((1, 4)), 0.95)
         for t, got in enumerate([float(x) for x in dead[0]]):
             assert abs(got - float(reward[0, t])) < 1e-5
 
     def test_constant_tensor_matches_a_scalar_discount(self) -> None:
         reward, value = lucid.randn((3, 6)), lucid.randn((3, 6))
-        scalar = _lambda_return(reward, value, 0.99, 0.95)
-        tensor = _lambda_return(reward, value, lucid.ones((3, 6)) * 0.99, 0.95)
+        scalar = lambda_return(reward, value, 0.99, 0.95)
+        tensor = lambda_return(reward, value, lucid.ones((3, 6)) * 0.99, 0.95)
         assert float((scalar - tensor).abs().max().item()) < 1e-4
 
 

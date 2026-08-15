@@ -1726,6 +1726,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.flow_matching._model"
     },
     {
@@ -2732,6 +2736,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.planet._model"
     },
     {
@@ -2991,6 +2999,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._pretrained"
     },
     {
       "kind": "module",
@@ -9734,6 +9746,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.flow_matching._model"
     },
     {
@@ -10113,6 +10129,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._model"
     },
     {
       "kind": "module",

@@ -19,8 +19,8 @@ from lucid.models.generative._config import GenerativeActivation, WorldModelConf
 
 #: How the actor's gradient is estimated.  ``"dynamics"`` backpropagates
 #: through the learned transition, as Dreamer does; ``"reinforce"`` uses the
-#: score-function estimator; ``"mix"`` interpolates.
-ActorGradient = Literal["dynamics", "reinforce", "mix"]
+#: score-function estimator; ``"both"`` interpolates between them.
+ActorGradient = Literal["dynamics", "reinforce", "both"]
 
 
 @model_family_meta(
@@ -129,14 +129,14 @@ class DreamerV2Config(WorldModelConfig):
         Reward discount :math:`\gamma`.
     lambda_ : float, default=0.95
         TD(:math:`\lambda`) weighting.
-    actor_grad : {"dynamics", "reinforce", "mix"}, default="dynamics"
+    actor_grad : {"dynamics", "reinforce", "both"}, default="dynamics"
         How the actor's gradient is estimated.  The released
         implementation's ``auto`` resolves to ``"dynamics"`` for
         continuous actions and ``"reinforce"`` for discrete ones; since
         this family emits continuous actions, that resolution is the
         default here.
     actor_grad_mix : float, default=0.1
-        Weight on the dynamics term when ``actor_grad="mix"``.
+        Weight on the dynamics term when ``actor_grad="both"``.
     actor_entropy : float, default=2e-3
         Coefficient on the actor's entropy bonus.
     actor_min_std : float, default=0.1
