@@ -1,19 +1,29 @@
-"""Does a world model actually learn to control anything?
+"""Does a world model learn to act at all?
 
 Everything else in the suite checks the parts. Shapes are right, gradients
 reach the modules they should, losses fall, lambda-returns match the
 paper's closed form. None of it would catch a recurrence that carries the
 wrong state forward, because a model like that still reconstructs frames
-and still reports a shrinking loss — it simply never learns to act.
+and still reports a shrinking loss.
 
-So this closes the loop: seed a replay buffer with random episodes, train
-the three objectives, collect with the policy it is learning, and check
-that the return beats what random gets. It is the only test here that can
-fail for the right reason.
+So this closes the loop: seed a replay buffer, train the three objectives,
+collect with the policy being learned, and check the return beats random.
 
-Cost, measured on an M1 Pro: about 20 seconds. That is why the run is
-short and the model is small — the point is the direction of the curve,
-not a competitive score.
+**What this does not establish.** The target here is fixed, so a policy
+that ignores its observation entirely and pushes in one direction already
+scores 15.78 against random's 5.77 — measured, and pinned below. Passing
+this therefore shows the agent found a good *constant* action, not that it
+learned to read a state and respond to it. On a variant with the target
+moved each episode, where a constant action cannot work, this same setup
+peaks at 0.87x the best constant and then degrades: state-dependent
+control is not demonstrated here, and whether that is scale or a defect
+is open.
+
+The tests are kept because "finds the best constant action" is still far
+more than the rest of the suite establishes — a mis-wired recurrence
+fails it — but the name of the file should not be read as more than that.
+
+Cost, measured on an M1 Pro: about 45 seconds for both families.
 """
 
 import math
@@ -104,6 +114,45 @@ class TestPointMassEnvironment:
         assert float(target.max().item()) > 0.9
         # Different places, or the task would be solved at t=0.
         assert float((agent * target).max().item()) < 0.5
+
+
+class TestWhatTheThresholdActuallyRequires:
+    """Pins the limitation of the tests below, so it cannot be forgotten.
+
+    A threshold of 1.3x random reads like evidence of control. On a fixed
+    target it is not: the numbers here show a constant action clearing it
+    outright. Keeping the measurement in the tree is the difference
+    between a known limitation and a wrong claim.
+    """
+
+    class _Constant:
+        def __init__(self, value: list[float]) -> None:
+            self.value = lucid.tensor(value)
+
+        def reset(self) -> None:
+            return None
+
+        def __call__(self, observation: lucid.Tensor) -> lucid.Tensor:
+            return self.value
+
+    def test_a_constant_action_already_clears_the_bar(self) -> None:
+        env = PointMass(horizon=20)
+        baseline = _average_return(env, RandomPolicy(2), episodes=5)
+        best = max(
+            _average_return(env, self._Constant(v), episodes=1)
+            for v in ([1.0, -1.0], [1.0, 0.0], [0.0, -1.0], [0.7, -0.7])
+        )
+        assert best > 1.3 * baseline, (
+            "if this ever fails the tests below became stronger than "
+            "documented, and the module docstring needs revisiting"
+        )
+
+    def test_the_optimal_policy_is_still_better(self) -> None:
+        """There is headroom above the constant — the task is not degenerate."""
+        env = PointMass(horizon=20)
+        greedy = _average_return(env, _Greedy(env), episodes=2)
+        best_constant = _average_return(env, self._Constant([1.0, -1.0]), episodes=1)
+        assert greedy > best_constant
 
 
 class TestDreamerLearnsControl:

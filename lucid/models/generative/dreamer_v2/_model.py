@@ -854,7 +854,15 @@ class DreamerV2ForWorldModeling(PretrainedModel):
         if self._actor_grad != "dynamics":
             baseline = model.predict_value(scored, target=True)
             advantage = (objective - baseline).detach()
-            log_prob = model.actor.log_prob(feature, actions[:, 1:horizon].detach())
+            # `actions[t]` is the action taken *from* `states[t]`, so the
+            # states scored above pair with the actions at the same index.
+            # The released implementation writes `action[1:-1]` because its
+            # action array carries a leading placeholder for the step that
+            # led into the start state; copying that index without the
+            # placeholder credits the policy with the next action's
+            # log-probability, which silently disables REINFORCE.
+            chosen = actions[:, : horizon - 1].detach()
+            log_prob = model.actor.log_prob(feature, chosen)
             score = log_prob * advantage
             objective = (
                 score
