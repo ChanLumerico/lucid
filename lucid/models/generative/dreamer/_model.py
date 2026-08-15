@@ -607,8 +607,9 @@ class DreamerModel(PretrainedModel):
             actions.append(action)
             deters.append(current.deter)
             stochs.append(current.stoch)
-            means.append(current.mean)
-            stds.append(current.std)
+            step_mean, step_std = current.gaussian()
+            means.append(step_mean)
+            stds.append(step_std)
 
         # The start state has no prior Gaussian of its own — it came from a
         # posterior — so its mean/std slots are filled with the first
@@ -628,15 +629,17 @@ class DreamerModel(PretrainedModel):
         self, observations: Tensor, actions: Tensor
     ) -> DreamerOutput:
         priors, posteriors = self.observe(observations, actions)
+        posterior_mean, posterior_std = posteriors.gaussian()
+        prior_mean, prior_std = priors.gaussian()
         return DreamerOutput(
             observation=self.decode(posteriors),
             reward=self.predict_reward(posteriors),
             value=self.predict_value(posteriors),
             posterior_stoch=posteriors.stoch,
-            posterior_mean=posteriors.mean,
-            posterior_std=posteriors.std,
-            prior_mean=priors.mean,
-            prior_std=priors.std,
+            posterior_mean=posterior_mean,
+            posterior_std=posterior_std,
+            prior_mean=prior_mean,
+            prior_std=prior_std,
             deter=posteriors.deter,
         )
 
@@ -864,18 +867,19 @@ class DreamerForWorldModeling(PretrainedModel):
                     "pcont drops the last filtered step, so it needs a "
                     f"sequence of at least 2, got {int(posteriors.deter.shape[1])}"
                 )
-            posteriors = RSSMState(*(x[:, :keep] for x in posteriors))
+            posteriors = posteriors.map(lambda x: x[:, :keep])
 
         b, t = int(posteriors.deter.shape[0]), int(posteriors.deter.shape[1])
 
         def flat(x: Tensor) -> Tensor:
             return x.reshape(b * t, int(x.shape[2])).detach()
 
+        start_mean, start_std = posteriors.gaussian()
         start = RSSMState(
             deter=flat(posteriors.deter),
             stoch=flat(posteriors.stoch),
-            mean=flat(posteriors.mean),
-            std=flat(posteriors.std),
+            mean=flat(start_mean),
+            std=flat(start_std),
         )
 
         states, actions = self.dreamer.imagine(start, self._horizon)
@@ -917,12 +921,7 @@ class DreamerForWorldModeling(PretrainedModel):
         # its own tape over its own variables.  Doing it with a detach
         # instead means the separation survives a caller who reaches for
         # one optimiser anyway.
-        detached = RSSMState(
-            deter=states.deter.detach(),
-            stoch=states.stoch.detach(),
-            mean=states.mean.detach(),
-            std=states.std.detach(),
-        )
+        detached = states.map(lambda t: t.detach())
         target = returns.detach()
         predicted = self.dreamer.predict_value(detached)[:, : self._horizon]
         value_loss = (0.5 * weight * (predicted - target) ** 2).mean()
@@ -988,6 +987,8 @@ class DreamerForWorldModeling(PretrainedModel):
         reward_loss = 0.5 * ((predicted_reward - rewards) ** 2).mean()
         kl_loss = rssm_kl(posteriors, priors, free_nats=self._free_nats)
         loss = recon_loss + reward_loss + self._kl_weight * kl_loss
+        posterior_mean, posterior_std = posteriors.gaussian()
+        prior_mean, prior_std = priors.gaussian()
 
         pcont_loss: Tensor | None = None
         if model.pcont_head is not None:
@@ -1011,10 +1012,10 @@ class DreamerForWorldModeling(PretrainedModel):
             reward=predicted_reward,
             value=model.predict_value(posteriors),
             posterior_stoch=posteriors.stoch,
-            posterior_mean=posteriors.mean,
-            posterior_std=posteriors.std,
-            prior_mean=priors.mean,
-            prior_std=priors.std,
+            posterior_mean=posterior_mean,
+            posterior_std=posterior_std,
+            prior_mean=prior_mean,
+            prior_std=prior_std,
             deter=posteriors.deter,
             loss=loss,
             recon_loss=recon_loss,

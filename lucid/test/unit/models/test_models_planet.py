@@ -24,7 +24,7 @@ from lucid.models import (
     list_models,
 )
 from lucid.models._utils._generative import generative_activation
-from lucid.models.generative._rssm import RSSMState, rssm_kl
+from lucid.models.generative._rssm import rssm_kl
 
 
 def _tiny_cfg(**overrides: object) -> PlaNetConfig:
@@ -439,11 +439,11 @@ class TestOvershooting:
         priors, posts = model.observe(obs, act)
 
         b, span = 2, 4
-        state = RSSMState(*(x[:, :span].reshape(b * span, -1) for x in posts))
+        state = posts.map(lambda x: x[:, :span].reshape(b * span, -1))
         step = model.rssm.prior_step(
             state, act[:, 1 : 1 + span].reshape(b * span, -1), sample=False
         )
-        rolled = RSSMState(*(x.reshape(b, span, -1) for x in step))
+        rolled = step.map(lambda x: x.reshape(b, span, -1))
 
         assert float((rolled.mean - priors.mean[:, 1:]).abs().max().item()) == 0.0
         assert float((rolled.deter - priors.deter[:, 1:]).abs().max().item()) == 0.0

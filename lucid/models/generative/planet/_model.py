@@ -283,14 +283,16 @@ class PlaNetModel(PretrainedModel):
         self, observations: Tensor, actions: Tensor
     ) -> PlaNetOutput:
         priors, posteriors = self.observe(observations, actions)
+        posterior_mean, posterior_std = posteriors.gaussian()
+        prior_mean, prior_std = priors.gaussian()
         return PlaNetOutput(
             observation=self.decode(posteriors),
             reward=self.predict_reward(posteriors),
             posterior_stoch=posteriors.stoch,
-            posterior_mean=posteriors.mean,
-            posterior_std=posteriors.std,
-            prior_mean=priors.mean,
-            prior_std=priors.std,
+            posterior_mean=posterior_mean,
+            posterior_std=posterior_std,
+            prior_mean=prior_mean,
+            prior_std=prior_std,
             deter=posteriors.deter,
         )
 
@@ -425,20 +427,20 @@ class PlaNetForWorldModeling(PretrainedModel):
         # this the term would also push the encoder toward states that
         # happen to be easy to roll forward.  Both ends are held fixed
         # so only the transition learns.
-        cur = RSSMState(*(x.detach() for x in posteriors))
+        cur = posteriors.map(lambda x: x.detach())
         total: Tensor | None = None
         reward_total: Tensor | None = None
         counted = 0
         for d in range(1, limit + 1):
             span = t - d
-            state = RSSMState(*(x[:, :span].reshape(b * span, -1) for x in cur[:4]))
+            state = cur.map(lambda x: x[:, :span].reshape(b * span, -1))
             step = self.planet.rssm.prior_step(
                 state, actions[:, d : d + span].reshape(b * span, -1)
             )
-            cur = RSSMState(*(x.reshape(b, span, -1) for x in step[:4]))
+            cur = step.map(lambda x: x.reshape(b, span, -1))
             if d < 2:
                 continue
-            target = RSSMState(*(x[:, d : d + span].detach() for x in posteriors[:4]))
+            target = posteriors.map(lambda x: x[:, d : d + span].detach())
             term = rssm_kl(target, cur, free_nats=0.0)
             total = term if total is None else total + term
             if rewards is not None and self._overshoot_reward_weight > 0.0:
@@ -484,14 +486,16 @@ class PlaNetForWorldModeling(PretrainedModel):
         if overshoot_reward is not None:
             total = total + self._overshoot_reward_weight * overshoot_reward
 
+        posterior_mean, posterior_std = posteriors.gaussian()
+        prior_mean, prior_std = priors.gaussian()
         return PlaNetOutput(
             observation=reconstruction,
             reward=predicted,
             posterior_stoch=posteriors.stoch,
-            posterior_mean=posteriors.mean,
-            posterior_std=posteriors.std,
-            prior_mean=priors.mean,
-            prior_std=priors.std,
+            posterior_mean=posterior_mean,
+            posterior_std=posterior_std,
+            prior_mean=prior_mean,
+            prior_std=prior_std,
             deter=posteriors.deter,
             loss=total,
             recon_loss=recon_loss,
@@ -601,12 +605,7 @@ class PlaNetForWorldModeling(PretrainedModel):
         std = lucid.ones(b, horizon, action_dim, device=device)
         # One rollout per (batch item, candidate); the dynamics only know
         # how to advance a flat batch, so the candidate axis is folded in.
-        tiled = RSSMState(
-            *(
-                lucid.cat([x] * candidates, dim=0)
-                for x in (state.deter, state.stoch, state.mean, state.std)
-            )
-        )
+        tiled = state.map(lambda x: lucid.cat([x] * candidates, dim=0))
 
         for _ in range(iterations):
             noise = lucid.randn(

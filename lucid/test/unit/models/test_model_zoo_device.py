@@ -550,7 +550,7 @@ def test_planet_decoder_and_reward_match_across_devices():
         mean=feature[..., cpu.config.deter_size :],
         std=feature[..., cpu.config.deter_size :],
     )
-    gpu_state = RSSMState(*(t.to("metal") for t in state))
+    gpu_state = state.map(lambda t: t.to("metal"))
 
     _agree(cpu.decode(state), metal.decode(gpu_state), 1e-4, "planet decode")
     _agree(
@@ -631,7 +631,7 @@ def test_dreamer_value_and_actor_heads_match_across_devices():
         mean=feature[..., cpu.config.deter_size :],
         std=feature[..., cpu.config.deter_size :],
     )
-    gpu_state = RSSMState(*(t.to("metal") for t in state))
+    gpu_state = state.map(lambda t: t.to("metal"))
 
     _agree(
         cpu.predict_value(state),

@@ -10104,6 +10104,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative._rssm"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
     },
     {

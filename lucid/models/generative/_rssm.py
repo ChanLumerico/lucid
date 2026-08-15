@@ -34,10 +34,12 @@ matching the rest of the zoo.  The unroll itself is time-major internally
 because a recurrence has to be — the same shape ``nn.GRU.forward`` takes.
 """
 
+from collections.abc import Callable
 from typing import NamedTuple, cast, override
 
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._generative import generative_activation, normal_kl
 
@@ -53,26 +55,48 @@ class RSSMState(NamedTuple):
         Deterministic path :math:`h`, shaped ``(B, deter_size)`` for a
         single step or ``(B, T, deter_size)`` after an unroll.
     stoch : Tensor
-        Sampled stochastic latent :math:`s`, drawn with the
-        reparameterisation trick so gradients flow through it.
-    mean : Tensor
-        Mean of the Gaussian ``stoch`` was drawn from.
-    std : Tensor
-        Standard deviation of that Gaussian.  Always positive — the
-        network emits an unconstrained real which is passed through
-        ``softplus`` and floored at ``min_std``.
+        The stochastic latent :math:`s`, drawn so that gradients flow
+        through it — reparameterised for a Gaussian latent,
+        straight-through for a categorical one.  Always flat: a
+        categorical grid arrives here already reshaped to
+        ``(B, stoch_size * discrete)``, so anything reading
+        :attr:`feature` sees one convention.
+    mean, std : Tensor or None
+        The Gaussian ``stoch`` was drawn from.  ``None`` when the latent
+        is categorical.
+    logits : Tensor or None
+        Unnormalised class scores, ``(B, stoch_size, discrete)``, when the
+        latent is categorical.  ``None`` when it is Gaussian.
 
     Notes
     -----
-    ``mean`` and ``std`` are carried alongside the sample because the
-    training objective needs the *distributions*, not just draws: the KL
-    between prior and posterior is computed in closed form from these.
+    The distribution's parameters ride along with the sample because the
+    objective needs the *distributions*, not just draws: the divergence
+    between prior and posterior is computed in closed form from them.
+
+    Exactly one of the two parameterisations is present, and which one is
+    a property of the model that produced the state rather than of the
+    state itself.  Use :meth:`map` to transform a state without having to
+    know which — writing ``RSSMState(*(f(x) for x in state))`` will hit a
+    ``None`` and raise.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._rssm import RSSMState
+    >>> gaussian = RSSMState(lucid.zeros((2, 4)), lucid.zeros((2, 3)),
+    ...                      lucid.zeros((2, 3)), lucid.ones((2, 3)))
+    >>> gaussian.is_discrete
+    False
+    >>> gaussian.map(lambda t: t[:1]).deter.shape
+    (1, 4)
     """
 
     deter: Tensor
     stoch: Tensor
-    mean: Tensor
-    std: Tensor
+    mean: Tensor | None = None
+    std: Tensor | None = None
+    logits: Tensor | None = None
 
     @property
     def feature(self) -> Tensor:
@@ -80,13 +104,93 @@ class RSSMState(NamedTuple):
         return lucid.cat([self.deter, self.stoch], dim=-1)
 
     @property
+    def is_discrete(self) -> bool:
+        """Whether this state carries a categorical latent."""
+        return self.logits is not None
+
+    @property
     def logvar(self) -> Tensor:
         r""":math:`\log \sigma^2`, for the helpers that parameterise that way.
 
+        Returns
+        -------
+        Tensor
+            Twice the log standard deviation.
+
+        Raises
+        ------
+        ValueError
+            If the latent is categorical, which has no variance to report.
+
+        Notes
+        -----
         Safe without an epsilon: ``std`` is floored at ``min_std`` by
         construction, so the logarithm never approaches its pole.
         """
+        if self.std is None:
+            raise ValueError("a categorical latent has no log-variance")
         return 2.0 * self.std.log()
+
+    def gaussian(self) -> tuple[Tensor, Tensor]:
+        """The ``(mean, std)`` this state was drawn from.
+
+        Returns
+        -------
+        mean, std : Tensor
+            The Gaussian's parameters, narrowed from the optional fields.
+
+        Raises
+        ------
+        ValueError
+            If the latent is categorical.  The families that call this are
+            Gaussian by construction, so the raise is a contract check
+            rather than a branch anyone is expected to take.
+
+        Notes
+        -----
+        Exists so that Gaussian-only code can read the parameters once and
+        keep working with plain tensors, instead of threading an optional
+        through every expression that uses them.
+        """
+        if self.mean is None or self.std is None:
+            raise ValueError(
+                "this state carries a categorical latent; it has no mean or "
+                "standard deviation"
+            )
+        return self.mean, self.std
+
+    def map(self, fn: Callable[[Tensor], Tensor]) -> RSSMState:
+        """Apply ``fn`` to every tensor present, leaving absent ones absent.
+
+        Parameters
+        ----------
+        fn : callable
+            ``Tensor -> Tensor``.  Applied to each field that is not
+            ``None``.
+
+        Returns
+        -------
+        RSSMState
+            A new state; nothing is mutated.
+
+        Notes
+        -----
+        This exists because a state is a *partial* record — a Gaussian one
+        has no ``logits``, a categorical one has no ``mean`` — so the
+        obvious ``RSSMState(*(fn(x) for x in state))`` fails on whichever
+        half is missing.
+        """
+
+        def apply(t: Tensor | None) -> Tensor | None:
+            return None if t is None else fn(t)
+
+        return RSSMState(
+            deter=fn(self.deter),
+            stoch=fn(self.stoch),
+            mean=apply(self.mean),
+            std=apply(self.std),
+            logits=apply(self.logits),
+        )
 
 
 class RSSM(nn.Module):
@@ -338,12 +442,25 @@ class RSSM(nn.Module):
 
     @staticmethod
     def _stack(states: list[RSSMState]) -> RSSMState:
-        """Stack per-step states into ``(B, T, ...)``."""
+        """Stack per-step states into ``(B, T, ...)``.
+
+        Only the parameterisation the states actually carry is stacked —
+        a categorical unroll has no ``mean`` to gather, and reaching for
+        one would raise on the first step rather than at the end.
+        """
+
+        def gather(pick: Callable[[RSSMState], Tensor | None]) -> Tensor | None:
+            first = pick(states[0])
+            if first is None:
+                return None
+            return lucid.stack([cast(Tensor, pick(s)) for s in states], dim=1)
+
         return RSSMState(
             deter=lucid.stack([s.deter for s in states], dim=1),
             stoch=lucid.stack([s.stoch for s in states], dim=1),
-            mean=lucid.stack([s.mean for s in states], dim=1),
-            std=lucid.stack([s.std for s in states], dim=1),
+            mean=gather(lambda s: s.mean),
+            std=gather(lambda s: s.std),
+            logits=gather(lambda s: s.logits),
         )
 
     def observe(
@@ -514,8 +631,58 @@ def rssm_kl(
     """
     if free_nats < 0.0:
         raise ValueError(f"free_nats must be non-negative, got {free_nats}")
-    per_step = normal_kl(
-        posterior.mean, posterior.logvar, prior.mean, prior.logvar
-    ).sum(dim=-1)
+    if posterior.is_discrete != prior.is_discrete:
+        raise ValueError(
+            "prior and posterior disagree on their parameterisation: one is "
+            "categorical and the other Gaussian"
+        )
+
+    if posterior.is_discrete:
+        per_step = categorical_kl(
+            cast(Tensor, posterior.logits), cast(Tensor, prior.logits)
+        )
+    else:
+        posterior_mean, _ = posterior.gaussian()
+        prior_mean, _ = prior.gaussian()
+        per_step = normal_kl(
+            posterior_mean, posterior.logvar, prior_mean, prior.logvar
+        ).sum(dim=-1)
+
     kl = per_step.mean()
     return (kl - free_nats).clip(0.0, None) if free_nats > 0.0 else kl
+
+
+def categorical_kl(posterior_logits: Tensor, prior_logits: Tensor) -> Tensor:
+    r"""KL between two grids of independent categoricals, summed over the grid.
+
+    Parameters
+    ----------
+    posterior_logits, prior_logits : Tensor
+        Unnormalised class scores, ``(B, T, stoch_size, discrete)``.
+
+    Returns
+    -------
+    Tensor
+        ``(B, T)`` — one divergence per step, the variables' summed.
+
+    Notes
+    -----
+    Computed from log-probabilities rather than through
+    :func:`lucid.distributions.kl_divergence`, which has no registered
+    pair for one-hot categoricals.  The closed form is a sum, so there is
+    nothing to approximate:
+
+    .. math::
+
+        \mathrm{KL}(q \,\|\, p)
+            = \sum_k q_k \big(\log q_k - \log p_k\big).
+
+    Taking both sides through ``log_softmax`` keeps it stable: the
+    subtraction happens in log space, so a class the prior has written off
+    contributes a large finite number rather than ``inf``.
+    """
+    posterior_log = F.log_softmax(posterior_logits, dim=-1)
+    prior_log = F.log_softmax(prior_logits, dim=-1)
+    probs = posterior_log.exp()
+    per_variable = (probs * (posterior_log - prior_log)).sum(dim=-1)
+    return per_variable.sum(dim=-1)
