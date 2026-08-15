@@ -75,7 +75,7 @@ class Policy(Protocol):
 
 
 class RandomPolicy:
-    r"""Uniform actions in ``(-1, 1)``.
+    r"""Uniform actions, in whichever shape the action space has.
 
     What fills the buffer before there is anything worth learning from.
     Both papers seed with a handful of random episodes for exactly this
@@ -85,7 +85,19 @@ class RandomPolicy:
     Parameters
     ----------
     action_dim : int
-        Width of the action vector.
+        Width of the action vector, or the number of alternatives when
+        ``discrete``.
+    discrete : bool, default=False
+        Draw a one-hot over ``action_dim`` choices instead of a vector in
+        ``(-1, 1)``.
+
+    Notes
+    -----
+    The flag is not cosmetic.  Seeding a discrete agent's buffer with
+    continuous noise trains its dynamics on action vectors it will never
+    be given again — a uniform draw in ``(-1, 1)`` looks nothing like a
+    one-hot — so the model is fitted on one input distribution and asked
+    to act under another.
 
     Examples
     --------
@@ -94,11 +106,18 @@ class RandomPolicy:
     >>> policy.reset()
     >>> policy(None).shape
     (3,)
+    >>> onehot = RandomPolicy(4, discrete=True)
+    >>> onehot.reset()
+    >>> float(onehot(None).sum())
+    1.0
     """
 
-    def __init__(self, action_dim: int) -> None:
+    def __init__(self, action_dim: int, discrete: bool = False) -> None:
         """Initialise the policy. See the class docstring for parameters."""
+        if action_dim < 1:
+            raise ValueError(f"action_dim must be at least 1, got {action_dim}")
         self.action_dim = action_dim
+        self.discrete = discrete
 
     def reset(self) -> None:
         """No state to clear; present so this satisfies :class:`Policy`."""
@@ -106,6 +125,16 @@ class RandomPolicy:
 
     def __call__(self, observation: Tensor) -> Tensor:
         """Draw a uniform action, ignoring the observation."""
+        if self.discrete:
+            index = int(float(lucid.rand(()).item()) * self.action_dim)
+            index = min(index, self.action_dim - 1)
+            return (
+                lucid.nn.functional.one_hot(
+                    lucid.tensor([index]), num_classes=self.action_dim
+                )
+                .reshape(self.action_dim)
+                .to(lucid.float32)
+            )
         return lucid.rand((self.action_dim,)) * 2.0 - 1.0
 
 

@@ -126,6 +126,95 @@ class TestRollout:
             rollout(_Counter(), RandomPolicy(2), **kwargs)  # type: ignore[arg-type]
 
 
+class TestRandomPolicyActionSpaces:
+    """Seeding has to match the space the agent will act in.
+
+    Filling a discrete agent's buffer with continuous noise fits its
+    dynamics on action vectors it is never given again — a uniform draw
+    in ``(-1, 1)`` looks nothing like a one-hot — so the model trains on
+    one input distribution and acts under another.
+    """
+
+    def test_continuous_is_the_default(self) -> None:
+        drawn = RandomPolicy(3)(None)
+        assert drawn.shape == (3,)
+        assert bool((drawn.abs() <= 1.0).all().item())
+
+    def test_discrete_draws_a_one_hot(self) -> None:
+        policy = RandomPolicy(4, discrete=True)
+        policy.reset()
+        for _ in range(20):
+            drawn = policy(None)
+            assert drawn.shape == (4,)
+            assert abs(float(drawn.sum().item()) - 1.0) < 1e-6
+
+    def test_discrete_covers_every_choice(self) -> None:
+        """A sampler stuck on one action would still pass the shape check."""
+        policy = RandomPolicy(4, discrete=True)
+        policy.reset()
+        seen = {int(policy(None).argmax(dim=-1).item()) for _ in range(200)}
+        assert seen == {0, 1, 2, 3}
+
+    def test_continuous_is_not_a_one_hot(self) -> None:
+        """Guards the pair above by showing the two really differ."""
+        drawn = [RandomPolicy(4)(None) for _ in range(20)]
+        assert not any(abs(float(a.sum().item()) - 1.0) < 1e-6 for a in drawn)
+
+    def test_rejects_an_empty_action_space(self) -> None:
+        with pytest.raises(ValueError):
+            RandomPolicy(0)
+
+
+class _Buttons:
+    """Four choices; the observation encodes which was pressed."""
+
+    def __init__(self, length: int = 5) -> None:
+        self.length = length
+
+    def reset(self) -> lucid.Tensor:
+        self.t = 0
+        return lucid.zeros((3, 64, 64))
+
+    def step(self, action: lucid.Tensor) -> StepResult:
+        self.t += 1
+        return StepResult(lucid.zeros((3, 64, 64)), 1.0, False, self.t >= self.length)
+
+
+class TestDiscreteAgentRollout:
+    def test_a_one_hot_policy_drives_a_rollout(self) -> None:
+        from lucid.models import dreamer_v2
+
+        model = dreamer_v2(
+            action_dim=4,
+            action_space="discrete",
+            cnn_depth=2,
+            stoch_size=3,
+            discrete=4,
+            deter_size=8,
+            hidden_size=8,
+            actor_hidden=8,
+            value_hidden=8,
+            reward_hidden=8,
+        ).eval()
+        policy = LatentPolicy(
+            model.encode, model.rssm, lambda s: model.act(s, sample=False), 4
+        )
+        episode, _ = rollout(_Buttons(5), policy)
+        assert len(episode) == 5
+        assert episode.actions.shape == (5, 4)
+        # The zero placeholder at index 0 is the convention; everything
+        # after it must still be a one-hot when it reaches the buffer.
+        later = episode.actions[1:]
+        assert float((later.sum(dim=-1) - 1.0).abs().max().item()) < 1e-4
+
+    def test_the_buffer_keeps_them_one_hot(self) -> None:
+        replay = SequenceReplay()
+        policy = RandomPolicy(4, discrete=True)
+        replay.add(rollout(_Buttons(6), policy)[0])
+        batch = replay.sample(2, 4)
+        assert batch.actions.shape == (2, 4, 4)
+
+
 class TestSequenceReplay:
     def test_stores_and_counts(self) -> None:
         replay = SequenceReplay()

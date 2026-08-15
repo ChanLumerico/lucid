@@ -853,3 +853,32 @@ def test_dreamer_v2_trains_one_step_on_device(device):
         assert grads
         for g in grads:
             assert str(g.device) == f"device('{device}')"
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_dreamer_v2_discrete_policy_on_device(device):
+    """The one-hot action takes the same CPU round-trip the latent does.
+
+    ``multinomial`` is data-dependent, so on Metal its result comes back
+    on the CPU — the bug the categorical latent already shipped once.
+    """
+    lucid.manual_seed(0)
+    config = dict(_DREAMER_V2_SMALL, action_dim=4, action_space="discrete")
+    model = M.create_model("dreamer_v2_world_model", **config).to(device)
+    model.train()
+
+    out = model(
+        lucid.rand((2, 4, 3, 64, 64), device=device),
+        lucid.rand((2, 4, 4), device=device),
+        lucid.rand((2, 4), device=device),
+    )
+    assert out.behavior is not None
+    drawn = out.behavior.imagined_action
+    assert str(drawn.device) == f"device('{device}')"
+    assert np.allclose(drawn.to("cpu").numpy().sum(axis=-1), 1.0, atol=1e-4)
+
+    model.backward(out)
+    grads = [p.grad for p in model.actor_parameters() if p.grad is not None]
+    assert grads
+    for g in grads:
+        assert str(g.device) == f"device('{device}')"
