@@ -234,9 +234,9 @@ class _VAEDecoder(nn.Module):
         z_or_zs: Tensor | list[Tensor],
     ) -> Tensor:
         if self._hier:
-            assert isinstance(z_or_zs, list), (
-                "Hierarchical decoder expects a list of z_l"
-            )
+            assert isinstance(
+                z_or_zs, list
+            ), "Hierarchical decoder expects a list of z_l"
             zs = z_or_zs
             # Bottom-up encoder produced (z_0, …, z_{L-1}); decoder consumes
             # them top-down.

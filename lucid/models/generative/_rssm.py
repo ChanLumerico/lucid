@@ -416,12 +416,16 @@ class RSSM(nn.Module):
             flat = probs.reshape(-1, self.discrete)
             drawn = lucid.multinomial(flat, num_samples=1).reshape(-1)
             hard = nn.functional.one_hot(drawn, num_classes=self.discrete)
-            hard = hard.reshape(*(int(v) for v in probs.shape)).to(probs.dtype)
+            hard = hard.reshape(*(int(v) for v in probs.shape))
         else:
             index = probs.argmax(dim=-1)
-            hard = nn.functional.one_hot(index, num_classes=self.discrete).to(
-                probs.dtype
-            )
+            hard = nn.functional.one_hot(index, num_classes=self.discrete)
+        # `multinomial` and `argmax` are data-dependent, so on Metal their
+        # results come back on the CPU — the documented carve-out — and the
+        # one-hot built from them lands there too.  Send it back before it
+        # meets `probs`, or the straight-through subtraction is a device
+        # mismatch.
+        hard = hard.to(probs.device).to(probs.dtype)
         onehot = nn.functional.straight_through(hard, probs)
         leading = tuple(int(v) for v in onehot.shape[:-2])
         return onehot.reshape(*leading, self.stoch_width)

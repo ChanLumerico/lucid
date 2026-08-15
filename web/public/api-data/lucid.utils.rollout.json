@@ -1,0 +1,751 @@
+{
+  "slug": "lucid.utils.rollout",
+  "name": "rollout",
+  "path": "lucid.utils.rollout",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/__init__.py#L1",
+  "members": [
+    {
+      "name": "LatentPolicy",
+      "path": "lucid.utils.rollout._driver.LatentPolicy",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "LatentPolicy(encode: Callable[[Tensor], Tensor], rssm: RSSM, act: Callable[[RSSMState], Tensor], action_dim: int, noise: float = 0.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L112",
+      "subcategory": "driver",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.rollout._driver.LatentPolicy.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(encode: Callable[[Tensor], Tensor], rssm: RSSM, act: Callable[[RSSMState], Tensor], action_dim: int, noise: float = 0.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L171",
+          "subcategory": "driver",
+          "summary": "Initialise the policy. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reset",
+          "path": "lucid.utils.rollout._driver.LatentPolicy.reset",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L190",
+          "subcategory": "driver",
+          "summary": "Drop the belief so the next episode starts from the prior.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.utils.rollout._driver.LatentPolicy.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(observation: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L195",
+          "subcategory": "driver",
+          "summary": "Fold in the observation, then choose.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Carries an RSSM belief through an episode and asks the model to act.",
+      "extended": "A world model does not act from the frame in front of it; it acts from\na belief it has been updating since the episode began.  So this holds\nthat belief, folds each new observation into it, and hands it to\nwhatever the model uses to choose — which is not the same method\nacross the family, and is therefore passed in rather than assumed:\nDreamer has a learned actor, PlaNet searches with a planner.",
+      "parameters": [
+        {
+          "name": "encode",
+          "annotation": "callable",
+          "description": "`(B, T, C, H, W) -> (B, T, embed)`, normally `model.encode`.",
+          "default": null
+        },
+        {
+          "name": "rssm",
+          "annotation": "RSSM",
+          "description": "The model's recurrent state-space model.",
+          "default": null
+        },
+        {
+          "name": "act",
+          "annotation": "callable",
+          "description": "`RSSMState -> (1, action_dim)`, given the single-step posterior.\nFor Dreamer this is `lambda s: model.act(s, sample=False)`.  For\nPlaNet it is the *task wrapper's* planner — `plan` lives on\n`lucid.models.PlaNetForWorldModeling`, not on the trunk,\nso the encoder and RSSM come from `wrapper.planet` while the\nplanner comes from `wrapper`.",
+          "default": null
+        },
+        {
+          "name": "action_dim",
+          "annotation": "int",
+          "description": "Width of the action vector.",
+          "default": null
+        },
+        {
+          "name": "noise",
+          "annotation": "float",
+          "description": "Standard deviation of Gaussian exploration noise added to the\nchosen action.  The papers collect with `0.3` and evaluate with\n`0`.",
+          "default": "0.0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models import dreamer\n>>> from lucid.utils.rollout import LatentPolicy\n>>> model = dreamer(action_dim=2, cnn_depth=2, stoch_size=4, deter_size=8,\n...                 hidden_size=8, actor_hidden=8, value_hidden=8,\n...                 reward_hidden=8).eval()\n>>> policy = LatentPolicy(model.encode, model.rssm,\n...                       lambda s: model.act(s, sample=False), 2)\n>>> policy.reset()\n>>> policy(lucid.zeros((3, 64, 64))).shape\n(2,)"
+      ],
+      "notes": [
+        "The action is clipped into `(-1, 1)` whether or not noise was added,\nbecause that is what `Policy` promises an environment.  Dreamer\nemits a `tanh`-squashed action and the clip does nothing; PlaNet's\nplanner searches an unbounded Gaussian and relies on it, which is the\nclipping the paper describes.",
+        "Runs under `lucid.no_grad` — acting is not a thing to\ndifferentiate, and holding a graph across a whole episode would keep\nevery frame alive."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Policy",
+      "path": "lucid.utils.rollout._driver.Policy",
+      "kind": "class",
+      "class_kind": "protocol",
+      "bases": [
+        "Protocol"
+      ],
+      "labels": [],
+      "signature": "Policy()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L34",
+      "subcategory": "driver",
+      "methods": [
+        {
+          "name": "reset",
+          "path": "lucid.utils.rollout._driver.Policy.reset",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L57",
+          "subcategory": "driver",
+          "summary": "Forget whatever the previous episode left behind.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.utils.rollout._driver.Policy.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(observation: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L61",
+          "subcategory": "driver",
+          "summary": "Choose an action.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "observation",
+              "annotation": "Tensor",
+              "description": "`(C, H, W)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(action_dim,)` in `(-1, 1)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Something that chooses actions and can be told an episode restarted.",
+      "extended": "The `reset` is what distinguishes this from a plain function.  A\nworld model does not act from the frame in front of it — it acts from\na belief it has been updating since the episode began — so the driver\nhas to be able to say \"that was a different episode, start again\".  A\nstateless policy can implement it as a no-op.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.utils.rollout import Policy, RandomPolicy\n>>> isinstance(RandomPolicy(2), Policy)\nTrue"
+      ],
+      "notes": [
+        "Actions are expected in `(-1, 1)`.  Anything narrower is fine; the\nenvironment is what decides how they are scaled."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "RandomPolicy",
+      "path": "lucid.utils.rollout._driver.RandomPolicy",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "RandomPolicy(action_dim: int)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L77",
+      "subcategory": "driver",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.rollout._driver.RandomPolicy.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(action_dim: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L99",
+          "subcategory": "driver",
+          "summary": "Initialise the policy. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reset",
+          "path": "lucid.utils.rollout._driver.RandomPolicy.reset",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L103",
+          "subcategory": "driver",
+          "summary": "No state to clear; present so this satisfies `Policy`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__call__",
+          "path": "lucid.utils.rollout._driver.RandomPolicy.__call__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__call__(observation: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L107",
+          "subcategory": "driver",
+          "summary": "Draw a uniform action, ignoring the observation.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Uniform actions in `(-1, 1)`.",
+      "extended": "What fills the buffer before there is anything worth learning from.\nBoth papers seed with a handful of random episodes for exactly this\nreason: a world model fitted on nothing has no opinion for a policy\nto improve on.",
+      "parameters": [
+        {
+          "name": "action_dim",
+          "annotation": "int",
+          "description": "Width of the action vector.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.utils.rollout import RandomPolicy\n>>> policy = RandomPolicy(3)\n>>> policy.reset()\n>>> policy(None).shape\n(3,)"
+      ],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "rollout",
+      "path": "lucid.utils.rollout._driver.rollout",
+      "kind": "function",
+      "labels": [],
+      "signature": "rollout(env: Environment, policy: Policy, action_repeat: int = 1, max_steps: int | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L235",
+      "subcategory": "driver",
+      "summary": "Run one episode and return it, ready for the replay buffer.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "env",
+          "annotation": "Environment",
+          "description": "Anything satisfying the protocol.",
+          "default": null
+        },
+        {
+          "name": "policy",
+          "annotation": "Policy",
+          "description": "Reset once here, then called per decision.",
+          "default": null
+        },
+        {
+          "name": "action_repeat",
+          "annotation": "int",
+          "description": "Environment steps per decision.  The papers use 2 for some\nControl Suite tasks and 4 for others, and it is not a free\nparameter — it sets what one step of the learned dynamics\n*means*, so the same number has to be used when collecting and\nwhen reporting a return.",
+          "default": "1"
+        },
+        {
+          "name": "max_steps",
+          "annotation": "int or None",
+          "description": "Cut the episode off after this many recorded steps, reported as\ntruncation rather than termination.  `None` runs until the\nenvironment says stop.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "Episode",
+        "description": "`(T, ...)` tensors, with `actions[t]` the action taken *into*\nstep `t` — so the first entry is a zero vector, because nothing\nwas taken into the first observation."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.utils.rollout import RandomPolicy, StepResult, rollout\n>>> class Trivial:\n...     def reset(self):\n...         self.t = 0\n...         return lucid.zeros((3, 4, 4))\n...     def step(self, action):\n...         self.t += 1\n...         return StepResult(lucid.zeros((3, 4, 4)), 1.0, False, self.t >= 5)\n>>> episode, total = rollout(Trivial(), RandomPolicy(2))\n>>> len(episode), total\n(5, 5.0)"
+      ],
+      "notes": [
+        "A repeated action is recorded once per environment step, not once per\ndecision, so the stored sequence is at the environment's own rate and\na model trained on it predicts single steps."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Environment",
+      "path": "lucid.utils.rollout._env.Environment",
+      "kind": "class",
+      "class_kind": "protocol",
+      "bases": [
+        "Protocol"
+      ],
+      "labels": [],
+      "signature": "Environment()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L87",
+      "subcategory": "env",
+      "methods": [
+        {
+          "name": "reset",
+          "path": "lucid.utils.rollout._env.Environment.reset",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L116",
+          "subcategory": "env",
+          "summary": "Start a new episode.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "The first observation, `(C, H, W)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.utils.rollout._env.Environment.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(action: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L126",
+          "subcategory": "env",
+          "summary": "Advance one step.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "action",
+              "annotation": "Tensor",
+              "description": "`(action_dim,)`, expected in `(-1, 1)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "StepResult",
+            "description": "Observation, reward, and the two end-of-episode flags."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What a rollout needs an environment to do.",
+      "extended": "Implement this on your own simulator; nothing here touches an outside\npackage, and no base class has to be inherited — a plain object with\nthese two methods satisfies it.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.utils.rollout import Environment, StepResult\n>>> class Trivial:\n...     def reset(self):\n...         self.t = 0\n...         return lucid.zeros((3, 64, 64))\n...     def step(self, action):\n...         self.t += 1\n...         return StepResult(lucid.zeros((3, 64, 64)), 0.0, False, self.t >= 5)\n>>> isinstance(Trivial(), Environment)\nTrue"
+      ],
+      "notes": [
+        "Actions are expected in `(-1, 1)`, which is what a `tanh`-squashed\npolicy emits.  Rescale inside your environment rather than outside it,\nso the policy never has to know the units."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Episode",
+      "path": "lucid.utils.rollout._env.Episode",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "NamedTuple"
+      ],
+      "labels": [],
+      "signature": "Episode()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L51",
+      "subcategory": "env",
+      "methods": [
+        {
+          "name": "__len__",
+          "path": "lucid.utils.rollout._env.Episode.__len__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__len__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L81",
+          "subcategory": "env",
+          "summary": "Number of transitions in the episode.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "One complete trajectory, laid out for the replay buffer.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The first action is a zero vector: there is no action before the\nfirst observation, and the recurrence needs something of the right\nshape to start from."
+      ],
+      "attributes": [
+        {
+          "name": "observations",
+          "annotation": "Tensor",
+          "description": "`(T, C, H, W)`."
+        },
+        {
+          "name": "actions",
+          "annotation": "Tensor",
+          "description": "`(T, action_dim)` — the action taken *into* each step, so\n`actions[t]` produced `observations[t]`.  This is the\nalignment the world models expect."
+        },
+        {
+          "name": "rewards",
+          "annotation": "Tensor",
+          "description": "`(T,)`."
+        },
+        {
+          "name": "discounts",
+          "annotation": "Tensor",
+          "description": "`(T,)`, `0` where the episode terminated and `1` everywhere\nelse — including where it was merely truncated.  Feeds\n`pcont`; ignored by models that hold the discount constant."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "StepResult",
+      "path": "lucid.utils.rollout._env.StepResult",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "NamedTuple"
+      ],
+      "labels": [],
+      "signature": "StepResult()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L17",
+      "subcategory": "env",
+      "methods": [],
+      "summary": "What one environment step returns.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Termination and truncation are separated because a world model\ngenuinely needs them apart.  Collapsing them into one `done` flag,\nwhich is the older convention, teaches a discount head that running\nout of clock is the same as dying — and then the planner refuses to\nlook past the horizon it was trained under."
+      ],
+      "attributes": [
+        {
+          "name": "observation",
+          "annotation": "Tensor",
+          "description": "What the agent sees after the step, `(C, H, W)` for the pixel\nworld models."
+        },
+        {
+          "name": "reward",
+          "annotation": "float",
+          "description": "Reward for the transition."
+        },
+        {
+          "name": "terminated",
+          "annotation": "bool",
+          "description": "The episode reached a terminal state — a failure, a goal, an\nabsorbing state.  Nothing follows it, so a discount head should\nlearn `0` here."
+        },
+        {
+          "name": "truncated",
+          "annotation": "bool",
+          "description": "The episode was cut short from outside — a time limit, a step\nbudget.  Something *would* have followed, so the value function\nshould still bootstrap."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "SequenceReplay",
+      "path": "lucid.utils.rollout._replay.SequenceReplay",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "SequenceReplay(capacity: int = 1000000)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L17",
+      "subcategory": "replay",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.rollout._replay.SequenceReplay.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(capacity: int = 1000000)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L61",
+          "subcategory": "replay",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__len__",
+          "path": "lucid.utils.rollout._replay.SequenceReplay.__len__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__len__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L68",
+          "subcategory": "replay",
+          "summary": "Number of stored episodes.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "steps",
+          "path": "lucid.utils.rollout._replay.SequenceReplay.steps",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "steps: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L73",
+          "summary": "Total transitions held.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "add",
+          "path": "lucid.utils.rollout._replay.SequenceReplay.add",
+          "kind": "function",
+          "labels": [],
+          "signature": "add(episode: Episode)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L77",
+          "subcategory": "replay",
+          "summary": "Store an episode, evicting the oldest until the budget is met.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "episode",
+              "annotation": "Episode",
+              "description": "The trajectory to store.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If the episode's fields disagree on length, or it is empty."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "sample",
+          "path": "lucid.utils.rollout._replay.SequenceReplay.sample",
+          "kind": "function",
+          "labels": [],
+          "signature": "sample(batch_size: int, length: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L109",
+          "subcategory": "replay",
+          "summary": "Draw contiguous chunks.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "batch_size",
+              "annotation": "int",
+              "description": "Number of chunks.",
+              "default": null
+            },
+            {
+              "name": "length",
+              "annotation": "int",
+              "description": "Steps per chunk.  Each one is a window into a single episode.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Episode",
+            "description": "Batched, with a leading batch axis — `observations` is\n`(batch_size, length, C, H, W)` and the rest follow.  It is\nthe same NamedTuple because the fields mean the same thing;\nonly the rank differs."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If no stored episode is at least `length` steps long."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Whole episodes in, contiguous chunks out.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "capacity",
+          "annotation": "int",
+          "description": "Budget in *transitions*, not episodes.  Frames dominate the\nmemory of a pixel-based agent — at 64x64x3 in float32 a single\nobservation is 48 KiB, so a million of them is not a number to\nset carelessly — and counting episodes would let the true cost\ndrift with their length.  Oldest episodes are dropped first.",
+          "default": "1_000_000"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.utils.rollout import Episode, SequenceReplay\n>>> replay = SequenceReplay()\n>>> replay.add(Episode(lucid.zeros((20, 3, 8, 8)), lucid.zeros((20, 2)),\n...                    lucid.zeros((20,)), lucid.ones((20,))))\n>>> batch = replay.sample(4, 5)\n>>> batch.observations.shape, batch.actions.shape\n((4, 5, 3, 8, 8), (4, 5, 2))"
+      ],
+      "notes": [
+        "Episodes shorter than the requested chunk length are skipped rather\nthan padded.  Padding would put frames into the sequence that the\ndynamics never produced, and the model has no way to tell them from\nreal ones.\n\nSampling picks an episode uniformly and then a start position within\nit uniformly, which is what the world-model papers' released code\ndoes.  Note the consequence: a step in a short episode is more likely\nto be drawn than a step in a long one.  Sampling uniformly over all\nvalid start positions instead would remove that bias, and is a\ndeliberate non-choice here — matching the reference matters more than\ncorrecting it."
+      ],
+      "attributes": [
+        {
+          "name": "episodes",
+          "annotation": "list of Episode",
+          "description": "Stored trajectories, oldest first."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "lucid.utils.rollout: environment contract, episode replay, and the loop\nthat connects a policy to an environment.",
+  "extended": "Lucid ships no environments — every compute path here is closed to\noutside packages. What it ships is the shape one has to have, storage\nthat hands a recurrent model contiguous sequences rather than loose\ntransitions, and the two collection hyperparameters the world-model\npapers state: action repeat and exploration noise.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

@@ -3,7 +3,7 @@
   "name": "qat",
   "path": "lucid.nn.qat",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/__init__.py#L1",
   "members": [
     {
       "name": "Conv1d",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "Conv1d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L46",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L46",
       "subcategory": "conv",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L164",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L164",
           "subcategory": "conv",
           "summary": "Initialise the Conv1d module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -46,7 +46,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L174",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L174",
           "subcategory": "conv",
           "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
           "extended": null,
@@ -70,7 +70,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L182",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L182",
           "subcategory": "conv",
           "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
@@ -159,7 +159,7 @@
       ],
       "labels": [],
       "signature": "Conv2d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L187",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L187",
       "subcategory": "conv",
       "methods": [
         {
@@ -168,7 +168,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L305",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L305",
           "subcategory": "conv",
           "summary": "Initialise the driver; the executable itself is lazy.",
           "extended": null,
@@ -220,7 +220,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L315",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L315",
           "subcategory": "conv",
           "summary": "Generate anchors for all FPN levels.",
           "extended": null,
@@ -263,7 +263,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L323",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L323",
           "subcategory": "conv",
           "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
@@ -352,7 +352,7 @@
       ],
       "labels": [],
       "signature": "Conv3d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L328",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L328",
       "subcategory": "conv",
       "methods": [
         {
@@ -361,7 +361,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L446",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L446",
           "subcategory": "conv",
           "summary": "Initialise the Conv1d module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -383,7 +383,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L456",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L456",
           "subcategory": "conv",
           "summary": "Apply attention gate.",
           "extended": null,
@@ -420,7 +420,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L464",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L464",
           "subcategory": "conv",
           "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
@@ -509,7 +509,7 @@
       ],
       "labels": [],
       "signature": "ConvReLU1d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L476",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L476",
       "subcategory": "conv",
       "methods": [
         {
@@ -518,7 +518,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L572",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L572",
           "subcategory": "conv",
           "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
           "extended": null,
@@ -542,7 +542,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L580",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L580",
           "subcategory": "conv",
           "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
@@ -631,7 +631,7 @@
       ],
       "labels": [],
       "signature": "ConvReLU2d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L586",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L586",
       "subcategory": "conv",
       "methods": [
         {
@@ -640,7 +640,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L683",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L683",
           "subcategory": "conv",
           "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
           "extended": null,
@@ -664,7 +664,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L691",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L691",
           "subcategory": "conv",
           "summary": "Build from a calibrated float activation (reads its output observer).",
           "extended": null,
@@ -753,7 +753,7 @@
       ],
       "labels": [],
       "signature": "ConvReLU3d(args: object = (), qconfig: QConfig | None = None, kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L697",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L697",
       "subcategory": "conv",
       "methods": [
         {
@@ -762,7 +762,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L793",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L793",
           "subcategory": "conv",
           "summary": "Fold BN → fake-quant folded weight → conv → (ReLU) → fake-quant output.",
           "extended": null,
@@ -786,7 +786,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/conv.py#L801",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/conv.py#L801",
           "subcategory": "conv",
           "summary": "Quantize a calibrated float convolution module.",
           "extended": null,
@@ -875,7 +875,7 @@
       ],
       "labels": [],
       "signature": "Linear(in_features: int, out_features: int, bias: bool = True, qconfig: QConfig | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/linear.py#L23",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/linear.py#L23",
       "subcategory": "linear",
       "methods": [
         {
@@ -884,7 +884,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(in_features: int, out_features: int, bias: bool = True, qconfig: QConfig | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/linear.py#L142",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/linear.py#L142",
           "subcategory": "linear",
           "summary": "Construct a Tensor from Python data, a NumPy array, or another Tensor.",
           "extended": "The data is funnelled through `lucid._factories.converters._to_impl`,\nthe canonical bridge between the outside world and Lucid's C++\n`TensorImpl`. Python scalars become 0-d tensors; nested lists are\nrecursively flattened with shape inference; NumPy arrays cross the\nsingle sanctioned host-to-engine boundary; and existing `Tensor`\nsources are rewrapped (optionally with cast and/or device transfer).",
@@ -935,7 +935,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/linear.py#L156",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/linear.py#L156",
           "subcategory": "linear",
           "summary": "Fake-quantize the weight, run linear, fake-quantize the output.",
           "extended": null,
@@ -959,7 +959,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/linear.py#L163",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/linear.py#L163",
           "subcategory": "linear",
           "summary": "Build a QAT `Linear` from a float one (shares the trained weight).",
           "extended": null,
@@ -1054,7 +1054,7 @@
       ],
       "labels": [],
       "signature": "LinearReLU(in_features: int, out_features: int, bias: bool = True, qconfig: QConfig | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/linear.py#L181",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/linear.py#L181",
       "subcategory": "linear",
       "methods": [
         {
@@ -1063,7 +1063,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/linear.py#L280",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/linear.py#L280",
           "subcategory": "linear",
           "summary": "Fake-quantize the weight, run linear, ReLU, fake-quantize the output.",
           "extended": null,
@@ -1087,7 +1087,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/linear.py#L287",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/linear.py#L287",
           "subcategory": "linear",
           "summary": "Build from a fused float `nni.LinearReLU` (its inner linear).",
           "extended": null,
@@ -1182,7 +1182,7 @@
       ],
       "labels": [],
       "signature": "Embedding(num_embeddings: int, embedding_dim: int, padding_idx: int | None = None, qconfig: QConfig | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/sparse.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/sparse.py#L21",
       "subcategory": "sparse",
       "methods": [
         {
@@ -1191,7 +1191,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_embeddings: int, embedding_dim: int, padding_idx: int | None = None, qconfig: QConfig | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/sparse.py#L128",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/sparse.py#L128",
           "subcategory": "sparse",
           "summary": "Initialise the MSELoss module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -1213,7 +1213,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/sparse.py#L142",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/sparse.py#L142",
           "subcategory": "sparse",
           "summary": "Fake-quantize the table, then look up `x`.",
           "extended": null,
@@ -1237,7 +1237,7 @@
             "classmethod"
           ],
           "signature": "from_float(mod: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/nn/qat/sparse.py#L148",
+          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/nn/qat/sparse.py#L148",
           "subcategory": "sparse",
           "summary": "Build a QAT `Embedding` from a float one (shares the trained table).",
           "extended": null,

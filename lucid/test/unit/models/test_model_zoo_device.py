@@ -758,3 +758,98 @@ def test_dreamer_rollout_stays_on_device(device):
     batch = replay.sample(2, 3)
     assert str(batch.observations.device) == f"device('{device}')"
     assert not np.isnan(batch.observations.to("cpu").numpy()).any()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DreamerV2
+#
+# The discrete latent takes a different route through the engine than
+# anything else in this family — a multinomial draw, a one-hot scatter,
+# and erf/erfinv inside the policy — so none of the Dreamer coverage above
+# says anything about it running on Metal.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_DREAMER_V2_SMALL = {
+    "action_dim": 2,
+    "cnn_depth": 4,
+    "stoch_size": 4,
+    "discrete": 5,
+    "deter_size": 16,
+    "hidden_size": 16,
+    "actor_hidden": 16,
+    "value_hidden": 16,
+    "reward_hidden": 16,
+    "horizon": 4,
+    "pcont": False,
+}
+
+
+def test_dreamer_v2_encoder_matches_across_devices():
+    """Sampling-free, so it must agree exactly."""
+    cpu, metal = _paired("dreamer_v2", **_DREAMER_V2_SMALL)
+    obs = lucid.rand((2, 3, 3, 64, 64))
+    _agree(cpu.encode(obs), metal.encode(obs.to("metal")), 1e-4, "dreamer_v2 encode")
+
+
+def test_dreamer_v2_categorical_latent_is_one_hot_on_device():
+    """The multinomial draw and the one-hot scatter, on the GPU."""
+    lucid.manual_seed(0)
+    model = M.create_model("dreamer_v2", **_DREAMER_V2_SMALL).to("metal").eval()
+    _, posteriors = model.observe(
+        lucid.rand((2, 3, 3, 64, 64), device="metal"),
+        lucid.rand((2, 3, 2), device="metal"),
+    )
+    assert str(posteriors.stoch.device) == "device('metal')"
+    assert str(posteriors.logits.device) == "device('metal')"
+    grid = posteriors.stoch.reshape(2, 3, 4, 5).to("cpu").numpy()
+    assert np.allclose(grid.sum(axis=-1), 1.0, atol=1e-5)
+
+
+def test_dreamer_v2_policy_matches_across_devices():
+    """``erf`` and ``erfinv`` sit inside the truncated normal's mode."""
+    cpu, metal = _paired("dreamer_v2", **_DREAMER_V2_SMALL)
+    feature = lucid.rand((2, 3, cpu.config.latent_size))
+    state = RSSMState(
+        deter=feature[..., : cpu.config.deter_size],
+        stoch=feature[..., cpu.config.deter_size :],
+        logits=feature[..., cpu.config.deter_size :].reshape(2, 3, 4, 5),
+    )
+    gpu_state = state.map(lambda t: t.to("metal"))
+    _agree(
+        cpu.act(state, sample=False),
+        metal.act(gpu_state, sample=False),
+        1e-4,
+        "dreamer_v2 act(mode)",
+    )
+    _agree(
+        cpu.actor.distribution(state.feature).entropy(),
+        metal.actor.distribution(gpu_state.feature).entropy(),
+        1e-4,
+        "dreamer_v2 entropy",
+    )
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_dreamer_v2_trains_one_step_on_device(device):
+    """All three losses and the target refresh, staying on-device."""
+    lucid.manual_seed(0)
+    model = M.create_model("dreamer_v2_world_model", **_DREAMER_V2_SMALL).to(device)
+    model.train()
+
+    out = model(
+        lucid.rand((2, 4, 3, 64, 64), device=device),
+        lucid.rand((2, 4, 2), device=device),
+        lucid.rand((2, 4), device=device),
+    )
+    assert out.behavior is not None
+    for loss in (out.loss, out.behavior.actor_loss, out.behavior.value_loss):
+        assert str(loss.device) == f"device('{device}')"
+        assert not np.isnan(loss.to("cpu").numpy()).any()
+
+    model.backward(out)
+    model.update_slow_target()
+    for group in (model.world_parameters(), model.actor_parameters()):
+        grads = [p.grad for p in group if p.grad is not None]
+        assert grads
+        for g in grads:
+            assert str(g.device) == f"device('{device}')"

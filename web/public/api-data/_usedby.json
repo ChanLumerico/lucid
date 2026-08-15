@@ -3437,6 +3437,70 @@
       "module": "lucid.models.generative.dreamer"
     }
   ],
+  "lucid.models.generative.dreamer_v2": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._config.DreamerV2Config": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._pretrained"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._model.DreamerV2BehaviorOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._model.DreamerV2ForWorldModeling": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._pretrained"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._model.DreamerV2Model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._pretrained"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._model.DreamerV2Output": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    }
+  ],
   "lucid.models.generative.flow_matching": [
     {
       "kind": "module",
@@ -14591,6 +14655,72 @@
     {
       "kind": "module",
       "module": "lucid.utils.data"
+    }
+  ],
+  "lucid.utils.rollout": [
+    {
+      "kind": "module",
+      "module": "lucid.utils"
+    }
+  ],
+  "lucid.utils.rollout._driver.LatentPolicy": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    }
+  ],
+  "lucid.utils.rollout._driver.Policy": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    }
+  ],
+  "lucid.utils.rollout._driver.RandomPolicy": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    }
+  ],
+  "lucid.utils.rollout._driver.rollout": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    }
+  ],
+  "lucid.utils.rollout._env.Environment": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout._driver"
+    }
+  ],
+  "lucid.utils.rollout._env.Episode": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout._driver"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout._replay"
+    }
+  ],
+  "lucid.utils.rollout._env.StepResult": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    }
+  ],
+  "lucid.utils.rollout._replay.SequenceReplay": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
     }
   ],
   "lucid.utils.tokenizer": [

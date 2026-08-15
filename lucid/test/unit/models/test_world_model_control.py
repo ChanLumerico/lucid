@@ -16,6 +16,8 @@ short and the model is small — the point is the direction of the curve,
 not a competitive score.
 """
 
+import math
+
 import pytest
 
 import lucid
@@ -213,3 +215,102 @@ class TestDiscountHeadEndToEnd:
         replay.add(rollout(PointMass(horizon=8), RandomPolicy(2))[0])
         batch = replay.sample(2, 8)
         assert bool((batch.discounts == 1.0).all().item())
+
+
+_TINY_V2 = dict(
+    action_dim=2,
+    cnn_depth=4,
+    stoch_size=6,
+    discrete=6,
+    deter_size=24,
+    hidden_size=24,
+    actor_hidden=32,
+    value_hidden=32,
+    reward_hidden=32,
+    horizon=6,
+    pcont=False,
+)
+
+
+def _v2_policy(model: object, noise: float = 0.0) -> LatentPolicy:
+    return LatentPolicy(
+        model.encode,
+        model.rssm,
+        lambda state: model.act(state, sample=False),
+        2,
+        noise=noise,
+    )
+
+
+class TestDreamerV2LearnsControl:
+    """The same question asked of the discrete latent.
+
+    Worth asking separately rather than trusting the shared parts: the
+    latent, the divergence, the critic's target and the policy's
+    distribution are all different, and every one of them can be wired in
+    a way that trains happily and controls nothing.
+    """
+
+    def test_return_improves_over_random(self) -> None:
+        lucid.manual_seed(0)
+        env = PointMass(horizon=20)
+        model = M.create_model("dreamer_v2_world_model", **_TINY_V2)
+        optimisers = [
+            optim.Adam(model.world_parameters(), lr=6e-4),
+            optim.Adam(model.value_parameters(), lr=2e-4),
+            # 8e-4, not the released 8e-5. DreamerV2's policy starts at
+            # 99% of the maximum entropy the interval allows — std is
+            # 2*sigmoid(0) + min_std ~= 1.1, which on [-1, 1] is nearly
+            # uniform, so the mean barely moves the sample. Sharpening it
+            # is most of the learning, and the published rate is set for
+            # millions of steps rather than the sixty here. Measured: at
+            # 8e-5 the policy is still uniform after 120 steps and scores
+            # 0.70x random; at 8e-4 it reaches 2.9x by step 50.
+            optim.Adam(model.actor_parameters(), lr=8e-4),
+        ]
+
+        replay = SequenceReplay(capacity=20_000)
+        for _ in range(SEED_EPISODES):
+            replay.add(rollout(env, RandomPolicy(2))[0])
+        baseline = _average_return(env, RandomPolicy(2), episodes=5)
+
+        inner = model.dreamer_v2
+        collector = _v2_policy(inner, noise=0.3)
+        evaluator = _v2_policy(inner)
+
+        curve = []
+        entropy_first = entropy_last = None
+        for step in range(60):
+            batch = replay.sample(BATCH, LENGTH)
+            out = model(batch.observations, batch.actions, batch.rewards)
+            assert out.behavior is not None
+            entropy = float(out.behavior.entropy.item())
+            entropy_first = entropy if step == 0 else entropy_first
+            entropy_last = entropy
+            model.backward(out)
+            for opt in optimisers:
+                opt.step()
+            model.update_slow_target()
+            if (step + 1) % 30 == 0:
+                replay.add(rollout(env, collector)[0])
+                curve.append(_average_return(env, evaluator))
+
+        best = max(curve)
+        assert best > 1.3 * baseline, (
+            f"policy did not learn: best {best:.2f} vs random {baseline:.2f}, "
+            f"curve {[round(c, 2) for c in curve]}"
+        )
+        # The mechanism, on the same run rather than a second one. A
+        # policy that never leaves the uniform limit scores exactly
+        # random however good the world model gets — which is what the
+        # released actor rate produces over sixty steps.
+        assert entropy_last < entropy_first - 0.04, (
+            f"policy never sharpened: {entropy_first:.3f} -> {entropy_last:.3f}"
+        )
+
+    def test_it_starts_near_the_uniform_limit(self) -> None:
+        """Pins the starting point the test above measures movement from."""
+        model = M.create_model("dreamer_v2", **_TINY_V2).eval()
+        feature = lucid.randn((4, 3, model.config.latent_size))
+        entropy = float(model.actor.distribution(feature).entropy().mean().item())
+        assert entropy > 0.9 * math.log(2.0)
