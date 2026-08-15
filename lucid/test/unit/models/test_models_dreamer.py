@@ -692,7 +692,20 @@ class TestTrainingStep:
             for want, param in zip(expected, got):
                 if want is None:
                     continue
-                assert float((want - param.grad).abs().max().item()) < 1e-6, name
+                # Compared relatively, with a tolerance set from measurement
+                # rather than taste. Over eight trials the two paths — one
+                # backward alone, one with the graph retained across three —
+                # differ by at most 0.9% on these gradients, which are small
+                # enough (1e-4) that float32 noise on O(1) intermediates
+                # lands there. A mis-routed gradient differs by its whole
+                # magnitude, so 5% sits 5x above the noise and 20x below
+                # anything real. `test_the_comparison_catches_contamination`
+                # holds that second claim up.
+                scale = float(want.abs().max().item())
+                if scale < 1e-8:
+                    continue
+                error = float((want - param.grad).abs().max().item())
+                assert error / scale < 5e-2, f"{name}: {error / scale:.3e}"
 
     def test_world_group_is_not_contaminated_by_the_actor(self) -> None:
         """The failure this method exists to prevent, asserted directly."""

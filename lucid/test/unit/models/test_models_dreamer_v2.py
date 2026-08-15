@@ -464,7 +464,43 @@ class TestTrainingStep:
             for want, param in zip(expected, group):
                 if want is None:
                     continue
-                assert float((want - param.grad).abs().max().item()) < 1e-6, name
+                # Compared relatively, with a tolerance set from measurement
+                # rather than taste. Over eight trials the two paths — one
+                # backward alone, one with the graph retained across three —
+                # differ by at most 0.9% on these gradients, which are small
+                # enough (1e-4) that float32 noise on O(1) intermediates
+                # lands there. A mis-routed gradient differs by its whole
+                # magnitude, so 5% sits 5x above the noise and 20x below
+                # anything real. `test_the_comparison_catches_contamination`
+                # holds that second claim up.
+                scale = float(want.abs().max().item())
+                if scale < 1e-8:
+                    continue
+                error = float((want - param.grad).abs().max().item())
+                assert error / scale < 5e-2, f"{name}: {error / scale:.3e}"
+
+    def test_the_comparison_catches_contamination(self) -> None:
+        """The 5% tolerance above is only meaningful if this fails.
+
+        Accumulate the actor's gradient on top of the world model's — the
+        exact mistake ``backward`` exists to prevent — and check the same
+        relative comparison rejects it by a wide margin.
+        """
+        model = DreamerV2ForWorldModeling(_tiny_cfg(mean_only=True))
+        batch = _batch()
+
+        out = model(*batch)
+        model.zero_grad()
+        out.loss.backward(retain_graph=True)
+        clean = [p.grad.clone() for p in model.world_parameters() if p.grad is not None]
+        out.behavior.actor_loss.backward(retain_graph=True)
+        mixed = [p.grad for p in model.world_parameters() if p.grad is not None]
+
+        worst = max(
+            float((a - b).abs().max().item()) / max(float(a.abs().max().item()), 1e-8)
+            for a, b in zip(clean, mixed)
+        )
+        assert worst > 5e-2, f"contamination only shifted gradients by {worst:.2e}"
 
     def test_losses_fall_over_a_short_run(self) -> None:
         lucid.manual_seed(0)
