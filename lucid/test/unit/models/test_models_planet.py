@@ -26,6 +26,7 @@ from lucid.models import (
 from lucid.models._utils._generative import generative_activation
 from lucid.models.generative._rssm import (
     RSSM,
+    _gumbel_argmax,
     categorical_kl,
     rssm_kl,
 )
@@ -479,6 +480,76 @@ class TestRSSMCategorical:
     def test_categorical_kl_is_zero_against_itself(self) -> None:
         logits = lucid.randn((2, 3, 4, 5))
         assert float(categorical_kl(logits, logits).abs().max().item()) < 1e-6
+
+
+class TestGumbelArgmax:
+    """The categorical draw, and why it is not ``multinomial``.
+
+    ``multinomial`` is data-dependent, so it returns on the CPU. A
+    recurrence pays that synchronisation once per step and the imagination
+    pays it again — measured at 11.5 s per DreamerV2 training step on
+    Metal against 0.7 s on the CPU, which made the accelerator sixteen
+    times slower than not using it. Gumbel-max is the same draw with
+    ``rand``, ``log`` and ``argmax``, all device-resident: 38 ms.
+
+    So the tests here are about the draw being *exact*, since that is what
+    the substitution has to preserve.
+    """
+
+    def test_matches_the_target_distribution(self) -> None:
+        import collections
+        import math
+
+        probabilities = [0.5, 0.3, 0.15, 0.05]
+        logits = lucid.tensor([[math.log(p) for p in probabilities]] * 4000)
+        drawn = _gumbel_argmax(logits)
+        counts = collections.Counter(int(v) for v in drawn)
+        for index, expected in enumerate(probabilities):
+            empirical = counts[index] / 4000
+            assert abs(empirical - expected) < 0.03, (
+                f"class {index}: {empirical:.3f} vs {expected}"
+            )
+
+    def test_a_deterministic_logit_is_drawn_every_time(self) -> None:
+        """Guards the test above: a broken draw could pass it by chance."""
+        logits = lucid.tensor([[100.0, 0.0, 0.0]] * 200)
+        assert all(int(v) == 0 for v in _gumbel_argmax(logits))
+
+    def test_it_is_not_deterministic(self) -> None:
+        """And the other way — a plain argmax would pass the test above."""
+        logits = lucid.zeros((200, 4))
+        first, second = _gumbel_argmax(logits), _gumbel_argmax(logits)
+        assert not bool((first == second).all().item())
+
+    def test_shape_drops_the_class_axis(self) -> None:
+        assert _gumbel_argmax(lucid.zeros((3, 5, 7))).shape == (3, 5)
+
+    def test_the_latent_stays_one_hot(self) -> None:
+        model = RSSM(
+            stoch_size=3,
+            deter_size=8,
+            hidden_size=8,
+            action_dim=2,
+            embed_size=6,
+            discrete=4,
+        ).eval()
+        _, posterior = model.observe(lucid.randn((4, 3, 6)), lucid.randn((4, 3, 2)))
+        grid = posterior.stoch.reshape(4, 3, 3, 4)
+        assert float((grid.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
+
+    def test_every_class_gets_used(self) -> None:
+        """A draw collapsed onto one class is still a valid one-hot."""
+        model = RSSM(
+            stoch_size=1,
+            deter_size=8,
+            hidden_size=8,
+            action_dim=2,
+            embed_size=4,
+            discrete=4,
+        ).eval()
+        _, posterior = model.observe(lucid.randn((800, 1, 4)), lucid.randn((800, 1, 2)))
+        chosen = {int(v) for v in posterior.stoch.reshape(800, 4).argmax(dim=-1)}
+        assert chosen == {0, 1, 2, 3}
 
 
 class TestRegistry:

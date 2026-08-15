@@ -17,6 +17,7 @@ import math
 
 import lucid
 import lucid.nn.functional as F
+from lucid.models.generative._rssm import _gumbel_argmax
 from lucid._tensor.tensor import Tensor
 
 __all__ = ["TruncatedNormal", "OneHotCategorical"]
@@ -250,17 +251,13 @@ class OneHotCategorical:
 
         Notes
         -----
-        ``multinomial`` is data-dependent, so on Metal its result — and
-        the one-hot built from it — comes back on the CPU.  It is moved
-        before it meets ``probs``; without that the straight-through
-        subtraction is a device mismatch, which is a bug this family has
-        already shipped once.
+        Drawn with the Gumbel-max trick, which is exact and stays on
+        the accelerator.  ``multinomial`` is the obvious call and the
+        wrong one: it is data-dependent, so on Metal it round-trips to
+        the CPU once per draw.
         """
         classes = int(self.logits.shape[-1])
-        flat = self.probs.reshape(-1, classes)
-        drawn = lucid.multinomial(flat, num_samples=1).reshape(-1)
-        hard = F.one_hot(drawn, num_classes=classes)
-        hard = hard.reshape(*(int(v) for v in self.probs.shape))
+        hard = F.one_hot(_gumbel_argmax(self.logits), num_classes=classes)
         hard = hard.to(self.probs.device).to(self.probs.dtype)
         return F.straight_through(hard, self.probs)
 
