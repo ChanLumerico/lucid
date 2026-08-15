@@ -297,9 +297,15 @@ class RSSM(nn.Module):
         embed_size: int,
         act_fn: str = "relu",
         min_std: float = 0.1,
+        discrete: int = 0,
     ) -> None:
         """Initialise the RSSM. See the class docstring for parameter semantics."""
         super().__init__()
+        if discrete < 0 or discrete == 1:
+            raise ValueError(
+                "discrete must be 0 for a Gaussian latent or at least 2 for a "
+                f"categorical one; got {discrete}"
+            )
         for name, value in (
             ("stoch_size", stoch_size),
             ("deter_size", deter_size),
@@ -318,30 +324,107 @@ class RSSM(nn.Module):
         self.action_dim = action_dim
         self.embed_size = embed_size
         self.min_std = min_std
+        self.discrete = discrete
         self._act_name = act_fn
 
-        self.pre_cell = nn.Linear(stoch_size + action_dim, hidden_size)
+        # A categorical latent is a grid: `stoch_size` variables of
+        # `discrete` classes each, flattened once it leaves the head so
+        # everything downstream sees one vector.
+        self.stoch_width = stoch_size * discrete if discrete else stoch_size
+        head_width = self.stoch_width if discrete else 2 * stoch_size
+
+        self.pre_cell = nn.Linear(self.stoch_width + action_dim, hidden_size)
         self.cell = nn.GRUCell(hidden_size, deter_size)
 
         self.prior_head = nn.Sequential(
             nn.Linear(deter_size, hidden_size),
-            nn.Linear(hidden_size, 2 * stoch_size),
+            nn.Linear(hidden_size, head_width),
         )
         self.posterior_head = nn.Sequential(
             nn.Linear(deter_size + embed_size, hidden_size),
-            nn.Linear(hidden_size, 2 * stoch_size),
+            nn.Linear(hidden_size, head_width),
         )
 
     # ── internals ────────────────────────────────────────────────────────
 
-    def _head(self, head: nn.Module, x: Tensor) -> tuple[Tensor, Tensor]:
-        """Run a two-layer head and split its output into ``(mean, std)``."""
+    def _head(self, head: nn.Module, x: Tensor) -> Tensor:
+        """Run a two-layer head and return its raw output."""
         first, second = cast(nn.Sequential, head)[0], cast(nn.Sequential, head)[1]
         h = generative_activation(self._act_name, cast(Tensor, first(x)))
-        out = cast(Tensor, second(h))
+        return cast(Tensor, second(h))
+
+    def _latent(self, head: nn.Module, x: Tensor, sample: bool) -> RSSMState:
+        """Read a head and turn it into the latent half of a state.
+
+        Parameters
+        ----------
+        head : Module
+            ``prior_head`` or ``posterior_head``.
+        x : Tensor
+            Whatever that head reads.
+        sample : bool
+            Draw, or take the distribution's mode.
+
+        Returns
+        -------
+        RSSMState
+            With ``deter`` left as a placeholder for the caller to fill —
+            only the stochastic fields are set here.
+        """
+        out = self._head(head, x)
+        if self.discrete:
+            leading = tuple(int(v) for v in out.shape[:-1])
+            logits = out.reshape(*leading, self.stoch_size, self.discrete)
+            stoch = self._draw_discrete(logits, sample)
+            return RSSMState(deter=out, stoch=stoch, logits=logits)
         mean = out[..., : self.stoch_size]
         std = nn.functional.softplus(out[..., self.stoch_size :]) + self.min_std
-        return mean, std
+        return RSSMState(
+            deter=out, stoch=self._draw(mean, std, sample), mean=mean, std=std
+        )
+
+    def _draw_discrete(self, logits: Tensor, sample: bool) -> Tensor:
+        r"""One-hot draw with a straight-through gradient, flattened.
+
+        Parameters
+        ----------
+        logits : Tensor
+            ``(..., stoch_size, discrete)``.
+        sample : bool
+            Draw from the categorical, or take its mode.
+
+        Returns
+        -------
+        Tensor
+            ``(..., stoch_size * discrete)`` — one-hot per variable.
+
+        Notes
+        -----
+        A one-hot has no gradient, so the sample is passed forward and the
+        class probabilities' gradient backward:
+
+        .. math::
+
+            \tilde{s} = \mathrm{sample} + p - \mathrm{sg}(p).
+
+        That is :func:`lucid.nn.functional.straight_through`, the same
+        estimator vector quantisation uses — the codebook lookup and the
+        categorical draw are the same problem.
+        """
+        probs = nn.functional.softmax(logits, dim=-1)
+        if sample:
+            flat = probs.reshape(-1, self.discrete)
+            drawn = lucid.multinomial(flat, num_samples=1).reshape(-1)
+            hard = nn.functional.one_hot(drawn, num_classes=self.discrete)
+            hard = hard.reshape(*(int(v) for v in probs.shape)).to(probs.dtype)
+        else:
+            index = probs.argmax(dim=-1)
+            hard = nn.functional.one_hot(index, num_classes=self.discrete).to(
+                probs.dtype
+            )
+        onehot = nn.functional.straight_through(hard, probs)
+        leading = tuple(int(v) for v in onehot.shape[:-2])
+        return onehot.reshape(*leading, self.stoch_width)
 
     @staticmethod
     def _draw(mean: Tensor, std: Tensor, sample: bool) -> Tensor:
@@ -362,9 +445,35 @@ class RSSM(nn.Module):
     # ── single steps ─────────────────────────────────────────────────────
 
     def initial(self, batch_size: int, device: str = "cpu") -> RSSMState:
-        """Return the all-zero state the unroll starts from."""
+        """Return the all-zero state the unroll starts from.
+
+        Parameters
+        ----------
+        batch_size : int
+            Leading dimension.
+        device : str, default="cpu"
+            Where to allocate.
+
+        Returns
+        -------
+        RSSMState
+            Zeros throughout, parameterised the way this model is.
+
+        Notes
+        -----
+        The zero *logits* of a categorical start are a uniform
+        distribution, which is the honest prior before anything has been
+        seen.  The Gaussian start instead carries zero mean and zero
+        standard deviation — degenerate, but nothing reads it: the first
+        step overwrites both.
+        """
         deter = lucid.zeros(batch_size, self.deter_size, device=device)
-        stoch = lucid.zeros(batch_size, self.stoch_size, device=device)
+        stoch = lucid.zeros(batch_size, self.stoch_width, device=device)
+        if self.discrete:
+            logits = lucid.zeros(
+                batch_size, self.stoch_size, self.discrete, device=device
+            )
+            return RSSMState(deter=deter, stoch=stoch, logits=logits)
         return RSSMState(deter=deter, stoch=stoch, mean=stoch, std=stoch)
 
     def prior_step(
@@ -390,10 +499,8 @@ class RSSM(nn.Module):
         x = lucid.cat([state.stoch, action], dim=-1)
         x = generative_activation(self._act_name, cast(Tensor, self.pre_cell(x)))
         deter = cast(Tensor, self.cell(x, state.deter))
-        mean, std = self._head(self.prior_head, deter)
-        return RSSMState(
-            deter=deter, stoch=self._draw(mean, std, sample), mean=mean, std=std
-        )
+        latent = self._latent(self.prior_head, deter, sample)
+        return latent._replace(deter=deter)
 
     def posterior_step(
         self,
@@ -432,9 +539,8 @@ class RSSM(nn.Module):
         """
         prior = self.prior_step(state, action, sample=sample)
         x = lucid.cat([prior.deter, embed], dim=-1)
-        mean, std = self._head(self.posterior_head, x)
-        posterior = RSSMState(
-            deter=prior.deter, stoch=self._draw(mean, std, sample), mean=mean, std=std
+        posterior = self._latent(self.posterior_head, x, sample)._replace(
+            deter=prior.deter
         )
         return prior, posterior
 

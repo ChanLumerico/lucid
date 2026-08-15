@@ -24,7 +24,11 @@ from lucid.models import (
     list_models,
 )
 from lucid.models._utils._generative import generative_activation
-from lucid.models.generative._rssm import rssm_kl
+from lucid.models.generative._rssm import (
+    RSSM,
+    categorical_kl,
+    rssm_kl,
+)
 
 
 def _tiny_cfg(**overrides: object) -> PlaNetConfig:
@@ -363,6 +367,118 @@ class TestComposition:
 # ─────────────────────────────────────────────────────────────────────────────
 # Registry
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestRSSMCategorical:
+    """The seam DreamerV2 needs, tested where the RSSM lives.
+
+    PlaNet never asks for a categorical latent, but it shares the class
+    that provides one — so the Gaussian path has to keep behaving exactly
+    as before, and the discrete path has to actually work. Both are
+    asserted here rather than waiting for a family to depend on them.
+    """
+
+    def _rssm(self, discrete: int) -> RSSM:
+        return RSSM(
+            stoch_size=4,
+            deter_size=8,
+            hidden_size=8,
+            action_dim=2,
+            embed_size=6,
+            discrete=discrete,
+        )
+
+    def test_gaussian_is_unchanged(self) -> None:
+        model = self._rssm(0).eval()
+        _, posterior = model.observe(lucid.randn((2, 3, 6)), lucid.randn((2, 3, 2)))
+        assert posterior.stoch.shape == (2, 3, 4)
+        assert not posterior.is_discrete
+        assert posterior.logits is None
+        assert posterior.mean is not None and posterior.std is not None
+
+    def test_categorical_shapes(self) -> None:
+        model = self._rssm(5).eval()
+        _, posterior = model.observe(lucid.randn((2, 3, 6)), lucid.randn((2, 3, 2)))
+        assert posterior.is_discrete
+        assert posterior.logits.shape == (2, 3, 4, 5)
+        assert posterior.stoch.shape == (2, 3, 20)  # flattened 4 x 5
+        assert posterior.mean is None and posterior.std is None
+        assert posterior.feature.shape == (2, 3, 28)  # deter 8 + stoch 20
+
+    def test_every_variable_is_one_hot(self) -> None:
+        model = self._rssm(5).eval()
+        _, posterior = model.observe(lucid.randn((2, 3, 6)), lucid.randn((2, 3, 2)))
+        grid = posterior.stoch.reshape(2, 3, 4, 5)
+        assert float((grid.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
+
+    def test_straight_through_reaches_the_head(self) -> None:
+        """A one-hot has no gradient; the estimator is what supplies one.
+
+        Weighted, not summed: softmax rows total 1 whatever the logits
+        are, so ``stoch.sum()`` has zero gradient by construction and
+        would pass on a model whose latent was cut off entirely.
+        """
+        model = self._rssm(5)
+        _, posterior = model.observe(lucid.randn((2, 3, 6)), lucid.randn((2, 3, 2)))
+        weights = lucid.randn((2, 3, 20))
+        model.zero_grad()
+        (posterior.stoch * weights).sum().backward()
+        reached = sum(
+            float(p.grad.abs().sum().item())
+            for p in model.posterior_head.parameters()
+            if p.grad is not None
+        )
+        assert reached > 1e-3
+
+    def test_mean_only_is_deterministic_and_binary(self) -> None:
+        model = self._rssm(5).eval()
+        embed, actions = lucid.randn((2, 2, 6)), lucid.randn((2, 2, 2))
+        first = model.observe(embed, actions, sample=False)[1].stoch
+        second = model.observe(embed, actions, sample=False)[1].stoch
+        assert bool((first == second).all().item())
+        assert bool(((first == 0) | (first == 1)).all().item())
+
+    def test_sampling_varies(self) -> None:
+        """Guards the test above — otherwise it would pass on a dead sampler."""
+        model = self._rssm(5).eval()
+        embed, actions = lucid.randn((2, 2, 6)), lucid.randn((2, 2, 2))
+        first = model.observe(embed, actions, sample=True)[1].stoch
+        second = model.observe(embed, actions, sample=True)[1].stoch
+        assert not bool((first == second).all().item())
+
+    @pytest.mark.parametrize("discrete", [-1, 1])
+    def test_rejects_a_degenerate_grid(self, discrete: int) -> None:
+        with pytest.raises(ValueError):
+            self._rssm(discrete)
+
+    def test_kl_refuses_a_mismatched_pair(self) -> None:
+        """A Gaussian prior against a categorical posterior is a bug, not a number."""
+        gaussian = self._rssm(0).eval()
+        discrete = self._rssm(5).eval()
+        _, g_post = gaussian.observe(lucid.randn((2, 2, 6)), lucid.randn((2, 2, 2)))
+        _, d_post = discrete.observe(lucid.randn((2, 2, 6)), lucid.randn((2, 2, 2)))
+        with pytest.raises(ValueError):
+            rssm_kl(d_post, g_post)
+
+    def test_categorical_kl_matches_a_hand_computation(self) -> None:
+        import math
+
+        q = [[0.7, 0.2, 0.1], [0.3, 0.3, 0.4]]
+        p = [[0.2, 0.3, 0.5], [0.5, 0.25, 0.25]]
+        expected = sum(
+            sum(a * math.log(a / b) for a, b in zip(qv, pv)) for qv, pv in zip(q, p)
+        )
+        got = float(
+            categorical_kl(
+                lucid.tensor([[[math.log(x) for x in v] for v in q]]),
+                lucid.tensor([[[math.log(x) for x in v] for v in p]]),
+            ).item()
+        )
+        assert abs(got - expected) < 1e-5
+
+    def test_categorical_kl_is_zero_against_itself(self) -> None:
+        logits = lucid.randn((2, 3, 4, 5))
+        assert float(categorical_kl(logits, logits).abs().max().item()) < 1e-6
 
 
 class TestRegistry:
