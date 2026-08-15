@@ -92,6 +92,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - latent overshooting, CEM planning, deterministic rollouts
 
+- `Dreamer` (Hafner et al., 2020) — PlaNet's world model with a learned actor and critic in place of its planner, trained on imagined trajectories via TD(λ) returns. Factories `dreamer` / `dreamer_world_model`; no pretrained weights were published.
+- `WorldModelConfig` — shared Tier-2 config for the world-model families, carrying the fields PlaNet and Dreamer state identically.
+- `"elu"` accepted by every generative family's `act_fn`.
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

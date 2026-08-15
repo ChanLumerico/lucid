@@ -128,9 +128,9 @@ def _agree(cpu_out, metal_out, tol, what):
     assert a.shape == b.shape, what
     assert not np.isnan(b).any(), what
     scale = max(float(np.abs(a).max()), 1e-8)
-    assert (
-        np.abs(a - b).max() / scale < tol
-    ), f"{what}: rel {np.abs(a - b).max() / scale}"
+    assert np.abs(a - b).max() / scale < tol, (
+        f"{what}: rel {np.abs(a - b).max() / scale}"
+    )
 
 
 def test_neural_ode_matches_across_devices():
@@ -593,5 +593,102 @@ def test_planet_trains_one_step_on_device(device):
 
     grads = [p.grad for p in model.parameters() if p.grad is not None]
     assert grads, "planet: no parameter received a gradient"
+    for g in grads:
+        assert str(g.device) == f"device('{device}')"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dreamer
+#
+# Everything said about PlaNet above applies — plus one more sampling
+# source.  Dreamer's imagination draws twice per step, once for the latent
+# and once for the action, so an imagined trajectory diverges across devices
+# even faster.  The deterministic surfaces are compared exactly; the
+# behaviour pass is checked for residency and finiteness instead, which is
+# what the device test is actually for.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_DREAMER_SMALL = {
+    "action_dim": 2,
+    "stoch_size": 4,
+    "deter_size": 8,
+    "hidden_size": 8,
+    "cnn_depth": 4,
+    "reward_hidden": 8,
+    "actor_hidden": 8,
+    "value_hidden": 8,
+    "horizon": 3,
+}
+
+
+def test_dreamer_value_and_actor_heads_match_across_devices():
+    """Both new heads read a state; feed them the same one on each device."""
+    cpu, metal = _paired("dreamer", **_DREAMER_SMALL)
+    feature = lucid.rand((2, 3, cpu.config.latent_size))
+    state = RSSMState(
+        deter=feature[..., : cpu.config.deter_size],
+        stoch=feature[..., cpu.config.deter_size :],
+        mean=feature[..., cpu.config.deter_size :],
+        std=feature[..., cpu.config.deter_size :],
+    )
+    gpu_state = RSSMState(*(t.to("metal") for t in state))
+
+    _agree(
+        cpu.predict_value(state),
+        metal.predict_value(gpu_state),
+        1e-4,
+        "dreamer value",
+    )
+    # The actor's mean is deterministic even though its sample is not.
+    _agree(
+        cpu.actor.distribution(state.feature)[0],
+        metal.actor.distribution(gpu_state.feature)[0],
+        1e-4,
+        "dreamer actor mean",
+    )
+    _agree(
+        cpu.act(state, sample=False),
+        metal.act(gpu_state, sample=False),
+        1e-4,
+        "dreamer act(mean)",
+    )
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_dreamer_imagines_under_its_own_policy_on_device(device):
+    """Actor and dynamics alternate for the whole horizon, staying on-device."""
+    lucid.manual_seed(0)
+    model = M.create_model("dreamer", **_DREAMER_SMALL).to(device).eval()
+
+    states, actions = model.imagine(model.rssm.initial(2, device=device), 5)
+    assert str(states.stoch.device) == f"device('{device}')"
+    assert str(actions.device) == f"device('{device}')"
+    assert states.stoch.shape == (2, 6, 4)
+    assert actions.shape == (2, 5, 2)
+    assert not np.isnan(actions.to("cpu").numpy()).any()
+    assert np.all(np.abs(actions.to("cpu").numpy()) <= 1.0)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_dreamer_three_losses_backward_on_device(device):
+    """Each loss must reach its own group's gradients without leaving the device."""
+    lucid.manual_seed(0)
+    model = M.create_model("dreamer_world_model", **_DREAMER_SMALL).to(device)
+    model.train()
+
+    out = model(
+        lucid.rand((2, 3, 3, 64, 64), device=device),
+        lucid.rand((2, 3, 2), device=device),
+        lucid.rand((2, 3), device=device),
+    )
+    assert out.behavior is not None
+    for loss in (out.loss, out.behavior.actor_loss, out.behavior.value_loss):
+        assert str(loss.device) == f"device('{device}')"
+        assert not np.isnan(loss.to("cpu").numpy()).any()
+
+    model.zero_grad()
+    out.behavior.actor_loss.backward()
+    grads = [p.grad for p in model.actor_parameters() if p.grad is not None]
+    assert grads, "dreamer: the actor received no gradient"
     for g in grads:
         assert str(g.device) == f"device('{device}')"

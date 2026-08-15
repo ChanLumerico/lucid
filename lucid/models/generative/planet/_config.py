@@ -10,14 +10,18 @@ embedding, and 3 free nats on the KL.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, Literal, override
+from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.generative._config import GenerativeModelConfig
+from lucid.models.generative._config import (
+    WORLD_MODEL_IMAGE_SIZE,
+    GenerativeActivation,
+    WorldModelConfig,
+)
 
-#: The paper's convolutional schedule only lands on this resolution — see
-#: :class:`PlaNetConfig.__post_init__`.
-PLANET_IMAGE_SIZE = 64
+#: The paper's convolutional schedule only lands on this resolution.  Shared
+#: with Dreamer, which cites the same encoder and decoder.
+PLANET_IMAGE_SIZE = WORLD_MODEL_IMAGE_SIZE
 
 
 @model_family_meta(
@@ -86,47 +90,18 @@ PLANET_IMAGE_SIZE = 64
     """,
 )
 @dataclass(frozen=True)
-class PlaNetConfig(GenerativeModelConfig):
+class PlaNetConfig(WorldModelConfig):
     r"""Frozen configuration for the PlaNet family.
 
     Defaults reproduce Hafner et al., 2019 on the DeepMind Control Suite.
 
     Parameters
     ----------
-    sample_size : int or tuple of int, default=64
-        Frame resolution.  Must be 64 — see Notes.
-    in_channels : int, default=3
-        Observation channels.
-    out_channels : int, default=3
-        Reconstruction channels.
-    act_fn : {"silu", "swish", "relu", "gelu"}, default="relu"
+    act_fn : {"silu", "swish", "relu", "gelu", "elu"}, default="relu"
         Activation throughout.  The paper uses ReLU, which is why this
         family overrides the generative-domain default of ``"silu"``.
-    action_dim : int, default=1
-        Width of the action vector conditioning the transition.  Genuinely
-        task-dependent — the Control Suite tasks range from 1 to 12 — so
-        there is no paper value to inherit and it must be set per use.
-    stoch_size : int, default=30
-        Width of the stochastic latent :math:`s`.
-    deter_size : int, default=200
-        Width of the deterministic latent :math:`h`.
-    hidden_size : int, default=200
-        Width of the hidden layer inside the RSSM heads.
-    cnn_depth : int, default=32
-        Channel width of the first encoder convolution; the stack widens
-        ``depth, 2*depth, 4*depth, 8*depth``.  A scale knob, not a shape
-        knob — the spatial schedule is fixed.
-    min_std : float, default=0.1
-        Floor on the latent standard deviation.
-    mean_only : bool, default=False
-        Take the latent's mean instead of sampling it, making the whole
-        recurrence deterministic.  ``plan`` always does this regardless —
-        see Notes — so the flag matters for training and for
-        :meth:`PlaNetModel.observe` / :meth:`PlaNetModel.imagine`.
-    free_nats : float, default=3.0
-        The KL is clamped below at this value before it enters the loss.
-    kl_weight : float, default=1.0
-        Multiplier :math:`\beta` on the clamped KL.
+        Dreamer uses ELU, which is why neither value sits on
+        :class:`WorldModelConfig`.
     overshoot_distance : int or None, default=None
         How many steps ahead **latent overshooting** trains the dynamics.
         ``None`` overshoots as far as each batch allows (the paper's full
@@ -139,13 +114,19 @@ class PlaNetConfig(GenerativeModelConfig):
         it the reward head only ever sees posterior states while the
         planner only ever evaluates prior ones — see Notes.
     reward_hidden : int, default=200
-        Width of each reward-head hidden layer.
+        Width of each reward-head hidden layer.  Dreamer's is 300, so this
+        stays here rather than on the shared base.
     reward_layers : int, default=2
         Number of reward-head hidden layers.
     reward_loss_scale : float, default=1.0
         Multiplier on the reward likelihood.  The paper states none, so
         the default is 1; the released implementation uses 10 — see
         Notes.
+
+    The state geometry (``stoch_size``, ``deter_size``, ``hidden_size``,
+    ``cnn_depth``, ``min_std``, ``mean_only``), the frame size, the action
+    width and the two KL knobs (``free_nats``, ``kl_weight``) are inherited
+    from :class:`WorldModelConfig` — Dreamer states the same values.
 
     Notes
     -----
@@ -174,20 +155,7 @@ class PlaNetConfig(GenerativeModelConfig):
 
     model_type: ClassVar[str] = "planet"
 
-    sample_size: int | tuple[int, int] = PLANET_IMAGE_SIZE
-    act_fn: Literal["silu", "swish", "relu", "gelu"] = "relu"
-
-    action_dim: int = 1
-
-    stoch_size: int = 30
-    deter_size: int = 200
-    hidden_size: int = 200
-    cnn_depth: int = 32
-    min_std: float = 0.1
-    mean_only: bool = False
-
-    free_nats: float = 3.0
-    kl_weight: float = 1.0
+    act_fn: GenerativeActivation = "relu"
 
     overshoot_distance: int | None = None
     overshoot_weight: float = 1.0
@@ -201,38 +169,14 @@ class PlaNetConfig(GenerativeModelConfig):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-        size = self.sample_size
-        square = size if isinstance(size, int) else None
-        if isinstance(size, tuple):
-            square = size[0] if size[0] == size[1] else None
-        if square != PLANET_IMAGE_SIZE:
+        if self.reward_hidden <= 0:
             raise ValueError(
-                f"PlaNet's convolutional schedule only produces "
-                f"{PLANET_IMAGE_SIZE}x{PLANET_IMAGE_SIZE} frames; got "
-                f"sample_size={self.sample_size}. Scale the model with "
-                f"cnn_depth / deter_size / stoch_size instead."
+                f"reward_hidden must be positive, got {self.reward_hidden}"
             )
-
-        for name, value in (
-            ("action_dim", self.action_dim),
-            ("stoch_size", self.stoch_size),
-            ("deter_size", self.deter_size),
-            ("hidden_size", self.hidden_size),
-            ("cnn_depth", self.cnn_depth),
-            ("reward_hidden", self.reward_hidden),
-        ):
-            if value <= 0:
-                raise ValueError(f"{name} must be positive, got {value}")
         if self.reward_layers <= 0:
             raise ValueError(
                 f"reward_layers must be positive, got {self.reward_layers}"
             )
-        if self.min_std <= 0.0:
-            raise ValueError(f"min_std must be positive, got {self.min_std}")
-        if self.free_nats < 0.0:
-            raise ValueError(f"free_nats must be non-negative, got {self.free_nats}")
-        if self.kl_weight < 0.0:
-            raise ValueError(f"kl_weight must be non-negative, got {self.kl_weight}")
         if self.overshoot_distance is not None and self.overshoot_distance < 1:
             raise ValueError(
                 "overshoot_distance must be at least 1 (1 disables overshooting) "
@@ -244,21 +188,10 @@ class PlaNetConfig(GenerativeModelConfig):
             )
         if self.reward_loss_scale < 0.0:
             raise ValueError(
-                f"reward_loss_scale must be non-negative, got "
-                f"{self.reward_loss_scale}"
+                f"reward_loss_scale must be non-negative, got {self.reward_loss_scale}"
             )
         if self.overshoot_reward_weight < 0.0:
             raise ValueError(
                 "overshoot_reward_weight must be non-negative, got "
                 f"{self.overshoot_reward_weight}"
             )
-
-    @property
-    def embed_size(self) -> int:
-        """Width of the encoder output — ``8 * cnn_depth`` over a 2x2 grid."""
-        return 8 * self.cnn_depth * 2 * 2
-
-    @property
-    def latent_size(self) -> int:
-        """Width of the full latent ``[h; s]`` the decoder and reward head read."""
-        return self.deter_size + self.stoch_size

@@ -19,8 +19,9 @@ from typing import ClassVar, Literal, override
 from lucid.models._base import ModelConfig
 
 # Activation alias accepted by every generative family.  Diffusion U-Nets
-# typically use SiLU (Swish); VAEs use either SiLU or ReLU.
-GenerativeActivation = Literal["silu", "swish", "relu", "gelu"]
+# typically use SiLU (Swish); VAEs use either SiLU or ReLU; the world
+# models split — PlaNet specifies ReLU, Dreamer specifies ELU.
+GenerativeActivation = Literal["silu", "swish", "relu", "gelu", "elu"]
 
 # Noise schedule shape — see ``make_beta_schedule`` in ``_utils/_generative``.
 BetaSchedule = Literal["linear", "cosine"]
@@ -131,7 +132,118 @@ __all__ = [
     "GenerativeModelConfig",
     "DiffusionModelConfig",
     "NormalizingFlowConfig",
+    "WorldModelConfig",
     "GenerativeActivation",
     "BetaSchedule",
     "FlowPrior",
 ]
+
+
+#: The only frame size the shared world-model convolutional schedule produces —
+#: see :mod:`lucid.models.generative._pixel_nets`.
+WORLD_MODEL_IMAGE_SIZE = 64
+
+
+@dataclass(frozen=True)
+class WorldModelConfig(GenerativeModelConfig):
+    r"""Shared base for *world-model* families (latent dynamics from pixels).
+
+    A world model learns an environment's transition function in a compact
+    latent space and generates futures there, never rendering a frame in
+    order to decide anything.  Every family in this group carries PlaNet's
+    recurrent state-space model — a deterministic path ``h`` beside a
+    stochastic latent ``s`` — and reads pixels through the same
+    convolutional stack, so the state geometry, the encoder width and the
+    variational bound's two knobs are declared once here.
+
+    What each family does *with* the learned dynamics is what separates
+    them, and that stays in the family config: PlaNet plans over them,
+    Dreamer trains an actor and a critic on them.
+
+    Args:
+        sample_size: Frame resolution.  Must be 64 — the shared
+            convolutional schedule lands on that and nothing else.
+        action_dim: Width of the action vector conditioning the
+            transition.  Genuinely task-dependent — the Control Suite
+            tasks range from 1 to 12 — so there is no paper value to
+            inherit and it must be set per use.
+        stoch_size: Width of the stochastic latent :math:`s`.
+        deter_size: Width of the deterministic latent :math:`h`.
+        hidden_size: Width of the hidden layer inside the RSSM heads.
+        cnn_depth: Channel width of the first encoder convolution; the
+            stack widens ``depth, 2*depth, 4*depth, 8*depth``.  A scale
+            knob, not a shape knob — the spatial schedule is fixed.
+        min_std: Floor on the latent standard deviation.
+        mean_only: Take the latent's mean instead of sampling it, making
+            the whole recurrence deterministic.
+        free_nats: The KL is clamped below at this value before it enters
+            the loss, so no gradient is spent driving an already-small
+            divergence lower.
+        kl_weight: Multiplier :math:`\beta` on the clamped KL.
+
+    Notes:
+        Every default here is a value **both** PlaNet (Hafner et al., 2019)
+        and Dreamer (Hafner et al., 2020) state.  Fields the two papers
+        specify differently — ``act_fn``, the reward head's width and depth
+        — are deliberately *not* hoisted, because this class would then
+        have to pick a number neither paper backs.  Promoting a field here
+        means the families were observed to agree, not that they could.
+    """
+
+    model_type: ClassVar[str] = "world_model"
+
+    sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE
+
+    action_dim: int = 1
+
+    stoch_size: int = 30
+    deter_size: int = 200
+    hidden_size: int = 200
+    cnn_depth: int = 32
+    min_std: float = 0.1
+    mean_only: bool = False
+
+    free_nats: float = 3.0
+    kl_weight: float = 1.0
+
+    @override
+    def __post_init__(self) -> None:
+        super().__post_init__()
+
+        size = self.sample_size
+        square = size if isinstance(size, int) else None
+        if isinstance(size, tuple):
+            square = size[0] if size[0] == size[1] else None
+        if square != WORLD_MODEL_IMAGE_SIZE:
+            raise ValueError(
+                f"the world models' convolutional schedule only produces "
+                f"{WORLD_MODEL_IMAGE_SIZE}x{WORLD_MODEL_IMAGE_SIZE} frames; got "
+                f"sample_size={self.sample_size}. Scale the model with "
+                f"cnn_depth / deter_size / stoch_size instead."
+            )
+
+        for name, value in (
+            ("action_dim", self.action_dim),
+            ("stoch_size", self.stoch_size),
+            ("deter_size", self.deter_size),
+            ("hidden_size", self.hidden_size),
+            ("cnn_depth", self.cnn_depth),
+        ):
+            if value <= 0:
+                raise ValueError(f"{name} must be positive, got {value}")
+        if self.min_std <= 0.0:
+            raise ValueError(f"min_std must be positive, got {self.min_std}")
+        if self.free_nats < 0.0:
+            raise ValueError(f"free_nats must be non-negative, got {self.free_nats}")
+        if self.kl_weight < 0.0:
+            raise ValueError(f"kl_weight must be non-negative, got {self.kl_weight}")
+
+    @property
+    def embed_size(self) -> int:
+        """Width of the encoder output — ``8 * cnn_depth`` over a 2x2 grid."""
+        return 8 * self.cnn_depth * 2 * 2
+
+    @property
+    def latent_size(self) -> int:
+        """Width of the full latent ``[h; s]`` the decoder and heads read."""
+        return self.deter_size + self.stoch_size

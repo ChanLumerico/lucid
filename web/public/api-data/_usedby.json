@@ -1722,6 +1722,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dreamer._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.flow_matching._model"
     },
     {
@@ -2724,6 +2728,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dreamer._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.planet._model"
     },
     {
@@ -2979,6 +2987,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer._pretrained"
     },
     {
       "kind": "module",
@@ -9642,11 +9654,19 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative._pixel_nets"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative._rssm"
     },
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer._model"
     },
     {
       "kind": "module",
@@ -9667,10 +9687,6 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.nice._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.planet._model"
     },
     {
       "kind": "module",
@@ -10025,6 +10041,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer._model"
     },
     {
       "kind": "module",

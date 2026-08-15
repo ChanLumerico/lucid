@@ -43,11 +43,13 @@ class HasModelType(Protocol):
     registry, ``config.json`` persistence, and ``AutoConfig`` dispatch.
 
     Intermediate abstract bases — ``ModelConfig`` itself,
-    ``LanguageModelConfig``, ``DiffusionModelConfig``,
-    ``GenerativeModelConfig`` — deliberately keep ``model_type ==
-    "base"``; they are not family Configs and won't satisfy stricter
-    protocols (e.g. :class:`ModelConfigProtocol`) that compose this
-    one.
+    ``LanguageModelConfig``, ``GenerativeModelConfig``,
+    ``DiffusionModelConfig``, ``NormalizingFlowConfig``,
+    ``WorldModelConfig`` — carry an identifier naming the *tier* rather
+    than a family (``"base"``, ``"generative"``, ``"diffusion"``,
+    ``"normalizing_flow"``, ``"world_model"``).  None of them is a family
+    Config, and none satisfies the stricter protocols (e.g.
+    :class:`ModelConfigProtocol`) that compose this one.
 
     Attributes
     ----------

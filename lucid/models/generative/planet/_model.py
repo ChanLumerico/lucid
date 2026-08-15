@@ -24,20 +24,18 @@ The spatial chains are ``64 -> 31 -> 14 -> 6 -> 2`` down and
 their targets exactly, which is why the kernel schedule is irregular and
 why :class:`PlaNetConfig` refuses any resolution other than 64.
 
-The convolutions only ever see 4-D input, so the time axis is folded into
-the batch before them and unfolded after — the encoder and decoder are
-per-frame, and only the RSSM is sequential.
+The encoder, decoder and heads themselves live in ``_pixel_nets.py``:
+Dreamer uses the same networks, so they are shared rather than copied.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, cast, override
 
 import lucid
-import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import ModelOutput
-from lucid.models._utils._generative import generative_activation
+from lucid.models.generative._pixel_nets import DenseHead, PixelDecoder, PixelEncoder
 from lucid.models.generative._rssm import RSSM, RSSMState, rssm_kl
 from lucid.models.generative.planet._config import PlaNetConfig
 
@@ -119,111 +117,6 @@ class PlaNetOutput(ModelOutput):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _fold(x: Tensor) -> tuple[Tensor, int, int]:
-    """``(B, T, ...) -> (B * T, ...)``, returning the split for :func:`_unfold`."""
-    b, t = int(x.shape[0]), int(x.shape[1])
-    rest = tuple(int(s) for s in x.shape[2:])
-    return x.reshape(b * t, *rest), b, t
-
-
-def _unfold(x: Tensor, b: int, t: int) -> Tensor:
-    """``(B * T, ...) -> (B, T, ...)``."""
-    rest = tuple(int(s) for s in x.shape[1:])
-    return x.reshape(b, t, *rest)
-
-
-@final
-class _PlaNetEncoder(nn.Module):
-    """Four stride-2 convolutions with 4x4 kernels, widening ``d, 2d, 4d, 8d``.
-
-    No padding: ``64 -> 31 -> 14 -> 6 -> 2``, so the flattened output is
-    ``8d * 2 * 2 = 32d`` — 1024 at the paper's ``cnn_depth=32``.
-    """
-
-    def __init__(self, config: PlaNetConfig) -> None:
-        super().__init__()
-        self._act_name = config.act_fn
-        d = config.cnn_depth
-        widths = (config.in_channels, d, 2 * d, 4 * d, 8 * d)
-        self.convs = nn.ModuleList(
-            [
-                nn.Conv2d(widths[i], widths[i + 1], kernel_size=4, stride=2)
-                for i in range(4)
-            ]
-        )
-        self.embed_size = config.embed_size
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        h, b, t = _fold(x)
-        for conv in self.convs:
-            h = generative_activation(self._act_name, cast(Tensor, conv(h)))
-        return _unfold(h.reshape(int(h.shape[0]), self.embed_size), b, t)
-
-
-@final
-class _PlaNetDecoder(nn.Module):
-    """Linear lift to a 1x1 grid, then four transposed convolutions.
-
-    Kernels ``5, 5, 6, 6`` at stride 2 take ``1 -> 5 -> 13 -> 30 -> 64``.
-    The last one is unactivated: its output is the reconstruction mean of a
-    unit-variance Gaussian, not a hidden layer.
-    """
-
-    def __init__(self, config: PlaNetConfig) -> None:
-        super().__init__()
-        self._act_name = config.act_fn
-        d = config.cnn_depth
-        self._lift_width = config.embed_size
-
-        self.lift = nn.Linear(config.latent_size, config.embed_size)
-        specs = (
-            (config.embed_size, 4 * d, 5),
-            (4 * d, 2 * d, 5),
-            (2 * d, d, 6),
-            (d, config.out_channels, 6),
-        )
-        self.deconvs = nn.ModuleList(
-            [
-                nn.ConvTranspose2d(cin, cout, kernel_size=k, stride=2)
-                for cin, cout, k in specs
-            ]
-        )
-
-    @override
-    def forward(self, feature: Tensor) -> Tensor:  # type: ignore[override]
-        h, b, t = _fold(feature)
-        h = cast(Tensor, self.lift(h))
-        h = h.reshape(int(h.shape[0]), self._lift_width, 1, 1)
-        last = len(self.deconvs) - 1
-        for i, deconv in enumerate(self.deconvs):
-            h = cast(Tensor, deconv(h))
-            if i != last:
-                h = generative_activation(self._act_name, h)
-        return _unfold(h, b, t)
-
-
-@final
-class _PlaNetRewardHead(nn.Module):
-    """Feed-forward mean of a unit-variance Gaussian over the reward."""
-
-    def __init__(self, config: PlaNetConfig) -> None:
-        super().__init__()
-        self._act_name = config.act_fn
-        widths = [config.latent_size] + [config.reward_hidden] * config.reward_layers
-        self.layers = nn.ModuleList(
-            [nn.Linear(widths[i], widths[i + 1]) for i in range(config.reward_layers)]
-        )
-        self.out = nn.Linear(config.reward_hidden, 1)
-
-    @override
-    def forward(self, feature: Tensor) -> Tensor:  # type: ignore[override]
-        h, b, t = _fold(feature)
-        for layer in self.layers:
-            h = generative_activation(self._act_name, cast(Tensor, layer(h)))
-        return cast(Tensor, self.out(h)).reshape(b, t)
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Direct model — encoder, dynamics, decoder, reward head; no objective
 # ─────────────────────────────────────────────────────────────────────────────
@@ -295,7 +188,7 @@ class PlaNetModel(PretrainedModel):
 
     def __init__(self, config: PlaNetConfig) -> None:
         super().__init__(config)
-        self.encoder = _PlaNetEncoder(config)
+        self.encoder = PixelEncoder(config.in_channels, config.cnn_depth, config.act_fn)
         self.rssm = RSSM(
             stoch_size=config.stoch_size,
             deter_size=config.deter_size,
@@ -305,8 +198,16 @@ class PlaNetModel(PretrainedModel):
             act_fn=config.act_fn,
             min_std=config.min_std,
         )
-        self.decoder = _PlaNetDecoder(config)
-        self.reward_head = _PlaNetRewardHead(config)
+        self.decoder = PixelDecoder(
+            config.latent_size, config.out_channels, config.cnn_depth, config.act_fn
+        )
+        self.reward_head = DenseHead(
+            config.latent_size,
+            config.reward_hidden,
+            config.reward_layers,
+            act_fn=config.act_fn,
+            squeeze=True,
+        )
         self._sample = not config.mean_only
 
     def encode(self, observations: Tensor) -> Tensor:

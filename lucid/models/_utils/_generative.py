@@ -528,7 +528,8 @@ def generative_activation(name: str, x: Tensor) -> Tensor:
     """Apply the activation referenced by a :data:`GenerativeActivation` literal.
 
     Args:
-        name: One of ``"silu"`` / ``"swish"`` / ``"relu"`` / ``"gelu"``.
+        name: One of ``"silu"`` / ``"swish"`` / ``"relu"`` / ``"gelu"`` /
+            ``"elu"``.
         x:    Input tensor (elementwise).
 
     Returns:
@@ -543,6 +544,8 @@ def generative_activation(name: str, x: Tensor) -> Tensor:
         return F.relu(x)
     if name == "gelu":
         return F.gelu(x, approximate="none")
+    if name == "elu":
+        return F.elu(x)
     raise ValueError(f"Unsupported generative activation {name!r}")
 
 
@@ -581,8 +584,7 @@ def make_sigma_schedule(
         raise ValueError(f"num_noise_levels must be positive, got {num_noise_levels}")
     if not 0.0 < sigma_min < sigma_max:
         raise ValueError(
-            f"require 0 < sigma_min < sigma_max, got "
-            f"min={sigma_min}, max={sigma_max}"
+            f"require 0 < sigma_min < sigma_max, got min={sigma_min}, max={sigma_max}"
         )
     if num_noise_levels == 1:
         return lucid.tensor([sigma_max], device=device)

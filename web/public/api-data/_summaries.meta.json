@@ -358,5 +358,7 @@
   "vqvae": "b7ea6f256032e4f1",
   "vqvae_gen": "b7ea6f256032e4f1",
   "planet": "32f8dd64b2eaa3a4",
-  "planet_world_model": "32f8dd64b2eaa3a4"
+  "planet_world_model": "32f8dd64b2eaa3a4",
+  "dreamer": "7eac9ab079bc19c2",
+  "dreamer_world_model": "7eac9ab079bc19c2"
 }

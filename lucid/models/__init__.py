@@ -66,6 +66,11 @@ from lucid.models.generative.planet import (
     PlaNetConfig, PlaNetModel, PlaNetForWorldModeling, PlaNetOutput,
     planet, planet_world_model,
 )
+# 2020 — Dreamer (Hafner et al.)
+from lucid.models.generative.dreamer import (
+    DreamerConfig, DreamerModel, DreamerForWorldModeling, DreamerOutput,
+    DreamerBehaviorOutput, dreamer, dreamer_world_model,
+)
 # 2020 — DDPM (Ho et al.)
 from lucid.models.generative.ddpm import (
     DDPMConfig, DDPMModel, DDPMForImageGeneration, DDPMUNet,
@@ -725,6 +730,9 @@ __all__ = [
     # ── Generative (2019) PlaNet ──────────────────────────────────────────────
     "PlaNetConfig", "PlaNetModel", "PlaNetForWorldModeling", "PlaNetOutput",
     "planet", "planet_world_model",
+    # ── Generative (2020) Dreamer ─────────────────────────────────────────────
+    "DreamerConfig", "DreamerModel", "DreamerForWorldModeling", "DreamerOutput",
+    "DreamerBehaviorOutput", "dreamer", "dreamer_world_model",
     # ── Generative (2020) DDPM ────────────────────────────────────────────────
     "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "DDPMUNet",
     "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",
