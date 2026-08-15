@@ -9,6 +9,10 @@ from lucid.models.generative.dreamer_v2._model import (
 )
 from lucid.models.generative.dreamer_v2._pretrained import (
     dreamer_v2,
+    dreamer_v2_atari,
+    dreamer_v2_atari_world_model,
+    dreamer_v2_dmc,
+    dreamer_v2_dmc_world_model,
     dreamer_v2_world_model,
 )
 
@@ -20,4 +24,8 @@ __all__ = [
     "DreamerV2BehaviorOutput",
     "dreamer_v2",
     "dreamer_v2_world_model",
+    "dreamer_v2_atari",
+    "dreamer_v2_atari_world_model",
+    "dreamer_v2_dmc",
+    "dreamer_v2_dmc_world_model",
 ]

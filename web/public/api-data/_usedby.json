@@ -10196,6 +10196,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2._dists"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.dreamer_v2._model"
     },
     {

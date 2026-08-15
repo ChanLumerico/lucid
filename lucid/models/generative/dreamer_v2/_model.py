@@ -26,7 +26,10 @@ from lucid.models.generative._pixel_nets import DenseHead, PixelDecoder, PixelEn
 from lucid.models.generative._returns import lambda_return
 from lucid.models.generative._rssm import RSSM, RSSMState, categorical_kl
 from lucid.models.generative.dreamer_v2._config import DreamerV2Config
-from lucid.models.generative.dreamer_v2._dists import TruncatedNormal
+from lucid.models.generative.dreamer_v2._dists import (
+    OneHotCategorical,
+    TruncatedNormal,
+)
 
 __all__ = [
     "DreamerV2Model",
@@ -179,16 +182,21 @@ class _Actor(nn.Module):
         action_dim: int,
         act_fn: str,
         min_std: float,
+        discrete: bool = False,
     ) -> None:
         """Initialise the actor. See the class docstring for parameters."""
         super().__init__()
         self.action_dim = action_dim
         self.min_std = min_std
+        self.discrete = discrete
+        # A one-hot needs one score per alternative; a truncated Gaussian
+        # needs a location and a scale per dimension.
+        width = action_dim if discrete else 2 * action_dim
         self.head = DenseHead(
-            latent_size, hidden, layers, out_features=2 * action_dim, act_fn=act_fn
+            latent_size, hidden, layers, out_features=width, act_fn=act_fn
         )
 
-    def distribution(self, feature: Tensor) -> TruncatedNormal:
+    def distribution(self, feature: Tensor) -> TruncatedNormal | OneHotCategorical:
         """Return the policy at a state.
 
         Parameters
@@ -198,15 +206,57 @@ class _Actor(nn.Module):
 
         Returns
         -------
-        TruncatedNormal
-            Over ``(B, T, action_dim)``, supported on ``[-1, 1]``.
+        TruncatedNormal or OneHotCategorical
+            A truncated Gaussian over ``[-1, 1]^action_dim`` for a
+            continuous action space, a one-hot over ``action_dim``
+            alternatives for a discrete one.
         """
         out = cast(Tensor, self.head(feature))
+        if self.discrete:
+            return OneHotCategorical(out)
         raw_mean = out[..., : self.action_dim]
         raw_std = out[..., self.action_dim :]
         mean = lucid.tanh(raw_mean)
         std = 2.0 * F.sigmoid(raw_std / 2.0) + self.min_std
         return TruncatedNormal(mean, std)
+
+    def log_prob(self, feature: Tensor, action: Tensor) -> Tensor:
+        """Log probability of an action, summed over the event.
+
+        Parameters
+        ----------
+        feature : Tensor
+            Latent state, ``(B, T, latent_size)``.
+        action : Tensor
+            ``(B, T, action_dim)``.
+
+        Returns
+        -------
+        Tensor
+            ``(B, T)``.  The event axis is summed here rather than by the
+            caller, because what counts as one event differs: a
+            continuous action is ``action_dim`` independent draws, a
+            one-hot is a single choice.
+        """
+        policy = self.distribution(feature)
+        value = policy.log_prob(action)
+        return value if self.discrete else value.sum(dim=-1)
+
+    def entropy(self, feature: Tensor) -> Tensor:
+        """Policy entropy at a state, summed over the event — ``(B, T)``.
+
+        Parameters
+        ----------
+        feature : Tensor
+            Latent state, ``(B, T, latent_size)``.
+
+        Returns
+        -------
+        Tensor
+            ``(B, T)``.
+        """
+        value = self.distribution(feature).entropy()
+        return value if self.discrete else value.sum(dim=-1)
 
     @override
     def forward(  # type: ignore[override]
@@ -390,6 +440,7 @@ class DreamerV2Model(PretrainedModel):
             config.action_dim,
             config.act_fn,
             config.actor_min_std,
+            discrete=config.action_space == "discrete",
         )
         self._sample = not config.mean_only
 
@@ -627,7 +678,7 @@ class DreamerV2ForWorldModeling(PretrainedModel):
         self._horizon = config.horizon
         self._discount = config.discount
         self._lambda = config.lambda_
-        self._actor_grad = config.actor_grad
+        self._actor_grad = config.resolved_actor_grad
         self._actor_grad_mix = config.actor_grad_mix
         self._actor_entropy = config.actor_entropy
         self._pcont_scale = config.pcont_scale
@@ -797,13 +848,13 @@ class DreamerV2ForWorldModeling(PretrainedModel):
         model = self.dreamer_v2
         horizon = self._horizon
         scored = states.map(lambda x: x[:, : horizon - 1])
-        policy = model.actor.distribution(scored.feature.detach())
+        feature = scored.feature.detach()
         objective = target[:, 1:]
 
         if self._actor_grad != "dynamics":
             baseline = model.predict_value(scored, target=True)
             advantage = (objective - baseline).detach()
-            log_prob = policy.log_prob(actions[:, 1:horizon].detach()).sum(dim=-1)
+            log_prob = model.actor.log_prob(feature, actions[:, 1:horizon].detach())
             score = log_prob * advantage
             objective = (
                 score
@@ -812,7 +863,7 @@ class DreamerV2ForWorldModeling(PretrainedModel):
                 + (1.0 - self._actor_grad_mix) * score
             )
 
-        entropy = policy.entropy().sum(dim=-1)
+        entropy = model.actor.entropy(feature)
         objective = objective + self._actor_entropy * entropy
         actor_loss = -(weight[:, : horizon - 1] * objective).mean()
         return actor_loss, entropy.mean()

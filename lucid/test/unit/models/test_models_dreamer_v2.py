@@ -37,7 +37,10 @@ from lucid.models import (
     is_model,
     list_models,
 )
-from lucid.models.generative.dreamer_v2._dists import TruncatedNormal
+from lucid.models.generative.dreamer_v2._dists import (
+    OneHotCategorical,
+    TruncatedNormal,
+)
 from lucid.models.generative.dreamer_v2._model import balanced_kl
 
 
@@ -70,7 +73,11 @@ class TestDreamerV2Config:
         assert (cfg.deter_size, cfg.hidden_size, cfg.cnn_depth) == (1024, 1024, 48)
         assert cfg.kl_balance == 0.8 and cfg.free_nats == 0.0
         assert (cfg.actor_layers, cfg.actor_hidden) == (4, 400)
-        assert cfg.pcont is True and cfg.actor_grad == "dynamics"
+        assert cfg.pcont is True
+        # "auto" is what the released config ships; it resolves to the
+        # analytic path here because the default action space is a box.
+        assert cfg.actor_grad == "auto"
+        assert cfg.resolved_actor_grad == "dynamics"
 
     def test_latent_is_the_flattened_grid(self) -> None:
         cfg = DreamerV2Config(action_dim=6)
@@ -505,17 +512,20 @@ class TestTrainingStep:
     def test_losses_fall_over_a_short_run(self) -> None:
         lucid.manual_seed(0)
         model = DreamerV2ForWorldModeling(_tiny_cfg(horizon=3))
+        # 6e-4, not the released 1e-4: twelve steps is far short of what
+        # the published rate is set for, and this test asks only whether
+        # the losses move in the right direction at all.
         optimisers = [
-            optim.Adam(model.world_parameters(), lr=1e-4),
+            optim.Adam(model.world_parameters(), lr=6e-4),
             optim.Adam(model.value_parameters(), lr=2e-4),
-            optim.Adam(model.actor_parameters(), lr=8e-5),
+            optim.Adam(model.actor_parameters(), lr=8e-4),
         ]
         obs = lucid.rand((2, 4, 3, 64, 64))
         actions = lucid.rand((2, 4, 2)) * 2 - 1
         rewards = obs.reshape(2, 4, -1).mean(dim=-1) * 10.0
 
         first = last = None
-        for step in range(12):
+        for step in range(20):
             out = model(obs, actions, rewards)
             pair = (float(out.recon_loss.item()), float(out.reward_loss.item()))
             first = pair if step == 0 else first
@@ -527,6 +537,145 @@ class TestTrainingStep:
 
         assert last[0] < first[0], "reconstruction did not improve"
         assert last[1] < first[1], "reward prediction did not improve"
+
+
+class TestOneHotCategorical:
+    """The discrete policy — Atari has buttons, not a box."""
+
+    def test_sample_is_one_hot(self) -> None:
+        drawn = OneHotCategorical(lucid.randn((2, 3, 5))).rsample()
+        assert float((drawn.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
+
+    def test_mode_is_one_hot(self) -> None:
+        dist = OneHotCategorical(lucid.randn((2, 3, 5)))
+        assert float((dist.mode.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
+
+    def test_entropy_at_the_uniform_point(self) -> None:
+        dist = OneHotCategorical(lucid.zeros((2, 3, 4)))
+        assert abs(float(dist.entropy().mean().item()) - math.log(4.0)) < 1e-5
+
+    def test_log_prob_matches_a_hand_computation(self) -> None:
+        logits = lucid.tensor([[[2.0, 0.0, 0.0, 0.0]]])
+        action = lucid.tensor([[[1.0, 0.0, 0.0, 0.0]]])
+        expected = math.log(math.exp(2.0) / (math.exp(2.0) + 3.0))
+        got = float(OneHotCategorical(logits).log_prob(action).item())
+        assert abs(got - expected) < 1e-5
+
+    def test_straight_through_carries_gradient(self) -> None:
+        """Weighted, not summed — a one-hot's own sum is always 1.
+
+        ``rsample().sum()`` has zero gradient by construction, so that
+        check would pass on a sampler with the estimator removed.
+        """
+        logits = lucid.zeros((2, 4), requires_grad=True)
+        weights = lucid.randn((2, 4))
+        (OneHotCategorical(logits).rsample() * weights).sum().backward()
+        assert float(logits.grad.abs().sum().item()) > 0
+
+    def test_the_naive_check_really_would_pass_on_nothing(self) -> None:
+        """Guards the test above by showing why it is written that way."""
+        logits = lucid.zeros((2, 4), requires_grad=True)
+        OneHotCategorical(logits).rsample().sum().backward()
+        assert float(logits.grad.abs().sum().item()) < 1e-6
+
+    def test_log_prob_carries_gradient(self) -> None:
+        """The REINFORCE path, which is what Atari actually trains on."""
+        logits = lucid.zeros((2, 4), requires_grad=True)
+        action = lucid.tensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]])
+        OneHotCategorical(logits).log_prob(action).sum().backward()
+        assert float(logits.grad.abs().sum().item()) > 0
+
+
+class TestDiscreteActionSpace:
+    def _discrete(self, **overrides: object) -> DreamerV2ForWorldModeling:
+        return DreamerV2ForWorldModeling(
+            _tiny_cfg(action_space="discrete", action_dim=4, **overrides)
+        )
+
+    def test_auto_resolves_the_way_the_reference_does(self) -> None:
+        assert DreamerV2Config(action_dim=2).resolved_actor_grad == "dynamics"
+        assert (
+            DreamerV2Config(action_dim=4, action_space="discrete").resolved_actor_grad
+            == "reinforce"
+        )
+
+    def test_an_explicit_choice_wins(self) -> None:
+        cfg = DreamerV2Config(action_dim=4, action_space="discrete", actor_grad="both")
+        assert cfg.resolved_actor_grad == "both"
+
+    def test_imagined_actions_are_one_hot(self) -> None:
+        model = self._discrete()
+        out = model(
+            lucid.randn((2, 4, 3, 64, 64)),
+            lucid.randn((2, 4, 4)),
+            lucid.randn((2, 4)),
+        )
+        assert out.behavior is not None
+        drawn = out.behavior.imagined_action
+        assert drawn.shape == (8, 4, 4)
+        assert float((drawn.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
+
+    def test_the_actor_still_trains(self) -> None:
+        model = self._discrete()
+        out = model(
+            lucid.randn((2, 4, 3, 64, 64)),
+            lucid.randn((2, 4, 4)),
+            lucid.randn((2, 4)),
+        )
+        assert out.behavior is not None
+        model.zero_grad()
+        out.behavior.actor_loss.backward()
+        reached = sum(
+            float(p.grad.abs().sum().item())
+            for p in model.actor_parameters()
+            if p.grad is not None
+        )
+        assert reached > 0
+
+    def test_the_head_is_narrower(self) -> None:
+        """One score per action, not a location and a scale per dimension."""
+        discrete = DreamerV2Model(_tiny_cfg(action_space="discrete", action_dim=4))
+        continuous = DreamerV2Model(_tiny_cfg(action_dim=4))
+        assert int(discrete.actor.head.out.weight.shape[0]) == 4
+        assert int(continuous.actor.head.out.weight.shape[0]) == 8
+
+
+class TestTaskConfigurations:
+    """The paper's two columns, as the released implementation writes them."""
+
+    def test_atari(self) -> None:
+        cfg = create_model("dreamer_v2_atari", action_dim=18).config
+        assert (cfg.deter_size, cfg.hidden_size) == (600, 600)
+        assert (cfg.kl_weight, cfg.discount) == (0.1, 0.999)
+        assert cfg.pcont is True and cfg.pcont_scale == 5.0
+        assert cfg.actor_entropy == 1e-3
+        assert cfg.action_space == "discrete"
+        assert cfg.resolved_actor_grad == "reinforce"
+
+    def test_dmc(self) -> None:
+        cfg = create_model("dreamer_v2_dmc", action_dim=6).config
+        assert (cfg.deter_size, cfg.hidden_size) == (200, 200)
+        assert (cfg.kl_weight, cfg.discount) == (1.0, 0.99)
+        assert cfg.pcont is False
+        assert cfg.actor_entropy == 1e-4
+        assert cfg.action_space == "continuous"
+
+    def test_defaults_are_neither(self) -> None:
+        """The base factory is the released ``defaults`` block, not a task."""
+        cfg = create_model("dreamer_v2", action_dim=6).config
+        assert cfg.deter_size == 1024 and cfg.kl_weight == 1.0
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "dreamer_v2_atari",
+            "dreamer_v2_atari_world_model",
+            "dreamer_v2_dmc",
+            "dreamer_v2_dmc_world_model",
+        ],
+    )
+    def test_registered(self, name: str) -> None:
+        assert is_model(name) and name in list_models()
 
 
 class TestRegistry:

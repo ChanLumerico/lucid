@@ -20,7 +20,13 @@ from lucid.models.generative._config import GenerativeActivation, WorldModelConf
 #: How the actor's gradient is estimated.  ``"dynamics"`` backpropagates
 #: through the learned transition, as Dreamer does; ``"reinforce"`` uses the
 #: score-function estimator; ``"both"`` interpolates between them.
-ActorGradient = Literal["dynamics", "reinforce", "both"]
+#: ``"auto"`` resolves the way the released implementation does — the
+#: analytic path for a continuous action, the score function for a discrete
+#: one, where there is no path to differentiate.
+ActorGradient = Literal["auto", "dynamics", "reinforce", "both"]
+
+#: Whether actions are a bounded vector or a choice among alternatives.
+ActionSpace = Literal["continuous", "discrete"]
 
 
 @model_family_meta(
@@ -129,12 +135,18 @@ class DreamerV2Config(WorldModelConfig):
         Reward discount :math:`\gamma`.
     lambda_ : float, default=0.95
         TD(:math:`\lambda`) weighting.
-    actor_grad : {"dynamics", "reinforce", "both"}, default="dynamics"
-        How the actor's gradient is estimated.  The released
-        implementation's ``auto`` resolves to ``"dynamics"`` for
-        continuous actions and ``"reinforce"`` for discrete ones; since
-        this family emits continuous actions, that resolution is the
-        default here.
+    action_space : {"continuous", "discrete"}, default="continuous"
+        What an action *is*.  ``"continuous"`` gives a truncated Gaussian
+        over ``[-1, 1]^action_dim``, which is the Control Suite;
+        ``"discrete"`` gives a one-hot over ``action_dim`` alternatives,
+        which is Atari.  It also decides how the actor's gradient is
+        estimated when ``actor_grad`` is left on ``"auto"``.
+    actor_grad : {"auto", "dynamics", "reinforce", "both"}, default="auto"
+        How the actor's gradient is estimated.  ``"auto"`` resolves as the
+        released implementation does: the analytic path for a continuous
+        action, the score function for a discrete one, where a one-hot
+        offers nothing to differentiate through except a biased
+        straight-through estimate.
     actor_grad_mix : float, default=0.1
         Weight on the dynamics term when ``actor_grad="both"``.
     actor_entropy : float, default=2e-3
@@ -223,7 +235,8 @@ class DreamerV2Config(WorldModelConfig):
     discount: float = 0.99
     lambda_: float = 0.95
 
-    actor_grad: ActorGradient = "dynamics"
+    action_space: ActionSpace = "continuous"
+    actor_grad: ActorGradient = "auto"
     actor_grad_mix: float = 0.1
     actor_entropy: float = 2e-3
     actor_min_std: float = 0.1
@@ -280,6 +293,21 @@ class DreamerV2Config(WorldModelConfig):
             raise ValueError(
                 f"pcont_scale must be non-negative, got {self.pcont_scale}"
             )
+
+    @property
+    def resolved_actor_grad(self) -> ActorGradient:
+        """``actor_grad`` with ``"auto"`` settled against the action space.
+
+        Returns
+        -------
+        {"dynamics", "reinforce", "both"}
+            ``"reinforce"`` for a discrete action space, ``"dynamics"``
+            for a continuous one, when ``actor_grad`` is ``"auto"``;
+            otherwise whatever was asked for.
+        """
+        if self.actor_grad != "auto":
+            return self.actor_grad
+        return "reinforce" if self.action_space == "discrete" else "dynamics"
 
     @property
     def stoch_width(self) -> int:

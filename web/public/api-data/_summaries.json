@@ -302944,5 +302944,1037 @@
         ]
       }
     ]
+  },
+  "dreamer_v2_atari": {
+    "name": "DreamerV2Model",
+    "type": "DreamerV2Model",
+    "params": 23363176,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "encoder",
+        "type": "PixelEncoder",
+        "params": 1551312,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "convs",
+            "type": "ModuleList",
+            "params": 1551312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 2352,
+                "own_params": 2352,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Conv2d",
+                "params": 73824,
+                "own_params": 73824,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 295104,
+                "own_params": 295104,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 1180032,
+                "own_params": 1180032,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "rssm",
+        "type": "RSSM",
+        "params": 5652848,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "pre_cell",
+            "type": "Linear",
+            "params": 615600,
+            "own_params": 615600,
+            "children": []
+          },
+          {
+            "name": "cell",
+            "type": "GRUCell",
+            "params": 2163600,
+            "own_params": 2163600,
+            "children": []
+          },
+          {
+            "name": "prior_head",
+            "type": "Sequential",
+            "params": 976024,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Linear",
+                "params": 360600,
+                "own_params": 360600,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 615424,
+                "own_params": 615424,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "posterior_head",
+            "type": "Sequential",
+            "params": 1897624,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Linear",
+                "params": 1282200,
+                "own_params": 1282200,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 615424,
+                "own_params": 615424,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "decoder",
+        "type": "PixelDecoder",
+        "params": 10501011,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "lift",
+            "type": "Linear",
+            "params": 2496000,
+            "own_params": 2496000,
+            "children": []
+          },
+          {
+            "name": "deconvs",
+            "type": "ModuleList",
+            "params": 8005011,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "ConvTranspose2d",
+                "params": 7372992,
+                "own_params": 7372992,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ConvTranspose2d",
+                "params": 460896,
+                "own_params": 460896,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ConvTranspose2d",
+                "params": 165936,
+                "own_params": 165936,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ConvTranspose2d",
+                "params": 5187,
+                "own_params": 5187,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "reward_head",
+        "type": "DenseHead",
+        "params": 1131601,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "layers",
+            "type": "ModuleList",
+            "params": 1131200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Linear",
+                "params": 650000,
+                "own_params": 650000,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 160400,
+                "own_params": 160400,
+                "children": [],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "out",
+            "type": "Linear",
+            "params": 401,
+            "own_params": 401,
+            "children": []
+          }
+        ],
+        "repeat": 4
+      },
+      {
+        "name": "actor",
+        "type": "_Actor",
+        "params": 1131601,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "head",
+            "type": "DenseHead",
+            "params": 1131601,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 1131200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 650000,
+                    "own_params": 650000,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 160400,
+                    "own_params": 160400,
+                    "children": [],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 401,
+                "own_params": 401,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dreamer_v2_atari_world_model": {
+    "name": "DreamerV2ForWorldModeling",
+    "type": "DreamerV2ForWorldModeling",
+    "params": 23363176,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "dreamer_v2",
+        "type": "DreamerV2Model",
+        "params": 23363176,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "PixelEncoder",
+            "params": 1551312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "convs",
+                "type": "ModuleList",
+                "params": 1551312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 2352,
+                    "own_params": 2352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 73824,
+                    "own_params": 73824,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 295104,
+                    "own_params": 295104,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 1180032,
+                    "own_params": 1180032,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rssm",
+            "type": "RSSM",
+            "params": 5652848,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pre_cell",
+                "type": "Linear",
+                "params": 615600,
+                "own_params": 615600,
+                "children": []
+              },
+              {
+                "name": "cell",
+                "type": "GRUCell",
+                "params": 2163600,
+                "own_params": 2163600,
+                "children": []
+              },
+              {
+                "name": "prior_head",
+                "type": "Sequential",
+                "params": 976024,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 360600,
+                    "own_params": 360600,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 615424,
+                    "own_params": 615424,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "posterior_head",
+                "type": "Sequential",
+                "params": 1897624,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 1282200,
+                    "own_params": 1282200,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 615424,
+                    "own_params": 615424,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder",
+            "type": "PixelDecoder",
+            "params": 10501011,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lift",
+                "type": "Linear",
+                "params": 2496000,
+                "own_params": 2496000,
+                "children": []
+              },
+              {
+                "name": "deconvs",
+                "type": "ModuleList",
+                "params": 8005011,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 7372992,
+                    "own_params": 7372992,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 460896,
+                    "own_params": 460896,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ConvTranspose2d",
+                    "params": 165936,
+                    "own_params": 165936,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ConvTranspose2d",
+                    "params": 5187,
+                    "own_params": 5187,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "reward_head",
+            "type": "DenseHead",
+            "params": 1131601,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 1131200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 650000,
+                    "own_params": 650000,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 160400,
+                    "own_params": 160400,
+                    "children": [],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 401,
+                "own_params": 401,
+                "children": []
+              }
+            ],
+            "repeat": 4
+          },
+          {
+            "name": "actor",
+            "type": "_Actor",
+            "params": 1131601,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "head",
+                "type": "DenseHead",
+                "params": 1131601,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 1131200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 650000,
+                        "own_params": 650000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 160400,
+                        "own_params": 160400,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 401,
+                    "own_params": 401,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dreamer_v2_dmc": {
+    "name": "DreamerV2Model",
+    "type": "DreamerV2Model",
+    "params": 16570376,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "encoder",
+        "type": "PixelEncoder",
+        "params": 1551312,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "convs",
+            "type": "ModuleList",
+            "params": 1551312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Conv2d",
+                "params": 2352,
+                "own_params": 2352,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Conv2d",
+                "params": 73824,
+                "own_params": 73824,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "Conv2d",
+                "params": 295104,
+                "own_params": 295104,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "Conv2d",
+                "params": 1180032,
+                "own_params": 1180032,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "rssm",
+        "type": "RSSM",
+        "params": 1245648,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "pre_cell",
+            "type": "Linear",
+            "params": 205200,
+            "own_params": 205200,
+            "children": []
+          },
+          {
+            "name": "cell",
+            "type": "GRUCell",
+            "params": 241200,
+            "own_params": 241200,
+            "children": []
+          },
+          {
+            "name": "prior_head",
+            "type": "Sequential",
+            "params": 246024,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Linear",
+                "params": 40200,
+                "own_params": 40200,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 205824,
+                "own_params": 205824,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "posterior_head",
+            "type": "Sequential",
+            "params": 553224,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Linear",
+                "params": 347400,
+                "own_params": 347400,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 205824,
+                "own_params": 205824,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "decoder",
+        "type": "PixelDecoder",
+        "params": 9886611,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "lift",
+            "type": "Linear",
+            "params": 1881600,
+            "own_params": 1881600,
+            "children": []
+          },
+          {
+            "name": "deconvs",
+            "type": "ModuleList",
+            "params": 8005011,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "ConvTranspose2d",
+                "params": 7372992,
+                "own_params": 7372992,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "ConvTranspose2d",
+                "params": 460896,
+                "own_params": 460896,
+                "children": []
+              },
+              {
+                "name": "2",
+                "type": "ConvTranspose2d",
+                "params": 165936,
+                "own_params": 165936,
+                "children": []
+              },
+              {
+                "name": "3",
+                "type": "ConvTranspose2d",
+                "params": 5187,
+                "own_params": 5187,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "reward_head",
+        "type": "DenseHead",
+        "params": 971601,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "layers",
+            "type": "ModuleList",
+            "params": 971200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Linear",
+                "params": 490000,
+                "own_params": 490000,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 160400,
+                "own_params": 160400,
+                "children": [],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "out",
+            "type": "Linear",
+            "params": 401,
+            "own_params": 401,
+            "children": []
+          }
+        ],
+        "repeat": 3
+      },
+      {
+        "name": "actor",
+        "type": "_Actor",
+        "params": 972002,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "head",
+            "type": "DenseHead",
+            "params": 972002,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 971200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 490000,
+                    "own_params": 490000,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 160400,
+                    "own_params": 160400,
+                    "children": [],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 802,
+                "own_params": 802,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "dreamer_v2_dmc_world_model": {
+    "name": "DreamerV2ForWorldModeling",
+    "type": "DreamerV2ForWorldModeling",
+    "params": 16570376,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "dreamer_v2",
+        "type": "DreamerV2Model",
+        "params": 16570376,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "PixelEncoder",
+            "params": 1551312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "convs",
+                "type": "ModuleList",
+                "params": 1551312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 2352,
+                    "own_params": 2352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 73824,
+                    "own_params": 73824,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 295104,
+                    "own_params": 295104,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 1180032,
+                    "own_params": 1180032,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rssm",
+            "type": "RSSM",
+            "params": 1245648,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pre_cell",
+                "type": "Linear",
+                "params": 205200,
+                "own_params": 205200,
+                "children": []
+              },
+              {
+                "name": "cell",
+                "type": "GRUCell",
+                "params": 241200,
+                "own_params": 241200,
+                "children": []
+              },
+              {
+                "name": "prior_head",
+                "type": "Sequential",
+                "params": 246024,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 40200,
+                    "own_params": 40200,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 205824,
+                    "own_params": 205824,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "posterior_head",
+                "type": "Sequential",
+                "params": 553224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 347400,
+                    "own_params": 347400,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 205824,
+                    "own_params": 205824,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder",
+            "type": "PixelDecoder",
+            "params": 9886611,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lift",
+                "type": "Linear",
+                "params": 1881600,
+                "own_params": 1881600,
+                "children": []
+              },
+              {
+                "name": "deconvs",
+                "type": "ModuleList",
+                "params": 8005011,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 7372992,
+                    "own_params": 7372992,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 460896,
+                    "own_params": 460896,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ConvTranspose2d",
+                    "params": 165936,
+                    "own_params": 165936,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ConvTranspose2d",
+                    "params": 5187,
+                    "own_params": 5187,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "reward_head",
+            "type": "DenseHead",
+            "params": 971601,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 971200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 490000,
+                    "own_params": 490000,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 160400,
+                    "own_params": 160400,
+                    "children": [],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 401,
+                "own_params": 401,
+                "children": []
+              }
+            ],
+            "repeat": 3
+          },
+          {
+            "name": "actor",
+            "type": "_Actor",
+            "params": 972002,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "head",
+                "type": "DenseHead",
+                "params": 972002,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 971200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 490000,
+                        "own_params": 490000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 160400,
+                        "own_params": 160400,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 802,
+                    "own_params": 802,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 }
