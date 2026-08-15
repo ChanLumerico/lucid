@@ -515,12 +515,13 @@ class DreamerModel(PretrainedModel):
         return cast(Tensor, self.pcont_head(state.feature))
 
     def act(self, state: RSSMState, *, sample: bool = True) -> Tensor:
-        """Propose actions for a state — ``(B, T, action_dim)`` in ``(-1, 1)``.
+        """Propose actions for a state, bounded to ``(-1, 1)``.
 
         Parameters
         ----------
         state : RSSMState
-            The belief to act from.
+            The belief to act from, either a sequence ``(B, T, ·)`` or a
+            single step ``(B, ·)``.
         sample : bool, default=True, keyword-only
             Draw from the policy (``True``) or take its squashed mean
             (``False``).
@@ -528,9 +529,23 @@ class DreamerModel(PretrainedModel):
         Returns
         -------
         Tensor
-            Actions bounded to ``(-1, 1)``.
+            ``(B, T, action_dim)`` for a sequence, ``(B, action_dim)`` for
+            a single step — the rank that went in.
+
+        Notes
+        -----
+        Both ranks are accepted because acting is inherently a single-step
+        operation: an agent choosing its next move holds one belief, not a
+        sequence of them.  Demanding a length-1 time axis at the call site
+        would be an artifact of how the heads are batched, and every
+        caller would strip it again immediately.
         """
-        return cast(Tensor, self.actor(state.feature, sample=sample))
+        feature = state.feature
+        stepwise = feature.ndim == 2
+        if stepwise:
+            feature = feature.reshape(int(feature.shape[0]), 1, -1)
+        action = cast(Tensor, self.actor(feature, sample=sample))
+        return action[:, 0] if stepwise else action
 
     def imagine(
         self, state: RSSMState, horizon: int, *, sample: bool | None = None
