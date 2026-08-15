@@ -648,8 +648,102 @@ class TestRegistry:
 
 
 class TestTrainingStep:
+    """The end-to-end contract: three losses, three groups, one graph.
+
+    Both hand-rolled ways of spending these losses are wrong, so the
+    tests below pin what ``backward`` must produce rather than merely
+    that it runs.
+    """
+
+    KW = dict(mean_only=True)
+
+    def _reference_grads(
+        self, weights: object, batch: tuple[lucid.Tensor, ...]
+    ) -> dict[str, list[object]]:
+        """Each loss backpropagated alone, in its own model, on one batch."""
+        picks = {
+            "world": lambda o: o.loss,
+            "actor": lambda o: o.behavior.actor_loss,
+            "value": lambda o: o.behavior.value_loss,
+        }
+        out: dict[str, list[object]] = {}
+        for name, pick in picks.items():
+            model = DreamerForWorldModeling(_tiny_cfg(**self.KW))
+            model.load_state_dict(weights)
+            result = model(*batch)
+            model.zero_grad()
+            pick(result).backward()
+            group = getattr(model, f"{name}_parameters")()
+            out[name] = [None if p.grad is None else p.grad.clone() for p in group]
+        return out
+
+    def test_matches_three_independent_backward_passes(self) -> None:
+        model = DreamerForWorldModeling(_tiny_cfg(**self.KW))
+        weights = model.state_dict()
+        # The same batch on both sides — different data would produce
+        # different gradients and the comparison would mean nothing.
+        batch = _batch()
+        reference = self._reference_grads(weights, batch)
+
+        out = model(*batch)
+        model.backward(out)
+
+        for name, expected in reference.items():
+            got = getattr(model, f"{name}_parameters")()
+            assert any(p.grad is not None for p in got), f"{name} got no gradient"
+            for want, param in zip(expected, got):
+                if want is None:
+                    continue
+                assert float((want - param.grad).abs().max().item()) < 1e-6, name
+
+    def test_world_group_is_not_contaminated_by_the_actor(self) -> None:
+        """The failure this method exists to prevent, asserted directly."""
+        model = DreamerForWorldModeling(_tiny_cfg(**self.KW))
+        weights = model.state_dict()
+        batch = _batch()
+
+        alone = DreamerForWorldModeling(_tiny_cfg(**self.KW))
+        alone.load_state_dict(weights)
+        result = alone(*batch)
+        alone.zero_grad()
+        result.loss.backward()
+        clean = [
+            float(p.grad.abs().sum().item())
+            for p in alone.dreamer.rssm.parameters()
+            if p.grad is not None
+        ]
+
+        out = model(*batch)
+        model.backward(out)
+        via = [
+            float(p.grad.abs().sum().item())
+            for p in model.dreamer.rssm.parameters()
+            if p.grad is not None
+        ]
+        assert clean and len(clean) == len(via)
+        for a, b in zip(clean, via):
+            assert abs(a - b) < 1e-6
+
+    def test_naive_accumulation_really_would_contaminate(self) -> None:
+        """Guards the test above — otherwise it proves nothing."""
+        model = DreamerForWorldModeling(_tiny_cfg(**self.KW))
+        out = model(*_batch())
+        params = [p for p in model.dreamer.rssm.parameters()]
+
+        model.zero_grad()
+        out.loss.backward(retain_graph=True)
+        clean = [float(p.grad.abs().sum().item()) for p in params if p.grad is not None]
+        out.behavior.actor_loss.backward(retain_graph=True)
+        mixed = [float(p.grad.abs().sum().item()) for p in params if p.grad is not None]
+        assert any(abs(a - b) > 1e-9 for a, b in zip(clean, mixed))
+
+    def test_rejects_an_output_without_losses(self) -> None:
+        wrapper = DreamerForWorldModeling(_tiny_cfg())
+        plain = DreamerModel(_tiny_cfg())
+        with pytest.raises(ValueError):
+            wrapper.backward(plain(*_batch()[:2]))
+
     def test_three_optimisers_move_their_own_group(self) -> None:
-        """The end-to-end contract: each loss updates its group and no other."""
         import lucid.optim as optim
 
         model = DreamerForWorldModeling(_tiny_cfg())
@@ -658,29 +752,45 @@ class TestTrainingStep:
             "actor": model.actor_parameters(),
             "value": model.value_parameters(),
         }
-        optimisers = {k: optim.Adam(v, lr=1e-2) for k, v in groups.items()}
         before = {k: [p.data.clone() for p in v] for k, v in groups.items()}
+        optimisers = {k: optim.Adam(v, lr=1e-2) for k, v in groups.items()}
 
         out = model(*_batch())
-        assert out.loss is not None and out.behavior is not None
+        model.backward(out)
         for opt in optimisers.values():
-            opt.zero_grad()
-        out.loss.backward()
-        optimisers["world"].step()
+            opt.step()
 
-        for opt in optimisers.values():
-            opt.zero_grad()
-        out2 = model(*_batch())
-        assert out2.behavior is not None
-        out2.behavior.actor_loss.backward()
-        optimisers["actor"].step()
-
-        moved = {
-            name: any(
+        for name, params in groups.items():
+            moved = any(
                 float(abs(p.data - old).sum()) > 0
-                for p, old in zip(groups[name], before[name])
+                for p, old in zip(params, before[name])
             )
-            for name in groups
-        }
-        assert moved["world"] and moved["actor"]
-        assert not moved["value"], "the critic moved without its own step"
+            assert moved, f"{name} did not move"
+
+    def test_losses_fall_over_a_short_run(self) -> None:
+        """A few steps on fixed data must reduce what the world model fits."""
+        import lucid.optim as optim
+
+        lucid.manual_seed(0)
+        model = DreamerForWorldModeling(_tiny_cfg(horizon=3))
+        optimisers = [
+            optim.Adam(model.world_parameters(), lr=6e-4),
+            optim.Adam(model.value_parameters(), lr=8e-5),
+            optim.Adam(model.actor_parameters(), lr=8e-5),
+        ]
+        obs = lucid.rand((2, 3, 3, 64, 64))
+        actions = lucid.rand((2, 3, 2)) * 2 - 1
+        rewards = obs.reshape(2, 3, -1).mean(dim=-1) * 10.0
+
+        first = last = None
+        for step in range(12):
+            out = model(obs, actions, rewards)
+            if step == 0:
+                first = (float(out.recon_loss.item()), float(out.reward_loss.item()))
+            last = (float(out.recon_loss.item()), float(out.reward_loss.item()))
+            model.backward(out)
+            for opt in optimisers:
+                opt.step()
+
+        assert last[0] < first[0], "reconstruction did not improve"
+        assert last[1] < first[1], "reward prediction did not improve"

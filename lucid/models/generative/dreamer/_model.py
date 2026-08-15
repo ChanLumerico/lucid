@@ -659,6 +659,11 @@ class DreamerForWorldModeling(PretrainedModel):
     :meth:`actor_parameters` and :meth:`value_parameters`, which partition
     the model exactly.
 
+    Use :meth:`backward` to fill those groups' gradients.  The losses share
+    a graph, so backpropagating them by hand either contaminates the world
+    model or raises, depending on the order chosen — :meth:`backward` is
+    the whole training step bar the ``step`` calls.
+
     Imagination starts from **detached** posterior states, so no behaviour
     gradient reaches the encoder or the filtering that produced them.
     Within the horizon, though, the actor's gradient deliberately flows
@@ -743,6 +748,81 @@ class DreamerForWorldModeling(PretrainedModel):
             Trained by ``value_loss`` alone.
         """
         return list(self.dreamer.value_head.parameters())
+
+    def backward(self, output: DreamerOutput) -> None:
+        r"""Give every parameter group the gradient of *its own* loss.
+
+        The three losses share one graph, and that makes the obvious ways
+        of using them both wrong:
+
+        - Backward all three and then step — every world-model parameter
+          ends up carrying the actor's gradient as well as its own, so the
+          world model quietly descends the policy's objective.  Nothing
+          errors; the algorithm is simply no longer Dreamer's.
+        - Backward-then-step each in turn — the first ``step`` mutates
+          parameters that the imagination's deeper graph still needs, and
+          the next ``backward`` raises.  It happens to work if the actor
+          goes first, which is not a property anyone should have to know.
+
+        So this does it once, correctly: each loss is backpropagated in
+        isolation, its group's gradients are kept, and the rest are
+        discarded.  Afterwards every group holds exactly its own gradient
+        and the three optimisers may ``step`` in any order.
+
+        Parameters
+        ----------
+        output : DreamerOutput
+            The result of :meth:`forward`, with ``behavior`` populated.
+
+        Raises
+        ------
+        ValueError
+            If ``output`` carries no losses — it came from
+            :class:`DreamerModel` rather than from this wrapper.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> import lucid.optim as optim
+        >>> from lucid.models import dreamer_world_model
+        >>> model = dreamer_world_model(action_dim=2, cnn_depth=2,
+        ...     stoch_size=4, deter_size=8, hidden_size=8, actor_hidden=8,
+        ...     value_hidden=8, reward_hidden=8, horizon=3)
+        >>> opts = [optim.Adam(g, lr=1e-4) for g in (model.world_parameters(),
+        ...     model.actor_parameters(), model.value_parameters())]
+        >>> out = model(lucid.randn((1, 3, 3, 64, 64)),
+        ...             lucid.randn((1, 3, 2)), lucid.randn((1, 3)))
+        >>> model.backward(out)
+        >>> for opt in opts:
+        ...     opt.step()
+        """
+        behavior = output.behavior
+        if output.loss is None or behavior is None:
+            raise ValueError(
+                "backward() needs the losses; this output came from "
+                "DreamerModel rather than DreamerForWorldModeling."
+            )
+
+        def take(params: list[nn.Parameter]) -> list[Tensor | None]:
+            return [None if p.grad is None else p.grad.clone() for p in params]
+
+        # Deepest graph first, and retain it — the actor's reaches back
+        # through every imagined step.
+        self.zero_grad()
+        behavior.actor_loss.backward(retain_graph=True)
+        actor_grads = take(self.actor_parameters())
+
+        self.zero_grad()
+        behavior.value_loss.backward(retain_graph=True)
+        value_grads = take(self.value_parameters())
+
+        self.zero_grad()
+        output.loss.backward()
+
+        for param, grad in zip(self.actor_parameters(), actor_grads):
+            param.grad = grad
+        for param, grad in zip(self.value_parameters(), value_grads):
+            param.grad = grad
 
     def _behavior(self, posteriors: RSSMState) -> DreamerBehaviorOutput:
         """Imagine under the policy and score it.
