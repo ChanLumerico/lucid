@@ -279,6 +279,51 @@ class TestImagination:
             model.imagine(model.rssm.initial(2), 0)
 
 
+class TestMeanOnly:
+    """``mean_only`` must reach *every* draw, not just the filtering one.
+
+    This slipped through the first time: ``observe`` honoured the config
+    and ``imagine`` did not, so a model declared deterministic still
+    sampled its way through imagination — the one place Dreamer does most
+    of its drawing. Nothing about the shapes or the losses looked wrong.
+    """
+
+    def test_imagine_is_reproducible(self) -> None:
+        model = DreamerModel(_tiny_cfg(mean_only=True))
+        start = model.rssm.initial(2)
+        first_states, first_actions = model.imagine(start, 4)
+        second_states, second_actions = model.imagine(start, 4)
+        assert bool((first_states.stoch == second_states.stoch).all().item())
+        assert bool((first_actions == second_actions).all().item())
+
+    def test_sampling_model_is_not_reproducible(self) -> None:
+        """Guards the test above — the default must actually draw."""
+        model = DreamerModel(_tiny_cfg(mean_only=False))
+        start = model.rssm.initial(2)
+        first, _ = model.imagine(start, 4)
+        second, _ = model.imagine(start, 4)
+        assert not bool((first.stoch == second.stoch).all().item())
+
+    def test_explicit_argument_overrides_the_config(self) -> None:
+        model = DreamerModel(_tiny_cfg(mean_only=False))
+        start = model.rssm.initial(2)
+        first, _ = model.imagine(start, 4, sample=False)
+        second, _ = model.imagine(start, 4, sample=False)
+        assert bool((first.stoch == second.stoch).all().item())
+
+    def test_behaviour_pass_is_reproducible(self) -> None:
+        """The whole objective, end to end, with every draw pinned."""
+        model = DreamerForWorldModeling(_tiny_cfg(mean_only=True))
+        obs, actions, rewards = _batch()
+        first = model(obs, actions, rewards)
+        second = model(obs, actions, rewards)
+        assert first.behavior is not None and second.behavior is not None
+        assert float(first.loss.item()) == float(second.loss.item())
+        assert float(first.behavior.actor_loss.item()) == float(
+            second.behavior.actor_loss.item()
+        )
+
+
 class TestObjective:
     def test_world_loss_decomposes(self) -> None:
         model = DreamerForWorldModeling(_tiny_cfg())

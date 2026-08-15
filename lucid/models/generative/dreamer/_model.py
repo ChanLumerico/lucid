@@ -477,7 +477,7 @@ class DreamerModel(PretrainedModel):
         return cast(Tensor, self.actor(state.feature, sample=sample))
 
     def imagine(
-        self, state: RSSMState, horizon: int, *, sample: bool = True
+        self, state: RSSMState, horizon: int, *, sample: bool | None = None
     ) -> tuple[RSSMState, Tensor]:
         r"""Roll the dynamics forward under the actor's own policy.
 
@@ -495,9 +495,11 @@ class DreamerModel(PretrainedModel):
             Flat starting beliefs, ``(N, ·)``.
         horizon : int
             Number of steps to imagine.
-        sample : bool, default=True, keyword-only
+        sample : bool or None, optional, keyword-only
             Draw both the latent and the action (``True``) or take their
-            means (``False``).
+            means (``False``).  ``None`` follows the config's ``mean_only``
+            setting, matching :meth:`observe` — a model configured
+            deterministic must imagine deterministically too.
 
         Returns
         -------
@@ -515,13 +517,14 @@ class DreamerModel(PretrainedModel):
         if horizon < 1:
             raise ValueError(f"horizon must be at least 1, got {horizon}")
 
+        draw = self._sample if sample is None else sample
         current = state
         deters, stochs, means, stds = [state.deter], [state.stoch], [], []
         actions: list[Tensor] = []
         for _ in range(horizon):
             feature = current.feature.reshape(int(current.deter.shape[0]), 1, -1)
-            action = cast(Tensor, self.actor(feature, sample=sample))[:, 0]
-            current = self.rssm.prior_step(current, action, sample=sample)
+            action = cast(Tensor, self.actor(feature, sample=draw))[:, 0]
+            current = self.rssm.prior_step(current, action, sample=draw)
             actions.append(action)
             deters.append(current.deter)
             stochs.append(current.stoch)
