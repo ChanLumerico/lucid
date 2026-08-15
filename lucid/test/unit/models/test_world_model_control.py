@@ -22,7 +22,13 @@ import lucid
 import lucid.models as M
 import lucid.optim as optim
 from lucid.test._fixtures.point_mass import PointMass
-from lucid.utils.rollout import LatentPolicy, RandomPolicy, SequenceReplay, rollout
+from lucid.utils.rollout import (
+    LatentPolicy,
+    RandomPolicy,
+    SequenceReplay,
+    StepResult,
+    rollout,
+)
 
 pytestmark = pytest.mark.slow
 
@@ -155,3 +161,55 @@ class TestDreamerLearnsControl:
         quiet = rollout(env, _policy(model))[0]
         loud = rollout(env, _policy(model, noise=0.5))[0]
         assert not bool((quiet.actions == loud.actions).all().item())
+
+
+class _Cliff:
+    """Terminates rather than truncating, so ``discounts`` reaches zero."""
+
+    def __init__(self, at: int = 5) -> None:
+        self.at = at
+
+    def reset(self) -> lucid.Tensor:
+        self.t = 0
+        return lucid.rand((3, 64, 64))
+
+    def step(self, action: lucid.Tensor) -> StepResult:
+        self.t += 1
+        return StepResult(lucid.rand((3, 64, 64)), 1.0, self.t >= self.at, False)
+
+
+class TestDiscountHeadEndToEnd:
+    """Termination has to survive the whole path, not just each end of it.
+
+    ``pcont`` is tested against hand-written discounts elsewhere, and the
+    driver's termination flag is tested without a model. This is the seam
+    between them: an environment that really ends, through a real rollout,
+    into a real buffer, into the loss.
+    """
+
+    def test_termination_reaches_the_loss(self) -> None:
+        lucid.manual_seed(0)
+        model = M.create_model("dreamer_world_model", pcont=True, **_TINY)
+        replay = SequenceReplay()
+        for _ in range(4):
+            replay.add(rollout(_Cliff(5), RandomPolicy(2))[0])
+
+        batch = replay.sample(4, 5)
+        assert float(batch.discounts[0][-1]) == 0.0, "termination lost in the buffer"
+
+        out = model(batch.observations, batch.actions, batch.rewards, batch.discounts)
+        assert out.pcont_loss is not None
+        assert out.behavior is not None and out.behavior.imagined_pcont is not None
+
+        model.backward(out)
+        grads = [
+            p.grad for p in model.dreamer.pcont_head.parameters() if p.grad is not None
+        ]
+        assert grads and sum(float(g.abs().sum().item()) for g in grads) > 0
+
+    def test_a_truncating_environment_leaves_the_discount_alone(self) -> None:
+        """PointMass only ever truncates; nothing should read as terminal."""
+        replay = SequenceReplay()
+        replay.add(rollout(PointMass(horizon=8), RandomPolicy(2))[0])
+        batch = replay.sample(2, 8)
+        assert bool((batch.discounts == 1.0).all().item())

@@ -126,15 +126,26 @@ class LatentPolicy:
     rssm : RSSM
         The model's recurrent state-space model.
     act : callable
-        ``RSSMState -> (1, action_dim)``.  For Dreamer,
-        ``lambda s: model.act(s, sample=False)``; for PlaNet,
-        ``model.plan``.
+        ``RSSMState -> (1, action_dim)``, given the single-step posterior.
+        For Dreamer this is ``lambda s: model.act(s, sample=False)``.  For
+        PlaNet it is the *task wrapper's* planner — ``plan`` lives on
+        :class:`~lucid.models.PlaNetForWorldModeling`, not on the trunk,
+        so the encoder and RSSM come from ``wrapper.planet`` while the
+        planner comes from ``wrapper``.
     action_dim : int
         Width of the action vector.
     noise : float, default=0.0
         Standard deviation of Gaussian exploration noise added to the
-        chosen action, then clipped back into ``(-1, 1)``.  The papers
-        collect with ``0.3`` and evaluate with ``0``.
+        chosen action.  The papers collect with ``0.3`` and evaluate with
+        ``0``.
+
+    Notes
+    -----
+    The action is clipped into ``(-1, 1)`` whether or not noise was added,
+    because that is what :class:`Policy` promises an environment.  Dreamer
+    emits a ``tanh``-squashed action and the clip does nothing; PlaNet's
+    planner searches an unbounded Gaussian and relies on it, which is the
+    clipping the paper describes.
 
     Notes
     -----
@@ -201,7 +212,7 @@ class LatentPolicy:
 
         action = self._act(posterior)
         if self.noise > 0.0:
-            noisy = (
+            action = (
                 action
                 + lucid.randn(
                     tuple(int(s) for s in action.shape),
@@ -210,7 +221,13 @@ class LatentPolicy:
                 )
                 * self.noise
             )
-            action = lucid.clip(noisy, -1.0, 1.0)
+        # Always, not only when noise was added.  Dreamer's tanh already
+        # satisfies this and the clip is a no-op; PlaNet's planner searches
+        # an unbounded Gaussian and does not, which is what the paper
+        # clips.  Letting the bound depend on whether exploration was
+        # requested would make the same policy legal in one call and not
+        # the other.
+        action = lucid.clip(action, -1.0, 1.0)
         self._previous = action
         return action[0]
 

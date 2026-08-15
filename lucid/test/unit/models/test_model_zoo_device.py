@@ -723,3 +723,38 @@ def test_dreamer_discount_head_runs_on_device(device):
     assert grads, "dreamer: the discount head received no gradient"
     for g in grads:
         assert str(g.device) == f"device('{device}')"
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_dreamer_rollout_stays_on_device(device):
+    """The whole harness — policy belief, driver, replay — without a round trip."""
+    from lucid.utils.rollout import LatentPolicy, SequenceReplay, StepResult, rollout
+
+    class _Tiny:
+        def reset(self):
+            self.t = 0
+            return lucid.rand((3, 64, 64), device=device)
+
+        def step(self, action):
+            self.t += 1
+            return StepResult(
+                lucid.rand((3, 64, 64), device=device), 1.0, False, self.t >= 4
+            )
+
+    lucid.manual_seed(0)
+    model = M.create_model("dreamer", **_DREAMER_SMALL).to(device).eval()
+    policy = LatentPolicy(
+        model.encode, model.rssm, lambda s: model.act(s, sample=False), 2, noise=0.3
+    )
+
+    episode, total = rollout(_Tiny(), policy)
+    assert len(episode) == 4
+    assert str(episode.observations.device) == f"device('{device}')"
+    assert str(episode.actions.device) == f"device('{device}')"
+    assert np.all(np.abs(episode.actions.to("cpu").numpy()) <= 1.0)
+
+    replay = SequenceReplay()
+    replay.add(episode)
+    batch = replay.sample(2, 3)
+    assert str(batch.observations.device) == f"device('{device}')"
+    assert not np.isnan(batch.observations.to("cpu").numpy()).any()

@@ -311,6 +311,86 @@ class TestLatentPolicy:
         assert bool((episode.actions[0] == 0).all().item())
 
 
+class TestActionBounds:
+    """``Policy`` promises ``(-1, 1)``; both families have to keep it.
+
+    PlaNet does not get there by construction — its planner searches an
+    unbounded Gaussian — so the bound is enforced here. Earlier it was
+    applied only when exploration noise had been added, which made the
+    same policy legal in one call and not the other.
+    """
+
+    def _dreamer(self) -> object:
+        from lucid.models import dreamer
+
+        return dreamer(
+            action_dim=2,
+            cnn_depth=2,
+            stoch_size=4,
+            deter_size=8,
+            hidden_size=8,
+            actor_hidden=8,
+            value_hidden=8,
+            reward_hidden=8,
+        ).eval()
+
+    @pytest.mark.parametrize("noise", [0.0, 0.5])
+    def test_dreamer_actions_are_bounded(self, noise: float) -> None:
+        model = self._dreamer()
+        policy = LatentPolicy(
+            model.encode,
+            model.rssm,
+            lambda state: model.act(state, sample=False),
+            2,
+            noise=noise,
+        )
+        episode, _ = rollout(_Counter64(length=4), policy)
+        assert bool((episode.actions.abs() <= 1.0).all().item())
+
+    @pytest.mark.parametrize("noise", [0.0, 0.5])
+    def test_planet_actions_are_bounded(self, noise: float) -> None:
+        """The planner is unbounded by design — the policy is what clips."""
+        from lucid.models import create_model
+
+        wrapper = create_model(
+            "planet_world_model",
+            action_dim=2,
+            cnn_depth=2,
+            stoch_size=4,
+            deter_size=8,
+            hidden_size=8,
+            reward_hidden=8,
+        ).eval()
+        policy = LatentPolicy(
+            wrapper.planet.encode,
+            wrapper.planet.rssm,
+            lambda state: wrapper.plan(
+                state, horizon=3, iterations=2, candidates=16, elites=4
+            ),
+            2,
+            noise=noise,
+        )
+        episode, _ = rollout(_Counter64(length=3), policy)
+        assert bool((episode.actions.abs() <= 1.0).all().item())
+
+    def test_planner_itself_is_still_unbounded(self) -> None:
+        """Guards the test above: the clip is doing real work, not nothing."""
+        from lucid.models import create_model
+
+        wrapper = create_model(
+            "planet_world_model",
+            action_dim=2,
+            cnn_depth=2,
+            stoch_size=4,
+            deter_size=8,
+            hidden_size=8,
+            reward_hidden=8,
+        ).eval()
+        state = wrapper.planet.rssm.initial(8)
+        planned = wrapper.plan(state, horizon=3, iterations=2, candidates=16, elites=4)
+        assert float(planned.abs().max().item()) > 1.0
+
+
 class _Counter64:
     """Same as :class:`_Counter` but at the resolution the pixel nets need."""
 
