@@ -633,6 +633,20 @@ def _slice_positions(
     return _C_engine.arange(start, stop, step, _C_engine.I32, device)
 
 
+def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
+    """Swap a tensor's impl while keeping the flags that live on it.
+
+    ``requires_grad`` is carried by the impl, so rebinding wholesale drops
+    it.  The general scatter path below never did — it writes *into* the
+    existing impl — which is why ``x[0] = v`` kept the flag and ``x[:] = v``
+    silently lost it.  A Parameter assigned that way stayed a Parameter,
+    stayed a leaf, stayed in ``parameters()`` and ``state_dict()``, and
+    simply never received a gradient again.
+    """
+    keep = t._impl.requires_grad
+    t._impl = impl.clone_with_grad(True) if keep and not impl.requires_grad else impl
+
+
 def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     """
     In-place assignment using Lucid engine ops only — no numpy.
@@ -682,9 +696,9 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
                 val_impl = _C_engine.broadcast_to(val_impl, shape)
             if val_impl.dtype != t._impl.dtype:
                 val_impl = _C_engine.astype(val_impl, t._impl.dtype)
-            t._impl = _C_engine.contiguous(val_impl)
+            _rebind(t, _C_engine.contiguous(val_impl))
         else:
-            t._impl = _C_engine.full(shape, float(value), t._impl.dtype, device)
+            _rebind(t, _C_engine.full(shape, float(value), t._impl.dtype, device))
         return
 
     # ── general path: read the positions, scatter into what came back ────────

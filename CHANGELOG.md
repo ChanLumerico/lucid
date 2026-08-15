@@ -270,6 +270,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - stop the encoder activating twice at the residual boundary
 
+- keep requires_grad when assigning into a whole tensor
+
 ### Changed
 
 - give the engine ops one shared operand check

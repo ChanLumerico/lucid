@@ -100,6 +100,15 @@ def _invents_data(x: Any) -> Any:
     return x
 
 
+def _degenerate_on_rank(x: Any) -> Any:
+    # Accepts a rank it cannot actually handle and answers with an empty
+    # tensor instead of refusing.  That is the shape the rank axis exists
+    # for: the caller gets no exception, just a result with nothing in it.
+    if x.ndim <= 1:
+        return lucid.zeros((0,))
+    return x
+
+
 def _device_dependent(x: Any) -> Any:
     return x + (1.0 if "metal" in str(x.device) else 0.0)
 
@@ -448,6 +457,12 @@ MUTANTS: "tuple[Mutant, ...]" = (
         "invents_data",
         "an empty input produces a non-empty output",
         lambda: _invents_data,
+    ),
+    Mutant(
+        "rank",
+        "degenerate_on_rank",
+        "a rank it cannot handle is answered with an empty tensor, not refused",
+        lambda: _degenerate_on_rank,
     ),
     Mutant(
         "dtype",

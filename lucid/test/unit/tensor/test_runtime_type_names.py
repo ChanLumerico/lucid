@@ -183,3 +183,49 @@ def test_every_module_still_imports() -> None:
         "lucid._tensor._methods",
     ):
         assert importlib.import_module(name) is not None
+
+
+class TestWholeTensorAssignmentKeepsGrad:
+    """``x[:] = v`` must not quietly demote a parameter.
+
+    The whole-slice fast path rebinds ``_impl`` outright instead of
+    scattering into the existing one, and ``requires_grad`` rides on the
+    impl — so the flag went with it. Nothing about the object looked
+    wrong afterwards: still a Parameter, still a leaf, still in
+    ``parameters()`` and ``state_dict()``, and never trained again. The
+    general path (``x[0] = v``) always kept the flag, which is what the
+    fast path now matches.
+    """
+
+    def test_slice_assignment_preserves_requires_grad(self) -> None:
+        p = lucid.nn.Linear(4, 4).weight
+        p[:] = lucid.randn((4, 4))
+        assert p.requires_grad
+
+    def test_ellipsis_assignment_preserves_requires_grad(self) -> None:
+        p = lucid.nn.Linear(4, 4).weight
+        p[...] = lucid.zeros((4, 4))
+        assert p.requires_grad
+
+    def test_scalar_assignment_preserves_requires_grad(self) -> None:
+        p = lucid.nn.Linear(4, 4).weight
+        p[:] = 0.5
+        assert p.requires_grad
+
+    def test_the_parameter_still_trains(self) -> None:
+        layer = lucid.nn.Linear(4, 4)
+        layer.weight[:] = lucid.randn((4, 4))
+        layer(lucid.randn((3, 4))).sum().backward()
+        assert layer.weight.grad is not None
+        assert float(abs(layer.weight.grad).sum()) > 0.0
+
+    def test_a_plain_tensor_is_unaffected(self) -> None:
+        x = lucid.randn((3, 3))
+        x[:] = lucid.ones((3, 3))
+        assert not x.requires_grad
+        assert float((x - 1.0).abs().max().item()) == 0.0
+
+    def test_the_general_path_still_agrees(self) -> None:
+        p = lucid.nn.Linear(4, 4).weight
+        p[0] = lucid.randn((4,))
+        assert p.requires_grad
