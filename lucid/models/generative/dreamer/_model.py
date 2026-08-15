@@ -75,6 +75,9 @@ class DreamerBehaviorOutput(ModelOutput):
         The critic's estimate along the same states, ``(N, H + 1)``.
     imagined_action : Tensor
         Actions the actor proposed, ``(N, H, action_dim)``.
+    imagined_pcont : Tensor or None
+        Predicted continuation probability at each imagined state,
+        ``(N, H + 1)``; ``None`` when the discount is held constant.
 
     Notes
     -----
@@ -102,6 +105,7 @@ class DreamerBehaviorOutput(ModelOutput):
     imagined_reward: Tensor
     imagined_value: Tensor
     imagined_action: Tensor
+    imagined_pcont: Tensor | None = None
 
 
 @dataclass(slots=True)
@@ -123,12 +127,13 @@ class DreamerOutput(ModelOutput):
         ``(B, T, S)``.
     deter : Tensor
         The deterministic path, ``(B, T, D)``.
-    loss, recon_loss, reward_loss, kl_loss : Tensor or None
+    loss, recon_loss, reward_loss, kl_loss, pcont_loss : Tensor or None
         World-model terms, set only by
         :class:`DreamerForWorldModeling`.  ``loss`` is the **world-model**
         loss alone — the behaviour losses live on
         :class:`DreamerBehaviorOutput`, because they belong to different
-        optimisers.
+        optimisers.  ``pcont_loss`` is ``None`` unless the config asks for
+        a discount head.
     behavior : DreamerBehaviorOutput or None
         Actor and critic terms, set only by
         :class:`DreamerForWorldModeling`.
@@ -160,6 +165,7 @@ class DreamerOutput(ModelOutput):
     recon_loss: Tensor | None = None
     reward_loss: Tensor | None = None
     kl_loss: Tensor | None = None
+    pcont_loss: Tensor | None = None
     behavior: DreamerBehaviorOutput | None = None
 
 
@@ -272,7 +278,7 @@ class _Actor(nn.Module):
 
 
 def _lambda_return(
-    reward: Tensor, value: Tensor, discount: float, lambda_: float
+    reward: Tensor, value: Tensor, discount: float | Tensor, lambda_: float
 ) -> Tensor:
     r"""TD(:math:`\lambda`) returns over an imagined trajectory.
 
@@ -282,8 +288,12 @@ def _lambda_return(
         Predicted reward at each imagined state, ``(N, H + 1)``.
     value : Tensor
         The critic's estimate at the same states, ``(N, H + 1)``.
-    discount : float
-        :math:`\gamma`.
+    discount : float or Tensor
+        :math:`\gamma`.  A scalar holds it constant; a ``(N, H + 1)``
+        tensor is the *predicted* continuation probability at each state,
+        which is how the paper handles episodes that can terminate — a
+        state the agent will not survive discounts everything after it to
+        nothing.
     lambda_ : float
         :math:`\lambda`; ``0`` gives the one-step TD target, ``1`` the full
         Monte-Carlo return bootstrapped at the horizon.
@@ -316,8 +326,9 @@ def _lambda_return(
     agg = value[:, horizon]
     out: list[Tensor] = []
     for t in range(horizon - 1, -1, -1):
-        inputs = reward[:, t] + discount * (1.0 - lambda_) * value[:, t + 1]
-        agg = inputs + discount * lambda_ * agg
+        gamma = discount if isinstance(discount, float) else discount[:, t]
+        inputs = reward[:, t] + gamma * (1.0 - lambda_) * value[:, t + 1]
+        agg = inputs + gamma * lambda_ * agg
         out.append(agg)
     out.reverse()
     return lucid.stack(out, dim=1)
@@ -408,7 +419,19 @@ class DreamerModel(PretrainedModel):
             config.actor_init_std,
             config.actor_mean_scale,
         )
+        self.pcont_head = (
+            DenseHead(
+                config.latent_size,
+                config.value_hidden,
+                config.pcont_layers,
+                act_fn=config.act_fn,
+                squeeze=True,
+            )
+            if config.pcont
+            else None
+        )
         self._sample = not config.mean_only
+        self._detach_actor_input = config.detach_actor_input
 
     def encode(self, observations: Tensor) -> Tensor:
         """Embed a frame sequence — ``(B, T, C, 64, 64) -> (B, T, embed_size)``."""
@@ -457,6 +480,39 @@ class DreamerModel(PretrainedModel):
     def predict_value(self, state: RSSMState) -> Tensor:
         """Estimate the value of a state — ``(B, T)``."""
         return cast(Tensor, self.value_head(state.feature))
+
+    def predict_pcont(self, state: RSSMState) -> Tensor:
+        r"""Predict the discount at a state — logits, ``(B, T)``.
+
+        The head is Bernoulli: its probability is how likely the episode is
+        to continue past this state, and the discount used downstream is
+        that probability rather than a constant.  A state the agent will
+        not survive therefore discounts everything after it to nothing,
+        which is the point — a constant :math:`\gamma` would have the
+        planner keep collecting rewards past the end of the episode.
+
+        Parameters
+        ----------
+        state : RSSMState
+            The states to score.
+
+        Returns
+        -------
+        Tensor
+            Logits, ``(B, T)``.  Apply ``sigmoid`` for the probability;
+            the loss consumes the logits directly.
+
+        Raises
+        ------
+        ValueError
+            If the model was configured without ``pcont``.
+        """
+        if self.pcont_head is None:
+            raise ValueError(
+                "this model has no discount head; construct it with "
+                "DreamerConfig(pcont=True)"
+            )
+        return cast(Tensor, self.pcont_head(state.feature))
 
     def act(self, state: RSSMState, *, sample: bool = True) -> Tensor:
         """Propose actions for a state — ``(B, T, action_dim)`` in ``(-1, 1)``.
@@ -513,6 +569,12 @@ class DreamerModel(PretrainedModel):
         The start state is *not* detached here — that is the caller's
         decision, and :class:`DreamerForWorldModeling` does detach it so
         the actor's gradient cannot reach the world model.
+
+        The state the *actor reads* is detached when the config says so,
+        which is the released implementation's behaviour and the default.
+        It does not stop the actor learning: the gradient still arrives
+        through each action it produced.  What it drops are the terms in
+        which a return depends on the policy through the state it read.
         """
         if horizon < 1:
             raise ValueError(f"horizon must be at least 1, got {horizon}")
@@ -523,6 +585,8 @@ class DreamerModel(PretrainedModel):
         actions: list[Tensor] = []
         for _ in range(horizon):
             feature = current.feature.reshape(int(current.deter.shape[0]), 1, -1)
+            if self._detach_actor_input:
+                feature = feature.detach()
             action = cast(Tensor, self.actor(feature, sample=draw))[:, 0]
             current = self.rssm.prior_step(current, action, sample=draw)
             actions.append(action)
@@ -638,6 +702,7 @@ class DreamerForWorldModeling(PretrainedModel):
         self._horizon = config.horizon
         self._discount = config.discount
         self._lambda = config.lambda_
+        self._pcont_scale = config.pcont_scale
 
     def world_parameters(self) -> list[nn.Parameter]:
         """Everything the world-model loss trains — encoder, RSSM, decoder, reward.
@@ -649,11 +714,15 @@ class DreamerForWorldModeling(PretrainedModel):
             :meth:`actor_parameters` and :meth:`value_parameters`.
         """
         model = self.dreamer
-        return [
-            p
-            for module in (model.encoder, model.rssm, model.decoder, model.reward_head)
-            for p in module.parameters()
+        modules: list[nn.Module] = [
+            model.encoder,
+            model.rssm,
+            model.decoder,
+            model.reward_head,
         ]
+        if model.pcont_head is not None:
+            modules.append(model.pcont_head)
+        return [p for module in modules for p in module.parameters()]
 
     def actor_parameters(self) -> list[nn.Parameter]:
         """The actor's parameters.
@@ -683,13 +752,25 @@ class DreamerForWorldModeling(PretrainedModel):
         posteriors : RSSMState
             Filtered beliefs, ``(B, T, ·)``.  Flattened to ``(B * T, ·)`` and
             detached, so every filtered step becomes an independent
-            imagination start.
+            imagination start.  With ``pcont`` the final step is dropped
+            first — it may be the terminal one, and imagining onward from
+            a state the episode already ended in trains the policy on
+            something that cannot happen.
 
         Returns
         -------
         DreamerBehaviorOutput
             The actor and critic terms.
         """
+        if self.dreamer.pcont_head is not None:
+            keep = int(posteriors.deter.shape[1]) - 1
+            if keep < 1:
+                raise ValueError(
+                    "pcont drops the last filtered step, so it needs a "
+                    f"sequence of at least 2, got {int(posteriors.deter.shape[1])}"
+                )
+            posteriors = RSSMState(*(x[:, :keep] for x in posteriors))
+
         b, t = int(posteriors.deter.shape[0]), int(posteriors.deter.shape[1])
 
         def flat(x: Tensor) -> Tensor:
@@ -706,17 +787,32 @@ class DreamerForWorldModeling(PretrainedModel):
         reward = self.dreamer.predict_reward(states)
         value = self.dreamer.predict_value(states)
 
-        returns = _lambda_return(reward, value, self._discount, self._lambda)
+        # Constant gamma, or the discount the model predicts for each
+        # imagined state when the episode can end.
+        pcont: Tensor | None = None
+        discount: float | Tensor = self._discount
+        if self.dreamer.pcont_head is not None:
+            pcont = lucid.sigmoid(self.dreamer.predict_pcont(states))
+            discount = pcont
+
+        returns = _lambda_return(reward, value, discount, self._lambda)
 
         # The released implementation weights both behaviour losses by the
         # cumulative discount, so a step the agent is unlikely to still be
-        # around for counts for less.  Built as a constant: it is a weight,
-        # never a thing to differentiate.
-        weight = lucid.tensor(
-            [[self._discount**i for i in range(self._horizon)]],
-            device=returns.device,
-            dtype=returns.dtype,
-        )
+        # around for counts for less.  It is a weight, never a thing to
+        # differentiate, so it is detached either way.
+        if pcont is None:
+            weight = lucid.tensor(
+                [[self._discount**i for i in range(self._horizon)]],
+                device=returns.device,
+                dtype=returns.dtype,
+            )
+        else:
+            ones = lucid.ones(
+                (int(pcont.shape[0]), 1), device=pcont.device, dtype=pcont.dtype
+            )
+            running = lucid.cat([ones, pcont[:, : self._horizon - 1]], dim=1)
+            weight = lucid.cumprod(running, dim=1).detach()
 
         actor_loss = -(weight * returns).mean()
 
@@ -743,11 +839,16 @@ class DreamerForWorldModeling(PretrainedModel):
             imagined_reward=reward,
             imagined_value=value,
             imagined_action=actions,
+            imagined_pcont=pcont,
         )
 
     @override
     def forward(  # type: ignore[override]
-        self, observations: Tensor, actions: Tensor, rewards: Tensor
+        self,
+        observations: Tensor,
+        actions: Tensor,
+        rewards: Tensor,
+        discounts: Tensor | None = None,
     ) -> DreamerOutput:
         """Train the world model and the behaviour on one batch of trajectories.
 
@@ -759,12 +860,23 @@ class DreamerForWorldModeling(PretrainedModel):
             Actions taken *into* each step, ``(B, T, action_dim)``.
         rewards : Tensor
             Observed reward at each step, ``(B, T)``.
+        discounts : Tensor or None, optional
+            ``(B, T)``, ``1`` where the episode continued past that step
+            and ``0`` where it ended.  Required when the config asks for a
+            discount head, ignored otherwise.
 
         Returns
         -------
         DreamerOutput
             ``loss`` is the world-model loss; the behaviour losses are on
             ``.behavior`` and take their own optimisers.
+
+        Raises
+        ------
+        ValueError
+            If ``pcont`` is configured and ``discounts`` is omitted — the
+            head has nothing to learn from without it, and defaulting to
+            "never terminates" would silently train it to a constant.
         """
         model = self.dreamer
         priors, posteriors = model.observe(observations, actions)
@@ -782,6 +894,23 @@ class DreamerForWorldModeling(PretrainedModel):
         kl_loss = rssm_kl(posteriors, priors, free_nats=self._free_nats)
         loss = recon_loss + reward_loss + self._kl_weight * kl_loss
 
+        pcont_loss: Tensor | None = None
+        if model.pcont_head is not None:
+            if discounts is None:
+                raise ValueError(
+                    "pcont=True needs `discounts` — 1 where the episode "
+                    "continued past a step and 0 where it ended."
+                )
+            # Bernoulli likelihood against a soft target: the released
+            # implementation regresses onto `gamma * d`, so a surviving
+            # step is taught `gamma` rather than 1 and the head's output
+            # is directly usable as the discount.
+            target = self._discount * discounts
+            pcont_loss = self._pcont_scale * F.binary_cross_entropy_with_logits(
+                model.predict_pcont(posteriors), target
+            )
+            loss = loss + pcont_loss
+
         return DreamerOutput(
             observation=reconstruction,
             reward=predicted_reward,
@@ -796,5 +925,6 @@ class DreamerForWorldModeling(PretrainedModel):
             recon_loss=recon_loss,
             reward_loss=reward_loss,
             kl_loss=kl_loss,
+            pcont_loss=pcont_loss,
             behavior=self._behavior(posteriors),
         )

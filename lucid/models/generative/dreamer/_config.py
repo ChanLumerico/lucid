@@ -104,8 +104,24 @@ class DreamerConfig(WorldModelConfig):
     actor_mean_scale : float, default=5.0
         The mean is passed through ``s * tanh(x / s)`` before squashing,
         which keeps it from saturating the outer ``tanh``.
-    reward_hidden, reward_layers : int, default=300, 3
-        Width and depth of the reward head.
+    reward_hidden, reward_layers : int, default=300, 2
+        Width and depth of the reward head.  The paper names only the
+        action and value models, so the depth here is the released
+        implementation's — which also matches PlaNet's reward head.
+    detach_actor_input : bool, default=True
+        Hide the state's gradient from the actor during imagination.  The
+        released implementation does this; the paper does not discuss it.
+        Setting ``False`` gives the exact gradient of the stated objective
+        — see Notes.
+    pcont : bool, default=False
+        Predict the discount factor from each latent state instead of
+        holding it constant.  The paper introduces this for "tasks with
+        early termination"; with no termination there is nothing to learn,
+        which is why it is off by default.
+    pcont_scale : float, default=10.0
+        Multiplier on the discount head's likelihood.
+    pcont_layers : int, default=3
+        Depth of the discount head.  Width follows ``value_hidden``.
 
     Notes
     -----
@@ -119,6 +135,26 @@ class DreamerConfig(WorldModelConfig):
     paper**; they are the released implementation's, and are exposed here
     rather than buried so a reader can see which numbers have a citation
     and which have a source.
+
+    Where the paper and the released implementation disagree, the paper
+    wins and the difference is recorded here rather than hidden:
+
+    ==============  ====================  ==========================
+    quantity        paper                 released implementation
+    ==============  ====================  ==========================
+    head width      300                   400 throughout
+    actor depth     3                     4
+    value depth     3                     3
+    reward depth    not stated            2  (taken, as the default)
+    ==============  ====================  ==========================
+
+    ``detach_actor_input`` is the one behavioural fork.  The released
+    implementation feeds the actor a ``stop_gradient``-ed state during
+    imagination, which drops the terms in which a return depends on the
+    policy *through the state it read*.  Keeping them (``False``) is the
+    exact gradient of :math:`\max_\phi \mathbb{E}[\sum_\tau V_\lambda]`;
+    dropping them is cheaper and lower-variance.  The default follows the
+    released implementation because the paper is silent.
 
     The three losses need **three optimisers over three parameter groups**
     — see :class:`DreamerForWorldModeling`.  Summing them and taking one
@@ -154,7 +190,13 @@ class DreamerConfig(WorldModelConfig):
     actor_mean_scale: float = 5.0
 
     reward_hidden: int = 300
-    reward_layers: int = 3
+    reward_layers: int = 2
+
+    detach_actor_input: bool = True
+
+    pcont: bool = False
+    pcont_scale: float = 10.0
+    pcont_layers: int = 3
 
     @override
     def __post_init__(self) -> None:
@@ -167,6 +209,7 @@ class DreamerConfig(WorldModelConfig):
             ("value_layers", self.value_layers),
             ("reward_hidden", self.reward_hidden),
             ("reward_layers", self.reward_layers),
+            ("pcont_layers", self.pcont_layers),
         ):
             if value < 1:
                 raise ValueError(f"{name} must be at least 1, got {value}")
@@ -177,6 +220,10 @@ class DreamerConfig(WorldModelConfig):
         if self.actor_min_std <= 0.0:
             raise ValueError(
                 f"actor_min_std must be positive, got {self.actor_min_std}"
+            )
+        if self.pcont_scale < 0.0:
+            raise ValueError(
+                f"pcont_scale must be non-negative, got {self.pcont_scale}"
             )
         if self.actor_mean_scale <= 0.0:
             raise ValueError(

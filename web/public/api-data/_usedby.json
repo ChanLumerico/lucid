@@ -3361,6 +3361,70 @@
       "module": "lucid.models.weights"
     }
   ],
+  "lucid.models.generative.dreamer": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.dreamer._config.DreamerConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer._pretrained"
+    }
+  ],
+  "lucid.models.generative.dreamer._model.DreamerBehaviorOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer"
+    }
+  ],
+  "lucid.models.generative.dreamer._model.DreamerForWorldModeling": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer._pretrained"
+    }
+  ],
+  "lucid.models.generative.dreamer._model.DreamerModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer._pretrained"
+    }
+  ],
+  "lucid.models.generative.dreamer._model.DreamerOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer"
+    }
+  ],
+  "lucid.models.generative.dreamer._pretrained.dreamer": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer"
+    }
+  ],
+  "lucid.models.generative.dreamer._pretrained.dreamer_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer"
+    }
+  ],
   "lucid.models.generative.flow_matching": [
     {
       "kind": "module",

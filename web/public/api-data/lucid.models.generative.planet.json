@@ -3,7 +3,7 @@
   "name": "planet",
   "path": "lucid.models.generative.planet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/__init__.py#L1",
   "members": [
     {
       "name": "PlaNetConfig",
@@ -11,66 +11,20 @@
       "kind": "class",
       "class_kind": "dataclass",
       "bases": [
-        "GenerativeModelConfig"
+        "WorldModelConfig"
       ],
       "labels": [],
-      "signature": "PlaNetConfig(sample_size: int | tuple[int, int] = PLANET_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: Literal['silu', 'swish', 'relu', 'gelu'] = 'relu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, free_nats: float = 3.0, kl_weight: float = 1.0, reward_hidden: int = 200, reward_layers: int = 2)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_config.py#L23",
+      "signature": "PlaNetConfig(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'relu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 3.0, kl_weight: float = 1.0, overshoot_distance: int | None = None, overshoot_weight: float = 1.0, overshoot_reward_weight: float = 1.0, reward_hidden: int = 200, reward_layers: int = 2, reward_loss_scale: float = 1.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_config.py#L27",
       "subcategory": "config",
       "methods": [
-        {
-          "name": "embed_size",
-          "path": "lucid.models.generative.planet._config.PlaNetConfig.embed_size",
-          "kind": "function",
-          "labels": [
-            "property"
-          ],
-          "signature": "embed_size: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_config.py#L212",
-          "summary": "Width of the encoder output — `8 * cnn_depth` over a 2x2 grid.",
-          "extended": null,
-          "parameters": [],
-          "returns": {
-            "annotation": "int",
-            "description": ""
-          },
-          "raises": [],
-          "examples": [],
-          "notes": [],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        },
-        {
-          "name": "latent_size",
-          "path": "lucid.models.generative.planet._config.PlaNetConfig.latent_size",
-          "kind": "function",
-          "labels": [
-            "property"
-          ],
-          "signature": "latent_size: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_config.py#L217",
-          "summary": "Width of the full latent `[h; s]` the decoder and reward head read.",
-          "extended": null,
-          "parameters": [],
-          "returns": {
-            "annotation": "int",
-            "description": ""
-          },
-          "raises": [],
-          "examples": [],
-          "notes": [],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        },
         {
           "name": "__init__",
           "path": "lucid.models.generative.planet._config.PlaNetConfig.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(sample_size: int | tuple[int, int] = PLANET_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: Literal['silu', 'swish', 'relu', 'gelu'] = 'relu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, free_nats: float = 3.0, kl_weight: float = 1.0, reward_hidden: int = 200, reward_layers: int = 2)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_config.py#L1",
+          "signature": "__init__(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'relu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 3.0, kl_weight: float = 1.0, overshoot_distance: int | None = None, overshoot_weight: float = 1.0, overshoot_reward_weight: float = 1.0, reward_hidden: int = 200, reward_layers: int = 2, reward_loss_scale: float = 1.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -91,81 +45,33 @@
       "extended": "Defaults reproduce Hafner et al., 2019 on the DeepMind Control Suite.",
       "parameters": [
         {
-          "name": "sample_size",
-          "annotation": "int or tuple of int",
-          "description": "Frame resolution.  Must be 64 — see Notes.",
-          "default": "64"
-        },
-        {
-          "name": "in_channels",
-          "annotation": "int",
-          "description": "Observation channels.",
-          "default": "3"
-        },
-        {
-          "name": "out_channels",
-          "annotation": "int",
-          "description": "Reconstruction channels.",
-          "default": "3"
-        },
-        {
           "name": "act_fn",
-          "annotation": "(silu, swish, relu, gelu)",
-          "description": "Activation throughout.  The paper uses ReLU, which is why this\nfamily overrides the generative-domain default of `\"silu\"`.",
+          "annotation": "(silu, swish, relu, gelu, elu)",
+          "description": "Activation throughout.  The paper uses ReLU, which is why this\nfamily overrides the generative-domain default of `\"silu\"`.\nDreamer uses ELU, which is why neither value sits on\n`WorldModelConfig`.",
           "default": "\"silu\""
         },
         {
-          "name": "action_dim",
-          "annotation": "int",
-          "description": "Width of the action vector conditioning the transition.  Genuinely\ntask-dependent — the Control Suite tasks range from 1 to 12 — so\nthere is no paper value to inherit and it must be set per use.",
-          "default": "1"
+          "name": "overshoot_distance",
+          "annotation": "int or None",
+          "description": "How many steps ahead **latent overshooting** trains the dynamics.\n`None` overshoots as far as each batch allows (the paper's full\nsetting); `1` disables it, leaving the ordinary one-step bound.\nCosts one extra recurrence sweep per distance — see Notes.",
+          "default": "None"
         },
         {
-          "name": "stoch_size",
-          "annotation": "int",
-          "description": "Width of the stochastic latent $s$.",
-          "default": "30"
-        },
-        {
-          "name": "deter_size",
-          "annotation": "int",
-          "description": "Width of the deterministic latent $h$.",
-          "default": "200"
-        },
-        {
-          "name": "hidden_size",
-          "annotation": "int",
-          "description": "Width of the hidden layer inside the RSSM heads.",
-          "default": "200"
-        },
-        {
-          "name": "cnn_depth",
-          "annotation": "int",
-          "description": "Channel width of the first encoder convolution; the stack widens\n`depth, 2*depth, 4*depth, 8*depth`.  A scale knob, not a shape\nknob — the spatial schedule is fixed.",
-          "default": "32"
-        },
-        {
-          "name": "min_std",
+          "name": "overshoot_weight",
           "annotation": "float",
-          "description": "Floor on the latent standard deviation.",
-          "default": "0.1"
+          "description": "Multiplier on the averaged multi-step divergence.",
+          "default": "1.0"
         },
         {
-          "name": "free_nats",
+          "name": "overshoot_reward_weight",
           "annotation": "float",
-          "description": "The KL is clamped below at this value before it enters the loss.",
-          "default": "3.0"
-        },
-        {
-          "name": "kl_weight",
-          "annotation": "float",
-          "description": "Multiplier $\\beta$ on the clamped KL.",
+          "description": "Multiplier on reward prediction at the overshot states.  Without\nit the reward head only ever sees posterior states while the\nplanner only ever evaluates prior ones — see Notes.",
           "default": "1.0"
         },
         {
           "name": "reward_hidden",
           "annotation": "int",
-          "description": "Width of each reward-head hidden layer.",
+          "description": "Width of each reward-head hidden layer.  Dreamer's is 300, so this\nstays here rather than on the shared base.",
           "default": "200"
         },
         {
@@ -173,6 +79,30 @@
           "annotation": "int",
           "description": "Number of reward-head hidden layers.",
           "default": "2"
+        },
+        {
+          "name": "reward_loss_scale",
+          "annotation": "float",
+          "description": "Multiplier on the reward likelihood.  The paper states none, so\nthe default is 1; the released implementation uses 10 — see\nNotes.",
+          "default": "1.0"
+        },
+        {
+          "name": "The",
+          "annotation": null,
+          "description": "",
+          "default": null
+        },
+        {
+          "name": "width",
+          "annotation": null,
+          "description": "",
+          "default": null
+        },
+        {
+          "name": "from",
+          "annotation": null,
+          "description": "",
+          "default": null
         }
       ],
       "returns": null,
@@ -197,7 +127,7 @@
       ],
       "labels": [],
       "signature": "PlaNetForWorldModeling(config: PlaNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L350",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L303",
       "subcategory": "model",
       "methods": [
         {
@@ -206,7 +136,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: PlaNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L415",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L368",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -228,7 +158,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor, rewards: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L421",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L456",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -240,6 +170,63 @@
           "raises": [],
           "examples": [],
           "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "plan",
+          "path": "lucid.models.generative.planet._model.PlaNetForWorldModeling.plan",
+          "kind": "function",
+          "labels": [],
+          "signature": "plan(state: RSSMState, horizon: int = 12, iterations: int = 10, candidates: int = 1000, elites: int = 100)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L504",
+          "subcategory": "model",
+          "summary": "Choose an action by searching imagined trajectories (CEM).",
+          "extended": "The paper's planner.  It never touches an environment: candidate\naction sequences are rolled forward through the learned dynamics\nand scored by the learned reward head, so the entire search is a\nforward pass over this model's own parameters.\n\nThe cross-entropy method fits a diagonal Gaussian over action\nsequences to its own best samples, repeatedly:\n\n$$\n\\mu, \\sigma \\;\\leftarrow\\;\n    \\mathrm{mean}, \\mathrm{std}\\Big(\n        \\operatorname*{top-K}_{a^{(j)} \\sim\n            \\mathcal{N}(\\mu, \\sigma^2)}\n        \\textstyle\\sum_{\\tau} r\\big(s_\\tau^{(j)}\\big)\n    \\Big),\n$$\n\nand the first action of the final mean is returned.  Searching in\na compact latent rather than in pixels is what makes a thousand\ncandidates per step affordable.",
+          "parameters": [
+            {
+              "name": "state",
+              "annotation": "RSSMState",
+              "description": "The belief to plan from, `(B, ·)` — typically one step of a\nposterior produced by `PlaNetModel.observe`.",
+              "default": null
+            },
+            {
+              "name": "horizon",
+              "annotation": "int",
+              "description": "How many steps ahead to imagine.",
+              "default": "12"
+            },
+            {
+              "name": "iterations",
+              "annotation": "int",
+              "description": "Refits of the action distribution.",
+              "default": "10"
+            },
+            {
+              "name": "candidates",
+              "annotation": "int",
+              "description": "Sequences sampled per refit.",
+              "default": "1000"
+            },
+            {
+              "name": "elites",
+              "annotation": "int",
+              "description": "Best sequences kept to refit from.",
+              "default": "100"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "The first action of the planned sequence, `(B, action_dim)`."
+          },
+          "raises": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.planet import (\n...     PlaNetConfig, PlaNetForWorldModeling,\n... )\n>>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,\n...                    hidden_size=8, cnn_depth=4, reward_hidden=8)\n>>> model = PlaNetForWorldModeling(cfg).eval()\n>>> start = model.planet.rssm.initial(1)\n>>> model.plan(start, horizon=3, iterations=2, candidates=8,\n...            elites=2).shape\n(1, 2)"
+          ],
+          "notes": [
+            "Defaults are the paper's: $H = 12$, $I = 10$,\n$J = 1000$, $K = 100$.\n\nThe search is unbounded — the paper clips actions to the\nenvironment's range, which this model cannot know.  Clip the\nresult yourself if your action space is bounded.\n\nExploration noise is also the caller's: the paper adds Gaussian\nnoise to the planned action when collecting episodes, which is a\nproperty of the data-collection loop rather than of the planner."
+          ],
           "attributes": [],
           "warns": [],
           "see_also": []
@@ -283,7 +270,7 @@
       ],
       "labels": [],
       "signature": "PlaNetModel(config: PlaNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L224",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L125",
       "subcategory": "model",
       "methods": [
         {
@@ -292,9 +279,9 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: PlaNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L288",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L189",
           "subcategory": "model",
-          "summary": null,
+          "summary": "Initialise the actor. See the class docstring for parameters.",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -314,7 +301,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(observations: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L303",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L213",
           "subcategory": "model",
           "summary": "Embed a frame sequence — `(B, T, C, 64, 64) -> (B, T, embed_size)`.",
           "extended": null,
@@ -335,15 +322,40 @@
           "path": "lucid.models.generative.planet._model.PlaNetModel.observe",
           "kind": "function",
           "labels": [],
-          "signature": "observe(observations: Tensor, actions: Tensor, state: RSSMState | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L307",
+          "signature": "observe(observations: Tensor, actions: Tensor, state: RSSMState | None = None, sample: bool | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L217",
           "subcategory": "model",
-          "summary": "Filter a trajectory into posterior states — returns `(priors, posteriors)`.",
+          "summary": "Filter a trajectory into posterior states.",
           "extended": null,
-          "parameters": [],
+          "parameters": [
+            {
+              "name": "observations",
+              "annotation": "Tensor",
+              "description": "Frames, `(B, T, C, 64, 64)`.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "Actions taken *into* each step, `(B, T, action_dim)` — see the\nclass docstring on alignment.",
+              "default": null
+            },
+            {
+              "name": "state",
+              "annotation": "RSSMState or None",
+              "description": "Starting belief; `None` starts from zeros.",
+              "default": "None"
+            },
+            {
+              "name": "sample",
+              "annotation": "(bool or None, optional, keyword - only)",
+              "description": "Draw the latent (`True`) or take its mean (`False`).\n`None` follows the config's `mean_only` setting.",
+              "default": "None"
+            }
+          ],
           "returns": {
-            "annotation": "tuple[RSSMState, RSSMState]",
-            "description": ""
+            "annotation": "RSSMState",
+            "description": "What the dynamics predicted, `(B, T, ·)`."
           },
           "raises": [],
           "examples": [],
@@ -357,15 +369,34 @@
           "path": "lucid.models.generative.planet._model.PlaNetModel.imagine",
           "kind": "function",
           "labels": [],
-          "signature": "imagine(state: RSSMState, actions: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L316",
+          "signature": "imagine(state: RSSMState, actions: Tensor, sample: bool | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L250",
           "subcategory": "model",
           "summary": "Roll the dynamics forward with no observations at all.",
           "extended": null,
-          "parameters": [],
+          "parameters": [
+            {
+              "name": "state",
+              "annotation": "RSSMState",
+              "description": "The belief to roll from, `(B, ·)`.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "Actions to imagine taking, `(B, T, action_dim)`.",
+              "default": null
+            },
+            {
+              "name": "sample",
+              "annotation": "(bool or None, optional, keyword - only)",
+              "description": "Draw the latent (`True`) or take its mean (`False`).\n`None` follows the config's `mean_only` setting.",
+              "default": "None"
+            }
+          ],
           "returns": {
             "annotation": "RSSMState",
-            "description": ""
+            "description": "The imagined prior states, `(B, T, ·)`."
           },
           "raises": [],
           "examples": [],
@@ -380,7 +411,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L320",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L273",
           "subcategory": "model",
           "summary": "Reconstruct frames from a state — `(B, T, C, 64, 64)`.",
           "extended": null,
@@ -402,7 +433,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_reward(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L324",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L277",
           "subcategory": "model",
           "summary": "Predict reward from a state — `(B, T)`.",
           "extended": null,
@@ -424,14 +455,27 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L328",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L281",
           "subcategory": "model",
-          "summary": null,
+          "summary": "Propose an action for a state — `(B, T, action_dim)` in `(-1, 1)`.",
           "extended": null,
-          "parameters": [],
+          "parameters": [
+            {
+              "name": "feature",
+              "annotation": "Tensor",
+              "description": "Latent state, `(B, T, latent_size)`.",
+              "default": null
+            },
+            {
+              "name": "sample",
+              "annotation": "bool",
+              "description": "Draw reparameterised (`True`) or take the squashed mean\n(`False`, which is how a trained policy should act).",
+              "default": "True, keyword-only"
+            }
+          ],
           "returns": {
-            "annotation": "PlaNetOutput",
-            "description": ""
+            "annotation": "Tensor",
+            "description": "Actions bounded to `(-1, 1)`."
           },
           "raises": [],
           "examples": [],
@@ -493,8 +537,8 @@
         "ModelOutput"
       ],
       "labels": [],
-      "signature": "PlaNetOutput(observation: Tensor, reward: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L48",
+      "signature": "PlaNetOutput(observation: Tensor, reward: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, overshoot_kl_loss: Tensor | None = None, overshoot_reward_loss: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L47",
       "subcategory": "model",
       "methods": [
         {
@@ -502,8 +546,8 @@
           "path": "lucid.models.generative.planet._model.PlaNetOutput.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(observation: Tensor, reward: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_model.py#L1",
+          "signature": "__init__(observation: Tensor, reward: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, overshoot_kl_loss: Tensor | None = None, overshoot_reward_loss: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -570,7 +614,12 @@
         {
           "name": "recon_loss, reward_loss, kl_loss",
           "annotation": "(Tensor or None, optional)",
-          "description": "The three terms separately.  `kl_loss` is already clamped at\n`free_nats`."
+          "description": "The one-step terms separately.  `kl_loss` is already clamped\nat `free_nats`."
+        },
+        {
+          "name": "overshoot_kl_loss, overshoot_reward_loss",
+          "annotation": "(Tensor or None, optional)",
+          "description": "The latent-overshooting terms, averaged over distances.  `None`\nwhen overshooting is off or the sequence is too short.  Reported\nseparately because they enter `loss` with their own weights\nand are otherwise invisible."
         }
       ],
       "warns": [],
@@ -582,7 +631,7 @@
       "kind": "function",
       "labels": [],
       "signature": "planet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_pretrained.py#L58",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_pretrained.py#L58",
       "subcategory": "pretrained",
       "summary": "Construct PlaNet's latent dynamics model — no training objective.",
       "extended": "The architecture of Hafner et al., 2019: a four-layer stride-2\nconvolutional encoder, a recurrent state-space model with a 200-unit\ndeterministic path and a 30-unit stochastic state, a mirrored\ntransposed-convolutional decoder, and a two-layer reward head.",
@@ -827,7 +876,7 @@
       "kind": "function",
       "labels": [],
       "signature": "planet_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/9e4fad62f/lucid/models/generative/planet/_pretrained.py#L117",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/planet/_pretrained.py#L117",
       "subcategory": "pretrained",
       "summary": "Construct PlaNet with its variational objective.",
       "extended": "Same trunk as `planet`, wrapped with the bound of Hafner et al.,\n2019 — reconstruction and reward likelihoods against a KL between the\nposterior and the dynamics' own prior, floored at `free_nats`.",

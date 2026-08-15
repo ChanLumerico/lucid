@@ -692,3 +692,34 @@ def test_dreamer_three_losses_backward_on_device(device):
     assert grads, "dreamer: the actor received no gradient"
     for g in grads:
         assert str(g.device) == f"device('{device}')"
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_dreamer_discount_head_runs_on_device(device):
+    """`pcont` swaps a Python float for a tensor inside the return recursion."""
+    lucid.manual_seed(0)
+    model = M.create_model("dreamer_world_model", pcont=True, **_DREAMER_SMALL).to(
+        device
+    )
+    model.train()
+
+    out = model(
+        lucid.rand((2, 4, 3, 64, 64), device=device),
+        lucid.rand((2, 4, 2), device=device),
+        lucid.rand((2, 4), device=device),
+        lucid.ones((2, 4), device=device),
+    )
+    assert out.pcont_loss is not None and out.behavior is not None
+    assert str(out.pcont_loss.device) == f"device('{device}')"
+    assert out.behavior.imagined_pcont is not None
+    assert str(out.behavior.imagined_pcont.device) == f"device('{device}')"
+    assert not np.isnan(out.behavior.lambda_return.to("cpu").numpy()).any()
+
+    model.zero_grad()
+    out.pcont_loss.backward()
+    grads = [
+        p.grad for p in model.dreamer.pcont_head.parameters() if p.grad is not None
+    ]
+    assert grads, "dreamer: the discount head received no gradient"
+    for g in grads:
+        assert str(g.device) == f"device('{device}')"

@@ -301856,7 +301856,7 @@
   "dreamer": {
     "name": "DreamerModel",
     "type": "DreamerModel",
-    "params": 5793523,
+    "params": 5703223,
     "own_params": 0,
     "children": [
       {
@@ -302023,6 +302023,43 @@
       {
         "name": "reward_head",
         "type": "DenseHead",
+        "params": 159901,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "layers",
+            "type": "ModuleList",
+            "params": 159600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Linear",
+                "params": 69300,
+                "own_params": 69300,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 90300,
+                "own_params": 90300,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "out",
+            "type": "Linear",
+            "params": 301,
+            "own_params": 301,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "value_head",
+        "type": "DenseHead",
         "params": 250201,
         "own_params": 0,
         "children": [
@@ -302056,8 +302093,7 @@
             "own_params": 301,
             "children": []
           }
-        ],
-        "repeat": 2
+        ]
       },
       {
         "name": "actor",
@@ -302110,13 +302146,13 @@
   "dreamer_world_model": {
     "name": "DreamerForWorldModeling",
     "type": "DreamerForWorldModeling",
-    "params": 5793523,
+    "params": 5703223,
     "own_params": 0,
     "children": [
       {
         "name": "dreamer",
         "type": "DreamerModel",
-        "params": 5793523,
+        "params": 5703223,
         "own_params": 0,
         "children": [
           {
@@ -302283,6 +302319,43 @@
           {
             "name": "reward_head",
             "type": "DenseHead",
+            "params": 159901,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 159600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 69300,
+                    "own_params": 69300,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 90300,
+                    "own_params": 90300,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 301,
+                "own_params": 301,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "value_head",
+            "type": "DenseHead",
             "params": 250201,
             "own_params": 0,
             "children": [
@@ -302316,8 +302389,7 @@
                 "own_params": 301,
                 "children": []
               }
-            ],
-            "repeat": 2
+            ]
           },
           {
             "name": "actor",

@@ -27,8 +27,11 @@ from lucid.models.generative.dreamer._model import (
 )
 
 # The paper's DeepMind Control Suite setup: PlaNet's world model unchanged,
-# with 3-layer 300-unit ELU heads for reward, value and the policy, a
-# 15-step imagination horizon and TD(0.95) returns.
+# with 300-unit ELU heads, a 15-step imagination horizon and TD(0.95)
+# returns.  Depths differ per head and are cited individually — the paper
+# states three layers for the action and value models and says nothing
+# about the reward model, whose two layers come from the released
+# implementation (and match PlaNet's).
 _CFG_DREAMER = DreamerConfig(
     sample_size=64,
     in_channels=3,
@@ -48,7 +51,7 @@ _CFG_DREAMER = DreamerConfig(
     value_hidden=300,
     value_layers=3,
     reward_hidden=300,
-    reward_layers=3,
+    reward_layers=2,
 )
 
 

@@ -64,10 +64,27 @@ class TestDreamerConfig:
     def test_defaults_match_paper(self) -> None:
         cfg = DreamerConfig(action_dim=6)
         assert (cfg.horizon, cfg.lambda_, cfg.discount) == (15, 0.95, 0.99)
+        # Paper: "three dense layers of size 300 with ELU activations for
+        # the action and value models".  The reward head's depth is not
+        # stated there; 2 is the released implementation's, and PlaNet's.
         assert (cfg.actor_hidden, cfg.actor_layers) == (300, 3)
         assert (cfg.value_hidden, cfg.value_layers) == (300, 3)
-        assert (cfg.reward_hidden, cfg.reward_layers) == (300, 3)
+        assert (cfg.reward_hidden, cfg.reward_layers) == (300, 2)
         assert cfg.act_fn == "elu"
+
+    def test_head_depths_reach_the_modules(self) -> None:
+        """A cited depth is worth nothing if the head is built some other way."""
+        model = DreamerModel(DreamerConfig(action_dim=2))
+        assert len(model.reward_head.layers) == 2
+        assert len(model.value_head.layers) == 3
+        assert len(model.actor.head.layers) == 3
+
+    def test_pcont_defaults_off(self) -> None:
+        """The paper introduces it for early termination; DMC has none."""
+        cfg = DreamerConfig(action_dim=2)
+        assert cfg.pcont is False
+        assert cfg.pcont_scale == 10.0 and cfg.pcont_layers == 3
+        assert cfg.detach_actor_input is True
 
     def test_world_model_fields_inherited(self) -> None:
         """The state geometry comes from the shared base, not from Dreamer."""
@@ -231,6 +248,21 @@ class TestLambdaReturn:
             )
             assert abs(got - want) < 1e-4
 
+    def test_targets_include_the_starting_state(self) -> None:
+        """Paper Algorithm 1 anchors the sum at the state you are in.
+
+        "Imagine trajectories {(s_tau, a_tau)}_{tau=t}^{t+H} from each s_t
+        ... Compute value estimates V_lambda(s_tau)" — tau starts at t, so
+        the observed state gets a target. The released implementation's
+        indexing starts one step in; this follows the paper. Imagining H
+        steps from N starts therefore yields H targets, not H-1.
+        """
+        model = DreamerForWorldModeling(_tiny_cfg(horizon=5))
+        out = model(*_batch(b=2, t=3))
+        assert out.behavior is not None
+        assert out.behavior.imagined_reward.shape == (6, 6)  # start + 5
+        assert out.behavior.lambda_return.shape == (6, 5)  # one per step, incl. start
+
     def test_shape_drops_the_bootstrap(self) -> None:
         out = _lambda_return(lucid.randn((3, 6)), lucid.randn((3, 6)), 0.99, 0.95)
         assert out.shape == (3, 5)
@@ -372,6 +404,120 @@ class TestObjective:
         out = model(*_batch())
         assert out.kl_loss is not None
         assert float(out.kl_loss.item()) == pytest.approx(0.0, abs=1e-5)
+
+
+class TestDiscountHead:
+    """``pcont`` — the discount the model predicts instead of assuming.
+
+    The paper: "In tasks with early termination, the world model also
+    predicts the discount factor from each latent state." Without it a
+    constant gamma has the planner keep collecting reward past the end of
+    the episode.
+    """
+
+    def test_absent_by_default(self) -> None:
+        model = DreamerForWorldModeling(_tiny_cfg())
+        assert model.dreamer.pcont_head is None
+        out = model(*_batch())
+        assert out.pcont_loss is None
+        assert out.behavior is not None and out.behavior.imagined_pcont is None
+
+    def test_predict_pcont_raises_without_a_head(self) -> None:
+        model = DreamerModel(_tiny_cfg())
+        with pytest.raises(ValueError):
+            model.predict_pcont(model.rssm.initial(2))
+
+    def test_requires_discounts(self) -> None:
+        """Defaulting to 'never terminates' would train the head to a constant."""
+        model = DreamerForWorldModeling(_tiny_cfg(pcont=True))
+        obs, actions, rewards = _batch()
+        with pytest.raises(ValueError):
+            model(obs, actions, rewards)
+
+    def test_populates_its_loss_and_prediction(self) -> None:
+        model = DreamerForWorldModeling(_tiny_cfg(pcont=True))
+        obs, actions, rewards = _batch()
+        out = model(obs, actions, rewards, lucid.ones((2, 3)))
+        assert out.pcont_loss is not None
+        assert out.behavior is not None
+        assert out.behavior.imagined_pcont is not None
+        assert out.behavior.imagined_pcont.shape == (4, 5)
+
+    def test_drops_the_last_filtered_step(self) -> None:
+        """It may be terminal, and imagining onward from it trains a fiction."""
+        plain = DreamerForWorldModeling(_tiny_cfg())
+        with_pcont = DreamerForWorldModeling(_tiny_cfg(pcont=True))
+        obs, actions, rewards = _batch(b=2, t=3)
+        a = plain(obs, actions, rewards)
+        b = with_pcont(obs, actions, rewards, lucid.ones((2, 3)))
+        assert a.behavior is not None and b.behavior is not None
+        assert a.behavior.lambda_return.shape[0] == 6  # B * T
+        assert b.behavior.lambda_return.shape[0] == 4  # B * (T - 1)
+
+    def test_rejects_a_sequence_too_short_to_drop_from(self) -> None:
+        model = DreamerForWorldModeling(_tiny_cfg(pcont=True))
+        obs, actions, rewards = _batch(b=2, t=1)
+        with pytest.raises(ValueError):
+            model(obs, actions, rewards, lucid.ones((2, 1)))
+
+    def test_head_joins_the_world_parameter_group(self) -> None:
+        model = DreamerForWorldModeling(_tiny_cfg(pcont=True))
+        world = {id(p) for p in model.world_parameters()}
+        assert {id(p) for p in model.dreamer.pcont_head.parameters()} <= world
+        actor = {id(p) for p in model.actor_parameters()}
+        value = {id(p) for p in model.value_parameters()}
+        assert world | actor | value == {id(p) for p in model.parameters()}
+        assert not world & actor and not world & value
+
+    def test_termination_cuts_the_future(self) -> None:
+        """The semantics, not the plumbing: gamma == 0 leaves only the reward."""
+        reward = lucid.tensor([[0.5, -1.2, 2.0, 0.3]])
+        value = lucid.tensor([[0.9, 0.2, -0.7, 1.5]])
+        dead = _lambda_return(reward, value, lucid.zeros((1, 4)), 0.95)
+        for t, got in enumerate([float(x) for x in dead[0]]):
+            assert abs(got - float(reward[0, t])) < 1e-5
+
+    def test_constant_tensor_matches_a_scalar_discount(self) -> None:
+        reward, value = lucid.randn((3, 6)), lucid.randn((3, 6))
+        scalar = _lambda_return(reward, value, 0.99, 0.95)
+        tensor = _lambda_return(reward, value, lucid.ones((3, 6)) * 0.99, 0.95)
+        assert float((scalar - tensor).abs().max().item()) < 1e-4
+
+
+class TestActorInputDetach:
+    """``detach_actor_input`` — the one behavioural fork with the reference.
+
+    The released implementation feeds the actor a ``stop_gradient``-ed
+    state during imagination. Both settings must still train the actor;
+    what changes is which chain-rule terms survive.
+    """
+
+    def _actor_grads(self, detach: bool, weights: object) -> list[lucid.Tensor]:
+        model = DreamerForWorldModeling(
+            _tiny_cfg(detach_actor_input=detach, mean_only=True)
+        )
+        model.load_state_dict(weights)
+        out = model(*_batch())
+        assert out.behavior is not None
+        model.zero_grad()
+        out.behavior.actor_loss.backward()
+        return [p.grad.clone() for p in model.actor_parameters()]
+
+    def test_flag_changes_the_gradient(self) -> None:
+        weights = DreamerForWorldModeling(
+            _tiny_cfg(detach_actor_input=True, mean_only=True)
+        ).state_dict()
+        on = self._actor_grads(True, weights)
+        off = self._actor_grads(False, weights)
+        assert max(float((a - b).abs().max().item()) for a, b in zip(on, off)) > 1e-9
+
+    @pytest.mark.parametrize("detach", [True, False])
+    def test_actor_still_learns_either_way(self, detach: bool) -> None:
+        weights = DreamerForWorldModeling(
+            _tiny_cfg(detach_actor_input=True, mean_only=True)
+        ).state_dict()
+        grads = self._actor_grads(detach, weights)
+        assert sum(float((g**2).sum().item()) for g in grads) > 0
 
 
 class TestGradientRouting:

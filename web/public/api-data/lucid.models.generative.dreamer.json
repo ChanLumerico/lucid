@@ -1,0 +1,1538 @@
+{
+  "slug": "lucid.models.generative.dreamer",
+  "name": "dreamer",
+  "path": "lucid.models.generative.dreamer",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/__init__.py#L1",
+  "members": [
+    {
+      "name": "DreamerConfig",
+      "path": "lucid.models.generative.dreamer._config.DreamerConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "WorldModelConfig"
+      ],
+      "labels": [],
+      "signature": "DreamerConfig(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'elu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 3.0, kl_weight: float = 1.0, horizon: int = 15, discount: float = 0.99, lambda_: float = 0.95, actor_hidden: int = 300, actor_layers: int = 3, value_hidden: int = 300, value_layers: int = 3, actor_min_std: float = 0.0001, actor_init_std: float = 5.0, actor_mean_scale: float = 5.0, reward_hidden: int = 300, reward_layers: int = 2, detach_actor_input: bool = True, pcont: bool = False, pcont_scale: float = 10.0, pcont_layers: int = 3)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_config.py#L21",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.dreamer._config.DreamerConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'elu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 3.0, kl_weight: float = 1.0, horizon: int = 15, discount: float = 0.99, lambda_: float = 0.95, actor_hidden: int = 300, actor_layers: int = 3, value_hidden: int = 300, value_layers: int = 3, actor_min_std: float = 0.0001, actor_init_std: float = 5.0, actor_mean_scale: float = 5.0, reward_hidden: int = 300, reward_layers: int = 2, detach_actor_input: bool = True, pcont: bool = False, pcont_scale: float = 10.0, pcont_layers: int = 3)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_config.py#L1",
+          "subcategory": "config",
+          "summary": "Initialise the actor. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen configuration for the Dreamer family.",
+      "extended": "Defaults reproduce Hafner et al., 2020 on the DeepMind Control Suite.\nFields shared with PlaNet are inherited from `WorldModelConfig`.",
+      "parameters": [
+        {
+          "name": "act_fn",
+          "annotation": "(silu, swish, relu, gelu, elu)",
+          "description": "Activation throughout.  The paper specifies ELU, where PlaNet\nspecifies ReLU — the two families genuinely differ here.",
+          "default": "\"silu\""
+        },
+        {
+          "name": "horizon",
+          "annotation": "int",
+          "description": "How many steps each imagined trajectory runs for.  Short on\npurpose: model error compounds, and the critic's bootstrap is what\ncarries value beyond the horizon.",
+          "default": "15"
+        },
+        {
+          "name": "discount",
+          "annotation": "float",
+          "description": "Reward discount $\\gamma$.",
+          "default": "0.99"
+        },
+        {
+          "name": "lambda_",
+          "annotation": "float",
+          "description": "TD($\\lambda$) weighting between short- and long-horizon\nreturns.  Trailing underscore because `lambda` is a keyword.",
+          "default": "0.95"
+        },
+        {
+          "name": "actor_hidden",
+          "annotation": "int",
+          "description": "Width and depth of the actor.",
+          "default": "300, 3"
+        },
+        {
+          "name": "actor_layers",
+          "annotation": "int",
+          "description": "Width and depth of the actor.",
+          "default": "300, 3"
+        },
+        {
+          "name": "value_hidden",
+          "annotation": "int",
+          "description": "Width and depth of the critic.",
+          "default": "300, 3"
+        },
+        {
+          "name": "value_layers",
+          "annotation": "int",
+          "description": "Width and depth of the critic.",
+          "default": "300, 3"
+        },
+        {
+          "name": "actor_min_std",
+          "annotation": "float",
+          "description": "Floor on the action distribution's scale.",
+          "default": "1e-4"
+        },
+        {
+          "name": "actor_init_std",
+          "annotation": "float",
+          "description": "Offset added before `softplus` so the policy starts wide enough\nto explore.",
+          "default": "5.0"
+        },
+        {
+          "name": "actor_mean_scale",
+          "annotation": "float",
+          "description": "The mean is passed through `s * tanh(x / s)` before squashing,\nwhich keeps it from saturating the outer `tanh`.",
+          "default": "5.0"
+        },
+        {
+          "name": "reward_hidden",
+          "annotation": "int",
+          "description": "Width and depth of the reward head.  The paper names only the\naction and value models, so the depth here is the released\nimplementation's — which also matches PlaNet's reward head.",
+          "default": "300, 2"
+        },
+        {
+          "name": "reward_layers",
+          "annotation": "int",
+          "description": "Width and depth of the reward head.  The paper names only the\naction and value models, so the depth here is the released\nimplementation's — which also matches PlaNet's reward head.",
+          "default": "300, 2"
+        },
+        {
+          "name": "detach_actor_input",
+          "annotation": "bool",
+          "description": "Hide the state's gradient from the actor during imagination.  The\nreleased implementation does this; the paper does not discuss it.\nSetting `False` gives the exact gradient of the stated objective\n— see Notes.",
+          "default": "True"
+        },
+        {
+          "name": "pcont",
+          "annotation": "bool",
+          "description": "Predict the discount factor from each latent state instead of\nholding it constant.  The paper introduces this for \"tasks with\nearly termination\"; with no termination there is nothing to learn,\nwhich is why it is off by default.",
+          "default": "False"
+        },
+        {
+          "name": "pcont_scale",
+          "annotation": "float",
+          "description": "Multiplier on the discount head's likelihood.",
+          "default": "10.0"
+        },
+        {
+          "name": "pcont_layers",
+          "annotation": "int",
+          "description": "Depth of the discount head.  Width follows `value_hidden`.",
+          "default": "3"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.dreamer import DreamerConfig\n>>> cfg = DreamerConfig(action_dim=6)\n>>> cfg.horizon, cfg.lambda_, cfg.discount\n(15, 0.95, 0.99)\n>>> cfg.act_fn\n'elu'"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n([arXiv:1912.01603](https://arxiv.org/abs/1912.01603)).\n\nThe actor emits a `tanh`-squashed diagonal Gaussian, so actions are\nbounded to `(-1, 1)` — the Control Suite's range.  `actor_min_std`,\n`actor_init_std` and `actor_mean_scale` are **not stated in the\npaper**; they are the released implementation's, and are exposed here\nrather than buried so a reader can see which numbers have a citation\nand which have a source.\n\nWhere the paper and the released implementation disagree, the paper\nwins and the difference is recorded here rather than hidden:\n\n==============  ====================  ==========================\nquantity        paper                 released implementation\n==============  ====================  ==========================\nhead width      300                   400 throughout\nactor depth     3                     4\nvalue depth     3                     3\nreward depth    not stated            2  (taken, as the default)\n==============  ====================  ==========================\n\n`detach_actor_input` is the one behavioural fork.  The released\nimplementation feeds the actor a `stop_gradient`-ed state during\nimagination, which drops the terms in which a return depends on the\npolicy *through the state it read*.  Keeping them (`False`) is the\nexact gradient of $\\max_\\phi \\mathbb{E}[\\sum_\\tau V_\\lambda]$;\ndropping them is cheaper and lower-variance.  The default follows the\nreleased implementation because the paper is silent.\n\nThe three losses need **three optimisers over three parameter groups**\n— see `DreamerForWorldModeling`.  Summing them and taking one\nstep is not this algorithm: the actor's gradient would then also\ndescend the world model, and the critic would chase a target it is\nsimultaneously moving."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DreamerBehaviorOutput",
+      "path": "lucid.models.generative.dreamer._model.DreamerBehaviorOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "DreamerBehaviorOutput(actor_loss: Tensor, value_loss: Tensor, lambda_return: Tensor, imagined_reward: Tensor, imagined_value: Tensor, imagined_action: Tensor, imagined_pcont: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L57",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.dreamer._model.DreamerBehaviorOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(actor_loss: Tensor, value_loss: Tensor, lambda_return: Tensor, imagined_reward: Tensor, imagined_value: Tensor, imagined_action: Tensor, imagined_pcont: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Initialise the actor. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What the imagination pass produces — the actor's and critic's terms.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.dreamer import (\n...     DreamerConfig, DreamerForWorldModeling)\n>>> cfg = DreamerConfig(action_dim=2, cnn_depth=2, stoch_size=4,\n...                     deter_size=8, hidden_size=8, actor_hidden=8,\n...                     value_hidden=8, reward_hidden=8, horizon=3)\n>>> model = DreamerForWorldModeling(cfg)\n>>> out = model(lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2)),\n...             lucid.randn((1, 3)))\n>>> out.behavior.lambda_return.shape\n(3, 3)"
+      ],
+      "notes": [
+        "`actor_loss` and `value_loss` must be given **separate optimisers\nover disjoint parameter groups** — see the module docstring."
+      ],
+      "attributes": [
+        {
+          "name": "actor_loss",
+          "annotation": "Tensor",
+          "description": "`-mean(w * V_lambda)`, minimised by the actor's optimiser only."
+        },
+        {
+          "name": "value_loss",
+          "annotation": "Tensor",
+          "description": "Half the discounted squared error between the critic and the\n(detached) $V_\\lambda$ target."
+        },
+        {
+          "name": "lambda_return",
+          "annotation": "Tensor",
+          "description": "The targets themselves, `(N, H)` for `N` imagined trajectories\nover a horizon of `H`."
+        },
+        {
+          "name": "imagined_reward",
+          "annotation": "Tensor",
+          "description": "Reward the model predicted along the imagined trajectories,\n`(N, H + 1)`."
+        },
+        {
+          "name": "imagined_value",
+          "annotation": "Tensor",
+          "description": "The critic's estimate along the same states, `(N, H + 1)`."
+        },
+        {
+          "name": "imagined_action",
+          "annotation": "Tensor",
+          "description": "Actions the actor proposed, `(N, H, action_dim)`."
+        },
+        {
+          "name": "imagined_pcont",
+          "annotation": "Tensor or None",
+          "description": "Predicted continuation probability at each imagined state,\n`(N, H + 1)`; `None` when the discount is held constant."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DreamerForWorldModeling",
+      "path": "lucid.models.generative.dreamer._model.DreamerForWorldModeling",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "DreamerForWorldModeling(config: DreamerConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L634",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.dreamer._model.DreamerForWorldModeling.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: DreamerConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L697",
+          "subcategory": "model",
+          "summary": "Initialise the actor. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "world_parameters",
+          "path": "lucid.models.generative.dreamer._model.DreamerForWorldModeling.world_parameters",
+          "kind": "function",
+          "labels": [],
+          "signature": "world_parameters()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L707",
+          "subcategory": "model",
+          "summary": "Everything the world-model loss trains — encoder, RSSM, decoder, reward.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list of Parameter",
+            "description": "The world model's parameters, disjoint from\n`actor_parameters` and `value_parameters`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "actor_parameters",
+          "path": "lucid.models.generative.dreamer._model.DreamerForWorldModeling.actor_parameters",
+          "kind": "function",
+          "labels": [],
+          "signature": "actor_parameters()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L727",
+          "subcategory": "model",
+          "summary": "The actor's parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list of Parameter",
+            "description": "Trained by `actor_loss` alone."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "value_parameters",
+          "path": "lucid.models.generative.dreamer._model.DreamerForWorldModeling.value_parameters",
+          "kind": "function",
+          "labels": [],
+          "signature": "value_parameters()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L737",
+          "subcategory": "model",
+          "summary": "The critic's parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list of Parameter",
+            "description": "Trained by `value_loss` alone."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.dreamer._model.DreamerForWorldModeling.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(observations: Tensor, actions: Tensor, rewards: Tensor, discounts: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L845",
+          "subcategory": "model",
+          "summary": "Train the world model and the behaviour on one batch of trajectories.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "observations",
+              "annotation": "Tensor",
+              "description": "Frames, `(B, T, C, 64, 64)`.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "Actions taken *into* each step, `(B, T, action_dim)`.",
+              "default": null
+            },
+            {
+              "name": "rewards",
+              "annotation": "Tensor",
+              "description": "Observed reward at each step, `(B, T)`.",
+              "default": null
+            },
+            {
+              "name": "discounts",
+              "annotation": "Tensor or None",
+              "description": "`(B, T)`, `1` where the episode continued past that step\nand `0` where it ended.  Required when the config asks for a\ndiscount head, ignored otherwise.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "DreamerOutput",
+            "description": "`loss` is the world-model loss; the behaviour losses are on\n`.behavior` and take their own optimisers."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If `pcont` is configured and `discounts` is omitted — the\nhead has nothing to learn from without it, and defaulting to\n\"never terminates\" would silently train it to a constant."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Dreamer with its world-model, actor and critic objectives.",
+      "extended": "Three losses come out of one forward pass:\n\n- the **world-model** loss, identical in form to PlaNet's — pixel and\n  reward reconstruction against a free-nats-clamped KL;\n- the **actor** loss, $-\\mathbb{E}[V_\\lambda]$ over trajectories\n  imagined under the policy itself;\n- the **critic** loss, regressing onto those same targets held fixed.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "DreamerConfig",
+          "description": "Frozen configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.dreamer import (\n...     DreamerConfig, DreamerForWorldModeling)\n>>> cfg = DreamerConfig(action_dim=2, cnn_depth=2, stoch_size=4,\n...                     deter_size=8, hidden_size=8, actor_hidden=8,\n...                     value_hidden=8, reward_hidden=8, horizon=3)\n>>> model = DreamerForWorldModeling(cfg)\n>>> out = model(lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2)),\n...             lucid.randn((1, 3)))\n>>> bool(out.loss.ndim == 0), bool(out.behavior.actor_loss.ndim == 0)\n(True, True)"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020.\n\n**These three must be optimised separately.**  Summing them and taking\none step is a different algorithm: the actor's gradient would descend\nthe world model too, and the critic would chase a moving target.  The\nparameter groups are exposed as `world_parameters`,\n`actor_parameters` and `value_parameters`, which partition\nthe model exactly.\n\nImagination starts from **detached** posterior states, so no behaviour\ngradient reaches the encoder or the filtering that produced them.\nWithin the horizon, though, the actor's gradient deliberately flows\n*through the learned dynamics* — through the RSSM transition, the\nreward head and the critic — because that analytic path is the paper's\nentire contribution.  Both the latent draw and the action draw are\nreparameterised, which is what lets a return computed 15 steps out\nreach the policy that chose step 1.  Only the actor's parameters are\nupdated by it; that is what the parameter grouping is for.\n\nThe critic is the exception: it reads detached states, so `value_loss`\nreaches nothing but the critic itself.\n\nReconstruction is a Gaussian log-likelihood with unit variance, so it\nreduces to a squared error summed over pixels and averaged over the\nbatch — the same convention as PlaNet."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DreamerModel",
+      "path": "lucid.models.generative.dreamer._model.DreamerModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "DreamerModel(config: DreamerConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L342",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: DreamerConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L383",
+          "subcategory": "model",
+          "summary": "Initialise the actor. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(observations: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L436",
+          "subcategory": "model",
+          "summary": "Embed a frame sequence — `(B, T, C, 64, 64) -> (B, T, embed_size)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "observe",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.observe",
+          "kind": "function",
+          "labels": [],
+          "signature": "observe(observations: Tensor, actions: Tensor, state: RSSMState | None = None, sample: bool | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L440",
+          "subcategory": "model",
+          "summary": "Filter a trajectory into posterior states.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "observations",
+              "annotation": "Tensor",
+              "description": "Frames, `(B, T, C, 64, 64)`.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "Actions taken *into* each step, `(B, T, action_dim)`.",
+              "default": null
+            },
+            {
+              "name": "state",
+              "annotation": "RSSMState or None",
+              "description": "Starting belief; `None` starts from zeros.",
+              "default": "None"
+            },
+            {
+              "name": "sample",
+              "annotation": "(bool or None, optional, keyword - only)",
+              "description": "Draw the latent (`True`) or take its mean (`False`).\n`None` follows the config's `mean_only` setting.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "RSSMState",
+            "description": "What the dynamics predicted, `(B, T, ·)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "decode",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.decode",
+          "kind": "function",
+          "labels": [],
+          "signature": "decode(state: RSSMState)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L472",
+          "subcategory": "model",
+          "summary": "Reconstruct frames from a state — `(B, T, C, 64, 64)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "predict_reward",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.predict_reward",
+          "kind": "function",
+          "labels": [],
+          "signature": "predict_reward(state: RSSMState)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L476",
+          "subcategory": "model",
+          "summary": "Predict reward from a state — `(B, T)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "predict_value",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.predict_value",
+          "kind": "function",
+          "labels": [],
+          "signature": "predict_value(state: RSSMState)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L480",
+          "subcategory": "model",
+          "summary": "Estimate the value of a state — `(B, T)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "predict_pcont",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.predict_pcont",
+          "kind": "function",
+          "labels": [],
+          "signature": "predict_pcont(state: RSSMState)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L484",
+          "subcategory": "model",
+          "summary": "Predict the discount at a state — logits, `(B, T)`.",
+          "extended": "The head is Bernoulli: its probability is how likely the episode is\nto continue past this state, and the discount used downstream is\nthat probability rather than a constant.  A state the agent will\nnot survive therefore discounts everything after it to nothing,\nwhich is the point — a constant $\\gamma$ would have the\nplanner keep collecting rewards past the end of the episode.",
+          "parameters": [
+            {
+              "name": "state",
+              "annotation": "RSSMState",
+              "description": "The states to score.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "Logits, `(B, T)`.  Apply `sigmoid` for the probability;\nthe loss consumes the logits directly."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If the model was configured without `pcont`."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "act",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.act",
+          "kind": "function",
+          "labels": [],
+          "signature": "act(state: RSSMState, sample: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L517",
+          "subcategory": "model",
+          "summary": "Propose actions for a state — `(B, T, action_dim)` in `(-1, 1)`.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "state",
+              "annotation": "RSSMState",
+              "description": "The belief to act from.",
+              "default": null
+            },
+            {
+              "name": "sample",
+              "annotation": "bool",
+              "description": "Draw from the policy (`True`) or take its squashed mean\n(`False`).",
+              "default": "True, keyword-only"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "Actions bounded to `(-1, 1)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "imagine",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.imagine",
+          "kind": "function",
+          "labels": [],
+          "signature": "imagine(state: RSSMState, horizon: int, sample: bool | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L535",
+          "subcategory": "model",
+          "summary": "Roll the dynamics forward under the actor's own policy.",
+          "extended": "This is the loop the whole method rests on.  Unlike PlaNet's\n`lucid.models.generative.planet.PlaNetModel.imagine`, which\nis handed a fixed action sequence to evaluate, here the action at\neach step is *produced* by the actor from the state the model just\nimagined — so the trajectory and the policy are coupled, and a\ngradient taken at the end reaches the policy at every step along\nthe way.",
+          "parameters": [
+            {
+              "name": "state",
+              "annotation": "RSSMState",
+              "description": "Flat starting beliefs, `(N, ·)`.",
+              "default": null
+            },
+            {
+              "name": "horizon",
+              "annotation": "int",
+              "description": "Number of steps to imagine.",
+              "default": null
+            },
+            {
+              "name": "sample",
+              "annotation": "(bool or None, optional, keyword - only)",
+              "description": "Draw both the latent and the action (`True`) or take their\nmeans (`False`).  `None` follows the config's `mean_only`\nsetting, matching `observe` — a model configured\ndeterministic must imagine deterministically too.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "RSSMState",
+            "description": "The imagined states including the start, `(N, horizon + 1, ·)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "The start state is *not* detached here — that is the caller's\ndecision, and `DreamerForWorldModeling` does detach it so\nthe actor's gradient cannot reach the world model.\n\nThe state the *actor reads* is detached when the config says so,\nwhich is the released implementation's behaviour and the default.\nIt does not stop the actor learning: the gradient still arrives\nthrough each action it produced.  What it drops are the terms in\nwhich a return depends on the policy through the state it read."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.dreamer._model.DreamerModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(observations: Tensor, actions: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L611",
+          "subcategory": "model",
+          "summary": "Propose an action for a state — `(B, T, action_dim)` in `(-1, 1)`.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "feature",
+              "annotation": "Tensor",
+              "description": "Latent state, `(B, T, latent_size)`.",
+              "default": null
+            },
+            {
+              "name": "sample",
+              "annotation": "bool",
+              "description": "Draw reparameterised (`True`) or take the squashed mean\n(`False`, which is how a trained policy should act).",
+              "default": "True, keyword-only"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "Actions bounded to `(-1, 1)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "PlaNet's world model plus a learned actor and critic.",
+      "extended": "The world model is unchanged from PlaNet — the same encoder, the same\nRSSM, the same decoder and reward head.  Two heads are added: an actor\nthat proposes actions from a latent state and a critic that scores one.",
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "DreamerConfig",
+          "description": "Frozen configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.dreamer import DreamerConfig, DreamerModel\n>>> cfg = DreamerConfig(action_dim=2, cnn_depth=2, stoch_size=4,\n...                     deter_size=8, hidden_size=8, actor_hidden=8,\n...                     value_hidden=8, reward_hidden=8)\n>>> model = DreamerModel(cfg)\n>>> _, posteriors = model.observe(lucid.randn((1, 4, 3, 64, 64)),\n...                               lucid.randn((1, 4, 2)))\n>>> model.act(posteriors, sample=False).shape\n(1, 4, 2)"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020.\n\n`actions[:, t]` is the action taken *into* step `t`, matching\n`lucid.models.generative.planet.PlaNetModel`.\n\nThis class holds no environment and never steps one.  Everything it\ndoes — filtering, imagining, acting — happens in latent space, which is\nwhat makes the whole family trainable from a replay buffer alone."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DreamerOutput",
+      "path": "lucid.models.generative.dreamer._model.DreamerOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "DreamerOutput(observation: Tensor, reward: Tensor, value: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, pcont_loss: Tensor | None = None, behavior: DreamerBehaviorOutput | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L111",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.dreamer._model.DreamerOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(observation: Tensor, reward: Tensor, value: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, pcont_loss: Tensor | None = None, behavior: DreamerBehaviorOutput | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Initialise the actor. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What `DreamerModel` returns after filtering a trajectory.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.dreamer import DreamerConfig, DreamerModel\n>>> cfg = DreamerConfig(action_dim=2, cnn_depth=2, stoch_size=4,\n...                     deter_size=8, hidden_size=8, actor_hidden=8,\n...                     value_hidden=8, reward_hidden=8)\n>>> model = DreamerModel(cfg)\n>>> out = model(lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2)))\n>>> out.observation.shape, out.value.shape\n((1, 3, 3, 64, 64), (1, 3))"
+      ],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "observation",
+          "annotation": "Tensor",
+          "description": "Reconstruction from the posterior states, `(B, T, C, 64, 64)`."
+        },
+        {
+          "name": "reward",
+          "annotation": "Tensor",
+          "description": "Predicted reward at each posterior state, `(B, T)`."
+        },
+        {
+          "name": "value",
+          "annotation": "Tensor",
+          "description": "The critic's estimate at each posterior state, `(B, T)`."
+        },
+        {
+          "name": "posterior_stoch, posterior_mean, posterior_std",
+          "annotation": "Tensor",
+          "description": "The filtered latent and the Gaussian it came from, `(B, T, S)`."
+        },
+        {
+          "name": "prior_mean, prior_std",
+          "annotation": "Tensor",
+          "description": "The Gaussian the dynamics predicted before seeing the frame,\n`(B, T, S)`."
+        },
+        {
+          "name": "deter",
+          "annotation": "Tensor",
+          "description": "The deterministic path, `(B, T, D)`."
+        },
+        {
+          "name": "loss, recon_loss, reward_loss, kl_loss, pcont_loss",
+          "annotation": "Tensor or None",
+          "description": "World-model terms, set only by\n`DreamerForWorldModeling`.  `loss` is the **world-model**\nloss alone — the behaviour losses live on\n`DreamerBehaviorOutput`, because they belong to different\noptimisers.  `pcont_loss` is `None` unless the config asks for\na discount head."
+        },
+        {
+          "name": "behavior",
+          "annotation": "DreamerBehaviorOutput or None",
+          "description": "Actor and critic terms, set only by\n`DreamerForWorldModeling`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "dreamer",
+      "path": "lucid.models.generative.dreamer._pretrained.dreamer",
+      "kind": "function",
+      "labels": [],
+      "signature": "dreamer(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_pretrained.py#L65",
+      "subcategory": "pretrained",
+      "summary": "Construct Dreamer's world model, actor and critic — no objectives.",
+      "extended": "PlaNet's architecture unchanged — a four-layer stride-2 convolutional\nencoder, a recurrent state-space model with a 200-unit deterministic\npath and a 30-unit stochastic state, a mirrored decoder — plus the two\nheads that replace PlaNet's planner: a `tanh`-squashed Gaussian actor\nand a scalar critic, each three 300-unit ELU layers.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises\nrather than returning a randomly initialised model.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `DreamerConfig` field overrides.  `action_dim` is\nthe one you almost always need — it is set by the environment, not\nby the paper.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "DreamerModel",
+        "description": "The trunk, configured with the paper defaults and any overrides."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.dreamer import dreamer\n>>> model = dreamer(action_dim=6).eval()\n>>> model.config.horizon, model.config.lambda_\n(15, 0.95)"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n([arXiv:1912.01603](https://arxiv.org/abs/1912.01603))."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "DreamerModel",
+        "type": "DreamerModel",
+        "params": 5703223,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "PixelEncoder",
+            "params": 690144,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "convs",
+                "type": "ModuleList",
+                "params": 690144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 1568,
+                    "own_params": 1568,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 32832,
+                    "own_params": 32832,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 131200,
+                    "own_params": 131200,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 524544,
+                    "own_params": 524544,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rssm",
+            "type": "RSSM",
+            "params": 556920,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pre_cell",
+                "type": "Linear",
+                "params": 6400,
+                "own_params": 6400,
+                "children": []
+              },
+              {
+                "name": "cell",
+                "type": "GRUCell",
+                "params": 241200,
+                "own_params": 241200,
+                "children": []
+              },
+              {
+                "name": "prior_head",
+                "type": "Sequential",
+                "params": 52260,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 40200,
+                    "own_params": 40200,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 12060,
+                    "own_params": 12060,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "posterior_head",
+                "type": "Sequential",
+                "params": 257060,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 245000,
+                    "own_params": 245000,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 12060,
+                    "own_params": 12060,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder",
+            "type": "PixelDecoder",
+            "params": 3795555,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lift",
+                "type": "Linear",
+                "params": 236544,
+                "own_params": 236544,
+                "children": []
+              },
+              {
+                "name": "deconvs",
+                "type": "ModuleList",
+                "params": 3559011,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 3276928,
+                    "own_params": 3276928,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 204864,
+                    "own_params": 204864,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ConvTranspose2d",
+                    "params": 73760,
+                    "own_params": 73760,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ConvTranspose2d",
+                    "params": 3459,
+                    "own_params": 3459,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "reward_head",
+            "type": "DenseHead",
+            "params": 159901,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 159600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 69300,
+                    "own_params": 69300,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 90300,
+                    "own_params": 90300,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 301,
+                "own_params": 301,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "value_head",
+            "type": "DenseHead",
+            "params": 250201,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 249900,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 69300,
+                    "own_params": 69300,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 90300,
+                    "own_params": 90300,
+                    "children": [],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 301,
+                "own_params": 301,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "actor",
+            "type": "_Actor",
+            "params": 250502,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "head",
+                "type": "DenseHead",
+                "params": 250502,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 249900,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 69300,
+                        "own_params": 69300,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 90300,
+                        "own_params": 90300,
+                        "children": [],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 602,
+                    "own_params": 602,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "dreamer_world_model",
+      "path": "lucid.models.generative.dreamer._pretrained.dreamer_world_model",
+      "kind": "function",
+      "labels": [],
+      "signature": "dreamer_world_model(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d27e58fe4/lucid/models/generative/dreamer/_pretrained.py#L117",
+      "subcategory": "pretrained",
+      "summary": "Construct Dreamer with all three of its objectives.",
+      "extended": "Same trunk as `dreamer`, wrapped with the world-model bound of\nHafner et al., 2019 and the two behaviour losses of Hafner et al.,\n2020 — an actor maximising $V_\\lambda$ over imagined\ntrajectories and a critic regressing onto it.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `DreamerConfig` field overrides.  `horizon`,\n`lambda_` and `discount` shape the imagined return;\n`action_dim` is set by the environment.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "DreamerForWorldModeling",
+        "description": "The trunk plus the objectives."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.dreamer import dreamer_world_model\n>>> model = dreamer_world_model(action_dim=6).eval()\n>>> len(model.actor_parameters()) > 0\nTrue"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n([arXiv:1912.01603](https://arxiv.org/abs/1912.01603)).\n\nThe three losses take **three separate optimisers** over the parameter\ngroups the model exposes — see `DreamerForWorldModeling`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "DreamerForWorldModeling",
+        "type": "DreamerForWorldModeling",
+        "params": 5703223,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "dreamer",
+            "type": "DreamerModel",
+            "params": 5703223,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "PixelEncoder",
+                "params": 690144,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "convs",
+                    "type": "ModuleList",
+                    "params": 690144,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 1568,
+                        "own_params": 1568,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 32832,
+                        "own_params": 32832,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Conv2d",
+                        "params": 131200,
+                        "own_params": 131200,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 524544,
+                        "own_params": 524544,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "rssm",
+                "type": "RSSM",
+                "params": 556920,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "pre_cell",
+                    "type": "Linear",
+                    "params": 6400,
+                    "own_params": 6400,
+                    "children": []
+                  },
+                  {
+                    "name": "cell",
+                    "type": "GRUCell",
+                    "params": 241200,
+                    "own_params": 241200,
+                    "children": []
+                  },
+                  {
+                    "name": "prior_head",
+                    "type": "Sequential",
+                    "params": 52260,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 40200,
+                        "own_params": 40200,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 12060,
+                        "own_params": 12060,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "posterior_head",
+                    "type": "Sequential",
+                    "params": 257060,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 245000,
+                        "own_params": 245000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 12060,
+                        "own_params": 12060,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "PixelDecoder",
+                "params": 3795555,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "lift",
+                    "type": "Linear",
+                    "params": 236544,
+                    "own_params": 236544,
+                    "children": []
+                  },
+                  {
+                    "name": "deconvs",
+                    "type": "ModuleList",
+                    "params": 3559011,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ConvTranspose2d",
+                        "params": 3276928,
+                        "own_params": 3276928,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "ConvTranspose2d",
+                        "params": 204864,
+                        "own_params": 204864,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ConvTranspose2d",
+                        "params": 73760,
+                        "own_params": 73760,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "ConvTranspose2d",
+                        "params": 3459,
+                        "own_params": 3459,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "reward_head",
+                "type": "DenseHead",
+                "params": 159901,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 159600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 69300,
+                        "own_params": 69300,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 90300,
+                        "own_params": 90300,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 301,
+                    "own_params": 301,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "value_head",
+                "type": "DenseHead",
+                "params": 250201,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 249900,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 69300,
+                        "own_params": 69300,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 90300,
+                        "own_params": 90300,
+                        "children": [],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 301,
+                    "own_params": 301,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "actor",
+                "type": "_Actor",
+                "params": 250502,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "head",
+                    "type": "DenseHead",
+                    "params": 250502,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "layers",
+                        "type": "ModuleList",
+                        "params": 249900,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 69300,
+                            "own_params": 69300,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 90300,
+                            "own_params": 90300,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "out",
+                        "type": "Linear",
+                        "params": 602,
+                        "own_params": 602,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "Dreamer family — Hafner et al., 2020.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "Dreamer",
+  "citation": "Hafner, Danijar, et al. \"Dream to Control: Learning Behaviors by Latent Imagination.\" International Conference on Learning Representations, 2020.",
+  "theory": "Dreamer inherits PlaNet's recurrent state-space model and throws away\nits planner.  Where PlaNet searches over action sequences at every step\n— thousands of imagined trajectories to choose one action — Dreamer\n*learns* a policy, so acting costs a single forward pass.\n\nThe trade is that a learned policy needs a learning signal, and the\npaper's contribution is where that signal comes from.  An **actor**\n$a_\\tau \\sim q_\\phi(a_\\tau \\mid s_\\tau)$ and a **critic**\n$v_\\psi(s_\\tau)$ are trained entirely on trajectories the world\nmodel imagines, never on environment interaction.  Because the imagined\nstates are produced by a differentiable transition and the actions are\nreparameterised samples, the gradient of a predicted return flows\n*backwards through the dynamics* into the actor:\n\n\n\n$$\n\\max_\\phi \\; \\mathbb{E}_{q_\\theta, q_\\phi}\n    \\Big[\\textstyle\\sum_{\\tau} V_\\lambda(s_\\tau)\\Big].\n$$\n\nThis is what separates it from a model-free actor-critic, which can\nonly estimate that gradient from scalar rewards it has actually\nobserved.  Here the model supplies an analytic path.\n\nThe target $V_\\lambda$ is an exponentially-weighted average of\n$k$-step returns — TD($\\lambda$) computed inside the\nimagination:\n\n\n\n$$\nV_\\lambda(s_\\tau) = (1 - \\lambda)\n    \\sum_{n=1}^{H-1} \\lambda^{n-1} V_N^n(s_\\tau)\n    + \\lambda^{H-1} V_N^H(s_\\tau),\n$$\n\nwith each $V_N^k$ summing discounted imagined rewards and\nbootstrapping from the critic.  The weighting is the usual bias-variance\ndial: short horizons trust the critic, long ones trust the model, and\n$\\lambda$ interpolates.  The critic then regresses onto that same\nquantity, which is why the two networks are trained together but with\nthe target held fixed.\n\nImagination is short — 15 steps in the paper — because the model's\nerror compounds, and the critic's bootstrap is what lets a short\nhorizon still represent long-term value.",
+  "tasks": [
+    "world-modeling"
+  ]
+}
