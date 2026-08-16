@@ -34,6 +34,7 @@ matching the rest of the zoo.  The unroll itself is time-major internally
 because a recurrence has to be — the same shape ``nn.GRU.forward`` takes.
 """
 
+import math
 from collections.abc import Callable
 from typing import NamedTuple, cast, override
 
@@ -43,7 +44,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._generative import generative_activation, normal_kl
 
-__all__ = ["RSSMState", "RSSM", "rssm_kl"]
+__all__ = ["RSSMState", "RSSM", "BlockLinear", "rssm_kl"]
 
 
 class RSSMState(NamedTuple):
@@ -240,6 +241,101 @@ def _gumbel_argmax(logits: Tensor) -> Tensor:
     return (logits + gumbel).argmax(dim=-1)
 
 
+class BlockLinear(nn.Module):
+    r"""A linear map that never mixes its blocks.
+
+    Parameters
+    ----------
+    in_features, out_features : int
+        Total widths, both divisible by ``blocks``.  Flat in, flat out —
+        the grouping is an implementation detail of the weight, not of
+        the call site.
+    blocks : int
+        How many independent maps to run side by side.
+
+    Raises
+    ------
+    ValueError
+        If ``blocks`` is not positive, or does not divide both widths.
+
+    Notes
+    -----
+    Group :math:`i` of the output reads group :math:`i` of the input and
+    nothing else, so the weight is
+    :math:`(g,\, d_{\mathrm{in}}/g,\, d_{\mathrm{out}}/g)` rather than
+    :math:`(d_{\mathrm{in}},\, d_{\mathrm{out}})` — a factor of :math:`g`
+    fewer parameters for the same widths.
+
+    This is what lets DreamerV3's sequence model be eight times wider than
+    its hidden layers without the recurrence dominating the parameter
+    count: at the ``200m`` rung a dense recurrence over 8192 units would
+    cost 200M parameters by itself, which is the entire model's budget.
+    Written as one map with a block-structured weight rather than as
+    ``blocks`` separate maps because that keeps it a single matmul, and
+    because a list of submodules would put ``blocks`` entries in
+    ``state_dict`` where there is conceptually one layer.
+
+    Initialised exactly as :class:`~lucid.nn.Linear` is, with the fan-in
+    taken *within* a block, which is the fan-in that actually reaches an
+    output.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._rssm import BlockLinear
+    >>> layer = BlockLinear(12, 24, blocks=4)
+    >>> layer(lucid.zeros((2, 12))).shape
+    (2, 24)
+    >>> layer.weight.shape
+    (4, 3, 6)
+    """
+
+    def __init__(self, in_features: int, out_features: int, blocks: int) -> None:
+        """Initialise the layer. See the class docstring for parameters."""
+        super().__init__()
+        if blocks < 1:
+            raise ValueError(f"blocks must be positive, got {blocks}")
+        if in_features % blocks or out_features % blocks:
+            raise ValueError(
+                f"blocks must divide both widths, got {in_features} and "
+                f"{out_features} for {blocks} blocks"
+            )
+        self.blocks = blocks
+        self.in_block = in_features // blocks
+        self.out_block = out_features // blocks
+        self.weight = nn.Parameter(lucid.empty(blocks, self.in_block, self.out_block))
+        self.bias = nn.Parameter(lucid.empty(blocks, self.out_block))
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Uniform on the within-block fan-in, as :class:`~lucid.nn.Linear` is."""
+        bound = 1.0 / math.sqrt(self.in_block)
+        nn.init.uniform_(self.weight, -bound, bound)
+        nn.init.uniform_(self.bias, -bound, bound)
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        """Apply the block map — ``(..., in_features) -> (..., out_features)``.
+
+        Parameters
+        ----------
+        x : Tensor
+            Flat, with the groups laid out contiguously along the last
+            axis.
+
+        Returns
+        -------
+        Tensor
+            Flat, in the same layout.
+        """
+        leading = tuple(int(v) for v in x.shape[:-1])
+        grouped = x.reshape(*leading, self.blocks, 1, self.in_block)
+        out = lucid.matmul(grouped, self.weight)
+        return (out.reshape(*leading, self.blocks, self.out_block) + self.bias).reshape(
+            *leading, self.blocks * self.out_block
+        )
+
+
 class RSSM(nn.Module):
     r"""Recurrent state-space model (Hafner et al., 2019).
 
@@ -282,11 +378,24 @@ class RSSM(nn.Module):
         Floor added after ``softplus``.  Without it a head can drive the
         standard deviation to zero, at which point the KL diverges and the
         sample stops carrying gradient.
+    discrete : int, default=0
+        Classes per stochastic variable.  ``0`` keeps the Gaussian latent
+        the paper describes; ``>= 2`` makes the latent a grid of
+        categoricals, which is what DreamerV2 changed.
+    unimix : float, default=0.0
+        Uniform mass mixed into every categorical, so no class can reach
+        probability zero and strand its gradient.  DreamerV3 sets 1%.
+    blocks : int, default=0
+        ``0`` uses the GRU recurrence above.  ``>= 1`` uses DreamerV3's
+        block-diagonal sequence model instead, in which the ``deter_size``
+        units are split into this many independent groups — see
+        :meth:`_block_recurrent`.  Must divide ``deter_size``.
 
     Attributes
     ----------
     cell : nn.GRUCell
-        The deterministic recurrence.
+        The deterministic recurrence.  Absent when ``blocks`` is set,
+        which replaces it with :class:`BlockLinear` gates.
     prior_head : nn.Module
         Maps :math:`h_t` to :math:`(\mu_p, \sigma_p)`.
     posterior_head : nn.Module
@@ -346,11 +455,18 @@ class RSSM(nn.Module):
         min_std: float = 0.1,
         discrete: int = 0,
         unimix: float = 0.0,
+        blocks: int = 0,
     ) -> None:
         """Initialise the RSSM. See the class docstring for parameter semantics."""
         super().__init__()
         if not 0.0 <= unimix < 1.0:
             raise ValueError(f"unimix must be in [0, 1), got {unimix}")
+        if blocks < 0:
+            raise ValueError(f"blocks must be non-negative, got {blocks}")
+        if blocks and deter_size % blocks:
+            raise ValueError(
+                f"blocks must divide deter_size, got {deter_size} and {blocks}"
+            )
         if discrete < 0 or discrete == 1:
             raise ValueError(
                 "discrete must be 0 for a Gaussian latent or at least 2 for a "
@@ -376,6 +492,7 @@ class RSSM(nn.Module):
         self.min_std = min_std
         self.discrete = discrete
         self.unimix = unimix
+        self.blocks = blocks
         self._act_name = act_fn
 
         # A categorical latent is a grid: `stoch_size` variables of
@@ -384,8 +501,25 @@ class RSSM(nn.Module):
         self.stoch_width = stoch_size * discrete if discrete else stoch_size
         head_width = self.stoch_width if discrete else 2 * stoch_size
 
-        self.pre_cell = nn.Linear(self.stoch_width + action_dim, hidden_size)
-        self.cell = nn.GRUCell(hidden_size, deter_size)
+        if blocks:
+            # DreamerV3's sequence model.  Three normalised projections
+            # instead of one concatenation, then a gate computed
+            # block-diagonally so the recurrence can be eight times wider
+            # than the hidden layers at a fraction of the parameters.
+            self.deter_in = nn.Linear(deter_size, hidden_size)
+            self.stoch_in = nn.Linear(self.stoch_width, hidden_size)
+            self.action_in = nn.Linear(action_dim, hidden_size)
+            self.deter_in_norm = nn.RMSNorm(hidden_size)
+            self.stoch_in_norm = nn.RMSNorm(hidden_size)
+            self.action_in_norm = nn.RMSNorm(hidden_size)
+            self.block_hidden = BlockLinear(
+                deter_size + 3 * hidden_size * blocks, deter_size, blocks
+            )
+            self.block_hidden_norm = nn.RMSNorm(deter_size)
+            self.block_gate = BlockLinear(deter_size, 3 * deter_size, blocks)
+        else:
+            self.pre_cell = nn.Linear(self.stoch_width + action_dim, hidden_size)
+            self.cell = nn.GRUCell(hidden_size, deter_size)
 
         self.prior_head = nn.Sequential(
             nn.Linear(deter_size, hidden_size),
@@ -397,6 +531,108 @@ class RSSM(nn.Module):
         )
 
     # ── internals ────────────────────────────────────────────────────────
+
+    def _recurrent(self, stoch: Tensor, action: Tensor, deter: Tensor) -> Tensor:
+        r"""Advance the deterministic path one step — :math:`h_{t-1} \to h_t`.
+
+        Parameters
+        ----------
+        stoch, action, deter : Tensor
+            The previous latent, the action taken into this step, and the
+            previous deterministic state; all ``(B, ·)``.
+
+        Returns
+        -------
+        Tensor
+            The new deterministic state, ``(B, deter_size)``.
+
+        Notes
+        -----
+        One of two recurrences, chosen by ``blocks``.  Both are here
+        rather than in a subclass because the *rest* of the model — the
+        heads, the draw, the unrolls, the divergence — is identical
+        either way, and a subclass would have to inherit all of it to
+        change these ten lines.
+        """
+        if not self.blocks:
+            x = lucid.cat([stoch, action], dim=-1)
+            x = generative_activation(self._act_name, cast(Tensor, self.pre_cell(x)))
+            return cast(Tensor, self.cell(x, deter))
+        return self._block_recurrent(stoch, action, deter)
+
+    def _block_recurrent(self, stoch: Tensor, action: Tensor, deter: Tensor) -> Tensor:
+        r"""DreamerV3's block-diagonal gated recurrence.
+
+        Parameters
+        ----------
+        stoch, action, deter : Tensor
+            As in :meth:`_recurrent`.
+
+        Returns
+        -------
+        Tensor
+            The new deterministic state.
+
+        Notes
+        -----
+        .. math::
+
+            r, c, u = \mathrm{BlockLinear}(x), \qquad
+            h_t = \sigma(u - 1)\,\tanh(\sigma(r)\, c)
+                  + \big(1 - \sigma(u - 1)\big)\, h_{t-1},
+
+        where :math:`x` is each block's slice of :math:`h_{t-1}`
+        concatenated with the three normalised projections of
+        :math:`h_{t-1}`, :math:`s_{t-1}` and :math:`a_{t-1}`, broadcast to
+        every block.
+
+        Two details are not the textbook GRU and both are deliberate.  The
+        update gate is offset by one before the sigmoid, so a freshly
+        initialised model *keeps* its state rather than replacing it —
+        which is what makes a very wide recurrence trainable from step
+        one.  And the three inputs are projected and normalised
+        separately rather than concatenated and projected once, so a
+        large observation embedding cannot drown out a one-dimensional
+        action.
+
+        The action is divided by its own magnitude when that exceeds one.
+        Bounded policies never trigger it; it is there so that an
+        environment handing over unnormalised actions degrades rather than
+        destabilises.
+        """
+        blocks = self.blocks
+        scaled = action / action.abs().clip(1.0, None).detach()
+
+        def project(layer: nn.Module, norm: nn.Module, x: Tensor) -> Tensor:
+            return generative_activation(
+                self._act_name, cast(Tensor, norm(cast(Tensor, layer(x))))
+            )
+
+        parts = lucid.cat(
+            [
+                project(self.deter_in, self.deter_in_norm, deter),
+                project(self.stoch_in, self.stoch_in_norm, stoch),
+                project(self.action_in, self.action_in_norm, scaled),
+            ],
+            dim=-1,
+        )
+        leading = tuple(int(v) for v in deter.shape[:-1])
+        width = self.deter_size // blocks
+        # Every block sees the same summary of the step and its own slice
+        # of the state.
+        shared = parts.reshape(*leading, 1, -1).repeat(*(1,) * len(leading), blocks, 1)
+        x = lucid.cat([deter.reshape(*leading, blocks, width), shared], dim=-1)
+        x = cast(Tensor, self.block_hidden(x.reshape(*leading, -1)))
+        x = generative_activation(
+            self._act_name, cast(Tensor, self.block_hidden_norm(x))
+        )
+
+        gates = cast(Tensor, self.block_gate(x)).reshape(*leading, blocks, 3 * width)
+        reset = F.sigmoid(gates[..., :width].reshape(*leading, -1))
+        candidate = gates[..., width : 2 * width].reshape(*leading, -1)
+        update = F.sigmoid(gates[..., 2 * width :].reshape(*leading, -1) - 1.0)
+        candidate = lucid.tanh(reset * candidate)
+        return update * candidate + (1.0 - update) * deter
 
     def _head(self, head: nn.Module, x: Tensor) -> Tensor:
         """Run a two-layer head and return its raw output."""
@@ -557,9 +793,7 @@ class RSSM(nn.Module):
         RSSMState
             The predicted state, ``(B, ·)``.
         """
-        x = lucid.cat([state.stoch, action], dim=-1)
-        x = generative_activation(self._act_name, cast(Tensor, self.pre_cell(x)))
-        deter = cast(Tensor, self.cell(x, state.deter))
+        deter = self._recurrent(state.stoch, action, state.deter)
         latent = self._latent(self.prior_head, deter, sample)
         return latent._replace(deter=deter)
 

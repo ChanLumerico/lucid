@@ -150,6 +150,36 @@ class TwoHotHead(nn.Module):
         probabilities = F.softmax(self._logits(feature), dim=-1)
         return F.symexp((probabilities * self.grid).sum(dim=-1))
 
+    def cross_entropy(self, feature: Tensor, target: Tensor) -> Tensor:
+        """The loss before it is averaged — ``(B, T)``.
+
+        Parameters
+        ----------
+        feature : Tensor
+            Latent state, ``(B, T, in_features)``.
+        target : Tensor
+            Scalars to fit, ``(B, T)``, in their own units.
+
+        Returns
+        -------
+        Tensor
+            One cross-entropy per step.
+
+        Notes
+        -----
+        Separate from :meth:`loss` because the critic weights its steps by
+        the probability the episode has survived that far, and a mean
+        taken first cannot be weighted afterwards.
+
+        The target is detached: it is data, and a head that could move its
+        own target would fit nothing.  The encoding is a soft label rather
+        than a class index, so this is a cross-entropy over a distribution
+        and not a classification.
+        """
+        encoded = F.two_hot(F.symlog(target.detach()), self.grid)
+        logits = F.log_softmax(self._logits(feature), dim=-1)
+        return -(encoded * logits).sum(dim=-1)
+
     def loss(self, feature: Tensor, target: Tensor) -> Tensor:
         """Cross-entropy against the two-hot encoding of ``symlog(target)``.
 
@@ -164,14 +194,5 @@ class TwoHotHead(nn.Module):
         -------
         Tensor
             A scalar, averaged over the batch and time.
-
-        Notes
-        -----
-        The target is detached: it is data, and a head that could move its
-        own target would fit nothing.  The encoding is a soft label rather
-        than a class index, so this is a cross-entropy over a distribution
-        and not a classification.
         """
-        encoded = F.two_hot(F.symlog(target.detach()), self.grid)
-        logits = F.log_softmax(self._logits(feature), dim=-1)
-        return -(encoded * logits).sum(dim=-1).mean()
+        return self.cross_entropy(feature, target).mean()

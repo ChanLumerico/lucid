@@ -1,16 +1,43 @@
-r"""DreamerV2 — Hafner et al., 2021.
+r"""DreamerV3 — Hafner et al., Nature 640 (2025).
 
-Dreamer's machine with a discrete latent, a balanced divergence, a target
-critic and an entropy bonus.  The encoder, decoder, dense heads, recurrent
-state-space model and lambda-returns are all the shared ones; what is
-written here is the four changes and the objectives that use them.
+The same machine as DreamerV2, with every place a domain-specific
+constant used to be replaced by something scale-free.  The encoder,
+decoder, RSSM, actor and lambda-returns are all the shared ones; what is
+written here is how the four changes fit together and what each objective
+now looks like.
 
 Sequences are ``(B, T, ...)``, and ``actions[:, t]`` is the action taken
 *into* step ``t``, as in the rest of the family.
 
-Three losses, three optimisers — the same contract Dreamer has, for the
-same reason, with the same :meth:`DreamerV2ForWorldModeling.backward` to
-spend them correctly.
+Three losses, three optimisers — the same contract the earlier families
+have, with the same :meth:`DreamerV3ForWorldModeling.backward` to spend
+them correctly.
+
+Where this departs from the released implementation, and why
+---------------------------------------------------------
+
+The paper's own architecture list — block GRU, RMS normalisation, SiLU —
+is implemented: the first two live in :class:`~.RSSM` behind ``blocks``,
+the third is the family's default activation.  What is left out is what
+the released code has added *since*: extra dynamics layers, an
+``absolute`` posterior variant, adaptive gradient clipping and LaProp.
+The last two are optimiser behaviour and belong to :mod:`lucid.optim` if
+anywhere.
+
+Two further departures are deliberate and worth stating because they are
+not visible from the configuration:
+
+* The **replay critic reads detached features.**  The reference lets that
+  loss reach the world model (``repval_grad: True``) because it has a
+  single optimiser and a single loss.  This family has three parameter
+  groups by construction, and :meth:`~DreamerV3ForWorldModeling.backward`
+  gives the world model only its own gradient, so a gradient sent along
+  that path would be discarded anyway.  Detaching makes that explicit
+  rather than accidental.
+* **Value normalisation and advantage normalisation are absent.**  The
+  reference carries both, disabled (``impl: none``) in every published
+  configuration including the ones for the paper's results.  A knob no
+  one has ever turned is not worth a field.
 """
 
 from dataclasses import dataclass
@@ -22,17 +49,19 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import ModelOutput
+from lucid.models.generative._actor import Actor
 from lucid.models.generative._pixel_nets import DenseHead, PixelDecoder, PixelEncoder
 from lucid.models.generative._returns import lambda_return
-from lucid.models.generative._rssm import RSSM, RSSMState, categorical_kl
-from lucid.models.generative.dreamer_v2._config import DreamerV2Config
-from lucid.models.generative._actor import Actor
+from lucid.models.generative._rssm import RSSM, RSSMState
+from lucid.models.generative.dreamer_v3._config import DreamerV3Config
+from lucid.models.generative.dreamer_v3._heads import TwoHotHead
+from lucid.models.generative.dreamer_v3._objectives import ReturnNormaliser, free_bits_kl
 
 __all__ = [
-    "DreamerV2Model",
-    "DreamerV2ForWorldModeling",
-    "DreamerV2Output",
-    "DreamerV2BehaviorOutput",
+    "DreamerV3Model",
+    "DreamerV3ForWorldModeling",
+    "DreamerV3Output",
+    "DreamerV3BehaviorOutput",
 ]
 
 
@@ -42,19 +71,22 @@ __all__ = [
 
 
 @dataclass(slots=True)
-class DreamerV2BehaviorOutput(ModelOutput):
+class DreamerV3BehaviorOutput(ModelOutput):
     r"""What the imagination pass produces.
 
     Attributes
     ----------
     actor_loss, value_loss : Tensor
-        Scalars, each for its own optimiser.
+        Scalars, each for its own optimiser.  ``value_loss`` already
+        carries the replayed-trajectory term when one is configured.
     lambda_return : Tensor
-        The targets, ``(N, H)``, computed from the *target* critic.
+        The targets, ``(N, H)``, bootstrapped from the *live* critic.
+    return_scale : float
+        What the advantage was divided by — ``max(1, S)``.  Exposed
+        because it is the number that decides whether the entropy bonus
+        is currently doing anything.
     entropy : Tensor
-        Mean policy entropy over the scored states — the quantity the
-        bonus is paid on, exposed because it is the first thing to look
-        at when a policy stops exploring.
+        Mean policy entropy over the scored states.
     imagined_reward, imagined_value : Tensor
         Along the imagined trajectory, ``(N, H + 1)``.
     imagined_action : Tensor
@@ -62,14 +94,17 @@ class DreamerV2BehaviorOutput(ModelOutput):
     imagined_discount : Tensor or None
         Predicted continuation probability, ``(N, H + 1)``; ``None`` when
         the discount is held constant.
+    replay_value_loss : Tensor or None
+        The critic's term over the replayed trajectory, before its scale
+        is applied; ``None`` when that term is switched off.
 
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models import dreamer_v2_world_model
-    >>> model = dreamer_v2_world_model(action_dim=2, cnn_depth=2, stoch_size=3,
+    >>> from lucid.models import dreamer_v3_12m_world_model
+    >>> model = dreamer_v3_12m_world_model(action_dim=2, cnn_depth=2, stoch_size=3,
     ...     discrete=4, deter_size=8, hidden_size=8, actor_hidden=8,
-    ...     value_hidden=8, reward_hidden=8, horizon=3, pcont=False)
+    ...     value_hidden=8, reward_hidden=8, num_bins=5, horizon=3, pcont=False)
     >>> out = model(lucid.randn((1, 4, 3, 64, 64)), lucid.randn((1, 4, 2)),
     ...             lucid.randn((1, 4)))
     >>> out.behavior.lambda_return.shape
@@ -79,23 +114,26 @@ class DreamerV2BehaviorOutput(ModelOutput):
     actor_loss: Tensor
     value_loss: Tensor
     lambda_return: Tensor
+    return_scale: float
     entropy: Tensor
     imagined_reward: Tensor
     imagined_value: Tensor
     imagined_action: Tensor
     imagined_discount: Tensor | None = None
+    replay_value_loss: Tensor | None = None
 
 
 @dataclass(slots=True)
-class DreamerV2Output(ModelOutput):
-    r"""What :class:`DreamerV2Model` returns after filtering a trajectory.
+class DreamerV3Output(ModelOutput):
+    r"""What :class:`DreamerV3Model` returns after filtering a trajectory.
 
     Attributes
     ----------
     observation : Tensor
         Reconstruction, ``(B, T, C, 64, 64)``.
     reward, value : Tensor
-        Predictions at each posterior state, ``(B, T)``.
+        Predictions at each posterior state, ``(B, T)``, decoded from
+        their bin distributions and back in the target's own units.
     posterior_stoch : Tensor
         The filtered latent, flattened, ``(B, T, stoch_size * discrete)``.
     posterior_logits, prior_logits : Tensor
@@ -103,19 +141,25 @@ class DreamerV2Output(ModelOutput):
         ``(B, T, stoch_size, discrete)``.
     deter : Tensor
         The deterministic path, ``(B, T, D)``.
-    loss, recon_loss, reward_loss, kl_loss, pcont_loss : Tensor or None
+    loss, recon_loss, reward_loss, pcont_loss : Tensor or None
         World-model terms, set only by
-        :class:`DreamerV2ForWorldModeling`.
-    behavior : DreamerV2BehaviorOutput or None
+        :class:`DreamerV3ForWorldModeling`.
+    dynamics_loss, representation_loss : Tensor or None
+        The two halves of the divergence, already scaled and floored.
+        Kept apart because their ratio is what a reader checks when a
+        latent collapses.
+    kl_loss : Tensor or None
+        Their sum, for symmetry with the earlier families.
+    behavior : DreamerV3BehaviorOutput or None
         Actor and critic terms, set only by that wrapper.
 
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models import dreamer_v2
-    >>> model = dreamer_v2(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,
+    >>> from lucid.models import dreamer_v3_12m
+    >>> model = dreamer_v3_12m(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,
     ...     deter_size=8, hidden_size=8, actor_hidden=8, value_hidden=8,
-    ...     reward_hidden=8)
+    ...     reward_hidden=8, num_bins=5)
     >>> out = model(lucid.randn((1, 2, 3, 64, 64)), lucid.randn((1, 2, 2)))
     >>> out.posterior_stoch.shape, out.posterior_logits.shape
     ((1, 2, 12), (1, 2, 3, 4))
@@ -132,75 +176,11 @@ class DreamerV2Output(ModelOutput):
     loss: Tensor | None = None
     recon_loss: Tensor | None = None
     reward_loss: Tensor | None = None
+    dynamics_loss: Tensor | None = None
+    representation_loss: Tensor | None = None
     kl_loss: Tensor | None = None
     pcont_loss: Tensor | None = None
-    behavior: DreamerV2BehaviorOutput | None = None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Internal building blocks
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def balanced_kl(
-    posterior: RSSMState, prior: RSSMState, *, balance: float, free_nats: float = 0.0
-) -> Tensor:
-    r"""KL balancing — the two directions weighted apart.
-
-    Parameters
-    ----------
-    posterior, prior : RSSMState
-        Both categorical, from the same step.
-    balance : float
-        :math:`\alpha`.  The share that trains the *prior* toward the
-        posterior; ``1 - alpha`` trains the posterior toward the prior.
-    free_nats : float, default=0.0
-        Clamp applied to each side before mixing.
-
-    Returns
-    -------
-    Tensor
-        A scalar.
-
-    Raises
-    ------
-    ValueError
-        If either state is Gaussian — balancing needs both sides
-        differentiable *and* detachable, and this family is categorical.
-
-    Notes
-    -----
-    A single KL term moves prior and posterior toward each other at the
-    same rate, and the paper reports the posterior giving way: it
-    collapses onto a prior that has not learned anything yet, and the
-    latent stops carrying the observation.  Splitting the term fixes the
-    ratio instead of leaving it to whichever side has the steeper
-    gradient:
-
-    .. math::
-
-        \alpha\, \mathrm{KL}\big(\mathrm{sg}(q) \,\|\, p\big)
-        + (1 - \alpha)\, \mathrm{KL}\big(q \,\|\, \mathrm{sg}(p)\big).
-
-    Both halves are the same number when nothing is detached — the split
-    is entirely about where the gradient goes, which is why a test that
-    only checks the value cannot tell this apart from a plain KL.
-    """
-    if not (posterior.is_discrete and prior.is_discrete):
-        raise ValueError("KL balancing here expects two categorical states")
-    if not 0.0 <= balance <= 1.0:
-        raise ValueError(f"balance must be in [0, 1], got {balance}")
-
-    posterior_logits = cast(Tensor, posterior.logits)
-    prior_logits = cast(Tensor, prior.logits)
-
-    def clamp(value: Tensor) -> Tensor:
-        mean = value.mean()
-        return (mean - free_nats).clip(0.0, None) if free_nats > 0.0 else mean
-
-    toward_prior = clamp(categorical_kl(posterior_logits.detach(), prior_logits))
-    toward_posterior = clamp(categorical_kl(posterior_logits, prior_logits.detach()))
-    return balance * toward_prior + (1.0 - balance) * toward_posterior
+    behavior: DreamerV3BehaviorOutput | None = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -208,42 +188,51 @@ def balanced_kl(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class DreamerV2Model(PretrainedModel):
-    r"""Dreamer's architecture with a categorical latent and a target critic.
+class DreamerV3Model(PretrainedModel):
+    r"""DreamerV2's architecture with distributional heads and a slow critic.
 
     Parameters
     ----------
-    config : DreamerV2Config
+    config : DreamerV3Config
         Frozen configuration.
 
     Notes
     -----
-    Reference: Hafner, Lillicrap, Norouzi, and Ba, *"Mastering Atari with
-    Discrete World Models"*, ICLR, 2021 (arXiv:2010.02193).
+    Reference: Hafner, Pasukonis, Ba, and Norouzi, *"Mastering Diverse
+    Domains through World Models"*, Nature 640 (2025), 647-653
+    (arXiv:2301.04104).
 
-    The critic is duplicated.  ``value_head`` is what learns; the frozen
-    ``target_value_head`` is what the returns are computed from, and it is
-    refreshed on a schedule.  Without it the critic regresses onto targets
-    built from itself, and a small error compounds every step it is fed
-    back through.
+    Two architectural differences from DreamerV2 are visible here.
+
+    The reward and value heads are :class:`~.TwoHotHead`\ s — they predict
+    a distribution over exponentially spaced bins and are read back
+    through ``symexp``, which is what decouples the gradients from the
+    reward's magnitude.
+
+    The critic is duplicated, but the copy plays the opposite role to
+    DreamerV2's.  There the frozen copy produced the *targets*; here the
+    returns bootstrap from the live critic and the slow copy appears only
+    as a regulariser pulling the live one toward its own moving average.
+    The copy is therefore updated every step by a small fraction rather
+    than replaced wholesale on a schedule.
 
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models import dreamer_v2
-    >>> model = dreamer_v2(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,
+    >>> from lucid.models import dreamer_v3_12m
+    >>> model = dreamer_v3_12m(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,
     ...     deter_size=8, hidden_size=8, actor_hidden=8, value_hidden=8,
-    ...     reward_hidden=8)
+    ...     reward_hidden=8, num_bins=5)
     >>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),
     ...                               lucid.randn((1, 3, 2)))
     >>> posteriors.is_discrete, model.act(posteriors, sample=False).shape
     (True, (1, 3, 2))
     """
 
-    config_class: ClassVar[type[DreamerV2Config]] = DreamerV2Config
-    base_model_prefix: ClassVar[str] = "dreamer_v2"
+    config_class: ClassVar[type[DreamerV3Config]] = DreamerV3Config
+    base_model_prefix: ClassVar[str] = "dreamer_v3"
 
-    def __init__(self, config: DreamerV2Config) -> None:
+    def __init__(self, config: DreamerV3Config) -> None:
         super().__init__(config)
         self.encoder = PixelEncoder(config.in_channels, config.cnn_depth, config.act_fn)
         self.rssm = RSSM(
@@ -255,30 +244,40 @@ class DreamerV2Model(PretrainedModel):
             act_fn=config.act_fn,
             min_std=config.min_std,
             discrete=config.discrete,
+            unimix=config.unimix,
+            blocks=config.blocks,
         )
         self.decoder = PixelDecoder(
             config.latent_size, config.out_channels, config.cnn_depth, config.act_fn
         )
-        self.reward_head = DenseHead(
+        self.reward_head = TwoHotHead(
             config.latent_size,
             config.reward_hidden,
             config.reward_layers,
+            num_bins=config.num_bins,
+            bin_range=config.bin_range,
             act_fn=config.act_fn,
-            squeeze=True,
         )
-        self.value_head = DenseHead(
+        # Both critics start predicting exactly zero.  A critic that opens
+        # by asserting large returns sends the actor chasing them, and the
+        # slow copy would then spend its whole warm-up defending that.
+        self.value_head = TwoHotHead(
             config.latent_size,
             config.value_hidden,
             config.value_layers,
+            num_bins=config.num_bins,
+            bin_range=config.bin_range,
             act_fn=config.act_fn,
-            squeeze=True,
+            zero_init=True,
         )
-        self.target_value_head = DenseHead(
+        self.slow_value_head = TwoHotHead(
             config.latent_size,
             config.value_hidden,
             config.value_layers,
+            num_bins=config.num_bins,
+            bin_range=config.bin_range,
             act_fn=config.act_fn,
-            squeeze=True,
+            zero_init=True,
         )
         self.pcont_head = (
             DenseHead(
@@ -299,6 +298,7 @@ class DreamerV2Model(PretrainedModel):
             config.act_fn,
             config.actor_min_std,
             discrete=config.action_space == "discrete",
+            unimix=config.unimix,
         )
         self._sample = not config.mean_only
 
@@ -330,38 +330,47 @@ class DreamerV2Model(PretrainedModel):
         Returns
         -------
         priors, posteriors : RSSMState
-            ``(B, T, ·)`` each, carrying categorical logits.
+            ``(B, T, ·)`` each, carrying categorical logits already mixed
+            with ``unimix``.
         """
         draw = self._sample if sample is None else sample
         return self.rssm.observe(self.encode(observations), actions, state, sample=draw)
 
     def decode(self, state: RSSMState) -> Tensor:
-        """Reconstruct frames from a state — ``(B, T, C, 64, 64)``."""
+        """Reconstruct frames from a state — ``(B, T, C, 64, 64)``.
+
+        Notes
+        -----
+        Frames are *not* passed through ``symlog``.  The transform is for
+        quantities whose range differs between domains; a pixel is always
+        in the same interval, and the reference applies it to vector
+        observations and to reward and value only.
+        """
         return cast(Tensor, self.decoder(state.feature))
 
     def predict_reward(self, state: RSSMState) -> Tensor:
-        """Predict reward from a state — ``(B, T)``."""
-        return cast(Tensor, self.reward_head(state.feature))
+        """Predict reward from a state — ``(B, T)``, in reward units."""
+        return self.reward_head.predict(state.feature)
 
-    def predict_value(self, state: RSSMState, *, target: bool = False) -> Tensor:
+    def predict_value(self, state: RSSMState, *, slow: bool = False) -> Tensor:
         """Estimate a state's value — ``(B, T)``.
 
         Parameters
         ----------
         state : RSSMState
             The states to score.
-        target : bool, default=False, keyword-only
-            Read the frozen target copy instead of the learning critic.
-            The returns are built from the target; the critic's own loss
-            is measured against the learner.
+        slow : bool, default=False, keyword-only
+            Read the slow copy instead of the learning critic.  Note this
+            is *not* where the returns come from — they bootstrap from
+            the learner; the slow copy only regularises it.
 
         Returns
         -------
         Tensor
-            Value estimates.
+            Value estimates, in return units.
         """
-        head = self.target_value_head if target else self.value_head
-        return cast(Tensor, head(state.feature))
+        head = self.slow_value_head if slow else self.value_head
+        return head.predict(state.feature)
 
     def predict_pcont(self, state: RSSMState) -> Tensor:
         """Predict the discount at a state — logits, ``(B, T)``.
@@ -384,7 +393,7 @@ class DreamerV2Model(PretrainedModel):
         if self.pcont_head is None:
             raise ValueError(
                 "this model has no discount head; construct it with "
-                "DreamerV2Config(pcont=True)"
+                "DreamerV3Config(pcont=True)"
             )
         return cast(Tensor, self.pcont_head(state.feature))
 
@@ -401,7 +410,7 @@ class DreamerV2Model(PretrainedModel):
         Returns
         -------
         Tensor
-            Actions inside ``(-1, 1)``.
+            Actions inside ``(-1, 1)``, or one-hot when discrete.
         """
         return cast(Tensor, self.actor(state.feature, sample=sample))
 
@@ -429,10 +438,10 @@ class DreamerV2Model(PretrainedModel):
 
         Notes
         -----
-        The state the actor reads is detached, as the released
-        implementation does — the gradient still reaches the policy
-        through each action, and still travels back through the dynamics
-        from the return.
+        The state the actor reads is detached.  Unlike the earlier
+        families this costs nothing: DreamerV3's actor is trained purely
+        by the score function, so no gradient was ever going to travel
+        back through the dynamics from the return.
         """
         if horizon < 1:
             raise ValueError(f"horizon must be at least 1, got {horizon}")
@@ -464,9 +473,9 @@ class DreamerV2Model(PretrainedModel):
     @override
     def forward(  # type: ignore[override]
         self, observations: Tensor, actions: Tensor
-    ) -> DreamerV2Output:
+    ) -> DreamerV3Output:
         priors, posteriors = self.observe(observations, actions)
-        return DreamerV2Output(
+        return DreamerV3Output(
             observation=self.decode(posteriors),
             reward=self.predict_reward(posteriors),
             value=self.predict_value(posteriors),
@@ -482,67 +491,77 @@ class DreamerV2Model(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class DreamerV2ForWorldModeling(PretrainedModel):
-    r"""DreamerV2 with its world-model, actor and critic objectives.
+class DreamerV3ForWorldModeling(PretrainedModel):
+    r"""DreamerV3 with its world-model, actor and critic objectives.
 
     Parameters
     ----------
-    config : DreamerV2Config
+    config : DreamerV3Config
         Frozen configuration.
 
     Notes
     -----
-    Reference: Hafner, Lillicrap, Norouzi, and Ba, *"Mastering Atari with
-    Discrete World Models"*, ICLR, 2021 (arXiv:2010.02193).
+    Reference: Hafner, Pasukonis, Ba, and Norouzi, *"Mastering Diverse
+    Domains through World Models"*, Nature 640 (2025), 647-653
+    (arXiv:2301.04104).
 
-    Same three-optimiser contract as Dreamer, and the same reason for it.
-    Use :meth:`backward` — spending the losses by hand either contaminates
-    the world model or raises, depending on the order.
+    Same three-optimiser contract as the earlier families, and the same
+    reason for it.  Use :meth:`backward` — spending the losses by hand
+    either contaminates the world model or raises, depending on the order.
 
-    ``update_slow_target`` must be called once per gradient step.  It is
-    not folded into :meth:`backward` because it counts *optimiser* steps,
-    not backward passes, and only the caller knows when one has happened.
+    :meth:`update_slow_critic` must be called once per gradient step.  It
+    is not folded into :meth:`backward` because it counts *optimiser*
+    steps, not backward passes, and only the caller knows when one has
+    happened.
 
-    The indexing follows the released implementation, which is worth
-    stating because it is not obvious.  Imagination produces ``H + 1``
-    states.  Two are lost at the end — one is the bootstrap, and one has
-    an action that leads nowhere — and one target is lost at the start,
-    because the first state came from the replay buffer rather than from
-    the policy.  So the actor is scored on states ``0 .. H-2`` against
-    targets ``1 .. H-1``, and the critic on states ``0 .. H-1``.
+    The indexing is simpler than DreamerV2's, and the simplification is
+    the point.  Imagination produces ``H + 1`` states and ``H`` actions;
+    ``action[t]`` is taken from ``state[t]``, the return ``R[t]`` starts
+    at ``state[t]``, and the critic's estimate ``v[t]`` scores the same
+    state.  So the advantage is ``R[t] - v(s_t)`` paired with
+    ``log pi(a_t | s_t)`` at every ``t`` in ``0 .. H-1`` — the textbook
+    alignment, available here because the actor is score-function only
+    and does not need the one-step shift dynamics backpropagation forced
+    on DreamerV2.
 
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models import dreamer_v2_world_model
-    >>> model = dreamer_v2_world_model(action_dim=2, cnn_depth=2, stoch_size=3,
+    >>> from lucid.models import dreamer_v3_12m_world_model
+    >>> model = dreamer_v3_12m_world_model(action_dim=2, cnn_depth=2, stoch_size=3,
     ...     discrete=4, deter_size=8, hidden_size=8, actor_hidden=8,
-    ...     value_hidden=8, reward_hidden=8, horizon=4, pcont=False)
+    ...     value_hidden=8, reward_hidden=8, num_bins=5, horizon=4, pcont=False)
     >>> out = model(lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2)),
     ...             lucid.randn((1, 3)))
     >>> bool(out.loss.ndim == 0), bool(out.behavior.actor_loss.ndim == 0)
     (True, True)
     """
 
-    config_class: ClassVar[type[DreamerV2Config]] = DreamerV2Config
-    base_model_prefix: ClassVar[str] = "dreamer_v2"
+    config_class: ClassVar[type[DreamerV3Config]] = DreamerV3Config
+    base_model_prefix: ClassVar[str] = "dreamer_v3"
 
-    def __init__(self, config: DreamerV2Config) -> None:
+    def __init__(self, config: DreamerV3Config) -> None:
         super().__init__(config)
-        self.dreamer_v2 = DreamerV2Model(config)
+        self.dreamer_v3 = DreamerV3Model(config)
         self._kl_weight = config.kl_weight
-        self._kl_balance = config.kl_balance
+        self._dyn_scale = config.dyn_scale
+        self._rep_scale = config.rep_scale
+        self._pred_scale = config.pred_scale
         self._free_nats = config.free_nats
         self._horizon = config.horizon
         self._discount = config.discount
         self._lambda = config.lambda_
-        self._actor_grad = config.resolved_actor_grad
-        self._actor_grad_mix = config.actor_grad_mix
         self._actor_entropy = config.actor_entropy
+        self._critic_ema = config.critic_ema
+        self._critic_slowreg = config.critic_slowreg
+        self._replay_value_scale = config.replay_value_scale
         self._pcont_scale = config.pcont_scale
-        self._slow_update = config.slow_target_update
-        self._slow_fraction = config.slow_target_fraction
         self._updates = 0
+        self.returns = ReturnNormaliser(
+            decay=config.return_ema_decay,
+            low=config.return_low,
+            high=config.return_high,
+        )
 
     # ── parameter groups ─────────────────────────────────────────────────
 
@@ -555,7 +574,7 @@ class DreamerV2ForWorldModeling(PretrainedModel):
             Encoder, RSSM, decoder, reward head, and the discount head
             when there is one.
         """
-        model = self.dreamer_v2
+        model = self.dreamer_v3
         modules: list[nn.Module] = [
             model.encoder,
             model.rssm,
@@ -574,44 +593,47 @@ class DreamerV2ForWorldModeling(PretrainedModel):
         list of Parameter
             Trained by ``actor_loss`` alone.
         """
-        return list(self.dreamer_v2.actor.parameters())
+        return list(self.dreamer_v3.actor.parameters())
 
     def value_parameters(self) -> list[nn.Parameter]:
-        """The learning critic's parameters — *not* the target copy.
+        """The learning critic's parameters — *not* the slow copy.
 
         Returns
         -------
         list of Parameter
-            Trained by ``value_loss``.  The target copy is written by
-            :meth:`update_slow_target` and never by an optimiser, which is
-            what makes it a fixed point to regress onto.
+            Trained by ``value_loss``.  The slow copy is written by
+            :meth:`update_slow_critic` and never by an optimiser, which is
+            what makes it a fixed point to regress toward.
         """
-        return list(self.dreamer_v2.value_head.parameters())
+        return list(self.dreamer_v3.value_head.parameters())
 
-    def update_slow_target(self) -> None:
-        """Refresh the target critic, on the paper's schedule.
+    def update_slow_critic(self) -> None:
+        """Move the slow critic a little toward the live one.
 
         Notes
         -----
-        Called once per gradient step; it moves the target only every
-        ``slow_target_update`` of them.  The very first call copies
-        outright whatever ``slow_target_fraction`` says, since a target
-        left at its initialisation is not a useful thing to regress onto.
+        Every gradient step, by ``critic_ema`` — 2% at the paper's value.
+        DreamerV2 copied its target outright every hundred steps; a
+        continuous average has no schedule to tune and no discontinuity
+        for the critic's loss to step over.  The first call copies
+        outright, since a slow critic left at its initialisation is not
+        something worth regressing toward.
         """
-        if self._updates % self._slow_update == 0:
-            mix = 1.0 if self._updates == 0 else self._slow_fraction
-            live = self.dreamer_v2.value_head.parameters()
-            frozen = self.dreamer_v2.target_value_head.parameters()
-            with lucid.no_grad():
-                for source, destination in zip(live, frozen):
-                    # `destination[:] = ...`, not `destination.data[:] = ...`:
-                    # the latter writes to a copy and silently does nothing.
-                    destination[:] = mix * source + (1.0 - mix) * destination
+        mix = 1.0 if self._updates == 0 else self._critic_ema
+        live = self.dreamer_v3.value_head.parameters()
+        slow = self.dreamer_v3.slow_value_head.parameters()
+        with lucid.no_grad():
+            for source, destination in zip(live, slow):
+                # `destination[:] = ...`, not `destination.data[:] = ...`:
+                # the latter writes to a copy and silently does nothing.
+                destination[:] = mix * source + (1.0 - mix) * destination
         self._updates += 1
 
     # ── objectives ───────────────────────────────────────────────────────
 
-    def _behavior(self, posteriors: RSSMState) -> DreamerV2BehaviorOutput:
+    def _behavior(
+        self, posteriors: RSSMState, rewards: Tensor, continues: Tensor | None
+    ) -> DreamerV3BehaviorOutput:
         """Imagine under the policy and score it.
 
         Parameters
@@ -619,13 +641,20 @@ class DreamerV2ForWorldModeling(PretrainedModel):
         posteriors : RSSMState
             Filtered beliefs, flattened and detached into imagination
             starts.
+        rewards : Tensor
+            Observed reward over the replayed batch, ``(B, T)`` — needed
+            by the critic's replay term.
+        continues : Tensor or None
+            ``(B, T)``, ``0`` where the episode terminated.
 
         Returns
         -------
-        DreamerV2BehaviorOutput
+        DreamerV3BehaviorOutput
             Actor and critic terms.
         """
-        model = self.dreamer_v2
+        model = self.dreamer_v3
+        batch = int(posteriors.deter.shape[0])
+        kept = posteriors
         if model.pcont_head is not None:
             keep = int(posteriors.deter.shape[1]) - 1
             if keep < 1:
@@ -633,16 +662,16 @@ class DreamerV2ForWorldModeling(PretrainedModel):
                     "pcont drops the last filtered step, so it needs a "
                     f"sequence of at least 2, got {int(posteriors.deter.shape[1])}"
                 )
-            posteriors = posteriors.map(lambda x: x[:, :keep])
+            kept = posteriors.map(lambda x: x[:, :keep])
 
-        b, t = int(posteriors.deter.shape[0]), int(posteriors.deter.shape[1])
-        start = posteriors.map(
-            lambda x: x.reshape(b * t, *(int(v) for v in x.shape[2:])).detach()
+        steps = int(kept.deter.shape[1])
+        start = kept.map(
+            lambda x: x.reshape(batch * steps, *(int(v) for v in x.shape[2:])).detach()
         )
 
         states, actions = model.imagine(start, self._horizon)
         reward = model.predict_reward(states)
-        value = model.predict_value(states, target=True)
+        value = model.predict_value(states)
 
         pcont: Tensor | None = None
         if model.pcont_head is not None:
@@ -653,8 +682,10 @@ class DreamerV2ForWorldModeling(PretrainedModel):
 
         target = lambda_return(reward, value, discount, self._lambda)
 
-        # Cumulative discount, detached: it weights the objectives, it is
-        # not part of them.
+        # How much of the objective each imagined step is worth: the
+        # probability the episode is still running when it arrives.  With
+        # a learned discount that probability already carries gamma, which
+        # is why the two branches look different and mean the same thing.
         if pcont is None:
             weight = lucid.tensor(
                 [[self._discount**i for i in range(self._horizon)]],
@@ -662,30 +693,44 @@ class DreamerV2ForWorldModeling(PretrainedModel):
                 dtype=target.dtype,
             )
         else:
-            ones = lucid.ones(
-                (int(pcont.shape[0]), 1), device=pcont.device, dtype=pcont.dtype
-            )
-            running = lucid.cat([ones, pcont[:, : self._horizon - 1]], dim=1)
-            weight = lucid.cumprod(running, dim=1).detach()
+            weight = lucid.cumprod(pcont[:, : self._horizon], dim=1).detach()
 
-        actor_loss, entropy = self._actor_objective(states, actions, target, weight)
+        scale = self.returns.update(target)
+        actor_loss, entropy = self._actor_objective(
+            states, actions, target, weight, scale
+        )
         value_loss = self._critic_objective(states, target, weight)
 
-        return DreamerV2BehaviorOutput(
+        replay_loss: Tensor | None = None
+        if self._replay_value_scale > 0.0:
+            bootstrap = target[:, 0].reshape(batch, steps).detach()
+            replay_loss = self._replay_critic_objective(
+                kept, rewards[:, :steps], continues, bootstrap
+            )
+            value_loss = value_loss + self._replay_value_scale * replay_loss
+
+        return DreamerV3BehaviorOutput(
             actor_loss=actor_loss,
             value_loss=value_loss,
             lambda_return=target,
+            return_scale=scale,
             entropy=entropy,
             imagined_reward=reward,
             imagined_value=value,
             imagined_action=actions,
             imagined_discount=pcont,
+            replay_value_loss=replay_loss,
         )
 
     def _actor_objective(
-        self, states: RSSMState, actions: Tensor, target: Tensor, weight: Tensor
+        self,
+        states: RSSMState,
+        actions: Tensor,
+        target: Tensor,
+        weight: Tensor,
+        scale: float,
     ) -> tuple[Tensor, Tensor]:
-        """The policy's objective, by whichever gradient estimator is set.
+        r"""The policy's objective — score function, on a scale-free advantage.
 
         Parameters
         ----------
@@ -697,47 +742,53 @@ class DreamerV2ForWorldModeling(PretrainedModel):
             Lambda-returns, ``(N, H)``.
         weight : Tensor
             Cumulative discount, ``(N, H)`` or broadcastable.
+        scale : float
+            ``max(1, S)`` — the divisor that makes the advantage
+            dimensionless.
 
         Returns
         -------
         actor_loss, entropy : Tensor
             The loss to minimise, and the mean entropy it was paid on.
-        """
-        model = self.dreamer_v2
-        horizon = self._horizon
-        scored = states.map(lambda x: x[:, : horizon - 1])
-        feature = scored.feature.detach()
-        objective = target[:, 1:]
 
-        if self._actor_grad != "dynamics":
-            baseline = model.predict_value(scored, target=True)
-            advantage = (objective - baseline).detach()
-            # `actions[t]` is the action taken *from* `states[t]`, so the
-            # states scored above pair with the actions at the same index.
-            # The released implementation writes `action[1:-1]` because its
-            # action array carries a leading placeholder for the step that
-            # led into the start state; copying that index without the
-            # placeholder credits the policy with the next action's
-            # log-probability, which silently disables REINFORCE.
-            chosen = actions[:, : horizon - 1].detach()
-            log_prob = model.actor.log_prob(feature, chosen)
-            score = log_prob * advantage
-            objective = (
-                score
-                if self._actor_grad == "reinforce"
-                else self._actor_grad_mix * objective
-                + (1.0 - self._actor_grad_mix) * score
-            )
+        Notes
+        -----
+        .. math::
+
+            \mathcal{L}(\theta) = -\,\mathbb{E}\Big[
+                w_t \big(\mathrm{sg}\big[(R^\lambda_t - v(s_t)) / S\big]
+                \log \pi_\theta(a_t \mid s_t)
+                + \eta\, \mathrm{H}[\pi_\theta(\cdot \mid s_t)]\big)\Big].
+
+        Only one estimator, for both action spaces.  Dreamer used dynamics
+        backpropagation for continuous actions and the score function for
+        discrete ones, and DreamerV2 kept the split; the normalisation
+        above is what makes the score function's variance tolerable
+        everywhere, so the split stops earning its keep.
+
+        The division is by the *scale* alone and not a standardisation:
+        subtracting the returns' mean as well would remove the sign of the
+        advantage, which is the only thing the score function reads.
+        """
+        model = self.dreamer_v3
+        horizon = self._horizon
+        scored = states.map(lambda x: x[:, :horizon])
+        feature = scored.feature.detach()
+
+        baseline = model.predict_value(scored)
+        advantage = ((target - baseline) / scale).detach()
+        chosen = actions.detach()
+        log_prob = model.actor.log_prob(feature, chosen)
 
         entropy = model.actor.entropy(feature)
-        objective = objective + self._actor_entropy * entropy
-        actor_loss = -(weight[:, : horizon - 1] * objective).mean()
+        objective = log_prob * advantage + self._actor_entropy * entropy
+        actor_loss = -(weight * objective).mean()
         return actor_loss, entropy.mean()
 
     def _critic_objective(
         self, states: RSSMState, target: Tensor, weight: Tensor
     ) -> Tensor:
-        """Half the weighted squared error against a fixed target.
+        """Two-hot cross-entropy against the returns, plus the slow-copy pull.
 
         Parameters
         ----------
@@ -755,21 +806,103 @@ class DreamerV2ForWorldModeling(PretrainedModel):
 
         Notes
         -----
-        Reads detached states, so the critic's gradient reaches nothing
-        but the critic.  The released implementation gets the same
-        separation from its tape; doing it with a detach means it survives
-        a caller who reaches for one optimiser anyway.
-        """
-        detached = states.map(lambda x: x[:, : self._horizon].detach())
-        predicted = self.dreamer_v2.predict_value(detached)
-        return (0.5 * weight * (predicted - target.detach()) ** 2).mean()
+        Two terms.  The first fits the returns; the second fits the slow
+        copy's own prediction at the same states, weighted by
+        ``critic_slowreg``.  The second is what a target critic used to
+        do, arranged so that the targets themselves stay fresh: the
+        returns bootstrap from the live critic and only the *pull* is
+        slow, where DreamerV2 froze the targets and left the critic
+        chasing a stale estimate between refreshes.
 
-    def backward(self, output: DreamerV2Output) -> None:
+        Reads detached states, so the critic's gradient reaches nothing
+        but the critic.
+        """
+        model = self.dreamer_v3
+        detached = states.map(lambda x: x[:, : self._horizon].detach())
+        feature = detached.feature
+        fitted = model.value_head.cross_entropy(feature, target.detach())
+        toward_slow = model.value_head.cross_entropy(
+            feature, model.slow_value_head.predict(feature).detach()
+        )
+        return (weight * (fitted + self._critic_slowreg * toward_slow)).mean()
+
+    def _replay_critic_objective(
+        self,
+        posteriors: RSSMState,
+        rewards: Tensor,
+        continues: Tensor | None,
+        bootstrap: Tensor,
+    ) -> Tensor:
+        """The same critic loss, over what actually happened.
+
+        Parameters
+        ----------
+        posteriors : RSSMState
+            Filtered beliefs, ``(B, T, ·)``.
+        rewards : Tensor
+            Observed reward, ``(B, T)``.
+        continues : Tensor or None
+            ``(B, T)``, ``0`` where the episode terminated.
+        bootstrap : Tensor
+            The imagined return at each posterior state, ``(B, T)``.  Only
+            its last column is used — it closes the replayed sequence with
+            an estimate that looks past the end of the chunk, which the
+            critic's own value at that step cannot do.
+
+        Returns
+        -------
+        Tensor
+            A scalar.
+
+        Raises
+        ------
+        ValueError
+            If the sequence is a single step, which leaves no return to
+            compute.
+
+        Notes
+        -----
+        The critic sees imagined states almost exclusively, and imagined
+        states are wherever the world model happens to have wandered.
+        Training it on replayed states as well anchors it to the
+        distribution the agent is actually in.  This is the term the
+        reference weights at ``0.3``.
+
+        Features are detached — see the module docstring for why that
+        differs from the reference and why the difference is not
+        observable under this family's three-optimiser contract.
+        """
+        if int(rewards.shape[1]) < 2:
+            raise ValueError(
+                "the replayed critic term needs at least two steps, got "
+                f"{int(rewards.shape[1])}"
+            )
+        model = self.dreamer_v3
+        feature = posteriors.feature.detach()
+        estimate = model.value_head.predict(feature).detach()
+        # Everything but the last step is the critic's own estimate; the
+        # last is the imagined return, which is the only thing here that
+        # knows what comes after the chunk.
+        value = lucid.cat([estimate[:, :-1], bootstrap[:, -1:]], dim=1)
+
+        discount: float | Tensor = (
+            self._discount if continues is None else self._discount * continues
+        )
+        target = lambda_return(rewards, value, discount, self._lambda)
+
+        scored = feature[:, : int(target.shape[1])]
+        fitted = model.value_head.cross_entropy(scored, target.detach())
+        toward_slow = model.value_head.cross_entropy(
+            scored, model.slow_value_head.predict(scored).detach()
+        )
+        return (fitted + self._critic_slowreg * toward_slow).mean()
+
+    def backward(self, output: DreamerV3Output) -> None:
         """Give every parameter group the gradient of its own loss.
 
         Parameters
         ----------
-        output : DreamerV2Output
+        output : DreamerV3Output
             The result of :meth:`forward`, with ``behavior`` populated.
 
         Raises
@@ -779,16 +912,17 @@ class DreamerV2ForWorldModeling(PretrainedModel):
 
         Notes
         -----
-        Identical in shape to Dreamer's, and identical in motivation: the
-        three losses share one graph, so backpropagating them by hand
-        either lets the actor's gradient descend the world model or raises
-        on a parameter the imagination's graph still needed.
+        Identical in shape to the earlier families', and identical in
+        motivation: the three losses share one graph, so backpropagating
+        them by hand either lets the actor's gradient descend the world
+        model or raises on a parameter the imagination's graph still
+        needed.
         """
         behavior = output.behavior
         if output.loss is None or behavior is None:
             raise ValueError(
                 "backward() needs the losses; this output came from "
-                "DreamerV2Model rather than DreamerV2ForWorldModeling."
+                "DreamerV3Model rather than DreamerV3ForWorldModeling."
             )
 
         def take(params: list[nn.Parameter]) -> list[Tensor | None]:
@@ -817,7 +951,7 @@ class DreamerV2ForWorldModeling(PretrainedModel):
         actions: Tensor,
         rewards: Tensor,
         discounts: Tensor | None = None,
-    ) -> DreamerV2Output:
+    ) -> DreamerV3Output:
         """Train the world model and the behaviour on one batch.
 
         Parameters
@@ -834,7 +968,7 @@ class DreamerV2ForWorldModeling(PretrainedModel):
 
         Returns
         -------
-        DreamerV2Output
+        DreamerV3Output
             ``loss`` is the world-model loss; the behaviour losses are on
             ``.behavior`` and take their own optimisers.
 
@@ -842,21 +976,33 @@ class DreamerV2ForWorldModeling(PretrainedModel):
         ------
         ValueError
             If ``pcont`` is configured and ``discounts`` is omitted.
+
+        Notes
+        -----
+        The reward term is a two-hot cross-entropy rather than a squared
+        error, so a domain whose rewards are in the thousands produces
+        gradients of the same size as one whose rewards are in
+        hundredths.  The reconstruction stays a squared error: pixels are
+        already in a fixed range and have nothing to normalise away.
         """
-        model = self.dreamer_v2
+        model = self.dreamer_v3
         priors, posteriors = model.observe(observations, actions)
         reconstruction = model.decode(posteriors)
-        predicted_reward = model.predict_reward(posteriors)
 
         b = int(observations.shape[0])
         t = int(observations.shape[1])
         diff = (reconstruction - observations) ** 2
         recon_loss = 0.5 * diff.reshape(b, t, -1).sum(dim=-1).mean()
-        reward_loss = 0.5 * ((predicted_reward - rewards) ** 2).mean()
-        kl_loss = balanced_kl(
-            posteriors, priors, balance=self._kl_balance, free_nats=self._free_nats
+        reward_loss = model.reward_head.loss(posteriors.feature, rewards)
+        dynamics_loss, representation_loss = free_bits_kl(
+            posteriors,
+            priors,
+            dyn_scale=self._dyn_scale,
+            rep_scale=self._rep_scale,
+            free_nats=self._free_nats,
         )
-        loss = recon_loss + reward_loss + self._kl_weight * kl_loss
+        kl_loss = dynamics_loss + representation_loss
+        loss = self._pred_scale * (recon_loss + reward_loss) + self._kl_weight * kl_loss
 
         pcont_loss: Tensor | None = None
         if model.pcont_head is not None:
@@ -871,9 +1017,9 @@ class DreamerV2ForWorldModeling(PretrainedModel):
             )
             loss = loss + pcont_loss
 
-        return DreamerV2Output(
+        return DreamerV3Output(
             observation=reconstruction,
-            reward=predicted_reward,
+            reward=model.predict_reward(posteriors),
             value=model.predict_value(posteriors),
             posterior_stoch=posteriors.stoch,
             posterior_logits=cast(Tensor, posteriors.logits),
@@ -882,7 +1028,9 @@ class DreamerV2ForWorldModeling(PretrainedModel):
             loss=loss,
             recon_loss=recon_loss,
             reward_loss=reward_loss,
+            dynamics_loss=dynamics_loss,
+            representation_loss=representation_loss,
             kl_loss=kl_loss,
             pcont_loss=pcont_loss,
-            behavior=self._behavior(posteriors),
+            behavior=self._behavior(posteriors, rewards, discounts),
         )

@@ -213,4 +213,4 @@ class ReturnNormaliser:
             ``returns / max(floor, spread)`` — the divisor is a plain
             float, so nothing differentiates through the normalisation.
         """
-        return returns / self.update(returns)
+        return cast(Tensor, returns / self.update(returns))

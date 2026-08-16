@@ -209,6 +209,16 @@ class OneHotCategorical:
     ----------
     logits : Tensor
         Unnormalised scores, ``(..., action_dim)``.
+    unimix : float, default=0.0
+        Uniform mass mixed into the probabilities before anything else
+        reads them.  DreamerV3 sets 1%, so no action's probability can
+        reach zero — and a probability at zero is a log-probability at
+        :math:`-\infty` and a gradient that never comes back.
+
+    Raises
+    ------
+    ValueError
+        If ``unimix`` is outside ``[0, 1)``.
 
     Notes
     -----
@@ -217,6 +227,10 @@ class OneHotCategorical:
     a usable gradient even under ``actor_grad="dynamics"``, though it is
     biased, which is the reason the reference prefers the score-function
     estimator for discrete actions rather than the analytic path.
+
+    ``self.logits`` is the *mixed* score, not the argument: everything
+    downstream — the sample, the log-probability, the entropy — has to
+    describe one distribution, and it is the mixed one.
 
     Examples
     --------
@@ -230,8 +244,14 @@ class OneHotCategorical:
     (2, 3)
     """
 
-    def __init__(self, logits: Tensor) -> None:
+    def __init__(self, logits: Tensor, unimix: float = 0.0) -> None:
         """Initialise the distribution. See the class docstring."""
+        if not 0.0 <= unimix < 1.0:
+            raise ValueError(f"unimix must be in [0, 1), got {unimix}")
+        if unimix:
+            classes = int(logits.shape[-1])
+            probs = F.softmax(logits, dim=-1)
+            logits = ((1.0 - unimix) * probs + unimix / classes).log()
         self.logits = logits
         self.log_probs = F.log_softmax(logits, dim=-1)
         self.probs = self.log_probs.exp()

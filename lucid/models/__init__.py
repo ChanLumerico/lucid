@@ -78,6 +78,16 @@ from lucid.models.generative.dreamer_v2 import (
     dreamer_v2_atari, dreamer_v2_atari_world_model,
     dreamer_v2_dmc, dreamer_v2_dmc_world_model,
 )
+from lucid.models.generative.dreamer_v3 import (
+    DreamerV3Config, DreamerV3Model, DreamerV3ForWorldModeling, DreamerV3Output,
+    DreamerV3BehaviorOutput,
+    dreamer_v3_12m, dreamer_v3_12m_world_model,
+    dreamer_v3_25m, dreamer_v3_25m_world_model,
+    dreamer_v3_50m, dreamer_v3_50m_world_model,
+    dreamer_v3_100m, dreamer_v3_100m_world_model,
+    dreamer_v3_200m, dreamer_v3_200m_world_model,
+    dreamer_v3_400m, dreamer_v3_400m_world_model,
+)
 # 2020 — DDPM (Ho et al.)
 from lucid.models.generative.ddpm import (
     DDPMConfig, DDPMModel, DDPMForImageGeneration, DDPMUNet,
@@ -746,6 +756,14 @@ __all__ = [
     "dreamer_v2", "dreamer_v2_world_model",
     "dreamer_v2_atari", "dreamer_v2_atari_world_model",
     "dreamer_v2_dmc", "dreamer_v2_dmc_world_model",
+    "DreamerV3Config", "DreamerV3Model", "DreamerV3ForWorldModeling",
+    "DreamerV3Output", "DreamerV3BehaviorOutput",
+    "dreamer_v3_12m", "dreamer_v3_12m_world_model",
+    "dreamer_v3_25m", "dreamer_v3_25m_world_model",
+    "dreamer_v3_50m", "dreamer_v3_50m_world_model",
+    "dreamer_v3_100m", "dreamer_v3_100m_world_model",
+    "dreamer_v3_200m", "dreamer_v3_200m_world_model",
+    "dreamer_v3_400m", "dreamer_v3_400m_world_model",
     # ── Generative (2020) DDPM ────────────────────────────────────────────────
     "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "DDPMUNet",
     "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",

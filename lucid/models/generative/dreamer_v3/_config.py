@@ -118,6 +118,12 @@ class DreamerV3Config(WorldModelConfig):
     unimix : float, default=0.01
         Uniform mass mixed into every categorical.  Keeps a class from
         reaching probability zero, where its gradient would vanish.
+    blocks : int, default=8
+        Groups in the block-diagonal sequence model.  The paper's
+        recurrence is eight times the hidden width, split into eight
+        independent blocks of that width — which is the only reason a
+        4096-unit recurrence fits inside a 50M-parameter model.  Must
+        divide ``deter_size``.
     free_nats : float, default=1.0
         Free bits — the divergence is flat below this, per step.  One nat
         is the paper's value, and the reason it no longer needs tuning.
@@ -158,6 +164,11 @@ class DreamerV3Config(WorldModelConfig):
     critic_ema : float, default=0.02
         Rate at which the critic's slow copy follows it.  DreamerV2 used
         a hard copy every hundred steps; this is a continuous average.
+    critic_slowreg : float, default=1.0
+        Weight on the term pulling the critic toward its own slow copy.
+        The slow copy is a regulariser here, not the source of the
+        targets — the returns are bootstrapped from the *live* critic,
+        which is the opposite of DreamerV2's arrangement.
     replay_value_scale : float, default=0.3
         Weight on the critic's loss over *replayed* trajectories, in
         addition to imagined ones.
@@ -185,10 +196,20 @@ class DreamerV3Config(WorldModelConfig):
     ``400m``  12288    1536      96       96     1536
     ========  =======  ========  =======  =====  =====
 
-    The released implementation has drifted past the paper — its current
-    defaults are the ``200m`` rung with eight-block recurrence and RMS
-    normalisation, none of which the paper reports.  Where the two
-    disagree the paper is followed, as it is for the earlier families.
+    Two details of that table are worth writing down.  Its ``12m`` column
+    prints 1024 recurrent units where the stated rule — eight times the
+    hidden size — gives 2048; the released implementation uses 2048, and
+    so does this.  And the paper's own default is the ``200m`` rung for
+    every benchmark except the two control suites, which use ``12m``; the
+    defaults here are ``50m``, the middle of the ladder, because a 200M
+    default would make merely constructing the model an expensive
+    operation.  Use :func:`dreamer_v3_200m` for the paper's setting.
+
+    The released implementation carries a few things the paper does not
+    report — extra dynamics layers, an ``absolute`` posterior variant, and
+    a value- and advantage-normalisation pair disabled in every published
+    configuration.  Where the two disagree the paper is followed, as it is
+    for the earlier families.
 
     Examples
     --------
@@ -210,6 +231,7 @@ class DreamerV3Config(WorldModelConfig):
     hidden_size: int = 512
     cnn_depth: int = 32
     unimix: float = 0.01
+    blocks: int = 8
 
     free_nats: float = 1.0
     kl_weight: float = 1.0
@@ -238,6 +260,7 @@ class DreamerV3Config(WorldModelConfig):
     return_high: float = 95.0
 
     critic_ema: float = 0.02
+    critic_slowreg: float = 1.0
     replay_value_scale: float = 0.3
 
     pcont: bool = True
@@ -270,6 +293,13 @@ class DreamerV3Config(WorldModelConfig):
                 f"num_bins must be at least 2 — a two-hot needs two bins to "
                 f"interpolate between; got {self.num_bins}"
             )
+        if self.blocks < 1:
+            raise ValueError(f"blocks must be at least 1, got {self.blocks}")
+        if self.deter_size % self.blocks:
+            raise ValueError(
+                f"blocks must divide deter_size, got {self.deter_size} and "
+                f"{self.blocks}"
+            )
         if not 0.0 <= self.unimix < 1.0:
             raise ValueError(f"unimix must be in [0, 1), got {self.unimix}")
         if not 0.0 < self.discount <= 1.0:
@@ -294,6 +324,7 @@ class DreamerV3Config(WorldModelConfig):
             ("rep_scale", self.rep_scale),
             ("pred_scale", self.pred_scale),
             ("actor_entropy", self.actor_entropy),
+            ("critic_slowreg", self.critic_slowreg),
             ("replay_value_scale", self.replay_value_scale),
             ("pcont_scale", self.pcont_scale),
         ):

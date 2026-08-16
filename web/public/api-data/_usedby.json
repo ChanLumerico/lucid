@@ -1730,6 +1730,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.flow_matching._model"
     },
     {
@@ -2740,6 +2744,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.planet._model"
     },
     {
@@ -3003,6 +3011,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer_v2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._pretrained"
     },
     {
       "kind": "module",
@@ -3525,13 +3537,155 @@
       "module": "lucid.models.generative.dreamer_v2"
     }
   ],
+  "lucid.models.generative.dreamer_v3": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
   "lucid.models.generative.dreamer_v3._config.DreamerV3Config": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._pretrained"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._heads.TwoHotHead": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._model"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._model.DreamerV3BehaviorOutput": [
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer_v3"
     }
   ],
-  "lucid.models.generative.dreamer_v3._heads.TwoHotHead": [
+  "lucid.models.generative.dreamer_v3._model.DreamerV3ForWorldModeling": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._pretrained"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._model.DreamerV3Model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._pretrained"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._model.DreamerV3Output": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._objectives.ReturnNormaliser": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._model"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._objectives.free_bits_kl": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._model"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_100m": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_100m_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_12m": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_12m_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_200m": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_200m_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_25m": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_25m_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_400m": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_400m_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_50m": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_50m_world_model": [
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer_v3"
@@ -9830,6 +9984,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative._actor"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative._pixel_nets"
     },
     {
@@ -9851,6 +10009,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer_v3._heads"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._model"
     },
     {
       "kind": "module",
@@ -10224,6 +10386,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative._actor"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative._dists"
     },
     {
@@ -10245,6 +10411,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer_v3._heads"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3._model"
     },
     {
       "kind": "module",
