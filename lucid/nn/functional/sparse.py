@@ -331,3 +331,79 @@ def vector_quantize(x: Tensor, codebook: Tensor) -> tuple[Tensor, Tensor]:
     lead = tuple(int(s) for s in x.shape[:-1])
     hard = embedding(indices.reshape(-1), codebook).reshape(*lead, dim)
     return straight_through(hard, x), indices
+
+
+def two_hot(values: Tensor, bins: Tensor) -> Tensor:
+    r"""Encode continuous scalars as a distribution over two adjacent bins.
+
+    The generalisation of :func:`one_hot` to values that fall *between*
+    classes: all entries are zero except at the two bins bracketing the
+    scalar, which carry linearly interpolated weight summing to one.
+
+    Parameters
+    ----------
+    values : Tensor
+        Scalars to encode, any shape ``(...)``.
+    bins : Tensor
+        Bin locations, ``(K,)``, strictly increasing.  Values outside the
+        range are clamped onto the end bins.
+
+    Returns
+    -------
+    Tensor
+        ``(..., K)``, non-negative and summing to 1 along the last axis.
+
+    Notes
+    -----
+    Why a regression head would want this: predicting a scalar with a
+    squared error forces the network to commit to one number, and the
+    mean of a bimodal target is a value the target never takes.  A
+    distribution over bins can represent "either 0 or 10", and the scalar
+    is recovered afterwards as :math:`\sum_k p_k b_k`.  Trained with a
+    cross-entropy, the gradient no longer scales with the error either,
+    which is what lets one set of hyperparameters cover reward scales
+    that differ by orders of magnitude.
+
+    Exact on a bin: a value landing on ``bins[k]`` puts all its weight
+    there, so this reduces to :func:`one_hot` on the grid.
+
+    See Also
+    --------
+    one_hot : The discrete case.
+    lucid.nn.functional.symlog : Usually applied before encoding, so that
+        the grid can be uniform while the bins are not.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn.functional as F
+    >>> F.two_hot(lucid.tensor([1.5]), lucid.tensor([0.0, 1.0, 2.0]))
+    tensor([[0., 0.5, 0.5]])
+    """
+    count = int(bins.shape[0])
+    if bins.ndim != 1 or count < 2:
+        raise ValueError(
+            f"bins must be a 1-D tensor of at least two entries, got shape "
+            f"{tuple(int(s) for s in bins.shape)}"
+        )
+
+    lower, upper = float(bins[0].item()), float(bins[count - 1].item())
+    clamped = values.clip(lower, upper).unsqueeze(dim=-1)
+
+    # Weight every bin by how close it is, then keep only the two that
+    # bracket the value: `below` counts the bins at or under it, so
+    # `below - 1` and `below` are the neighbours.
+    below = (bins <= clamped).to(clamped.dtype).sum(dim=-1) - 1.0
+    below = below.clip(0.0, float(count - 2))
+    index = below.unsqueeze(dim=-1)
+
+    positions = lucid.arange(0, count, 1, dtype=clamped.dtype, device=clamped.device)
+    left = (positions == index).to(clamped.dtype)
+    right = (positions == index + 1.0).to(clamped.dtype)
+
+    left_edge = (left * bins).sum(dim=-1, keepdim=True)
+    right_edge = (right * bins).sum(dim=-1, keepdim=True)
+    span = (right_edge - left_edge).clip(1e-12, None)
+    weight = ((clamped - left_edge) / span).clip(0.0, 1.0)
+
+    return left * (1.0 - weight) + right * weight

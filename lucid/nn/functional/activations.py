@@ -1907,3 +1907,86 @@ def rrelu_(
         The same ``x`` tensor, now holding ``rrelu(x, lower, upper, training)``.
     """
     return _write_back(x, rrelu(x, lower, upper, training))
+
+
+def symlog(x: Tensor) -> Tensor:
+    r"""Symmetric logarithm — compress magnitude, keep sign and zero.
+
+    .. math::
+
+        \mathrm{symlog}(x) = \mathrm{sign}(x)\,\ln(|x| + 1)
+
+    Parameters
+    ----------
+    x : Tensor
+        Any shape.
+
+    Returns
+    -------
+    Tensor
+        Same shape.
+
+    Notes
+    -----
+    Behaves like the identity near zero and like a logarithm far from it,
+    so a single network can be trained on targets whose scale is not known
+    in advance — rewards that are ``0.01`` in one environment and
+    ``10000`` in another land in the same range without per-task
+    normalisation.  That is what it is for in DreamerV3.
+
+    The inverse is :func:`symexp`, and the pair is exact: ``symexp`` of
+    ``symlog`` returns the input.  Implemented through ``log1p`` rather
+    than ``log(1 + ·)`` so small inputs keep their precision.
+
+    See Also
+    --------
+    symexp : The inverse transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn.functional as F
+    >>> F.symlog(lucid.tensor([-100.0, 0.0, 100.0]))
+    tensor([-4.615, 0., 4.615])
+    """
+    return _l.sign(x) * _l.log1p(_l.abs(x))
+
+
+def symexp(x: Tensor) -> Tensor:
+    r"""Inverse of :func:`symlog`.
+
+    .. math::
+
+        \mathrm{symexp}(x) = \mathrm{sign}(x)\big(\exp(|x|) - 1\big)
+
+    Parameters
+    ----------
+    x : Tensor
+        Any shape.
+
+    Returns
+    -------
+    Tensor
+        Same shape.
+
+    Notes
+    -----
+    Used to read a prediction back out into the original units — a value
+    head trained against ``symlog`` targets predicts in the compressed
+    space, and this is what turns that back into a return.
+
+    Uses ``expm1`` rather than ``exp(·) - 1``, which loses precision for
+    small arguments exactly where ``symlog`` sends most of its inputs.
+
+    See Also
+    --------
+    symlog : The forward transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn.functional as F
+    >>> round(float(F.symexp(F.symlog(lucid.tensor([1234.0]))).item()), 2)
+    1234.0
+    """
+    return _l.sign(x) * _l.expm1(_l.abs(x))

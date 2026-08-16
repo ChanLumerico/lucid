@@ -49,6 +49,8 @@ from lucid.nn.functional.activations import (
     rrelu,
     gumbel_softmax,
     straight_through,
+    symexp,
+    symlog,
     relu_,
     elu_,
     selu_,
@@ -137,6 +139,7 @@ from lucid.nn.functional.sparse import (
     embedding,
     nearest_codebook,
     one_hot,
+    two_hot,
     vector_quantize,
 )
 from lucid.nn.functional.positional import (
@@ -194,6 +197,8 @@ __all__ = [
     "rrelu",
     "gumbel_softmax",
     "straight_through",
+    "symexp",
+    "symlog",
     # in-place activation variants (already imported above; previously
     # absent from __all__ caused them to fall through Griffe's static
     # AST walk → docs site missed the public surface).
@@ -279,6 +284,7 @@ __all__ = [
     # sparse
     "embedding",
     "one_hot",
+    "two_hot",
     "nearest_codebook",
     "vector_quantize",
     # positional encodings
