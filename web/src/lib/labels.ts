@@ -223,6 +223,7 @@ const PACKAGE_LABELS: Record<string, string> = {
   "lucid.utils":             "Utils",        // synthetic-ish parent
   "lucid.utils.cache":       "KV Cache",
   "lucid.utils.data":        "Data",
+  "lucid.utils.rollout":     "Rollout",
   "lucid.utils.tokenizer":   "Tokenizers",
   "lucid.utils.transforms":  "Transforms",
   "lucid.weights":           "Weights",
