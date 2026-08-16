@@ -41,16 +41,24 @@ class TestTwoHotHead:
         assert head(feature).shape == (2, 3, 41)
         assert head.predict(feature).shape == (2, 3)
 
-    def test_zero_init_predicts_exactly_zero(self) -> None:
-        """A critic that starts by promising returns sends the actor after them."""
+    def test_zero_init_predicts_zero(self) -> None:
+        """A critic that starts by promising returns sends the actor after them.
+
+        Not *exactly* zero at the default 255 bins.  A uniform
+        distribution over a grid symmetric about the origin has mean zero
+        in exact arithmetic, but the float32 sum of 255 terms leaves about
+        1e-7 behind — at 41 bins the cancellation happened to be exact,
+        which made the earlier equality test a statement about summation
+        order rather than about the head.
+        """
         head = TwoHotHead(8, 16, 2, zero_init=True)
-        assert float(head.predict(lucid.randn((4, 5, 8))).abs().max().item()) == 0.0
+        assert float(head.predict(lucid.randn((4, 5, 8))).abs().max().item()) < 1e-5
 
     def test_without_zero_init_it_does_not(self) -> None:
         """Guards the test above — otherwise it would pass on any head."""
         lucid.manual_seed(0)
         head = TwoHotHead(8, 16, 2, zero_init=False)
-        assert float(head.predict(lucid.randn((4, 5, 8))).abs().max().item()) > 0.0
+        assert float(head.predict(lucid.randn((4, 5, 8))).abs().max().item()) > 1e-3
 
     def test_the_loss_is_a_cross_entropy(self) -> None:
         """Non-negative, and minimised when the logits match the encoding."""

@@ -101,10 +101,13 @@ class TestDreamerV3Config:
         assert (cfg.stoch_size, cfg.discrete) == (32, 32)
         assert (cfg.free_nats, cfg.dyn_scale, cfg.rep_scale) == (1.0, 1.0, 0.1)
         assert (cfg.unimix, cfg.actor_entropy) == (0.01, 3e-4)
-        assert (cfg.discount, cfg.lambda_, cfg.horizon) == (0.997, 0.95, 16)
-        assert (cfg.num_bins, cfg.bin_range) == (41, 20.0)
+        assert (cfg.discount, cfg.lambda_, cfg.horizon) == (0.997, 0.95, 15)
+        assert (cfg.num_bins, cfg.bin_range) == (255, 20.0)
         assert (cfg.critic_ema, cfg.replay_value_scale) == (0.02, 0.3)
         assert cfg.blocks == 8
+        assert (cfg.reward_layers, cfg.pcont_layers) == (1, 1)
+        assert (cfg.actor_layers, cfg.value_layers) == (3, 3)
+        assert (cfg.critic_slowreg, cfg.pred_scale) == (1.0, 1.0)
 
     def test_the_ladder_follows_its_own_rule(self) -> None:
         """Table 3 derives every width from the model dimension."""

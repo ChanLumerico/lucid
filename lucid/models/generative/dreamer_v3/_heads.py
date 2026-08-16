@@ -40,7 +40,7 @@ class TwoHotHead(nn.Module):
         Width of the latent it reads.
     hidden, layers : int
         Shape of the dense trunk.
-    num_bins : int, default=41
+    num_bins : int, default=255
         Bins in the output distribution.
     bin_range : float, default=20.0
         The grid spans ``[-bin_range, bin_range]`` **in symlog space**, so
@@ -80,7 +80,7 @@ class TwoHotHead(nn.Module):
         in_features: int,
         hidden: int,
         layers: int,
-        num_bins: int = 41,
+        num_bins: int = 255,
         bin_range: float = 20.0,
         act_fn: str = "silu",
         zero_init: bool = False,

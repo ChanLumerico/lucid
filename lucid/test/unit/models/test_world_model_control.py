@@ -357,9 +357,9 @@ class TestDreamerV2LearnsControl:
         # policy that never leaves the uniform limit scores exactly
         # random however good the world model gets — which is what the
         # released actor rate produces over sixty steps.
-        assert entropy_last < entropy_first - 0.04, (
-            f"policy never sharpened: {entropy_first:.3f} -> {entropy_last:.3f}"
-        )
+        assert (
+            entropy_last < entropy_first - 0.04
+        ), f"policy never sharpened: {entropy_first:.3f} -> {entropy_last:.3f}"
 
     def test_it_starts_near_the_uniform_limit(self) -> None:
         """Pins the starting point the test above measures movement from."""

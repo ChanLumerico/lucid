@@ -55,7 +55,10 @@ from lucid.models.generative._returns import lambda_return
 from lucid.models.generative._rssm import RSSM, RSSMState
 from lucid.models.generative.dreamer_v3._config import DreamerV3Config
 from lucid.models.generative.dreamer_v3._heads import TwoHotHead
-from lucid.models.generative.dreamer_v3._objectives import ReturnNormaliser, free_bits_kl
+from lucid.models.generative.dreamer_v3._objectives import (
+    ReturnNormaliser,
+    free_bits_kl,
+)
 
 __all__ = [
     "DreamerV3Model",

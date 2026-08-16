@@ -136,19 +136,20 @@ class DreamerV3Config(WorldModelConfig):
     pred_scale : float, default=1.0
         :math:`\beta_{\mathrm{pred}}` on the reconstruction, reward and
         continuation likelihoods.
-    num_bins : int, default=41
+    num_bins : int, default=255
         Bins in the reward and value heads' two-hot output.
     bin_range : float, default=20.0
         The grid spans ``[-bin_range, +bin_range]`` in symlog space, so in
         reward units it reaches ``symexp(20)`` — roughly 5e8.
-    reward_hidden, reward_layers : int, default=512, 3
-        Reward head.
+    reward_hidden, reward_layers : int, default=512, 1
+        Reward head.  One hidden layer, as the reference's ``rewhead``
+        has — the three-layer stack is the actor's and the critic's.
     actor_hidden, actor_layers : int, default=512, 3
         Actor.
     value_hidden, value_layers : int, default=512, 3
         Critic.
-    horizon : int, default=16
-        Imagination horizon.
+    horizon : int, default=15
+        Imagination horizon.  ``H`` in the paper's Table 4.
     discount : float, default=0.997
         Reward discount.  Stated as a horizon of 333 steps in the
         released configuration, which is the same number.
@@ -218,7 +219,7 @@ class DreamerV3Config(WorldModelConfig):
     >>> cfg.stoch_size, cfg.discrete, cfg.free_nats
     (32, 32, 1.0)
     >>> cfg.discount, cfg.horizon, cfg.num_bins
-    (0.997, 16, 41)
+    (0.997, 15, 255)
     """
 
     model_type: ClassVar[str] = "dreamer_v3"
@@ -239,17 +240,17 @@ class DreamerV3Config(WorldModelConfig):
     rep_scale: float = 0.1
     pred_scale: float = 1.0
 
-    num_bins: int = 41
+    num_bins: int = 255
     bin_range: float = 20.0
 
     reward_hidden: int = 512
-    reward_layers: int = 3
+    reward_layers: int = 1
     actor_hidden: int = 512
     actor_layers: int = 3
     value_hidden: int = 512
     value_layers: int = 3
 
-    horizon: int = 16
+    horizon: int = 15
     discount: float = 0.997
     lambda_: float = 0.95
 
@@ -265,7 +266,7 @@ class DreamerV3Config(WorldModelConfig):
 
     pcont: bool = True
     pcont_scale: float = 1.0
-    pcont_layers: int = 3
+    pcont_layers: int = 1
 
     action_space: str = "continuous"
 

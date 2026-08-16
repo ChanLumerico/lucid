@@ -128,9 +128,9 @@ def _agree(cpu_out, metal_out, tol, what):
     assert a.shape == b.shape, what
     assert not np.isnan(b).any(), what
     scale = max(float(np.abs(a).max()), 1e-8)
-    assert np.abs(a - b).max() / scale < tol, (
-        f"{what}: rel {np.abs(a - b).max() / scale}"
-    )
+    assert (
+        np.abs(a - b).max() / scale < tol
+    ), f"{what}: rel {np.abs(a - b).max() / scale}"
 
 
 def test_neural_ode_matches_across_devices():
@@ -928,9 +928,7 @@ def test_dreamer_v3_block_recurrence_matches_across_devices():
     deter = lucid.rand((2, 8))
     _agree(
         cpu.rssm._recurrent(stoch, action, deter),
-        metal.rssm._recurrent(
-            stoch.to("metal"), action.to("metal"), deter.to("metal")
-        ),
+        metal.rssm._recurrent(stoch.to("metal"), action.to("metal"), deter.to("metal")),
         1e-4,
         "dreamer_v3 block recurrence",
     )

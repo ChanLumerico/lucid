@@ -604,9 +604,9 @@ class TestGumbelArgmax:
         counts = collections.Counter(int(v) for v in drawn)
         for index, expected in enumerate(probabilities):
             empirical = counts[index] / 4000
-            assert abs(empirical - expected) < 0.03, (
-                f"class {index}: {empirical:.3f} vs {expected}"
-            )
+            assert (
+                abs(empirical - expected) < 0.03
+            ), f"class {index}: {empirical:.3f} vs {expected}"
 
     def test_a_deterministic_logit_is_drawn_every_time(self) -> None:
         """Guards the test above: a broken draw could pass it by chance."""

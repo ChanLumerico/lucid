@@ -25,9 +25,10 @@ Suites, where it reports the small model matching the large one at a
 fraction of the cost.
 
 The registered ``params`` are the paper's labels.  They are met because
-the recurrence is block-diagonal — measured at 12.1M, 27.2M, 48.4M and
-108.8M for the first four rungs, against 26.8M, 60.3M, 107.1M and 240.9M
-had the GRU been dense.
+the recurrence is block-diagonal — measured at 12.03M, 26.90M, 47.67M,
+106.93M, 189.81M and 426.41M against labels of 12M, 25M, 50M, 100M, 200M
+and 400M.  A dense GRU at the same widths costs 26.8M where the label
+says 12M, which is why the block structure is not optional.
 
 Set ``action_dim`` for your environment at ``create_model`` time, and
 ``action_space="discrete"`` when the actions are buttons rather than a
@@ -255,7 +256,7 @@ def dreamer_v3_25m_world_model(
     >>> from lucid.models import dreamer_v3_25m_world_model
     >>> model = dreamer_v3_25m_world_model(action_dim=6).eval()
     >>> model.config.horizon, model.config.lambda_
-    (16, 0.95)
+    (15, 0.95)
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_25m_world_model")
@@ -434,7 +435,7 @@ def dreamer_v3_100m_world_model(
     >>> from lucid.models import dreamer_v3_100m_world_model
     >>> model = dreamer_v3_100m_world_model(action_dim=6).eval()
     >>> model.config.num_bins, model.config.bin_range
-    (41, 20.0)
+    (255, 20.0)
     """
     if pretrained:
         reject_unavailable_pretrained("dreamer_v3_100m_world_model")
