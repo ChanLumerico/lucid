@@ -229,9 +229,13 @@ def _gumbel_argmax(logits: Tensor) -> Tensor:
     >>> _gumbel_argmax(lucid.zeros((4, 5))).shape
     (4,)
     """
+    # Both bounds are exclusive on purpose.  `-log(-log(u))` is +inf at
+    # u = 1 and -inf at u = 0, and a clip whose upper bound is 1.0
+    # *inclusive* leaves the first of those reachable — rarely, which is
+    # the worst frequency for a numerical landmine.
     uniform = lucid.rand(
         tuple(int(s) for s in logits.shape), device=logits.device, dtype=logits.dtype
-    ).clip(1e-9, 1.0)
+    ).clip(1e-9, 1.0 - 1e-7)
     gumbel = -lucid.log(-lucid.log(uniform))
     return (logits + gumbel).argmax(dim=-1)
 

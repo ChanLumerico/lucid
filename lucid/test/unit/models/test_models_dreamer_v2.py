@@ -586,6 +586,70 @@ class TestOneHotCategorical:
         assert float(logits.grad.abs().sum().item()) > 0
 
 
+class TestEntropyIsNumericallySafe:
+    """The textbook entropy formula has a hole, and training walks into it.
+
+    ``-sum(p log p)`` multiplies a probability that has underflowed to
+    zero by a log-probability at ``-inf``, and ``0 * -inf`` is ``NaN``. A
+    policy becoming confident is exactly what produces those two factors,
+    so the failure arrives late in training rather than in any unit test
+    built on fresh weights.
+
+    Computed as ``logsumexp(l) - sum(p l)`` instead: the same number, and
+    every factor finite by construction.
+    """
+
+    @pytest.mark.parametrize(
+        "logits",
+        [
+            [[0.0, 0.0, 0.0, 0.0]],
+            [[1.0, 0.0, -1.0, 2.0]],
+            [[100.0, 0.0, 0.0, 0.0]],
+            [[1e4, -1e4, 0.0, 0.0]],
+            [[1e30, -1e30, 0.0, 0.0]],
+        ],
+    )
+    def test_it_stays_finite(self, logits: list[list[float]]) -> None:
+        value = float(OneHotCategorical(lucid.tensor(logits)).entropy().item())
+        assert value == value, "NaN"
+        assert abs(value) < 1e30
+
+    def test_it_matches_the_uniform_maximum(self) -> None:
+        uniform = OneHotCategorical(lucid.zeros((1, 4)))
+        assert abs(float(uniform.entropy().item()) - math.log(4.0)) < 1e-6
+
+    def test_it_agrees_with_the_textbook_form_where_that_is_defined(self) -> None:
+        """Same number — the change is in what it survives, not what it says."""
+        logits = lucid.randn((32, 5))
+        dist = OneHotCategorical(logits)
+        textbook = -(dist.probs * dist.log_probs).sum(dim=-1)
+        assert float((dist.entropy() - textbook).abs().max().item()) < 1e-5
+
+    def test_a_confident_policy_gives_zero_not_nan(self) -> None:
+        """The case that actually occurs: training makes the policy certain."""
+        value = float(
+            OneHotCategorical(lucid.tensor([[50.0, -50.0, -50.0]])).entropy().item()
+        )
+        assert value == value and 0.0 <= value < 1e-6
+
+
+class TestGumbelBoundsAreExclusive:
+    """``-log(-log(u))`` is infinite at both ends of the unit interval."""
+
+    def test_u_at_one_would_be_infinite(self) -> None:
+        """Why the clip's upper bound cannot be 1.0, stated as a fact."""
+        gumbel = -lucid.log(-lucid.log(lucid.tensor([1.0])))
+        assert not (abs(float(gumbel.item())) < 1e30)
+
+    def test_the_draw_is_finite_over_many_samples(self) -> None:
+        from lucid.models.generative._rssm import _gumbel_argmax
+
+        drawn = _gumbel_argmax(lucid.randn((20000, 6)) * 20.0)
+        as_float = drawn.to(lucid.float32)
+        assert bool((as_float == as_float).all().item())
+        assert 0 <= float(as_float.min().item()) and float(as_float.max().item()) <= 5
+
+
 class TestDiscreteActionSpace:
     def _discrete(self, **overrides: object) -> DreamerV2ForWorldModeling:
         return DreamerV2ForWorldModeling(

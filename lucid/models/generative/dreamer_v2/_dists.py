@@ -279,11 +279,31 @@ class OneHotCategorical:
         return (value * self.log_probs).sum(dim=-1)
 
     def entropy(self) -> Tensor:
-        """Shannon entropy, ``(...)``.
+        r"""Shannon entropy, ``(...)``.
 
         Returns
         -------
         Tensor
             Non-negative, at most ``log(action_dim)``.
+
+        Notes
+        -----
+        Computed as :math:`\mathrm{logsumexp}(\ell) - \sum_k p_k \ell_k`
+        rather than the textbook :math:`-\sum_k p_k \log p_k`.  The two
+        are the same number, but the textbook form multiplies a
+        probability that has underflowed to zero by a log-probability that
+        has gone to :math:`-\infty`, and ``0 * -inf`` is ``NaN``.  A
+        policy that has become confident — which is what training is for —
+        walks straight into that.  This form only ever multiplies finite
+        logits by finite probabilities.
+
+        The normaliser is computed directly, shifting by the maximum,
+        rather than recovered as ``logits - log_probs``.  The shorter
+        route reads the same on paper and inherits whatever the
+        log-probabilities carry; this one depends on nothing but the
+        logits.
         """
-        return -(self.probs * self.log_probs).sum(dim=-1)
+        maximum = self.logits.max(dim=-1, keepdim=True)
+        shifted = (self.logits - maximum).exp().sum(dim=-1, keepdim=True)
+        normaliser = (maximum + shifted.log()).squeeze(dim=-1)
+        return normaliser - (self.probs * self.logits).sum(dim=-1)
