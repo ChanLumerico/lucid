@@ -354,6 +354,26 @@ class TestReturnNormalisation:
             divisor = normaliser.update(lucid.randn((256,)) * 0.001)
         assert divisor == 1.0
 
+    def test_evaluating_a_model_does_not_move_the_estimate(self) -> None:
+        """Otherwise a run's numbers depend on how often it was measured."""
+        lucid.manual_seed(0)
+        model = DreamerV3ForWorldModeling(_tiny_cfg())
+        observations, actions, rewards = _batch(t=3)
+        model.train()
+        model(observations, actions, rewards)
+        trained = model.returns.spread
+        assert trained > 0.0
+
+        model.eval()
+        behavior = model(observations, actions, rewards * 500.0).behavior
+        assert behavior is not None
+        assert model.returns.spread == trained
+        assert behavior.return_scale == max(1.0, trained)
+
+        model.train()
+        model(observations, actions, rewards * 500.0)
+        assert model.returns.spread != trained, "training must still update it"
+
     def test_the_actor_objective_is_scale_free(self) -> None:
         """The claim the fixed entropy coefficient rests on."""
         lucid.manual_seed(0)

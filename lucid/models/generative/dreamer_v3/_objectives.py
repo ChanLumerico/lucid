@@ -179,6 +179,26 @@ class ReturnNormaliser:
         self.floor = floor
         self.spread = 0.0
 
+    @property
+    def scale(self) -> float:
+        """The current divisor, without folding anything in.
+
+        Returns
+        -------
+        float
+            ``max(floor, spread)`` — what :meth:`update` would return if
+            this batch happened to match the running estimate exactly.
+
+        Notes
+        -----
+        Exists so that a model in evaluation mode can read the estimate
+        without moving it.  Scoring a policy is not evidence about the
+        return distribution the policy is being trained on, and letting
+        an evaluation pass update the divisor makes a run's numbers
+        depend on how often it was measured.
+        """
+        return max(self.floor, self.spread)
+
     @lucid.no_grad()
     def update(self, returns: Tensor) -> float:
         """Fold this batch's spread into the estimate.

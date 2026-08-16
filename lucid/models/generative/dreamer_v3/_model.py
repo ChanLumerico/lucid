@@ -695,7 +695,7 @@ class DreamerV3ForWorldModeling(PretrainedModel):
         else:
             weight = lucid.cumprod(pcont[:, : self._horizon], dim=1).detach()
 
-        scale = self.returns.update(target)
+        scale = self.returns.update(target) if self.training else self.returns.scale
         actor_loss, entropy = self._actor_objective(
             states, actions, target, weight, scale
         )
@@ -705,7 +705,10 @@ class DreamerV3ForWorldModeling(PretrainedModel):
         if self._replay_value_scale > 0.0:
             bootstrap = target[:, 0].reshape(batch, steps).detach()
             replay_loss = self._replay_critic_objective(
-                kept, rewards[:, :steps], continues, bootstrap
+                kept,
+                rewards[:, :steps],
+                None if continues is None else continues[:, :steps],
+                bootstrap,
             )
             value_loss = value_loss + self._replay_value_scale * replay_loss
 
