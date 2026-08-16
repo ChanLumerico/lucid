@@ -14,6 +14,7 @@ exact composition instead of the output shape.
 import pytest
 
 import lucid
+import lucid.nn.functional as F
 from lucid.models import (
     PlaNetConfig,
     PlaNetForWorldModeling,
@@ -480,6 +481,103 @@ class TestRSSMCategorical:
     def test_categorical_kl_is_zero_against_itself(self) -> None:
         logits = lucid.randn((2, 3, 4, 5))
         assert float(categorical_kl(logits, logits).abs().max().item()) < 1e-6
+
+
+class TestUnimix:
+    """A uniform floor under every categorical.
+
+    Without it a class can reach probability zero, and a divergence
+    measured against a zero is unbounded — which is the tuning problem
+    DreamerV3 removes rather than tunes around.
+    """
+
+    def _peaked(self, unimix: float) -> RSSM:
+        """An RSSM whose head is scaled up until its output saturates."""
+        model = RSSM(
+            stoch_size=2,
+            deter_size=8,
+            hidden_size=8,
+            action_dim=2,
+            embed_size=4,
+            discrete=4,
+            unimix=unimix,
+        ).eval()
+        for parameter in list(model.posterior_head.parameters()) + list(
+            model.prior_head.parameters()
+        ):
+            parameter.data.copy_(parameter.data * 60.0)
+        return model
+
+    def test_the_floor_binds(self) -> None:
+        model = self._peaked(0.1)
+        _, posterior = model.observe(lucid.randn((300, 1, 4)), lucid.randn((300, 1, 2)))
+        probabilities = F.softmax(posterior.logits, dim=-1)
+        assert float(probabilities.min().item()) >= 0.1 / 4 - 1e-6
+
+    def test_without_it_a_class_reaches_zero(self) -> None:
+        """Guards the test above — otherwise it passes on any model."""
+        model = self._peaked(0.0)
+        _, posterior = model.observe(lucid.randn((300, 1, 4)), lucid.randn((300, 1, 2)))
+        probabilities = F.softmax(posterior.logits, dim=-1)
+        assert float(probabilities.min().item()) < 1e-6
+
+    def test_it_bounds_the_divergence(self) -> None:
+        """The point of the floor, not a side effect of it."""
+        unbounded = self._peaked(0.0)
+        floored = self._peaked(0.01)
+        embed, actions = lucid.randn((300, 1, 4)), lucid.randn((300, 1, 2))
+        wild = float(
+            categorical_kl(
+                *(s.logits for s in reversed(unbounded.observe(embed, actions)))
+            )
+            .max()
+            .item()
+        )
+        tame = float(
+            categorical_kl(
+                *(s.logits for s in reversed(floored.observe(embed, actions)))
+            )
+            .max()
+            .item()
+        )
+        assert tame < wild / 10.0
+
+    def test_it_stays_a_distribution(self) -> None:
+        model = self._peaked(0.1)
+        _, posterior = model.observe(lucid.randn((50, 1, 4)), lucid.randn((50, 1, 2)))
+        probabilities = F.softmax(posterior.logits, dim=-1)
+        assert float((probabilities.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
+
+    def test_the_sample_is_still_one_hot(self) -> None:
+        model = self._peaked(0.1)
+        _, posterior = model.observe(lucid.randn((50, 1, 4)), lucid.randn((50, 1, 2)))
+        grid = posterior.stoch.reshape(50, 1, 2, 4)
+        assert float((grid.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
+
+    @pytest.mark.parametrize("unimix", [-0.1, 1.0, 1.5])
+    def test_rejects_a_bad_mixture(self, unimix: float) -> None:
+        with pytest.raises(ValueError):
+            RSSM(
+                stoch_size=2,
+                deter_size=8,
+                hidden_size=8,
+                action_dim=2,
+                embed_size=4,
+                discrete=4,
+                unimix=unimix,
+            )
+
+    def test_default_is_off(self) -> None:
+        """The earlier families must be untouched by this."""
+        model = RSSM(
+            stoch_size=2,
+            deter_size=8,
+            hidden_size=8,
+            action_dim=2,
+            embed_size=4,
+            discrete=4,
+        )
+        assert model.unimix == 0.0
 
 
 class TestGumbelArgmax:

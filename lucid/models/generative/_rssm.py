@@ -341,9 +341,12 @@ class RSSM(nn.Module):
         act_fn: str = "relu",
         min_std: float = 0.1,
         discrete: int = 0,
+        unimix: float = 0.0,
     ) -> None:
         """Initialise the RSSM. See the class docstring for parameter semantics."""
         super().__init__()
+        if not 0.0 <= unimix < 1.0:
+            raise ValueError(f"unimix must be in [0, 1), got {unimix}")
         if discrete < 0 or discrete == 1:
             raise ValueError(
                 "discrete must be 0 for a Gaussian latent or at least 2 for a "
@@ -368,6 +371,7 @@ class RSSM(nn.Module):
         self.embed_size = embed_size
         self.min_std = min_std
         self.discrete = discrete
+        self.unimix = unimix
         self._act_name = act_fn
 
         # A categorical latent is a grid: `stoch_size` variables of
@@ -418,7 +422,7 @@ class RSSM(nn.Module):
         if self.discrete:
             leading = tuple(int(v) for v in out.shape[:-1])
             logits = out.reshape(*leading, self.stoch_size, self.discrete)
-            stoch = self._draw_discrete(logits, sample)
+            stoch, logits = self._draw_discrete(logits, sample)
             return RSSMState(deter=out, stoch=stoch, logits=logits)
         mean = out[..., : self.stoch_size]
         std = nn.functional.softplus(out[..., self.stoch_size :]) + self.min_std
@@ -426,7 +430,7 @@ class RSSM(nn.Module):
             deter=out, stoch=self._draw(mean, std, sample), mean=mean, std=std
         )
 
-    def _draw_discrete(self, logits: Tensor, sample: bool) -> Tensor:
+    def _draw_discrete(self, logits: Tensor, sample: bool) -> tuple[Tensor, Tensor]:
         r"""One-hot draw with a straight-through gradient, flattened.
 
         Parameters
@@ -438,8 +442,13 @@ class RSSM(nn.Module):
 
         Returns
         -------
-        Tensor
+        sample : Tensor
             ``(..., stoch_size * discrete)`` — one-hot per variable.
+        logits : Tensor
+            The logits actually used, which are the *mixed* ones when
+            ``unimix`` is set.  Returned rather than recomputed because
+            the divergence has to measure the same distribution the
+            sample came from.
 
         Notes
         -----
@@ -459,12 +468,20 @@ class RSSM(nn.Module):
         accelerator — see that function.
         """
         probs = nn.functional.softmax(logits, dim=-1)
+        if self.unimix:
+            # Mix in a uniform floor, then recover the logits it implies —
+            # every downstream user (the draw, the divergence) has to see
+            # the *mixed* distribution, not the raw one, or the floor is
+            # only cosmetic.
+            classes = int(probs.shape[-1])
+            probs = (1.0 - self.unimix) * probs + self.unimix / classes
+            logits = probs.log()
         index = _gumbel_argmax(logits) if sample else probs.argmax(dim=-1)
         hard = nn.functional.one_hot(index, num_classes=self.discrete)
         hard = hard.to(probs.device).to(probs.dtype)
         onehot = nn.functional.straight_through(hard, probs)
         leading = tuple(int(v) for v in onehot.shape[:-2])
-        return onehot.reshape(*leading, self.stoch_width)
+        return onehot.reshape(*leading, self.stoch_width), logits
 
     @staticmethod
     def _draw(mean: Tensor, std: Tensor, sample: bool) -> Tensor:
