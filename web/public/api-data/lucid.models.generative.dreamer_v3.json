@@ -1,0 +1,512 @@
+{
+  "slug": "lucid.models.generative.dreamer_v3",
+  "name": "dreamer_v3",
+  "path": "lucid.models.generative.dreamer_v3",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/__init__.py#L1",
+  "members": [
+    {
+      "name": "DreamerV3Config",
+      "path": "lucid.models.generative.dreamer_v3._config.DreamerV3Config",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "WorldModelConfig"
+      ],
+      "labels": [],
+      "signature": "DreamerV3Config(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 4096, hidden_size: int = 512, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 1.0, kl_weight: float = 1.0, discrete: int = 32, unimix: float = 0.01, dyn_scale: float = 1.0, rep_scale: float = 0.1, pred_scale: float = 1.0, num_bins: int = 41, bin_range: float = 20.0, reward_hidden: int = 512, reward_layers: int = 3, actor_hidden: int = 512, actor_layers: int = 3, value_hidden: int = 512, value_layers: int = 3, horizon: int = 16, discount: float = 0.997, lambda_: float = 0.95, actor_entropy: float = 0.0003, actor_min_std: float = 0.1, return_ema_decay: float = 0.99, return_low: float = 5.0, return_high: float = 95.0, critic_ema: float = 0.02, replay_value_scale: float = 0.3, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 3, action_space: str = 'continuous')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_config.py#L34",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "stoch_width",
+          "path": "lucid.models.generative.dreamer_v3._config.DreamerV3Config.stoch_width",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "stoch_width: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_config.py#L309",
+          "summary": "Flattened width of the stochastic latent — `stoch_size * discrete`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "latent_size",
+          "path": "lucid.models.generative.dreamer_v3._config.DreamerV3Config.latent_size",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "latent_size: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_config.py#L315",
+          "summary": "Width of `[h; s]`, with `s` the flattened categorical grid.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.dreamer_v3._config.DreamerV3Config.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 4096, hidden_size: int = 512, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 1.0, kl_weight: float = 1.0, discrete: int = 32, unimix: float = 0.01, dyn_scale: float = 1.0, rep_scale: float = 0.1, pred_scale: float = 1.0, num_bins: int = 41, bin_range: float = 20.0, reward_hidden: int = 512, reward_layers: int = 3, actor_hidden: int = 512, actor_layers: int = 3, value_hidden: int = 512, value_layers: int = 3, horizon: int = 16, discount: float = 0.997, lambda_: float = 0.95, actor_entropy: float = 0.0003, actor_min_std: float = 0.1, return_ema_decay: float = 0.99, return_low: float = 5.0, return_high: float = 95.0, critic_ema: float = 0.02, replay_value_scale: float = 0.3, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 3, action_space: str = 'continuous')",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen configuration for the DreamerV3 family.",
+      "extended": "Defaults are the paper's values at the `50m` rung of the scaling\nladder, whose 32-class categorical grid is the one the paper\ndescribes.  Fields shared with the earlier world models are inherited\nfrom `WorldModelConfig`.",
+      "parameters": [
+        {
+          "name": "act_fn",
+          "annotation": "(silu, swish, relu, gelu, elu)",
+          "description": "Activation throughout.  DreamerV2 used ELU; this uses SiLU.",
+          "default": "\"silu\""
+        },
+        {
+          "name": "stoch_size",
+          "annotation": "int",
+          "description": "Number of categorical variables.",
+          "default": "32"
+        },
+        {
+          "name": "discrete",
+          "annotation": "int",
+          "description": "Classes per variable.",
+          "default": "32"
+        },
+        {
+          "name": "deter_size",
+          "annotation": "int",
+          "description": "Deterministic path and the RSSM heads' hidden width.",
+          "default": "4096, 512"
+        },
+        {
+          "name": "hidden_size",
+          "annotation": "int",
+          "description": "Deterministic path and the RSSM heads' hidden width.",
+          "default": "4096, 512"
+        },
+        {
+          "name": "cnn_depth",
+          "annotation": "int",
+          "description": "First encoder convolution's width.",
+          "default": "32"
+        },
+        {
+          "name": "unimix",
+          "annotation": "float",
+          "description": "Uniform mass mixed into every categorical.  Keeps a class from\nreaching probability zero, where its gradient would vanish.",
+          "default": "0.01"
+        },
+        {
+          "name": "free_nats",
+          "annotation": "float",
+          "description": "Free bits — the divergence is flat below this, per step.  One nat\nis the paper's value, and the reason it no longer needs tuning.",
+          "default": "1.0"
+        },
+        {
+          "name": "kl_weight",
+          "annotation": "float",
+          "description": "Overall multiplier on the divergence, on top of the split below.",
+          "default": "1.0"
+        },
+        {
+          "name": "dyn_scale",
+          "annotation": "float",
+          "description": "$\\beta_{\\mathrm{dyn}}$ and $\\beta_{\\mathrm{rep}}$ —\nhow hard the prior is pulled toward the posterior against the\nreverse.  The asymmetry is DreamerV2's KL balancing, restated.",
+          "default": "1.0, 0.1"
+        },
+        {
+          "name": "rep_scale",
+          "annotation": "float",
+          "description": "$\\beta_{\\mathrm{dyn}}$ and $\\beta_{\\mathrm{rep}}$ —\nhow hard the prior is pulled toward the posterior against the\nreverse.  The asymmetry is DreamerV2's KL balancing, restated.",
+          "default": "1.0, 0.1"
+        },
+        {
+          "name": "pred_scale",
+          "annotation": "float",
+          "description": "$\\beta_{\\mathrm{pred}}$ on the reconstruction, reward and\ncontinuation likelihoods.",
+          "default": "1.0"
+        },
+        {
+          "name": "num_bins",
+          "annotation": "int",
+          "description": "Bins in the reward and value heads' two-hot output.",
+          "default": "41"
+        },
+        {
+          "name": "bin_range",
+          "annotation": "float",
+          "description": "The grid spans `[-bin_range, +bin_range]` in symlog space, so in\nreward units it reaches `symexp(20)` — roughly 5e8.",
+          "default": "20.0"
+        },
+        {
+          "name": "reward_hidden",
+          "annotation": "int",
+          "description": "Reward head.",
+          "default": "512, 3"
+        },
+        {
+          "name": "reward_layers",
+          "annotation": "int",
+          "description": "Reward head.",
+          "default": "512, 3"
+        },
+        {
+          "name": "actor_hidden",
+          "annotation": "int",
+          "description": "Actor.",
+          "default": "512, 3"
+        },
+        {
+          "name": "actor_layers",
+          "annotation": "int",
+          "description": "Actor.",
+          "default": "512, 3"
+        },
+        {
+          "name": "value_hidden",
+          "annotation": "int",
+          "description": "Critic.",
+          "default": "512, 3"
+        },
+        {
+          "name": "value_layers",
+          "annotation": "int",
+          "description": "Critic.",
+          "default": "512, 3"
+        },
+        {
+          "name": "horizon",
+          "annotation": "int",
+          "description": "Imagination horizon.",
+          "default": "16"
+        },
+        {
+          "name": "discount",
+          "annotation": "float",
+          "description": "Reward discount.  Stated as a horizon of 333 steps in the\nreleased configuration, which is the same number.",
+          "default": "0.997"
+        },
+        {
+          "name": "lambda_",
+          "annotation": "float",
+          "description": "TD($\\lambda$) weighting.",
+          "default": "0.95"
+        },
+        {
+          "name": "actor_entropy",
+          "annotation": "float",
+          "description": "Entropy bonus.  Fixed across domains, which only works because\nthe returns it competes with are normalised.",
+          "default": "3e-4"
+        },
+        {
+          "name": "return_ema_decay",
+          "annotation": "float",
+          "description": "Decay of the moving return-spread estimate.",
+          "default": "0.99"
+        },
+        {
+          "name": "return_low",
+          "annotation": "float",
+          "description": "Percentiles whose difference is that spread.",
+          "default": "5.0, 95.0"
+        },
+        {
+          "name": "return_high",
+          "annotation": "float",
+          "description": "Percentiles whose difference is that spread.",
+          "default": "5.0, 95.0"
+        },
+        {
+          "name": "critic_ema",
+          "annotation": "float",
+          "description": "Rate at which the critic's slow copy follows it.  DreamerV2 used\na hard copy every hundred steps; this is a continuous average.",
+          "default": "0.02"
+        },
+        {
+          "name": "replay_value_scale",
+          "annotation": "float",
+          "description": "Weight on the critic's loss over *replayed* trajectories, in\naddition to imagined ones.",
+          "default": "0.3"
+        },
+        {
+          "name": "action_space",
+          "annotation": "(continuous, discrete)",
+          "description": "What an action is, as in DreamerV2.",
+          "default": "\"continuous\""
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.dreamer_v3 import DreamerV3Config\n>>> cfg = DreamerV3Config(action_dim=6)\n>>> cfg.stoch_size, cfg.discrete, cfg.free_nats\n(32, 32, 1.0)\n>>> cfg.discount, cfg.horizon, cfg.num_bins\n(0.997, 16, 41)"
+      ],
+      "notes": [
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nThe scaling ladder moves five quantities together, so it is a table\nrather than a knob — see `DREAMER_V3_SIZES` and the factories\nbuilt from it:\n\n========  =======  ========  =======  =====  =====\nsize      deter    hidden    classes  depth  units\n========  =======  ========  =======  =====  =====\n`12m`   2048     256       16       16     256\n`25m`   3072     384       24       24     384\n`50m`   4096     512       32       32     512\n`100m`  6144     768       48       48     768\n`200m`  8192     1024      64       64     1024\n`400m`  12288    1536      96       96     1536\n========  =======  ========  =======  =====  =====\n\nThe released implementation has drifted past the paper — its current\ndefaults are the `200m` rung with eight-block recurrence and RMS\nnormalisation, none of which the paper reports.  Where the two\ndisagree the paper is followed, as it is for the earlier families."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "TwoHotHead",
+      "path": "lucid.models.generative.dreamer_v3._heads.TwoHotHead",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Module"
+      ],
+      "labels": [],
+      "signature": "TwoHotHead(in_features: int, hidden: int, layers: int, num_bins: int = 41, bin_range: float = 20.0, act_fn: str = 'silu', zero_init: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_heads.py#L33",
+      "subcategory": "heads",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.dreamer_v3._heads.TwoHotHead.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(in_features: int, hidden: int, layers: int, num_bins: int = 41, bin_range: float = 20.0, act_fn: str = 'silu', zero_init: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_heads.py#L78",
+          "subcategory": "heads",
+          "summary": "Initialise the head. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "grid",
+          "path": "lucid.models.generative.dreamer_v3._heads.TwoHotHead.grid",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "grid: Tensor",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_heads.py#L113",
+          "summary": "The bin locations, narrowed from the buffer registry.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.dreamer_v3._heads.TwoHotHead.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(feature: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_heads.py#L121",
+          "subcategory": "heads",
+          "summary": "Return the raw bin logits — `(B, T, num_bins)`.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "feature",
+              "annotation": "Tensor",
+              "description": "Latent state, `(B, T, in_features)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "Unnormalised scores over the grid."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "predict",
+          "path": "lucid.models.generative.dreamer_v3._heads.TwoHotHead.predict",
+          "kind": "function",
+          "labels": [],
+          "signature": "predict(feature: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_heads.py#L137",
+          "subcategory": "heads",
+          "summary": "Read the distribution back as a scalar — `(B, T)`.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "feature",
+              "annotation": "Tensor",
+              "description": "Latent state, `(B, T, in_features)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`symexp` of the grid's expectation, in the target's units."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "loss",
+          "path": "lucid.models.generative.dreamer_v3._heads.TwoHotHead.loss",
+          "kind": "function",
+          "labels": [],
+          "signature": "loss(feature: Tensor, target: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v3/_heads.py#L153",
+          "subcategory": "heads",
+          "summary": "Cross-entropy against the two-hot encoding of `symlog(target)`.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "feature",
+              "annotation": "Tensor",
+              "description": "Latent state, `(B, T, in_features)`.",
+              "default": null
+            },
+            {
+              "name": "target",
+              "annotation": "Tensor",
+              "description": "Scalars to fit, `(B, T)`, in their own units.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "A scalar, averaged over the batch and time."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "The target is detached: it is data, and a head that could move its\nown target would fit nothing.  The encoding is a soft label rather\nthan a class index, so this is a cross-entropy over a distribution\nand not a classification."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "A dense trunk whose output is a distribution over symlog bins.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "in_features",
+          "annotation": "int",
+          "description": "Width of the latent it reads.",
+          "default": null
+        },
+        {
+          "name": "hidden",
+          "annotation": "int",
+          "description": "Shape of the dense trunk.",
+          "default": null
+        },
+        {
+          "name": "layers",
+          "annotation": "int",
+          "description": "Shape of the dense trunk.",
+          "default": null
+        },
+        {
+          "name": "num_bins",
+          "annotation": "int",
+          "description": "Bins in the output distribution.",
+          "default": "41"
+        },
+        {
+          "name": "bin_range",
+          "annotation": "float",
+          "description": "The grid spans `[-bin_range, bin_range]` **in symlog space**, so\nit reaches `symexp(bin_range)` in the target's own units —\nabout 5e8 at the default, which is why one grid covers every\ndomain the paper reports.",
+          "default": "20.0"
+        },
+        {
+          "name": "act_fn",
+          "annotation": "str",
+          "description": "Activation in the trunk.",
+          "default": "\"silu\""
+        },
+        {
+          "name": "zero_init",
+          "annotation": "bool",
+          "description": "Start the output layer at zero, so the head predicts exactly\n`symexp(0) = 0` before it has learned anything.  The paper does\nthis for the critic: a value function that begins by asserting\nlarge returns sends the actor chasing them.",
+          "default": "False"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.dreamer_v3._heads import TwoHotHead\n>>> head = TwoHotHead(8, 16, 2, num_bins=41)\n>>> head.predict(lucid.zeros((2, 3, 8))).shape\n(2, 3)"
+      ],
+      "notes": [
+        "The grid is uniform in symlog space and therefore exponential in the\ntarget's, which is the whole trick — near zero the bins are dense and\nfar out they are sparse, matching where precision is worth spending.\n\nReading a scalar back is the grid's expectation put through\n`symexp`.  Note this is *not* the same as the mode: a bimodal\nprediction reports its mean, which is the answer to \"what should I\nexpect\", the question a value function is asked."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "DreamerV3 family — Hafner et al., 2023.",
+  "extended": "Under construction: the configuration and the distributional heads are in\nplace; the model and its factories are not.  What is exported here is\nwhat exists, so the family contract has something to check rather than an\nempty package that reads as a broken family.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "DreamerV3",
+  "citation": "Hafner, Danijar, et al. \"Mastering Diverse Domains through World Models.\" Nature, vol. 640, 2025, pp. 647-653.",
+  "theory": "DreamerV3's contribution is that its hyperparameters stop mattering.\nIts predecessors needed a different divergence scale for Atari than\nfor continuous control, a different entropy bonus, a different\ndiscount; this one setting spans them, and the paper's headline\nresult — collecting diamonds in Minecraft from scratch — is run with\nthe same numbers as everything else.\n\nFour changes buy that, and each removes a scale the practitioner was\notherwise forced to supply.\n\n**Symlog.** Rewards differ by orders of magnitude between domains, and\na network fitted to one range is wrong on another.  Compressing them\nthrough $\\mathrm{sign}(x)\\ln(|x| + 1)$ leaves small values\nalone and folds large ones in, so the same head covers both.\n\n**Two-hot regression.** Reward and value heads predict a\n*distribution* over exponentially spaced bins rather than a number.\nA squared error's gradient scales with the error, which is precisely\nthe coupling to reward magnitude the paper is trying to break; a\ncross-entropy's does not.  It also lets a prediction be bimodal,\nwhich the mean of a squared-error head cannot represent.\n\n**Free bits.** The divergence is clipped below at one nat per\nvariable:\n\n\n\n$$\n\\mathcal{L}_{\\mathrm{dyn}} = \\max\\big(1,\\;\n    \\mathrm{KL}[\\mathrm{sg}(q) \\,\\|\\, p]\\big),\n\\qquad\n\\mathcal{L}_{\\mathrm{rep}} = \\max\\big(1,\\;\n    \\mathrm{KL}[q \\,\\|\\, \\mathrm{sg}(p)\\big]),\n$$\n\nweighted $\\beta_{\\mathrm{dyn}} = 1$ and\n$\\beta_{\\mathrm{rep}} = 0.1$.  Below one nat the term is flat,\nso no gradient is spent closing a gap that is already small — which\nis what stopped the posterior collapsing and made the KL scale a\ntuning knob in the first place.  The categoricals are also mixed with\n1% uniform, so no class can reach probability zero and strand its\ngradient.\n\n**Normalised returns.** The actor divides its objective by the spread\nof its own recent returns,\n\n\n\n$$\nS = \\mathrm{EMA}\\big(\\mathrm{Per}(R^\\lambda, 95)\n                   - \\mathrm{Per}(R^\\lambda, 5),\\; 0.99\\big),\n$$\n\ndividing by $\\max(1, S)$ so that small returns are left alone\nrather than amplified into noise.  A fixed entropy bonus then means\nthe same thing in every domain, because the thing it is traded\nagainst has been made scale-free."
+}

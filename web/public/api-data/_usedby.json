@@ -3495,10 +3495,46 @@
       "module": "lucid.models.generative.dreamer_v2"
     }
   ],
+  "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_atari": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_atari_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_dmc": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    }
+  ],
+  "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_dmc_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v2"
+    }
+  ],
   "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_world_model": [
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer_v2"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._config.DreamerV3Config": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
+    }
+  ],
+  "lucid.models.generative.dreamer_v3._heads.TwoHotHead": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer_v3"
     }
   ],
   "lucid.models.generative.flow_matching": [
@@ -10873,6 +10909,18 @@
       "module": "lucid.nn.modules.sparse"
     }
   ],
+  "lucid.nn.functional.activations.symexp": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional"
+    }
+  ],
+  "lucid.nn.functional.activations.symlog": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional"
+    }
+  ],
   "lucid.nn.functional.activations.tanh": [
     {
       "kind": "module",
@@ -11729,6 +11777,12 @@
     {
       "kind": "module",
       "module": "lucid.nn.modules.sparse"
+    }
+  ],
+  "lucid.nn.functional.sparse.two_hot": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional"
     }
   ],
   "lucid.nn.functional.sparse.vector_quantize": [

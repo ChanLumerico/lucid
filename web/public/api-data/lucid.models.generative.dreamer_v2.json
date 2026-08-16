@@ -3,7 +3,7 @@
   "name": "dreamer_v2",
   "path": "lucid.models.generative.dreamer_v2",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/__init__.py#L1",
   "members": [
     {
       "name": "DreamerV2Config",
@@ -14,10 +14,33 @@
         "WorldModelConfig"
       ],
       "labels": [],
-      "signature": "DreamerV2Config(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'elu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 1024, hidden_size: int = 1024, cnn_depth: int = 48, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 0.0, kl_weight: float = 1.0, discrete: int = 32, kl_balance: float = 0.8, reward_hidden: int = 400, reward_layers: int = 4, actor_hidden: int = 400, actor_layers: int = 4, value_hidden: int = 400, value_layers: int = 4, horizon: int = 15, discount: float = 0.99, lambda_: float = 0.95, actor_grad: ActorGradient = 'dynamics', actor_grad_mix: float = 0.1, actor_entropy: float = 0.002, actor_min_std: float = 0.1, slow_target_update: int = 100, slow_target_fraction: float = 1.0, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 4)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_config.py#L26",
+      "signature": "DreamerV2Config(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'elu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 1024, hidden_size: int = 1024, cnn_depth: int = 48, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 0.0, kl_weight: float = 1.0, discrete: int = 32, kl_balance: float = 0.8, reward_hidden: int = 400, reward_layers: int = 4, actor_hidden: int = 400, actor_layers: int = 4, value_hidden: int = 400, value_layers: int = 4, horizon: int = 15, discount: float = 0.99, lambda_: float = 0.95, action_space: ActionSpace = 'continuous', actor_grad: ActorGradient = 'auto', actor_grad_mix: float = 0.1, actor_entropy: float = 0.002, actor_min_std: float = 0.1, slow_target_update: int = 100, slow_target_fraction: float = 1.0, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 4)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_config.py#L32",
       "subcategory": "config",
       "methods": [
+        {
+          "name": "resolved_actor_grad",
+          "path": "lucid.models.generative.dreamer_v2._config.DreamerV2Config.resolved_actor_grad",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "resolved_actor_grad: ActorGradient",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_config.py#L298",
+          "summary": "`actor_grad` with `\"auto\"` settled against the action space.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "{dynamics, reinforce, both}",
+            "description": "`\"reinforce\"` for a discrete action space, `\"dynamics\"`\nfor a continuous one, when `actor_grad` is `\"auto\"`;\notherwise whatever was asked for."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
         {
           "name": "stoch_width",
           "path": "lucid.models.generative.dreamer_v2._config.DreamerV2Config.stoch_width",
@@ -26,7 +49,7 @@
             "property"
           ],
           "signature": "stoch_width: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_config.py#L285",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_config.py#L313",
           "summary": "Flattened width of the stochastic latent — `stoch_size * discrete`.",
           "extended": null,
           "parameters": [],
@@ -49,7 +72,7 @@
             "property"
           ],
           "signature": "latent_size: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_config.py#L291",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_config.py#L319",
           "summary": "Width of `[h; s]`, with `s` the flattened categorical grid.",
           "extended": null,
           "parameters": [],
@@ -69,8 +92,8 @@
           "path": "lucid.models.generative.dreamer_v2._config.DreamerV2Config.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'elu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 1024, hidden_size: int = 1024, cnn_depth: int = 48, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 0.0, kl_weight: float = 1.0, discrete: int = 32, kl_balance: float = 0.8, reward_hidden: int = 400, reward_layers: int = 4, actor_hidden: int = 400, actor_layers: int = 4, value_hidden: int = 400, value_layers: int = 4, horizon: int = 15, discount: float = 0.99, lambda_: float = 0.95, actor_grad: ActorGradient = 'dynamics', actor_grad_mix: float = 0.1, actor_entropy: float = 0.002, actor_min_std: float = 0.1, slow_target_update: int = 100, slow_target_fraction: float = 1.0, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 4)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_config.py#L1",
+          "signature": "__init__(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'elu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 1024, hidden_size: int = 1024, cnn_depth: int = 48, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 0.0, kl_weight: float = 1.0, discrete: int = 32, kl_balance: float = 0.8, reward_hidden: int = 400, reward_layers: int = 4, actor_hidden: int = 400, actor_layers: int = 4, value_hidden: int = 400, value_layers: int = 4, horizon: int = 15, discount: float = 0.99, lambda_: float = 0.95, action_space: ActionSpace = 'continuous', actor_grad: ActorGradient = 'auto', actor_grad_mix: float = 0.1, actor_entropy: float = 0.002, actor_min_std: float = 0.1, slow_target_update: int = 100, slow_target_fraction: float = 1.0, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 4)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_config.py#L1",
           "subcategory": "config",
           "summary": "Initialise the actor. See the class docstring for parameters.",
           "extended": null,
@@ -199,10 +222,16 @@
           "default": "0.95"
         },
         {
+          "name": "action_space",
+          "annotation": "(continuous, discrete)",
+          "description": "What an action *is*.  `\"continuous\"` gives a truncated Gaussian\nover `[-1, 1]^action_dim`, which is the Control Suite;\n`\"discrete\"` gives a one-hot over `action_dim` alternatives,\nwhich is Atari.  It also decides how the actor's gradient is\nestimated when `actor_grad` is left on `\"auto\"`.",
+          "default": "\"continuous\""
+        },
+        {
           "name": "actor_grad",
-          "annotation": "(dynamics, reinforce, both)",
-          "description": "How the actor's gradient is estimated.  The released\nimplementation's `auto` resolves to `\"dynamics\"` for\ncontinuous actions and `\"reinforce\"` for discrete ones; since\nthis family emits continuous actions, that resolution is the\ndefault here.",
-          "default": "\"dynamics\""
+          "annotation": "(auto, dynamics, reinforce, both)",
+          "description": "How the actor's gradient is estimated.  `\"auto\"` resolves as the\nreleased implementation does: the analytic path for a continuous\naction, the score function for a discrete one, where a one-hot\noffers nothing to differentiate through except a biased\nstraight-through estimate.",
+          "default": "\"auto\""
         },
         {
           "name": "actor_grad_mix",
@@ -275,7 +304,7 @@
       ],
       "labels": [],
       "signature": "DreamerV2BehaviorOutput(actor_loss: Tensor, value_loss: Tensor, lambda_return: Tensor, entropy: Tensor, imagined_reward: Tensor, imagined_value: Tensor, imagined_action: Tensor, imagined_discount: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L44",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L47",
       "subcategory": "model",
       "methods": [
         {
@@ -284,7 +313,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(actor_loss: Tensor, value_loss: Tensor, lambda_return: Tensor, entropy: Tensor, imagined_reward: Tensor, imagined_value: Tensor, imagined_action: Tensor, imagined_discount: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the actor. See the class docstring for parameters.",
           "extended": null,
@@ -355,7 +384,7 @@
       ],
       "labels": [],
       "signature": "DreamerV2ForWorldModeling(config: DreamerV2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L576",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L627",
       "subcategory": "model",
       "methods": [
         {
@@ -364,7 +393,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DreamerV2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L621",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L672",
           "subcategory": "model",
           "summary": "Initialise the actor. See the class docstring for parameters.",
           "extended": null,
@@ -386,7 +415,7 @@
           "kind": "function",
           "labels": [],
           "signature": "world_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L640",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L691",
           "subcategory": "model",
           "summary": "Everything the world-model loss trains.",
           "extended": null,
@@ -408,7 +437,7 @@
           "kind": "function",
           "labels": [],
           "signature": "actor_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L660",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L711",
           "subcategory": "model",
           "summary": "The actor's parameters.",
           "extended": null,
@@ -430,7 +459,7 @@
           "kind": "function",
           "labels": [],
           "signature": "value_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L670",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L721",
           "subcategory": "model",
           "summary": "The learning critic's parameters — *not* the target copy.",
           "extended": null,
@@ -452,7 +481,7 @@
           "kind": "function",
           "labels": [],
           "signature": "update_slow_target()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L682",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L733",
           "subcategory": "model",
           "summary": "Refresh the target critic, on the paper's schedule.",
           "extended": null,
@@ -476,7 +505,7 @@
           "kind": "function",
           "labels": [],
           "signature": "backward(output: DreamerV2Output)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L850",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L909",
           "subcategory": "model",
           "summary": "Give every parameter group the gradient of its own loss.",
           "extended": null,
@@ -512,7 +541,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor, rewards: Tensor, discounts: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L896",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L955",
           "subcategory": "model",
           "summary": "Train the world model and the behaviour on one batch.",
           "extended": null,
@@ -591,7 +620,7 @@
       ],
       "labels": [],
       "signature": "DreamerV2Model(config: DreamerV2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L303",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L353",
       "subcategory": "model",
       "methods": [
         {
@@ -600,7 +629,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DreamerV2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L338",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L388",
           "subcategory": "model",
           "summary": "Initialise the actor. See the class docstring for parameters.",
           "extended": null,
@@ -622,7 +651,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(observations: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L396",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L447",
           "subcategory": "model",
           "summary": "Embed a frame sequence — `(B, T, C, 64, 64) -> (B, T, embed_size)`.",
           "extended": null,
@@ -644,7 +673,7 @@
           "kind": "function",
           "labels": [],
           "signature": "observe(observations: Tensor, actions: Tensor, state: RSSMState | None = None, sample: bool | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L400",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L451",
           "subcategory": "model",
           "summary": "Filter a trajectory into posterior states.",
           "extended": null,
@@ -691,7 +720,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L429",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L480",
           "subcategory": "model",
           "summary": "Reconstruct frames from a state — `(B, T, C, 64, 64)`.",
           "extended": null,
@@ -713,7 +742,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_reward(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L433",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L484",
           "subcategory": "model",
           "summary": "Predict reward from a state — `(B, T)`.",
           "extended": null,
@@ -735,7 +764,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_value(state: RSSMState, target: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L437",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L488",
           "subcategory": "model",
           "summary": "Estimate a state's value — `(B, T)`.",
           "extended": null,
@@ -770,7 +799,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_pcont(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L457",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L508",
           "subcategory": "model",
           "summary": "Predict the discount at a state — logits, `(B, T)`.",
           "extended": null,
@@ -804,7 +833,7 @@
           "kind": "function",
           "labels": [],
           "signature": "act(state: RSSMState, sample: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L482",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L533",
           "subcategory": "model",
           "summary": "Propose actions — `(B, T, action_dim)` or `(B, action_dim)`.",
           "extended": null,
@@ -839,7 +868,7 @@
           "kind": "function",
           "labels": [],
           "signature": "imagine(state: RSSMState, horizon: int, sample: bool | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L499",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L550",
           "subcategory": "model",
           "summary": "Roll the dynamics forward under the actor's own policy.",
           "extended": null,
@@ -882,7 +911,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L555",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L606",
           "subcategory": "model",
           "summary": "Propose an action — `(B, T, action_dim)` inside `(-1, 1)`.",
           "extended": null,
@@ -944,7 +973,7 @@
       ],
       "labels": [],
       "signature": "DreamerV2Output(observation: Tensor, reward: Tensor, value: Tensor, posterior_stoch: Tensor, posterior_logits: Tensor, prior_logits: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, pcont_loss: Tensor | None = None, behavior: DreamerV2BehaviorOutput | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L89",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L92",
       "subcategory": "model",
       "methods": [
         {
@@ -953,7 +982,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(observation: Tensor, reward: Tensor, value: Tensor, posterior_stoch: Tensor, posterior_logits: Tensor, prior_logits: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, pcont_loss: Tensor | None = None, behavior: DreamerV2BehaviorOutput | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the actor. See the class docstring for parameters.",
           "extended": null,
@@ -1025,7 +1054,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_pretrained.py#L37",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_pretrained.py#L50",
       "subcategory": "pretrained",
       "summary": "Construct DreamerV2's world model, actor and critic — no objectives.",
       "extended": "Dreamer's architecture with a categorical latent: 32 variables of 32\nclasses, sampled as one-hots and carried as a 1024-wide sparse binary\nvector.  Four-layer 400-unit ELU heads for reward, value and policy,\nplus a frozen copy of the critic to compute returns against.",
@@ -1307,12 +1336,1200 @@
       }
     },
     {
+      "name": "dreamer_v2_atari",
+      "path": "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_atari",
+      "kind": "function",
+      "labels": [],
+      "signature": "dreamer_v2_atari(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_pretrained.py#L178",
+      "subcategory": "pretrained",
+      "summary": "Construct DreamerV2 as the paper configures it for Atari.",
+      "extended": "A 600-unit deterministic state, a divergence scaled to 0.1, a discount\nof 0.999 weighted five times over, and a **discrete** policy — a\none-hot over the game's buttons rather than a box.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `DreamerV2Config` field overrides.  `action_dim`\nis the number of actions the game exposes.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "DreamerV2Model",
+        "description": "The trunk, configured for Atari."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import dreamer_v2_atari\n>>> model = dreamer_v2_atari(action_dim=18).eval()\n>>> model.config.action_space, model.config.resolved_actor_grad\n('discrete', 'reinforce')"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nAction repeat of 4 is part of this configuration and is not a model\nfield — pass it to `lucid.utils.rollout.rollout`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "DreamerV2Model",
+        "type": "DreamerV2Model",
+        "params": 23363176,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "PixelEncoder",
+            "params": 1551312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "convs",
+                "type": "ModuleList",
+                "params": 1551312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 2352,
+                    "own_params": 2352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 73824,
+                    "own_params": 73824,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 295104,
+                    "own_params": 295104,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 1180032,
+                    "own_params": 1180032,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rssm",
+            "type": "RSSM",
+            "params": 5652848,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pre_cell",
+                "type": "Linear",
+                "params": 615600,
+                "own_params": 615600,
+                "children": []
+              },
+              {
+                "name": "cell",
+                "type": "GRUCell",
+                "params": 2163600,
+                "own_params": 2163600,
+                "children": []
+              },
+              {
+                "name": "prior_head",
+                "type": "Sequential",
+                "params": 976024,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 360600,
+                    "own_params": 360600,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 615424,
+                    "own_params": 615424,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "posterior_head",
+                "type": "Sequential",
+                "params": 1897624,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 1282200,
+                    "own_params": 1282200,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 615424,
+                    "own_params": 615424,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder",
+            "type": "PixelDecoder",
+            "params": 10501011,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lift",
+                "type": "Linear",
+                "params": 2496000,
+                "own_params": 2496000,
+                "children": []
+              },
+              {
+                "name": "deconvs",
+                "type": "ModuleList",
+                "params": 8005011,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 7372992,
+                    "own_params": 7372992,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 460896,
+                    "own_params": 460896,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ConvTranspose2d",
+                    "params": 165936,
+                    "own_params": 165936,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ConvTranspose2d",
+                    "params": 5187,
+                    "own_params": 5187,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "reward_head",
+            "type": "DenseHead",
+            "params": 1131601,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 1131200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 650000,
+                    "own_params": 650000,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 160400,
+                    "own_params": 160400,
+                    "children": [],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 401,
+                "own_params": 401,
+                "children": []
+              }
+            ],
+            "repeat": 4
+          },
+          {
+            "name": "actor",
+            "type": "_Actor",
+            "params": 1131601,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "head",
+                "type": "DenseHead",
+                "params": 1131601,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 1131200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 650000,
+                        "own_params": 650000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 160400,
+                        "own_params": 160400,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 401,
+                    "own_params": 401,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "dreamer_v2_atari_world_model",
+      "path": "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_atari_world_model",
+      "kind": "function",
+      "labels": [],
+      "signature": "dreamer_v2_atari_world_model(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_pretrained.py#L225",
+      "subcategory": "pretrained",
+      "summary": "Construct the Atari configuration with all three objectives.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `DreamerV2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "DreamerV2ForWorldModeling",
+        "description": "The Atari trunk plus the objectives."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import dreamer_v2_atari_world_model\n>>> model = dreamer_v2_atari_world_model(action_dim=18).eval()\n>>> model.config.kl_weight, model.config.pcont_scale\n(0.1, 5.0)"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nThe actor's gradient is the score function here, resolved from the\ndiscrete action space — a one-hot offers nothing to differentiate\nthrough but a biased straight-through estimate."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "DreamerV2ForWorldModeling",
+        "type": "DreamerV2ForWorldModeling",
+        "params": 23363176,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "dreamer_v2",
+            "type": "DreamerV2Model",
+            "params": 23363176,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "PixelEncoder",
+                "params": 1551312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "convs",
+                    "type": "ModuleList",
+                    "params": 1551312,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 2352,
+                        "own_params": 2352,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 73824,
+                        "own_params": 73824,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Conv2d",
+                        "params": 295104,
+                        "own_params": 295104,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 1180032,
+                        "own_params": 1180032,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "rssm",
+                "type": "RSSM",
+                "params": 5652848,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "pre_cell",
+                    "type": "Linear",
+                    "params": 615600,
+                    "own_params": 615600,
+                    "children": []
+                  },
+                  {
+                    "name": "cell",
+                    "type": "GRUCell",
+                    "params": 2163600,
+                    "own_params": 2163600,
+                    "children": []
+                  },
+                  {
+                    "name": "prior_head",
+                    "type": "Sequential",
+                    "params": 976024,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 360600,
+                        "own_params": 360600,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 615424,
+                        "own_params": 615424,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "posterior_head",
+                    "type": "Sequential",
+                    "params": 1897624,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 1282200,
+                        "own_params": 1282200,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 615424,
+                        "own_params": 615424,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "PixelDecoder",
+                "params": 10501011,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "lift",
+                    "type": "Linear",
+                    "params": 2496000,
+                    "own_params": 2496000,
+                    "children": []
+                  },
+                  {
+                    "name": "deconvs",
+                    "type": "ModuleList",
+                    "params": 8005011,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ConvTranspose2d",
+                        "params": 7372992,
+                        "own_params": 7372992,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "ConvTranspose2d",
+                        "params": 460896,
+                        "own_params": 460896,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ConvTranspose2d",
+                        "params": 165936,
+                        "own_params": 165936,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "ConvTranspose2d",
+                        "params": 5187,
+                        "own_params": 5187,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "reward_head",
+                "type": "DenseHead",
+                "params": 1131601,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 1131200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 650000,
+                        "own_params": 650000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 160400,
+                        "own_params": 160400,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 401,
+                    "own_params": 401,
+                    "children": []
+                  }
+                ],
+                "repeat": 4
+              },
+              {
+                "name": "actor",
+                "type": "_Actor",
+                "params": 1131601,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "head",
+                    "type": "DenseHead",
+                    "params": 1131601,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "layers",
+                        "type": "ModuleList",
+                        "params": 1131200,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 650000,
+                            "own_params": 650000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 160400,
+                            "own_params": 160400,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ]
+                      },
+                      {
+                        "name": "out",
+                        "type": "Linear",
+                        "params": 401,
+                        "own_params": 401,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "dreamer_v2_dmc",
+      "path": "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_dmc",
+      "kind": "function",
+      "labels": [],
+      "signature": "dreamer_v2_dmc(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_pretrained.py#L270",
+      "subcategory": "pretrained",
+      "summary": "Construct DreamerV2 as the paper configures it for the Control Suite.",
+      "extended": "A 200-unit deterministic state, the full divergence, a continuous\npolicy, and **no discount head** — these episodes end on a clock\nrather than on a failure, and there is nothing for one to predict.",
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `DreamerV2Config` field overrides.  `action_dim`\nis set by the task.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "DreamerV2Model",
+        "description": "The trunk, configured for the Control Suite."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import dreamer_v2_dmc\n>>> model = dreamer_v2_dmc(action_dim=6).eval()\n>>> model.config.deter_size, model.config.pcont\n(200, False)"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nThe released implementation splits this into `dmc_vision` and\n`dmc_proprio`, which differ only in whether the encoder reads pixels\nor joint angles.  This family reads pixels, so they are one\nconfiguration here."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "DreamerV2Model",
+        "type": "DreamerV2Model",
+        "params": 16570376,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "PixelEncoder",
+            "params": 1551312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "convs",
+                "type": "ModuleList",
+                "params": 1551312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 2352,
+                    "own_params": 2352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Conv2d",
+                    "params": 73824,
+                    "own_params": 73824,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Conv2d",
+                    "params": 295104,
+                    "own_params": 295104,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "Conv2d",
+                    "params": 1180032,
+                    "own_params": 1180032,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rssm",
+            "type": "RSSM",
+            "params": 1245648,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "pre_cell",
+                "type": "Linear",
+                "params": 205200,
+                "own_params": 205200,
+                "children": []
+              },
+              {
+                "name": "cell",
+                "type": "GRUCell",
+                "params": 241200,
+                "own_params": 241200,
+                "children": []
+              },
+              {
+                "name": "prior_head",
+                "type": "Sequential",
+                "params": 246024,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 40200,
+                    "own_params": 40200,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 205824,
+                    "own_params": 205824,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "posterior_head",
+                "type": "Sequential",
+                "params": 553224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 347400,
+                    "own_params": 347400,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 205824,
+                    "own_params": 205824,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "decoder",
+            "type": "PixelDecoder",
+            "params": 9886611,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "lift",
+                "type": "Linear",
+                "params": 1881600,
+                "own_params": 1881600,
+                "children": []
+              },
+              {
+                "name": "deconvs",
+                "type": "ModuleList",
+                "params": 8005011,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "ConvTranspose2d",
+                    "params": 7372992,
+                    "own_params": 7372992,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "ConvTranspose2d",
+                    "params": 460896,
+                    "own_params": 460896,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "ConvTranspose2d",
+                    "params": 165936,
+                    "own_params": 165936,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "ConvTranspose2d",
+                    "params": 5187,
+                    "own_params": 5187,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "reward_head",
+            "type": "DenseHead",
+            "params": 971601,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "layers",
+                "type": "ModuleList",
+                "params": 971200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 490000,
+                    "own_params": 490000,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 160400,
+                    "own_params": 160400,
+                    "children": [],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "out",
+                "type": "Linear",
+                "params": 401,
+                "own_params": 401,
+                "children": []
+              }
+            ],
+            "repeat": 3
+          },
+          {
+            "name": "actor",
+            "type": "_Actor",
+            "params": 972002,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "head",
+                "type": "DenseHead",
+                "params": 972002,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 971200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 490000,
+                        "own_params": 490000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 160400,
+                        "own_params": 160400,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 802,
+                    "own_params": 802,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "dreamer_v2_dmc_world_model",
+      "path": "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_dmc_world_model",
+      "kind": "function",
+      "labels": [],
+      "signature": "dreamer_v2_dmc_world_model(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_pretrained.py#L319",
+      "subcategory": "pretrained",
+      "summary": "Construct the Control Suite configuration with all three objectives.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this family; passing `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `DreamerV2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "DreamerV2ForWorldModeling",
+        "description": "The Control Suite trunk plus the objectives."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import dreamer_v2_dmc_world_model\n>>> model = dreamer_v2_dmc_world_model(action_dim=6).eval()\n>>> model.config.actor_entropy\n0.0001"
+      ],
+      "notes": [
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nAction repeat of 2 belongs to this configuration and is not a model\nfield — pass it to `lucid.utils.rollout.rollout`."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "DreamerV2ForWorldModeling",
+        "type": "DreamerV2ForWorldModeling",
+        "params": 16570376,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "dreamer_v2",
+            "type": "DreamerV2Model",
+            "params": 16570376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "PixelEncoder",
+                "params": 1551312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "convs",
+                    "type": "ModuleList",
+                    "params": 1551312,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 2352,
+                        "own_params": 2352,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Conv2d",
+                        "params": 73824,
+                        "own_params": 73824,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Conv2d",
+                        "params": 295104,
+                        "own_params": 295104,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "Conv2d",
+                        "params": 1180032,
+                        "own_params": 1180032,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "rssm",
+                "type": "RSSM",
+                "params": 1245648,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "pre_cell",
+                    "type": "Linear",
+                    "params": 205200,
+                    "own_params": 205200,
+                    "children": []
+                  },
+                  {
+                    "name": "cell",
+                    "type": "GRUCell",
+                    "params": 241200,
+                    "own_params": 241200,
+                    "children": []
+                  },
+                  {
+                    "name": "prior_head",
+                    "type": "Sequential",
+                    "params": 246024,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 40200,
+                        "own_params": 40200,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 205824,
+                        "own_params": 205824,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "posterior_head",
+                    "type": "Sequential",
+                    "params": 553224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 347400,
+                        "own_params": 347400,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 205824,
+                        "own_params": 205824,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "decoder",
+                "type": "PixelDecoder",
+                "params": 9886611,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "lift",
+                    "type": "Linear",
+                    "params": 1881600,
+                    "own_params": 1881600,
+                    "children": []
+                  },
+                  {
+                    "name": "deconvs",
+                    "type": "ModuleList",
+                    "params": 8005011,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ConvTranspose2d",
+                        "params": 7372992,
+                        "own_params": 7372992,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "ConvTranspose2d",
+                        "params": 460896,
+                        "own_params": 460896,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "ConvTranspose2d",
+                        "params": 165936,
+                        "own_params": 165936,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "ConvTranspose2d",
+                        "params": 5187,
+                        "own_params": 5187,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "reward_head",
+                "type": "DenseHead",
+                "params": 971601,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "layers",
+                    "type": "ModuleList",
+                    "params": 971200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 490000,
+                        "own_params": 490000,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 160400,
+                        "own_params": 160400,
+                        "children": [],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "out",
+                    "type": "Linear",
+                    "params": 401,
+                    "own_params": 401,
+                    "children": []
+                  }
+                ],
+                "repeat": 3
+              },
+              {
+                "name": "actor",
+                "type": "_Actor",
+                "params": 972002,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "head",
+                    "type": "DenseHead",
+                    "params": 972002,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "layers",
+                        "type": "ModuleList",
+                        "params": 971200,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 490000,
+                            "own_params": 490000,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 160400,
+                            "own_params": 160400,
+                            "children": [],
+                            "repeat": 3
+                          }
+                        ]
+                      },
+                      {
+                        "name": "out",
+                        "type": "Linear",
+                        "params": 802,
+                        "own_params": 802,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "name": "dreamer_v2_world_model",
       "path": "lucid.models.generative.dreamer_v2._pretrained.dreamer_v2_world_model",
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v2_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/models/generative/dreamer_v2/_pretrained.py#L82",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/models/generative/dreamer_v2/_pretrained.py#L95",
       "subcategory": "pretrained",
       "summary": "Construct DreamerV2 with all three of its objectives.",
       "extended": "Same trunk as `dreamer_v2`, wrapped with the world-model bound\nunder a **balanced** divergence, an actor maximising imagined\n$V_\\lambda$ with an entropy bonus, and a critic regressing onto\na target copy of itself.",
@@ -1336,7 +2553,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> from lucid.models import dreamer_v2_world_model\n>>> model = dreamer_v2_world_model(action_dim=6).eval()\n>>> model.config.kl_balance, model.config.actor_grad\n(0.8, 'dynamics')"
+        ">>> from lucid.models import dreamer_v2_world_model\n>>> model = dreamer_v2_world_model(action_dim=6).eval()\n>>> model.config.kl_balance, model.config.resolved_actor_grad\n(0.8, 'dynamics')"
       ],
       "notes": [
         "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nThe three losses take **three separate optimisers**; use\n`lucid.models.DreamerV2ForWorldModeling.backward` to fill their\ngradients, and call `update_slow_target` once per step."

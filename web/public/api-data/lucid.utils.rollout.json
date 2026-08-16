@@ -3,7 +3,7 @@
   "name": "rollout",
   "path": "lucid.utils.rollout",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/__init__.py#L1",
   "members": [
     {
       "name": "LatentPolicy",
@@ -13,7 +13,7 @@
       "bases": [],
       "labels": [],
       "signature": "LatentPolicy(encode: Callable[[Tensor], Tensor], rssm: RSSM, act: Callable[[RSSMState], Tensor], action_dim: int, noise: float = 0.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L112",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L141",
       "subcategory": "driver",
       "methods": [
         {
@@ -22,7 +22,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(encode: Callable[[Tensor], Tensor], rssm: RSSM, act: Callable[[RSSMState], Tensor], action_dim: int, noise: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L171",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L200",
           "subcategory": "driver",
           "summary": "Initialise the policy. See the class docstring for parameters.",
           "extended": null,
@@ -44,7 +44,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L190",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L219",
           "subcategory": "driver",
           "summary": "Drop the belief so the next episode starts from the prior.",
           "extended": null,
@@ -66,7 +66,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__call__(observation: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L195",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L224",
           "subcategory": "driver",
           "summary": "Fold in the observation, then choose.",
           "extended": null,
@@ -140,7 +140,7 @@
       ],
       "labels": [],
       "signature": "Policy()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L34",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L34",
       "subcategory": "driver",
       "methods": [
         {
@@ -149,7 +149,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L57",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L57",
           "subcategory": "driver",
           "summary": "Forget whatever the previous episode left behind.",
           "extended": null,
@@ -171,7 +171,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__call__(observation: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L61",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L61",
           "subcategory": "driver",
           "summary": "Choose an action.",
           "extended": null,
@@ -217,8 +217,8 @@
       "class_kind": "regular",
       "bases": [],
       "labels": [],
-      "signature": "RandomPolicy(action_dim: int)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L77",
+      "signature": "RandomPolicy(action_dim: int, discrete: bool = False)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L77",
       "subcategory": "driver",
       "methods": [
         {
@@ -226,8 +226,8 @@
           "path": "lucid.utils.rollout._driver.RandomPolicy.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(action_dim: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L99",
+          "signature": "__init__(action_dim: int, discrete: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L115",
           "subcategory": "driver",
           "summary": "Initialise the policy. See the class docstring for parameters.",
           "extended": null,
@@ -249,7 +249,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L103",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L122",
           "subcategory": "driver",
           "summary": "No state to clear; present so this satisfies `Policy`.",
           "extended": null,
@@ -271,7 +271,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__call__(observation: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L107",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L126",
           "subcategory": "driver",
           "summary": "Draw a uniform action, ignoring the observation.",
           "extended": null,
@@ -288,22 +288,30 @@
           "see_also": []
         }
       ],
-      "summary": "Uniform actions in `(-1, 1)`.",
+      "summary": "Uniform actions, in whichever shape the action space has.",
       "extended": "What fills the buffer before there is anything worth learning from.\nBoth papers seed with a handful of random episodes for exactly this\nreason: a world model fitted on nothing has no opinion for a policy\nto improve on.",
       "parameters": [
         {
           "name": "action_dim",
           "annotation": "int",
-          "description": "Width of the action vector.",
+          "description": "Width of the action vector, or the number of alternatives when\n`discrete`.",
           "default": null
+        },
+        {
+          "name": "discrete",
+          "annotation": "bool",
+          "description": "Draw a one-hot over `action_dim` choices instead of a vector in\n`(-1, 1)`.",
+          "default": "False"
         }
       ],
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> from lucid.utils.rollout import RandomPolicy\n>>> policy = RandomPolicy(3)\n>>> policy.reset()\n>>> policy(None).shape\n(3,)"
+        ">>> from lucid.utils.rollout import RandomPolicy\n>>> policy = RandomPolicy(3)\n>>> policy.reset()\n>>> policy(None).shape\n(3,)\n>>> onehot = RandomPolicy(4, discrete=True)\n>>> onehot.reset()\n>>> float(onehot(None).sum())\n1.0"
       ],
-      "notes": [],
+      "notes": [
+        "The flag is not cosmetic.  Seeding a discrete agent's buffer with\ncontinuous noise trains its dynamics on action vectors it will never\nbe given again — a uniform draw in `(-1, 1)` looks nothing like a\none-hot — so the model is fitted on one input distribution and asked\nto act under another."
+      ],
       "attributes": [],
       "warns": [],
       "see_also": []
@@ -314,7 +322,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rollout(env: Environment, policy: Policy, action_repeat: int = 1, max_steps: int | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_driver.py#L235",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_driver.py#L264",
       "subcategory": "driver",
       "summary": "Run one episode and return it, ready for the replay buffer.",
       "extended": null,
@@ -369,7 +377,7 @@
       ],
       "labels": [],
       "signature": "Environment()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L87",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_env.py#L87",
       "subcategory": "env",
       "methods": [
         {
@@ -378,7 +386,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L116",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_env.py#L116",
           "subcategory": "env",
           "summary": "Start a new episode.",
           "extended": null,
@@ -400,7 +408,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(action: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L126",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_env.py#L126",
           "subcategory": "env",
           "summary": "Advance one step.",
           "extended": null,
@@ -449,7 +457,7 @@
       ],
       "labels": [],
       "signature": "Episode()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L51",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_env.py#L51",
       "subcategory": "env",
       "methods": [
         {
@@ -458,7 +466,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L81",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_env.py#L81",
           "subcategory": "env",
           "summary": "Number of transitions in the episode.",
           "extended": null,
@@ -519,7 +527,7 @@
       ],
       "labels": [],
       "signature": "StepResult()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_env.py#L17",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_env.py#L17",
       "subcategory": "env",
       "methods": [],
       "summary": "What one environment step returns.",
@@ -564,7 +572,7 @@
       "bases": [],
       "labels": [],
       "signature": "SequenceReplay(capacity: int = 1000000)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L17",
+      "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_replay.py#L17",
       "subcategory": "replay",
       "methods": [
         {
@@ -573,7 +581,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(capacity: int = 1000000)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L61",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_replay.py#L61",
           "subcategory": "replay",
           "summary": null,
           "extended": null,
@@ -595,7 +603,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L68",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_replay.py#L68",
           "subcategory": "replay",
           "summary": "Number of stored episodes.",
           "extended": null,
@@ -619,7 +627,7 @@
             "property"
           ],
           "signature": "steps: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L73",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_replay.py#L73",
           "summary": "Total transitions held.",
           "extended": null,
           "parameters": [],
@@ -640,7 +648,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add(episode: Episode)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L77",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_replay.py#L77",
           "subcategory": "replay",
           "summary": "Store an episode, evicting the oldest until the budget is met.",
           "extended": null,
@@ -674,7 +682,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sample(batch_size: int, length: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/780cd2512/lucid/utils/rollout/_replay.py#L109",
+          "source": "https://github.com/ChanLumerico/lucid/blob/654ba1ede/lucid/utils/rollout/_replay.py#L109",
           "subcategory": "replay",
           "summary": "Draw contiguous chunks.",
           "extended": null,
