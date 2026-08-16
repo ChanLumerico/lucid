@@ -37,7 +37,7 @@ from lucid.models import (
     is_model,
     list_models,
 )
-from lucid.models.generative.dreamer_v2._dists import (
+from lucid.models.generative._dists import (
     OneHotCategorical,
     TruncatedNormal,
 )

@@ -10224,6 +10224,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative._dists"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative._rssm"
     },
     {
@@ -10233,10 +10237,6 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.dreamer_v2._dists"
     },
     {
       "kind": "module",

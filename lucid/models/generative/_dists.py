@@ -6,11 +6,14 @@ a squashed normal has no closed-form entropy — the released implementation
 estimates it by sampling — whereas a truncated one does, so the bonus is
 exact and costs nothing.
 
-Kept private to the family.  ``lucid.distributions`` is where a truncated
-normal ought to eventually live, and it is missing one, but that module
-has a contract of its own — constraints, registered divergences, transform
-composition — and adding a half-conforming member to it would be worse
-than this.  Promote it when a second consumer appears.
+Shared across the world models rather than owned by one: DreamerV2 needed
+these first and DreamerV3 needs the same two, so they sit beside the RSSM
+and the pixel networks.
+
+``lucid.distributions`` is where a truncated normal ought to eventually
+live, and it is missing one, but that module has a contract of its own —
+constraints, registered divergences, transform composition — and adding a
+half-conforming member to it would be worse than this.
 """
 
 import math
@@ -74,7 +77,7 @@ class TruncatedNormal:
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative.dreamer_v2._dists import TruncatedNormal
+    >>> from lucid.models.generative._dists import TruncatedNormal
     >>> dist = TruncatedNormal(lucid.zeros((2, 3)), lucid.ones((2, 3)))
     >>> sample = dist.rsample()
     >>> bool((sample.abs() <= 1.0).all().item())
@@ -218,7 +221,7 @@ class OneHotCategorical:
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative.dreamer_v2._dists import OneHotCategorical
+    >>> from lucid.models.generative._dists import OneHotCategorical
     >>> dist = OneHotCategorical(lucid.zeros((2, 3, 4)))
     >>> sample = dist.rsample()
     >>> bool((sample.sum(dim=-1) - 1.0).abs().max().item() < 1e-6)

@@ -26,7 +26,7 @@ from lucid.models.generative._pixel_nets import DenseHead, PixelDecoder, PixelEn
 from lucid.models.generative._returns import lambda_return
 from lucid.models.generative._rssm import RSSM, RSSMState, categorical_kl
 from lucid.models.generative.dreamer_v2._config import DreamerV2Config
-from lucid.models.generative.dreamer_v2._dists import (
+from lucid.models.generative._dists import (
     OneHotCategorical,
     TruncatedNormal,
 )

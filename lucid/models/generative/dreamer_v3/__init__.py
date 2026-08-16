@@ -11,9 +11,15 @@ from lucid.models.generative.dreamer_v3._config import (
     DreamerV3Config,
 )
 from lucid.models.generative.dreamer_v3._heads import TwoHotHead
+from lucid.models.generative.dreamer_v3._objectives import (
+    ReturnNormaliser,
+    free_bits_kl,
+)
 
 __all__ = [
     "DreamerV3Config",
     "DREAMER_V3_SIZES",
     "TwoHotHead",
+    "free_bits_kl",
+    "ReturnNormaliser",
 ]
