@@ -109,6 +109,15 @@ class TwoHotHead(nn.Module):
             "bins", lucid.linspace(-bin_range, bin_range, num_bins), persistent=False
         )
 
+    @property
+    def grid(self) -> Tensor:
+        """The bin locations, narrowed from the buffer registry."""
+        return cast(Tensor, self.bins)
+
+    def _logits(self, feature: Tensor) -> Tensor:
+        """``self(feature)``, narrowed — ``Module.__call__`` is loosely typed."""
+        return cast(Tensor, self(feature))
+
     @override
     def forward(self, feature: Tensor) -> Tensor:  # type: ignore[override]
         """Return the raw bin logits — ``(B, T, num_bins)``.
@@ -138,8 +147,8 @@ class TwoHotHead(nn.Module):
         Tensor
             ``symexp`` of the grid's expectation, in the target's units.
         """
-        probabilities = F.softmax(self(feature), dim=-1)
-        return F.symexp((probabilities * self.bins).sum(dim=-1))
+        probabilities = F.softmax(self._logits(feature), dim=-1)
+        return F.symexp((probabilities * self.grid).sum(dim=-1))
 
     def loss(self, feature: Tensor, target: Tensor) -> Tensor:
         """Cross-entropy against the two-hot encoding of ``symlog(target)``.
@@ -163,5 +172,6 @@ class TwoHotHead(nn.Module):
         than a class index, so this is a cross-entropy over a distribution
         and not a classification.
         """
-        encoded = F.two_hot(F.symlog(target.detach()), self.bins)
-        return -(encoded * F.log_softmax(self(feature), dim=-1)).sum(dim=-1).mean()
+        encoded = F.two_hot(F.symlog(target.detach()), self.grid)
+        logits = F.log_softmax(self._logits(feature), dim=-1)
+        return -(encoded * logits).sum(dim=-1).mean()
