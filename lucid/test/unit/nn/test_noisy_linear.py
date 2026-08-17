@@ -131,7 +131,12 @@ class TestNoisyLinearModule:
         layer.eval()
         x = lucid.randn((2, 4))
         assert (
-            float((layer(x) - F.linear(x, layer.weight_mu, layer.bias_mu)).abs().max().item())
+            float(
+                (layer(x) - F.linear(x, layer.weight_mu, layer.bias_mu))
+                .abs()
+                .max()
+                .item()
+            )
             < 1e-6
         )
 

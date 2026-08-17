@@ -424,9 +424,7 @@ def noisy_linear(
     import lucid as _l
 
     if (bias_mu is None) != (bias_sigma is None):
-        raise ValueError(
-            "bias_mu and bias_sigma must be given together or not at all"
-        )
+        raise ValueError("bias_mu and bias_sigma must be given together or not at all")
 
     out_features, in_features = (int(v) for v in weight_mu.shape)
     if epsilon_in is None:

@@ -96,6 +96,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WorldModelConfig` — shared Tier-2 config for the world-model families, carrying the fields PlaNet and Dreamer state identically.
 - `"elu"` accepted by every generative family's `act_fn`.
 
+- add DreamerV3 — free bits and percentile return normalisation
+
+- add the DreamerV3 family and its six paper-cited size rungs
+
+- add a block-diagonal recurrence to the RSSM, behind blocks
+
+- add Dreamer's discrete-control setting for Atari and DMLab
+
+- add nn.NoisyLinear and nn.functional.noisy_linear
+
+- add PrioritizedSequenceReplay and SumTree to lucid.utils.rollout
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs
@@ -275,6 +287,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - stop the encoder activating twice at the residual boundary
 
 - keep requires_grad when assigning into a whole tensor
+
+- stop DreamerV3's evaluation pass from moving the return normaliser
+
+- correct four DreamerV3 defaults against the paper's Table 4
+
+- correct Dreamer and DreamerV2 defaults sourced from the wrong place
+
+- stop lucid.linalg.inv factorising an empty matrix
 
 ### Changed
 

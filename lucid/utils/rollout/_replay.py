@@ -487,9 +487,11 @@ class PrioritizedSequenceReplay(SequenceReplay):
 
         count = len(self.episodes)
         scaled = [max(self._tree.get(i), self.epsilon**self.alpha) for i in indices]
-        probabilities = [s / total for s in scaled] if total > 0.0 else [
-            1.0 / count for _ in indices
-        ]
+        probabilities = (
+            [s / total for s in scaled]
+            if total > 0.0
+            else [1.0 / count for _ in indices]
+        )
         raw = [(count * p) ** (-self.beta) for p in probabilities]
         largest = max(raw)
         weights = lucid.tensor([w / largest for w in raw])
@@ -529,9 +531,7 @@ class PrioritizedSequenceReplay(SequenceReplay):
             If the two lists differ in length.
         """
         if len(indices) != len(errors):
-            raise ValueError(
-                f"got {len(indices)} indices and {len(errors)} errors"
-            )
+            raise ValueError(f"got {len(indices)} indices and {len(errors)} errors")
         for index, error in zip(indices, errors):
             priority = abs(error) + self.epsilon
             self._max_priority = max(self._max_priority, priority)
