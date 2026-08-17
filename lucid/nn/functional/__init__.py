@@ -64,6 +64,8 @@ from lucid.nn.functional.linear import (
     bilinear,
     fused_linear_relu,
     fused_linear_gelu,
+    noisy_linear,
+    scaled_noise,
 )
 from lucid.nn.functional.conv import (
     conv1d,
@@ -199,6 +201,8 @@ __all__ = [
     "straight_through",
     "symexp",
     "symlog",
+    "noisy_linear",
+    "scaled_noise",
     # in-place activation variants (already imported above; previously
     # absent from __all__ caused them to fall through Griffe's static
     # AST walk → docs site missed the public surface).

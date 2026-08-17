@@ -25,6 +25,8 @@ from lucid.utils.rollout import (
     SequenceReplay,
     StepResult,
     rollout,
+    PrioritizedSequenceReplay,
+    SumTree,
 )
 
 
@@ -493,3 +495,145 @@ class _Counter64:
     def step(self, action: lucid.Tensor) -> StepResult:
         self.t += 1
         return StepResult(lucid.zeros((3, 64, 64)), 1.0, False, self.t >= self.length)
+
+
+class TestSumTree:
+    """The structure that makes prioritized sampling affordable."""
+
+    def test_it_finds_the_leaf_owning_a_prefix(self) -> None:
+        tree = SumTree(4)
+        tree.set(0, 1.0)
+        tree.set(3, 3.0)
+        assert tree.total == 4.0
+        assert tree.find(0.5) == 0
+        assert tree.find(2.0) == 3
+
+    def test_updates_repair_every_sum_above(self) -> None:
+        tree = SumTree(8)
+        for i in range(8):
+            tree.set(i, float(i))
+        assert tree.total == pytest.approx(28.0)
+        tree.set(3, 100.0)
+        assert tree.total == pytest.approx(125.0)
+        assert tree.get(3) == 100.0
+
+    def test_the_search_is_proportional(self) -> None:
+        """A leaf twice as heavy must own twice the range."""
+        tree = SumTree(4)
+        tree.set(0, 1.0)
+        tree.set(1, 2.0)
+        owned = sum(1 for i in range(300) if tree.find(i / 300.0 * 3.0) == 1)
+        assert 0.6 < owned / 300 < 0.73
+
+    @pytest.mark.parametrize("bad", [-1, 4])
+    def test_it_rejects_an_out_of_range_leaf(self, bad: int) -> None:
+        with pytest.raises(ValueError):
+            SumTree(4).set(bad, 1.0)
+
+    def test_it_rejects_a_negative_priority(self) -> None:
+        with pytest.raises(ValueError):
+            SumTree(4).set(0, -1.0)
+
+
+class TestPrioritizedSequenceReplay:
+    """Schaul et al. (2016), and the two details that are easy to omit."""
+
+    @staticmethod
+    def _episode(length: int, tag: float) -> Episode:
+        return Episode(
+            observations=lucid.ones((length, 3, 8, 8)) * tag,
+            actions=lucid.zeros((length, 2)),
+            rewards=lucid.zeros((length,)),
+            discounts=lucid.ones((length,)),
+        )
+
+    def _filled(self, count: int = 5, alpha: float = 0.6, beta: float = 0.4):
+        buffer = PrioritizedSequenceReplay(capacity=100_000, alpha=alpha, beta=beta)
+        for i in range(count):
+            buffer.add(self._episode(6, float(i)))
+        return buffer
+
+    def test_a_new_episode_enters_at_the_largest_priority(self) -> None:
+        """Algorithm 1, line 6 — otherwise it can be buried before its
+        first replay, and prioritization would starve fresh experience."""
+        buffer = self._filled(4)
+        buffer.update_priorities([0, 1, 2, 3], [10.0, 1e-3, 1e-3, 1e-3])
+        buffer.add(self._episode(6, 4.0))
+        newest = buffer._tree.get(len(buffer) - 1)
+        assert newest > buffer._tree.get(1)
+
+    def test_sampling_follows_priority(self) -> None:
+        buffer = self._filled(4)
+        buffer.update_priorities([0, 1, 2, 3], [10.0, 1e-3, 1e-3, 1e-3])
+        counts: dict[int, int] = {}
+        for _ in range(200):
+            index = buffer.sample_prioritized(1, 5).indices[0]
+            counts[index] = counts.get(index, 0) + 1
+        assert counts.get(0, 0) > 150
+
+    def test_alpha_zero_is_uniform(self) -> None:
+        """Guards the test above: the paper says alpha=0 is the uniform case."""
+        buffer = self._filled(4, alpha=0.0)
+        buffer.update_priorities([0], [100.0])
+        counts: dict[int, int] = {}
+        for _ in range(400):
+            index = buffer.sample_prioritized(1, 5).indices[0]
+            counts[index] = counts.get(index, 0) + 1
+        assert max(counts.values()) < 160
+
+    def test_weights_are_normalised_by_their_maximum(self) -> None:
+        """"So that they only scale the update downwards.\""""
+        buffer = self._filled(5)
+        buffer.update_priorities([0, 1, 2, 3, 4], [50.0, 20.0, 5.0, 1.0, 0.1])
+        weights = buffer.sample_prioritized(8, 5).weights.tolist()
+        assert max(weights) == pytest.approx(1.0)
+        assert all(0.0 < w <= 1.0 + 1e-6 for w in weights)
+
+    def test_a_frequently_drawn_episode_is_down_weighted(self) -> None:
+        """The correction has to actually correct something."""
+        buffer = self._filled(5, beta=1.0)
+        buffer.update_priorities([0, 1, 2, 3, 4], [50.0, 20.0, 5.0, 1.0, 0.1])
+        seen: dict[int, list[float]] = {}
+        for _ in range(60):
+            batch = buffer.sample_prioritized(4, 5)
+            for index, weight in zip(batch.indices, batch.weights.tolist()):
+                seen.setdefault(index, []).append(weight)
+        common = max(seen, key=lambda i: len(seen[i]))
+        rare = min(seen, key=lambda i: len(seen[i]))
+        mean = lambda i: sum(seen[i]) / len(seen[i])
+        assert mean(common) < mean(rare)
+
+    def test_beta_anneals_linearly(self) -> None:
+        buffer = self._filled(3, beta=0.4)
+        buffer.anneal_beta(0.0)
+        assert buffer.beta == pytest.approx(0.4)
+        buffer.anneal_beta(0.5)
+        assert buffer.beta == pytest.approx(0.7)
+        buffer.anneal_beta(1.0)
+        assert buffer.beta == pytest.approx(1.0)
+
+    def test_the_batch_matches_the_uniform_one_in_shape(self) -> None:
+        buffer = self._filled(4)
+        batch = buffer.sample_prioritized(3, 5)
+        assert batch.episode.observations.shape == (3, 5, 3, 8, 8)
+        assert len(batch.indices) == 3
+        assert batch.weights.shape == (3,)
+
+    def test_uniform_sampling_still_works(self) -> None:
+        """It is a SequenceReplay; the inherited draw must be untouched."""
+        assert self._filled(4).sample(2, 5).observations.shape == (2, 5, 3, 8, 8)
+
+    def test_it_refuses_a_length_nothing_can_serve(self) -> None:
+        with pytest.raises(ValueError):
+            self._filled(2).sample_prioritized(1, 99)
+
+    def test_mismatched_updates_are_refused(self) -> None:
+        with pytest.raises(ValueError):
+            self._filled(3).update_priorities([0, 1], [1.0])
+
+    @pytest.mark.parametrize(
+        "kwargs", [{"alpha": -0.1}, {"beta": -0.1}, {"epsilon": 0.0}]
+    )
+    def test_it_rejects_bad_hyperparameters(self, kwargs: dict[str, float]) -> None:
+        with pytest.raises(ValueError):
+            PrioritizedSequenceReplay(capacity=10, **kwargs)

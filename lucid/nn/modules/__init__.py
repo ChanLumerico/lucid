@@ -1,4 +1,11 @@
-from lucid.nn.modules.linear import Linear, Identity, Bilinear, LazyLinear, FusedLinear
+from lucid.nn.modules.linear import (
+    Linear,
+    Identity,
+    Bilinear,
+    LazyLinear,
+    FusedLinear,
+    NoisyLinear,
+)
 from lucid.nn.modules.conv import (
     Conv1d,
     Conv2d,
@@ -178,6 +185,7 @@ from lucid.nn.modules.transformer import (
 
 __all__ = [
     "Linear",
+    "NoisyLinear",
     "Identity",
     "Bilinear",
     "FusedLinear",

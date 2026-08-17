@@ -3,7 +3,7 @@ Linear and related fully-connected layers.
 """
 
 import math
-from typing import override
+from typing import cast, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -14,6 +14,7 @@ import lucid.nn.init as init
 from lucid._factories.creation import empty
 from lucid.nn.functional.linear import (
     linear,
+    noisy_linear,
     bilinear,
     fused_linear_relu,
     fused_linear_gelu,
@@ -799,4 +800,186 @@ class LazyLinear(Module):
         return (
             f"in_features={self.in_features}, out_features={self.out_features}, "
             f"bias={self._has_bias}"
+        )
+
+
+class NoisyLinear(Module):
+    r"""A linear layer whose weights carry learnable exploration noise.
+
+    Parameters
+    ----------
+    in_features, out_features : int
+        Widths, as :class:`Linear`.
+    bias : bool, default=True
+        Whether to carry a noisy bias.
+    sigma_zero : float, default=0.5
+        :math:`\sigma_0`, the constant the noise scales are initialised
+        from.  The paper's value, and it notes it was not tuned.
+    device, dtype : optional
+        As elsewhere.
+
+    Attributes
+    ----------
+    weight_mu, weight_sigma : Parameter
+        ``(out_features, in_features)``.
+    bias_mu, bias_sigma : Parameter or None
+        ``(out_features,)``.
+    epsilon_in, epsilon_out : Tensor
+        The current noise sample, held as buffers so that a forward pass
+        — and, for an agent, a whole episode — sees one fixed network.
+        Refreshed by :meth:`resample`.
+
+    Raises
+    ------
+    ValueError
+        If ``sigma_zero`` is not positive.
+
+    Notes
+    -----
+    Reference: Fortunato et al., *"Noisy Networks for Exploration"*,
+    ICLR, 2018 (arXiv:1706.10295).
+
+    .. math::
+
+        y = (\mu^w + \sigma^w \odot \varepsilon^w)\,x
+            + (\mu^b + \sigma^b \odot \varepsilon^b)
+
+    with factorised noise, so the layer draws ``in_features +
+    out_features`` random numbers rather than their product.
+
+    Initialised as the paper's factorised case specifies: "each element
+    :math:`\mu_{i,j}` was initialised by a sample from an independent
+    uniform distribution :math:`U[-1/\sqrt{p}, +1/\sqrt{p}]` and each
+    element :math:`\sigma_{i,j}` was initialised to a constant
+    :math:`\sigma_0/\sqrt{p}`", with :math:`p` the input width.
+
+    **The noise is a buffer, not a per-call draw.**  Redrawing inside
+    ``forward`` would make two calls on the same input two different
+    networks, which breaks both the Monte-Carlo gradient the paper
+    derives — one sample per optimisation step, its equation 13 — and
+    any agent that needs a fixed policy for an episode.  Call
+    :meth:`resample` when a new sample is wanted.  In ``eval()`` the
+    noise is not used at all, so a deterministic policy is just the mean
+    network.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> layer = nn.NoisyLinear(4, 3)
+    >>> layer(lucid.zeros((2, 4))).shape
+    (2, 3)
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        sigma_zero: float = 0.5,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        """Initialise the layer. See the class docstring for parameters."""
+        super().__init__()
+        if sigma_zero <= 0.0:
+            raise ValueError(f"sigma_zero must be positive, got {sigma_zero}")
+        self.in_features = in_features
+        self.out_features = out_features
+        self.sigma_zero = sigma_zero
+
+        self.weight_mu = Parameter(
+            empty(out_features, in_features, dtype=dtype, device=device)
+        )
+        self.weight_sigma = Parameter(
+            empty(out_features, in_features, dtype=dtype, device=device)
+        )
+        if bias:
+            self.bias_mu: Parameter | None = Parameter(
+                empty(out_features, dtype=dtype, device=device)
+            )
+            self.bias_sigma: Parameter | None = Parameter(
+                empty(out_features, dtype=dtype, device=device)
+            )
+        else:
+            self.bias_mu = None
+            self.bias_sigma = None
+
+        self.register_buffer(
+            "epsilon_in", empty(in_features, dtype=dtype, device=device)
+        )
+        self.register_buffer(
+            "epsilon_out", empty(out_features, dtype=dtype, device=device)
+        )
+        self.reset_parameters()
+        self.resample()
+
+    def reset_parameters(self) -> None:
+        r"""The paper's factorised initialisation.
+
+        ``mu ~ U[-1/sqrt(p), 1/sqrt(p)]`` and ``sigma = sigma_zero /
+        sqrt(p)``, with ``p`` the input width.
+        """
+        bound = 1.0 / math.sqrt(self.in_features)
+        scale = self.sigma_zero / math.sqrt(self.in_features)
+        init.uniform_(self.weight_mu, -bound, bound)
+        init.constant_(self.weight_sigma, scale)
+        if self.bias_mu is not None and self.bias_sigma is not None:
+            init.uniform_(self.bias_mu, -bound, bound)
+            init.constant_(self.bias_sigma, scale)
+
+    @property
+    def noise_in(self) -> Tensor:
+        """The input noise sample, narrowed from the buffer registry."""
+        return cast(Tensor, self.epsilon_in)
+
+    @property
+    def noise_out(self) -> Tensor:
+        """The output noise sample, narrowed from the buffer registry."""
+        return cast(Tensor, self.epsilon_out)
+
+    def resample(self) -> None:
+        """Draw a fresh noise sample — one per optimisation step, or episode.
+
+        Notes
+        -----
+        Writes the buffers in place with ``[:]``.  Assigning ``.data``
+        writes to a copy and silently does nothing, which is the mistake
+        this codebase has made before.
+        """
+        import lucid as _l
+
+        noise_in, noise_out = self.noise_in, self.noise_out
+        with _l.no_grad():
+            noise_in[:] = _l.randn(
+                (self.in_features,), device=noise_in.device, dtype=noise_in.dtype
+            )
+            noise_out[:] = _l.randn(
+                (self.out_features,), device=noise_out.device, dtype=noise_out.dtype
+            )
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        """Apply the layer — noisy while training, the mean network in eval.
+
+        Parameters
+        ----------
+        x : Tensor
+            ``(*, in_features)``.
+
+        Returns
+        -------
+        Tensor
+            ``(*, out_features)``.
+        """
+        if not self.training:
+            return linear(x, self.weight_mu, self.bias_mu)
+        return noisy_linear(
+            x,
+            self.weight_mu,
+            self.weight_sigma,
+            self.bias_mu,
+            self.bias_sigma,
+            self.noise_in,
+            self.noise_out,
         )

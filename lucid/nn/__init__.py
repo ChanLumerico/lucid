@@ -36,6 +36,7 @@ from lucid.nn import init
 from lucid.nn import utils
 from lucid.nn.modules import (
     Linear,
+    NoisyLinear,
     Identity,
     Bilinear,
     LazyLinear,
@@ -216,6 +217,7 @@ __all__ = [
     "init",
     "utils",
     "Linear",
+    "NoisyLinear",
     "Identity",
     "Bilinear",
     "LazyLinear",

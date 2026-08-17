@@ -297,3 +297,156 @@ def fused_linear_gelu(
     # exact erf path — no fused kernel available, fall back to two-op path.
     pre = _wrap(_C_engine.nn.linear(_unwrap(x), _unwrap(weight), _unwrap(bias)))
     return _gelu(pre, approximate="none")
+
+
+def scaled_noise(x: Tensor) -> Tensor:
+    r"""The factorised-noise transform of Fortunato et al. (2017).
+
+    .. math::
+
+        f(x) = \mathrm{sign}(x)\sqrt{|x|}
+
+    Parameters
+    ----------
+    x : Tensor
+        Unit Gaussian samples, any shape.
+
+    Returns
+    -------
+    Tensor
+        The same shape, magnitude-compressed with the sign kept.
+
+    Notes
+    -----
+    Written out because :func:`noisy_linear` applies it to both noise
+    vectors and the paper is explicit that the *bias* uses it too: "for
+    the bias we could have set :math:`f(x) = x`, but we decided to keep
+    the same output noise for weights and biases."
+
+    Composed rather than fused, matching :func:`~lucid.nn.functional.symlog`
+    — the same :math:`\mathrm{sign}(x)\,g(|x|)` shape, and the same
+    decision.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.functional import scaled_noise
+    >>> scaled_noise(lucid.tensor([-4.0, 0.0, 9.0]))
+    tensor([-2.0, 0.0, 3.0])
+    """
+    import lucid as _l
+
+    return _l.sign(x) * _l.sqrt(_l.abs(x))
+
+
+def noisy_linear(
+    x: Tensor,
+    weight_mu: Tensor,
+    weight_sigma: Tensor,
+    bias_mu: Tensor | None = None,
+    bias_sigma: Tensor | None = None,
+    epsilon_in: Tensor | None = None,
+    epsilon_out: Tensor | None = None,
+) -> Tensor:
+    r"""A linear layer whose parameters carry learnable noise.
+
+    .. math::
+
+        y = (\mu^w + \sigma^w \odot \varepsilon^w)\,x
+            + (\mu^b + \sigma^b \odot \varepsilon^b)
+
+    Parameters
+    ----------
+    x : Tensor
+        Input, ``(*, in_features)``.
+    weight_mu, weight_sigma : Tensor
+        Both ``(out_features, in_features)`` — the mean weight and the
+        scale of the noise on it.
+    bias_mu, bias_sigma : Tensor or None, optional
+        Both ``(out_features,)``, or ``None`` for an unbiased layer.
+    epsilon_in : Tensor or None, optional
+        ``(in_features,)`` unit Gaussian samples.  ``None`` draws them.
+    epsilon_out : Tensor or None, optional
+        ``(out_features,)`` unit Gaussian samples.  ``None`` draws them.
+
+    Returns
+    -------
+    Tensor
+        ``(*, out_features)``.
+
+    Raises
+    ------
+    ValueError
+        If exactly one of ``bias_mu`` and ``bias_sigma`` is given.
+
+    Notes
+    -----
+    Reference: Fortunato, Azar, Piot, Menick, Hessel, Osband, Graves,
+    Mnih, Munos, Hassabis, Pietquin, Blundell, and Legg, *"Noisy Networks
+    for Exploration"*, ICLR, 2018 (arXiv:1706.10295), equations 9-11.
+
+    **Factorised** noise, which is the variant the paper uses for the
+    single-threaded agents: rather than one sample per weight, it draws
+    :math:`p` for the inputs and :math:`q` for the outputs and forms
+
+    .. math::
+
+        \varepsilon^w_{i,j} = f(\varepsilon_i) f(\varepsilon_j),
+        \qquad
+        \varepsilon^b_j = f(\varepsilon_j),
+
+    so a layer costs :math:`p + q` random numbers instead of :math:`pq`.
+    The paper's stated reason is compute time, and it is the reason to
+    prefer this form here too.
+
+    The two noise vectors are arguments rather than always drawn, because
+    a *sample* has to be held fixed across a whole forward pass — and,
+    for an agent, often across a whole episode.  Drawing inside the
+    function would make every call a different network.
+
+    Gradients reach :math:`\sigma` through the noise, which is the point:
+    the scale of the exploration is learned rather than annealed.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.functional import noisy_linear
+    >>> x = lucid.zeros((2, 4))
+    >>> mu, sigma = lucid.zeros((3, 4)), lucid.ones((3, 4))
+    >>> noisy_linear(x, mu, sigma).shape
+    (2, 3)
+
+    See Also
+    --------
+    lucid.nn.NoisyLinear : ``nn.Module`` wrapper that owns the parameters.
+    linear : the deterministic layer this perturbs.
+    """
+    import lucid as _l
+
+    if (bias_mu is None) != (bias_sigma is None):
+        raise ValueError(
+            "bias_mu and bias_sigma must be given together or not at all"
+        )
+
+    out_features, in_features = (int(v) for v in weight_mu.shape)
+    if epsilon_in is None:
+        epsilon_in = _l.randn(
+            (in_features,), device=weight_mu.device, dtype=weight_mu.dtype
+        )
+    if epsilon_out is None:
+        epsilon_out = _l.randn(
+            (out_features,), device=weight_mu.device, dtype=weight_mu.dtype
+        )
+
+    f_in = scaled_noise(epsilon_in)
+    f_out = scaled_noise(epsilon_out)
+    # The outer product is the factorisation: one draw per input and per
+    # output, combined into the (q, p) perturbation the weight needs.
+    weight = weight_mu + weight_sigma * (
+        f_out.reshape(out_features, 1) * f_in.reshape(1, in_features)
+    )
+
+    bias: Tensor | None = None
+    if bias_mu is not None and bias_sigma is not None:
+        bias = bias_mu + bias_sigma * f_out
+    return linear(x, weight, bias)

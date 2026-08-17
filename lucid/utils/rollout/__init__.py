@@ -16,13 +16,21 @@ from lucid.utils.rollout._driver import (
     rollout,
 )
 from lucid.utils.rollout._env import Environment, Episode, StepResult
-from lucid.utils.rollout._replay import SequenceReplay
+from lucid.utils.rollout._replay import (
+    PrioritizedBatch,
+    PrioritizedSequenceReplay,
+    SequenceReplay,
+    SumTree,
+)
 
 __all__ = [
     "Environment",
     "Episode",
     "StepResult",
     "SequenceReplay",
+    "SumTree",
+    "PrioritizedBatch",
+    "PrioritizedSequenceReplay",
     "Policy",
     "RandomPolicy",
     "LatentPolicy",
