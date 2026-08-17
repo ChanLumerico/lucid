@@ -1023,3 +1023,34 @@ def test_dreamer_v3_discrete_policy_on_device(device):
     assert grads
     for g in grads:
         assert str(g.device) == f"device('{device}')"
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_dreamer_discrete_policy_on_device(device):
+    """Dreamer v1's categorical policy, drawn straight-through on-device.
+
+    Same hazard the v2 discrete path had: a data-dependent draw round-trips
+    to the CPU on Metal. ``OneHotCategorical`` uses Gumbel-max precisely so
+    it does not, and the imagined actions must come back on the device they
+    were asked for.
+    """
+    lucid.manual_seed(0)
+    config = dict(_DREAMER_SMALL, action_dim=4, action_space="discrete", pcont=False)
+    model = M.create_model("dreamer_world_model", **config).to(device)
+    model.train()
+
+    out = model(
+        lucid.rand((2, 4, 3, 64, 64), device=device),
+        lucid.rand((2, 4, 4), device=device),
+        rewards=lucid.rand((2, 4), device=device),
+    )
+    assert out.behavior is not None
+    drawn = out.behavior.imagined_action
+    assert str(drawn.device) == f"device('{device}')"
+    assert np.allclose(drawn.to("cpu").numpy().sum(axis=-1), 1.0, atol=1e-4)
+
+    model.backward(out)
+    grads = [p.grad for p in model.actor_parameters() if p.grad is not None]
+    assert grads
+    for g in grads:
+        assert str(g.device) == f"device('{device}')"

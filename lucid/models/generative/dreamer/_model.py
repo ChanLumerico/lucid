@@ -37,6 +37,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import ModelOutput
+from lucid.models.generative._dists import OneHotCategorical
 from lucid.models.generative._pixel_nets import DenseHead, PixelDecoder, PixelEncoder
 from lucid.models.generative._returns import lambda_return
 from lucid.models.generative._rssm import RSSM, RSSMState, rssm_kl
@@ -195,7 +196,10 @@ class _Actor(nn.Module):
     act_fn : str
         Activation in the trunk.
     min_std, init_std, mean_scale : float
-        See :class:`DreamerConfig`.
+        See :class:`DreamerConfig`.  Ignored when ``discrete``.
+    discrete : bool, default=False
+        Emit a one-hot over ``action_dim`` alternatives instead of a
+        bounded vector.
 
     Notes
     -----
@@ -203,6 +207,18 @@ class _Actor(nn.Module):
     that an untrained head — whose raw output is near zero — produces
     exactly ``init_std``.  Solving ``softplus(c) = init_std`` gives
     ``c = log(exp(init_std) - 1)``, which is what is added.
+
+    The discrete branch is the paper's *Discrete control* paragraph: "the
+    action model predicts the logits of a categorical distribution.  We
+    use straight-through gradients for the sampling step during latent
+    imagination."  Both halves matter.  The one-hot is what an Atari
+    button is; the straight-through draw is what keeps this actor
+    trainable the same way the continuous one is — Dreamer's gradient
+    arrives *through* the action, and a hard sample would sever it.
+
+    That is where this parts company with DreamerV2, which scores a
+    discrete policy with the score function instead.  The estimator here
+    is biased and the reference says so; it is also what this paper ran.
     """
 
     def __init__(
@@ -215,16 +231,21 @@ class _Actor(nn.Module):
         min_std: float,
         init_std: float,
         mean_scale: float,
+        discrete: bool = False,
     ) -> None:
         """Initialise the actor. See the class docstring for parameters."""
         super().__init__()
         self.action_dim = action_dim
         self.min_std = min_std
         self.mean_scale = mean_scale
+        self.discrete = discrete
         # softplus(c) = init_std  =>  c = log(exp(init_std) - 1)
         self._raw_init_std = math.log(math.expm1(init_std))
+        # A one-hot needs one score per alternative; a squashed Gaussian
+        # needs a location and a scale per dimension.
+        width = action_dim if discrete else 2 * action_dim
         self.head = DenseHead(
-            latent_size, hidden, layers, out_features=2 * action_dim, act_fn=act_fn
+            latent_size, hidden, layers, out_features=width, act_fn=act_fn
         )
 
     def distribution(self, feature: Tensor) -> tuple[Tensor, Tensor]:
@@ -243,6 +264,11 @@ class _Actor(nn.Module):
         std : Tensor
             Scale, ``(B, T, action_dim)``, floored at ``min_std``.
         """
+        if self.discrete:
+            raise ValueError(
+                "a discrete actor has no (mean, std) — it emits categorical "
+                "logits; use `logits()` or call the actor"
+            )
         out = cast(Tensor, self.head(feature))
         raw_mean = out[..., : self.action_dim]
         raw_std = out[..., self.action_dim :]
@@ -269,6 +295,9 @@ class _Actor(nn.Module):
         Tensor
             Actions bounded to ``(-1, 1)``.
         """
+        if self.discrete:
+            policy = OneHotCategorical(self.logits(feature))
+            return policy.rsample() if sample else policy.mode
         mean, std = self.distribution(feature)
         if not sample:
             return lucid.tanh(mean)
@@ -276,6 +305,31 @@ class _Actor(nn.Module):
             tuple(int(s) for s in mean.shape), device=mean.device, dtype=mean.dtype
         )
         return lucid.tanh(mean + std * noise)
+
+    def logits(self, feature: Tensor) -> Tensor:
+        """Categorical scores over the alternatives — ``(B, T, action_dim)``.
+
+        Parameters
+        ----------
+        feature : Tensor
+            Latent state, ``(B, T, latent_size)``.
+
+        Returns
+        -------
+        Tensor
+            Unnormalised scores.
+
+        Raises
+        ------
+        ValueError
+            If the actor is continuous, which has no logits to give.
+        """
+        if not self.discrete:
+            raise ValueError(
+                "a continuous actor has no logits — it emits a mean and a "
+                "scale; use `distribution()`"
+            )
+        return cast(Tensor, self.head(feature))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -362,6 +416,7 @@ class DreamerModel(PretrainedModel):
             config.actor_min_std,
             config.actor_init_std,
             config.actor_mean_scale,
+            discrete=config.action_space == "discrete",
         )
         self.pcont_head = (
             DenseHead(

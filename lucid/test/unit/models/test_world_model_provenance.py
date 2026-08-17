@@ -53,6 +53,13 @@ _SAMPLE = "lucid: 64x64 frames, the resolution all four papers train on"
 _RGB = "lucid: RGB, the zoo's channel convention for pixel models"
 _ACTION_DIM = "lucid: placeholder — the environment sets this, not the paper"
 _MEAN_ONLY = "lucid: zoo convention — draw the latent unless asked not to"
+# Not a pure convention: each paper names both settings and says which
+# benchmarks use which.  The *default* is the continuous one; the
+# discrete factories override it.
+_ACTION_SPACE = (
+    "paper: the continuous setting is the default; each family's discrete "
+    "factory overrides it, citing that paper's own discrete-control section"
+)
 
 
 PLANET: dict[str, tuple[Any, str]] = {
@@ -215,6 +222,14 @@ DREAMER: dict[str, tuple[Any, str]] = {
         3,
         "code: dreamer.py DenseDecoder((), 3, num_units, 'binary')",
     ),
+    "action_space": (
+        "continuous",
+        'paper: Appendix A gives two settings.  The main paragraph is the '
+        'Control Suite\'s, and its policy is the tanh-squashed Gaussian; the '
+        '*Discrete control* paragraph says "the action model predicts the '
+        'logits of a categorical distribution" for Atari and DeepMind Lab, '
+        "which dreamer_discrete selects",
+    ),
 }
 
 
@@ -288,7 +303,7 @@ DREAMER_V2: dict[str, tuple[Any, str]] = {
         1.0,
         "code: configs.yaml slow_target_fraction 1 — a hard copy, not a blend",
     ),
-    "action_space": ("continuous", _ACTION_DIM),
+    "action_space": ("continuous", _ACTION_SPACE),
     "pcont": (True, "code: configs.yaml pred_discount True"),
     "pcont_scale": (1.0, "code: configs.yaml loss_scales.discount 1.0"),
     "pcont_layers": (4, "code: configs.yaml discount_head.layers 4"),
@@ -301,7 +316,7 @@ DREAMER_V3: dict[str, tuple[Any, str]] = {
     "out_channels": (3, _RGB),
     "action_dim": (1, _ACTION_DIM),
     "mean_only": (False, _MEAN_ONLY),
-    "action_space": ("continuous", _ACTION_DIM),
+    "action_space": ("continuous", _ACTION_SPACE),
     "act_fn": ("silu", "paper: Table 4, Activation RMSNorm + SiLU"),
     "stoch_size": (
         32,

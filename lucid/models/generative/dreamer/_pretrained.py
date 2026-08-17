@@ -1,15 +1,32 @@
 """Registry factories for Dreamer.
 
-Hafner et al., 2020 report **one** architecture, evaluated across 20
-DeepMind Control Suite tasks.  As with PlaNet, the tasks differ only in
-action dimensionality and the action-repeat constant — neither is a variant
-of the network — so under the project's paper-cited-variants-only rule this
-family gets nominal names and no size suffix:
+Hafner et al., 2020 report one architecture at two settings.  Appendix A
+gives the Control Suite setup in its main paragraph and then a second,
+headed *Discrete control*, for Atari and DeepMind Lab.  The tasks inside
+each setting differ only in action dimensionality and the action-repeat
+constant — neither is a variant of the network — so under the project's
+paper-cited-variants-only rule this family gets nominal names and no size
+suffix:
 
-    * ``dreamer``             — world model plus actor and critic.
-    * ``dreamer_world_model`` — the same, with all three objectives.
+    * ``dreamer``          — the Control Suite setting: a tanh-squashed
+      Gaussian policy, 15-step horizon, unscaled divergence, no discount
+      head.
+    * ``dreamer_discrete`` — the *Discrete control* setting: a categorical
+      policy over buttons, 10-step horizon, divergence scaled to 0.1, and a
+      discount head.
 
-Set ``action_dim`` for your environment at ``create_model`` time.
+Each has a ``_world_model`` counterpart carrying the objectives.  Set
+``action_dim`` for your environment at ``create_model`` time — for Atari
+that is how many buttons the game has.
+
+Two things the *Discrete control* paragraph specifies are **not** model
+fields and are absent here on purpose.  Its exploration is "epsilon greedy
+where epsilon is linearly scheduled from 0.4 to 0.1 over the first 200,000
+gradient steps", which belongs to whatever drives
+:func:`lucid.utils.rollout.rollout`; and it bounds "rewards using tanh",
+which is a property of the environment's reward, applied before the batch
+reaches the model.  DreamerV2 draws the same line for the same two
+quantities.
 
 No parameter count is registered — the paper states no trainable-parameter
 total, and the docs site introspects the real figure anyway.
@@ -164,3 +181,117 @@ def dreamer_world_model(
     if pretrained:
         reject_unavailable_pretrained("dreamer_world_model")
     return DreamerForWorldModeling(_apply(_CFG_DREAMER, overrides))
+
+
+# The paper's *Discrete control* paragraph, which changes four things about
+# the model and nothing else.  The categorical policy is what makes this a
+# different network rather than a resize: an Atari action is a button, not
+# a box, and the sample is drawn straight-through so the actor's gradient
+# still arrives through it.
+_CFG_DISCRETE = replace(
+    _CFG_DREAMER,
+    action_space="discrete",
+    horizon=10,
+    kl_weight=0.1,
+    pcont=True,
+)
+
+
+@register_model(
+    task="base",
+    family="dreamer",
+    model_type="dreamer",
+    model_class=DreamerModel,
+    default_config=_CFG_DISCRETE,
+)
+def dreamer_discrete(pretrained: bool = False, **overrides: object) -> DreamerModel:
+    r"""Construct Dreamer as the paper configures it for Atari and DMLab.
+
+    A categorical policy over the game's buttons, a 10-step imagination
+    horizon, the divergence scaled to 0.1, and a discount head — the four
+    changes the paper's *Discrete control* paragraph makes "to account for
+    the higher complexity of these tasks".
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        No weights are published for this family; passing ``True`` raises.
+    **overrides : object
+        Optional :class:`DreamerConfig` field overrides.  ``action_dim`` is
+        the number of actions the game exposes.
+
+    Returns
+    -------
+    DreamerModel
+        The trunk, configured for discrete control.
+
+    Notes
+    -----
+    Reference: Hafner, Lillicrap, Ba, and Norouzi, *"Dream to Control:
+    Learning Behaviors by Latent Imagination"*, ICLR, 2020
+    (arXiv:1912.01603), Appendix A.
+
+    The action is sampled with straight-through gradients, as the paper
+    specifies.  That is a biased estimator, and it is the one this paper
+    used; DreamerV2 later replaced it with the score function for discrete
+    actions.
+
+    Epsilon-greedy exploration and tanh reward bounding belong to the
+    rollout and the environment respectively — see this module's docstring.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.dreamer import dreamer_discrete
+    >>> model = dreamer_discrete(action_dim=18).eval()
+    >>> model.config.action_space, model.config.horizon, model.config.kl_weight
+    ('discrete', 10, 0.1)
+    """
+    if pretrained:
+        reject_unavailable_pretrained("dreamer_discrete")
+    return DreamerModel(_apply(_CFG_DISCRETE, overrides))
+
+
+@register_model(
+    task="world-modeling",
+    family="dreamer",
+    model_type="dreamer",
+    model_class=DreamerForWorldModeling,
+    default_config=_CFG_DISCRETE,
+)
+def dreamer_discrete_world_model(
+    pretrained: bool = False, **overrides: object
+) -> DreamerForWorldModeling:
+    r"""Construct the discrete-control configuration with all three objectives.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        No weights are published for this family; passing ``True`` raises.
+    **overrides : object
+        Optional :class:`DreamerConfig` field overrides.
+
+    Returns
+    -------
+    DreamerForWorldModeling
+        The discrete-control trunk plus the objectives.
+
+    Notes
+    -----
+    Reference: Hafner, Lillicrap, Ba, and Norouzi, *"Dream to Control:
+    Learning Behaviors by Latent Imagination"*, ICLR, 2020
+    (arXiv:1912.01603), Appendix A.
+
+    ``pcont=True`` here, so ``forward`` needs its ``discounts`` argument —
+    the discount head is "trained towards the soft labels of 0 and gamma",
+    which is what this family already does with that tensor.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.dreamer import dreamer_discrete_world_model
+    >>> model = dreamer_discrete_world_model(action_dim=18).eval()
+    >>> model.config.pcont, model.config.pcont_scale
+    (True, 10.0)
+    """
+    if pretrained:
+        reject_unavailable_pretrained("dreamer_discrete_world_model")
+    return DreamerForWorldModeling(_apply(_CFG_DISCRETE, overrides))

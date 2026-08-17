@@ -7,7 +7,12 @@ from lucid.models.generative.dreamer._model import (
     DreamerModel,
     DreamerOutput,
 )
-from lucid.models.generative.dreamer._pretrained import dreamer, dreamer_world_model
+from lucid.models.generative.dreamer._pretrained import (
+    dreamer,
+    dreamer_discrete,
+    dreamer_discrete_world_model,
+    dreamer_world_model,
+)
 
 __all__ = [
     "DreamerConfig",
@@ -16,5 +21,7 @@ __all__ = [
     "DreamerOutput",
     "DreamerBehaviorOutput",
     "dreamer",
+    "dreamer_discrete",
+    "dreamer_discrete_world_model",
     "dreamer_world_model",
 ]

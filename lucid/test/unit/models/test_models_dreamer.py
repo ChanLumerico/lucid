@@ -21,6 +21,7 @@ import pytest
 
 import lucid
 from lucid.models import (
+    dreamer_discrete,
     DreamerBehaviorOutput,
     DreamerConfig,
     DreamerForWorldModeling,
@@ -811,3 +812,156 @@ class TestTrainingStep:
 
         assert last[0] < first[0], "reconstruction did not improve"
         assert last[1] < first[1], "reward prediction did not improve"
+
+
+class TestDiscreteControl:
+    """Appendix A's second setting, and the two halves of it that matter.
+
+    The paper gives Atari and DeepMind Lab their own paragraph: "the action
+    model predicts the logits of a categorical distribution.  We use
+    straight-through gradients for the sampling step during latent
+    imagination.  ... we use an imagination horizon of H = 10, scale the KL
+    regularizers by beta = 0.1, and bound rewards using tanh.  We predict
+    the discount factor from the latent state with a binary classifier."
+
+    Both halves of the policy sentence are load-bearing and neither shows
+    up in a shape check. The one-hot is what an Atari button is; the
+    straight-through draw is what keeps the actor trainable, because
+    Dreamer's gradient arrives *through* the action and a hard sample
+    severs it. So the tests below check that the sample is one-hot **and**
+    that a gradient survives it.
+    """
+
+    @staticmethod
+    def _cfg(**overrides: object) -> DreamerConfig:
+        return _tiny_cfg(action_dim=4, action_space="discrete", **overrides)
+
+    @staticmethod
+    def _actions(b: int = 2, t: int = 3, action_dim: int = 4) -> lucid.Tensor:
+        index = lucid.zeros((b, t)).to(lucid.int32)
+        return lucid.nn.functional.one_hot(index, num_classes=action_dim).to(
+            lucid.float32
+        )
+
+    def test_the_action_is_a_one_hot(self) -> None:
+        lucid.manual_seed(0)
+        model = DreamerModel(self._cfg()).eval()
+        _, posteriors = model.observe(
+            lucid.randn((2, 3, 3, 64, 64)), self._actions()
+        )
+        action = model.act(posteriors)
+        assert action.shape == (2, 3, 4)
+        assert float((action.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
+        assert set(float(v) for v in action.reshape(-1).tolist()) <= {0.0, 1.0}
+
+    def test_the_mode_is_also_a_one_hot(self) -> None:
+        lucid.manual_seed(0)
+        model = DreamerModel(self._cfg()).eval()
+        _, posteriors = model.observe(
+            lucid.randn((2, 3, 3, 64, 64)), self._actions()
+        )
+        action = model.act(posteriors, sample=False)
+        assert float((action.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
+
+    def test_the_draw_carries_a_gradient(self) -> None:
+        """Straight-through, which is the half a shape check cannot see.
+
+        A hard one-hot has zero gradient everywhere. If the sample were
+        drawn without the straight-through estimator the actor would still
+        produce valid actions and never learn.
+        """
+        lucid.manual_seed(0)
+        model = DreamerModel(self._cfg())
+        feature = lucid.randn((2, 3, model.config.latent_size), requires_grad=True)
+        model.actor(feature).sum().backward()
+        assert feature.grad is not None
+        assert float(feature.grad.abs().sum().item()) > 0.0
+
+    def test_a_hard_draw_would_not(self) -> None:
+        """Guards the test above — otherwise it would pass on any sampler."""
+        lucid.manual_seed(0)
+        model = DreamerModel(self._cfg())
+        feature = lucid.randn((2, 3, model.config.latent_size), requires_grad=True)
+        logits = model.actor.logits(feature)
+        index = logits.argmax(dim=-1)
+        hard = lucid.nn.functional.one_hot(index, num_classes=4).to(lucid.float32)
+        hard.sum().backward()
+        assert feature.grad is None or float(feature.grad.abs().sum().item()) == 0.0
+
+    def test_the_two_parameterisations_are_exclusive(self) -> None:
+        """Each raises on the other's accessor rather than returning nonsense."""
+        discrete = DreamerModel(self._cfg()).actor
+        continuous = DreamerModel(_tiny_cfg()).actor
+        feature_d = lucid.zeros((1, 1, discrete.head.out.in_features))
+        with pytest.raises(ValueError):
+            discrete.distribution(feature_d)
+        feature_c = lucid.zeros((1, 1, continuous.head.out.in_features))
+        with pytest.raises(ValueError):
+            continuous.logits(feature_c)
+
+    def test_the_head_is_narrower_than_the_gaussian_one(self) -> None:
+        """One score per button, not a location and a scale per dimension."""
+        assert DreamerModel(self._cfg()).actor.head.out.out_features == 4
+        assert DreamerModel(_tiny_cfg(action_dim=4)).actor.head.out.out_features == 8
+
+    def test_the_objectives_run_and_route(self) -> None:
+        lucid.manual_seed(0)
+        model = DreamerForWorldModeling(self._cfg(pcont=True))
+        output = model(
+            lucid.randn((2, 3, 3, 64, 64)),
+            self._actions(),
+            lucid.randn((2, 3)),
+            lucid.ones((2, 3)),
+        )
+        assert output.loss is not None and output.pcont_loss is not None
+        model.backward(output)
+        touched = sum(
+            1
+            for p in model.actor_parameters()
+            if p.grad is not None and float(p.grad.abs().sum().item()) > 0.0
+        )
+        assert touched == len(model.actor_parameters())
+
+    @pytest.mark.parametrize("space", ["continuous", "discrete"])
+    def test_the_continuous_setting_is_untouched(self, space: str) -> None:
+        """Adding the second setting must not move the first."""
+        cfg = _tiny_cfg() if space == "continuous" else self._cfg()
+        assert cfg.action_space == space
+        assert DreamerConfig(action_dim=2).action_space == "continuous"
+        assert DreamerConfig(action_dim=2).horizon == 15
+        assert DreamerConfig(action_dim=2).kl_weight == 1.0
+
+    def test_rejects_an_unknown_action_space(self) -> None:
+        with pytest.raises(ValueError):
+            _tiny_cfg(action_space="ternary")
+
+
+class TestDiscreteRegistry:
+    def test_the_factories_carry_the_papers_four_changes(self) -> None:
+        model = create_model("dreamer_discrete", action_dim=18)
+        cfg = model.config
+        assert cfg.action_space == "discrete"
+        assert cfg.horizon == 10           # "an imagination horizon of H = 10"
+        assert cfg.kl_weight == 0.1        # "scale the KL regularizers by beta = 0.1"
+        assert cfg.pcont is True           # "predict the discount factor ..."
+
+    def test_it_differs_from_the_control_suite_setting_in_exactly_those(self) -> None:
+        """Nothing else about the network changes between the two settings."""
+        from dataclasses import fields
+
+        base = create_model("dreamer", action_dim=18).config
+        discrete = create_model("dreamer_discrete", action_dim=18).config
+        moved = {
+            f.name
+            for f in fields(base)
+            if getattr(base, f.name) != getattr(discrete, f.name)
+        }
+        assert moved == {"action_space", "horizon", "kl_weight", "pcont"}
+
+    def test_both_tasks_are_registered(self) -> None:
+        assert "dreamer_discrete" in list_models()
+        assert "dreamer_discrete_world_model" in list_models()
+
+    def test_pretrained_weights_are_refused(self) -> None:
+        with pytest.raises(NotImplementedError):
+            dreamer_discrete(pretrained=True)

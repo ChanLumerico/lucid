@@ -114,6 +114,13 @@ class DreamerConfig(WorldModelConfig):
         Width and depth of the reward head.  The paper names only the
         action and value models, so the depth here is the released
         implementation's — which also matches PlaNet's reward head.
+    action_space : {"continuous", "discrete"}, default="continuous"
+        What an action is.  ``"continuous"`` is the tanh-squashed Gaussian
+        the Control Suite needs.  ``"discrete"`` makes the action model
+        "predict the logits of a categorical distribution", which is what
+        the paper's *Discrete control* paragraph specifies for Atari and
+        DeepMind Lab, sampled with straight-through gradients so the
+        actor's gradient still arrives through the action.
     detach_actor_input : bool, default=True
         Hide the state's gradient from the actor during imagination.  The
         released implementation does this; the paper does not discuss it.
@@ -204,9 +211,16 @@ class DreamerConfig(WorldModelConfig):
     pcont_scale: float = 10.0
     pcont_layers: int = 3
 
+    action_space: str = "continuous"
+
     @override
     def __post_init__(self) -> None:
         super().__post_init__()
+        if self.action_space not in ("continuous", "discrete"):
+            raise ValueError(
+                f"action_space must be 'continuous' or 'discrete', got "
+                f"{self.action_space!r}"
+            )
         for name, value in (
             ("horizon", self.horizon),
             ("actor_hidden", self.actor_hidden),

@@ -70,6 +70,7 @@ from lucid.models.generative.planet import (
 from lucid.models.generative.dreamer import (
     DreamerConfig, DreamerModel, DreamerForWorldModeling, DreamerOutput,
     DreamerBehaviorOutput, dreamer, dreamer_world_model,
+    dreamer_discrete, dreamer_discrete_world_model,
 )
 # 2021 — DreamerV2 (Hafner et al.)
 from lucid.models.generative.dreamer_v2 import (
@@ -750,6 +751,7 @@ __all__ = [
     # ── Generative (2020) Dreamer ─────────────────────────────────────────────
     "DreamerConfig", "DreamerModel", "DreamerForWorldModeling", "DreamerOutput",
     "DreamerBehaviorOutput", "dreamer", "dreamer_world_model",
+    "dreamer_discrete", "dreamer_discrete_world_model",
     # ── Generative (2021) DreamerV2 ───────────────────────────────────────────
     "DreamerV2Config", "DreamerV2Model", "DreamerV2ForWorldModeling",
     "DreamerV2Output", "DreamerV2BehaviorOutput",
