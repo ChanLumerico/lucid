@@ -86,7 +86,23 @@ def inv(x: Tensor) -> Tensor:
     >>> A = lucid.tensor([[4.0, 7.0], [2.0, 6.0]])
     >>> inv(A)
     tensor([[0.6, -0.7], [-0.2, 0.4]])
+
+    Notes
+    -----
+    A matrix with a zero dimension is returned unchanged rather than
+    handed to the factorisation.  The 0x0 matrix is its own inverse — it
+    is the identity on the zero-dimensional space — so nothing is lost,
+    and LAPACK's behaviour at ``n = 0`` is not uniform across the
+    implementations this runs against: the same call is harmless on one
+    Accelerate build and a segmentation fault on another.  Guarding here
+    makes the answer depend on the mathematics rather than on which
+    machine is asking.
     """
+    shape: tuple[int, ...] = tuple(x.shape)
+    if len(shape) >= 2 and shape[-1] == 0:
+        # Inversion preserves shape, and there are no elements to
+        # factorise, so the input *is* the answer.
+        return x
     return _la.inv(x)  # type: ignore[arg-type, return-value]
 
 

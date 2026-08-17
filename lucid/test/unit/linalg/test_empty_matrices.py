@@ -83,6 +83,20 @@ def test_pinv_transposes_the_matrix_axes(shape, expected) -> None:
     assert tuple(L.pinv(_t(shape)).shape) == expected
 
 
+@pytest.mark.parametrize("shape", [(0, 0), (2, 0, 0), (3, 2, 0, 0)])
+def test_inv_of_an_empty_matrix_never_reaches_the_factorisation(shape) -> None:
+    """A segfault on CI that this machine could not reproduce.
+
+    ``pinv`` routes a square input to ``inv``, and ``(0, 0)`` is square,
+    so an empty pseudo-inverse called LAPACK with ``n = 0``.  Whether
+    that returns or crashes is not uniform across Accelerate builds — it
+    survived here and segfaulted on the runner for days.  The 0x0 matrix
+    is its own inverse, so the answer is decided in Python now and does
+    not depend on which machine is asking.
+    """
+    assert tuple(L.inv(_t(shape)).shape) == shape
+
+
 # ── the square ones ───────────────────────────────────────────────────────────
 
 
