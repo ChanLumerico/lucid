@@ -224,8 +224,8 @@ DREAMER: dict[str, tuple[Any, str]] = {
     ),
     "action_space": (
         "continuous",
-        'paper: Appendix A gives two settings.  The main paragraph is the '
-        'Control Suite\'s, and its policy is the tanh-squashed Gaussian; the '
+        "paper: Appendix A gives two settings.  The main paragraph is the "
+        "Control Suite's, and its policy is the tanh-squashed Gaussian; the "
         '*Discrete control* paragraph says "the action model predicts the '
         'logits of a categorical distribution" for Atari and DeepMind Lab, '
         "which dreamer_discrete selects",
@@ -505,9 +505,9 @@ class TestTheTableIsNotVacuous:
         for dropped in list(table)[:3]:
             incomplete = {k: v for k, v in table.items() if k != dropped}
             declared = {f.name for f in fields(config_class)}
-            assert declared - set(incomplete) == {dropped}, (
-                f"{name}: dropping {dropped} did not register as missing"
-            )
+            assert declared - set(incomplete) == {
+                dropped
+            }, f"{name}: dropping {dropped} did not register as missing"
 
     def test_the_families_disagree_where_their_papers_do(self) -> None:
         """PlaNet says two dense layers, Dreamer says three.

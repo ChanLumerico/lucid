@@ -846,9 +846,7 @@ class TestDiscreteControl:
     def test_the_action_is_a_one_hot(self) -> None:
         lucid.manual_seed(0)
         model = DreamerModel(self._cfg()).eval()
-        _, posteriors = model.observe(
-            lucid.randn((2, 3, 3, 64, 64)), self._actions()
-        )
+        _, posteriors = model.observe(lucid.randn((2, 3, 3, 64, 64)), self._actions())
         action = model.act(posteriors)
         assert action.shape == (2, 3, 4)
         assert float((action.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
@@ -857,9 +855,7 @@ class TestDiscreteControl:
     def test_the_mode_is_also_a_one_hot(self) -> None:
         lucid.manual_seed(0)
         model = DreamerModel(self._cfg()).eval()
-        _, posteriors = model.observe(
-            lucid.randn((2, 3, 3, 64, 64)), self._actions()
-        )
+        _, posteriors = model.observe(lucid.randn((2, 3, 3, 64, 64)), self._actions())
         action = model.act(posteriors, sample=False)
         assert float((action.sum(dim=-1) - 1.0).abs().max().item()) < 1e-5
 
@@ -941,9 +937,9 @@ class TestDiscreteRegistry:
         model = create_model("dreamer_discrete", action_dim=18)
         cfg = model.config
         assert cfg.action_space == "discrete"
-        assert cfg.horizon == 10           # "an imagination horizon of H = 10"
-        assert cfg.kl_weight == 0.1        # "scale the KL regularizers by beta = 0.1"
-        assert cfg.pcont is True           # "predict the discount factor ..."
+        assert cfg.horizon == 10  # "an imagination horizon of H = 10"
+        assert cfg.kl_weight == 0.1  # "scale the KL regularizers by beta = 0.1"
+        assert cfg.pcont is True  # "predict the discount factor ..."
 
     def test_it_differs_from_the_control_suite_setting_in_exactly_those(self) -> None:
         """Nothing else about the network changes between the two settings."""
