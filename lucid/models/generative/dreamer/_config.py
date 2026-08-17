@@ -104,7 +104,13 @@ class DreamerConfig(WorldModelConfig):
     actor_mean_scale : float, default=5.0
         The mean is passed through ``s * tanh(x / s)`` before squashing,
         which keeps it from saturating the outer ``tanh``.
-    reward_hidden, reward_layers : int, default=300, 2
+    reward_hidden, reward_layers : int, default=300, 3
+        Reward head.  Appendix A gives one shape for everything it does
+        not name separately — "all other functions as three dense layers
+        of size 300" — so the reward, action and value models share it.
+        The released implementation disagrees on both counts (400 units,
+        with two layers for reward and four for the actor); the paper is
+        followed here, as everywhere else in this family.
         Width and depth of the reward head.  The paper names only the
         action and value models, so the depth here is the released
         implementation's — which also matches PlaNet's reward head.
@@ -190,7 +196,7 @@ class DreamerConfig(WorldModelConfig):
     actor_mean_scale: float = 5.0
 
     reward_hidden: int = 300
-    reward_layers: int = 2
+    reward_layers: int = 3
 
     detach_actor_input: bool = True
 

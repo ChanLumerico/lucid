@@ -170,6 +170,7 @@ _CFG_DMC = replace(
     hidden_size=200,
     discount=0.99,
     kl_weight=1.0,
+    free_nats=1.0,
     pcont=False,
     actor_entropy=1e-4,
 )
@@ -188,6 +189,13 @@ def dreamer_v2_atari(pretrained: bool = False, **overrides: object) -> DreamerV2
     A 600-unit deterministic state, a divergence scaled to 0.1, a discount
     of 0.999 weighted five times over, and a **discrete** policy — a
     one-hot over the game's buttons rather than a box.
+
+    The discount is the one number here the paper and the released
+    configuration disagree on: Table D.1 prints 0.995, the released
+    ``atari`` config uses 0.999, and the table's own note recommends
+    searching :math:`\gamma \in \{0.99, 0.999\}`.  The released value
+    is followed, because it is the one that produced the reported Atari
+    results.
 
     Parameters
     ----------
@@ -277,9 +285,10 @@ def dreamer_v2_atari_world_model(
 def dreamer_v2_dmc(pretrained: bool = False, **overrides: object) -> DreamerV2Model:
     r"""Construct DreamerV2 as the paper configures it for the Control Suite.
 
-    A 200-unit deterministic state, the full divergence, a continuous
-    policy, and **no discount head** — these episodes end on a clock
-    rather than on a failure, and there is nothing for one to predict.
+    A 200-unit deterministic state, the full divergence floored at one
+    free nat, a continuous policy, and **no discount head** — these
+    episodes end on a clock rather than on a failure, and there is
+    nothing for one to predict.
 
     Parameters
     ----------

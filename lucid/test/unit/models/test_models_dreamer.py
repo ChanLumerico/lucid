@@ -64,18 +64,24 @@ class TestDreamerConfig:
     def test_defaults_match_paper(self) -> None:
         cfg = DreamerConfig(action_dim=6)
         assert (cfg.horizon, cfg.lambda_, cfg.discount) == (15, 0.95, 0.99)
-        # Paper: "three dense layers of size 300 with ELU activations for
-        # the action and value models".  The reward head's depth is not
-        # stated there; 2 is the released implementation's, and PlaNet's.
+        # Appendix A, verbatim: "We use the convolutional encoder and
+        # decoder networks from Ha and Schmidhuber (2018), the RSSM of
+        # Hafner et al. (2018), and implement *all other functions* as
+        # three dense layers of size 300 with ELU activations."  All
+        # other functions is reward, action and value alike — an earlier
+        # version of this test paraphrased it as "the action and value
+        # models" and used that to justify a two-layer reward head.
+        # The released code disagrees with the paper on every one of
+        # these (400 units; reward 2, value 3, actor 4).
         assert (cfg.actor_hidden, cfg.actor_layers) == (300, 3)
         assert (cfg.value_hidden, cfg.value_layers) == (300, 3)
-        assert (cfg.reward_hidden, cfg.reward_layers) == (300, 2)
+        assert (cfg.reward_hidden, cfg.reward_layers) == (300, 3)
         assert cfg.act_fn == "elu"
 
     def test_head_depths_reach_the_modules(self) -> None:
         """A cited depth is worth nothing if the head is built some other way."""
         model = DreamerModel(DreamerConfig(action_dim=2))
-        assert len(model.reward_head.layers) == 2
+        assert len(model.reward_head.layers) == 3
         assert len(model.value_head.layers) == 3
         assert len(model.actor.head.layers) == 3
 
