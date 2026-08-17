@@ -1,5 +1,9 @@
 """``lucid.optim`` — optimizers + LR schedulers."""
 
+import pathlib
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 
@@ -90,41 +94,121 @@ class TestLRScheduler:
             assert abs(group["lr"] - 0.5) < 1e-6
 
 
+_LEAK_PROBE = """
+import gc, sys, lucid, lucid.nn as nn, lucid.optim as optim
+import mlx.core as mx
+
+retain = sys.argv[1] == "1"
+model = nn.Sequential(nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 64)).to("metal")
+opt = optim.Adam(model.parameters(), lr=1e-3)
+x = lucid.randn(16, 64).to("metal")
+t = lucid.randn(16, 64).to("metal")
+held = []
+
+
+def step():
+    opt.zero_grad()
+    out = model(x)
+    ((out - t) ** 2).mean().backward()
+    opt.step()          # NO per-step .item() — the leak-exposing pattern
+    if retain:
+        held.append(out)
+
+
+for _ in range(20):     # warm up — lazy alloc / first-step state settles
+    step()
+mx.synchronize()
+base = mx.get_active_memory()
+
+marks = []
+for _ in range(12):
+    for _ in range(100):
+        step()
+    mx.synchronize()
+    marks.append(mx.get_active_memory() - base)
+
+half = len(marks) // 2
+print("DRIFT", min(marks[half:]) - min(marks[:half]))
+"""
+
+
 class TestOptimizerGpuMemory:
     """Regression: the GPU optimizer step must not leak active MLX memory.
 
     ``Optimizer::step`` writes each param back as an UNEVALUATED MLX array;
-    without a per-step eval the lazy graph pins every prior step's compute →
-    unbounded active-memory / RSS growth on the GPU path (only loops that call
-    ``.item()`` every step happen to mask it). A leak grows linearly with steps;
-    the batched eval flush keeps it flat.
+    without a per-step eval the lazy graph can pin every prior step's
+    compute → unbounded active-memory / RSS growth on the GPU path.
+
+    **This runs in its own process, and that is the whole point.** Two
+    earlier versions of this test were wrong in ways worth recording,
+    because both looked right and both produced a red CI for days.
+
+    The first took ``get_active_memory()`` once before a 300-step loop and
+    once after. That quantity *oscillates*: sampled over four consecutive
+    windows on a loaded process it reads ``+16384, -16384, +16384, -16384``.
+    A leak cannot go negative, so a single difference cannot tell monotone
+    growth from an allocator holding a block at the moment you look.
+
+    The second measured the trough across twelve windows, which is the
+    right statistic — and it still failed, reporting a genuinely linear
+    20480 B/step, exactly one step's forward activations, unbounded to
+    61 MB over 3000 steps. That is what a real leak looks like. It was
+    not one: it is absent in a fresh interpreter, absent from a standalone
+    script under heavy allocation load, unaffected by an explicit
+    ``_metal_eval_params()`` flush or a per-step ``.item()``, and not
+    attributable to any single test directory. It appears only inside a
+    large pytest session, which holds references this measurement cannot
+    tell apart from the optimizer's own.
+
+    Since the statistic is process-global, the measurement has to own the
+    process. The subprocess measures Lucid; running it in-session measured
+    pytest.
     """
 
-    def test_no_active_memory_leak(self) -> None:
-        mx = pytest.importorskip("mlx.core")
-        import lucid.nn as nn
+    _TIMEOUT = 600
 
-        m = nn.Sequential(nn.Linear(64, 128), nn.ReLU(), nn.Linear(128, 64)).to("metal")
-        opt = optim.Adam(m.parameters(), lr=1e-3)
-        x = lucid.randn(16, 64).to("metal")
-        t = lucid.randn(16, 64).to("metal")
+    @staticmethod
+    def _trough_drift(retain: bool) -> int:
+        """Run the probe in a fresh interpreter; return the floor's drift.
 
-        def step() -> None:
-            opt.zero_grad()
-            loss = ((m(x) - t) ** 2).mean()
-            loss.backward()
-            opt.step()
+        Parameters
+        ----------
+        retain : bool
+            Hold one activation per step — a leak by construction, used to
+            prove this measurement is able to fail.
 
-        for _ in range(20):  # warm up — lazy alloc / first-step state settles
-            step()
-        mx.synchronize()
-        before = mx.get_active_memory()
-        for _ in range(300):  # NO per-step .item() — the leak-exposing pattern
-            step()
-        mx.synchronize()
-        delta = mx.get_active_memory() - before
-        # Pre-fix this grew ~60-90 B/step (≈ 20+ KB over 300, unbounded). Flat now.
-        assert delta < 8192, (
-            f"optimizer leaked {delta} B over 300 steps "
-            f"({delta / 300:.1f} B/step) — Optimizer::step eval flush regressed"
+        Returns
+        -------
+        int
+            ``min(second half) - min(first half)`` in bytes, over twelve
+            windows of a hundred steps.
+        """
+        pytest.importorskip("mlx.core")
+        completed = subprocess.run(
+            [sys.executable, "-c", _LEAK_PROBE, "1" if retain else "0"],
+            capture_output=True,
+            text=True,
+            timeout=TestOptimizerGpuMemory._TIMEOUT,
+            cwd=str(pathlib.Path(__file__).resolve().parents[4]),
         )
+        assert completed.returncode == 0, completed.stderr[-2000:]
+        line = next(
+            ln for ln in completed.stdout.splitlines() if ln.startswith("DRIFT ")
+        )
+        return int(line.split()[1])
+
+    def test_no_active_memory_leak(self) -> None:
+        drift = self._trough_drift(retain=False)
+        assert drift < 8192, (
+            f"the optimizer's active-memory floor rose {drift} B over 1200 "
+            f"steps — Optimizer::step eval flush regressed"
+        )
+
+    def test_the_measurement_can_detect_a_leak(self) -> None:
+        """Guards the test above.
+
+        A measurement that always read zero would pass forever. Retaining
+        one activation per step is a leak by construction and must
+        register — it reads about 2.4 MB against the 8192 B allowance.
+        """
+        assert self._trough_drift(retain=True) > 8192
