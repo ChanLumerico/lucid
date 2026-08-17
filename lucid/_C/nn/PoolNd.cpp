@@ -230,8 +230,7 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
         scope.set_attr("stride", std::move(Sv));
         scope.set_attr("padding", std::move(Pv));
         scope.set_attr("ceil_mode", std::vector<std::int64_t>{ceil_mode ? 1 : 0});
-        scope.set_attr("count_include_pad",
-                       std::vector<std::int64_t>{count_include_pad ? 1 : 0});
+        scope.set_attr("count_include_pad", std::vector<std::int64_t>{count_include_pad ? 1 : 0});
     }
 
     backend::IBackend::PoolOpts avg_opts{};
@@ -376,9 +375,8 @@ TensorImplPtr max_pool1d_op(const TensorImplPtr& x, int KL, int sl, int pl, bool
     int p[1]{pl};
     return MaxPool1dBackward::forward(x, K, s, p, ceil_mode);
 }
-TensorImplPtr
-max_pool2d_op(const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw,
-              bool ceil_mode) {
+TensorImplPtr max_pool2d_op(
+    const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw, bool ceil_mode) {
     int K[2]{KH, KW};
     int s[2]{sh, sw};
     int p[2]{ph, pw};
@@ -400,16 +398,22 @@ TensorImplPtr max_pool3d_op(const TensorImplPtr& x,
     int p[3]{pd, ph, pw};
     return MaxPool3dBackward::forward(x, K, s, p, ceil_mode);
 }
-TensorImplPtr avg_pool1d_op(const TensorImplPtr& x, int KL, int sl, int pl, bool ceil_mode,
-                            bool count_include_pad) {
+TensorImplPtr avg_pool1d_op(
+    const TensorImplPtr& x, int KL, int sl, int pl, bool ceil_mode, bool count_include_pad) {
     int K[1]{KL};
     int s[1]{sl};
     int p[1]{pl};
     return AvgPool1dBackward::forward(x, K, s, p, ceil_mode, count_include_pad);
 }
-TensorImplPtr
-avg_pool2d_op(const TensorImplPtr& x, int KH, int KW, int sh, int sw, int ph, int pw,
-              bool ceil_mode, bool count_include_pad) {
+TensorImplPtr avg_pool2d_op(const TensorImplPtr& x,
+                            int KH,
+                            int KW,
+                            int sh,
+                            int sw,
+                            int ph,
+                            int pw,
+                            bool ceil_mode,
+                            bool count_include_pad) {
     int K[2]{KH, KW};
     int s[2]{sh, sw};
     int p[2]{ph, pw};

@@ -5533,12 +5533,10 @@ private:
             if (uniform) {
                 // Every window on this axis has the full span — one scalar
                 // divide instead of a broadcast tensor.
-                y = ::mlx::core::divide(
-                    y, ::mlx::core::array(static_cast<double>(K[i]), mdt));
+                y = ::mlx::core::divide(y, ::mlx::core::array(static_cast<double>(K[i]), mdt));
                 continue;
             }
-            y = ::mlx::core::divide(
-                y, ::mlx::core::astype(::mlx::core::reshape(vec, bshape), mdt));
+            y = ::mlx::core::divide(y, ::mlx::core::astype(::mlx::core::reshape(vec, bshape), mdt));
         }
         return y;
     }

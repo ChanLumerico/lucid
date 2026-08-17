@@ -15,11 +15,12 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
-#include <cxxabi.h>
 #include <memory>
 #include <string>
 #include <typeinfo>
 #include <vector>
+
+#include <cxxabi.h>
 
 #include "../api.h"
 #include "../core/Storage.h"
@@ -286,7 +287,8 @@ public:
         // namespace inside it came back worse still
         // (``N5lucid12_GLOBAL__N_113WhereBackwardE``).
         const char* mangled = typeid(*this).name();
-        if (mangled == nullptr) return "unknown";
+        if (mangled == nullptr)
+            return "unknown";
 
         int status = 0;
         char* demangled = abi::__cxa_demangle(mangled, nullptr, nullptr, &status);
@@ -302,16 +304,17 @@ public:
             // enclosing scope, so the search stops at the first ``<``.
             const std::size_t template_start = name.find('<');
             const std::size_t sep = name.rfind("::", template_start);
-            if (sep != std::string::npos) name = name.substr(sep + 2);
+            if (sep != std::string::npos)
+                name = name.substr(sep + 2);
         } else {
             // Demangling failed, so fall back to the flat form: it is
             // still right for a global-namespace node, and a mangled
             // string beats no string at all.
             std::size_t start = 0;
-            while (start < name.size() &&
-                   std::isdigit(static_cast<unsigned char>(name[start])))
+            while (start < name.size() && std::isdigit(static_cast<unsigned char>(name[start])))
                 ++start;
-            if (start < name.size()) name = name.substr(start);
+            if (start < name.size())
+                name = name.substr(start);
         }
 
         return name.empty() ? "unknown" : name;

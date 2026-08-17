@@ -5843,8 +5843,7 @@ public:
         // ``size() - 2`` reads past the shape, and what it finds becomes the row
         // count every buffer here is sized from.
         if (h_shape.size() < 2)
-            ErrorBuilder("cpu_backend::linalg_householder_product")
-                .fail("H must be at least 2-D");
+            ErrorBuilder("cpu_backend::linalg_householder_product").fail("H must be at least 2-D");
         const auto& h_cpu = std::get<CpuStorage>(H);
         const auto& tau_cpu = std::get<CpuStorage>(tau);
         const int m = static_cast<int>(h_shape[h_shape.size() - 2]);
@@ -8868,10 +8867,10 @@ public:
                                                 O[0], O[1], opts.stride[0], opts.stride[1],
                                                 opts.pad[0], opts.pad[1], opts.count_include_pad);
                 else
-                    cpu::avg_pool3d_forward_f32(xp, yp, B, C, S[0], S[1], S[2], opts.K[0],
-                                                opts.K[1], opts.K[2], O[0], O[1], O[2],
-                                                opts.stride[0], opts.stride[1], opts.stride[2],
-                                                opts.pad[0], opts.pad[1], opts.pad[2], opts.count_include_pad);
+                    cpu::avg_pool3d_forward_f32(
+                        xp, yp, B, C, S[0], S[1], S[2], opts.K[0], opts.K[1], opts.K[2], O[0], O[1],
+                        O[2], opts.stride[0], opts.stride[1], opts.stride[2], opts.pad[0],
+                        opts.pad[1], opts.pad[2], opts.count_include_pad);
             } else {
                 if (N == 1)
                     cpu::avg_pool1d_forward_f64(xp, yp, B, C, S[0], opts.K[0], O[0], opts.stride[0],
@@ -8881,10 +8880,10 @@ public:
                                                 O[0], O[1], opts.stride[0], opts.stride[1],
                                                 opts.pad[0], opts.pad[1], opts.count_include_pad);
                 else
-                    cpu::avg_pool3d_forward_f64(xp, yp, B, C, S[0], S[1], S[2], opts.K[0],
-                                                opts.K[1], opts.K[2], O[0], O[1], O[2],
-                                                opts.stride[0], opts.stride[1], opts.stride[2],
-                                                opts.pad[0], opts.pad[1], opts.pad[2], opts.count_include_pad);
+                    cpu::avg_pool3d_forward_f64(
+                        xp, yp, B, C, S[0], S[1], S[2], opts.K[0], opts.K[1], opts.K[2], O[0], O[1],
+                        O[2], opts.stride[0], opts.stride[1], opts.stride[2], opts.pad[0],
+                        opts.pad[1], opts.pad[2], opts.count_include_pad);
             }
         };
         if (dt == Dtype::F32)
@@ -8932,29 +8931,31 @@ public:
             if constexpr (std::is_same_v<T, float>) {
                 if (N == 1)
                     cpu::avg_pool1d_backward_f32(gp, dxp, B, C, S[0], opts.K[0], O[0],
-                                                 opts.stride[0], opts.pad[0], opts.count_include_pad);
+                                                 opts.stride[0], opts.pad[0],
+                                                 opts.count_include_pad);
                 else if (N == 2)
                     cpu::avg_pool2d_backward_f32(gp, dxp, B, C, S[0], S[1], opts.K[0], opts.K[1],
                                                  O[0], O[1], opts.stride[0], opts.stride[1],
                                                  opts.pad[0], opts.pad[1], opts.count_include_pad);
                 else
-                    cpu::avg_pool3d_backward_f32(gp, dxp, B, C, S[0], S[1], S[2], opts.K[0],
-                                                 opts.K[1], opts.K[2], O[0], O[1], O[2],
-                                                 opts.stride[0], opts.stride[1], opts.stride[2],
-                                                 opts.pad[0], opts.pad[1], opts.pad[2], opts.count_include_pad);
+                    cpu::avg_pool3d_backward_f32(
+                        gp, dxp, B, C, S[0], S[1], S[2], opts.K[0], opts.K[1], opts.K[2], O[0],
+                        O[1], O[2], opts.stride[0], opts.stride[1], opts.stride[2], opts.pad[0],
+                        opts.pad[1], opts.pad[2], opts.count_include_pad);
             } else {
                 if (N == 1)
                     cpu::avg_pool1d_backward_f64(gp, dxp, B, C, S[0], opts.K[0], O[0],
-                                                 opts.stride[0], opts.pad[0], opts.count_include_pad);
+                                                 opts.stride[0], opts.pad[0],
+                                                 opts.count_include_pad);
                 else if (N == 2)
                     cpu::avg_pool2d_backward_f64(gp, dxp, B, C, S[0], S[1], opts.K[0], opts.K[1],
                                                  O[0], O[1], opts.stride[0], opts.stride[1],
                                                  opts.pad[0], opts.pad[1], opts.count_include_pad);
                 else
-                    cpu::avg_pool3d_backward_f64(gp, dxp, B, C, S[0], S[1], S[2], opts.K[0],
-                                                 opts.K[1], opts.K[2], O[0], O[1], O[2],
-                                                 opts.stride[0], opts.stride[1], opts.stride[2],
-                                                 opts.pad[0], opts.pad[1], opts.pad[2], opts.count_include_pad);
+                    cpu::avg_pool3d_backward_f64(
+                        gp, dxp, B, C, S[0], S[1], S[2], opts.K[0], opts.K[1], opts.K[2], O[0],
+                        O[1], O[2], opts.stride[0], opts.stride[1], opts.stride[2], opts.pad[0],
+                        opts.pad[1], opts.pad[2], opts.count_include_pad);
             }
         };
         if (dt == Dtype::F32)

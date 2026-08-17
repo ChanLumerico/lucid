@@ -898,8 +898,7 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
     // above it sailed through and became the output shape.  Same call,
     // two different answers on two runs.
     if (d < 0 || d >= ndim)
-        ErrorBuilder("unfold_dim")
-            .fail("dim is out of range for the operand's rank");
+        ErrorBuilder("unfold_dim").fail("dim is out of range for the operand's rank");
     const int dim_size = static_cast<int>(in_shape[static_cast<std::size_t>(d)]);
     if (size > dim_size)
         ErrorBuilder("unfold_dim").fail("size > dimension size");

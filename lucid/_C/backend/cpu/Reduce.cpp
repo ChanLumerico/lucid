@@ -87,45 +87,41 @@ void sum_axis_f64(
 void max_axis_f32(
     const float* in, float* out, std::size_t outer, std::size_t reduce_dim, std::size_t inner) {
     constexpr float NEG_INF = -std::numeric_limits<float>::infinity();
-    axis_reduce<float>(in, out, outer, reduce_dim, inner, NEG_INF,
-                       [](float a, float b) {
-                           if (std::isnan(a) || std::isnan(b))
-                               return std::numeric_limits<float>::quiet_NaN();
-                           return a > b ? a : b;
-                       });
+    axis_reduce<float>(in, out, outer, reduce_dim, inner, NEG_INF, [](float a, float b) {
+        if (std::isnan(a) || std::isnan(b))
+            return std::numeric_limits<float>::quiet_NaN();
+        return a > b ? a : b;
+    });
 }
 
 void max_axis_f64(
     const double* in, double* out, std::size_t outer, std::size_t reduce_dim, std::size_t inner) {
     constexpr double NEG_INF = -std::numeric_limits<double>::infinity();
-    axis_reduce<double>(in, out, outer, reduce_dim, inner, NEG_INF,
-                        [](double a, double b) {
-                           if (std::isnan(a) || std::isnan(b))
-                               return std::numeric_limits<double>::quiet_NaN();
-                           return a > b ? a : b;
-                       });
+    axis_reduce<double>(in, out, outer, reduce_dim, inner, NEG_INF, [](double a, double b) {
+        if (std::isnan(a) || std::isnan(b))
+            return std::numeric_limits<double>::quiet_NaN();
+        return a > b ? a : b;
+    });
 }
 
 void min_axis_f32(
     const float* in, float* out, std::size_t outer, std::size_t reduce_dim, std::size_t inner) {
     constexpr float POS_INF = std::numeric_limits<float>::infinity();
-    axis_reduce<float>(in, out, outer, reduce_dim, inner, POS_INF,
-                       [](float a, float b) {
-                           if (std::isnan(a) || std::isnan(b))
-                               return std::numeric_limits<float>::quiet_NaN();
-                           return a < b ? a : b;
-                       });
+    axis_reduce<float>(in, out, outer, reduce_dim, inner, POS_INF, [](float a, float b) {
+        if (std::isnan(a) || std::isnan(b))
+            return std::numeric_limits<float>::quiet_NaN();
+        return a < b ? a : b;
+    });
 }
 
 void min_axis_f64(
     const double* in, double* out, std::size_t outer, std::size_t reduce_dim, std::size_t inner) {
     constexpr double POS_INF = std::numeric_limits<double>::infinity();
-    axis_reduce<double>(in, out, outer, reduce_dim, inner, POS_INF,
-                        [](double a, double b) {
-                           if (std::isnan(a) || std::isnan(b))
-                               return std::numeric_limits<double>::quiet_NaN();
-                           return a < b ? a : b;
-                       });
+    axis_reduce<double>(in, out, outer, reduce_dim, inner, POS_INF, [](double a, double b) {
+        if (std::isnan(a) || std::isnan(b))
+            return std::numeric_limits<double>::quiet_NaN();
+        return a < b ? a : b;
+    });
 }
 
 void prod_axis_f32(

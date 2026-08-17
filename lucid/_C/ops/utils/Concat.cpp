@@ -538,8 +538,7 @@ split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices, int axis)
     std::int64_t previous = 0;
     for (std::int64_t at : indices) {
         if (at < 0 || at > extent)
-            ErrorBuilder("split_at")
-                .fail("cut point lies outside the axis being split");
+            ErrorBuilder("split_at").fail("cut point lies outside the axis being split");
         if (at < previous)
             ErrorBuilder("split_at").fail("cut points must be non-decreasing");
         previous = at;

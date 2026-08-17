@@ -62,8 +62,8 @@ SchemaGuard::SchemaGuard(const OpSchema& schema, Dtype input_dtype, Device devic
         // ``is_integral`` deliberately excludes Bool, so it is named here:
         // the reference promotes a bool input for these ops too, and
         // ``sqrt(True)`` is 1.0 rather than a type error.
-        if ((schema.real_valued || schema.amp_policy == AmpPolicy::ForceFP32)
-            && (is_integral(input_dtype) || input_dtype == Dtype::Bool))
+        if ((schema.real_valued || schema.amp_policy == AmpPolicy::ForceFP32) &&
+            (is_integral(input_dtype) || input_dtype == Dtype::Bool))
             effective_dtype_ = Dtype::F32;
         else
             effective_dtype_ = input_dtype;

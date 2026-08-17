@@ -66,9 +66,9 @@ template <int N>
 class LUCID_API MaxPoolNdBackward : public FuncOp<MaxPoolNdBackward<N>, 1> {
 public:
     static const OpSchema schema_v1;
-    int K_[N];       // Pooling window size per axis.
-    int stride_[N];  // Stride per axis (already resolved from 0 in forward).
-    int pad_[N];     // Zero-padding per axis.
+    int K_[N];                // Pooling window size per axis.
+    int stride_[N];           // Stride per axis (already resolved from 0 in forward).
+    int pad_[N];              // Zero-padding per axis.
     bool ceil_mode_ = false;  // Ceiling output sizing.
     // Winner index per output element, plane-local into the unpadded
     // input; -1 where the window covered only padding.  Verified against
@@ -154,8 +154,8 @@ public:
     int K_[N];
     int stride_[N];
     int pad_[N];
-    bool ceil_mode_ = false;          // Ceiling output sizing.
-    bool count_include_pad_ = true;   // Whether padding counts in the divisor.
+    bool ceil_mode_ = false;         // Ceiling output sizing.
+    bool count_include_pad_ = true;  // Whether padding counts in the divisor.
 
     // Graph-mode backward.  Covers the non-overlapping, unpadded window —
     // which is what ``avg_pool2d(x, k)`` means — and refuses the rest
@@ -238,11 +238,8 @@ using AvgPool3dBackward = AvgPoolNdBackward<3>;
 // TensorImplPtr
 //     Output of shape ``(B, C, L_out)`` where
 //     $L_\text{out} = \lfloor (L + 2 p - KL)/s + 1 \rfloor$.
-LUCID_API TensorImplPtr max_pool1d_op(const TensorImplPtr& x,
-                                      int KL,
-                                      int stride_l = 0,
-                                      int pad_l = 0,
-                                      bool ceil_mode = false);
+LUCID_API TensorImplPtr max_pool1d_op(
+    const TensorImplPtr& x, int KL, int stride_l = 0, int pad_l = 0, bool ceil_mode = false);
 
 // Two-dimensional max pooling over a batch of feature maps.
 //
