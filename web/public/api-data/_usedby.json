@@ -3443,6 +3443,18 @@
       "module": "lucid.models.generative.dreamer"
     }
   ],
+  "lucid.models.generative.dreamer._pretrained.dreamer_discrete": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer"
+    }
+  ],
+  "lucid.models.generative.dreamer._pretrained.dreamer_discrete_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dreamer"
+    }
+  ],
   "lucid.models.generative.dreamer._pretrained.dreamer_world_model": [
     {
       "kind": "module",
