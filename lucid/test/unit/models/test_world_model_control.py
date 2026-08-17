@@ -37,6 +37,7 @@ import pytest
 import lucid
 import lucid.models as M
 import lucid.optim as optim
+from lucid.test._fixtures.classic_control import Pendulum
 from lucid.test._fixtures.point_mass import PointMass
 from lucid.utils.rollout import (
     LatentPolicy,
@@ -77,6 +78,32 @@ def _policy(model: object, noise: float = 0.0) -> LatentPolicy:
 
 def _average_return(env: PointMass, policy: object, episodes: int = 2) -> float:
     return sum(rollout(env, policy)[1] for _ in range(episodes)) / episodes
+
+
+class _FixedAction:
+    """A policy that ignores what it sees — the thing to be beaten."""
+
+    def __init__(self, action: lucid.Tensor) -> None:
+        self.action = action
+
+    def reset(self) -> None:
+        pass
+
+    def __call__(self, observation: lucid.Tensor) -> lucid.Tensor:
+        return self.action
+
+
+class _PendulumOracle:
+    """The fixture's own reference controller, for a solvable return."""
+
+    def __init__(self, env: Pendulum) -> None:
+        self.env = env
+
+    def reset(self) -> None:
+        pass
+
+    def __call__(self, observation: lucid.Tensor) -> lucid.Tensor:
+        return self.env.optimal_action()
 
 
 class _Greedy:
@@ -367,3 +394,113 @@ class TestDreamerV2LearnsControl:
         feature = lucid.randn((4, 3, model.config.latent_size))
         entropy = float(model.actor.distribution(feature).entropy().mean().item())
         assert entropy > 0.9 * math.log(2.0)
+
+
+class TestPendulumEnvironment:
+    """The swing-up, and the two properties that make it worth having.
+
+    The point-mass task above is honest about its ceiling: a constant
+    action clears its threshold, so passing it shows an agent found a good
+    constant, not that it reads a state. The pendulum removes that escape
+    by physics rather than by tuning — the torque limit is a fraction of
+    the gravitational torque, so no constant lifts the rod at all.
+
+    The physics itself is checked against an invariant, not against a
+    citation. An equation copied wrong still produces plausible motion; it
+    does not conserve energy.
+    """
+
+    @staticmethod
+    def _drift(dt: float, seconds: float = 6.0) -> float:
+        env = Pendulum(horizon=10**6, dt=dt)
+        env.reset()
+        env.theta, env.omega = 2.0, 0.5  # away from equilibrium, so there is motion
+        start = env.energy()
+        worst = 0.0
+        zero = lucid.tensor([0.0])
+        for _ in range(int(seconds / dt)):
+            env.step(zero)
+            worst = max(worst, abs(env.energy() - start))
+        return worst
+
+    def test_unforced_motion_conserves_energy(self) -> None:
+        """The check a citation cannot give: a wrong equation would drift."""
+        env = Pendulum(horizon=10**6)
+        env.reset()
+        env.theta, env.omega = 2.0, 0.5
+        start = env.energy()
+        assert abs(self._drift(0.05)) / abs(start) < 1e-3
+
+    def test_the_residual_is_truncation_and_shrinks_with_the_step(self) -> None:
+        """Guards the test above.
+
+        A tolerance alone would pass on a systematically wrong equation
+        that happens to drift slowly. Truncation error falls with the step
+        size; a wrong equation does not.
+        """
+        assert self._drift(0.02) < self._drift(0.08) / 4.0
+
+    def test_the_torque_cannot_lift_the_rod(self) -> None:
+        """Underactuation, as a property of the numbers rather than a hope."""
+        env = Pendulum()
+        peak_gravity_torque = env.mass * env.gravity * env.length / 2.0
+        assert env.max_torque < peak_gravity_torque
+
+    def test_no_constant_action_solves_it(self) -> None:
+        """The property the point-mass task lacks.
+
+        Measured: the best constant scores 6.02 where the oracle scores
+        77.41. This is what lets a return on this task mean the agent is
+        responding to what it sees.
+        """
+        env = Pendulum()
+        best = max(
+            rollout(env, _FixedAction(lucid.tensor([v])))[1]
+            for v in (-1.0, -0.5, 0.0, 0.5, 1.0)
+        )
+        oracle = rollout(env, _PendulumOracle(env))[1]
+        assert oracle > 5.0 * best
+
+    def test_the_oracle_actually_swings_it_up(self) -> None:
+        """Solvable, and by the controller the fixture ships."""
+        env = Pendulum(horizon=200)
+        env.reset()
+        for _ in range(200):
+            env.step(env.optimal_action())
+        assert math.cos(env.theta) > 0.95
+
+    def test_the_oracle_does_not_rely_on_floating_point_noise(self) -> None:
+        """It starts at rest, where energy pumping is exactly zero.
+
+        An earlier version bootstrapped off ``sin(pi)`` evaluating to
+        1.2e-16 and would have stalled for ever on a system that reached
+        the resting state exactly.
+        """
+        env = Pendulum()
+        env.reset()
+        assert abs(float(env.optimal_action()[0].item())) > 0.5
+
+    def test_the_frame_moves_with_the_angle(self) -> None:
+        """The rod's pixels are the only place the angle is observable."""
+        env = Pendulum()
+        hanging = env.reset()
+        env.theta = 0.0
+        upright = env._render()
+        assert float((upright - hanging).abs().max().item()) > 0.5
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    def test_it_renders_on_the_requested_device(self, device: str) -> None:
+        env = Pendulum(device=device)
+        assert str(env.reset().device) == f"device('{device}')"
+
+    def test_it_satisfies_the_rollout_protocol(self) -> None:
+        episode, total = rollout(Pendulum(horizon=10), RandomPolicy(1))
+        assert episode.observations.shape == (10, 3, 64, 64)
+        assert isinstance(total, float)
+
+    @pytest.mark.parametrize("torque", [0.0, 1.0, 1.5])
+    def test_it_rejects_a_torque_that_removes_the_challenge(
+        self, torque: float
+    ) -> None:
+        with pytest.raises(ValueError):
+            Pendulum(torque=torque)
