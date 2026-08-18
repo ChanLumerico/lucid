@@ -67,6 +67,11 @@ from lucid.models.generative.planet import (
     planet, planet_world_model,
 )
 # 2020 — Dreamer (Hafner et al.)
+from lucid.models.generative.score_sde import (
+    ScoreSDEConfig, ScoreSDEModel, ScoreSDEForImageGeneration, ScoreSDEOutput,
+    score_sde_vp, score_sde_vp_gen, score_sde_ve, score_sde_ve_gen,
+    score_sde_subvp, score_sde_subvp_gen,
+)
 from lucid.models.generative.dreamer import (
     DreamerConfig, DreamerModel, DreamerForWorldModeling, DreamerOutput,
     DreamerBehaviorOutput, dreamer, dreamer_world_model,
@@ -750,6 +755,10 @@ __all__ = [
     "planet", "planet_world_model",
     # ── Generative (2020) Dreamer ─────────────────────────────────────────────
     "DreamerConfig", "DreamerModel", "DreamerForWorldModeling", "DreamerOutput",
+    "ScoreSDEConfig", "ScoreSDEModel", "ScoreSDEForImageGeneration",
+    "ScoreSDEOutput",
+    "score_sde_vp", "score_sde_vp_gen", "score_sde_ve", "score_sde_ve_gen",
+    "score_sde_subvp", "score_sde_subvp_gen",
     "DreamerBehaviorOutput", "dreamer", "dreamer_world_model",
     "dreamer_discrete", "dreamer_discrete_world_model",
     # ── Generative (2021) DreamerV2 ───────────────────────────────────────────

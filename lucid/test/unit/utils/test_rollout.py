@@ -582,7 +582,7 @@ class TestPrioritizedSequenceReplay:
         assert max(counts.values()) < 160
 
     def test_weights_are_normalised_by_their_maximum(self) -> None:
-        """ "So that they only scale the update downwards.\""""
+        """ "So that they only scale the update downwards.\" """
         buffer = self._filled(5)
         buffer.update_priorities([0, 1, 2, 3, 4], [50.0, 20.0, 5.0, 1.0, 0.1])
         weights = buffer.sample_prioritized(8, 5).weights.tolist()

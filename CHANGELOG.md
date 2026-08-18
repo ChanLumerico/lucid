@@ -108,6 +108,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add PrioritizedSequenceReplay and SumTree to lucid.utils.rollout
 
+- add Score-SDE, and give the ODE sampler to lucid.diffeq
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

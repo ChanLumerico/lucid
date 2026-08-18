@@ -266563,6 +266563,4908 @@
       }
     ]
   },
+  "score_sde_subvp": {
+    "name": "ScoreSDEModel",
+    "type": "ScoreSDEModel",
+    "params": 35746307,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "unet",
+        "type": "DDPMUNet",
+        "params": 35746307,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "time_mlp",
+            "type": "TimestepEmbedding",
+            "params": 328704,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "linear_1",
+                "type": "Linear",
+                "params": 66048,
+                "own_params": 66048,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "linear_2",
+                "type": "Linear",
+                "params": 262656,
+                "own_params": 262656,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv_in",
+            "type": "Conv2d",
+            "params": 3584,
+            "own_params": 3584,
+            "children": []
+          },
+          {
+            "name": "down_res",
+            "type": "ModuleList",
+            "params": 8335616,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ResBlock",
+                "params": 361344,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "2",
+                "type": "_ResBlock",
+                "params": 1050368,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 295168,
+                    "own_params": 295168,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 33024,
+                    "own_params": 33024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "_ResBlock",
+                "params": 1312512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 5
+              }
+            ]
+          },
+          {
+            "name": "down_attn",
+            "type": "ModuleList",
+            "params": 527360,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "2",
+                "type": "_AttentionBlock",
+                "params": 263680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "qkv",
+                    "type": "Conv2d",
+                    "params": 197376,
+                    "own_params": 197376,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "4",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "down_sample",
+            "type": "ModuleList",
+            "params": 1327744,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 147584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "op",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 590080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "op",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "3",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "mid_block1",
+            "type": "_ResBlock",
+            "params": 1312512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "time_proj",
+                "type": "Linear",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv2",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "skip",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "mid_attn",
+            "type": "_AttentionBlock",
+            "params": 263680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "qkv",
+                "type": "Conv2d",
+                "params": 197376,
+                "own_params": 197376,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "mid_block2",
+            "type": "_ResBlock",
+            "params": 1312512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "time_proj",
+                "type": "Linear",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv2",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "skip",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "up_res",
+            "type": "ModuleList",
+            "params": 19769600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ResBlock",
+                "params": 2034176,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 1179904,
+                    "own_params": 1179904,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  }
+                ],
+                "repeat": 8
+              },
+              {
+                "name": "8",
+                "type": "_ResBlock",
+                "params": 1706240,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 884992,
+                    "own_params": 884992,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 98560,
+                    "own_params": 98560,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "9",
+                "type": "_ResBlock",
+                "params": 706048,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 442496,
+                    "own_params": 442496,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 49280,
+                    "own_params": 49280,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "10",
+                "type": "_ResBlock",
+                "params": 541952,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 295040,
+                    "own_params": 295040,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 32896,
+                    "own_params": 32896,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "up_attn",
+            "type": "ModuleList",
+            "params": 791040,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 6
+              },
+              {
+                "name": "6",
+                "type": "_AttentionBlock",
+                "params": 263680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "qkv",
+                    "type": "Conv2d",
+                    "params": 197376,
+                    "own_params": 197376,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ],
+                "repeat": 3
+              },
+              {
+                "name": "9",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "up_sample",
+            "type": "ModuleList",
+            "params": 1770240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Upsample",
+                "params": 590080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "op",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  }
+                ],
+                "repeat": 3
+              },
+              {
+                "name": "3",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "norm_out",
+            "type": "GroupNorm",
+            "params": 256,
+            "own_params": 256,
+            "children": []
+          },
+          {
+            "name": "conv_out",
+            "type": "Conv2d",
+            "params": 3459,
+            "own_params": 3459,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "score_sde_subvp_gen": {
+    "name": "ScoreSDEForImageGeneration",
+    "type": "ScoreSDEForImageGeneration",
+    "params": 35746307,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "score_sde",
+        "type": "ScoreSDEModel",
+        "params": 35746307,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "unet",
+            "type": "DDPMUNet",
+            "params": 35746307,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "time_mlp",
+                "type": "TimestepEmbedding",
+                "params": 328704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "linear_1",
+                    "type": "Linear",
+                    "params": 66048,
+                    "own_params": 66048,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "linear_2",
+                    "type": "Linear",
+                    "params": 262656,
+                    "own_params": 262656,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "conv_in",
+                "type": "Conv2d",
+                "params": 3584,
+                "own_params": 3584,
+                "children": []
+              },
+              {
+                "name": "down_res",
+                "type": "ModuleList",
+                "params": 8335616,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResBlock",
+                    "params": 361344,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ResBlock",
+                    "params": 1050368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 295168,
+                        "own_params": 295168,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 33024,
+                        "own_params": 33024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_ResBlock",
+                    "params": 1312512,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 5
+                  }
+                ]
+              },
+              {
+                "name": "down_attn",
+                "type": "ModuleList",
+                "params": 527360,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "2",
+                    "type": "_AttentionBlock",
+                    "params": 263680,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Conv2d",
+                        "params": 197376,
+                        "own_params": 197376,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 65792,
+                        "own_params": 65792,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "4",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "down_sample",
+                "type": "ModuleList",
+                "params": 1327744,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Downsample",
+                    "params": 147584,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "op",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Downsample",
+                    "params": 590080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "op",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "3",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "mid_block1",
+                "type": "_ResBlock",
+                "params": 1312512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "mid_attn",
+                "type": "_AttentionBlock",
+                "params": 263680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "qkv",
+                    "type": "Conv2d",
+                    "params": 197376,
+                    "own_params": 197376,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "mid_block2",
+                "type": "_ResBlock",
+                "params": 1312512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "up_res",
+                "type": "ModuleList",
+                "params": 19769600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResBlock",
+                    "params": 2034176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1179904,
+                        "own_params": 1179904,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 8
+                  },
+                  {
+                    "name": "8",
+                    "type": "_ResBlock",
+                    "params": 1706240,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 884992,
+                        "own_params": 884992,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 98560,
+                        "own_params": 98560,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "9",
+                    "type": "_ResBlock",
+                    "params": 706048,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 442496,
+                        "own_params": 442496,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 49280,
+                        "own_params": 49280,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "10",
+                    "type": "_ResBlock",
+                    "params": 541952,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 295040,
+                        "own_params": 295040,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 32896,
+                        "own_params": 32896,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "up_attn",
+                "type": "ModuleList",
+                "params": 791040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "6",
+                    "type": "_AttentionBlock",
+                    "params": 263680,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Conv2d",
+                        "params": 197376,
+                        "own_params": 197376,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 65792,
+                        "own_params": 65792,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  },
+                  {
+                    "name": "9",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "up_sample",
+                "type": "ModuleList",
+                "params": 1770240,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Upsample",
+                    "params": 590080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "op",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  },
+                  {
+                    "name": "3",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm_out",
+                "type": "GroupNorm",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "conv_out",
+                "type": "Conv2d",
+                "params": 3459,
+                "own_params": 3459,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "score_sde_ve": {
+    "name": "ScoreSDEModel",
+    "type": "ScoreSDEModel",
+    "params": 35746307,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "unet",
+        "type": "DDPMUNet",
+        "params": 35746307,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "time_mlp",
+            "type": "TimestepEmbedding",
+            "params": 328704,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "linear_1",
+                "type": "Linear",
+                "params": 66048,
+                "own_params": 66048,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "linear_2",
+                "type": "Linear",
+                "params": 262656,
+                "own_params": 262656,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv_in",
+            "type": "Conv2d",
+            "params": 3584,
+            "own_params": 3584,
+            "children": []
+          },
+          {
+            "name": "down_res",
+            "type": "ModuleList",
+            "params": 8335616,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ResBlock",
+                "params": 361344,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "2",
+                "type": "_ResBlock",
+                "params": 1050368,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 295168,
+                    "own_params": 295168,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 33024,
+                    "own_params": 33024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "_ResBlock",
+                "params": 1312512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 5
+              }
+            ]
+          },
+          {
+            "name": "down_attn",
+            "type": "ModuleList",
+            "params": 527360,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "2",
+                "type": "_AttentionBlock",
+                "params": 263680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "qkv",
+                    "type": "Conv2d",
+                    "params": 197376,
+                    "own_params": 197376,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "4",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "down_sample",
+            "type": "ModuleList",
+            "params": 1327744,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 147584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "op",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 590080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "op",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "3",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "mid_block1",
+            "type": "_ResBlock",
+            "params": 1312512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "time_proj",
+                "type": "Linear",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv2",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "skip",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "mid_attn",
+            "type": "_AttentionBlock",
+            "params": 263680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "qkv",
+                "type": "Conv2d",
+                "params": 197376,
+                "own_params": 197376,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "mid_block2",
+            "type": "_ResBlock",
+            "params": 1312512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "time_proj",
+                "type": "Linear",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv2",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "skip",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "up_res",
+            "type": "ModuleList",
+            "params": 19769600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ResBlock",
+                "params": 2034176,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 1179904,
+                    "own_params": 1179904,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  }
+                ],
+                "repeat": 8
+              },
+              {
+                "name": "8",
+                "type": "_ResBlock",
+                "params": 1706240,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 884992,
+                    "own_params": 884992,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 98560,
+                    "own_params": 98560,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "9",
+                "type": "_ResBlock",
+                "params": 706048,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 442496,
+                    "own_params": 442496,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 49280,
+                    "own_params": 49280,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "10",
+                "type": "_ResBlock",
+                "params": 541952,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 295040,
+                    "own_params": 295040,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 32896,
+                    "own_params": 32896,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "up_attn",
+            "type": "ModuleList",
+            "params": 791040,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 6
+              },
+              {
+                "name": "6",
+                "type": "_AttentionBlock",
+                "params": 263680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "qkv",
+                    "type": "Conv2d",
+                    "params": 197376,
+                    "own_params": 197376,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ],
+                "repeat": 3
+              },
+              {
+                "name": "9",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "up_sample",
+            "type": "ModuleList",
+            "params": 1770240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Upsample",
+                "params": 590080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "op",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  }
+                ],
+                "repeat": 3
+              },
+              {
+                "name": "3",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "norm_out",
+            "type": "GroupNorm",
+            "params": 256,
+            "own_params": 256,
+            "children": []
+          },
+          {
+            "name": "conv_out",
+            "type": "Conv2d",
+            "params": 3459,
+            "own_params": 3459,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "score_sde_ve_gen": {
+    "name": "ScoreSDEForImageGeneration",
+    "type": "ScoreSDEForImageGeneration",
+    "params": 35746307,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "score_sde",
+        "type": "ScoreSDEModel",
+        "params": 35746307,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "unet",
+            "type": "DDPMUNet",
+            "params": 35746307,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "time_mlp",
+                "type": "TimestepEmbedding",
+                "params": 328704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "linear_1",
+                    "type": "Linear",
+                    "params": 66048,
+                    "own_params": 66048,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "linear_2",
+                    "type": "Linear",
+                    "params": 262656,
+                    "own_params": 262656,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "conv_in",
+                "type": "Conv2d",
+                "params": 3584,
+                "own_params": 3584,
+                "children": []
+              },
+              {
+                "name": "down_res",
+                "type": "ModuleList",
+                "params": 8335616,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResBlock",
+                    "params": 361344,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ResBlock",
+                    "params": 1050368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 295168,
+                        "own_params": 295168,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 33024,
+                        "own_params": 33024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_ResBlock",
+                    "params": 1312512,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 5
+                  }
+                ]
+              },
+              {
+                "name": "down_attn",
+                "type": "ModuleList",
+                "params": 527360,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "2",
+                    "type": "_AttentionBlock",
+                    "params": 263680,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Conv2d",
+                        "params": 197376,
+                        "own_params": 197376,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 65792,
+                        "own_params": 65792,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "4",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "down_sample",
+                "type": "ModuleList",
+                "params": 1327744,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Downsample",
+                    "params": 147584,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "op",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Downsample",
+                    "params": 590080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "op",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "3",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "mid_block1",
+                "type": "_ResBlock",
+                "params": 1312512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "mid_attn",
+                "type": "_AttentionBlock",
+                "params": 263680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "qkv",
+                    "type": "Conv2d",
+                    "params": 197376,
+                    "own_params": 197376,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "mid_block2",
+                "type": "_ResBlock",
+                "params": 1312512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "up_res",
+                "type": "ModuleList",
+                "params": 19769600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResBlock",
+                    "params": 2034176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1179904,
+                        "own_params": 1179904,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 8
+                  },
+                  {
+                    "name": "8",
+                    "type": "_ResBlock",
+                    "params": 1706240,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 884992,
+                        "own_params": 884992,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 98560,
+                        "own_params": 98560,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "9",
+                    "type": "_ResBlock",
+                    "params": 706048,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 442496,
+                        "own_params": 442496,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 49280,
+                        "own_params": 49280,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "10",
+                    "type": "_ResBlock",
+                    "params": 541952,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 295040,
+                        "own_params": 295040,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 32896,
+                        "own_params": 32896,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "up_attn",
+                "type": "ModuleList",
+                "params": 791040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "6",
+                    "type": "_AttentionBlock",
+                    "params": 263680,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Conv2d",
+                        "params": 197376,
+                        "own_params": 197376,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 65792,
+                        "own_params": 65792,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  },
+                  {
+                    "name": "9",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "up_sample",
+                "type": "ModuleList",
+                "params": 1770240,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Upsample",
+                    "params": 590080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "op",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  },
+                  {
+                    "name": "3",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm_out",
+                "type": "GroupNorm",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "conv_out",
+                "type": "Conv2d",
+                "params": 3459,
+                "own_params": 3459,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "score_sde_vp": {
+    "name": "ScoreSDEModel",
+    "type": "ScoreSDEModel",
+    "params": 35746307,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "unet",
+        "type": "DDPMUNet",
+        "params": 35746307,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "time_mlp",
+            "type": "TimestepEmbedding",
+            "params": 328704,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "linear_1",
+                "type": "Linear",
+                "params": 66048,
+                "own_params": 66048,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "linear_2",
+                "type": "Linear",
+                "params": 262656,
+                "own_params": 262656,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "conv_in",
+            "type": "Conv2d",
+            "params": 3584,
+            "own_params": 3584,
+            "children": []
+          },
+          {
+            "name": "down_res",
+            "type": "ModuleList",
+            "params": 8335616,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ResBlock",
+                "params": 361344,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "2",
+                "type": "_ResBlock",
+                "params": 1050368,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 295168,
+                    "own_params": 295168,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 33024,
+                    "own_params": 33024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "3",
+                "type": "_ResBlock",
+                "params": 1312512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ],
+                "repeat": 5
+              }
+            ]
+          },
+          {
+            "name": "down_attn",
+            "type": "ModuleList",
+            "params": 527360,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "2",
+                "type": "_AttentionBlock",
+                "params": 263680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "qkv",
+                    "type": "Conv2d",
+                    "params": 197376,
+                    "own_params": 197376,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "4",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 4
+              }
+            ]
+          },
+          {
+            "name": "down_sample",
+            "type": "ModuleList",
+            "params": 1327744,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Downsample",
+                "params": 147584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "op",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "1",
+                "type": "_Downsample",
+                "params": 590080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "op",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "3",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "mid_block1",
+            "type": "_ResBlock",
+            "params": 1312512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "time_proj",
+                "type": "Linear",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv2",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "skip",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "mid_attn",
+            "type": "_AttentionBlock",
+            "params": 263680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "qkv",
+                "type": "Conv2d",
+                "params": 197376,
+                "own_params": 197376,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Conv2d",
+                "params": 65792,
+                "own_params": 65792,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "mid_block2",
+            "type": "_ResBlock",
+            "params": 1312512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "time_proj",
+                "type": "Linear",
+                "params": 131328,
+                "own_params": 131328,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "GroupNorm",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              },
+              {
+                "name": "dropout",
+                "type": "Dropout",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv2",
+                "type": "Conv2d",
+                "params": 590080,
+                "own_params": 590080,
+                "children": []
+              },
+              {
+                "name": "skip",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "up_res",
+            "type": "ModuleList",
+            "params": 19769600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_ResBlock",
+                "params": 2034176,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 1179904,
+                    "own_params": 1179904,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  }
+                ],
+                "repeat": 8
+              },
+              {
+                "name": "8",
+                "type": "_ResBlock",
+                "params": 1706240,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 884992,
+                    "own_params": 884992,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 98560,
+                    "own_params": 98560,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "9",
+                "type": "_ResBlock",
+                "params": 706048,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 442496,
+                    "own_params": 442496,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 49280,
+                    "own_params": 49280,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "10",
+                "type": "_ResBlock",
+                "params": 541952,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 295040,
+                    "own_params": 295040,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 65664,
+                    "own_params": 65664,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Conv2d",
+                    "params": 32896,
+                    "own_params": 32896,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "up_attn",
+            "type": "ModuleList",
+            "params": 791040,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 6
+              },
+              {
+                "name": "6",
+                "type": "_AttentionBlock",
+                "params": 263680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "qkv",
+                    "type": "Conv2d",
+                    "params": 197376,
+                    "own_params": 197376,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ],
+                "repeat": 3
+              },
+              {
+                "name": "9",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": [],
+                "repeat": 3
+              }
+            ]
+          },
+          {
+            "name": "up_sample",
+            "type": "ModuleList",
+            "params": 1770240,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_Upsample",
+                "params": 590080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "op",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  }
+                ],
+                "repeat": 3
+              },
+              {
+                "name": "3",
+                "type": "Identity",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "norm_out",
+            "type": "GroupNorm",
+            "params": 256,
+            "own_params": 256,
+            "children": []
+          },
+          {
+            "name": "conv_out",
+            "type": "Conv2d",
+            "params": 3459,
+            "own_params": 3459,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "score_sde_vp_gen": {
+    "name": "ScoreSDEForImageGeneration",
+    "type": "ScoreSDEForImageGeneration",
+    "params": 35746307,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "score_sde",
+        "type": "ScoreSDEModel",
+        "params": 35746307,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "unet",
+            "type": "DDPMUNet",
+            "params": 35746307,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "time_mlp",
+                "type": "TimestepEmbedding",
+                "params": 328704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "linear_1",
+                    "type": "Linear",
+                    "params": 66048,
+                    "own_params": 66048,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "linear_2",
+                    "type": "Linear",
+                    "params": 262656,
+                    "own_params": 262656,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "conv_in",
+                "type": "Conv2d",
+                "params": 3584,
+                "own_params": 3584,
+                "children": []
+              },
+              {
+                "name": "down_res",
+                "type": "ModuleList",
+                "params": 8335616,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResBlock",
+                    "params": 361344,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "2",
+                    "type": "_ResBlock",
+                    "params": 1050368,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 295168,
+                        "own_params": 295168,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 33024,
+                        "own_params": 33024,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "3",
+                    "type": "_ResBlock",
+                    "params": 1312512,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 5
+                  }
+                ]
+              },
+              {
+                "name": "down_attn",
+                "type": "ModuleList",
+                "params": 527360,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "2",
+                    "type": "_AttentionBlock",
+                    "params": 263680,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Conv2d",
+                        "params": 197376,
+                        "own_params": 197376,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 65792,
+                        "own_params": 65792,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "4",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 4
+                  }
+                ]
+              },
+              {
+                "name": "down_sample",
+                "type": "ModuleList",
+                "params": 1327744,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Downsample",
+                    "params": 147584,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "op",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "1",
+                    "type": "_Downsample",
+                    "params": 590080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "op",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "3",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "mid_block1",
+                "type": "_ResBlock",
+                "params": 1312512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "mid_attn",
+                "type": "_AttentionBlock",
+                "params": 263680,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "qkv",
+                    "type": "Conv2d",
+                    "params": 197376,
+                    "own_params": 197376,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "mid_block2",
+                "type": "_ResBlock",
+                "params": 1312512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "time_proj",
+                    "type": "Linear",
+                    "params": 131328,
+                    "own_params": 131328,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "GroupNorm",
+                    "params": 512,
+                    "own_params": 512,
+                    "children": []
+                  },
+                  {
+                    "name": "dropout",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv2",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  },
+                  {
+                    "name": "skip",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "up_res",
+                "type": "ModuleList",
+                "params": 19769600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResBlock",
+                    "params": 2034176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 1179904,
+                        "own_params": 1179904,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 8
+                  },
+                  {
+                    "name": "8",
+                    "type": "_ResBlock",
+                    "params": 1706240,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 884992,
+                        "own_params": 884992,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 131328,
+                        "own_params": 131328,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 98560,
+                        "own_params": 98560,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "9",
+                    "type": "_ResBlock",
+                    "params": 706048,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 442496,
+                        "own_params": 442496,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 49280,
+                        "own_params": 49280,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "10",
+                    "type": "_ResBlock",
+                    "params": 541952,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "conv1",
+                        "type": "Conv2d",
+                        "params": 295040,
+                        "own_params": 295040,
+                        "children": []
+                      },
+                      {
+                        "name": "time_proj",
+                        "type": "Linear",
+                        "params": 65664,
+                        "own_params": 65664,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "GroupNorm",
+                        "params": 256,
+                        "own_params": 256,
+                        "children": []
+                      },
+                      {
+                        "name": "dropout",
+                        "type": "Dropout",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "conv2",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      },
+                      {
+                        "name": "skip",
+                        "type": "Conv2d",
+                        "params": 32896,
+                        "own_params": 32896,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "up_attn",
+                "type": "ModuleList",
+                "params": 791040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 6
+                  },
+                  {
+                    "name": "6",
+                    "type": "_AttentionBlock",
+                    "params": 263680,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm",
+                        "type": "GroupNorm",
+                        "params": 512,
+                        "own_params": 512,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Conv2d",
+                        "params": 197376,
+                        "own_params": 197376,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 65792,
+                        "own_params": 65792,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  },
+                  {
+                    "name": "9",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": [],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "up_sample",
+                "type": "ModuleList",
+                "params": 1770240,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Upsample",
+                    "params": 590080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "op",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 3
+                  },
+                  {
+                    "name": "3",
+                    "type": "Identity",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm_out",
+                "type": "GroupNorm",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              },
+              {
+                "name": "conv_out",
+                "type": "Conv2d",
+                "params": 3459,
+                "own_params": 3459,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
   "se_resnet_101": {
     "name": "SENet",
     "type": "SENet",
