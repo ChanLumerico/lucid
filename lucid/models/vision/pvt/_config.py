@@ -8,7 +8,7 @@ from lucid.models._meta import model_family_meta
 
 
 @model_family_meta(
-    canonical_name="PVT v2",
+    canonical_name="PVT-v2",
     citation=(
         'Wang, Wenhai, et al. "PVT v2: Improved Baselines with '
         'Pyramid Vision Transformer." Computational Visual Media, '

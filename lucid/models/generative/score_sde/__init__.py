@@ -19,7 +19,6 @@ from lucid.models.generative.score_sde._sde import (
     SubVPSDE,
     VESDE,
     VPSDE,
-    make_sde,
 )
 
 __all__ = [
@@ -31,7 +30,6 @@ __all__ = [
     "VESDE",
     "VPSDE",
     "SubVPSDE",
-    "make_sde",
     "score_sde_vp",
     "score_sde_vp_gen",
     "score_sde_ve",

@@ -30,7 +30,7 @@ ActionSpace = Literal["continuous", "discrete"]
 
 
 @model_family_meta(
-    canonical_name="DreamerV2",
+    canonical_name="Dreamer-v2",
     citation=(
         "Hafner, Danijar, et al. "
         '"Mastering Atari with Discrete World Models." '

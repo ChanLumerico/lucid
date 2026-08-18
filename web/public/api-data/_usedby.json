@@ -3597,16 +3597,6 @@
       "module": "lucid.models.generative.dreamer_v3._pretrained"
     }
   ],
-  "lucid.models.generative.dreamer_v3._heads.TwoHotHead": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.dreamer_v3"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.dreamer_v3._model"
-    }
-  ],
   "lucid.models.generative.dreamer_v3._model.DreamerV3BehaviorOutput": [
     {
       "kind": "module",
@@ -3637,26 +3627,6 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer_v3"
-    }
-  ],
-  "lucid.models.generative.dreamer_v3._objectives.ReturnNormaliser": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.dreamer_v3"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.dreamer_v3._model"
-    }
-  ],
-  "lucid.models.generative.dreamer_v3._objectives.free_bits_kl": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.dreamer_v3"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.dreamer_v3._model"
     }
   ],
   "lucid.models.generative.dreamer_v3._pretrained.dreamer_v3_100m": [
@@ -4393,16 +4363,6 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.score_sde"
-    }
-  ],
-  "lucid.models.generative.score_sde._sde.make_sde": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.score_sde"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.score_sde._model"
     }
   ],
   "lucid.models.generative.vae": [

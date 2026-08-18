@@ -8,7 +8,7 @@ from lucid.models._meta import model_family_meta
 
 
 @model_family_meta(
-    canonical_name="MobileNet V2",
+    canonical_name="MobileNet-v2",
     citation=(
         'Sandler, Mark, et al. "MobileNetV2: Inverted Residuals and '
         'Linear Bottlenecks." Proceedings of the IEEE Conference on '

@@ -32,7 +32,7 @@ DREAMER_V3_SIZES: dict[str, tuple[int, int, int, int, int]] = {
 
 
 @model_family_meta(
-    canonical_name="DreamerV3",
+    canonical_name="Dreamer-v3",
     citation=(
         "Hafner, Danijar, et al. "
         '"Mastering Diverse Domains through World Models." '

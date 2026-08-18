@@ -16,7 +16,10 @@ Contract spec: ``obsidian/architecture/arch-models-family-contract.md``
 """
 
 import importlib
+import inspect
+import re
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -24,6 +27,7 @@ from lucid.models._protocols import (
     ModelConfigProtocol,
     PretrainedModelProtocol,
 )
+from lucid.models._registry import is_model
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 MODELS_DIR = REPO_ROOT / "lucid" / "models"
@@ -155,3 +159,123 @@ def test_family_count_matches_directory_scan() -> None:
         f"family discovery saw {len(_FAMILIES)}, raw directory scan "
         f"sees {actual} — investigate."
     )
+
+
+def _misspelt_versions(canonical_name: str) -> list[str]:
+    """Version tokens in a display name that are not written ``-vN``.
+
+    The zoo writes a family's version as a lowercase ``v`` joined by a
+    hyphen — ``Dreamer-v3``, ``MobileNet-v2``, ``PVT-v2`` — so the
+    sidebar reads consistently regardless of how each paper styled its
+    own title (``DreamerV3``, ``MobileNet V2``, ``PVTv2`` are all in the
+    literature).
+
+    Only ``v``-prefixed tokens count.  A bare trailing numeral is part of
+    the published name rather than a version suffix — ``GPT-2`` is what
+    the model is called, and ``Mask2Former`` is not versioned at all.
+    """
+    bad: list[str] = []
+    for match in re.finditer(r"[Vv]\s*\d+", canonical_name):
+        token = match.group()
+        preceded_by_hyphen = (
+            match.start() > 0 and canonical_name[match.start() - 1] == "-"
+        )
+        if not (token.startswith("v") and preceded_by_hyphen):
+            bad.append(token)
+    return bad
+
+
+@pytest.mark.parametrize(
+    "domain,family", _FAMILIES, ids=[f"{d}/{f}" for d, f in _FAMILIES]
+)
+def test_family_version_suffix_is_hyphen_v(domain: str, family: str) -> None:
+    """Versioned families display as ``<Name>-vN`` on the docs site."""
+    module = _import_family(domain, family)
+    config = next(
+        (getattr(module, n) for n in module.__all__ if n.endswith("Config")), None
+    )
+    assert config is not None, f"{domain}/{family} exports no Config"
+    meta = getattr(config, "__model_family_meta__", None)
+    canonical = getattr(meta, "canonical_name", None) or ""
+    bad = _misspelt_versions(canonical)
+    assert not bad, (
+        f"{domain}/{family} canonical_name {canonical!r} writes its version "
+        f"as {bad} — the zoo's convention is '-vN' (lowercase v, hyphen "
+        f"joined), e.g. 'Dreamer-v3'."
+    )
+
+
+def test_the_version_check_can_fail() -> None:
+    """Guards the test above — every family already conforms, so a check
+    that matched nothing would look identical to one that works."""
+    assert _misspelt_versions("MobileNet V2") == ["V2"]
+    assert _misspelt_versions("DreamerV3") == ["V3"]
+    assert _misspelt_versions("PVTv2") == ["v2"]  # right letter, no hyphen
+    assert _misspelt_versions("Dreamer-v3") == []
+    assert _misspelt_versions("GPT-2") == []  # not a version suffix
+    assert _misspelt_versions("Mask2Former") == []
+
+
+def _stray_exported_functions(module: ModuleType) -> list[str]:
+    """Names in ``module.__all__`` that are functions with no business
+    being public.
+
+    A family's public functions are its **model factories**, plus the
+    occasional **config builder** (EfficientDet exposes one, keyed by the
+    compound-scaling coefficient).  Anything else — a training objective,
+    a dispatch helper — is an implementation detail of the family.
+
+    Kept as a helper rather than inlined so the test below can be pointed
+    at a module built to fail.
+    """
+    stray: list[str] = []
+    for name in getattr(module, "__all__", []):
+        obj = getattr(module, name, None)
+        if not inspect.isfunction(obj):
+            continue
+        if is_model(name):
+            continue
+        if getattr(obj, "__module__", "").endswith("._config"):
+            continue
+        stray.append(name)
+    return stray
+
+
+@pytest.mark.parametrize(
+    "domain,family", _FAMILIES, ids=[f"{d}/{f}" for d, f in _FAMILIES]
+)
+def test_family_exports_no_internal_helpers(domain: str, family: str) -> None:
+    """A family's ``__all__`` must not leak its own machinery.
+
+    This is a docs bug before it is an API bug.  The site renders a
+    family leaf's module-level functions as its factory list, so an
+    exported helper appears among the pretrained entries as though you
+    could load weights with it — which is how ``free_bits_kl`` was
+    spotted sitting next to the twelve DreamerV3 factories.
+
+    Classes are exempt: they render in their own section, so a genuinely
+    public building block (``DDPMUNet``, the SDE hierarchy) is fine
+    there.
+    """
+    module = _import_family(domain, family)
+    stray = _stray_exported_functions(module)
+    assert not stray, (
+        f"lucid.models.{domain}.{family} exports {stray} — not registered "
+        f"factories and not config builders.  Drop them from __init__.py "
+        f"(callers inside the family should import from the private "
+        f"module directly), or register them if they really are factories."
+    )
+
+
+def test_the_export_check_can_fail() -> None:
+    """Guards the test above — with every family already clean, a check
+    that silently matched nothing would pass just as convincingly."""
+    fake = ModuleType("lucid.models.generative.fake")
+
+    def free_bits_kl() -> None: ...
+
+    free_bits_kl.__module__ = "lucid.models.generative.fake._objectives"
+    fake.free_bits_kl = free_bits_kl  # type: ignore[attr-defined]
+    fake.__all__ = ["free_bits_kl"]  # type: ignore[attr-defined]
+
+    assert _stray_exported_functions(fake) == ["free_bits_kl"]

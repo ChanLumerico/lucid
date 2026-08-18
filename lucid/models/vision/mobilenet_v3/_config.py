@@ -8,7 +8,7 @@ from lucid.models._meta import model_family_meta
 
 
 @model_family_meta(
-    canonical_name="MobileNet V3",
+    canonical_name="MobileNet-v3",
     citation=(
         'Howard, Andrew, et al. "Searching for MobileNetV3." Proceedings '
         "of the IEEE/CVF International Conference on Computer Vision, "
