@@ -398,7 +398,6 @@ DREAMER_V3: dict[str, tuple[Any, str]] = {
 }
 
 
-
 SCORE_SDE: dict[str, tuple[Any, str]] = {
     "sample_size": (
         32,
@@ -414,13 +413,13 @@ SCORE_SDE: dict[str, tuple[Any, str]] = {
     ),
     "sde_type": (
         "vp",
-        'paper: Table 3 reports rows per process; VP is DDPM\'s continuous '
+        "paper: Table 3 reports rows per process; VP is DDPM's continuous "
         "limit and the natural default for a DDPM backbone",
     ),
     "sigma_min": (
         0.01,
         'paper: Appendix C, "in SMLD, the noise scales is typically a '
-        "geometric sequence where sigma_min is fixed to 0.01\"",
+        'geometric sequence where sigma_min is fixed to 0.01"',
     ),
     "sigma_max": (
         50.0,

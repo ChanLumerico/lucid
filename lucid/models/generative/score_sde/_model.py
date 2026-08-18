@@ -309,9 +309,7 @@ class ScoreSDEForImageGeneration(PretrainedModel):
         """Descending times from 1 to the SDE's floor."""
         return lucid.linspace(1.0, self.sde.t_min, steps, device=device)
 
-    def _guided_score(
-        self, x: Tensor, t: Tensor, guidance: _Guidance | None
-    ) -> Tensor:
+    def _guided_score(self, x: Tensor, t: Tensor, guidance: _Guidance | None) -> Tensor:
         r"""The score, plus a conditioning term if one was supplied.
 
         Notes
@@ -581,6 +579,5 @@ class ScoreSDEForImageGeneration(PretrainedModel):
         variance = self.sde.prior_variance
         flat = x.reshape(count, -1)
         return -0.5 * (
-            dims * math.log(2.0 * math.pi * variance)
-            + (flat**2).sum(dim=-1) / variance
+            dims * math.log(2.0 * math.pi * variance) + (flat**2).sum(dim=-1) / variance
         )

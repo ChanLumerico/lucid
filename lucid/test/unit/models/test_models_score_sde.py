@@ -308,7 +308,8 @@ class TestExactLikelihood:
         integral = 0.5 * (sde.beta_max - sde.beta_min) + sde.beta_min
         end = x * math.exp(-0.5 * integral)
         prior = -0.5 * (
-            dims * math.log(2.0 * math.pi) + float((end.reshape(1, -1) ** 2).sum().item())
+            dims * math.log(2.0 * math.pi)
+            + float((end.reshape(1, -1) ** 2).sum().item())
         )
         return prior - 0.5 * integral * dims
 
@@ -318,7 +319,10 @@ class TestExactLikelihood:
         lucid.manual_seed(0)
         model = self._tiny()
         x = lucid.randn((1, 3, 8, 8))
-        assert float(model.score_sde.score(x, lucid.ones((1,)) * 0.5).abs().max().item()) == 0.0
+        assert (
+            float(model.score_sde.score(x, lucid.ones((1,)) * 0.5).abs().max().item())
+            == 0.0
+        )
         target = self._analytic(model, x)
         coarse = abs(float(model.log_likelihood(x, steps=16).item()) - target)
         fine = abs(float(model.log_likelihood(x, steps=128).item()) - target)
@@ -339,7 +343,9 @@ class TestExactLikelihood:
 
     def test_it_returns_one_number_per_sample(self) -> None:
         lucid.manual_seed(0)
-        assert self._tiny().log_likelihood(lucid.randn((3, 3, 8, 8)), steps=3).shape == (3,)
+        assert self._tiny().log_likelihood(
+            lucid.randn((3, 3, 8, 8)), steps=3
+        ).shape == (3,)
 
     def test_the_prior_width_follows_the_sde(self) -> None:
         """VE's prior is as wide as sigma_max; assuming unit variance
