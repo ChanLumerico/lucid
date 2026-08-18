@@ -813,6 +813,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.rectified_flow._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
     }
   ],
   "lucid.diffeq._adjoint.odeint_adjoint": [
@@ -1762,6 +1766,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -2580,6 +2588,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -2749,6 +2761,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.planet._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
     },
     {
       "kind": "module",
@@ -3046,6 +3062,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.score_sde._pretrained"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._pretrained"
     },
     {
@@ -3283,6 +3303,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ncsn._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
     }
   ],
   "lucid.models.generative.ddpm._model.DDPMForImageGeneration": [
@@ -3319,6 +3343,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ncsn._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
     }
   ],
   "lucid.models.generative.ddpm._pretrained.ddpm_cifar": [
@@ -4251,6 +4279,130 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.rectified_flow"
+    }
+  ],
+  "lucid.models.generative.score_sde": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.score_sde._config.ScoreSDEConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._pretrained"
+    }
+  ],
+  "lucid.models.generative.score_sde._model.ScoreSDEForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._pretrained"
+    }
+  ],
+  "lucid.models.generative.score_sde._model.ScoreSDEModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._pretrained"
+    }
+  ],
+  "lucid.models.generative.score_sde._model.ScoreSDEOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.score_sde._pretrained.score_sde_subvp": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.score_sde._pretrained.score_sde_subvp_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.score_sde._pretrained.score_sde_ve": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.score_sde._pretrained.score_sde_ve_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.score_sde._pretrained.score_sde_vp": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.score_sde._pretrained.score_sde_vp_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.score_sde._sde.SDE": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
+    }
+  ],
+  "lucid.models.generative.score_sde._sde.SubVPSDE": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.score_sde._sde.VESDE": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
+    }
+  ],
+  "lucid.models.generative.score_sde._sde.VPSDE": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.score_sde._sde.make_sde": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._model"
     }
   ],
   "lucid.models.generative.vae": [
@@ -11331,6 +11483,22 @@
       "module": "lucid.nn.modules.rnn"
     }
   ],
+  "lucid.nn.functional.linear.noisy_linear": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.linear"
+    }
+  ],
+  "lucid.nn.functional.linear.scaled_noise": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional"
+    }
+  ],
   "lucid.nn.functional.loss.binary_cross_entropy": [
     {
       "kind": "module",
@@ -12659,6 +12827,12 @@
     {
       "kind": "module",
       "module": "lucid.nn.utils.fusion"
+    }
+  ],
+  "lucid.nn.modules.linear.NoisyLinear": [
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules"
     }
   ],
   "lucid.nn.modules.loss.BCELoss": [
@@ -14965,7 +15139,25 @@
       "module": "lucid.utils.rollout"
     }
   ],
+  "lucid.utils.rollout._replay.PrioritizedBatch": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    }
+  ],
+  "lucid.utils.rollout._replay.PrioritizedSequenceReplay": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    }
+  ],
   "lucid.utils.rollout._replay.SequenceReplay": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.rollout"
+    }
+  ],
+  "lucid.utils.rollout._replay.SumTree": [
     {
       "kind": "module",
       "module": "lucid.utils.rollout"

@@ -3,7 +3,7 @@
   "name": "rollout",
   "path": "lucid.utils.rollout",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/__init__.py#L1",
   "members": [
     {
       "name": "LatentPolicy",
@@ -13,7 +13,7 @@
       "bases": [],
       "labels": [],
       "signature": "LatentPolicy(encode: Callable[[Tensor], Tensor], rssm: RSSM, act: Callable[[RSSMState], Tensor], action_dim: int, noise: float = 0.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L141",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L141",
       "subcategory": "driver",
       "methods": [
         {
@@ -22,7 +22,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(encode: Callable[[Tensor], Tensor], rssm: RSSM, act: Callable[[RSSMState], Tensor], action_dim: int, noise: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L200",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L200",
           "subcategory": "driver",
           "summary": "Initialise the policy. See the class docstring for parameters.",
           "extended": null,
@@ -44,7 +44,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L219",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L219",
           "subcategory": "driver",
           "summary": "Drop the belief so the next episode starts from the prior.",
           "extended": null,
@@ -66,7 +66,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__call__(observation: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L224",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L224",
           "subcategory": "driver",
           "summary": "Fold in the observation, then choose.",
           "extended": null,
@@ -140,7 +140,7 @@
       ],
       "labels": [],
       "signature": "Policy()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L34",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L34",
       "subcategory": "driver",
       "methods": [
         {
@@ -149,7 +149,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L57",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L57",
           "subcategory": "driver",
           "summary": "Forget whatever the previous episode left behind.",
           "extended": null,
@@ -171,7 +171,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__call__(observation: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L61",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L61",
           "subcategory": "driver",
           "summary": "Choose an action.",
           "extended": null,
@@ -218,7 +218,7 @@
       "bases": [],
       "labels": [],
       "signature": "RandomPolicy(action_dim: int, discrete: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L77",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L77",
       "subcategory": "driver",
       "methods": [
         {
@@ -227,7 +227,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(action_dim: int, discrete: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L115",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L115",
           "subcategory": "driver",
           "summary": "Initialise the policy. See the class docstring for parameters.",
           "extended": null,
@@ -249,7 +249,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L122",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L122",
           "subcategory": "driver",
           "summary": "No state to clear; present so this satisfies `Policy`.",
           "extended": null,
@@ -271,7 +271,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__call__(observation: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L126",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L126",
           "subcategory": "driver",
           "summary": "Draw a uniform action, ignoring the observation.",
           "extended": null,
@@ -322,7 +322,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rollout(env: Environment, policy: Policy, action_repeat: int = 1, max_steps: int | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_driver.py#L264",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_driver.py#L264",
       "subcategory": "driver",
       "summary": "Run one episode and return it, ready for the replay buffer.",
       "extended": null,
@@ -377,7 +377,7 @@
       ],
       "labels": [],
       "signature": "Environment()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_env.py#L87",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_env.py#L87",
       "subcategory": "env",
       "methods": [
         {
@@ -386,7 +386,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_env.py#L116",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_env.py#L116",
           "subcategory": "env",
           "summary": "Start a new episode.",
           "extended": null,
@@ -408,7 +408,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(action: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_env.py#L126",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_env.py#L126",
           "subcategory": "env",
           "summary": "Advance one step.",
           "extended": null,
@@ -457,7 +457,7 @@
       ],
       "labels": [],
       "signature": "Episode()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_env.py#L51",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_env.py#L51",
       "subcategory": "env",
       "methods": [
         {
@@ -466,7 +466,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_env.py#L81",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_env.py#L81",
           "subcategory": "env",
           "summary": "Number of transitions in the episode.",
           "extended": null,
@@ -527,7 +527,7 @@
       ],
       "labels": [],
       "signature": "StepResult()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_env.py#L17",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_env.py#L17",
       "subcategory": "env",
       "methods": [],
       "summary": "What one environment step returns.",
@@ -565,6 +565,275 @@
       "see_also": []
     },
     {
+      "name": "PrioritizedBatch",
+      "path": "lucid.utils.rollout._replay.PrioritizedBatch",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "NamedTuple"
+      ],
+      "labels": [],
+      "signature": "PrioritizedBatch()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L311",
+      "subcategory": "replay",
+      "methods": [],
+      "summary": "What a prioritized draw returns.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "episode",
+          "annotation": "Episode",
+          "description": "The chunks, batched exactly as `SequenceReplay.sample`\nreturns them."
+        },
+        {
+          "name": "indices",
+          "annotation": "list of int",
+          "description": "Where each chunk came from, to hand back to\n`PrioritizedSequenceReplay.update_priorities`."
+        },
+        {
+          "name": "weights",
+          "annotation": "Tensor",
+          "description": "Importance-sampling weights, `(batch_size,)`, normalised so the\nlargest is one.  A loss corrected for the sampling bias multiplies\nits per-chunk terms by these."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "PrioritizedSequenceReplay",
+      "path": "lucid.utils.rollout._replay.PrioritizedSequenceReplay",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "SequenceReplay"
+      ],
+      "labels": [],
+      "signature": "PrioritizedSequenceReplay(capacity: int = 1000000, alpha: float = 0.6, beta: float = 0.4, epsilon: float = 1e-06)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L333",
+      "subcategory": "replay",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.rollout._replay.PrioritizedSequenceReplay.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(capacity: int = 1000000, alpha: float = 0.6, beta: float = 0.4, epsilon: float = 1e-06)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L387",
+          "subcategory": "replay",
+          "summary": "Initialise the buffer. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "add",
+          "path": "lucid.utils.rollout._replay.PrioritizedSequenceReplay.add",
+          "kind": "function",
+          "labels": [],
+          "signature": "add(episode: Episode)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L421",
+          "subcategory": "replay",
+          "summary": "Store an episode at the largest priority seen.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "episode",
+              "annotation": "Episode",
+              "description": "As `SequenceReplay.add`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Eviction can drop episodes off the front, so the priorities are\nre-laid after the base class has done its bookkeeping rather than\ntracked incrementally — the buffer is a list and the indices move."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "sample_prioritized",
+          "path": "lucid.utils.rollout._replay.PrioritizedSequenceReplay.sample_prioritized",
+          "kind": "function",
+          "labels": [],
+          "signature": "sample_prioritized(batch_size: int, length: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L450",
+          "subcategory": "replay",
+          "summary": "Draw chunks in proportion to priority, with their weights.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "batch_size",
+              "annotation": "int",
+              "description": "As `SequenceReplay.sample`.",
+              "default": null
+            },
+            {
+              "name": "length",
+              "annotation": "int",
+              "description": "As `SequenceReplay.sample`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "PrioritizedBatch",
+            "description": "The chunks, where they came from, and the correction weights."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If no stored episode is long enough, or nothing is stored."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "update_priorities",
+          "path": "lucid.utils.rollout._replay.PrioritizedSequenceReplay.update_priorities",
+          "kind": "function",
+          "labels": [],
+          "signature": "update_priorities(indices: list[int], errors: list[float])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L517",
+          "subcategory": "replay",
+          "summary": "Rewrite the priorities of the episodes just trained on.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "indices",
+              "annotation": "list of int",
+              "description": "As returned by `sample_prioritized`.",
+              "default": null
+            },
+            {
+              "name": "errors",
+              "annotation": "list of float",
+              "description": "One magnitude per index — the paper uses `|delta|`, the\ntemporal-difference error.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If the two lists differ in length."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "anneal_beta",
+          "path": "lucid.utils.rollout._replay.PrioritizedSequenceReplay.anneal_beta",
+          "kind": "function",
+          "labels": [],
+          "signature": "anneal_beta(fraction: float, final: float = 1.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L541",
+          "subcategory": "replay",
+          "summary": "Move `beta` linearly toward `final`.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "fraction",
+              "annotation": "float",
+              "description": "Training progress in `[0, 1]`.",
+              "default": null
+            },
+            {
+              "name": "final",
+              "annotation": "float",
+              "description": "Where beta ends up, which the paper reaches \"only at the end\nof learning\".",
+              "default": "1.0"
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "The correction matters most near convergence, so it is annealed\nin rather than applied at full strength from the start — the\npaper's argument is that early training is non-stationary anyway."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Sequence replay that samples in proportion to a priority.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "capacity",
+          "annotation": "int",
+          "description": "As `SequenceReplay`, in transitions.",
+          "default": "1_000_000"
+        },
+        {
+          "name": "alpha",
+          "annotation": "float",
+          "description": "How much prioritization is used.  `0` is uniform.",
+          "default": "0.6"
+        },
+        {
+          "name": "beta",
+          "annotation": "float",
+          "description": "Starting exponent for the importance-sampling correction.  The\npaper anneals it to `1` over training; see `anneal_beta`.",
+          "default": "0.4"
+        },
+        {
+          "name": "epsilon",
+          "annotation": "float",
+          "description": "Added to every priority so that a chunk whose error reached zero\ncan still be drawn again.",
+          "default": "1e-6"
+        }
+      ],
+      "returns": null,
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "If `alpha` or `beta` is negative, or `epsilon` is not\npositive."
+        }
+      ],
+      "examples": [
+        ">>> from lucid.utils.rollout import PrioritizedSequenceReplay\n>>> buffer = PrioritizedSequenceReplay(capacity=1000)\n>>> buffer.alpha, buffer.beta\n(0.6, 0.4)"
+      ],
+      "notes": [
+        "Reference: Schaul, Quan, Antonoglou, and Silver, *\"Prioritized\nExperience Replay\"*, ICLR, 2016 ([arXiv:1511.05952](https://arxiv.org/abs/1511.05952)).\n\n\n\n$$\nP(i) = \\frac{p_i^\\alpha}{\\sum_k p_k^\\alpha},\n\\qquad\nw_i = \\frac{(N \\cdot P(i))^{-\\beta}}{\\max_j w_j},\n$$\n\nwith proportional priorities $p_i = |\\delta_i| + \\epsilon$.\n\nPrioritizes **episodes**, not individual transitions, because that is\nthe unit this buffer stores and the unit a sequence model trains on.\nA chunk's priority is its episode's.\n\nTwo details from the paper are easy to leave out and both matter.  A\nnewly stored episode is given the **largest priority seen so far**,\nso that everything is replayed at least once before prioritization\ncan bury it — Algorithm 1, line 6.  And the weights are normalised by\ntheir maximum \"so that they only scale the update downwards\", which\nkeeps the correction from inflating any gradient."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "SequenceReplay",
       "path": "lucid.utils.rollout._replay.SequenceReplay",
       "kind": "class",
@@ -572,7 +841,7 @@
       "bases": [],
       "labels": [],
       "signature": "SequenceReplay(capacity: int = 1000000)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_replay.py#L17",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L25",
       "subcategory": "replay",
       "methods": [
         {
@@ -581,9 +850,9 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(capacity: int = 1000000)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_replay.py#L61",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L69",
           "subcategory": "replay",
-          "summary": null,
+          "summary": "Initialise an empty tree. See the class docstring.",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -603,7 +872,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_replay.py#L68",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L76",
           "subcategory": "replay",
           "summary": "Number of stored episodes.",
           "extended": null,
@@ -627,7 +896,7 @@
             "property"
           ],
           "signature": "steps: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_replay.py#L73",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L81",
           "summary": "Total transitions held.",
           "extended": null,
           "parameters": [],
@@ -648,7 +917,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add(episode: Episode)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_replay.py#L77",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L85",
           "subcategory": "replay",
           "summary": "Store an episode, evicting the oldest until the budget is met.",
           "extended": null,
@@ -682,7 +951,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sample(batch_size: int, length: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/81243efc2/lucid/utils/rollout/_replay.py#L109",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L117",
           "subcategory": "replay",
           "summary": "Draw contiguous chunks.",
           "extended": null,
@@ -742,6 +1011,188 @@
           "description": "Stored trajectories, oldest first."
         }
       ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "SumTree",
+      "path": "lucid.utils.rollout._replay.SumTree",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "SumTree(capacity: int)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L194",
+      "subcategory": "replay",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.utils.rollout._replay.SumTree.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(capacity: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L235",
+          "subcategory": "replay",
+          "summary": "Initialise an empty tree. See the class docstring.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "total",
+          "path": "lucid.utils.rollout._replay.SumTree.total",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "total: float",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L243",
+          "summary": "Sum of every leaf — the root.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "float",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "set",
+          "path": "lucid.utils.rollout._replay.SumTree.set",
+          "kind": "function",
+          "labels": [],
+          "signature": "set(index: int, priority: float)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L247",
+          "subcategory": "replay",
+          "summary": "Write one leaf and repair the sums above it.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "index",
+              "annotation": "int",
+              "description": "Leaf position, in `[0, capacity)`.",
+              "default": null
+            },
+            {
+              "name": "priority",
+              "annotation": "float",
+              "description": "Non-negative.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If the index is out of range or the priority is negative."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "get",
+          "path": "lucid.utils.rollout._replay.SumTree.get",
+          "kind": "function",
+          "labels": [],
+          "signature": "get(index: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L272",
+          "subcategory": "replay",
+          "summary": "Read one leaf.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "index",
+              "annotation": "int",
+              "description": "Leaf position.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "float",
+            "description": "Its priority."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "find",
+          "path": "lucid.utils.rollout._replay.SumTree.find",
+          "kind": "function",
+          "labels": [],
+          "signature": "find(prefix: float)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9f635dee3/lucid/utils/rollout/_replay.py#L287",
+          "subcategory": "replay",
+          "summary": "The leaf whose cumulative range contains `prefix`.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "prefix",
+              "annotation": "float",
+              "description": "In `[0, total)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "int",
+            "description": "Leaf index.  Descends the tree, so the cost is the depth."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "A flat segment tree over priorities: sample in $O(\\log n)$.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "capacity",
+          "annotation": "int",
+          "description": "Number of leaves.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "If `capacity` is not positive."
+        }
+      ],
+      "examples": [
+        ">>> from lucid.utils.rollout import SumTree\n>>> tree = SumTree(4)\n>>> tree.set(0, 1.0)\n>>> tree.set(3, 3.0)\n>>> tree.total\n4.0\n>>> tree.find(0.5), tree.find(2.0)\n(0, 3)"
+      ],
+      "notes": [
+        "Schaul et al. describe exactly this: \"a 'sum-tree' data structure,\nwhere every node is the sum of its children, with the priorities as\nthe leaf nodes, which can be efficiently updated and sampled from.\"\n\nIt is here rather than expressed with tensors because the obvious\ntensor formulation is a cumulative sum plus a search, and that is\n$O(n)$ in the buffer rather than $O(\\log n)$ in it.\nMeasured on this machine at a million leaves: the cumulative-sum form\ntakes **196 ms** to draw a batch of 32, the tree **0.20 ms** — a\nfactor of 973, against a training step of about 120 ms. The bottleneck\nis the algorithm, not the language, which is also why this is Python\nand not a new engine op: having fixed the complexity, a C++ tree would\nsave a further 0.2% of a step."
+      ],
+      "attributes": [],
       "warns": [],
       "see_also": []
     }
