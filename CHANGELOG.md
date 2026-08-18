@@ -110,6 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add Score-SDE, and give the ODE sampler to lucid.diffeq
 
+- exact likelihood, conditional sampling, and the gates it skipped
+
 ### Fixed
 
 - stop grad() from writing .grad on leaves outside inputs

@@ -1054,3 +1054,84 @@ def test_dreamer_discrete_policy_on_device(device):
     assert grads
     for g in grads:
         assert str(g.device) == f"device('{device}')"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Score-SDE
+#
+# Three samplers, and the one worth the most attention is the ODE — it
+# leaves this family entirely and runs inside ``lucid.diffeq``, so a
+# device that is lost there is lost silently.  The likelihood adds a
+# backward pass per solver step, which is the other place residency can
+# slip.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SCORE_SDE_SMALL = {
+    "sample_size": 8,
+    "base_channels": 8,
+    "channel_mult": (1,),
+    "num_res_blocks": 1,
+    "resnet_groups": 4,
+    "attention_resolutions": (),
+    "num_scales": 20,
+}
+
+
+def test_score_sde_score_matches_across_devices():
+    """The network and the sigma it is divided by, compared elementwise."""
+    cpu, metal = _paired("score_sde_vp", **_SCORE_SDE_SMALL)
+    x = lucid.rand((2, 3, 8, 8))
+    t = lucid.ones((2,)) * 0.5
+    _agree(
+        cpu.score(x, t),
+        metal.score(x.to("metal"), t.to("metal")),
+        1e-4,
+        "score_sde score",
+    )
+
+
+@pytest.mark.parametrize("kind", ["vp", "ve", "subvp"])
+def test_score_sde_marginal_prob_matches_across_devices(kind):
+    """The perturbation kernel is pure arithmetic — it must agree exactly."""
+    cpu, metal = _paired(f"score_sde_{kind}", **_SCORE_SDE_SMALL)
+    x = lucid.rand((4, 3, 8, 8))
+    t = lucid.ones((4,)) * 0.3
+    mean_c, std_c = cpu.sde.marginal_prob(x, t)
+    mean_m, std_m = metal.sde.marginal_prob(x.to("metal"), t.to("metal"))
+    _agree(mean_c, mean_m, 1e-5, f"score_sde {kind} kernel mean")
+    _agree(std_c, std_m, 1e-5, f"score_sde {kind} kernel std")
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("method", ["euler", "pc", "ode"])
+def test_score_sde_samples_on_device(device, method):
+    """Every sampler, including the one that runs inside lucid.diffeq."""
+    lucid.manual_seed(0)
+    model = M.create_model("score_sde_vp_gen", **_SCORE_SDE_SMALL).to(device).eval()
+    samples = model.generate(2, method=method, steps=4, device=device).samples
+    assert str(samples.device) == f"device('{device}')"
+    assert not np.isnan(samples.to("cpu").numpy()).any()
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_score_sde_likelihood_on_device(device):
+    """A backward pass per solver step — where residency most easily slips."""
+    lucid.manual_seed(0)
+    model = M.create_model("score_sde_vp_gen", **_SCORE_SDE_SMALL).to(device).eval()
+    out = model.log_likelihood(lucid.rand((2, 3, 8, 8), device=device), steps=3)
+    assert str(out.device) == f"device('{device}')"
+    assert not np.isnan(out.to("cpu").numpy()).any()
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_score_sde_trains_one_step_on_device(device):
+    lucid.manual_seed(0)
+    model = M.create_model("score_sde_vp_gen", **_SCORE_SDE_SMALL).to(device)
+    model.train()
+    out = model(lucid.rand((2, 3, 8, 8), device=device))
+    assert str(out.loss.device) == f"device('{device}')"
+    out.loss.backward()
+    grads = [p.grad for p in model.parameters() if p.grad is not None]
+    assert grads
+    for g in grads:
+        assert str(g.device) == f"device('{device}')"

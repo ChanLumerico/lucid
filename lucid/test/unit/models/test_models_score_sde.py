@@ -88,7 +88,9 @@ class TestSDEs:
             g = sde.diffusion(t).reshape(count, 1)
             x = x + sde.drift(x, t) * step + g * (step**0.5) * lucid.randn((count, 1))
             t = t + step
-        mean, std = sde.marginal_prob(lucid.ones((count, 1)), lucid.ones((count,)) * end)
+        mean, std = sde.marginal_prob(
+            lucid.ones((count, 1)), lucid.ones((count,)) * end
+        )
         assert abs(float(x.mean().item()) - float(mean.mean().item())) < 0.05
         assert abs(float(x.std().item()) / float(std.mean().item()) - 1.0) < 0.06
 
@@ -167,14 +169,10 @@ class TestSamplersAgainstAnAnalyticScore:
             x = flat.reshape(self.COUNT, 1)
             t = lucid.ones((self.COUNT,)) * float(moment.item())
             g = sde.diffusion(t).reshape(self.COUNT, 1)
-            return (
-                sde.drift(x, t) - 0.5 * g**2 * self._score(sde, x, t)
-            ).reshape(-1)
+            return (sde.drift(x, t) - 0.5 * g**2 * self._score(sde, x, t)).reshape(-1)
 
         start = sde.prior_sampling((self.COUNT, 1), "cpu").reshape(-1)
-        path = odeint(
-            rhs, start, lucid.linspace(1.0, sde.t_min, 150), method="rk4"
-        )
+        path = odeint(rhs, start, lucid.linspace(1.0, sde.t_min, 150), method="rk4")
         x = path[-1]
         assert abs(float(x.mean().item()) - self.MU) < 0.12
         assert abs(float(x.std().item()) - self.S0) < 0.08
@@ -195,8 +193,10 @@ class TestSamplersAgainstAnAnalyticScore:
         for i in range(steps):
             t = lucid.ones((self.COUNT,)) * float(times[i].item())
             g = sde.diffusion(t).reshape(self.COUNT, 1)
-            x = x + sde.drift(x, t) * (-step) + g * (step**0.5) * lucid.randn(
-                (self.COUNT, 1)
+            x = (
+                x
+                + sde.drift(x, t) * (-step)
+                + g * (step**0.5) * lucid.randn((self.COUNT, 1))
             )
         assert abs(float(x.mean().item()) - self.MU) > 0.5
 
@@ -282,3 +282,101 @@ class TestRegistry:
     def test_pretrained_weights_are_refused(self) -> None:
         with pytest.raises(NotImplementedError):
             score_sde_vp(pretrained=True)
+
+
+class TestExactLikelihood:
+    r"""Appendix D.2 — what the deterministic sampler buys.
+
+    The probability-flow ODE is a neural ODE, so the instantaneous change
+    of variables gives an *exact* density rather than a bound. Both the
+    integral and the Skilling-Hutchinson trace estimate can be subtly
+    wrong and still return a plausible number, so the test is convergence
+    to a case where the answer is known.
+    """
+
+    @staticmethod
+    def _tiny() -> "object":
+        return create_model("score_sde_vp_gen", **_TINY).eval()
+
+    def _analytic(self, model: object, x: lucid.Tensor) -> float:
+        """With a zero score the flow is a linear contraction, so the
+        likelihood is available in closed form."""
+        import math
+
+        sde = model.sde  # type: ignore[attr-defined]
+        dims = 3 * 8 * 8
+        integral = 0.5 * (sde.beta_max - sde.beta_min) + sde.beta_min
+        end = x * math.exp(-0.5 * integral)
+        prior = -0.5 * (
+            dims * math.log(2.0 * math.pi) + float((end.reshape(1, -1) ** 2).sum().item())
+        )
+        return prior - 0.5 * integral * dims
+
+    def test_it_converges_to_the_analytic_value(self) -> None:
+        """A zero-initialised head makes the score exactly zero, which is
+        the one case where the answer can be written down."""
+        lucid.manual_seed(0)
+        model = self._tiny()
+        x = lucid.randn((1, 3, 8, 8))
+        assert float(model.score_sde.score(x, lucid.ones((1,)) * 0.5).abs().max().item()) == 0.0
+        target = self._analytic(model, x)
+        coarse = abs(float(model.log_likelihood(x, steps=16).item()) - target)
+        fine = abs(float(model.log_likelihood(x, steps=128).item()) - target)
+        assert fine < coarse / 4.0
+
+    def test_the_error_is_first_order_in_the_step(self) -> None:
+        """Guards the test above: a tolerance alone would pass on a
+        systematically wrong integral that happened to land close."""
+        lucid.manual_seed(0)
+        model = self._tiny()
+        x = lucid.randn((1, 3, 8, 8))
+        target = self._analytic(model, x)
+        errors = [
+            abs(float(model.log_likelihood(x, steps=n).item()) - target)
+            for n in (32, 128)
+        ]
+        assert 3.0 < errors[0] / errors[1] < 5.0
+
+    def test_it_returns_one_number_per_sample(self) -> None:
+        lucid.manual_seed(0)
+        assert self._tiny().log_likelihood(lucid.randn((3, 3, 8, 8)), steps=3).shape == (3,)
+
+    def test_the_prior_width_follows_the_sde(self) -> None:
+        """VE's prior is as wide as sigma_max; assuming unit variance
+        would silently bias every VE likelihood."""
+        assert make_sde("ve").prior_variance == 50.0**2
+        assert make_sde("vp").prior_variance == 1.0
+
+
+class TestControllableGeneration:
+    """The paper's conditional sampling, which needs no retraining.
+
+    ``grad log p(x | y) = grad log p(x) + grad log p(y | x)``, so
+    conditioning is one added term — "all achievable using a single
+    unconditional score-based model without re-training".
+    """
+
+    @pytest.mark.parametrize("method", ["euler", "pc", "ode"])
+    def test_guidance_changes_the_samples(self, method: str) -> None:
+        lucid.manual_seed(0)
+        model = create_model("score_sde_vp_gen", **_TINY).eval()
+
+        def pull_to_one(x: lucid.Tensor, t: lucid.Tensor) -> lucid.Tensor:
+            return (lucid.ones_like(x) - x) * 5.0
+
+        lucid.manual_seed(1)
+        plain = model.generate(1, method=method, steps=5).samples
+        lucid.manual_seed(1)
+        guided = model.generate(1, method=method, steps=5, guidance=pull_to_one).samples
+        assert float((guided - plain).abs().max().item()) > 1e-4
+
+    def test_guidance_pulls_in_the_direction_it_is_given(self) -> None:
+        """Guards the test above — 'different' could be noise."""
+        lucid.manual_seed(0)
+        model = create_model("score_sde_vp_gen", **_TINY).eval()
+        toward = lambda target: (lambda x, t: (lucid.ones_like(x) * target - x) * 20.0)
+        lucid.manual_seed(2)
+        high = model.generate(1, method="ode", steps=8, guidance=toward(3.0)).samples
+        lucid.manual_seed(2)
+        low = model.generate(1, method="ode", steps=8, guidance=toward(-3.0)).samples
+        assert float(high.mean().item()) > float(low.mean().item())

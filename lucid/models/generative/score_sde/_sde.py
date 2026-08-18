@@ -80,6 +80,17 @@ class SDE(ABC):
     def t_min(self) -> float:
         """The earliest time the SDE is defined at."""
 
+    @property
+    @abstractmethod
+    def prior_variance(self) -> float:
+        r"""Variance of the distribution :meth:`prior_sampling` draws from.
+
+        Needed by the exact-likelihood computation, which has to evaluate
+        :math:`\log p_T` rather than merely sample it — and VE's prior is
+        as wide as ``sigma_max`` while VP's is unit, so assuming either
+        would be wrong for the other.
+        """
+
 
 class VESDE(SDE):
     r"""Variance Exploding — the continuous limit of NCSN.
@@ -131,6 +142,12 @@ class VESDE(SDE):
     def sigma(self, t: Tensor) -> Tensor:
         r""":math:`\sigma(t) = \sigma_{\min}(\sigma_{\max}/\sigma_{\min})^t`."""
         return self.sigma_min * (self._ratio**t)
+
+    @property
+    @override
+    def prior_variance(self) -> float:
+        r""":math:`\sigma_{\max}^2`."""
+        return self.sigma_max**2
 
     @override
     def drift(self, x: Tensor, t: Tensor) -> Tensor:
@@ -192,6 +209,12 @@ class VPSDE(SDE):
     def t_min(self) -> float:
         """The paper's sampling epsilon, chosen so the variance matches DDPM's."""
         return 1e-3
+
+    @property
+    @override
+    def prior_variance(self) -> float:
+        """One — the process is variance preserving."""
+        return 1.0
 
     def beta(self, t: Tensor) -> Tensor:
         r""":math:`\beta(t) = \bar\beta_{\min} + t(\bar\beta_{\max} - \bar\beta_{\min})`."""

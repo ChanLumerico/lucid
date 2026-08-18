@@ -12,6 +12,9 @@ tested adaptive solver suite, so it is handed to
 :func:`lucid.diffeq.odeint` rather than stepped by hand.
 """
 
+import math
+
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import ClassVar, cast, override
 
@@ -26,6 +29,8 @@ from lucid.models.generative.score_sde._config import ScoreSDEConfig
 from lucid.models.generative.score_sde._sde import SDE, VESDE, make_sde
 
 __all__ = ["ScoreSDEModel", "ScoreSDEForImageGeneration", "ScoreSDEOutput"]
+
+_Guidance = Callable[[Tensor, Tensor], Tensor]
 
 
 @dataclass(slots=True)
@@ -304,18 +309,45 @@ class ScoreSDEForImageGeneration(PretrainedModel):
         """Descending times from 1 to the SDE's floor."""
         return lucid.linspace(1.0, self.sde.t_min, steps, device=device)
 
-    def _predictor(self, x: Tensor, t: Tensor, dt: float) -> Tensor:
+    def _guided_score(
+        self, x: Tensor, t: Tensor, guidance: _Guidance | None
+    ) -> Tensor:
+        r"""The score, plus a conditioning term if one was supplied.
+
+        Notes
+        -----
+        The paper's *controllable generation*: "the conditional
+        reverse-time SDE can be efficiently estimated from unconditional
+        scores", because
+
+        .. math::
+
+            \nabla_x \log p_t(x \mid y)
+                = \nabla_x \log p_t(x) + \nabla_x \log p_t(y \mid x).
+
+        So class-conditioning, inpainting and colourisation are the same
+        sampler with a second term added — "all achievable using a single
+        unconditional score-based model without re-training".
+        """
+        score = self.score_sde.score(x, t)
+        return score if guidance is None else score + guidance(x, t)
+
+    def _predictor(
+        self, x: Tensor, t: Tensor, dt: float, guidance: _Guidance | None = None
+    ) -> Tensor:
         """One reverse-time Euler-Maruyama step — equation 6."""
         count = int(x.shape[0])
         g = self.sde.diffusion(t).reshape(count, *([1] * (x.ndim - 1)))
-        drift = self.sde.drift(x, t) - g**2 * self.score_sde.score(x, t)
+        drift = self.sde.drift(x, t) - g**2 * self._guided_score(x, t, guidance)
         noise = lucid.randn(tuple(int(v) for v in x.shape), device=x.device)
         return cast(Tensor, x + drift * (-dt) + g * (dt**0.5) * noise)
 
-    def _corrector(self, x: Tensor, t: Tensor) -> Tensor:
+    def _corrector(
+        self, x: Tensor, t: Tensor, guidance: _Guidance | None = None
+    ) -> Tensor:
         """Langevin steps at fixed ``t`` — the 'corrector' half."""
         for _ in range(self._corrector_steps):
-            score = self.score_sde.score(x, t)
+            score = self._guided_score(x, t, guidance)
             noise = lucid.randn(tuple(int(v) for v in x.shape), device=x.device)
             count = int(x.shape[0])
             grad_norm = float(
@@ -337,8 +369,9 @@ class ScoreSDEForImageGeneration(PretrainedModel):
         method: str = "pc",
         steps: int | None = None,
         device: str | None = None,
+        guidance: _Guidance | None = None,
     ) -> GenerationOutput:
-        """Draw samples by integrating backwards from the prior.
+        r"""Draw samples by integrating backwards from the prior.
 
         Parameters
         ----------
@@ -354,6 +387,11 @@ class ScoreSDEForImageGeneration(PretrainedModel):
             is the framework's point.
         device : str or None, optional
             Where to sample; ``None`` follows the parameters.
+        guidance : callable or None, optional
+            ``(x, t) -> Tensor``, returning
+            :math:`\nabla_x \\log p_t(y \\mid x)`.  Added to the score, which
+            is all conditional sampling is — the paper's controllable
+            generation needs no retraining and no conditional model.
 
         Returns
         -------
@@ -376,18 +414,26 @@ class ScoreSDEForImageGeneration(PretrainedModel):
 
         with lucid.no_grad():
             if method == "ode":
-                return GenerationOutput(samples=self._solve_ode(shape, resolved, count))
+                return GenerationOutput(
+                    samples=self._solve_ode(shape, resolved, count, guidance)
+                )
             x = self.sde.prior_sampling(shape, resolved)
             times = self._timesteps(count, resolved)
             dt = (1.0 - self.sde.t_min) / max(count - 1, 1)
             for i in range(count):
                 t = lucid.ones((n_samples,), device=resolved) * float(times[i].item())
                 if method == "pc":
-                    x = self._corrector(x, t)
-                x = self._predictor(x, t, dt)
+                    x = self._corrector(x, t, guidance)
+                x = self._predictor(x, t, dt, guidance)
         return GenerationOutput(samples=x)
 
-    def _solve_ode(self, shape: tuple[int, ...], device: str, steps: int) -> Tensor:
+    def _solve_ode(
+        self,
+        shape: tuple[int, ...],
+        device: str,
+        steps: int,
+        guidance: _Guidance | None = None,
+    ) -> Tensor:
         r"""The probability-flow ODE, equation 13, through ``lucid.diffeq``.
 
         Notes
@@ -412,7 +458,9 @@ class ScoreSDEForImageGeneration(PretrainedModel):
             x = flat.reshape(*shape)
             t = lucid.ones((count,), device=device) * float(t_scalar.item())
             g = self.sde.diffusion(t).reshape(count, *([1] * (x.ndim - 1)))
-            drift = self.sde.drift(x, t) - 0.5 * g**2 * self.score_sde.score(x, t)
+            drift = self.sde.drift(x, t) - 0.5 * g**2 * self._guided_score(
+                x, t, guidance
+            )
             return drift.reshape(-1)
 
         start = self.sde.prior_sampling(shape, device).reshape(-1)
@@ -423,3 +471,116 @@ class ScoreSDEForImageGeneration(PretrainedModel):
             method="rk4",
         )
         return cast(Tensor, path[-1]).reshape(*shape)
+
+    def log_likelihood(
+        self, x: Tensor, *, steps: int = 100, eps: Tensor | None = None
+    ) -> Tensor:
+        r"""Exact log-likelihood of the data, in nats.
+
+        Parameters
+        ----------
+        x : Tensor
+            Data, ``(N, C, H, W)``.
+        steps : int, default=100
+            Solver steps for the forward integration.
+        eps : Tensor or None, optional
+            The probe vector of the trace estimator.  ``None`` draws
+            Rademacher noise.  Exposed so a test can hold it fixed, since
+            the estimate is stochastic.
+
+        Returns
+        -------
+        Tensor
+            ``(N,)`` log-densities.
+
+        Notes
+        -----
+        Song et al. (2021), Appendix D.2.  Because the probability-flow
+        ODE is a neural ODE, the instantaneous change of variables gives
+
+        .. math::
+
+            \log p_0(x(0)) = \log p_T(x(T))
+                + \int_0^T \nabla \cdot \tilde{f}_\theta(x(t), t)\, dt,
+
+        equation 39, where :math:`x(t)` solves that ODE.  The divergence
+        is expensive, so it is estimated as the paper does — equation 40,
+        the Skilling-Hutchinson trace estimator
+
+        .. math::
+
+            \nabla \cdot \tilde{f}_\theta(x, t)
+                = \mathbb{E}_{p(\epsilon)}
+                  \big[\epsilon^\top \nabla \tilde{f}_\theta(x, t)\,
+                  \epsilon\big],
+
+        with :math:`\epsilon` of zero mean and identity covariance.  The
+        vector-Jacobian product is one backward pass, so the whole
+        estimate costs one extra gradient per solver step.
+
+        This is what the deterministic sampler buys that a stochastic one
+        cannot: an exact density, not a bound.  It is also **stochastic in
+        the estimator** — two calls differ, and the variance falls with
+        the number of probes, not with ``steps``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import score_sde_vp_gen
+        >>> model = score_sde_vp_gen(sample_size=8, base_channels=8,
+        ...     channel_mult=(1,), num_res_blocks=1, resnet_groups=4,
+        ...     attention_resolutions=()).eval()
+        >>> model.log_likelihood(lucid.randn((1, 3, 8, 8)), steps=3).shape
+        (1,)
+        """
+        count = int(x.shape[0])
+        shape = tuple(int(v) for v in x.shape)
+        probe = eps
+        if probe is None:
+            # Rademacher: mean zero, identity covariance, as equation 40 asks.
+            draw = lucid.rand(shape, device=x.device)
+            probe = (draw > 0.5).to(x.dtype) * 2.0 - 1.0
+
+        divergence = lucid.zeros((count,), device=x.device)
+        current = x
+        times = lucid.linspace(self.sde.t_min, 1.0, steps + 1, device=x.device)
+
+        for i in range(steps):
+            start = float(times[i].item())
+            step = float(times[i + 1].item()) - start
+            t = lucid.ones((count,), device=x.device) * start
+            state = current.detach()
+            state.requires_grad = True
+            g = self.sde.diffusion(t).reshape(count, *([1] * (x.ndim - 1)))
+            drift = self.sde.drift(state, t) - 0.5 * g**2 * self.score_sde.score(
+                state, t
+            )
+            # eps^T (d drift / d x) eps, by one vector-Jacobian product.
+            (drift * probe).sum().backward()
+            assert state.grad is not None
+            trace = (state.grad * probe).reshape(count, -1).sum(dim=-1)
+            divergence = divergence + trace.detach() * step
+            current = (state + drift * step).detach()
+
+        prior = self._prior_log_prob(current)
+        return prior + divergence
+
+    def _prior_log_prob(self, x: Tensor) -> Tensor:
+        r"""log :math:`p_T(x(T))`, the density the ODE integrates up to.
+
+        Notes
+        -----
+        A zero-mean Gaussian in both cases; only the width differs, which
+        is exactly the VE/VP distinction and the reason this is asked of
+        the SDE rather than assumed by the caller.
+        """
+        count = int(x.shape[0])
+        dims = 1
+        for size in tuple(int(v) for v in x.shape)[1:]:
+            dims *= size
+        variance = self.sde.prior_variance
+        flat = x.reshape(count, -1)
+        return -0.5 * (
+            dims * math.log(2.0 * math.pi * variance)
+            + (flat**2).sum(dim=-1) / variance
+        )

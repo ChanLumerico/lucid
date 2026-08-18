@@ -1,4 +1,4 @@
-"""Where every world-model default came from, checked exhaustively.
+"""Where every generative-family default came from, checked exhaustively.
 
 This file exists because of how the defects in this family were actually
 found. Seven wrong defaults were fixed across PlaNet, Dreamer, DreamerV2
@@ -46,6 +46,7 @@ from lucid.models.generative.dreamer import DreamerConfig
 from lucid.models.generative.dreamer_v2 import DreamerV2Config
 from lucid.models.generative.dreamer_v3 import DreamerV3Config
 from lucid.models.generative.planet import PlaNetConfig
+from lucid.models.generative.score_sde import ScoreSDEConfig
 
 # A Lucid-wide convention shared by every generative config; recorded once
 # and reused, because repeating it four times would invite it drifting.
@@ -397,11 +398,84 @@ DREAMER_V3: dict[str, tuple[Any, str]] = {
 }
 
 
+
+SCORE_SDE: dict[str, tuple[Any, str]] = {
+    "sample_size": (
+        32,
+        "code: 32x32, following the DDPM backbone this family reuses and "
+        "the CIFAR-10 setting the paper reports its Table 2 likelihoods on",
+    ),
+    "in_channels": (3, _RGB),
+    "out_channels": (3, _RGB),
+    "act_fn": (
+        "silu",
+        "lucid: the generative domain's default activation; the paper "
+        "specifies the backbone, which this family does not use",
+    ),
+    "sde_type": (
+        "vp",
+        'paper: Table 3 reports rows per process; VP is DDPM\'s continuous '
+        "limit and the natural default for a DDPM backbone",
+    ),
+    "sigma_min": (
+        0.01,
+        'paper: Appendix C, "in SMLD, the noise scales is typically a '
+        "geometric sequence where sigma_min is fixed to 0.01\"",
+    ),
+    "sigma_max": (
+        50.0,
+        "paper: Appendix C — chosen per dataset by Song & Ermon (2020)'s "
+        "Technique 1; 50 is the CIFAR-10 value",
+    ),
+    "beta_min": (
+        0.1,
+        'paper: Appendix C, "we let beta_min = 0.1 and beta_max = 20 to '
+        'match the settings in Ho et al. (2020)"',
+    ),
+    "beta_max": (20.0, "paper: Appendix C, the same sentence as beta_min"),
+    "num_scales": (
+        1000,
+        'paper: Appendix C, "the SMLD and DDPM models both use N = 1000 '
+        'noise scales".  A sampler property here, not a trained-in one',
+    ),
+    "snr": (
+        0.16,
+        "code: the reference configs' Predictor-Corrector signal-to-noise "
+        "ratio for CIFAR-10",
+    ),
+    "corrector_steps": (
+        1,
+        "code: configs.py n_steps_each = 1 — one Langevin step per "
+        "predictor step, the reference default",
+    ),
+    "base_channels": (
+        128,
+        "code: DDPMConfig.base_channels 128 — the backbone this family reuses",
+    ),
+    "channel_mult": (
+        (1, 2, 2, 2),
+        "code: DDPMConfig.channel_mult, the CIFAR-10 multipliers",
+    ),
+    "num_res_blocks": (
+        2,
+        "paper: DDPM Appendix B, two residual blocks per resolution",
+    ),
+    "attention_resolutions": (
+        (16,),
+        "code: DDPMConfig.attention_resolutions — attention at 16x16",
+    ),
+    "num_heads": (4, "code: DDPMConfig.num_heads 4"),
+    "dropout": (0.1, "code: DDPMConfig.dropout 0.1, the CIFAR-10 value"),
+    "resnet_groups": (32, "code: DDPMConfig.resnet_groups 32"),
+}
+
+
 _FAMILIES = [
     ("planet", PlaNetConfig, PLANET),
     ("dreamer", DreamerConfig, DREAMER),
     ("dreamer_v2", DreamerV2Config, DREAMER_V2),
     ("dreamer_v3", DreamerV3Config, DREAMER_V3),
+    ("score_sde", ScoreSDEConfig, SCORE_SDE),
 ]
 _KINDS = ("paper:", "code:", "lucid:")
 _LOCATORS = (
