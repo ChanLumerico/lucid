@@ -460,3 +460,140 @@ class TestTokenizer:
         """Guards the test above — ``\\d+`` would read identically here
         until a number longer than one digit appeared."""
         assert _PATTERN.findall("2026") == ["2", "0", "2", "6"]
+
+
+class TestItRunsOnBothDevices:
+    """CLIP had never been run on Metal, and it did not work.
+
+    ``lucid.arange`` with no device builds its index tensor on the CPU,
+    and gathering the ``[EOS]`` row with it fails only once the index
+    meets accelerator activations — several frames from the line at
+    fault. The same shape of bug had already been found in the rollout
+    layer, which is why it is now tested at both ends rather than
+    assumed to travel with the parameters.
+    """
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    def test_a_forward_and_backward_survive(self, device: str) -> None:
+        lucid.manual_seed(0)
+        model = CLIP(_tiny())
+        model = model.metal() if device == "metal" else model
+        images = lucid.randn((3, 3, 32, 32), device=device)
+        captions = _captions([1, 2, 3]).to(device)
+
+        out = model(images, captions, return_loss=True)
+        assert str(out.image_embeds.device) == f"device('{device}')"
+        assert str(out.logits_per_image.device) == f"device('{device}')"
+        assert out.loss is not None
+        out.loss.backward()
+        total = sum(
+            float(p.grad.abs().sum().item())
+            for p in model.parameters()
+            if p.grad is not None
+        )
+        assert total > 0.0
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    def test_the_zero_shot_wrapper_too(self, device: str) -> None:
+        lucid.manual_seed(0)
+        model = CLIPForZeroShotImageClassification(_tiny())
+        model = model.metal() if device == "metal" else model
+        out = model(
+            lucid.randn((2, 3, 32, 32), device=device),
+            _captions([1, 2, 3, 4]).to(device),
+        )
+        assert out.logits.shape == (2, 4)
+        assert str(out.logits.device) == f"device('{device}')"
+
+
+@pytest.mark.slow
+class TestItLearnsToMatch:
+    """The consumer. Nothing else here asks whether CLIP *works*.
+
+    Shapes, normalisation, the sentinel and the loss are each checked in
+    isolation above, and a model that got every one of them right could
+    still fail to align anything — the objective is only correct if
+    optimising it moves matched pairs to the top of their row.
+
+    So: a fixed synthetic pairing with nothing to generalise, trained to
+    convergence. Rank-1 starts at chance and has to reach the diagonal.
+    """
+
+    @staticmethod
+    def _fixture(device: str) -> tuple:
+        pairs = 8
+        config = CLIPConfig(
+            embed_dim=32,
+            image_size=32,
+            patch_size=8,
+            vision_layers=2,
+            vision_width=64,
+            vision_heads=4,
+            context_length=8,
+            vocab_size=32,
+            text_width=64,
+            text_heads=4,
+            text_layers=2,
+        )
+        model = CLIP(config)
+        model = model.metal() if device == "metal" else model
+        images = lucid.stack(
+            [lucid.full((3, 32, 32), (i + 1) / pairs) for i in range(pairs)], dim=0
+        )
+        captions = lucid.tensor(
+            [[1, 2 + i, 31, 0, 0, 0, 0, 0] for i in range(pairs)],
+            dtype=lucid.int64,
+        )
+        if device == "metal":
+            images, captions = images.metal(), captions.metal()
+        return model, images, captions, pairs
+
+    @staticmethod
+    def _rank1(model: CLIP, images: lucid.Tensor, captions: lucid.Tensor, n: int) -> float:
+        with lucid.no_grad():
+            predicted = model(images, captions).logits_per_image.argmax(dim=-1)
+            target = lucid.arange(
+                n, dtype=lucid.int64, device=predicted.device.type
+            )
+            return float((predicted == target).to(lucid.float32).mean().item())
+
+    def test_matched_pairs_reach_the_top_of_their_row(self) -> None:
+        import lucid.optim as optim
+
+        lucid.manual_seed(0)
+        model, images, captions, pairs = self._fixture("cpu")
+        opt = optim.Adam(model.parameters(), lr=3e-4)
+
+        before = self._rank1(model, images, captions, pairs)
+        for _ in range(250):
+            out = model(images, captions, return_loss=True)
+            model.zero_grad()
+            assert out.loss is not None
+            out.loss.backward()
+            opt.step()
+        after = self._rank1(model, images, captions, pairs)
+
+        assert before <= 0.5, f"started already solved ({before:.3f})"
+        assert after == 1.0, f"did not align: rank-1 {before:.3f} -> {after:.3f}"
+
+    def test_the_temperature_moves_while_it_learns(self) -> None:
+        """Guards the test above.
+
+        A model whose towers memorised the pairing without the scale ever
+        adapting would still reach rank-1; the paper's claim is that the
+        temperature is learned rather than annealed, and only this shows
+        it is being optimised at all.
+        """
+        import lucid.optim as optim
+
+        lucid.manual_seed(0)
+        model, images, captions, _ = self._fixture("cpu")
+        opt = optim.Adam(model.parameters(), lr=3e-4)
+        start = float(model.scale.item())
+        for _ in range(100):
+            out = model(images, captions, return_loss=True)
+            model.zero_grad()
+            assert out.loss is not None
+            out.loss.backward()
+            opt.step()
+        assert abs(float(model.scale.item()) - start) > 0.05

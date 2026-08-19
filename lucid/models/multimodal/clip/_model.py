@@ -324,7 +324,13 @@ class _TextTransformer(nn.Module):
         x = cast(Tensor, self.ln_final(x))
 
         eos = input_ids.argmax(dim=-1)
-        pooled = x[lucid.arange(int(x.shape[0]), dtype=lucid.int64), eos]
+        # ``.type`` — a bare ``device`` object renders as "device('metal')",
+        # which the creation factories do not parse, and an index tensor
+        # left on the CPU only fails once it meets the activations.
+        rows = lucid.arange(
+            int(x.shape[0]), dtype=lucid.int64, device=x.device.type
+        )
+        pooled = x[rows, eos]
         return pooled @ cast(Tensor, self.text_projection)
 
 
@@ -711,7 +717,9 @@ def _contrastive_loss(logits_per_image: Tensor, logits_per_text: Tensor) -> Tens
             f"the contrastive loss pairs a batch with itself, so the logits "
             f"must be square; got {tuple(logits_per_image.shape)}"
         )
-    target = lucid.arange(n, dtype=lucid.int64, device=logits_per_image.device)
+    target = lucid.arange(
+        n, dtype=lucid.int64, device=logits_per_image.device.type
+    )
     image_side = F.cross_entropy(logits_per_image, target)
     text_side = F.cross_entropy(logits_per_text, target)
     return (image_side + text_side) / 2.0
