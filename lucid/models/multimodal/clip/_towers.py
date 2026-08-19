@@ -6,12 +6,16 @@ order to respect — text does, patches do not.  So the block is written
 once here and parameterised by that, rather than twice in a family and
 kept in step by hand.
 
-These are domain-level rather than :mod:`lucid.nn` because of what they
-encode: pre-norm residual structure with ``QuickGELU``, which is the
-shape the released contrastive checkpoints were trained in.  A caller
-building a general Transformer wants :class:`lucid.nn.TransformerEncoderLayer`
-— it is the same idea with the framework's own defaults, and it will not
-load these weights.
+These live in the family rather than one level up because CLIP is their
+only consumer.  The domain layer holds what several families share; a
+block with one user belongs to that user, and moves up when a second
+appears — SigLIP and ALIGN would both want exactly this block.
+
+They are not in :mod:`lucid.nn` for a different reason: they encode a
+pre-norm-with-``QuickGELU`` shape because that is what the released
+contrastive checkpoints were trained in.
+:class:`lucid.nn.TransformerEncoderLayer` is the same idea with the
+framework's own defaults, and it will not load these weights.
 """
 
 from typing import cast, final, override

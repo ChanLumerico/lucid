@@ -10,15 +10,14 @@ import pytest
 import lucid
 import lucid.nn as nn
 from lucid.models import (
-    DDPMScheduler,
-    DiffusionMixin,
     DiffusionModelConfig,
     DiffusionModelOutput,
     GenerationOutput,
     GenerativeModelConfig,
-    DiffusionScheduler,
     VAEOutput,
 )
+from lucid.models._mixins import DiffusionMixin
+from lucid.models.generative import DDPMScheduler, DiffusionScheduler
 from lucid.models._base import PretrainedModel
 from lucid.models.generative._rssm import RSSM, rssm_kl
 from lucid.models._utils import (

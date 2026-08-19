@@ -13,11 +13,8 @@ import pytest
 
 import lucid
 import lucid.nn as nn
-from lucid.models import (
-    CausalLMOutput,
-    CausalLMMixin,
-    LanguageModelConfig,
-)
+from lucid.models import CausalLMOutput, LanguageModelConfig
+from lucid.models._mixins import CausalLMMixin
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LanguageModelConfig

@@ -17,10 +17,10 @@ from lucid.models import (
     VQVAEConfig,
     VQVAEForImageGeneration,
     VQVAEModel,
-    VQVAEOutput,
     create_model,
     is_model,
 )
+from lucid.models.generative.vqvae import VQVAEOutput
 
 
 def _tiny_cfg(**overrides: object) -> VQVAEConfig:

@@ -2,7 +2,7 @@
 
 from lucid.models.multimodal.clip._config import CLIPConfig
 from lucid.models.multimodal.clip._model import (
-    CLIP,
+    CLIPModel,
     CLIPForZeroShotImageClassification,
     CLIPOutput,
     CLIPZeroShotOutput,
@@ -32,7 +32,7 @@ from lucid.models.multimodal.clip._pretrained import (
 
 __all__ = [
     "CLIPConfig",
-    "CLIP",
+    "CLIPModel",
     "CLIPForZeroShotImageClassification",
     "CLIPOutput",
     "CLIPZeroShotOutput",

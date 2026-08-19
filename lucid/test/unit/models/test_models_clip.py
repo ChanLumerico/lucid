@@ -30,7 +30,7 @@ import lucid
 import lucid.models as M
 import lucid.nn as nn
 from lucid.models.multimodal.clip import (
-    CLIP,
+    CLIPModel,
     CLIP_EOS,
     CLIP_SOS,
     CLIPConfig,
@@ -43,7 +43,7 @@ from lucid.models.multimodal.clip import (
     CLIPViTLarge14Weights,
 )
 from lucid.models.multimodal.clip._tokenizer import _PATTERN
-from lucid.models.multimodal import QuickGELU
+from lucid.models.multimodal.clip._towers import QuickGELU
 from lucid.models.multimodal.clip._model import (
     _contrastive_loss,
     _TextTransformer,
@@ -111,7 +111,7 @@ class TestTheTextFeatureComesFromEOS:
         taken at the last column.
         """
         lucid.manual_seed(0)
-        model = CLIP(_tiny()).eval()
+        model = CLIPModel(_tiny()).eval()
         short = _captions([2])
         padded = _captions([2])
         # Same caption; scribble junk into the padding of one of them.
@@ -164,7 +164,7 @@ class TestTheTextFeatureComesFromEOS:
 class TestEmbeddingsAreNormalised:
     def test_rows_have_unit_length(self) -> None:
         lucid.manual_seed(0)
-        model = CLIP(_tiny()).eval()
+        model = CLIPModel(_tiny()).eval()
         out = model(lucid.randn((3, 3, 32, 32)), _captions([2, 3, 1]))
         for name, embeds in (
             ("image", out.image_embeds),
@@ -176,7 +176,7 @@ class TestEmbeddingsAreNormalised:
     def test_an_unnormalised_dot_product_would_differ(self) -> None:
         """Guards the test above — the towers do not emit unit rows by luck."""
         lucid.manual_seed(0)
-        model = CLIP(_tiny()).eval()
+        model = CLIPModel(_tiny()).eval()
         images = lucid.randn((3, 3, 32, 32))
         raw = model.visual(images)
         norms = (raw**2).sum(dim=-1) ** 0.5
@@ -226,24 +226,24 @@ class TestTheLossIsSymmetric:
 
 class TestTheTemperature:
     def test_it_starts_at_the_papers_value(self) -> None:
-        model = CLIP(_tiny())
+        model = CLIPModel(_tiny())
         assert float(model.scale.item()) == pytest.approx(1.0 / 0.07, rel=1e-6)
 
     def test_it_is_capped(self) -> None:
         """ "clipped to prevent scaling the logits by more than 100"."""
-        model = CLIP(_tiny())
+        model = CLIPModel(_tiny())
         with lucid.no_grad():
             model.logit_scale[:] = lucid.full((1,), 20.0)  # exp(20) >> 100
         assert float(model.scale.item()) == pytest.approx(100.0)
 
     def test_the_cap_is_not_always_active(self) -> None:
         """Guards the test above — a scale pinned at 100 would also pass."""
-        model = CLIP(_tiny())
+        model = CLIPModel(_tiny())
         assert float(model.scale.item()) < 100.0
 
     def test_it_is_learned(self) -> None:
         lucid.manual_seed(0)
-        model = CLIP(_tiny())
+        model = CLIPModel(_tiny())
         out = model(lucid.randn((2, 3, 32, 32)), _captions([2, 3]), return_loss=True)
         assert out.loss is not None
         out.loss.backward()
@@ -281,7 +281,7 @@ class TestTheTowersAttendCorrectly:
         above would pass just as well if both towers were masked.
         """
         lucid.manual_seed(0)
-        model = CLIP(_tiny()).eval()
+        model = CLIPModel(_tiny()).eval()
         images = lucid.randn((1, 3, 32, 32))
         first = model.visual(images)
         # Disturb only the last patch; a causal tower reading the class
@@ -357,9 +357,9 @@ class TestShadowConstructionSeesEveryParameter:
         from lucid.nn._shadow import shadow_alloc
 
         config = _tiny()
-        real = CLIP(config).num_parameters()
+        real = CLIPModel(config).num_parameters()
         with shadow_alloc():
-            shadow = CLIP(config).num_parameters()
+            shadow = CLIPModel(config).num_parameters()
         assert shadow == real, (
             f"shadow construction sees {shadow:,} parameters and real "
             f"construction {real:,} — a Parameter built from arithmetic "
@@ -399,7 +399,7 @@ class TestZeroShot:
 class TestTokenizer:
     """The framing the model's ``argmax`` depends on, and the scheme.
 
-    CLIP's BPE is neither of the two already in the tree — byte-level
+    CLIPModel's BPE is neither of the two already in the tree — byte-level
     like GPT-2's, ``</w>``-suffixed like GPT-1's — so the pieces that
     could be silently swapped for the wrong half are the ones checked.
     """
@@ -489,7 +489,7 @@ class TestItRunsOnBothDevices:
     @pytest.mark.parametrize("device", ["cpu", "metal"])
     def test_a_forward_and_backward_survive(self, device: str) -> None:
         lucid.manual_seed(0)
-        model = CLIP(_tiny())
+        model = CLIPModel(_tiny())
         model = model.metal() if device == "metal" else model
         images = lucid.randn((3, 3, 32, 32), device=device)
         captions = _captions([1, 2, 3]).to(device)
@@ -548,7 +548,7 @@ class TestItLearnsToMatch:
             text_heads=4,
             text_layers=2,
         )
-        model = CLIP(config)
+        model = CLIPModel(config)
         model = model.metal() if device == "metal" else model
         images = lucid.stack(
             [lucid.full((3, 32, 32), (i + 1) / pairs) for i in range(pairs)], dim=0
@@ -563,7 +563,7 @@ class TestItLearnsToMatch:
 
     @staticmethod
     def _rank1(
-        model: CLIP, images: lucid.Tensor, captions: lucid.Tensor, n: int
+        model: CLIPModel, images: lucid.Tensor, captions: lucid.Tensor, n: int
     ) -> float:
         with lucid.no_grad():
             predicted = model(images, captions).logits_per_image.argmax(dim=-1)

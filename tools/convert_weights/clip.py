@@ -63,7 +63,7 @@ import numpy as np
 import torch
 from huggingface_hub import hf_hub_download
 
-from lucid.models.multimodal.clip import CLIP, CLIPConfig
+from lucid.models.multimodal.clip import CLIPModel, CLIPConfig
 from lucid.nn import Module
 from tools.convert_weights._base import Architecture, ConversionSpec, register_arch
 
@@ -185,7 +185,7 @@ class CLIPArch(Architecture):
 
     def target_model(self) -> Module:
         """Build the empty Lucid model the weights load into."""
-        return CLIP(self._config())
+        return CLIPModel(self._config())
 
     def map_key(self, src_key: str) -> str | None:
         """Rename one upstream key, or drop it.
@@ -282,7 +282,7 @@ class CLIPArch(Architecture):
         config = self._config()
         return ConversionSpec(
             model_name=self.model_name,
-            architecture="CLIP",
+            architecture="CLIPModel",
             repo_id=f"lucid-dl/{self.model_name.replace('_', '-')}",
             tag=self.tag,
             task="base",

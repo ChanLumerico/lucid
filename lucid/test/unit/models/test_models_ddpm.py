@@ -22,13 +22,13 @@ from lucid.models import (
     DDPMConfig,
     DDPMForImageGeneration,
     DDPMModel,
-    DDPMScheduler,
-    DDPMUNet,
     DiffusionModelOutput,
     GenerationOutput,
     create_model,
     is_model,
 )
+from lucid.models.generative import DDPMScheduler
+from lucid.models.generative.ddpm import DDPMUNet
 
 
 def _tiny_cfg(**overrides: object) -> DDPMConfig:

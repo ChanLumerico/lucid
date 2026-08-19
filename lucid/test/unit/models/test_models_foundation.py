@@ -13,10 +13,7 @@ from lucid.models import (
     AutoConfig,
     AutoModel,
     AutoModelForImageClassification,
-    BackboneMixin,
     BaseModelOutput,
-    ClassificationHeadMixin,
-    FeatureInfo,
     ImageClassificationOutput,
     ModelConfig,
     ModelOutput,
@@ -26,6 +23,7 @@ from lucid.models import (
     list_models,
     register_model,
 )
+from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models import _registry as _reg_mod
 from lucid.weights import download
 

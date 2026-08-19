@@ -39,7 +39,7 @@ from lucid.models.multimodal.clip._weights import (
     CLIPViTLarge14Weights,
 )
 from lucid.models.multimodal.clip._model import (
-    CLIP,
+    CLIPModel,
     CLIPForZeroShotImageClassification,
 )
 
@@ -91,11 +91,11 @@ def _apply(cfg: CLIPConfig, overrides: dict[str, object]) -> CLIPConfig:
     task="base",
     family="clip",
     model_type="clip",
-    model_class=CLIP,
+    model_class=CLIPModel,
     default_config=_CFG_BASE_32,
     summary="auto",
 )
-def clip_vit_base_32(pretrained: bool = False, **overrides: object) -> CLIP:
+def clip_vit_base_32(pretrained: bool = False, **overrides: object) -> CLIPModel:
     """Construct CLIP with a ViT-B/32 image tower.
 
     Parameters
@@ -107,7 +107,7 @@ def clip_vit_base_32(pretrained: bool = False, **overrides: object) -> CLIP:
 
     Returns
     -------
-    CLIP
+    CLIPModel
         Both towers and the learned temperature.
 
     Notes
@@ -125,7 +125,7 @@ def clip_vit_base_32(pretrained: bool = False, **overrides: object) -> CLIP:
     >>> model.config.patch_size, model.config.embed_dim
     (32, 512)
     """
-    model = CLIP(_apply(_CFG_BASE_32, overrides))
+    model = CLIPModel(_apply(_CFG_BASE_32, overrides))
     entry = weights_mod.resolve_weights(CLIPViTBase32Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="clip_vit_base_32")
@@ -136,11 +136,11 @@ def clip_vit_base_32(pretrained: bool = False, **overrides: object) -> CLIP:
     task="base",
     family="clip",
     model_type="clip",
-    model_class=CLIP,
+    model_class=CLIPModel,
     default_config=_CFG_BASE_16,
     summary="auto",
 )
-def clip_vit_base_16(pretrained: bool = False, **overrides: object) -> CLIP:
+def clip_vit_base_16(pretrained: bool = False, **overrides: object) -> CLIPModel:
     """Construct CLIP with a ViT-B/16 image tower.
 
     Parameters
@@ -152,7 +152,7 @@ def clip_vit_base_16(pretrained: bool = False, **overrides: object) -> CLIP:
 
     Returns
     -------
-    CLIP
+    CLIPModel
         Both towers and the learned temperature.
 
     Notes
@@ -170,7 +170,7 @@ def clip_vit_base_16(pretrained: bool = False, **overrides: object) -> CLIP:
     >>> model.config.patch_size, model.config.vision_width
     (16, 768)
     """
-    model = CLIP(_apply(_CFG_BASE_16, overrides))
+    model = CLIPModel(_apply(_CFG_BASE_16, overrides))
     entry = weights_mod.resolve_weights(CLIPViTBase16Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="clip_vit_base_16")
@@ -181,11 +181,11 @@ def clip_vit_base_16(pretrained: bool = False, **overrides: object) -> CLIP:
     task="base",
     family="clip",
     model_type="clip",
-    model_class=CLIP,
+    model_class=CLIPModel,
     default_config=_CFG_LARGE_14,
     summary="auto",
 )
-def clip_vit_large_14(pretrained: bool = False, **overrides: object) -> CLIP:
+def clip_vit_large_14(pretrained: bool = False, **overrides: object) -> CLIPModel:
     """Construct CLIP with a ViT-L/14 image tower.
 
     Parameters
@@ -197,7 +197,7 @@ def clip_vit_large_14(pretrained: bool = False, **overrides: object) -> CLIP:
 
     Returns
     -------
-    CLIP
+    CLIPModel
         Both towers and the learned temperature.
 
     Notes
@@ -215,7 +215,7 @@ def clip_vit_large_14(pretrained: bool = False, **overrides: object) -> CLIP:
     >>> model.config.vision_layers, model.config.text_width
     (24, 768)
     """
-    model = CLIP(_apply(_CFG_LARGE_14, overrides))
+    model = CLIPModel(_apply(_CFG_LARGE_14, overrides))
     entry = weights_mod.resolve_weights(CLIPViTLarge14Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="clip_vit_large_14")
@@ -226,11 +226,11 @@ def clip_vit_large_14(pretrained: bool = False, **overrides: object) -> CLIP:
     task="base",
     family="clip",
     model_type="clip",
-    model_class=CLIP,
+    model_class=CLIPModel,
     default_config=_CFG_LARGE_14_336,
     summary="auto",
 )
-def clip_vit_large_14_336(pretrained: bool = False, **overrides: object) -> CLIP:
+def clip_vit_large_14_336(pretrained: bool = False, **overrides: object) -> CLIPModel:
     """Construct CLIP with a ViT-L/14 image tower at 336 pixels.
 
     Parameters
@@ -242,7 +242,7 @@ def clip_vit_large_14_336(pretrained: bool = False, **overrides: object) -> CLIP
 
     Returns
     -------
-    CLIP
+    CLIPModel
         Both towers and the learned temperature.
 
     Notes
@@ -262,7 +262,7 @@ def clip_vit_large_14_336(pretrained: bool = False, **overrides: object) -> CLIP
     >>> model.config.image_size
     336
     """
-    model = CLIP(_apply(_CFG_LARGE_14_336, overrides))
+    model = CLIPModel(_apply(_CFG_LARGE_14_336, overrides))
     entry = weights_mod.resolve_weights(CLIPViTLarge14_336Weights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="clip_vit_large_14_336")

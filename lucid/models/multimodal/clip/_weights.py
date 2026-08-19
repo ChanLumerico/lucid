@@ -15,7 +15,7 @@ the transpose of ``text_projection`` is *square* in the base models, so
 getting it backwards would have produced a model of exactly the right
 shape that silently ranks nothing.
 
-Preprocessing is CLIP's own, and is not ImageNet's: bicubic resize to
+Preprocessing is CLIPModel's own, and is not ImageNet's: bicubic resize to
 the tower's resolution, centre crop, and the dataset statistics below,
 which come from the released preprocessor configuration rather than
 from the paper.
@@ -25,7 +25,7 @@ Every released checkpoint stores ``logit_scale = 4.605170``, whose
 exponential is 100.000006 — the trained temperature sat *at* the
 paper's ceiling, which is what "clipped to prevent scaling the logits
 by more than 100" produces when the constraint binds. Lucid applies
-that cap in :attr:`CLIP.scale`, so it returns exactly 100.0 where the
+that cap in :attr:`CLIPModel.scale`, so it returns exactly 100.0 where the
 reference — which clamps in its training loop rather than its model —
 returns 100.000006. The resulting relative difference is 6e-08, three
 orders below the float32 agreement reported above, and the cap is doing
@@ -57,7 +57,7 @@ _PRESET_336 = ImageClassification(
     crop_size=336, resize_size=336, mean=_MEAN, std=_STD, interpolation="bicubic"
 )
 
-_SOURCE = "openai/CLIP (via transformers re-hosting)"
+_SOURCE = "openai/CLIPModel (via transformers re-hosting)"
 
 
 @register_weights("clip_vit_base_32")
@@ -65,7 +65,7 @@ class CLIPViTBase32Weights(WeightsEnum):
     """Pretrained weights for :func:`lucid.models.clip_vit_base_32`.
 
     Trained on WIT-400M, the paper's 400-million image-text pair
-    dataset.  ``num_classes`` is 0 because CLIP has no fixed label set —
+    dataset.  ``num_classes`` is 0 because CLIPModel has no fixed label set —
     that is the point of it.
     """
 

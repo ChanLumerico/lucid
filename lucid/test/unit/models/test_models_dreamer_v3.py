@@ -36,16 +36,15 @@ import pytest
 import lucid
 import lucid.optim as optim
 from lucid.models import (
-    DreamerV3BehaviorOutput,
     DreamerV3Config,
     DreamerV3ForWorldModeling,
     DreamerV3Model,
-    DreamerV3Output,
     create_model,
     dreamer_v3_12m,
     is_model,
     list_models,
 )
+from lucid.models.generative.dreamer_v3 import DreamerV3BehaviorOutput, DreamerV3Output
 from lucid.models._utils._generative import generative_activation
 from lucid.models.generative._actor import Actor
 from lucid.models.generative._rssm import (

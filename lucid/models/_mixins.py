@@ -598,7 +598,8 @@ class DiffusionMixin:
 
     Examples
     --------
-    >>> from lucid.models import DDPMScheduler, AutoModelForImageGeneration
+    >>> from lucid.models import AutoModelForImageGeneration
+    >>> from lucid.models.generative import DDPMScheduler
     >>> model = AutoModelForImageGeneration.from_pretrained("ddpm_cifar_gen")
     >>> scheduler = DDPMScheduler(num_train_timesteps=1000)
     >>> out = model.generate(scheduler, n_samples=4, num_inference_steps=50)

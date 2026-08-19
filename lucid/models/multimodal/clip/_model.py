@@ -32,14 +32,14 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import ModelOutput
-from lucid.models.multimodal._towers import (
+from lucid.models.multimodal.clip._towers import (
     ResidualAttentionBlock,
     TransformerTower,
 )
 from lucid.models.multimodal.clip._config import CLIPConfig
 
 __all__ = [
-    "CLIP",
+    "CLIPModel",
     "CLIPForZeroShotImageClassification",
     "CLIPOutput",
     "CLIPZeroShotOutput",
@@ -180,7 +180,7 @@ class _TextTransformer(nn.Module):
         -----
         The feature is taken at the ``[EOS]`` position, located as the
         argmax of the ids.  That is not a heuristic: ``[EOS]`` is the
-        highest id in a CLIP vocabulary and padding is ``0``, so the
+        highest id in a CLIPModel vocabulary and padding is ``0``, so the
         argmax is exactly the sentinel.  Reading the last column instead
         would return padding for every caption shorter than the context,
         which trains and ranks nothing.
@@ -251,7 +251,7 @@ class CLIPZeroShotOutput(ModelOutput):
     text_embeds: Tensor
 
 
-class CLIP(PretrainedModel):
+class CLIPModel(PretrainedModel):
     r"""Contrastive Language-Image Pre-training.
 
     Parameters
@@ -282,8 +282,8 @@ class CLIP(PretrainedModel):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.multimodal.clip import CLIP, CLIPConfig
-    >>> model = CLIP(CLIPConfig(image_size=32, patch_size=16, vision_layers=1,
+    >>> from lucid.models.multimodal.clip import CLIPModel, CLIPConfig
+    >>> model = CLIPModel(CLIPConfig(image_size=32, patch_size=16, vision_layers=1,
     ...                         vision_width=32, vision_heads=2,
     ...                         context_length=8, vocab_size=64, text_width=32,
     ...                         text_heads=2, text_layers=1, embed_dim=16)).eval()
@@ -476,7 +476,7 @@ class CLIPForZeroShotImageClassification(PretrainedModel):
     trained for, and this can.
 
     A caller that classifies many images against one label set should
-    embed the prompts once with :meth:`~CLIP.encode_text` and reuse them;
+    embed the prompts once with :meth:`~CLIPModel.encode_text` and reuse them;
     :meth:`forward` re-embeds them on every call because it does not know
     that the set is fixed.
 
@@ -501,7 +501,7 @@ class CLIPForZeroShotImageClassification(PretrainedModel):
     def __init__(self, config: CLIPConfig) -> None:
         """Initialise the model. See the class docstring for parameters."""
         super().__init__(config)
-        self.clip = CLIP(config)
+        self.clip = CLIPModel(config)
 
     @override
     def forward(  # type: ignore[override]
@@ -515,7 +515,7 @@ class CLIPForZeroShotImageClassification(PretrainedModel):
             ``(B, 3, image_size, image_size)``.
         prompt_ids : Tensor
             ``(num_prompts, context_length)`` — one tokenised caption per
-            candidate class.  Unlike :meth:`CLIP.forward` this batch is
+            candidate class.  Unlike :meth:`CLIPModel.forward` this batch is
             *not* paired with the images and may be any size.
 
         Returns

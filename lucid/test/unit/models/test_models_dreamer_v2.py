@@ -28,15 +28,14 @@ import pytest
 import lucid
 import lucid.optim as optim
 from lucid.models import (
-    DreamerV2BehaviorOutput,
     DreamerV2Config,
     DreamerV2ForWorldModeling,
     DreamerV2Model,
-    DreamerV2Output,
     create_model,
     is_model,
     list_models,
 )
+from lucid.models.generative.dreamer_v2 import DreamerV2BehaviorOutput, DreamerV2Output
 from lucid.models.generative._dists import (
     OneHotCategorical,
     TruncatedNormal,

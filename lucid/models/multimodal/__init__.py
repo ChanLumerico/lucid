@@ -8,32 +8,23 @@ structure, and two encoders trained to land in one representation are a
 structure neither single-modality domain describes.
 
 Concrete families live in sub-packages (``clip``).  What is exported
-here is the infrastructure a new family builds on — the base config and
-the tower blocks — so a second family needs only its own ``_config.py``,
-``_model.py`` and ``_pretrained.py``, which is the arrangement
+here is the base config — the arrangement
 :mod:`lucid.models.generative` and :mod:`lucid.models.text` already use.
 
-The blocks here are deliberately not in :mod:`lucid.nn`.  They encode a
-particular pre-norm-with-``QuickGELU`` shape because that is what the
-released contrastive checkpoints were trained in;
-:class:`lucid.nn.TransformerEncoderLayer` is the general form and will
-not load those weights.
+Nothing else is here yet, and that is the rule rather than an accident:
+a module at this level is for what **several** families share.  CLIP's
+Transformer blocks are generic enough to belong here eventually and sit
+in ``clip/_towers.py`` until a second family wants them, because a
+shared module with one consumer is an abstraction guessed rather than
+observed.
 """
 
 from lucid.models.multimodal._config import (
     MultimodalActivation,
     MultimodalModelConfig,
 )
-from lucid.models.multimodal._towers import (
-    QuickGELU,
-    ResidualAttentionBlock,
-    TransformerTower,
-)
 
 __all__ = [
     "MultimodalActivation",
     "MultimodalModelConfig",
-    "QuickGELU",
-    "ResidualAttentionBlock",
-    "TransformerTower",
 ]

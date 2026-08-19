@@ -16,11 +16,6 @@ from lucid.models._auto import (
     AutoModelForZeroShotImageClassification,
 )
 from lucid.models._base   import ModelConfig, PretrainedModel
-from lucid.models._meta   import ModelFamilyMeta, model_family_meta
-from lucid.models._mixins import (
-    BackboneMixin, ClassificationHeadMixin, DiffusionMixin,
-    FeatureInfo, CausalLMMixin, MaskedLMMixin,
-)
 from lucid.models._output import (
     ModelOutput, BaseModelOutput, BaseModelOutputWithPooling,
     ImageClassificationOutput, ObjectDetectionOutput, InstanceSegmentationOutput,
@@ -29,23 +24,15 @@ from lucid.models._output import (
     QuestionAnsweringOutput,
     DiffusionModelOutput, VAEOutput, NormalizingFlowOutput, GenerationOutput,
 )
-from lucid.models._protocols import (
-    BackboneProtocol, ConfigT,
-    HasConfigClass, HasFamilyMeta, HasModelType,
-    ModelConfigProtocol, OutputDataclassProtocol,
-    PretrainedModelProtocol, TaskWrapperProtocol,
-)
 from lucid.models._registry import create_model, is_model, list_models, model_entrypoint, register_model
 
 # Text-domain infrastructure (Phase 4 base layer).
 # RoPE / sinusoidal PE live in lucid.nn — import from there directly.
-from lucid.models.text import LanguageModelConfig, TextActivation
+from lucid.models.text import LanguageModelConfig
 # Generative-domain infrastructure (Phase 5 base layer).
 from lucid.models.generative import (
-    BetaSchedule, DDPMScheduler, RSSM, RSSMState,
-    DiffusionModelConfig, FlowPrior, GenerativeActivation, GenerativeModelConfig,
-    NormalizingFlowConfig, DiffusionScheduler,
-)
+    DiffusionModelConfig, GenerativeModelConfig,
+    NormalizingFlowConfig, )
 # 2013 — VAE (Kingma & Welling)
 from lucid.models.generative.vae import (
     VAEConfig, VAEModel, VAEForImageGeneration,
@@ -59,36 +46,29 @@ from lucid.models.generative.nice import (
 )
 # 2017 — VQ-VAE (van den Oord, Vinyals & Kavukcuoglu)
 from lucid.models.generative.vqvae import (
-    VQVAEConfig, VQVAEModel, VQVAEForImageGeneration, VQVAEOutput,
-    vqvae, vqvae_gen,
+    VQVAEConfig, VQVAEModel, VQVAEForImageGeneration, vqvae, vqvae_gen,
 )
 # 2019 — PlaNet (Hafner et al.)
 from lucid.models.generative.planet import (
-    PlaNetConfig, PlaNetModel, PlaNetForWorldModeling, PlaNetOutput,
-    planet, planet_world_model,
+    PlaNetConfig, PlaNetModel, PlaNetForWorldModeling, planet, planet_world_model,
 )
 # 2020 — Dreamer (Hafner et al.)
 from lucid.models.generative.score_sde import (
-    ScoreSDEConfig, ScoreSDEModel, ScoreSDEForImageGeneration, ScoreSDEOutput,
-    score_sde_vp, score_sde_vp_gen, score_sde_ve, score_sde_ve_gen,
+    ScoreSDEConfig, ScoreSDEModel, ScoreSDEForImageGeneration, score_sde_vp, score_sde_vp_gen, score_sde_ve, score_sde_ve_gen,
     score_sde_subvp, score_sde_subvp_gen,
 )
 from lucid.models.generative.dreamer import (
-    DreamerConfig, DreamerModel, DreamerForWorldModeling, DreamerOutput,
-    DreamerBehaviorOutput, dreamer, dreamer_world_model,
+    DreamerConfig, DreamerModel, DreamerForWorldModeling, dreamer, dreamer_world_model,
     dreamer_discrete, dreamer_discrete_world_model,
 )
 # 2021 — DreamerV2 (Hafner et al.)
 from lucid.models.generative.dreamer_v2 import (
-    DreamerV2Config, DreamerV2Model, DreamerV2ForWorldModeling, DreamerV2Output,
-    DreamerV2BehaviorOutput, dreamer_v2, dreamer_v2_world_model,
+    DreamerV2Config, DreamerV2Model, DreamerV2ForWorldModeling, dreamer_v2, dreamer_v2_world_model,
     dreamer_v2_atari, dreamer_v2_atari_world_model,
     dreamer_v2_dmc, dreamer_v2_dmc_world_model,
 )
 from lucid.models.generative.dreamer_v3 import (
-    DreamerV3Config, DreamerV3Model, DreamerV3ForWorldModeling, DreamerV3Output,
-    DreamerV3BehaviorOutput,
-    dreamer_v3_12m, dreamer_v3_12m_world_model,
+    DreamerV3Config, DreamerV3Model, DreamerV3ForWorldModeling, dreamer_v3_12m, dreamer_v3_12m_world_model,
     dreamer_v3_25m, dreamer_v3_25m_world_model,
     dreamer_v3_50m, dreamer_v3_50m_world_model,
     dreamer_v3_100m, dreamer_v3_100m_world_model,
@@ -97,7 +77,7 @@ from lucid.models.generative.dreamer_v3 import (
 )
 # 2021 — CLIP (Radford et al.)
 from lucid.models.multimodal.clip import (
-    CLIPConfig, CLIP, CLIPForZeroShotImageClassification,
+    CLIPConfig, CLIPModel, CLIPForZeroShotImageClassification,
     clip_vit_base_32, clip_vit_base_16,
     clip_vit_large_14, clip_vit_large_14_336,
     clip_vit_base_32_zero_shot, clip_vit_base_16_zero_shot,
@@ -105,8 +85,7 @@ from lucid.models.multimodal.clip import (
 )
 # 2020 — DDPM (Ho et al.)
 from lucid.models.generative.ddpm import (
-    DDPMConfig, DDPMModel, DDPMForImageGeneration, DDPMUNet,
-    ddpm_cifar, ddpm_lsun, ddpm_imagenet64,
+    DDPMConfig, DDPMModel, DDPMForImageGeneration, ddpm_cifar, ddpm_lsun, ddpm_imagenet64,
     ddpm_cifar_gen, ddpm_lsun_gen, ddpm_imagenet64_gen,
 )
 # 2016 — RealNVP (Dinh, Sohl-Dickstein & Bengio)
@@ -160,8 +139,7 @@ from lucid.models.text.bert import (
     BERTForCausalLM,
     BERTForMaskedLM,
     BERTForNextSentencePrediction,
-    BERTForPreTraining, BERTForPreTrainingOutput,
-    BERTForQuestionAnswering,
+    BERTForPreTraining, BERTForQuestionAnswering,
     BERTForSequenceClassification, BERTForTokenClassification,
     bert_tiny, bert_mini, bert_small, bert_medium, bert_base, bert_large,
     bert_base_mlm, bert_large_mlm,
@@ -171,15 +149,13 @@ from lucid.models.text.bert import (
 # 2018 — GPT-1 (Radford et al.)
 from lucid.models.text.gpt import (
     GPTConfig, GPTModel, GPTLMHeadModel,
-    GPTDoubleHeadsModel, GPTDoubleHeadsOutput,
-    GPTForSequenceClassification,
+    GPTDoubleHeadsModel, GPTForSequenceClassification,
     gpt, gpt_lm, gpt_cls,
 )
 # 2019 — GPT-2 (Radford et al.)
 from lucid.models.text.gpt2 import (
     GPT2Config, GPT2Model, GPT2LMHeadModel,
-    GPT2DoubleHeadsModel, GPT2DoubleHeadsOutput,
-    GPT2ForSequenceClassification,
+    GPT2DoubleHeadsModel, GPT2ForSequenceClassification,
     gpt2_small, gpt2_medium, gpt2_large, gpt2_xlarge,
     gpt2_small_lm, gpt2_medium_lm, gpt2_large_lm, gpt2_xlarge_lm,
     gpt2_small_cls,
@@ -221,8 +197,7 @@ from lucid.models.vision.vgg import (
 )
 # 2014 — GoogLeNet / Inception v1 (Szegedy et al.)
 from lucid.models.vision.googlenet import (
-    GoogLeNetConfig, GoogLeNet, GoogLeNetForImageClassification, GoogLeNetOutput,
-    googlenet, googlenet_cls,
+    GoogLeNetConfig, GoogLeNet, GoogLeNetForImageClassification, googlenet, googlenet_cls,
 )
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet import (
@@ -239,8 +214,7 @@ from lucid.models.vision.resnet import (
 )
 # 2015 — Inception v3 (Szegedy et al.)
 from lucid.models.vision.inception import (
-    InceptionConfig, InceptionV3, InceptionV3ForImageClassification, InceptionV3Output,
-    inception_v3, inception_v3_cls,
+    InceptionConfig, InceptionV3, InceptionV3ForImageClassification, inception_v3, inception_v3_cls,
 )
 # 2016 — DenseNet (Huang et al.)
 from lucid.models.vision.densenet import (
@@ -254,7 +228,6 @@ from lucid.models.vision.densenet import (
 # 2016 — Inception-ResNet v2 (Szegedy et al.)
 from lucid.models.vision.inception_resnet import (
     InceptionResNetConfig, InceptionResNetV2, InceptionResNetV2ForImageClassification,
-    InceptionResNetOutput,
     inception_resnet_v2, inception_resnet_v2_cls,
 )
 # 2017 — ResNeXt (Xie et al.)
@@ -268,8 +241,7 @@ from lucid.models.vision.resnext import (
 )
 # 2017 — Xception (Chollet)
 from lucid.models.vision.xception import (
-    XceptionConfig, Xception, XceptionForImageClassification, XceptionOutput,
-    xception, xception_cls,
+    XceptionConfig, Xception, XceptionForImageClassification, xception, xception_cls,
 )
 # 2017 — MobileNet v1 (Howard et al.)
 from lucid.models.vision.mobilenet import (
@@ -466,8 +438,7 @@ from lucid.models.vision.detr import (
 )
 # 2020 — EfficientDet (Tan et al.)
 from lucid.models.vision.efficientdet import (
-    EfficientDetConfig, EfficientDetForObjectDetection, efficientdet_config,
-    efficientdet_d0, efficientdet_d1, efficientdet_d2, efficientdet_d3,
+    EfficientDetConfig, EfficientDetForObjectDetection, efficientdet_d0, efficientdet_d1, efficientdet_d2, efficientdet_d3,
     efficientdet_d4, efficientdet_d5, efficientdet_d6, efficientdet_d7,
 )
 # 2021 — MaskFormer (Cheng et al.)
@@ -493,16 +464,9 @@ from lucid.models.vision.yolo import (
     yolo_v4,
 )
 
-__all__ = [
-    # ── Infrastructure ────────────────────────────────────────────────────────
+__all__ = [    # ── Infrastructure ────────────────────────────────────────────────────────
     "ModelConfig", "PretrainedModel",
-    "ModelFamilyMeta", "model_family_meta",
-    "BackboneMixin", "ClassificationHeadMixin", "DiffusionMixin",
-    "FeatureInfo", "CausalLMMixin", "MaskedLMMixin",
-    "LanguageModelConfig", "TextActivation",
-    "GenerativeModelConfig", "DiffusionModelConfig", "NormalizingFlowConfig",
-    "GenerativeActivation", "BetaSchedule", "FlowPrior",
-    "DiffusionScheduler", "DDPMScheduler", "RSSM", "RSSMState",
+    "LanguageModelConfig", "GenerativeModelConfig", "DiffusionModelConfig", "NormalizingFlowConfig",
     "ModelOutput", "BaseModelOutput", "BaseModelOutputWithPooling",
     "ImageClassificationOutput", "ObjectDetectionOutput", "InstanceSegmentationOutput",
     "SemanticSegmentationOutput", "CausalLMOutput", "MaskedLMOutput", "Seq2SeqLMOutput",
@@ -519,7 +483,7 @@ __all__ = [
     "AutoModelForWorldModeling",
     "AutoModelForZeroShotImageClassification",
     "CLIPConfig",
-    "CLIP",
+    "CLIPModel",
     "CLIPForZeroShotImageClassification",
     "clip_vit_base_32",
     "clip_vit_base_16",
@@ -531,11 +495,6 @@ __all__ = [
     "clip_vit_large_14_336_zero_shot",
     "create_model", "is_model", "list_models", "model_entrypoint", "register_model",
     # Structural-typing contracts (advisory; see arch-models-family-contract).
-    "HasModelType", "HasFamilyMeta", "HasConfigClass",
-    "ModelConfigProtocol", "PretrainedModelProtocol",
-    "BackboneProtocol", "TaskWrapperProtocol",
-    "OutputDataclassProtocol",
-    "ConfigT",
     # ── Vision (1998) LeNet ───────────────────────────────────────────────────
     "LeNetConfig", "LeNet", "LeNetForImageClassification",
     "lenet_5", "lenet_5_cls",
@@ -552,8 +511,7 @@ __all__ = [
     "vgg_16", "vgg_16_bn", "vgg_16_cls", "vgg_16_bn_cls",
     "vgg_19", "vgg_19_bn", "vgg_19_cls", "vgg_19_bn_cls",
     # ── Vision (2014) GoogLeNet ───────────────────────────────────────────────
-    "GoogLeNetConfig", "GoogLeNet", "GoogLeNetForImageClassification", "GoogLeNetOutput",
-    "googlenet", "googlenet_cls",
+    "GoogLeNetConfig", "GoogLeNet", "GoogLeNetForImageClassification", "googlenet", "googlenet_cls",
     # ── Vision (2015) ResNet ──────────────────────────────────────────────────
     "ResNetConfig", "ResNet", "ResNetForImageClassification",
     "resnet_18", "resnet_18_cls", "resnet_34", "resnet_34_cls",
@@ -561,8 +519,7 @@ __all__ = [
     "resnet_200", "resnet_200_cls", "resnet_269", "resnet_269_cls",
     "wide_resnet_50", "wide_resnet_50_cls", "wide_resnet_101", "wide_resnet_101_cls",
     # ── Vision (2015) Inception v3 ────────────────────────────────────────────
-    "InceptionConfig", "InceptionV3", "InceptionV3ForImageClassification", "InceptionV3Output",
-    "inception_v3", "inception_v3_cls",
+    "InceptionConfig", "InceptionV3", "InceptionV3ForImageClassification", "inception_v3", "inception_v3_cls",
     # ── Vision (2016) DenseNet ────────────────────────────────────────────────
     "DenseNetConfig", "DenseNet", "DenseNetForImageClassification",
     "densenet_121", "densenet_121_cls", "densenet_161", "densenet_161_cls",
@@ -570,7 +527,6 @@ __all__ = [
     "densenet_201", "densenet_201_cls", "densenet_264", "densenet_264_cls",
     # ── Vision (2016) Inception-ResNet v2 ────────────────────────────────────
     "InceptionResNetConfig", "InceptionResNetV2", "InceptionResNetV2ForImageClassification",
-    "InceptionResNetOutput",
     "inception_resnet_v2", "inception_resnet_v2_cls",
     # ── Vision (2017) ResNeXt ─────────────────────────────────────────────────
     "ResNeXtConfig", "ResNeXt", "ResNeXtForImageClassification",
@@ -580,8 +536,7 @@ __all__ = [
     "resnext_101_64x4d",
     "resnext_101_64x4d_cls", "resnext_101_32x8d_cls",
     # ── Vision (2017) Xception ────────────────────────────────────────────────
-    "XceptionConfig", "Xception", "XceptionForImageClassification", "XceptionOutput",
-    "xception", "xception_cls",
+    "XceptionConfig", "Xception", "XceptionForImageClassification", "xception", "xception_cls",
     # ── Vision (2017) MobileNet v1 ────────────────────────────────────────────
     "MobileNetV1Config", "MobileNetV1", "MobileNetV1ForImageClassification",
     "mobilenet_v1", "mobilenet_v1_cls",
@@ -700,8 +655,7 @@ __all__ = [
     "DETRConfig", "DETRForObjectDetection",
     "detr_resnet50", "detr_resnet101",
     # ── Vision (2020) EfficientDet ────────────────────────────────────────────
-    "EfficientDetConfig", "EfficientDetForObjectDetection", "efficientdet_config",
-    "efficientdet_d0", "efficientdet_d1", "efficientdet_d2", "efficientdet_d3",
+    "EfficientDetConfig", "EfficientDetForObjectDetection", "efficientdet_d0", "efficientdet_d1", "efficientdet_d2", "efficientdet_d3",
     "efficientdet_d4", "efficientdet_d5", "efficientdet_d6", "efficientdet_d7",
     # ── Vision (2021) MaskFormer ──────────────────────────────────────────────
     "MaskFormerConfig", "MaskFormerForSemanticSegmentation",
@@ -722,8 +676,7 @@ __all__ = [
     "BERTForCausalLM",
     "BERTForMaskedLM",
     "BERTForNextSentencePrediction",
-    "BERTForPreTraining", "BERTForPreTrainingOutput",
-    "BERTForQuestionAnswering",
+    "BERTForPreTraining", "BERTForQuestionAnswering",
     "BERTForSequenceClassification", "BERTForTokenClassification",
     "bert_tiny", "bert_mini", "bert_small", "bert_medium", "bert_base", "bert_large",
     "bert_base_mlm", "bert_large_mlm",
@@ -731,13 +684,11 @@ __all__ = [
     "bert_base_token_cls", "bert_base_qa", "bert_large_qa",
     # ── Text (2018) GPT-1 ─────────────────────────────────────────────────────
     "GPTConfig", "GPTModel", "GPTLMHeadModel",
-    "GPTDoubleHeadsModel", "GPTDoubleHeadsOutput",
-    "GPTForSequenceClassification",
+    "GPTDoubleHeadsModel", "GPTForSequenceClassification",
     "gpt", "gpt_lm", "gpt_cls",
     # ── Text (2019) GPT-2 ─────────────────────────────────────────────────────
     "GPT2Config", "GPT2Model", "GPT2LMHeadModel",
-    "GPT2DoubleHeadsModel", "GPT2DoubleHeadsOutput",
-    "GPT2ForSequenceClassification",
+    "GPT2DoubleHeadsModel", "GPT2ForSequenceClassification",
     "gpt2_small", "gpt2_medium", "gpt2_large", "gpt2_xlarge",
     "gpt2_small_lm", "gpt2_medium_lm", "gpt2_large_lm", "gpt2_xlarge_lm",
     "gpt2_small_cls",
@@ -769,27 +720,21 @@ __all__ = [
     "nice_mnist", "nice_tfd", "nice_svhn", "nice_cifar",
     "nice_mnist_gen", "nice_tfd_gen", "nice_svhn_gen", "nice_cifar_gen",
     # ── Generative (2017) VQ-VAE ──────────────────────────────────────────────
-    "VQVAEConfig", "VQVAEModel", "VQVAEForImageGeneration", "VQVAEOutput",
-    "vqvae", "vqvae_gen",
+    "VQVAEConfig", "VQVAEModel", "VQVAEForImageGeneration", "vqvae", "vqvae_gen",
     # ── Generative (2019) PlaNet ──────────────────────────────────────────────
-    "PlaNetConfig", "PlaNetModel", "PlaNetForWorldModeling", "PlaNetOutput",
-    "planet", "planet_world_model",
+    "PlaNetConfig", "PlaNetModel", "PlaNetForWorldModeling", "planet", "planet_world_model",
     # ── Generative (2020) Dreamer ─────────────────────────────────────────────
-    "DreamerConfig", "DreamerModel", "DreamerForWorldModeling", "DreamerOutput",
-    "ScoreSDEConfig", "ScoreSDEModel", "ScoreSDEForImageGeneration",
-    "ScoreSDEOutput",
+    "DreamerConfig", "DreamerModel", "DreamerForWorldModeling", "ScoreSDEConfig", "ScoreSDEModel", "ScoreSDEForImageGeneration",
     "score_sde_vp", "score_sde_vp_gen", "score_sde_ve", "score_sde_ve_gen",
     "score_sde_subvp", "score_sde_subvp_gen",
-    "DreamerBehaviorOutput", "dreamer", "dreamer_world_model",
+    "dreamer", "dreamer_world_model",
     "dreamer_discrete", "dreamer_discrete_world_model",
     # ── Generative (2021) DreamerV2 ───────────────────────────────────────────
     "DreamerV2Config", "DreamerV2Model", "DreamerV2ForWorldModeling",
-    "DreamerV2Output", "DreamerV2BehaviorOutput",
     "dreamer_v2", "dreamer_v2_world_model",
     "dreamer_v2_atari", "dreamer_v2_atari_world_model",
     "dreamer_v2_dmc", "dreamer_v2_dmc_world_model",
     "DreamerV3Config", "DreamerV3Model", "DreamerV3ForWorldModeling",
-    "DreamerV3Output", "DreamerV3BehaviorOutput",
     "dreamer_v3_12m", "dreamer_v3_12m_world_model",
     "dreamer_v3_25m", "dreamer_v3_25m_world_model",
     "dreamer_v3_50m", "dreamer_v3_50m_world_model",
@@ -797,8 +742,7 @@ __all__ = [
     "dreamer_v3_200m", "dreamer_v3_200m_world_model",
     "dreamer_v3_400m", "dreamer_v3_400m_world_model",
     # ── Generative (2020) DDPM ────────────────────────────────────────────────
-    "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "DDPMUNet",
-    "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",
+    "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",
     "ddpm_cifar_gen", "ddpm_lsun_gen", "ddpm_imagenet64_gen",
     # ── Generative (2016) RealNVP ─────────────────────────────────────────────
     "RealNVPConfig", "RealNVPModel", "RealNVPForImageGeneration",

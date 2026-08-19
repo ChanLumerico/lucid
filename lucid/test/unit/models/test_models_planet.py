@@ -19,11 +19,11 @@ from lucid.models import (
     PlaNetConfig,
     PlaNetForWorldModeling,
     PlaNetModel,
-    PlaNetOutput,
     create_model,
     is_model,
     list_models,
 )
+from lucid.models.generative.planet import PlaNetOutput
 from lucid.models._utils._generative import generative_activation
 from lucid.models.generative._rssm import (
     RSSM,

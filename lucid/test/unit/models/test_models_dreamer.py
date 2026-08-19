@@ -22,15 +22,14 @@ import pytest
 import lucid
 from lucid.models import (
     dreamer_discrete,
-    DreamerBehaviorOutput,
     DreamerConfig,
     DreamerForWorldModeling,
     DreamerModel,
-    DreamerOutput,
     create_model,
     is_model,
     list_models,
 )
+from lucid.models.generative.dreamer import DreamerBehaviorOutput, DreamerOutput
 from lucid.models.generative._rssm import RSSMState
 from lucid.models.generative._returns import lambda_return
 
