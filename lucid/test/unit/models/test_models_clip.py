@@ -22,6 +22,7 @@ unconstrained; the numbers still fall.
 """
 
 import math
+import os
 
 import pytest
 
@@ -35,6 +36,10 @@ from lucid.models.multimodal.clip import (
     CLIPConfig,
     CLIPForZeroShotImageClassification,
     CLIPTokenizer,
+    CLIPViTBase16Weights,
+    CLIPViTBase32Weights,
+    CLIPViTLarge14_336Weights,
+    CLIPViTLarge14Weights,
 )
 from lucid.models.multimodal.clip._tokenizer import _PATTERN
 from lucid.models.multimodal.clip._model import (
@@ -597,3 +602,75 @@ class TestItLearnsToMatch:
             out.loss.backward()
             opt.step()
         assert abs(float(model.scale.item()) - start) > 0.05
+
+
+class TestWeightsAreDeclaredConsistently:
+    """The registry's own numbers, checked against the models they load into.
+
+    A wrong ``num_params`` or a stale ``sha256`` is invisible until a
+    user downloads — and this session already shipped a YOLO entry whose
+    digest did not match the published file, so these are checked
+    offline rather than trusted.
+    """
+
+    @pytest.mark.parametrize(
+        "factory,enum",
+        [
+            ("clip_vit_base_32", CLIPViTBase32Weights),
+            ("clip_vit_base_16", CLIPViTBase16Weights),
+            ("clip_vit_large_14", CLIPViTLarge14Weights),
+            ("clip_vit_large_14_336", CLIPViTLarge14_336Weights),
+        ],
+    )
+    def test_declared_parameter_count_matches_the_model(
+        self, factory: str, enum: object
+    ) -> None:
+        entry = enum.DEFAULT.value  # type: ignore[attr-defined]
+        assert entry.meta["num_params"] == M.create_model(factory).num_parameters()
+
+    def test_the_336_preset_crops_to_336(self) -> None:
+        """The one entry whose preprocessing differs, and the reason it does."""
+        assert CLIPViTLarge14_336Weights.DEFAULT.value.transforms.crop_size == 336
+        assert CLIPViTLarge14Weights.DEFAULT.value.transforms.crop_size == 224
+
+    def test_every_url_points_at_its_own_repo(self) -> None:
+        """Guards the three above — copy-pasting an entry is how two
+        variants end up sharing one checkpoint, which loads cleanly for
+        the pair whose shapes happen to agree."""
+        seen = set()
+        for enum in (
+            CLIPViTBase32Weights,
+            CLIPViTBase16Weights,
+            CLIPViTLarge14Weights,
+            CLIPViTLarge14_336Weights,
+        ):
+            entry = enum.DEFAULT.value
+            assert entry.url not in seen, f"duplicate url: {entry.url}"
+            assert entry.sha256 not in seen, f"duplicate digest: {entry.sha256}"
+            seen.update({entry.url, entry.sha256})
+
+
+@pytest.mark.skipif(
+    os.environ.get("LUCID_TEST_NETWORK") != "1",
+    reason="set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestPretrainedRoundTrip:
+    """End-to-end through the Lucid API alone: download, verify, run."""
+
+    def test_it_loads_and_runs(self) -> None:
+        model = M.clip_vit_base_32(pretrained=True).eval()
+        out = model(
+            lucid.randn((2, 3, 224, 224)),
+            lucid.tensor(
+                [[49406, 320, 1125, 49407] + [0] * 73] * 2, dtype=lucid.int64
+            ),
+        )
+        assert out.logits_per_image.shape == (2, 2)
+        norms = ((out.image_embeds**2).sum(dim=-1) ** 0.5).tolist()
+        assert all(abs(n - 1.0) < 1e-4 for n in norms)
+
+    def test_the_trained_temperature_sits_at_the_cap(self) -> None:
+        """Measured: every release stores log(100), so the paper's clip
+        was binding when training stopped."""
+        model = M.clip_vit_base_32(pretrained=True)
+        assert float(model.scale.item()) == pytest.approx(100.0, abs=1e-3)

@@ -7,6 +7,12 @@ from lucid.models.multimodal.clip._model import (
     CLIPOutput,
     CLIPZeroShotOutput,
 )
+from lucid.models.multimodal.clip._weights import (
+    CLIPViTBase16Weights,
+    CLIPViTBase32Weights,
+    CLIPViTLarge14_336Weights,
+    CLIPViTLarge14Weights,
+)
 from lucid.models.multimodal.clip._tokenizer import (
     CLIP_EOS,
     CLIP_SOS,
@@ -32,6 +38,10 @@ __all__ = [
     "CLIPTokenizer",
     "CLIP_SOS",
     "CLIP_EOS",
+    "CLIPViTBase32Weights",
+    "CLIPViTBase16Weights",
+    "CLIPViTLarge14Weights",
+    "CLIPViTLarge14_336Weights",
     "clip_vit_base_32",
     "clip_vit_base_16",
     "clip_vit_large_14",

@@ -15,6 +15,10 @@ a third ResNet variant, not a configuration of an existing one, and
 shipping it half-done would be worse than saying so.  The four ViT
 factories below are complete.
 
+All four ship pretrained weights, verified numerically against the
+reference before publication rather than merely loaded — see
+``_weights.py``.
+
 No parameter counts are registered.  The paper reports compute (in
 GPU-days and GFLOPs) rather than trainable-parameter totals for its
 variants — the only count it states is the text encoder's 63M — so any
@@ -25,9 +29,15 @@ citation.  ``summary="auto"`` reports the real number instead.
 from dataclasses import replace
 from typing import Any, cast
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
-from lucid.models._utils._common import reject_unavailable_pretrained
 from lucid.models.multimodal.clip._config import CLIPConfig
+from lucid.models.multimodal.clip._weights import (
+    CLIPViTBase16Weights,
+    CLIPViTBase32Weights,
+    CLIPViTLarge14_336Weights,
+    CLIPViTLarge14Weights,
+)
 from lucid.models.multimodal.clip._model import (
     CLIP,
     CLIPForZeroShotImageClassification,
@@ -91,7 +101,7 @@ def clip_vit_base_32(pretrained: bool = False, **overrides: object) -> CLIP:
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the OpenAI WIT-400M checkpoint from the Lucid hub.
     **overrides : object
         Optional :class:`CLIPConfig` field overrides.
 
@@ -115,9 +125,11 @@ def clip_vit_base_32(pretrained: bool = False, **overrides: object) -> CLIP:
     >>> model.config.patch_size, model.config.embed_dim
     (32, 512)
     """
-    if pretrained:
-        reject_unavailable_pretrained("clip_vit_base_32")
-    return CLIP(_apply(_CFG_BASE_32, overrides))
+    model = CLIP(_apply(_CFG_BASE_32, overrides))
+    entry = weights_mod.resolve_weights(CLIPViTBase32Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="clip_vit_base_32")
+    return model
 
 
 @register_model(
@@ -134,7 +146,7 @@ def clip_vit_base_16(pretrained: bool = False, **overrides: object) -> CLIP:
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the OpenAI WIT-400M checkpoint from the Lucid hub.
     **overrides : object
         Optional :class:`CLIPConfig` field overrides.
 
@@ -158,9 +170,11 @@ def clip_vit_base_16(pretrained: bool = False, **overrides: object) -> CLIP:
     >>> model.config.patch_size, model.config.vision_width
     (16, 768)
     """
-    if pretrained:
-        reject_unavailable_pretrained("clip_vit_base_16")
-    return CLIP(_apply(_CFG_BASE_16, overrides))
+    model = CLIP(_apply(_CFG_BASE_16, overrides))
+    entry = weights_mod.resolve_weights(CLIPViTBase16Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="clip_vit_base_16")
+    return model
 
 
 @register_model(
@@ -177,7 +191,7 @@ def clip_vit_large_14(pretrained: bool = False, **overrides: object) -> CLIP:
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the OpenAI WIT-400M checkpoint from the Lucid hub.
     **overrides : object
         Optional :class:`CLIPConfig` field overrides.
 
@@ -201,9 +215,11 @@ def clip_vit_large_14(pretrained: bool = False, **overrides: object) -> CLIP:
     >>> model.config.vision_layers, model.config.text_width
     (24, 768)
     """
-    if pretrained:
-        reject_unavailable_pretrained("clip_vit_large_14")
-    return CLIP(_apply(_CFG_LARGE_14, overrides))
+    model = CLIP(_apply(_CFG_LARGE_14, overrides))
+    entry = weights_mod.resolve_weights(CLIPViTLarge14Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="clip_vit_large_14")
+    return model
 
 
 @register_model(
@@ -220,7 +236,7 @@ def clip_vit_large_14_336(pretrained: bool = False, **overrides: object) -> CLIP
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the OpenAI WIT-400M checkpoint from the Lucid hub.
     **overrides : object
         Optional :class:`CLIPConfig` field overrides.
 
@@ -246,9 +262,11 @@ def clip_vit_large_14_336(pretrained: bool = False, **overrides: object) -> CLIP
     >>> model.config.image_size
     336
     """
-    if pretrained:
-        reject_unavailable_pretrained("clip_vit_large_14_336")
-    return CLIP(_apply(_CFG_LARGE_14_336, overrides))
+    model = CLIP(_apply(_CFG_LARGE_14_336, overrides))
+    entry = weights_mod.resolve_weights(CLIPViTLarge14_336Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="clip_vit_large_14_336")
+    return model
 
 
 @register_model(
@@ -267,7 +285,7 @@ def clip_vit_base_32_zero_shot(
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the OpenAI WIT-400M checkpoint from the Lucid hub.
     **overrides : object
         Optional :class:`CLIPConfig` field overrides.
 
@@ -287,9 +305,11 @@ def clip_vit_base_32_zero_shot(
     >>> model.config.patch_size
     32
     """
-    if pretrained:
-        reject_unavailable_pretrained("clip_vit_base_32_zero_shot")
-    return CLIPForZeroShotImageClassification(_apply(_CFG_BASE_32, overrides))
+    model = CLIPForZeroShotImageClassification(_apply(_CFG_BASE_32, overrides))
+    entry = weights_mod.resolve_weights(CLIPViTBase32Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(model.clip, entry, name="clip_vit_base_32_zero_shot")
+    return model
 
 
 @register_model(
@@ -308,7 +328,7 @@ def clip_vit_base_16_zero_shot(
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the OpenAI WIT-400M checkpoint from the Lucid hub.
     **overrides : object
         Optional :class:`CLIPConfig` field overrides.
 
@@ -328,9 +348,11 @@ def clip_vit_base_16_zero_shot(
     >>> model.config.patch_size
     16
     """
-    if pretrained:
-        reject_unavailable_pretrained("clip_vit_base_16_zero_shot")
-    return CLIPForZeroShotImageClassification(_apply(_CFG_BASE_16, overrides))
+    model = CLIPForZeroShotImageClassification(_apply(_CFG_BASE_16, overrides))
+    entry = weights_mod.resolve_weights(CLIPViTBase16Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(model.clip, entry, name="clip_vit_base_16_zero_shot")
+    return model
 
 
 @register_model(
@@ -349,7 +371,7 @@ def clip_vit_large_14_zero_shot(
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the OpenAI WIT-400M checkpoint from the Lucid hub.
     **overrides : object
         Optional :class:`CLIPConfig` field overrides.
 
@@ -371,9 +393,11 @@ def clip_vit_large_14_zero_shot(
     >>> model.config.embed_dim
     768
     """
-    if pretrained:
-        reject_unavailable_pretrained("clip_vit_large_14_zero_shot")
-    return CLIPForZeroShotImageClassification(_apply(_CFG_LARGE_14, overrides))
+    model = CLIPForZeroShotImageClassification(_apply(_CFG_LARGE_14, overrides))
+    entry = weights_mod.resolve_weights(CLIPViTLarge14Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(model.clip, entry, name="clip_vit_large_14_zero_shot")
+    return model
 
 
 @register_model(
@@ -392,7 +416,7 @@ def clip_vit_large_14_336_zero_shot(
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the OpenAI WIT-400M checkpoint from the Lucid hub.
     **overrides : object
         Optional :class:`CLIPConfig` field overrides.
 
@@ -412,6 +436,8 @@ def clip_vit_large_14_336_zero_shot(
     >>> model.config.image_size
     336
     """
-    if pretrained:
-        reject_unavailable_pretrained("clip_vit_large_14_336_zero_shot")
-    return CLIPForZeroShotImageClassification(_apply(_CFG_LARGE_14_336, overrides))
+    model = CLIPForZeroShotImageClassification(_apply(_CFG_LARGE_14_336, overrides))
+    entry = weights_mod.resolve_weights(CLIPViTLarge14_336Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(model.clip, entry, name="clip_vit_large_14_336_zero_shot")
+    return model
