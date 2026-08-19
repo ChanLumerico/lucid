@@ -10021,6 +10021,46 @@
       "module": "lucid.models.vision.yolo"
     }
   ],
+  "lucid.models.vision.yolo._weights.YOLOV2Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo._v2"
+    }
+  ],
+  "lucid.models.vision.yolo._weights.YOLOV3TinyWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo._v3"
+    }
+  ],
+  "lucid.models.vision.yolo._weights.YOLOV3Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo._v3"
+    }
+  ],
+  "lucid.models.vision.yolo._weights.YOLOV4Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo._v4"
+    }
+  ],
   "lucid.models.vision.zfnet": [
     {
       "kind": "module",
@@ -15524,6 +15564,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.yolo._weights"
+    },
+    {
+      "kind": "module",
       "module": "lucid.utils"
     },
     {
@@ -16679,6 +16723,22 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.xception._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo._v2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo._v3"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo._v4"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.yolo._weights"
     }
   ],
   "lucid.weights._base.WeightEntry": [
