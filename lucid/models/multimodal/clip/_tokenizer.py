@@ -26,6 +26,22 @@ things:
 and 49152 is the target the merge list is *sliced* to
 (``merges[1:49152-256-2+1]``) before the byte symbols are counted.
 
+**Where this differs from ``transformers``, measured.**  On five
+varied captions the ids agree with ``transformers``' CLIP tokenizer on
+four.  The fifth is ``"&amp;amp;"``: this implementation unescapes HTML
+entities twice and yields ``&``, matching the reference implementation
+the paper shipped —
+
+.. code-block:: python
+
+    text = ftfy.fix_text(text)
+    text = html.unescape(html.unescape(text))
+
+— while ``transformers`` tokenises the entity literally.  Doubly-escaped
+entities are common in scraped captions, which is why the released code
+unescapes twice, so the divergence is resolved in favour of the authors'
+own tokenizer rather than the re-hosting's.
+
 **One preprocessing step is deliberately absent.**  The reference calls
 ``ftfy.fix_text`` to repair mojibake before anything else.  Lucid's
 compute and utility paths take no third-party dependency, so it is not
@@ -40,12 +56,20 @@ import html
 import re
 from typing import override
 
+from lucid._C import engine as _C_engine
+
 from lucid.utils.tokenizer._base import SpecialTokens
 from lucid.utils.tokenizer._bpe import BPETokenizer
 from lucid.utils.tokenizer._normalizers import Normalizer
 from lucid.utils.tokenizer._pre_tokenizers import ByteLevel, Chunk, PreTokenizer
 
-__all__ = ["CLIPTokenizer", "CLIP_SOS", "CLIP_EOS", "END_OF_WORD"]
+__all__ = [
+    "CLIPTokenizer",
+    "CLIPTokenizerFast",
+    "CLIP_SOS",
+    "CLIP_EOS",
+    "END_OF_WORD",
+]
 
 CLIP_SOS = "<|startoftext|>"
 CLIP_EOS = "<|endoftext|>"
@@ -300,3 +324,165 @@ class CLIPTokenizer(BPETokenizer):
             if token is not None and token not in (CLIP_SOS, CLIP_EOS):
                 out.append(token)
         return "".join(out).replace(END_OF_WORD, " ").strip()
+
+
+def _fold_map() -> dict[str, str]:
+    """Map each byte-level symbol to a codepoint standing for ``s</w>``.
+
+    Returns
+    -------
+    dict of str to str
+        One private-use codepoint per byte symbol.
+
+    Notes
+    -----
+    The Private Use Area starts at ``U+E000`` and the byte-level alphabet
+    tops out near ``U+0143``, so no folded symbol can collide with a real
+    one.  That separation is the whole safety argument for the rewrite
+    below: a collision would silently merge two different tokens.
+    """
+    alphabet = [ByteLevel.encode_bytes(bytes([b])) for b in range(256)]
+    return {char: chr(0xE000 + index) for index, char in enumerate(alphabet)}
+
+
+def _fold_token(token: str, folded: dict[str, str]) -> str:
+    """Rewrite one vocabulary entry so ``</w>`` becomes one codepoint.
+
+    Parameters
+    ----------
+    token : str
+        A vocabulary key.
+    folded : dict of str to str
+        The map from :func:`_fold_map`.
+
+    Returns
+    -------
+    str
+        ``"hello</w>"`` becomes ``"hell" + folded["o"]``; a token without
+        the marker is returned unchanged.
+    """
+    if not token.endswith(END_OF_WORD) or len(token) <= len(END_OF_WORD):
+        return token
+    stem = token[: -len(END_OF_WORD)]
+    last = folded.get(stem[-1])
+    return stem[:-1] + last if last is not None else token
+
+
+class CLIPTokenizerFast(CLIPTokenizer):
+    r"""CLIP's tokenizer with the merge loop running in C++.
+
+    Same vocabulary format, same preprocessing, same output as
+    :class:`CLIPTokenizer` — only faster.
+
+    Parameters
+    ----------
+    vocab : dict[str, int]
+        Token-string → id map, over byte-mapped symbols.
+    merges : list of tuple of str
+        Ordered BPE merges; index is the rank.
+    normalizer : Normalizer, optional
+        Applied before the pattern.
+    special_tokens : SpecialTokens, optional
+        Override the default sentinel registry.
+
+    Notes
+    -----
+    **How this is possible at all.**  The engine's BPE seeds one symbol
+    per codepoint, so handing it ``"hello</w>"`` tears the marker into
+    ``<``, ``/``, ``w``, ``>`` — four symbols where the scheme needs the
+    marker fused to the final character.  That was measured, and it is
+    why :class:`~lucid.models.text.gpt.GPTTokenizerFast` carries no
+    acceleration at all.
+
+    The way through is a *vocabulary* rewrite rather than an engine one.
+    Every entry ending in ``</w>`` is folded so the marker and the
+    character before it become a single private-use codepoint, and the
+    same fold is applied to the merge table and to each chunk before it
+    is handed over.  The engine then seeds exactly the symbols the scheme
+    intends, applies the merges it was given, and returns ids from the
+    unmodified id space — the fold changes only the *keys*, never the
+    values, so nothing downstream sees it.
+
+    The same trick would give GPT-1 a genuine fast path; that class's
+    note that the scheme "needs an engine change" is one option, not the
+    only one.
+
+    Examples
+    --------
+    >>> from lucid.models.multimodal.clip import CLIPTokenizerFast
+    >>> vocab = {"a": 0, "b</w>": 1, "ab</w>": 2,
+    ...          "<|startoftext|>": 3, "<|endoftext|>": 4}
+    >>> tok = CLIPTokenizerFast(vocab=vocab, merges=[("a", "b</w>")])
+    >>> tok.encode("ab")
+    [2]
+    >>> tok.tokenize("ab", context_length=5)
+    [3, 2, 4, 0, 0]
+    """
+
+    def __init__(
+        self,
+        vocab: dict[str, int],
+        merges: list[tuple[str, str]],
+        *,
+        normalizer: Normalizer | None = None,
+        special_tokens: SpecialTokens | None = None,
+    ) -> None:
+        """Construct the tokenizer. See the class docstring for parameters."""
+        super().__init__(
+            vocab, merges, normalizer=normalizer, special_tokens=special_tokens
+        )
+        self._folded = _fold_map()
+        shadow_vocab = {
+            _fold_token(token, self._folded): index for token, index in vocab.items()
+        }
+        if len(shadow_vocab) != len(vocab):
+            raise ValueError(
+                "folding the end-of-word marker collapsed two vocabulary "
+                "entries onto one key; the vocabulary is not byte-level"
+            )
+        # The engine drops a symbol it cannot find; the Python path
+        # substitutes UNK.  On a total byte-level vocabulary neither can
+        # happen, because every seed symbol is present by construction —
+        # so require totality rather than let the two paths disagree on
+        # an input that should not exist.
+        missing = [
+            plain
+            for plain, folded_char in self._folded.items()
+            if plain not in vocab or folded_char not in shadow_vocab
+        ]
+        if missing:
+            raise ValueError(
+                f"the fast path needs a total byte-level vocabulary — every "
+                f"byte symbol with and without {END_OF_WORD!r} — but "
+                f"{len(missing)} are absent (e.g. {missing[0]!r}). The "
+                f"engine drops an unknown symbol where CLIPTokenizer "
+                f"substitutes UNK, so the two would silently disagree. "
+                f"Use CLIPTokenizer for a partial vocabulary."
+            )
+        shadow_merges = [
+            (_fold_token(left, self._folded), _fold_token(right, self._folded))
+            for left, right in merges
+        ]
+        self._cpp = _C_engine.utils.tokenizer.BPE(shadow_vocab, shadow_merges)
+
+    @override
+    def _encode_chunk(self, chunk: str) -> list[int]:
+        """Fold the chunk's final symbol, then merge in C++.
+
+        Parameters
+        ----------
+        chunk : str
+            One byte-mapped piece from the pre-tokenizer.
+
+        Returns
+        -------
+        list of int
+            Merged ids, identical to the pure-Python path's.
+        """
+        if not chunk:
+            return []
+        last = self._folded.get(chunk[-1])
+        if last is None:
+            # Not a byte-level symbol — fall back rather than mis-seed.
+            return super()._encode_chunk(chunk)
+        return list(self._cpp.encode(chunk[:-1] + last))

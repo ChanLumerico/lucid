@@ -308,7 +308,9 @@ def clip_vit_base_32_zero_shot(
     model = CLIPForZeroShotImageClassification(_apply(_CFG_BASE_32, overrides))
     entry = weights_mod.resolve_weights(CLIPViTBase32Weights, pretrained, None)
     if entry is not None:
-        weights_mod.load_weight_entry(model.clip, entry, name="clip_vit_base_32_zero_shot")
+        weights_mod.load_weight_entry(
+            model.clip, entry, name="clip_vit_base_32_zero_shot"
+        )
     return model
 
 
@@ -351,7 +353,9 @@ def clip_vit_base_16_zero_shot(
     model = CLIPForZeroShotImageClassification(_apply(_CFG_BASE_16, overrides))
     entry = weights_mod.resolve_weights(CLIPViTBase16Weights, pretrained, None)
     if entry is not None:
-        weights_mod.load_weight_entry(model.clip, entry, name="clip_vit_base_16_zero_shot")
+        weights_mod.load_weight_entry(
+            model.clip, entry, name="clip_vit_base_16_zero_shot"
+        )
     return model
 
 
@@ -396,7 +400,9 @@ def clip_vit_large_14_zero_shot(
     model = CLIPForZeroShotImageClassification(_apply(_CFG_LARGE_14, overrides))
     entry = weights_mod.resolve_weights(CLIPViTLarge14Weights, pretrained, None)
     if entry is not None:
-        weights_mod.load_weight_entry(model.clip, entry, name="clip_vit_large_14_zero_shot")
+        weights_mod.load_weight_entry(
+            model.clip, entry, name="clip_vit_large_14_zero_shot"
+        )
     return model
 
 
@@ -439,5 +445,7 @@ def clip_vit_large_14_336_zero_shot(
     model = CLIPForZeroShotImageClassification(_apply(_CFG_LARGE_14_336, overrides))
     entry = weights_mod.resolve_weights(CLIPViTLarge14_336Weights, pretrained, None)
     if entry is not None:
-        weights_mod.load_weight_entry(model.clip, entry, name="clip_vit_large_14_336_zero_shot")
+        weights_mod.load_weight_entry(
+            model.clip, entry, name="clip_vit_large_14_336_zero_shot"
+        )
     return model

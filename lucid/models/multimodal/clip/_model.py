@@ -32,6 +32,10 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import ModelOutput
+from lucid.models.multimodal._towers import (
+    ResidualAttentionBlock,
+    TransformerTower,
+)
 from lucid.models.multimodal.clip._config import CLIPConfig
 
 __all__ = [
@@ -40,136 +44,6 @@ __all__ = [
     "CLIPOutput",
     "CLIPZeroShotOutput",
 ]
-
-
-@final
-class _QuickGELU(nn.Module):
-    r"""``x * sigmoid(1.702 x)`` — the activation the released weights use.
-
-    Notes
-    -----
-    Not the same function as :func:`lucid.nn.functional.gelu`.  It is a
-    sigmoid approximation of it that predates the exact form being cheap,
-    and it survives here because the published CLIP checkpoints were
-    trained with it: swapping in exact GELU shifts every activation
-    slightly, which is invisible in a forward-shape test and shows up as
-    a quietly degraded zero-shot score.
-
-    Kept private to the family.  A second consumer would justify
-    promoting it to :mod:`lucid.nn`; there is one.
-    """
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        """Apply the activation.
-
-        Parameters
-        ----------
-        x : Tensor
-            Any shape.
-
-        Returns
-        -------
-        Tensor
-            The same shape.
-        """
-        return x * F.sigmoid(1.702 * x)
-
-
-@final
-class _ResidualAttentionBlock(nn.Module):
-    """Pre-norm Transformer block, shared by both towers.
-
-    Parameters
-    ----------
-    width : int
-        Residual stream width.
-    heads : int
-        Attention heads.
-    causal : bool, default=False
-        Mask future positions.  True for the text tower, false for the
-        image tower — patches have no order to respect.
-
-    Notes
-    -----
-    Pre-norm rather than post-norm: the residual path stays unnormalised
-    end to end, which is what lets these depths train without a warmup
-    schedule tuned per variant.
-    """
-
-    def __init__(self, width: int, heads: int, causal: bool = False) -> None:
-        """Initialise the block. See the class docstring for parameters."""
-        super().__init__()
-        self.causal = causal
-        self.ln_1 = nn.LayerNorm(width)
-        self.attn = nn.MultiheadAttention(width, heads, batch_first=True)
-        self.ln_2 = nn.LayerNorm(width)
-        self.mlp = nn.Sequential(
-            nn.Linear(width, width * 4),
-            _QuickGELU(),
-            nn.Linear(width * 4, width),
-        )
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        """Attention and MLP, each on the residual stream.
-
-        Parameters
-        ----------
-        x : Tensor
-            ``(B, T, width)``.
-
-        Returns
-        -------
-        Tensor
-            ``(B, T, width)``.
-        """
-        normed = cast(Tensor, self.ln_1(x))
-        attended, _ = self.attn(
-            normed, normed, normed, need_weights=False, is_causal=self.causal
-        )
-        x = x + attended
-        return x + cast(Tensor, self.mlp(cast(Tensor, self.ln_2(x))))
-
-
-@final
-class _Transformer(nn.Module):
-    """A stack of :class:`_ResidualAttentionBlock`.
-
-    Parameters
-    ----------
-    width, layers, heads : int
-        Shape of the stack.
-    causal : bool, default=False
-        Passed to every block.
-    """
-
-    def __init__(
-        self, width: int, layers: int, heads: int, causal: bool = False
-    ) -> None:
-        """Initialise the stack. See the class docstring for parameters."""
-        super().__init__()
-        self.resblocks = nn.ModuleList(
-            [_ResidualAttentionBlock(width, heads, causal) for _ in range(layers)]
-        )
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        """Run every block in order.
-
-        Parameters
-        ----------
-        x : Tensor
-            ``(B, T, width)``.
-
-        Returns
-        -------
-        Tensor
-            ``(B, T, width)``.
-        """
-        for block in self.resblocks:
-            x = cast(Tensor, block(x))
-        return x
 
 
 @final
@@ -222,7 +96,7 @@ class _VisionTransformer(nn.Module):
             lucid.zeros((self.num_patches + 1, width))
         )
         self.ln_pre = nn.LayerNorm(width)
-        self.transformer = _Transformer(
+        self.transformer = TransformerTower(
             width, config.vision_layers, config.vision_heads
         )
         self.ln_post = nn.LayerNorm(width)
@@ -281,7 +155,7 @@ class _TextTransformer(nn.Module):
         self.positional_embedding = nn.Parameter(
             lucid.zeros((config.context_length, width))
         )
-        self.transformer = _Transformer(
+        self.transformer = TransformerTower(
             width, config.text_layers, config.text_heads, causal=True
         )
         self.ln_final = nn.LayerNorm(width)
@@ -327,9 +201,7 @@ class _TextTransformer(nn.Module):
         # ``.type`` — a bare ``device`` object renders as "device('metal')",
         # which the creation factories do not parse, and an index tensor
         # left on the CPU only fails once it meets the activations.
-        rows = lucid.arange(
-            int(x.shape[0]), dtype=lucid.int64, device=x.device.type
-        )
+        rows = lucid.arange(int(x.shape[0]), dtype=lucid.int64, device=x.device.type)
         pooled = x[rows, eos]
         return pooled @ cast(Tensor, self.text_projection)
 
@@ -478,7 +350,7 @@ class CLIP(PretrainedModel):
                 proj_std = (width**-0.5) * ((2 * layers) ** -0.5)
                 fc_std = (2 * width) ** -0.5
                 for module in tower.resblocks:
-                    block = cast(_ResidualAttentionBlock, module)
+                    block = cast(ResidualAttentionBlock, module)
                     # Fused only when the three projections share a
                     # width, which self-attention always does; asserting
                     # rather than casting so a future kdim/vdim split
@@ -487,12 +359,8 @@ class CLIP(PretrainedModel):
                     assert fused is not None
                     nn.init.normal_(fused, std=attn_std)
                     nn.init.normal_(block.attn.out_proj_weight, std=proj_std)
-                    nn.init.normal_(
-                        cast(nn.Linear, block.mlp[0]).weight, std=fc_std
-                    )
-                    nn.init.normal_(
-                        cast(nn.Linear, block.mlp[2]).weight, std=proj_std
-                    )
+                    nn.init.normal_(cast(nn.Linear, block.mlp[0]).weight, std=fc_std)
+                    nn.init.normal_(cast(nn.Linear, block.mlp[2]).weight, std=proj_std)
 
             self.logit_scale[:] = lucid.full(
                 (1,), math.log(1.0 / config.logit_scale_init)
@@ -717,9 +585,7 @@ def _contrastive_loss(logits_per_image: Tensor, logits_per_text: Tensor) -> Tens
             f"the contrastive loss pairs a batch with itself, so the logits "
             f"must be square; got {tuple(logits_per_image.shape)}"
         )
-    target = lucid.arange(
-        n, dtype=lucid.int64, device=logits_per_image.device.type
-    )
+    target = lucid.arange(n, dtype=lucid.int64, device=logits_per_image.device.type)
     image_side = F.cross_entropy(logits_per_image, target)
     text_side = F.cross_entropy(logits_per_text, target)
     return (image_side + text_side) / 2.0

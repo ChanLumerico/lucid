@@ -1,10 +1,10 @@
 """CLIP configuration (Radford et al., 2021)."""
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, override
 
-from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
+from lucid.models.multimodal._config import MultimodalModelConfig
 
 __all__ = ["CLIPConfig"]
 
@@ -59,15 +59,15 @@ __all__ = ["CLIPConfig"]
     """,
 )
 @dataclass(frozen=True)
-class CLIPConfig(ModelConfig):
+class CLIPConfig(MultimodalModelConfig):
     r"""Frozen configuration dataclass for every CLIP variant.
 
     Parameters
     ----------
     embed_dim : int, default=512
-        Width of the joint image-text embedding space.  Both towers
-        project into it, so this — not either tower's width — is the
-        dimension a downstream consumer sees.
+        Inherited from :class:`~lucid.models.multimodal.MultimodalModelConfig`
+        — the width of the joint image-text space both towers project
+        into, and the dimension a downstream consumer sees.
     image_size : int, default=224
         Input resolution of the image tower.  ``336`` for the
         high-resolution ViT-L/14 variant.
@@ -140,8 +140,6 @@ class CLIPConfig(ModelConfig):
 
     model_type: ClassVar[str] = "clip"
 
-    embed_dim: int = 512
-
     image_size: int = 224
     patch_size: int = 32
     vision_layers: int = 12
@@ -157,8 +155,10 @@ class CLIPConfig(ModelConfig):
     logit_scale_init: float = 0.07
     logit_scale_max: float = 100.0
 
+    @override
     def __post_init__(self) -> None:
         """Reject configurations that cannot be built or trained."""
+        super().__post_init__()
         if self.image_size % self.patch_size != 0:
             raise ValueError(
                 f"image_size must be divisible by patch_size, got "

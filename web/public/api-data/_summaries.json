@@ -314101,7 +314101,7 @@
           },
           {
             "name": "transformer",
-            "type": "_Transformer",
+            "type": "TransformerTower",
             "params": 85054464,
             "own_params": 0,
             "children": [
@@ -314113,7 +314113,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_ResidualAttentionBlock",
+                    "type": "ResidualAttentionBlock",
                     "params": 7087872,
                     "own_params": 0,
                     "children": [
@@ -314153,7 +314153,7 @@
                           },
                           {
                             "name": "1",
-                            "type": "_QuickGELU",
+                            "type": "QuickGELU",
                             "params": 0,
                             "own_params": 0,
                             "children": []
@@ -314198,7 +314198,7 @@
           },
           {
             "name": "transformer",
-            "type": "_Transformer",
+            "type": "TransformerTower",
             "params": 37828608,
             "own_params": 0,
             "children": [
@@ -314210,7 +314210,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_ResidualAttentionBlock",
+                    "type": "ResidualAttentionBlock",
                     "params": 3152384,
                     "own_params": 0,
                     "children": [
@@ -314250,7 +314250,7 @@
                           },
                           {
                             "name": "1",
-                            "type": "_QuickGELU",
+                            "type": "QuickGELU",
                             "params": 0,
                             "own_params": 0,
                             "children": []
@@ -314316,7 +314316,7 @@
               },
               {
                 "name": "transformer",
-                "type": "_Transformer",
+                "type": "TransformerTower",
                 "params": 85054464,
                 "own_params": 0,
                 "children": [
@@ -314328,7 +314328,7 @@
                     "children": [
                       {
                         "name": "0",
-                        "type": "_ResidualAttentionBlock",
+                        "type": "ResidualAttentionBlock",
                         "params": 7087872,
                         "own_params": 0,
                         "children": [
@@ -314368,7 +314368,7 @@
                               },
                               {
                                 "name": "1",
-                                "type": "_QuickGELU",
+                                "type": "QuickGELU",
                                 "params": 0,
                                 "own_params": 0,
                                 "children": []
@@ -314413,7 +314413,7 @@
               },
               {
                 "name": "transformer",
-                "type": "_Transformer",
+                "type": "TransformerTower",
                 "params": 37828608,
                 "own_params": 0,
                 "children": [
@@ -314425,7 +314425,7 @@
                     "children": [
                       {
                         "name": "0",
-                        "type": "_ResidualAttentionBlock",
+                        "type": "ResidualAttentionBlock",
                         "params": 3152384,
                         "own_params": 0,
                         "children": [
@@ -314465,7 +314465,7 @@
                               },
                               {
                                 "name": "1",
-                                "type": "_QuickGELU",
+                                "type": "QuickGELU",
                                 "params": 0,
                                 "own_params": 0,
                                 "children": []
@@ -314527,7 +314527,7 @@
           },
           {
             "name": "transformer",
-            "type": "_Transformer",
+            "type": "TransformerTower",
             "params": 85054464,
             "own_params": 0,
             "children": [
@@ -314539,7 +314539,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_ResidualAttentionBlock",
+                    "type": "ResidualAttentionBlock",
                     "params": 7087872,
                     "own_params": 0,
                     "children": [
@@ -314579,7 +314579,7 @@
                           },
                           {
                             "name": "1",
-                            "type": "_QuickGELU",
+                            "type": "QuickGELU",
                             "params": 0,
                             "own_params": 0,
                             "children": []
@@ -314624,7 +314624,7 @@
           },
           {
             "name": "transformer",
-            "type": "_Transformer",
+            "type": "TransformerTower",
             "params": 37828608,
             "own_params": 0,
             "children": [
@@ -314636,7 +314636,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_ResidualAttentionBlock",
+                    "type": "ResidualAttentionBlock",
                     "params": 3152384,
                     "own_params": 0,
                     "children": [
@@ -314676,7 +314676,7 @@
                           },
                           {
                             "name": "1",
-                            "type": "_QuickGELU",
+                            "type": "QuickGELU",
                             "params": 0,
                             "own_params": 0,
                             "children": []
@@ -314742,7 +314742,7 @@
               },
               {
                 "name": "transformer",
-                "type": "_Transformer",
+                "type": "TransformerTower",
                 "params": 85054464,
                 "own_params": 0,
                 "children": [
@@ -314754,7 +314754,7 @@
                     "children": [
                       {
                         "name": "0",
-                        "type": "_ResidualAttentionBlock",
+                        "type": "ResidualAttentionBlock",
                         "params": 7087872,
                         "own_params": 0,
                         "children": [
@@ -314794,7 +314794,7 @@
                               },
                               {
                                 "name": "1",
-                                "type": "_QuickGELU",
+                                "type": "QuickGELU",
                                 "params": 0,
                                 "own_params": 0,
                                 "children": []
@@ -314839,7 +314839,7 @@
               },
               {
                 "name": "transformer",
-                "type": "_Transformer",
+                "type": "TransformerTower",
                 "params": 37828608,
                 "own_params": 0,
                 "children": [
@@ -314851,7 +314851,7 @@
                     "children": [
                       {
                         "name": "0",
-                        "type": "_ResidualAttentionBlock",
+                        "type": "ResidualAttentionBlock",
                         "params": 3152384,
                         "own_params": 0,
                         "children": [
@@ -314891,7 +314891,7 @@
                               },
                               {
                                 "name": "1",
-                                "type": "_QuickGELU",
+                                "type": "QuickGELU",
                                 "params": 0,
                                 "own_params": 0,
                                 "children": []
@@ -314953,7 +314953,7 @@
           },
           {
             "name": "transformer",
-            "type": "_Transformer",
+            "type": "TransformerTower",
             "params": 302309376,
             "own_params": 0,
             "children": [
@@ -314965,7 +314965,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_ResidualAttentionBlock",
+                    "type": "ResidualAttentionBlock",
                     "params": 12596224,
                     "own_params": 0,
                     "children": [
@@ -315005,7 +315005,7 @@
                           },
                           {
                             "name": "1",
-                            "type": "_QuickGELU",
+                            "type": "QuickGELU",
                             "params": 0,
                             "own_params": 0,
                             "children": []
@@ -315050,7 +315050,7 @@
           },
           {
             "name": "transformer",
-            "type": "_Transformer",
+            "type": "TransformerTower",
             "params": 85054464,
             "own_params": 0,
             "children": [
@@ -315062,7 +315062,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_ResidualAttentionBlock",
+                    "type": "ResidualAttentionBlock",
                     "params": 7087872,
                     "own_params": 0,
                     "children": [
@@ -315102,7 +315102,7 @@
                           },
                           {
                             "name": "1",
-                            "type": "_QuickGELU",
+                            "type": "QuickGELU",
                             "params": 0,
                             "own_params": 0,
                             "children": []
@@ -315162,7 +315162,7 @@
           },
           {
             "name": "transformer",
-            "type": "_Transformer",
+            "type": "TransformerTower",
             "params": 302309376,
             "own_params": 0,
             "children": [
@@ -315174,7 +315174,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_ResidualAttentionBlock",
+                    "type": "ResidualAttentionBlock",
                     "params": 12596224,
                     "own_params": 0,
                     "children": [
@@ -315214,7 +315214,7 @@
                           },
                           {
                             "name": "1",
-                            "type": "_QuickGELU",
+                            "type": "QuickGELU",
                             "params": 0,
                             "own_params": 0,
                             "children": []
@@ -315259,7 +315259,7 @@
           },
           {
             "name": "transformer",
-            "type": "_Transformer",
+            "type": "TransformerTower",
             "params": 85054464,
             "own_params": 0,
             "children": [
@@ -315271,7 +315271,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_ResidualAttentionBlock",
+                    "type": "ResidualAttentionBlock",
                     "params": 7087872,
                     "own_params": 0,
                     "children": [
@@ -315311,7 +315311,7 @@
                           },
                           {
                             "name": "1",
-                            "type": "_QuickGELU",
+                            "type": "QuickGELU",
                             "params": 0,
                             "own_params": 0,
                             "children": []
@@ -315377,7 +315377,7 @@
               },
               {
                 "name": "transformer",
-                "type": "_Transformer",
+                "type": "TransformerTower",
                 "params": 302309376,
                 "own_params": 0,
                 "children": [
@@ -315389,7 +315389,7 @@
                     "children": [
                       {
                         "name": "0",
-                        "type": "_ResidualAttentionBlock",
+                        "type": "ResidualAttentionBlock",
                         "params": 12596224,
                         "own_params": 0,
                         "children": [
@@ -315429,7 +315429,7 @@
                               },
                               {
                                 "name": "1",
-                                "type": "_QuickGELU",
+                                "type": "QuickGELU",
                                 "params": 0,
                                 "own_params": 0,
                                 "children": []
@@ -315474,7 +315474,7 @@
               },
               {
                 "name": "transformer",
-                "type": "_Transformer",
+                "type": "TransformerTower",
                 "params": 85054464,
                 "own_params": 0,
                 "children": [
@@ -315486,7 +315486,7 @@
                     "children": [
                       {
                         "name": "0",
-                        "type": "_ResidualAttentionBlock",
+                        "type": "ResidualAttentionBlock",
                         "params": 7087872,
                         "own_params": 0,
                         "children": [
@@ -315526,7 +315526,7 @@
                               },
                               {
                                 "name": "1",
-                                "type": "_QuickGELU",
+                                "type": "QuickGELU",
                                 "params": 0,
                                 "own_params": 0,
                                 "children": []
@@ -315594,7 +315594,7 @@
               },
               {
                 "name": "transformer",
-                "type": "_Transformer",
+                "type": "TransformerTower",
                 "params": 302309376,
                 "own_params": 0,
                 "children": [
@@ -315606,7 +315606,7 @@
                     "children": [
                       {
                         "name": "0",
-                        "type": "_ResidualAttentionBlock",
+                        "type": "ResidualAttentionBlock",
                         "params": 12596224,
                         "own_params": 0,
                         "children": [
@@ -315646,7 +315646,7 @@
                               },
                               {
                                 "name": "1",
-                                "type": "_QuickGELU",
+                                "type": "QuickGELU",
                                 "params": 0,
                                 "own_params": 0,
                                 "children": []
@@ -315691,7 +315691,7 @@
               },
               {
                 "name": "transformer",
-                "type": "_Transformer",
+                "type": "TransformerTower",
                 "params": 85054464,
                 "own_params": 0,
                 "children": [
@@ -315703,7 +315703,7 @@
                     "children": [
                       {
                         "name": "0",
-                        "type": "_ResidualAttentionBlock",
+                        "type": "ResidualAttentionBlock",
                         "params": 7087872,
                         "own_params": 0,
                         "children": [
@@ -315743,7 +315743,7 @@
                               },
                               {
                                 "name": "1",
-                                "type": "_QuickGELU",
+                                "type": "QuickGELU",
                                 "params": 0,
                                 "own_params": 0,
                                 "children": []

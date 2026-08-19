@@ -36,15 +36,16 @@ from lucid.models.multimodal.clip import (
     CLIPConfig,
     CLIPForZeroShotImageClassification,
     CLIPTokenizer,
+    CLIPTokenizerFast,
     CLIPViTBase16Weights,
     CLIPViTBase32Weights,
     CLIPViTLarge14_336Weights,
     CLIPViTLarge14Weights,
 )
 from lucid.models.multimodal.clip._tokenizer import _PATTERN
+from lucid.models.multimodal import QuickGELU
 from lucid.models.multimodal.clip._model import (
     _contrastive_loss,
-    _QuickGELU,
     _TextTransformer,
 )
 
@@ -229,7 +230,7 @@ class TestTheTemperature:
         assert float(model.scale.item()) == pytest.approx(1.0 / 0.07, rel=1e-6)
 
     def test_it_is_capped(self) -> None:
-        """"clipped to prevent scaling the logits by more than 100"."""
+        """ "clipped to prevent scaling the logits by more than 100"."""
         model = CLIP(_tiny())
         with lucid.no_grad():
             model.logit_scale[:] = lucid.full((1,), 20.0)  # exp(20) >> 100
@@ -294,7 +295,7 @@ class TestTheTowersAttendCorrectly:
 class TestQuickGELU:
     def test_it_is_the_sigmoid_approximation(self) -> None:
         x = lucid.tensor([-2.0, 0.0, 1.0])
-        got = _QuickGELU()(x).tolist()
+        got = QuickGELU()(x).tolist()
         want = [v * (1.0 / (1.0 + math.exp(-1.702 * v))) for v in (-2.0, 0.0, 1.0)]
         assert [round(g, 6) for g in got] == [round(w, 6) for w in want]
 
@@ -304,7 +305,7 @@ class TestQuickGELU:
         import lucid.nn.functional as F
 
         x = lucid.tensor([1.5])
-        assert abs(float(_QuickGELU()(x).item()) - float(F.gelu(x).item())) > 1e-4
+        assert abs(float(QuickGELU()(x).item()) - float(F.gelu(x).item())) > 1e-4
 
 
 class TestVariants:
@@ -458,7 +459,14 @@ class TestTokenizer:
         without complaint.
         """
         assert _PATTERN.findall("a dog's paw, 42!") == [
-            "a", "dog", "'s", "paw", ",", "4", "2", "!"
+            "a",
+            "dog",
+            "'s",
+            "paw",
+            ",",
+            "4",
+            "2",
+            "!",
         ]
 
     def test_digits_are_not_grouped(self) -> None:
@@ -554,12 +562,12 @@ class TestItLearnsToMatch:
         return model, images, captions, pairs
 
     @staticmethod
-    def _rank1(model: CLIP, images: lucid.Tensor, captions: lucid.Tensor, n: int) -> float:
+    def _rank1(
+        model: CLIP, images: lucid.Tensor, captions: lucid.Tensor, n: int
+    ) -> float:
         with lucid.no_grad():
             predicted = model(images, captions).logits_per_image.argmax(dim=-1)
-            target = lucid.arange(
-                n, dtype=lucid.int64, device=predicted.device.type
-            )
+            target = lucid.arange(n, dtype=lucid.int64, device=predicted.device.type)
             return float((predicted == target).to(lucid.float32).mean().item())
 
     def test_matched_pairs_reach_the_top_of_their_row(self) -> None:
@@ -661,9 +669,7 @@ class TestPretrainedRoundTrip:
         model = M.clip_vit_base_32(pretrained=True).eval()
         out = model(
             lucid.randn((2, 3, 224, 224)),
-            lucid.tensor(
-                [[49406, 320, 1125, 49407] + [0] * 73] * 2, dtype=lucid.int64
-            ),
+            lucid.tensor([[49406, 320, 1125, 49407] + [0] * 73] * 2, dtype=lucid.int64),
         )
         assert out.logits_per_image.shape == (2, 2)
         norms = ((out.image_embeds**2).sum(dim=-1) ** 0.5).tolist()
@@ -674,3 +680,79 @@ class TestPretrainedRoundTrip:
         was binding when training stopped."""
         model = M.clip_vit_base_32(pretrained=True)
         assert float(model.scale.item()) == pytest.approx(100.0, abs=1e-3)
+
+
+class TestTheFastTokenizerAgrees:
+    """The only property that matters for a fast path: identical output.
+
+    The engine seeds one symbol per codepoint, so it tears ``</w>`` into
+    four — measured, and the reason GPT-1's "fast" tokenizer carries no
+    acceleration at all. This one works by folding the marker and the
+    character before it into a single private-use codepoint across the
+    vocabulary, the merge table and each chunk, so the engine seeds what
+    the scheme intends. The fold touches keys only; ids are untouched.
+    """
+
+    @staticmethod
+    def _pair() -> tuple[CLIPTokenizer, CLIPTokenizerFast]:
+        """A *total* byte-level vocabulary, which is the contract.
+
+        A partial one makes the two paths disagree by construction —
+        the engine drops an unknown symbol where the Python path
+        substitutes UNK — so the fast tokenizer refuses it outright and
+        the tests must not build one.
+        """
+        from lucid.utils.tokenizer._pre_tokenizers import ByteLevel
+
+        alphabet = [ByteLevel.encode_bytes(bytes([b])) for b in range(256)]
+        vocab: dict[str, int] = {}
+        for char in alphabet:
+            vocab[char] = len(vocab)
+        for char in alphabet:
+            vocab[char + "</w>"] = len(vocab)
+        for extra in ("ab</w>", "cab</w>", CLIP_SOS, CLIP_EOS):
+            vocab[extra] = len(vocab)
+        merges = [("a", "b</w>"), ("c", "ab</w>")]
+        return (
+            CLIPTokenizer(vocab=vocab, merges=merges),
+            CLIPTokenizerFast(vocab=vocab, merges=merges),
+        )
+
+    @pytest.mark.parametrize(
+        "text", ["ab", "cab", "a", "ab ab", "AB", "", "hello world 42!"]
+    )
+    def test_it_matches_the_python_path(self, text: str) -> None:
+        slow, fast = self._pair()
+        assert fast.encode(text) == slow.encode(text)
+
+    def test_it_matches_through_framing(self) -> None:
+        slow, fast = self._pair()
+        assert fast.tokenize("cab", context_length=6) == slow.tokenize(
+            "cab", context_length=6
+        )
+
+    def test_the_fold_is_needed(self) -> None:
+        """Guards the tests above.
+
+        If the engine had handled ``</w>`` natively the fold would be
+        dead code and the agreement would prove nothing about it. Feed
+        the raw marker to the engine and require that it comes apart.
+        """
+        from lucid._C import engine as _C_engine
+
+        vocab = {c: i for i, c in enumerate("helo<>/w")}
+        vocab["o</w>"] = 100
+        engine_bpe = _C_engine.utils.tokenizer.BPE(vocab, [("l", "o</w>")])
+        pieces = [engine_bpe.id_to_token(i) for i in engine_bpe.encode("hello</w>")]
+        assert pieces[-4:] == ["<", "/", "w", ">"], (
+            "the engine now seeds the marker whole, so the fold in "
+            "CLIPTokenizerFast is no longer load-bearing"
+        )
+
+    def test_a_non_byte_level_vocab_is_refused(self) -> None:
+        """Folding must not collapse two entries onto one key."""
+        with pytest.raises(ValueError, match="byte-level"):
+            CLIPTokenizerFast(
+                vocab={"": 0, "\x00</w>": 1, CLIP_SOS: 2, CLIP_EOS: 3},
+                merges=[],
+            )
