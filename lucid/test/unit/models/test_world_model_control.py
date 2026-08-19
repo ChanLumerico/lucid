@@ -37,6 +37,7 @@ import pytest
 import lucid
 import lucid.models as M
 import lucid.optim as optim
+from lucid.models.generative._actor import Actor
 from lucid.test._fixtures.classic_control import Pendulum
 from lucid.test._fixtures.point_mass import PointMass
 from lucid.utils.rollout import (
@@ -566,17 +567,27 @@ class TestDreamerV3EndToEnd:
     cross-entropy and ``symexp`` — none of which a shape test exercises
     and all of which can be wired backwards while still training.
 
-    **What it does not establish, measured rather than assumed.** That
-    the policy learns. On this task the best constant action scores 15.78
-    against random's 5.77, and v3's actor reaches or misses that ceiling
-    for reasons unrelated to learning: on the seeds where the return rose
-    to 2.3x random, the actor's gradient had collapsed to 1e-3 by step 80
-    and its entropy had returned to the uniform limit — the score came
-    from a *frozen* constant. On the seed where the actor moved most, the
-    return was 0.87x random. Asserting "return beats random" here would
-    therefore pin a coin flip, so it is not asserted. State-dependent
-    control is measured in ``test_world_model_benchmarks.py``, on the
-    moving-target variant where no constant wins.
+    **What it does not establish.** That the policy learns. Not because
+    it does not — at ``lr`` 8e-4 on the actor and 3e-3 on the world
+    model it reaches 2.16-2.84x random on five seeds out of five, and the
+    imagined lambda-return it is actually maximising climbs from about
+    zero to 3.4-5.6 on every one — but because on this task that number
+    means less than it looks. The best constant action scores 15.78
+    against random's 5.77, and 15.78 is precisely where all five runs
+    land. So the honest reading is "found a good constant", the same
+    reading the file's header gives v1 and v2.
+
+    Two rates below and one above that window do *not* learn, which is
+    worth knowing before reading a failure here as a defect: at 2e-2 the
+    actor's gradient collapses to 1e-3 by step 80 with its entropy back
+    at the uniform limit, and 200 gradient steps is short of the ~300
+    this needs. Both were mistaken for a broken actor-critic until the
+    objective was tested on its own, where a known advantage moves the
+    continuous mode from -0.08 to +1.0000 inside 100 steps.
+
+    State-dependent control needs a task no constant can win, so it is
+    measured in ``test_world_model_benchmarks.py`` on the moving-target
+    variant rather than asserted here.
 
     This is the seam that hid a real defect: episodes collected from an
     accelerator environment split across devices, because rewards arrive
@@ -698,11 +709,13 @@ class TestPlaNetPlansThroughTheLoop:
     belief. A planner that silently searches a stale or mis-shaped state
     still returns a well-formed action.
 
-    Same limitation as the v3 class above, and the same reason: on the
-    fixed-target task an **untrained** planner already scored 2.00x
-    random on one seed, and on another the trained one scored worse than
-    the untrained. Ranking a planner by return needs the moving-target
-    variant, so that lives in the benchmarks.
+    Return is not asserted, and here the reason is sharper than for the
+    actor: on the fixed-target task an **untrained** planner scored 2.00x
+    random on one seed, and on another the trained one scored below the
+    untrained. CEM searches hard enough to stumble onto a good constant
+    through a model that has learned nothing, so on a task a constant can
+    win, the score says nothing about the model. Ranking a planner needs
+    the moving-target variant, so that lives in the benchmarks.
     """
 
     def test_the_planner_drives_a_real_episode(self) -> None:
@@ -744,3 +757,119 @@ class TestPlaNetPlansThroughTheLoop:
             f"[{low:.3f}, {high:.3f}]"
         )
         assert float(out.recon_loss.item()) >= first * 0.9
+
+
+class TestTheActorObjectiveCanLearn:
+    """REINFORCE on its own, with an advantage that is known to be right.
+
+    This exists because its absence cost real time. When the policy did
+    not improve end-to-end, there was nothing between "the actor-critic
+    is broken" and "the world model is not good enough yet" — the two
+    look identical from a return curve, and the first guess was wrong.
+    Every part of the objective was already covered (log-probabilities,
+    entropy, lambda-returns, the advantage's scale) and none of them
+    answers whether the thing *learns*.
+
+    So: no RSSM, no critic, no imagination. A fixed feature, an advantage
+    that is a known function of the sampled action, and the question of
+    whether the policy moves toward the actions that pay. If this fails,
+    a failure upstream is the actor's fault; if it passes, it is not.
+    """
+
+    @staticmethod
+    def _ascend(discrete: bool, steps: int = 150) -> tuple[float, float]:
+        lucid.manual_seed(0)
+        action_dim = 3 if discrete else 1
+        actor = Actor(
+            latent_size=4,
+            hidden=32,
+            layers=2,
+            action_dim=action_dim,
+            act_fn="silu",
+            min_std=0.1,
+            discrete=discrete,
+            unimix=0.01 if discrete else 0.0,
+        )
+        opt = optim.Adam(actor.parameters(), lr=3e-3)
+        feature = lucid.ones((64, 1, 4))
+
+        def preference() -> float:
+            with lucid.no_grad():
+                return float(actor.distribution(feature).mode[..., 0].mean().item())
+
+        before = preference()
+        for _ in range(steps):
+            action = actor.distribution(feature).rsample().detach()
+            # Paid for the first component: push toward +1 when
+            # continuous, toward choosing alternative 0 when discrete.
+            advantage = action[..., 0].detach()
+            loss = -(actor.log_prob(feature, action) * advantage).mean()
+            actor.zero_grad()
+            loss.backward()
+            opt.step()
+        return before, preference()
+
+    def test_a_continuous_policy_climbs(self) -> None:
+        before, after = self._ascend(discrete=False)
+        assert after > before + 0.5, (
+            f"the mode did not move toward the paid action: "
+            f"{before:+.4f} -> {after:+.4f}"
+        )
+        assert after > 0.9, f"did not approach the optimum: {after:+.4f}"
+
+    def test_a_discrete_policy_concentrates(self) -> None:
+        """The one-hot's entropy has to fall onto the paid alternative."""
+        lucid.manual_seed(0)
+        actor = Actor(
+            latent_size=4,
+            hidden=32,
+            layers=2,
+            action_dim=3,
+            act_fn="silu",
+            min_std=0.1,
+            discrete=True,
+            unimix=0.01,
+        )
+        opt = optim.Adam(actor.parameters(), lr=3e-3)
+        feature = lucid.ones((64, 1, 4))
+        start = float(actor.distribution(feature).entropy().mean().item())
+        for _ in range(150):
+            action = actor.distribution(feature).rsample().detach()
+            loss = -(actor.log_prob(feature, action) * action[..., 0].detach()).mean()
+            actor.zero_grad()
+            loss.backward()
+            opt.step()
+        end = float(actor.distribution(feature).entropy().mean().item())
+        chosen = float(actor.distribution(feature).mode[..., 0].mean().item())
+        assert end < start - 0.3, f"policy never concentrated: {start:.3f} -> {end:.3f}"
+        assert chosen > 0.9, f"concentrated on the wrong alternative: {chosen:.3f}"
+
+    def test_the_climb_needs_the_advantage(self) -> None:
+        """Guards both above.
+
+        A policy left to the entropy term alone drifts, and a drifting
+        mode can pass a "it moved" check. Zero the advantage and the
+        objective has nothing to say about which action is better, so the
+        mode must not arrive at the paid one.
+        """
+        lucid.manual_seed(0)
+        actor = Actor(
+            latent_size=4,
+            hidden=32,
+            layers=2,
+            action_dim=1,
+            act_fn="silu",
+            min_std=0.1,
+        )
+        opt = optim.Adam(actor.parameters(), lr=3e-3)
+        feature = lucid.ones((64, 1, 4))
+        for _ in range(150):
+            action = actor.distribution(feature).rsample().detach()
+            zero = lucid.zeros_like(action[..., 0])
+            loss = -(actor.log_prob(feature, action) * zero).mean()
+            actor.zero_grad()
+            loss.backward()
+            opt.step()
+        with lucid.no_grad():
+            mode = float(actor.distribution(feature).mode[..., 0].mean().item())
+        assert mode < 0.9, f"reached the optimum without an advantage: {mode:+.4f}"

@@ -160,8 +160,9 @@ markers = [
     "stability: numerical-edge / extreme-value coverage (inf / nan / subnormal)",
     "f64_only:  float64-only path; skipped when only f32 is available",
     "audit:     the exhaustive (symbol x axis) sweep — ~9k cases, minutes; opt in with -m audit",
+    "control:   world-model control benchmark — thousands of gradient steps, tens of minutes; opt in with -m control",
 ]
-addopts = "-v --tb=short -m 'not heavy and not audit'"
+addopts = "-v --tb=short -m 'not heavy and not audit and not control'"
 # A lazy layer whose parameters were read too early trains nothing, in
 # silence.  ``Module.parameters`` warns rather than raises, because
 # ``zero_grad`` and ``requires_grad_`` legitimately walk an uninitialised
