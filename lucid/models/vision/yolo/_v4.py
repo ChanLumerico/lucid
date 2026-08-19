@@ -63,6 +63,8 @@ from lucid.models._utils._detection import (
     batched_nms,
     clip_boxes_to_image,
 )
+from lucid.models.vision.yolo._weights import YOLOV4Weights
+import lucid.weights as weights_mod
 
 # v4 reuses v3's anchor-ignore rule verbatim; only the threshold differs
 # (yolov4.cfg says .7, yolov3's paper text says .5).
@@ -1150,7 +1152,10 @@ class YOLOV4ForObjectDetection(PretrainedModel):
 _CFG_V4 = YOLOV4Config()
 
 
-@register_model(
+# reason: yolo_v4 adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="object-detection",
     family="yolo",
     model_type="yolo_v4",
@@ -1159,7 +1164,9 @@ _CFG_V4 = YOLOV4Config()
     params=64363101,
 )
 def yolo_v4(
-    pretrained: bool = False,
+    pretrained: bool | str = False,
+    *,
+    weights: YOLOV4Weights | None = None,
     **overrides: object,
 ) -> YOLOV4ForObjectDetection:
     r"""YOLOv4 — CSPDarknet-53 + SPP + PANet (Bochkovskiy et al., 2020).
@@ -1172,9 +1179,15 @@ def yolo_v4(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        If ``True``, attempt to load pretrained COCO weights.  Currently
-        raises :class:`NotImplementedError`.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True`` →
+        the ``DEFAULT`` tag (:attr:`YOLOV4Weights.COCO_2017`, converted
+        from the AlexeyAB darknet release's ``yolov4.weights``); a tag
+        string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : YOLOV4Weights, optional, keyword-only
+        Explicit weights enum member, e.g. ``YOLOV4Weights.COCO_2017``.
+        Takes precedence over ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`YOLOV4Config`.
 
@@ -1205,7 +1218,8 @@ def yolo_v4(
     config = (
         replace(_CFG_V4, **cast(dict[str, Any], overrides)) if overrides else _CFG_V4
     )
+    entry = weights_mod.resolve_weights(YOLOV4Weights, pretrained, weights)
     model = YOLOV4ForObjectDetection(config)
-    if pretrained:
-        raise NotImplementedError("Pretrained YOLOv4 weights are not yet available.")
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="yolo_v4")
     return model

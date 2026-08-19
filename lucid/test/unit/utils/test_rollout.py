@@ -52,6 +52,74 @@ class _Counter:
         )
 
 
+class _DeviceCounter:
+    """``_Counter``, but rendering wherever it is told to."""
+
+    def __init__(self, device: str, length: int = 6) -> None:
+        self.device, self.length = device, length
+
+    def reset(self) -> lucid.Tensor:
+        self.t = 0
+        return lucid.ones((1, 2, 2), device=self.device)
+
+    def step(self, action: lucid.Tensor) -> StepResult:
+        self.t += 1
+        last = self.t >= self.length
+        return StepResult(
+            lucid.ones((1, 2, 2), device=self.device), float(self.t), False, last
+        )
+
+
+class TestEpisodesAreDeviceConsistent:
+    """An episode's five tensors have to end up in the same place.
+
+    Rewards and discounts arrive from the environment as Python floats,
+    so unlike observations and actions they carry no device of their own
+    and default to the CPU.  Collect from an accelerator environment and
+    the episode silently splits — three tensors there, two here — and
+    nothing complains until a world model reads a batch, several layers
+    away, against whichever op reached a reward first.
+
+    This is the seam neither side's tests covered: the rollout layer was
+    tested without a model and the models were tested on-device without
+    the rollout layer.
+    """
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    def test_rollout_puts_every_field_on_one_device(self, device: str) -> None:
+        episode, _ = rollout(_DeviceCounter(device), RandomPolicy(2))
+        places = {
+            name: getattr(episode, name).device.type
+            for name in ("observations", "actions", "rewards", "discounts")
+        }
+        assert set(places.values()) == {device}, places
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    def test_a_sampled_batch_keeps_them_together(self, device: str) -> None:
+        """The buffer must not undo it either."""
+        replay = SequenceReplay()
+        for _ in range(2):
+            replay.add(rollout(_DeviceCounter(device), RandomPolicy(2))[0])
+        batch = replay.sample(2, 4)
+        places = {
+            getattr(batch, name).device.type
+            for name in ("observations", "actions", "rewards", "discounts")
+        }
+        assert places == {device}, places
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    def test_random_policy_follows_the_observation(self, device: str) -> None:
+        """Guards the two above — they would also pass if the environment
+        alone decided, and the seeding policy is the other half of it."""
+        observation = lucid.zeros((1, 2, 2), device=device)
+        assert RandomPolicy(2)(observation).device.type == device
+        assert RandomPolicy(3, discrete=True)(observation).device.type == device
+
+    def test_a_deviceless_observation_still_works(self) -> None:
+        """``RandomPolicy(None)`` is in its own docstring; keep it valid."""
+        assert RandomPolicy(3)(None).shape == (3,)
+
+
 def _episode(length: int = 10, action_dim: int = 2) -> Episode:
     return Episode(
         observations=lucid.randn((length, 3, 4, 4)),

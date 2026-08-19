@@ -75,6 +75,8 @@ from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import batched_nms
+from lucid.models.vision.yolo._weights import YOLOV2Weights
+import lucid.weights as weights_mod
 
 if TYPE_CHECKING:
     pass
@@ -956,15 +958,21 @@ def _make_v2(
     return YOLOV2ForObjectDetection(cfg)
 
 
-@register_model(
+# reason: yolo_v2 adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="object-detection",
     family="yolo",
     model_type="yolo_v2",
     model_class=YOLOV2ForObjectDetection,
     default_config=_CFG_V2,
+    params=50962889,
 )
 def yolo_v2(
-    pretrained: bool = False,
+    pretrained: bool | str = False,
+    *,
+    weights: YOLOV2Weights | None = None,
     **overrides: object,
 ) -> YOLOV2ForObjectDetection:
     r"""YOLOv2 / YOLO9000 with Darknet-19 backbone (Redmon & Farhadi, CVPR 2017).
@@ -978,8 +986,15 @@ def yolo_v2(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True`` →
+        the ``DEFAULT`` tag (:attr:`YOLOV2Weights.COCO_2014`, converted
+        from darknet's ``yolov2.weights``); a tag string → that specific
+        checkpoint.  Mutually exclusive with ``weights`` (which wins if
+        both are given).
+    weights : YOLOV2Weights, optional, keyword-only
+        Explicit weights enum member, e.g. ``YOLOV2Weights.COCO_2014``.
+        Takes precedence over ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`YOLOV2Config` —
         ``num_classes``, ``num_anchors``, anchor priors, ``score_thresh``,
@@ -1007,4 +1022,8 @@ def yolo_v2(
     >>> out.logits.shape[0]
     1
     """
-    return _make_v2(_CFG_V2, overrides)
+    entry = weights_mod.resolve_weights(YOLOV2Weights, pretrained, weights)
+    model = _make_v2(_CFG_V2, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="yolo_v2")
+    return model

@@ -44,6 +44,11 @@ class PointMass:
         Width of the reward's Gaussian.  Wide on purpose: a narrow one
         makes the reward sparse, and then a short training run measures
         whether the agent got lucky rather than whether it learned.
+    device : str, default="cpu"
+        Where frames are rendered.  A model on the accelerator needs its
+        observations there too, so this saves a transfer per step rather
+        than being a performance option — the alternative is a device
+        mismatch at the encoder's first convolution.
 
     Attributes
     ----------
@@ -78,6 +83,7 @@ class PointMass:
         start: tuple[float, float] = (-0.6, 0.6),
         step_size: float = 0.15,
         sigma: float = 1.0,
+        device: str = "cpu",
     ) -> None:
         """Initialise the environment. See the class docstring."""
         self.size = size
@@ -86,12 +92,13 @@ class PointMass:
         self.start = start
         self.step_size = step_size
         self.sigma = sigma
+        self.device = device
 
-        axis = lucid.linspace(-1.0, 1.0, size)
+        axis = lucid.linspace(-1.0, 1.0, size, device=device)
         self._xs = axis.reshape(1, size)
         self._ys = axis.reshape(size, 1)
         self._target_blob = self._blob(*target)
-        self._empty = lucid.zeros((size, size))
+        self._empty = lucid.zeros((size, size), device=device)
         self.position = list(start)
         self._t = 0
 
@@ -155,5 +162,6 @@ class PointMass:
             [
                 max(-1.0, min(1.0, (self.target[i] - self.position[i]) * 10.0))
                 for i in range(2)
-            ]
+            ],
+            device=self.device,
         )

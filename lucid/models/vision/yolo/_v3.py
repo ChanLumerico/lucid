@@ -59,6 +59,8 @@ from lucid.models._utils._detection import (
     batched_nms,
     clip_boxes_to_image,
 )
+from lucid.models.vision.yolo._weights import YOLOV3TinyWeights, YOLOV3Weights
+import lucid.weights as weights_mod
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -366,14 +368,21 @@ class _Darknet53Tiny(nn.Module):
 
 def _make_detection_head(
     in_ch: int, mid_ch: int, num_anchors: int, num_classes: int
-) -> tuple[nn.Sequential, nn.Conv2d]:
+) -> tuple[nn.Sequential, nn.Sequential]:
     """Build a YOLOv3 detection head.
 
-    5 alternating 1×1/3×3 convolutions for feature compression, followed by a
-    final 1×1 conv that outputs ``num_anchors*(5+num_classes)`` channels.
+    5 alternating 1×1/3×3 convolutions for feature compression, then a 3×3
+    convolution back up to ``2 * mid_ch`` and a final 1×1 conv that outputs
+    ``num_anchors*(5+num_classes)`` channels.
+
+    The compress stack and the predictor are returned separately because
+    ``yolov3.cfg`` routes the *compressed* feature — not the expanded one —
+    into the top-down upsample path (``route -4`` back to the last 1×1).
+    Predictions come off the wider 3×3, so the two consumers need different
+    tensors.
 
     Returns:
-        (compress_convs, predict_conv)
+        (compress_convs, predict_convs)
     """
     c = [
         _ConvBnLeaky(in_ch, mid_ch, 1),
@@ -383,7 +392,10 @@ def _make_detection_head(
         _ConvBnLeaky(mid_ch * 2, mid_ch, 1),
     ]
     compress = nn.Sequential(*c)
-    predict = nn.Conv2d(mid_ch, num_anchors * (5 + num_classes), 1, bias=True)
+    predict = nn.Sequential(
+        _ConvBnLeaky(mid_ch, mid_ch * 2, 3),
+        nn.Conv2d(mid_ch * 2, num_anchors * (5 + num_classes), 1, bias=True),
+    )
     return compress, predict
 
 
@@ -807,8 +819,8 @@ class YOLOV3ForObjectDetection(PretrainedModel):
         Residual backbone producing P3 / P4 / P5 features at strides
         8 / 16 / 32 (128 / 256 / 1024 channels).
     p5_compress, p5_predict : nn.Sequential
-        Stride-32 detection head: five-conv compress + 3x3 + 1x1
-        prediction conv producing :math:`3(5 + C)` channels.
+        Stride-32 detection head: five-conv compress, then a 3x3 + 1x1
+        prediction pair producing :math:`3(5 + C)` channels.
     p4_compress, p4_predict, p4_to_p3_conv : nn.Sequential
         Stride-16 head with FPN-style top-down upsample + concatenation
         with the P4 backbone feature.
@@ -1163,16 +1175,21 @@ _CFG_V3 = YOLOV3Config()
 _CFG_V3_TINY = YOLOV3Config()
 
 
-@register_model(
+# reason: yolo_v3 adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="object-detection",
     family="yolo",
     model_type="yolo_v3",
     model_class=YOLOV3ForObjectDetection,
     default_config=_CFG_V3,
-    params=55523933,
+    params=61949149,
 )
 def yolo_v3(
-    pretrained: bool = False,
+    pretrained: bool | str = False,
+    *,
+    weights: YOLOV3Weights | None = None,
     **overrides: object,
 ) -> YOLOV3ForObjectDetection:
     r"""YOLOv3 with Darknet-53 backbone, 3-scale detection (Redmon & Farhadi, 2018).
@@ -1185,9 +1202,15 @@ def yolo_v3(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        If ``True``, attempt to load pretrained COCO weights.  Currently
-        raises :class:`NotImplementedError`.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True`` →
+        the ``DEFAULT`` tag (:attr:`YOLOV3Weights.COCO_2014`, converted
+        from darknet's ``yolov3.weights``); a tag string → that specific
+        checkpoint.  Mutually exclusive with ``weights`` (which wins if
+        both are given).
+    weights : YOLOV3Weights, optional, keyword-only
+        Explicit weights enum member, e.g. ``YOLOV3Weights.COCO_2014``.
+        Takes precedence over ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`YOLOV3Config`.
 
@@ -1216,13 +1239,17 @@ def yolo_v3(
     config = (
         replace(_CFG_V3, **cast(dict[str, Any], overrides)) if overrides else _CFG_V3
     )
+    entry = weights_mod.resolve_weights(YOLOV3Weights, pretrained, weights)
     model = YOLOV3ForObjectDetection(config)
-    if pretrained:
-        raise NotImplementedError("Pretrained YOLOv3 weights are not yet available.")
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="yolo_v3")
     return model
 
 
-@register_model(
+# reason: yolo_v3_tiny adds a typed weights= kwarg (per-model WeightsEnum); the
+# ModelFactory protocol predates the v3.1 weights system and still names only
+# pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
     task="object-detection",
     family="yolo",
     model_type="yolo_v3_tiny",
@@ -1231,7 +1258,9 @@ def yolo_v3(
     params=8852366,
 )
 def yolo_v3_tiny(
-    pretrained: bool = False,
+    pretrained: bool | str = False,
+    *,
+    weights: YOLOV3TinyWeights | None = None,
     **overrides: object,
 ) -> _YOLOV3Tiny:
     r"""YOLOv3-Tiny — 2-scale lightweight variant (Redmon & Farhadi, 2018).
@@ -1243,9 +1272,16 @@ def yolo_v3_tiny(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        If ``True``, attempt to load pretrained COCO weights.  Currently
-        raises :class:`NotImplementedError`.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True`` →
+        the ``DEFAULT`` tag (:attr:`YOLOV3TinyWeights.COCO_2014`,
+        converted from darknet's ``yolov3-tiny.weights``); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``
+        (which wins if both are given).
+    weights : YOLOV3TinyWeights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``YOLOV3TinyWeights.COCO_2014``.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`YOLOV3Config`.
 
@@ -1277,9 +1313,8 @@ def yolo_v3_tiny(
         if overrides
         else _CFG_V3_TINY
     )
+    entry = weights_mod.resolve_weights(YOLOV3TinyWeights, pretrained, weights)
     model = _YOLOV3Tiny(config)
-    if pretrained:
-        raise NotImplementedError(
-            "Pretrained YOLOv3-Tiny weights are not yet available."
-        )
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="yolo_v3_tiny")
     return model

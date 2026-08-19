@@ -379,12 +379,12 @@
   "wide_resnet_50_cls": "de99630540787335",
   "xception": "7ab2337e0a64986f",
   "xception_cls": "7ab2337e0a64986f",
-  "yolo_v1": "e86cd5459f0a0dbc",
-  "yolo_v1_tiny": "e86cd5459f0a0dbc",
-  "yolo_v2": "e86cd5459f0a0dbc",
-  "yolo_v3": "e86cd5459f0a0dbc",
-  "yolo_v3_tiny": "e86cd5459f0a0dbc",
-  "yolo_v4": "e86cd5459f0a0dbc",
+  "yolo_v1": "7e40e46c03a3eebe",
+  "yolo_v1_tiny": "7e40e46c03a3eebe",
+  "yolo_v2": "7e40e46c03a3eebe",
+  "yolo_v3": "7e40e46c03a3eebe",
+  "yolo_v3_tiny": "7e40e46c03a3eebe",
+  "yolo_v4": "7e40e46c03a3eebe",
   "zfnet": "3aa36edf7c305dc7",
   "zfnet_cls": "3aa36edf7c305dc7"
 }

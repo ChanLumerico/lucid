@@ -310611,7 +310611,7 @@
   "yolo_v3": {
     "name": "YOLOV3ForObjectDetection",
     "type": "YOLOV3ForObjectDetection",
-    "params": 55523933,
+    "params": 61949149,
     "own_params": 0,
     "children": [
       {
@@ -311178,10 +311178,40 @@
       },
       {
         "name": "p5_predict",
-        "type": "Conv2d",
-        "params": 130815,
-        "own_params": 130815,
-        "children": []
+        "type": "Sequential",
+        "params": 4982015,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_ConvBnLeaky",
+            "params": 4720640,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 4718592,
+                "own_params": 4718592,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "1",
+            "type": "Conv2d",
+            "params": 261375,
+            "own_params": 261375,
+            "children": []
+          }
+        ]
       },
       {
         "name": "p5_to_p4_conv",
@@ -311325,10 +311355,40 @@
       },
       {
         "name": "p4_predict",
-        "type": "Conv2d",
-        "params": 65535,
-        "own_params": 65535,
-        "children": []
+        "type": "Sequential",
+        "params": 1311487,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_ConvBnLeaky",
+            "params": 1180672,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 1179648,
+                "own_params": 1179648,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "1",
+            "type": "Conv2d",
+            "params": 130815,
+            "own_params": 130815,
+            "children": []
+          }
+        ]
       },
       {
         "name": "p4_to_p3_conv",
@@ -311472,10 +311532,40 @@
       },
       {
         "name": "p3_predict",
-        "type": "Conv2d",
-        "params": 32895,
-        "own_params": 32895,
-        "children": []
+        "type": "Sequential",
+        "params": 360959,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_ConvBnLeaky",
+            "params": 295424,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "conv",
+                "type": "Conv2d",
+                "params": 294912,
+                "own_params": 294912,
+                "children": []
+              },
+              {
+                "name": "bn",
+                "type": "BatchNorm2d",
+                "params": 512,
+                "own_params": 512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "1",
+            "type": "Conv2d",
+            "params": 65535,
+            "own_params": 65535,
+            "children": []
+          }
+        ]
       }
     ]
   },

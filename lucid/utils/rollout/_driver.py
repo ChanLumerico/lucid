@@ -124,18 +124,29 @@ class RandomPolicy:
         return None
 
     def __call__(self, observation: Tensor) -> Tensor:
-        """Draw a uniform action, ignoring the observation."""
+        """Draw a uniform action, reading the observation only for its device.
+
+        The draw ignores what is in the frame — that is the point of a
+        random policy — but not *where* it is.  Seeding an accelerator
+        environment with actions left on the CPU builds episodes whose
+        five tensors do not agree, and the mismatch is only reported much
+        later, inside whichever op a world model happens to reach first.
+        """
+        device = (
+            observation.device.type if isinstance(observation, Tensor) else "cpu"
+        )
         if self.discrete:
             index = int(float(lucid.rand(()).item()) * self.action_dim)
             index = min(index, self.action_dim - 1)
             return (
                 lucid.nn.functional.one_hot(
-                    lucid.tensor([index]), num_classes=self.action_dim
+                    lucid.tensor([index], device=device),
+                    num_classes=self.action_dim,
                 )
                 .reshape(self.action_dim)
                 .to(lucid.float32)
             )
-        return lucid.rand((self.action_dim,)) * 2.0 - 1.0
+        return lucid.rand((self.action_dim,), device=device) * 2.0 - 1.0
 
 
 class LatentPolicy:
@@ -353,11 +364,19 @@ def rollout(
             actions.append(action)
 
     steps = len(observations)
+    # Rewards and discounts arrive as Python floats, so they have no device
+    # of their own and would default to the CPU.  An episode collected from
+    # an accelerator environment would then carry three tensors there and
+    # two here, and the mismatch does not surface until a world model reads
+    # the batch — several layers away, reported against whichever op
+    # happened to touch a reward first.  `.type` because `str(device)`
+    # renders as "device('metal')", which the factories do not parse.
+    device = observations[0].device.type
     episode = Episode(
         observations=lucid.stack(observations, dim=0),
         actions=lucid.stack(actions[:steps], dim=0),
-        rewards=lucid.tensor(rewards[:steps]),
-        discounts=lucid.tensor(discounts[:steps]),
+        rewards=lucid.tensor(rewards[:steps], device=device),
+        discounts=lucid.tensor(discounts[:steps], device=device),
     )
     return episode, total
 
