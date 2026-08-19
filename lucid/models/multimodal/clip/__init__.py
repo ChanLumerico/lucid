@@ -7,6 +7,11 @@ from lucid.models.multimodal.clip._model import (
     CLIPOutput,
     CLIPZeroShotOutput,
 )
+from lucid.models.multimodal.clip._tokenizer import (
+    CLIP_EOS,
+    CLIP_SOS,
+    CLIPTokenizer,
+)
 from lucid.models.multimodal.clip._pretrained import (
     clip_vit_base_16,
     clip_vit_base_16_zero_shot,
@@ -24,6 +29,9 @@ __all__ = [
     "CLIPForZeroShotImageClassification",
     "CLIPOutput",
     "CLIPZeroShotOutput",
+    "CLIPTokenizer",
+    "CLIP_SOS",
+    "CLIP_EOS",
     "clip_vit_base_32",
     "clip_vit_base_16",
     "clip_vit_large_14",

@@ -30,9 +30,13 @@ import lucid.models as M
 import lucid.nn as nn
 from lucid.models.multimodal.clip import (
     CLIP,
+    CLIP_EOS,
+    CLIP_SOS,
     CLIPConfig,
     CLIPForZeroShotImageClassification,
+    CLIPTokenizer,
 )
+from lucid.models.multimodal.clip._tokenizer import _PATTERN
 from lucid.models.multimodal.clip._model import (
     _contrastive_loss,
     _QuickGELU,
@@ -384,3 +388,75 @@ class TestZeroShot:
         diagonal = [float(similarity[i, i].item()) for i in range(3)]
         assert all(d == pytest.approx(1.0, abs=1e-4) for d in diagonal)
         assert out.logits.shape == (3, 3)
+
+
+class TestTokenizer:
+    """The framing the model's ``argmax`` depends on, and the scheme.
+
+    CLIP's BPE is neither of the two already in the tree — byte-level
+    like GPT-2's, ``</w>``-suffixed like GPT-1's — so the pieces that
+    could be silently swapped for the wrong half are the ones checked.
+    """
+
+    @staticmethod
+    def _tok() -> CLIPTokenizer:
+        vocab = {
+            "a": 0,
+            "b</w>": 1,
+            "ab</w>": 2,
+            CLIP_SOS: 3,
+            CLIP_EOS: 4,
+            "c</w>": 5,
+        }
+        return CLIPTokenizer(vocab=vocab, merges=[("a", "b</w>")])
+
+    def test_it_merges_across_the_word_marker(self) -> None:
+        assert self._tok().encode("ab") == [2]
+
+    def test_encode_does_not_frame(self) -> None:
+        """The base class adds sentinels by default; this must not."""
+        ids = self._tok().encode("ab")
+        assert CLIP_SOS not in ids and 3 not in ids and 4 not in ids
+
+    def test_tokenize_frames_and_pads(self) -> None:
+        assert self._tok().tokenize("ab", context_length=5) == [3, 2, 4, 0, 0]
+
+    def test_the_eos_is_the_argmax(self) -> None:
+        """The property the model's text-feature lookup rests on."""
+        ids = self._tok().tokenize("ab", context_length=6)
+        assert ids.index(max(ids)) == 2
+
+    def test_a_caption_that_does_not_fit_is_an_error(self) -> None:
+        """Truncating would drop the [EOS] the model reads its feature at."""
+        with pytest.raises(ValueError, match=r"\[EOS\]"):
+            self._tok().tokenize("ab", context_length=2)
+
+    def test_it_lowercases_and_unescapes(self) -> None:
+        tok = self._tok()
+        assert tok.encode("AB") == tok.encode("ab")
+        assert tok.encode("&amp;amp;") == tok.encode("&")
+
+    def test_it_collapses_whitespace(self) -> None:
+        tok = self._tok()
+        assert tok.encode("  ab   ") == tok.encode("ab")
+
+    def test_a_vocab_without_sentinels_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="startoftext"):
+            CLIPTokenizer(vocab={"a": 0}, merges=[])
+
+    def test_the_pattern_splits_the_reference_way(self) -> None:
+        """Contractions before letters, digits one at a time.
+
+        Guards the regex translation: ``\\p{L}`` and ``\\p{N}`` are not
+        stdlib, so they were rewritten, and a rewrite that merged digit
+        runs or ate contractions would still tokenise every caption
+        without complaint.
+        """
+        assert _PATTERN.findall("a dog's paw, 42!") == [
+            "a", "dog", "'s", "paw", ",", "4", "2", "!"
+        ]
+
+    def test_digits_are_not_grouped(self) -> None:
+        """Guards the test above — ``\\d+`` would read identically here
+        until a number longer than one digit appeared."""
+        assert _PATTERN.findall("2026") == ["2", "0", "2", "6"]
