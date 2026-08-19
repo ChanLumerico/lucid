@@ -39,7 +39,7 @@ class YOLOV2Weights(WeightsEnum):
 
     COCO_2014 = WeightEntry(
         url=f"{HUB_BASE}/yolo-v2/resolve/main/COCO_2014/model.safetensors",
-        sha256="369e05ba62b16cff6a51026e8ddd73d0717712d9550ce35712551bce1a377762",
+        sha256="2a6bf0b3e5ce1c2976017f6fbd736cd3d6259f0dec798fafc7718a0a6e0dc367",
         num_classes=80,
         transforms=_PRESET_608,
         meta={
@@ -66,7 +66,7 @@ class YOLOV3Weights(WeightsEnum):
 
     COCO_2014 = WeightEntry(
         url=f"{HUB_BASE}/yolo-v3/resolve/main/COCO_2014/model.safetensors",
-        sha256="61e5d156ee8445345f7588c36d38cc006e797024df3f33b2c06c156d8fc44f81",
+        sha256="ff360a2297a04af1ef11f7ffaf36b49204e298cf28748e0390aee10278ae70fb",
         num_classes=80,
         transforms=_PRESET_416,
         meta={
@@ -94,7 +94,7 @@ class YOLOV3TinyWeights(WeightsEnum):
 
     COCO_2014 = WeightEntry(
         url=f"{HUB_BASE}/yolo-v3-tiny/resolve/main/COCO_2014/model.safetensors",
-        sha256="35e8f39a87a0302df9999c2ceaa77b9ae9dd69311cea4611c182056f8b6a63ad",
+        sha256="194beccbec3bfa7b228286290fbfe0056c4c08881ff7558f84cf8aacd63c9a3b",
         num_classes=80,
         transforms=_PRESET_416,
         meta={
@@ -122,7 +122,7 @@ class YOLOV4Weights(WeightsEnum):
 
     COCO_2017 = WeightEntry(
         url=f"{HUB_BASE}/yolo-v4/resolve/main/COCO_2017/model.safetensors",
-        sha256="f624703802e4c933c3f8d5ce4de4e8686f2a71466a7ad27321484c4b31dd0530",
+        sha256="2969aff0a7e0326aa1e1f20996139807684a6fb37f463204217a79e8f10ab755",
         num_classes=80,
         transforms=_PRESET_608,
         meta={

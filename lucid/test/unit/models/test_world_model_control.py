@@ -619,9 +619,7 @@ class TestDreamerV3EndToEnd:
             ("actor", model.actor_parameters()),
         ):
             total = sum(
-                float(p.grad.abs().sum().item())
-                for p in group
-                if p.grad is not None
+                float(p.grad.abs().sum().item()) for p in group if p.grad is not None
             )
             assert total > 0.0, f"{name} received no gradient"
 
@@ -742,9 +740,9 @@ class TestPlaNetPlansThroughTheLoop:
         model, env, _, out, first = _train_planet()
         low, high = _reward_range(env)
         predicted = float(out.reward.mean().item())
-        assert low - 0.1 <= predicted <= high + 0.1, (
-            f"predicted reward {predicted:.3f} outside [{low:.3f}, {high:.3f}]"
-        )
+        assert (
+            low - 0.1 <= predicted <= high + 0.1
+        ), f"predicted reward {predicted:.3f} outside [{low:.3f}, {high:.3f}]"
         assert float(out.recon_loss.item()) < first
 
     def test_a_frozen_model_does_not(self) -> None:

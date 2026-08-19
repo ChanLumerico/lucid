@@ -132,9 +132,7 @@ class RandomPolicy:
         five tensors do not agree, and the mismatch is only reported much
         later, inside whichever op a world model happens to reach first.
         """
-        device = (
-            observation.device.type if isinstance(observation, Tensor) else "cpu"
-        )
+        device = observation.device.type if isinstance(observation, Tensor) else "cpu"
         if self.discrete:
             index = int(float(lucid.rand(()).item()) * self.action_dim)
             index = min(index, self.action_dim - 1)
