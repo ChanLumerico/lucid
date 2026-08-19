@@ -219,7 +219,12 @@ function isFamilyLeaf(slug: string): boolean {
   const parts = slug.split(".");
   if (parts.length !== 4) return false;
   if (parts[0] !== "lucid" || parts[1] !== "models") return false;
-  return parts[2] === "vision" || parts[2] === "text" || parts[2] === "generative";
+  return (
+    parts[2] === "vision" ||
+    parts[2] === "text" ||
+    parts[2] === "generative" ||
+    parts[2] === "multimodal"
+  );
 }
 
 /** Build the 4-slot family-leaf sidebar item:

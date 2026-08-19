@@ -142,6 +142,9 @@
     --color-task-generative-2: #a855f7; /* purple-500     */
 
     --color-task-meta-1:   #64748b;   /* slate-500        */
+    /* Multimodal tasks sit between the cool vision and warm text ends,
+       so teal rather than a third point on either spectrum. */
+    --color-task-meta-2:   #14b8a6;   /* teal-500         */
   }
 }
 

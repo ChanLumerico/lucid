@@ -115,7 +115,7 @@ if (existsSync(LABELS_TS)) {
 const isFamilyLeaf = (slug) => {
   const p = slug.split(".");
   return p.length === 4 && p[0] === "lucid" && p[1] === "models" &&
-    ["vision", "text", "generative"].includes(p[2]);
+    ["vision", "text", "generative", "multimodal"].includes(p[2]);
 };
 
 // A model FACTORY returns a model instance and (when summarizable) carries a

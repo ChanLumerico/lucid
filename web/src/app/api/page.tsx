@@ -75,7 +75,7 @@ function _memberCount(slug: string): number {
 // ``family_groups`` entries inside each task-category JSON.
 function _modelFamilyCount(): number {
   let total = 0;
-  for (const cat of ["vision", "text", "generative"]) {
+  for (const cat of ["vision", "text", "generative", "multimodal"]) {
     try {
       const d = loadApiData(`lucid.models.${cat}`);
       if (isApiModule(d) && d.family_groups) {

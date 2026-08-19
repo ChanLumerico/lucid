@@ -143,7 +143,7 @@ function computeStats(): {
     const nnClasses = isApiModule(nn) ? nn.members.length : 0;
     const engineMembers = isApiModule(engine) ? engine.members.length : 0;
     let modelFamilies = 0;
-    for (const cat of ["vision", "text", "generative"]) {
+    for (const cat of ["vision", "text", "generative", "multimodal"]) {
       try {
         const d = loadApiData(`lucid.models.${cat}`);
         if (isApiModule(d) && d.family_groups) {

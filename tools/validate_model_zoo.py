@@ -44,7 +44,7 @@ _TASK_SUFFIX_RE = re.compile(r"For[A-Z][A-Za-z]*$")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = REPO_ROOT / "lucid" / "models"
-DOMAINS = ("vision", "text", "generative")
+DOMAINS = ("vision", "text", "generative", "multimodal")
 
 # Task suffixes mirror ``web/scripts/build-api-data.py`` _TASK_SUFFIX_MAP.
 # Kept duplicated here (small, ~17 entries) instead of importing the
@@ -68,6 +68,7 @@ KNOWN_TASK_SUFFIXES: set[str] = {
     "ForMultipleChoice",
     "ForPreTraining",
     "ForWorldModeling",
+    "ForZeroShotImageClassification",
     # Alternative head-style naming (GPT/GPT-2 use reference-framework names).
     "LMHeadModel",
     "DoubleHeadsModel",

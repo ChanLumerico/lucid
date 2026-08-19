@@ -729,3 +729,34 @@ class AutoModelForWorldModeling(_BaseAutoClass):
     """
 
     _task: ClassVar[str] = "world-modeling"
+
+
+class AutoModelForZeroShotImageClassification(_BaseAutoClass):
+    r"""Auto-dispatching wrapper that loads an open-vocabulary classifier.
+
+    Resolves names like ``"clip_vit_base_32_zero_shot"`` to their
+    concrete ``{Family}ForZeroShotImageClassification`` subclass.
+
+    "Zero-shot" here is not a fine-tuning regime — nothing is trained and
+    there is no head. The classes arrive at call time as tokenised
+    prompts, so the label set is an argument rather than a property of
+    the weights, and two callers can ask the same model different
+    questions without either of them touching it.
+
+    Notes
+    -----
+    The forward therefore takes two tensors: the images and the candidate
+    prompts. Their batch dimensions are independent — ``B`` images scored
+    against ``P`` prompts yield ``(B, P)`` logits — unlike the paired
+    batches the contrastive objective is trained on.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForZeroShotImageClassification
+    >>> model = AutoModelForZeroShotImageClassification.from_pretrained(
+    ...     "clip_vit_base_32_zero_shot")
+    >>> type(model).__name__
+    'CLIPForZeroShotImageClassification'
+    """
+
+    _task: ClassVar[str] = "zero-shot-image-classification"

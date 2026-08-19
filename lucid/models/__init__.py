@@ -13,6 +13,7 @@ from lucid.models._auto import (
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
     AutoModelForWorldModeling,
+    AutoModelForZeroShotImageClassification,
 )
 from lucid.models._base   import ModelConfig, PretrainedModel
 from lucid.models._meta   import ModelFamilyMeta, model_family_meta
@@ -93,6 +94,14 @@ from lucid.models.generative.dreamer_v3 import (
     dreamer_v3_100m, dreamer_v3_100m_world_model,
     dreamer_v3_200m, dreamer_v3_200m_world_model,
     dreamer_v3_400m, dreamer_v3_400m_world_model,
+)
+# 2021 — CLIP (Radford et al.)
+from lucid.models.multimodal.clip import (
+    CLIPConfig, CLIP, CLIPForZeroShotImageClassification,
+    clip_vit_base_32, clip_vit_base_16,
+    clip_vit_large_14, clip_vit_large_14_336,
+    clip_vit_base_32_zero_shot, clip_vit_base_16_zero_shot,
+    clip_vit_large_14_zero_shot, clip_vit_large_14_336_zero_shot,
 )
 # 2020 — DDPM (Ho et al.)
 from lucid.models.generative.ddpm import (
@@ -508,6 +517,18 @@ __all__ = [
     "AutoModelForQuestionAnswering",
     "AutoModelForImageGeneration",
     "AutoModelForWorldModeling",
+    "AutoModelForZeroShotImageClassification",
+    "CLIPConfig",
+    "CLIP",
+    "CLIPForZeroShotImageClassification",
+    "clip_vit_base_32",
+    "clip_vit_base_16",
+    "clip_vit_large_14",
+    "clip_vit_large_14_336",
+    "clip_vit_base_32_zero_shot",
+    "clip_vit_base_16_zero_shot",
+    "clip_vit_large_14_zero_shot",
+    "clip_vit_large_14_336_zero_shot",
     "create_model", "is_model", "list_models", "model_entrypoint", "register_model",
     # Structural-typing contracts (advisory; see arch-models-family-contract).
     "HasModelType", "HasFamilyMeta", "HasConfigClass",

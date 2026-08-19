@@ -303,6 +303,7 @@ const TASK_LABEL_OVERRIDES: Record<string, string> = {
   "panoptic-segmentation":      "Panoptic Segmentation",
   "image-generation":           "Image Generation",
   "world-modeling":             "World Modeling",
+  "zero-shot-image-classification": "Zero-Shot Image Classification",
   "text-generation":            "Text Generation",
   "text-classification":        "Text Classification",
   "token-classification":       "Token Classification",
@@ -340,6 +341,7 @@ const TASK_SWATCH: Record<string, string> = {
   "world-modeling":           "generative-2",
   // ── Multi / meta ──────────────────────────────────────────────────────────
   "pretraining":              "meta-1",
+  "zero-shot-image-classification": "meta-2",
 };
 
 const TASK_SWATCH_DEFAULT = "meta-1";

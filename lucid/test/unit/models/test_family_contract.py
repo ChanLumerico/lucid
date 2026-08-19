@@ -31,7 +31,7 @@ from lucid.models._registry import is_model
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 MODELS_DIR = REPO_ROOT / "lucid" / "models"
-DOMAINS = ("vision", "text", "generative")
+DOMAINS = ("vision", "text", "generative", "multimodal")
 
 # Abstract intermediate Config bases — these legitimately keep
 # ``model_type == "base"`` and are not themselves family configs.

@@ -314072,5 +314072,1709 @@
         "children": []
       }
     ]
+  },
+  "clip_vit_base_16": {
+    "name": "CLIP",
+    "type": "CLIP",
+    "params": 149620737,
+    "own_params": 1,
+    "children": [
+      {
+        "name": "visual",
+        "type": "_VisionTransformer",
+        "params": 86192640,
+        "own_params": 545280,
+        "children": [
+          {
+            "name": "conv1",
+            "type": "Conv2d",
+            "params": 589824,
+            "own_params": 589824,
+            "children": []
+          },
+          {
+            "name": "ln_pre",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_Transformer",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "resblocks",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResidualAttentionBlock",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_QuickGELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ln_post",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "textual",
+        "type": "_TextTransformer",
+        "params": 63428096,
+        "own_params": 301568,
+        "children": [
+          {
+            "name": "token_embedding",
+            "type": "Embedding",
+            "params": 25296896,
+            "own_params": 25296896,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_Transformer",
+            "params": 37828608,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "resblocks",
+                "type": "ModuleList",
+                "params": 37828608,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResidualAttentionBlock",
+                    "params": 3152384,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_QuickGELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ln_final",
+            "type": "LayerNorm",
+            "params": 1024,
+            "own_params": 1024,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "clip_vit_base_16_zero_shot": {
+    "name": "CLIPForZeroShotImageClassification",
+    "type": "CLIPForZeroShotImageClassification",
+    "params": 149620737,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "clip",
+        "type": "CLIP",
+        "params": 149620737,
+        "own_params": 1,
+        "children": [
+          {
+            "name": "visual",
+            "type": "_VisionTransformer",
+            "params": 86192640,
+            "own_params": 545280,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 589824,
+                "own_params": 589824,
+                "children": []
+              },
+              {
+                "name": "ln_pre",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_Transformer",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResidualAttentionBlock",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_post",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "textual",
+            "type": "_TextTransformer",
+            "params": 63428096,
+            "own_params": 301568,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 25296896,
+                "own_params": 25296896,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_Transformer",
+                "params": 37828608,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 37828608,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResidualAttentionBlock",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_final",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "clip_vit_base_32": {
+    "name": "CLIP",
+    "type": "CLIP",
+    "params": 151277313,
+    "own_params": 1,
+    "children": [
+      {
+        "name": "visual",
+        "type": "_VisionTransformer",
+        "params": 87849216,
+        "own_params": 432384,
+        "children": [
+          {
+            "name": "conv1",
+            "type": "Conv2d",
+            "params": 2359296,
+            "own_params": 2359296,
+            "children": []
+          },
+          {
+            "name": "ln_pre",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_Transformer",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "resblocks",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResidualAttentionBlock",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_QuickGELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ln_post",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "textual",
+        "type": "_TextTransformer",
+        "params": 63428096,
+        "own_params": 301568,
+        "children": [
+          {
+            "name": "token_embedding",
+            "type": "Embedding",
+            "params": 25296896,
+            "own_params": 25296896,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_Transformer",
+            "params": 37828608,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "resblocks",
+                "type": "ModuleList",
+                "params": 37828608,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResidualAttentionBlock",
+                    "params": 3152384,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 1050624,
+                        "own_params": 1050624,
+                        "children": []
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_QuickGELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ln_final",
+            "type": "LayerNorm",
+            "params": 1024,
+            "own_params": 1024,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "clip_vit_base_32_zero_shot": {
+    "name": "CLIPForZeroShotImageClassification",
+    "type": "CLIPForZeroShotImageClassification",
+    "params": 151277313,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "clip",
+        "type": "CLIP",
+        "params": 151277313,
+        "own_params": 1,
+        "children": [
+          {
+            "name": "visual",
+            "type": "_VisionTransformer",
+            "params": 87849216,
+            "own_params": 432384,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 2359296,
+                "own_params": 2359296,
+                "children": []
+              },
+              {
+                "name": "ln_pre",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_Transformer",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResidualAttentionBlock",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_post",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "textual",
+            "type": "_TextTransformer",
+            "params": 63428096,
+            "own_params": 301568,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 25296896,
+                "own_params": 25296896,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_Transformer",
+                "params": 37828608,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 37828608,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResidualAttentionBlock",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_final",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "clip_vit_large_14": {
+    "name": "CLIP",
+    "type": "CLIP",
+    "params": 427616513,
+    "own_params": 1,
+    "children": [
+      {
+        "name": "visual",
+        "type": "_VisionTransformer",
+        "params": 303966208,
+        "own_params": 1050624,
+        "children": [
+          {
+            "name": "conv1",
+            "type": "Conv2d",
+            "params": 602112,
+            "own_params": 602112,
+            "children": []
+          },
+          {
+            "name": "ln_pre",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_Transformer",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "resblocks",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResidualAttentionBlock",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_QuickGELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ln_post",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "textual",
+        "type": "_TextTransformer",
+        "params": 123650304,
+        "own_params": 648960,
+        "children": [
+          {
+            "name": "token_embedding",
+            "type": "Embedding",
+            "params": 37945344,
+            "own_params": 37945344,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_Transformer",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "resblocks",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResidualAttentionBlock",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_QuickGELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ln_final",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "clip_vit_large_14_336": {
+    "name": "CLIP",
+    "type": "CLIP",
+    "params": 427944193,
+    "own_params": 1,
+    "children": [
+      {
+        "name": "visual",
+        "type": "_VisionTransformer",
+        "params": 304293888,
+        "own_params": 1378304,
+        "children": [
+          {
+            "name": "conv1",
+            "type": "Conv2d",
+            "params": 602112,
+            "own_params": 602112,
+            "children": []
+          },
+          {
+            "name": "ln_pre",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_Transformer",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "resblocks",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResidualAttentionBlock",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_QuickGELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ln_post",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "textual",
+        "type": "_TextTransformer",
+        "params": 123650304,
+        "own_params": 648960,
+        "children": [
+          {
+            "name": "token_embedding",
+            "type": "Embedding",
+            "params": 37945344,
+            "own_params": 37945344,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_Transformer",
+            "params": 85054464,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "resblocks",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_ResidualAttentionBlock",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "ln_1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "ln_2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_QuickGELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ln_final",
+            "type": "LayerNorm",
+            "params": 1536,
+            "own_params": 1536,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "clip_vit_large_14_336_zero_shot": {
+    "name": "CLIPForZeroShotImageClassification",
+    "type": "CLIPForZeroShotImageClassification",
+    "params": 427944193,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "clip",
+        "type": "CLIP",
+        "params": 427944193,
+        "own_params": 1,
+        "children": [
+          {
+            "name": "visual",
+            "type": "_VisionTransformer",
+            "params": 304293888,
+            "own_params": 1378304,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 602112,
+                "own_params": 602112,
+                "children": []
+              },
+              {
+                "name": "ln_pre",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_Transformer",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResidualAttentionBlock",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_post",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "textual",
+            "type": "_TextTransformer",
+            "params": 123650304,
+            "own_params": 648960,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 37945344,
+                "own_params": 37945344,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_Transformer",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResidualAttentionBlock",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_final",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "clip_vit_large_14_zero_shot": {
+    "name": "CLIPForZeroShotImageClassification",
+    "type": "CLIPForZeroShotImageClassification",
+    "params": 427616513,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "clip",
+        "type": "CLIP",
+        "params": 427616513,
+        "own_params": 1,
+        "children": [
+          {
+            "name": "visual",
+            "type": "_VisionTransformer",
+            "params": 303966208,
+            "own_params": 1050624,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 602112,
+                "own_params": 602112,
+                "children": []
+              },
+              {
+                "name": "ln_pre",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_Transformer",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResidualAttentionBlock",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_post",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "textual",
+            "type": "_TextTransformer",
+            "params": 123650304,
+            "own_params": 648960,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 37945344,
+                "own_params": 37945344,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_Transformer",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResidualAttentionBlock",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "_QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_final",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 }
