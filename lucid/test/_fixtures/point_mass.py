@@ -37,7 +37,20 @@ class PointMass:
     horizon : int, default=20
         Steps before the episode is truncated.
     target, start : tuple of float
-        Positions in ``[-1, 1]^2``.
+        Positions in ``[-1, 1]^2``.  ``target`` is the fixed goal, and is
+        ignored when ``random_target`` is set.
+    random_target : bool, default=False
+        Draw a new goal on every :meth:`reset`, uniformly in
+        ``[-0.8, 0.8]^2``.
+
+        This changes what passing the task means, which is the only
+        reason it exists.  With a fixed goal the best constant action
+        scores 15.78 against random's 5.77, so an agent that never reads
+        its observation already clears any "beats random" bar — measured,
+        and the reason the cheap control tests are honest about
+        establishing "found a good constant" rather than control.  Move
+        the goal and no constant is good for more than one episode, so
+        the return can only be raised by *looking*.
     step_size : float, default=0.15
         How far a full-magnitude action moves the agent.
     sigma : float, default=1.0
@@ -84,6 +97,7 @@ class PointMass:
         step_size: float = 0.15,
         sigma: float = 1.0,
         device: str = "cpu",
+        random_target: bool = False,
     ) -> None:
         """Initialise the environment. See the class docstring."""
         self.size = size
@@ -93,6 +107,7 @@ class PointMass:
         self.step_size = step_size
         self.sigma = sigma
         self.device = device
+        self.random_target = random_target
 
         axis = lucid.linspace(-1.0, 1.0, size, device=device)
         self._xs = axis.reshape(1, size)
@@ -114,13 +129,20 @@ class PointMass:
         )
 
     def reset(self) -> Tensor:
-        """Return the agent to its start.
+        """Return the agent to its start, and re-draw the goal if asked.
 
         Returns
         -------
         Tensor
-            The first observation, ``(3, size, size)``.
+            The first observation, ``(3, size, size)``.  The goal is in
+            channel 1, so a moved goal is visible rather than hidden
+            state — the task stays fully observed and only stops
+            rewarding constants.
         """
+        if self.random_target:
+            draw = lucid.rand((2,)) * 1.6 - 0.8
+            self.target = (float(draw[0]), float(draw[1]))
+            self._target_blob = self._blob(*self.target)
         self.position = list(self.start)
         self._t = 0
         return self._render()

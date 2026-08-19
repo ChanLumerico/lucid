@@ -504,3 +504,243 @@ class TestPendulumEnvironment:
     ) -> None:
         with pytest.raises(ValueError):
             Pendulum(torque=torque)
+
+
+_TINY_V3 = dict(
+    action_dim=2,
+    cnn_depth=4,
+    stoch_size=6,
+    discrete=6,
+    deter_size=32,
+    hidden_size=24,
+    blocks=8,
+    actor_hidden=32,
+    value_hidden=32,
+    reward_hidden=32,
+    horizon=6,
+    num_bins=41,
+    pcont=False,
+)
+
+
+def _reward_range(env: PointMass) -> tuple[float, float]:
+    """What a reward on this task actually is, measured not assumed."""
+    episode = rollout(env, RandomPolicy(2))[0]
+    return float(episode.rewards.min()), float(episode.rewards.max())
+
+
+def _train_v3(steps: int = 60, world: bool = True) -> tuple:
+    """One short end-to-end run; returns the pieces the tests read."""
+    lucid.manual_seed(0)
+    env = PointMass(horizon=20)
+    model = M.create_model("dreamer_v3_12m_world_model", **_TINY_V3)
+    world_opt = optim.Adam(model.world_parameters(), lr=3e-3)
+    value_opt = optim.Adam(model.value_parameters(), lr=2e-4)
+    actor_opt = optim.Adam(model.actor_parameters(), lr=8e-4)
+
+    replay = SequenceReplay(capacity=20_000)
+    for _ in range(SEED_EPISODES):
+        replay.add(rollout(env, RandomPolicy(2))[0])
+
+    out = None
+    for _ in range(steps):
+        batch = replay.sample(BATCH, LENGTH)
+        out = model(batch.observations, batch.actions, batch.rewards)
+        model.backward(out)
+        if world:
+            world_opt.step()
+        value_opt.step()
+        actor_opt.step()
+        model.update_slow_critic()
+    return model, env, replay, out
+
+
+class TestDreamerV3EndToEnd:
+    """v3 driven through the rollout layer, which nothing else does.
+
+    **What this establishes.** That the loop closes and that the world
+    model learns the task's reward from episodes it collected itself.
+    The last part is the load-bearing one: the reward head is a
+    distribution over symlog bins rather than a scalar, so "the number
+    came out right" passes through two-hot encoding, a categorical
+    cross-entropy and ``symexp`` — none of which a shape test exercises
+    and all of which can be wired backwards while still training.
+
+    **What it does not establish, measured rather than assumed.** That
+    the policy learns. On this task the best constant action scores 15.78
+    against random's 5.77, and v3's actor reaches or misses that ceiling
+    for reasons unrelated to learning: on the seeds where the return rose
+    to 2.3x random, the actor's gradient had collapsed to 1e-3 by step 80
+    and its entropy had returned to the uniform limit — the score came
+    from a *frozen* constant. On the seed where the actor moved most, the
+    return was 0.87x random. Asserting "return beats random" here would
+    therefore pin a coin flip, so it is not asserted. State-dependent
+    control is measured in ``test_world_model_benchmarks.py``, on the
+    moving-target variant where no constant wins.
+
+    This is the seam that hid a real defect: episodes collected from an
+    accelerator environment split across devices, because rewards arrive
+    as Python floats and landed on the CPU while the frames did not. The
+    rollout layer is tested without a model and the models are tested
+    on-device without the rollout layer, so nothing saw it.
+    """
+
+    def test_the_collected_loop_closes(self) -> None:
+        model, env, replay, _ = _train_v3(steps=10)
+        before = replay.steps
+        inner = model.dreamer_v3
+        collector = LatentPolicy(
+            inner.encode,
+            inner.rssm,
+            lambda state: inner.act(state, sample=False),
+            2,
+            noise=0.3,
+        )
+        replay.add(rollout(env, collector)[0])
+        assert replay.steps > before
+
+    def test_all_three_objectives_receive_gradient(self) -> None:
+        """Off real collected data, not a synthetic batch."""
+        model, _, _, _ = _train_v3(steps=10)
+        for name, group in (
+            ("world", model.world_parameters()),
+            ("value", model.value_parameters()),
+            ("actor", model.actor_parameters()),
+        ):
+            total = sum(
+                float(p.grad.abs().sum().item())
+                for p in group
+                if p.grad is not None
+            )
+            assert total > 0.0, f"{name} received no gradient"
+
+    def test_the_reward_head_calibrates_to_the_task(self) -> None:
+        """Imagined reward has to land where real reward lives."""
+        model, env, _, out = _train_v3()
+        low, high = _reward_range(env)
+        imagined = float(out.behavior.imagined_reward.mean().item())
+        assert low - 0.1 <= imagined <= high + 0.1, (
+            f"imagined reward {imagined:.3f} outside the task's own range "
+            f"[{low:.3f}, {high:.3f}]"
+        )
+
+    def test_a_frozen_world_model_does_not(self) -> None:
+        """Guards the test above.
+
+        Rewards here are ``exp(-d^2)``, so they sit in a narrow positive
+        band that an untrained head could plausibly fall inside by
+        accident — which would make the check above pass without the
+        model having learned anything. Withholding the world optimiser
+        and nothing else shows the calibration is what moved it.
+        """
+        _, env, _, out = _train_v3(world=False)
+        low, high = _reward_range(env)
+        imagined = float(out.behavior.imagined_reward.mean().item())
+        assert not (low - 0.1 <= imagined <= high + 0.1), (
+            f"an untrained reward head already reads {imagined:.3f} inside "
+            f"[{low:.3f}, {high:.3f}] — the calibration test proves nothing"
+        )
+
+
+_TINY_PLANET = dict(
+    action_dim=2,
+    cnn_depth=4,
+    stoch_size=8,
+    deter_size=32,
+    hidden_size=32,
+    reward_hidden=32,
+)
+
+# Far below the paper's 12/10/1000/100. The planner is the policy, so it
+# runs once per environment step rather than once per training step, and
+# the paper's budget makes a twenty-step episode the dominant cost of the
+# whole file.
+_PLAN = dict(horizon=6, iterations=4, candidates=64, elites=8)
+
+
+def _train_planet(steps: int = 60, train: bool = True) -> tuple:
+    lucid.manual_seed(0)
+    env = PointMass(horizon=20)
+    model = M.create_model("planet_world_model", **_TINY_PLANET)
+    opt = optim.Adam(model.parameters(), lr=1e-3)
+
+    replay = SequenceReplay(capacity=20_000)
+    for _ in range(SEED_EPISODES):
+        replay.add(rollout(env, RandomPolicy(2))[0])
+
+    first = out = None
+    for step in range(steps):
+        batch = replay.sample(BATCH, LENGTH)
+        out = model(batch.observations, batch.actions, batch.rewards)
+        first = float(out.recon_loss.item()) if step == 0 else first
+        out.loss.backward()
+        if train:
+            opt.step()
+    return model, env, replay, out, first
+
+
+def _planner(model: object) -> LatentPolicy:
+    return LatentPolicy(
+        model.planet.encode,
+        model.planet.rssm,
+        lambda state: model.plan(state, **_PLAN),
+        2,
+    )
+
+
+class TestPlaNetPlansThroughTheLoop:
+    """CEM as the policy, in a real episode.
+
+    ``plan`` is unit-tested against a fixed state elsewhere. What was
+    never done is the thing PlaNet actually is: no actor, the planner
+    *is* the policy, so every environment step runs a fresh search
+    against the learned model and feeds its own result back as the next
+    belief. A planner that silently searches a stale or mis-shaped state
+    still returns a well-formed action.
+
+    Same limitation as the v3 class above, and the same reason: on the
+    fixed-target task an **untrained** planner already scored 2.00x
+    random on one seed, and on another the trained one scored worse than
+    the untrained. Ranking a planner by return needs the moving-target
+    variant, so that lives in the benchmarks.
+    """
+
+    def test_the_planner_drives_a_real_episode(self) -> None:
+        model, env, replay, _, _ = _train_planet(steps=10)
+        before = replay.steps
+        episode, total = rollout(env, _planner(model))
+        replay.add(episode)
+        assert replay.steps > before
+        assert isinstance(total, float)
+
+    def test_the_planner_respects_the_action_bound(self) -> None:
+        """CEM searches an unbounded Gaussian; the driver is what clips.
+
+        Worth asserting on a planned episode rather than a single call —
+        the bound is applied where the action leaves the policy, and an
+        actor-based model would satisfy it through its own tanh and hide
+        a missing clip.
+        """
+        model, env, _, _, _ = _train_planet(steps=10)
+        episode = rollout(env, _planner(model))[0]
+        assert float(episode.actions.abs().max().item()) <= 1.0
+
+    def test_the_reward_head_calibrates_to_the_task(self) -> None:
+        model, env, _, out, first = _train_planet()
+        low, high = _reward_range(env)
+        predicted = float(out.reward.mean().item())
+        assert low - 0.1 <= predicted <= high + 0.1, (
+            f"predicted reward {predicted:.3f} outside [{low:.3f}, {high:.3f}]"
+        )
+        assert float(out.recon_loss.item()) < first
+
+    def test_a_frozen_model_does_not(self) -> None:
+        """Guards the test above, the same way."""
+        _, env, _, out, first = _train_planet(train=False)
+        low, high = _reward_range(env)
+        predicted = float(out.reward.mean().item())
+        assert not (low - 0.1 <= predicted <= high + 0.1), (
+            f"an untrained reward head already reads {predicted:.3f} inside "
+            f"[{low:.3f}, {high:.3f}]"
+        )
+        assert float(out.recon_loss.item()) >= first * 0.9
