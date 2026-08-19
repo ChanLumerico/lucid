@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- _Pending the next release._
+
+---
+
+## [3.8.0] — 2026-08-19
 
 ### Added
 
@@ -316,6 +322,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Tooling
 
 - drop the artefact fence now that nothing writes them
+
 
 ---
 
@@ -3401,7 +3408,8 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.7.1...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.8.0...HEAD
+[3.8.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.8.0
 [3.7.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.7.1
 [3.7.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.7.0
 [3.5.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.5.0
