@@ -43,7 +43,13 @@ jobs:
           python -m pip install --upgrade pip
           # See ci.yml for why --no-build-isolation matters here (libmlx.dylib
           # RPATH must match between build env and runtime env).
-          python -m pip install setuptools wheel cmake ninja pybind11 mlx
+          #
+          # pybind11 pinned to match [build-system].requires — without
+          # isolation pip resolves the host env against that list, so an
+          # unpinned install fails the moment upstream ships a version
+          # outside the pin.
+          python -m pip install setuptools wheel cmake ninja \
+              "pybind11>=3.0,<3.1" mlx
           python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Build wheel only (no smoke yet)

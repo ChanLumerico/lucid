@@ -109,8 +109,17 @@ jobs:
           # MLX must be installed in the *host* env (not just the build
           # isolation env) so the .so RPATH baked at build time matches
           # the libmlx.dylib path the runtime resolver will see.
-          python -m pip install setuptools wheel cmake ninja pybind11 \
-              "mlx>=0.31" build
+          #
+          # pybind11 carries the same pin as [build-system].requires in
+          # pyproject.toml, and must: `build --no-isolation` checks the
+          # host env against that list, so an unpinned install resolves
+          # to whatever is newest and the build aborts with "Missing
+          # dependencies: pybind11<3.1,>=3.0" the day a 3.1 appears.
+          # ci.yml pins it in all three of its install steps; this one
+          # did not, which is how the release path broke while CI stayed
+          # green.
+          python -m pip install setuptools wheel cmake ninja \
+              "pybind11>=3.0,<3.1" "mlx>=0.31" build
 
       - name: Build wheel + sdist
         env:
