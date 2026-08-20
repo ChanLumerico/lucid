@@ -1,0 +1,2919 @@
+{
+  "slug": "lucid.models.multimodal.clip",
+  "name": "clip",
+  "path": "lucid.models.multimodal.clip",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/__init__.py#L1",
+  "members": [
+    {
+      "name": "CLIPConfig",
+      "path": "lucid.models.multimodal.clip._config.CLIPConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "MultimodalModelConfig"
+      ],
+      "labels": [],
+      "signature": "CLIPConfig(embed_dim: int = 512, act_fn: MultimodalActivation = 'quick_gelu', image_size: int = 224, patch_size: int = 32, vision_layers: int = 12, vision_width: int = 768, vision_heads: int = 12, context_length: int = 77, vocab_size: int = 49408, text_width: int = 512, text_heads: int = 8, text_layers: int = 12, logit_scale_init: float = 0.07, logit_scale_max: float = 100.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_config.py#L12",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.multimodal.clip._config.CLIPConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(embed_dim: int = 512, act_fn: MultimodalActivation = 'quick_gelu', image_size: int = 224, patch_size: int = 32, vision_layers: int = 12, vision_width: int = 768, vision_heads: int = 12, context_length: int = 77, vocab_size: int = 49408, text_width: int = 512, text_heads: int = 8, text_layers: int = 12, logit_scale_init: float = 0.07, logit_scale_max: float = 100.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_config.py#L1",
+          "subcategory": "config",
+          "summary": "Initialise the tower. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen configuration dataclass for every CLIP variant.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "embed_dim",
+          "annotation": "int",
+          "description": "Inherited from `lucid.models.multimodal.MultimodalModelConfig`\n— the width of the joint image-text space both towers project\ninto, and the dimension a downstream consumer sees.",
+          "default": "512"
+        },
+        {
+          "name": "image_size",
+          "annotation": "int",
+          "description": "Input resolution of the image tower.  `336` for the\nhigh-resolution ViT-L/14 variant.",
+          "default": "224"
+        },
+        {
+          "name": "patch_size",
+          "annotation": "int",
+          "description": "Side of the square patch the image is tokenised into.  The token\ncount is `(image_size / patch_size) ** 2 + 1`, the `+ 1`\nbeing the class token, so halving this quadruples the sequence.",
+          "default": "32"
+        },
+        {
+          "name": "vision_layers",
+          "annotation": "int",
+          "description": "Transformer blocks in the image tower.",
+          "default": "12"
+        },
+        {
+          "name": "vision_width",
+          "annotation": "int",
+          "description": "Residual width of the image tower.",
+          "default": "768"
+        },
+        {
+          "name": "vision_heads",
+          "annotation": "int",
+          "description": "Attention heads in the image tower.  The paper's variants all\nuse `vision_width / 64`.",
+          "default": "12"
+        },
+        {
+          "name": "context_length",
+          "annotation": "int",
+          "description": "Maximum text sequence length, counting the `[SOS]` and\n`[EOS]` sentinels.",
+          "default": "77"
+        },
+        {
+          "name": "vocab_size",
+          "annotation": "int",
+          "description": "Byte-pair vocabulary size of the text tower.",
+          "default": "49408"
+        },
+        {
+          "name": "text_width",
+          "annotation": "int",
+          "description": "Residual width of the text tower.",
+          "default": "512"
+        },
+        {
+          "name": "text_heads",
+          "annotation": "int",
+          "description": "Attention heads in the text tower.",
+          "default": "8"
+        },
+        {
+          "name": "text_layers",
+          "annotation": "int",
+          "description": "Transformer blocks in the text tower.  Fixed across every\nvariant the paper trains — see Notes.",
+          "default": "12"
+        },
+        {
+          "name": "logit_scale_init",
+          "annotation": "float",
+          "description": "The temperature the learned scale starts at; stored internally\nas $\\log(1/\\tau)$.",
+          "default": "0.07"
+        },
+        {
+          "name": "logit_scale_max",
+          "annotation": "float",
+          "description": "Ceiling on the exponentiated scale.",
+          "default": "100.0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.multimodal.clip import CLIPConfig\n>>> config = CLIPConfig()\n>>> config.embed_dim, config.patch_size\n(512, 32)\n>>> large = CLIPConfig(embed_dim=768, patch_size=14, vision_layers=24,\n...                    vision_width=1024, vision_heads=16,\n...                    text_width=768, text_heads=12)\n>>> large.vision_width // large.vision_heads\n64"
+      ],
+      "notes": [
+        "**Two numbers here disagree with the paper's prose**, and the\nimplementation's are used because the released weights have those\nshapes:\n\n=================  ==================  ==================\nfield              paper §A            official release\n=================  ==================  ==================\n`context_length`  \"capped at 76\"      77\n`vocab_size`      \"49,152 vocab size\" 49408\n=================  ==================  ==================\n\nThe gap in each case is the sentinels: 76 caption tokens plus\n`[SOS]` and `[EOS]` does not fit in 77, so the released models\ntreat 77 as the whole budget; and 49408 − 49152 = 256, one slot per\nbyte, which is what a byte-level BPE needs to stay total.\n\nDepth scales only in the image tower.  Every variant the paper\ntrains keeps `text_layers = 12`, and for the ResNet towers it says\nso outright — \"we only scale the width of the model to be\nproportional to the calculated increase in width of the ResNet and do\nnot scale the depth at all\".  The ViT variants follow the same rule:\nViT-L/14 widens the text tower to 768 and leaves it 12 deep."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPModel",
+      "path": "lucid.models.multimodal.clip._model.CLIPModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "CLIPModel(config: CLIPConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L254",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.multimodal.clip._model.CLIPModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: CLIPConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L300",
+          "subcategory": "model",
+          "summary": "Initialise the model. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "scale",
+          "path": "lucid.models.multimodal.clip._model.CLIPModel.scale",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "scale: Tensor",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L370",
+          "summary": "The temperature as a multiplier — `exp(logit_scale)`, capped.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "A scalar in `(0, logit_scale_max]`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "The cap is the paper's: the scale is \"clipped to prevent scaling\nthe logits by more than 100\".  Applying it here rather than in a\ntraining loop means every consumer gets it, including one that\nwrites its own loop — which is where the published implementation\nputs it and therefore where it is easy to omit."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode_image",
+          "path": "lucid.models.multimodal.clip._model.CLIPModel.encode_image",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode_image(pixel_values: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L390",
+          "subcategory": "model",
+          "summary": "Embed images into the joint space, L2-normalised.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "pixel_values",
+              "annotation": "Tensor",
+              "description": "`(B, 3, image_size, image_size)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(B, embed_dim)` with unit rows."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode_text",
+          "path": "lucid.models.multimodal.clip._model.CLIPModel.encode_text",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode_text(input_ids: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L405",
+          "subcategory": "model",
+          "summary": "Embed captions into the joint space, L2-normalised.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "input_ids",
+              "annotation": "Tensor",
+              "description": "`(B, context_length)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(B, embed_dim)` with unit rows."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.multimodal.clip._model.CLIPModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(pixel_values: Tensor, input_ids: Tensor, return_loss: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L420",
+          "subcategory": "model",
+          "summary": "Score every image against every caption in the batch.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "pixel_values",
+              "annotation": "Tensor",
+              "description": "`(B, 3, image_size, image_size)`.",
+              "default": null
+            },
+            {
+              "name": "input_ids",
+              "annotation": "Tensor",
+              "description": "`(B, context_length)`.",
+              "default": null
+            },
+            {
+              "name": "return_loss",
+              "annotation": "bool",
+              "description": "Also compute the symmetric contrastive loss, which assumes\nthe two batches are aligned pairwise.",
+              "default": "False"
+            }
+          ],
+          "returns": {
+            "annotation": "CLIPOutput",
+            "description": "Embeddings, both logit matrices, and optionally the loss."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Contrastive Language-Image Pre-training.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "CLIPConfig",
+          "description": "The variant to build.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.multimodal.clip import CLIPModel, CLIPConfig\n>>> model = CLIPModel(CLIPConfig(image_size=32, patch_size=16, vision_layers=1,\n...                         vision_width=32, vision_heads=2,\n...                         context_length=8, vocab_size=64, text_width=32,\n...                         text_heads=2, text_layers=1, embed_dim=16)).eval()\n>>> images = lucid.randn((2, 3, 32, 32))\n>>> captions = lucid.zeros((2, 8), dtype=lucid.int64)\n>>> out = model(images, captions)\n>>> out.logits_per_image.shape\n(2, 2)"
+      ],
+      "notes": [
+        "Reference: Radford et al., *\"Learning Transferable Visual Models From\nNatural Language Supervision\"*, ICML, 2021\n([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)).\n\nThe two towers never meet except in the dot product, so they can be\nrun independently — `encode_image` and `encode_text` are\nthe useful entry points for retrieval, where one side is indexed once\nand the other is queried repeatedly."
+      ],
+      "attributes": [
+        {
+          "name": "visual",
+          "annotation": "_VisionTransformer",
+          "description": "Image tower."
+        },
+        {
+          "name": "textual",
+          "annotation": "_TextTransformer",
+          "description": "Text tower."
+        },
+        {
+          "name": "logit_scale",
+          "annotation": "nn.Parameter",
+          "description": "$\\log(1/\\tau)$, a scalar."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPForZeroShotImageClassification",
+      "path": "lucid.models.multimodal.clip._model.CLIPForZeroShotImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "CLIPForZeroShotImageClassification(config: CLIPConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L462",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.multimodal.clip._model.CLIPForZeroShotImageClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: CLIPConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L501",
+          "subcategory": "model",
+          "summary": "Initialise the model. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.multimodal.clip._model.CLIPForZeroShotImageClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(pixel_values: Tensor, prompt_ids: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L506",
+          "subcategory": "model",
+          "summary": "Score each image against each candidate prompt.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "pixel_values",
+              "annotation": "Tensor",
+              "description": "`(B, 3, image_size, image_size)`.",
+              "default": null
+            },
+            {
+              "name": "prompt_ids",
+              "annotation": "Tensor",
+              "description": "`(num_prompts, context_length)` — one tokenised caption per\ncandidate class.  Unlike `CLIPModel.forward` this batch is\n*not* paired with the images and may be any size.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "CLIPZeroShotOutput",
+            "description": "`logits` is `(B, num_prompts)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "CLIP posed as a classifier, by writing the labels as sentences.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "CLIPConfig",
+          "description": "The variant to build.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.multimodal.clip import (\n...     CLIPConfig, CLIPForZeroShotImageClassification)\n>>> config = CLIPConfig(image_size=32, patch_size=16, vision_layers=1,\n...                     vision_width=32, vision_heads=2, context_length=8,\n...                     vocab_size=64, text_width=32, text_heads=2,\n...                     text_layers=1, embed_dim=16)\n>>> model = CLIPForZeroShotImageClassification(config).eval()\n>>> out = model(lucid.randn((2, 3, 32, 32)), lucid.zeros((5, 8), dtype=lucid.int64))\n>>> out.logits.shape\n(2, 5)"
+      ],
+      "notes": [
+        "There is no head and nothing new is trained.  The classes arrive as\ntokenised prompts and the scores are the same cosine similarities the\ncontrastive objective was fitted on, which is the whole claim of the\npaper — a fixed-label model cannot be asked a question it was not\ntrained for, and this can.\n\nA caller that classifies many images against one label set should\nembed the prompts once with `CLIPModel.encode_text` and reuse them;\n`forward` re-embeds them on every call because it does not know\nthat the set is fixed."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPOutput",
+      "path": "lucid.models.multimodal.clip._model.CLIPOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "CLIPOutput(image_embeds: Tensor, text_embeds: Tensor, logits_per_image: Tensor, logits_per_text: Tensor, loss: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L209",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.multimodal.clip._model.CLIPOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(image_embeds: Tensor, text_embeds: Tensor, logits_per_image: Tensor, logits_per_text: Tensor, loss: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Initialise the tower. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What `CLIP` returns.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "image_embeds, text_embeds",
+          "annotation": "Tensor",
+          "description": "`(B, embed_dim)`, L2-normalised — so a dot product between them\nis a cosine similarity and nothing further is needed to compare\nthem."
+        },
+        {
+          "name": "logits_per_image",
+          "annotation": "Tensor",
+          "description": "`(B_image, B_text)`, scaled by the learned temperature."
+        },
+        {
+          "name": "logits_per_text",
+          "annotation": "Tensor",
+          "description": "The transpose of `logits_per_image`, carried explicitly because\nthe symmetric loss reads both and transposing at the call site is\nwhere the two directions get accidentally tied."
+        },
+        {
+          "name": "loss",
+          "annotation": "Tensor or None",
+          "description": "The symmetric contrastive loss, present only when asked for."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPZeroShotOutput",
+      "path": "lucid.models.multimodal.clip._model.CLIPZeroShotOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "CLIPZeroShotOutput(logits: Tensor, image_embeds: Tensor, text_embeds: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L236",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.multimodal.clip._model.CLIPZeroShotOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(logits: Tensor, image_embeds: Tensor, text_embeds: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Initialise the tower. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What `CLIPForZeroShotImageClassification` returns.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "logits",
+          "annotation": "Tensor",
+          "description": "`(B, num_prompts)` — one score per candidate caption, in the\norder the prompts were given."
+        },
+        {
+          "name": "image_embeds, text_embeds",
+          "annotation": "Tensor",
+          "description": "The normalised embeddings the scores came from."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPViTBase16Weights",
+      "path": "lucid.models.multimodal.clip._weights.CLIPViTBase16Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CLIPViTBase16Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_weights.py#L88",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.clip_vit_base_16`.",
+      "extended": "The same tower shape as ViT-B/32 with 16-pixel patches, so it reads\n196 patch tokens where the other reads 49 — four times the attention\nfor the same 151M-scale budget, and the paper's better-scoring base\nmodel because of it.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPViTBase32Weights",
+      "path": "lucid.models.multimodal.clip._weights.CLIPViTBase32Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CLIPViTBase32Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_weights.py#L63",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.clip_vit_base_32`.",
+      "extended": "Trained on WIT-400M, the paper's 400-million image-text pair\ndataset.  `num_classes` is 0 because CLIPModel has no fixed label set —\nthat is the point of it.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPViTLarge14_336Weights",
+      "path": "lucid.models.multimodal.clip._weights.CLIPViTLarge14_336Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CLIPViTLarge14_336Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_weights.py#L139",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.clip_vit_large_14_336`.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Not interchangeable with `CLIPViTLarge14Weights` despite the\nidentical tower shape: the positional table has 577 rows here\nagainst 257 there, so loading either into the other's model fails on\nthat one tensor."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPViTLarge14Weights",
+      "path": "lucid.models.multimodal.clip._weights.CLIPViTLarge14Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "CLIPViTLarge14Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_weights.py#L114",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained weights for `lucid.models.clip_vit_large_14`.",
+      "extended": "The paper's best variant, and the only one whose text tower is\nwidened along with the image tower — 768 wide with 12 heads against\nthe base models' 512 and 8, at the same 12 layers.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPTokenizer",
+      "path": "lucid.models.multimodal.clip._tokenizer.CLIPTokenizer",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "BPETokenizer"
+      ],
+      "labels": [],
+      "signature": "CLIPTokenizer(vocab: dict[str, int], merges: list[tuple[str, str]], normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_tokenizer.py#L143",
+      "subcategory": "tokenizer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.multimodal.clip._tokenizer.CLIPTokenizer.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(vocab: dict[str, int], merges: list[tuple[str, str]], normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_tokenizer.py#L183",
+          "subcategory": "tokenizer",
+          "summary": "Construct the tokenizer. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.multimodal.clip._tokenizer.CLIPTokenizer.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(text: str, add_special_tokens: bool = False)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_tokenizer.py#L230",
+          "subcategory": "tokenizer",
+          "summary": "Return the BPE ids of `text`, unframed and unpadded.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "text",
+              "annotation": "str",
+              "description": "Raw caption.",
+              "default": null
+            },
+            {
+              "name": "add_special_tokens",
+              "annotation": "bool",
+              "description": "The base class defaults this to `True`.  It is flipped here\nbecause `tokenize` is the framing path and adding the\nsentinels in both places gives a caption two `[SOS]`,\nshifting every position the model reads by one.",
+              "default": "False, keyword-only"
+            }
+          ],
+          "returns": {
+            "annotation": "list of int",
+            "description": "One id per merged symbol."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "The sentinels are *not* added here, unlike the base class's\ndefault. Framing belongs to `tokenize`, which also pads —\nadding them in both places is how a caption ends up with two\n`[SOS]` and the model reads its feature one position early."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "tokenize",
+          "path": "lucid.models.multimodal.clip._tokenizer.CLIPTokenizer.tokenize",
+          "kind": "function",
+          "labels": [],
+          "signature": "tokenize(text: str, context_length: int = 77)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_tokenizer.py#L261",
+          "subcategory": "tokenizer",
+          "summary": "Frame a caption with the sentinels and pad it to a fixed width.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "text",
+              "annotation": "str",
+              "description": "Raw caption.",
+              "default": null
+            },
+            {
+              "name": "context_length",
+              "annotation": "int",
+              "description": "Total width, counting both sentinels.",
+              "default": "77"
+            }
+          ],
+          "returns": {
+            "annotation": "list of int",
+            "description": "`[SOS] … [EOS]` followed by zeros."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If the caption does not fit.  Truncating silently would drop\nthe `[EOS]` the model locates its feature by, so a caption\nthat is too long is an error rather than a shortened result."
+            }
+          ],
+          "examples": [
+            ">>> from lucid.models.multimodal.clip import CLIPTokenizer\n>>> vocab = {\"a\": 0, \"b</w>\": 1, \"ab</w>\": 2,\n...          \"<|startoftext|>\": 3, \"<|endoftext|>\": 4}\n>>> tok = CLIPTokenizer(vocab=vocab, merges=[(\"a\", \"b</w>\")])\n>>> tok.tokenize(\"ab\", context_length=4)\n[3, 2, 4, 0]"
+          ],
+          "notes": [
+            "Padding is `0`, which is a real token id in a CLIP vocabulary.\nThat is harmless *because* the feature is read at `[EOS]` and\nthe text tower is causal, so nothing after the sentinel can reach\nthe position the feature is taken from."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "CLIP's byte-level BPE with `</w>` word boundaries.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "vocab",
+          "annotation": "dict[str, int]",
+          "description": "Token-string → id map, over byte-mapped symbols.  Must contain\n`CLIP_SOS` and `CLIP_EOS`.",
+          "default": null
+        },
+        {
+          "name": "merges",
+          "annotation": "list of tuple of str",
+          "description": "Ordered BPE merges; index is the rank.",
+          "default": null
+        },
+        {
+          "name": "normalizer",
+          "annotation": "Normalizer",
+          "description": "Applied before the pattern.  Defaults to none — CLIP's own\ncleaning (HTML unescaping, whitespace collapse, lowercasing)\nruns regardless and is not optional.",
+          "default": "None"
+        },
+        {
+          "name": "special_tokens",
+          "annotation": "SpecialTokens",
+          "description": "Override the default registry, which sets `bos` to\n`<|startoftext|>` and `eos` / `unk` to `<|endoftext|>`.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.multimodal.clip import CLIPTokenizer\n>>> vocab = {\"a\": 0, \"b</w>\": 1, \"ab</w>\": 2,\n...          \"<|startoftext|>\": 3, \"<|endoftext|>\": 4}\n>>> tok = CLIPTokenizer(vocab=vocab, merges=[(\"a\", \"b</w>\")])\n>>> tok.encode(\"ab\")\n[2]\n>>> tok.tokenize(\"ab\", context_length=5)\n[3, 2, 4, 0, 0]"
+      ],
+      "notes": [
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.3.\n\n`tokenize` is the method the model wants: it frames each\ncaption with the two sentinels and pads to a fixed width, which is\nwhat makes `argmax` over the ids find `[EOS]`.  `encode`\nis inherited and does neither — it returns the bare BPE ids, which\nis what a caller building their own framing wants."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CLIPTokenizerFast",
+      "path": "lucid.models.multimodal.clip._tokenizer.CLIPTokenizerFast",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "CLIPTokenizer"
+      ],
+      "labels": [],
+      "signature": "CLIPTokenizerFast(vocab: dict[str, int], merges: list[tuple[str, str]], normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_tokenizer.py#L371",
+      "subcategory": "tokenizer",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.multimodal.clip._tokenizer.CLIPTokenizerFast.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(vocab: dict[str, int], merges: list[tuple[str, str]], normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_tokenizer.py#L422",
+          "subcategory": "tokenizer",
+          "summary": "Construct the tokenizer. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "CLIP's tokenizer with the merge loop running in C++.",
+      "extended": "Same vocabulary format, same preprocessing, same output as\n`CLIPTokenizer` — only faster.",
+      "parameters": [
+        {
+          "name": "vocab",
+          "annotation": "dict[str, int]",
+          "description": "Token-string → id map, over byte-mapped symbols.",
+          "default": null
+        },
+        {
+          "name": "merges",
+          "annotation": "list of tuple of str",
+          "description": "Ordered BPE merges; index is the rank.",
+          "default": null
+        },
+        {
+          "name": "normalizer",
+          "annotation": "Normalizer",
+          "description": "Applied before the pattern.",
+          "default": "None"
+        },
+        {
+          "name": "special_tokens",
+          "annotation": "SpecialTokens",
+          "description": "Override the default sentinel registry.",
+          "default": "None"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.multimodal.clip import CLIPTokenizerFast\n>>> vocab = {\"a\": 0, \"b</w>\": 1, \"ab</w>\": 2,\n...          \"<|startoftext|>\": 3, \"<|endoftext|>\": 4}\n>>> tok = CLIPTokenizerFast(vocab=vocab, merges=[(\"a\", \"b</w>\")])\n>>> tok.encode(\"ab\")\n[2]\n>>> tok.tokenize(\"ab\", context_length=5)\n[3, 2, 4, 0, 0]"
+      ],
+      "notes": [
+        "**How this is possible at all.**  The engine's BPE seeds one symbol\nper codepoint, so handing it `\"hello</w>\"` tears the marker into\n`<`, `/`, `w`, `>` — four symbols where the scheme needs the\nmarker fused to the final character.  That was measured, and it is\nwhy `lucid.models.text.gpt.GPTTokenizerFast` carries no\nacceleration at all.\n\nThe way through is a *vocabulary* rewrite rather than an engine one.\nEvery entry ending in `</w>` is folded so the marker and the\ncharacter before it become a single private-use codepoint, and the\nsame fold is applied to the merge table and to each chunk before it\nis handed over.  The engine then seeds exactly the symbols the scheme\nintends, applies the merges it was given, and returns ids from the\nunmodified id space — the fold changes only the *keys*, never the\nvalues, so nothing downstream sees it.\n\nThe same trick would give GPT-1 a genuine fast path; that class's\nnote that the scheme \"needs an engine change\" is one option, not the\nonly one."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "clip_vit_base_16",
+      "path": "lucid.models.multimodal.clip._pretrained.clip_vit_base_16",
+      "kind": "function",
+      "labels": [],
+      "signature": "clip_vit_base_16(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_pretrained.py#L135",
+      "subcategory": "pretrained",
+      "summary": "Construct CLIP with a ViT-B/16 image tower.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Load the OpenAI WIT-400M checkpoint from the Lucid hub.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `CLIPConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CLIPModel",
+        "description": "Both towers and the learned temperature."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import clip_vit_base_16\n>>> model = clip_vit_base_16()\n>>> model.config.patch_size, model.config.vision_width\n(16, 768)"
+      ],
+      "notes": [
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.4.\n\nIdentical to ViT-B/32 apart from the patch size, which alone\nquadruples the token count — the paper's evidence that resolution of\nthe tokenisation, not width, is what the image tower was starved of."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "CLIP",
+        "type": "CLIP",
+        "params": 149620737,
+        "own_params": 1,
+        "children": [
+          {
+            "name": "visual",
+            "type": "_VisionTransformer",
+            "params": 86192640,
+            "own_params": 545280,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 589824,
+                "own_params": 589824,
+                "children": []
+              },
+              {
+                "name": "ln_pre",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "TransformerTower",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ResidualAttentionBlock",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_post",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "textual",
+            "type": "_TextTransformer",
+            "params": 63428096,
+            "own_params": 301568,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 25296896,
+                "own_params": 25296896,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "TransformerTower",
+                "params": 37828608,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 37828608,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ResidualAttentionBlock",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_final",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "clip_vit_base_16_zero_shot",
+      "path": "lucid.models.multimodal.clip._pretrained.clip_vit_base_16_zero_shot",
+      "kind": "function",
+      "labels": [],
+      "signature": "clip_vit_base_16_zero_shot(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_pretrained.py#L317",
+      "subcategory": "pretrained",
+      "summary": "ViT-B/16 CLIP posed as an open-vocabulary classifier.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Load the OpenAI WIT-400M checkpoint from the Lucid hub.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `CLIPConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CLIPForZeroShotImageClassification",
+        "description": "Scores images against tokenised prompts."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import clip_vit_base_16_zero_shot\n>>> model = clip_vit_base_16_zero_shot()\n>>> model.config.patch_size\n16"
+      ],
+      "notes": [
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §3.1."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "CLIPForZeroShotImageClassification",
+        "type": "CLIPForZeroShotImageClassification",
+        "params": 149620737,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "clip",
+            "type": "CLIP",
+            "params": 149620737,
+            "own_params": 1,
+            "children": [
+              {
+                "name": "visual",
+                "type": "_VisionTransformer",
+                "params": 86192640,
+                "own_params": 545280,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 589824,
+                    "own_params": 589824,
+                    "children": []
+                  },
+                  {
+                    "name": "ln_pre",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "transformer",
+                    "type": "TransformerTower",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 85054464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "ResidualAttentionBlock",
+                            "params": 7087872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "ln_1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "MultiheadAttention",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "ln_2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "QuickGELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 12
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_post",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "textual",
+                "type": "_TextTransformer",
+                "params": 63428096,
+                "own_params": 301568,
+                "children": [
+                  {
+                    "name": "token_embedding",
+                    "type": "Embedding",
+                    "params": 25296896,
+                    "own_params": 25296896,
+                    "children": []
+                  },
+                  {
+                    "name": "transformer",
+                    "type": "TransformerTower",
+                    "params": 37828608,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 37828608,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "ResidualAttentionBlock",
+                            "params": 3152384,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "ln_1",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "MultiheadAttention",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "ln_2",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 2099712,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 1050624,
+                                    "own_params": 1050624,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "QuickGELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Linear",
+                                    "params": 1049088,
+                                    "own_params": 1049088,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 12
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_final",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "clip_vit_base_32",
+      "path": "lucid.models.multimodal.clip._pretrained.clip_vit_base_32",
+      "kind": "function",
+      "labels": [],
+      "signature": "clip_vit_base_32(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_pretrained.py#L90",
+      "subcategory": "pretrained",
+      "summary": "Construct CLIP with a ViT-B/32 image tower.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Load the OpenAI WIT-400M checkpoint from the Lucid hub.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `CLIPConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CLIPModel",
+        "description": "Both towers and the learned temperature."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import clip_vit_base_32\n>>> model = clip_vit_base_32()\n>>> model.config.patch_size, model.config.embed_dim\n(32, 512)"
+      ],
+      "notes": [
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.4.\n\nThe cheapest of the ViT variants: 32-pixel patches leave 49 patch\ntokens at 224 pixels, against ViT-B/16's 196, so it costs roughly a\nquarter of the attention for the same depth and width."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "CLIP",
+        "type": "CLIP",
+        "params": 151277313,
+        "own_params": 1,
+        "children": [
+          {
+            "name": "visual",
+            "type": "_VisionTransformer",
+            "params": 87849216,
+            "own_params": 432384,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 2359296,
+                "own_params": 2359296,
+                "children": []
+              },
+              {
+                "name": "ln_pre",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "TransformerTower",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ResidualAttentionBlock",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_post",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "textual",
+            "type": "_TextTransformer",
+            "params": 63428096,
+            "own_params": 301568,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 25296896,
+                "own_params": 25296896,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "TransformerTower",
+                "params": 37828608,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 37828608,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ResidualAttentionBlock",
+                        "params": 3152384,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_final",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "clip_vit_base_32_zero_shot",
+      "path": "lucid.models.multimodal.clip._pretrained.clip_vit_base_32_zero_shot",
+      "kind": "function",
+      "labels": [],
+      "signature": "clip_vit_base_32_zero_shot(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_pretrained.py#L272",
+      "subcategory": "pretrained",
+      "summary": "ViT-B/32 CLIP posed as an open-vocabulary classifier.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Load the OpenAI WIT-400M checkpoint from the Lucid hub.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `CLIPConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CLIPForZeroShotImageClassification",
+        "description": "Scores images against tokenised prompts."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import clip_vit_base_32_zero_shot\n>>> model = clip_vit_base_32_zero_shot()\n>>> model.config.patch_size\n32"
+      ],
+      "notes": [
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §3.1."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "CLIPForZeroShotImageClassification",
+        "type": "CLIPForZeroShotImageClassification",
+        "params": 151277313,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "clip",
+            "type": "CLIP",
+            "params": 151277313,
+            "own_params": 1,
+            "children": [
+              {
+                "name": "visual",
+                "type": "_VisionTransformer",
+                "params": 87849216,
+                "own_params": 432384,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 2359296,
+                    "own_params": 2359296,
+                    "children": []
+                  },
+                  {
+                    "name": "ln_pre",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  },
+                  {
+                    "name": "transformer",
+                    "type": "TransformerTower",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 85054464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "ResidualAttentionBlock",
+                            "params": 7087872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "ln_1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "MultiheadAttention",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "ln_2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "QuickGELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 12
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_post",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "textual",
+                "type": "_TextTransformer",
+                "params": 63428096,
+                "own_params": 301568,
+                "children": [
+                  {
+                    "name": "token_embedding",
+                    "type": "Embedding",
+                    "params": 25296896,
+                    "own_params": 25296896,
+                    "children": []
+                  },
+                  {
+                    "name": "transformer",
+                    "type": "TransformerTower",
+                    "params": 37828608,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 37828608,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "ResidualAttentionBlock",
+                            "params": 3152384,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "ln_1",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "MultiheadAttention",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "ln_2",
+                                "type": "LayerNorm",
+                                "params": 1024,
+                                "own_params": 1024,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 2099712,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 1050624,
+                                    "own_params": 1050624,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "QuickGELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Linear",
+                                    "params": 1049088,
+                                    "own_params": 1049088,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 12
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_final",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "clip_vit_large_14",
+      "path": "lucid.models.multimodal.clip._pretrained.clip_vit_large_14",
+      "kind": "function",
+      "labels": [],
+      "signature": "clip_vit_large_14(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_pretrained.py#L180",
+      "subcategory": "pretrained",
+      "summary": "Construct CLIP with a ViT-L/14 image tower.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Load the OpenAI WIT-400M checkpoint from the Lucid hub.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `CLIPConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CLIPModel",
+        "description": "Both towers and the learned temperature."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import clip_vit_large_14\n>>> model = clip_vit_large_14()\n>>> model.config.vision_layers, model.config.text_width\n(24, 768)"
+      ],
+      "notes": [
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.4.\n\nThe best-performing variant in the paper, and the one whose text\ntower is widened along with the image tower — 768 wide with 12 heads\nagainst the base models' 512 and 8, at the same 12 layers."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "CLIP",
+        "type": "CLIP",
+        "params": 427616513,
+        "own_params": 1,
+        "children": [
+          {
+            "name": "visual",
+            "type": "_VisionTransformer",
+            "params": 303966208,
+            "own_params": 1050624,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 602112,
+                "own_params": 602112,
+                "children": []
+              },
+              {
+                "name": "ln_pre",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "TransformerTower",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ResidualAttentionBlock",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_post",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "textual",
+            "type": "_TextTransformer",
+            "params": 123650304,
+            "own_params": 648960,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 37945344,
+                "own_params": 37945344,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "TransformerTower",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ResidualAttentionBlock",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_final",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "clip_vit_large_14_336",
+      "path": "lucid.models.multimodal.clip._pretrained.clip_vit_large_14_336",
+      "kind": "function",
+      "labels": [],
+      "signature": "clip_vit_large_14_336(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_pretrained.py#L225",
+      "subcategory": "pretrained",
+      "summary": "Construct CLIP with a ViT-L/14 image tower at 336 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Load the OpenAI WIT-400M checkpoint from the Lucid hub.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `CLIPConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CLIPModel",
+        "description": "Both towers and the learned temperature."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import clip_vit_large_14_336\n>>> model = clip_vit_large_14_336()\n>>> model.config.image_size\n336"
+      ],
+      "notes": [
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.5 — \"for\nthe ViT-L/14 we also pre-train at a higher 336 pixel resolution for\none additional epoch\", denoted ViT-L/14@336px.\n\nArchitecturally this differs from `clip_vit_large_14` in one\nnumber, but that number changes the positional table from 257 rows to\n577, so the two are not weight-compatible."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "CLIP",
+        "type": "CLIP",
+        "params": 427944193,
+        "own_params": 1,
+        "children": [
+          {
+            "name": "visual",
+            "type": "_VisionTransformer",
+            "params": 304293888,
+            "own_params": 1378304,
+            "children": [
+              {
+                "name": "conv1",
+                "type": "Conv2d",
+                "params": 602112,
+                "own_params": 602112,
+                "children": []
+              },
+              {
+                "name": "ln_pre",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "TransformerTower",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ResidualAttentionBlock",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_post",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "textual",
+            "type": "_TextTransformer",
+            "params": 123650304,
+            "own_params": 648960,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 37945344,
+                "own_params": 37945344,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "TransformerTower",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "resblocks",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "ResidualAttentionBlock",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "ln_1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "MultiheadAttention",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "ln_2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "Sequential",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "QuickGELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "ln_final",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "clip_vit_large_14_336_zero_shot",
+      "path": "lucid.models.multimodal.clip._pretrained.clip_vit_large_14_336_zero_shot",
+      "kind": "function",
+      "labels": [],
+      "signature": "clip_vit_large_14_336_zero_shot(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_pretrained.py#L409",
+      "subcategory": "pretrained",
+      "summary": "ViT-L/14@336px CLIP posed as an open-vocabulary classifier.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Load the OpenAI WIT-400M checkpoint from the Lucid hub.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `CLIPConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CLIPForZeroShotImageClassification",
+        "description": "Scores images against tokenised prompts."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import clip_vit_large_14_336_zero_shot\n>>> model = clip_vit_large_14_336_zero_shot()\n>>> model.config.image_size\n336"
+      ],
+      "notes": [
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.5."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "CLIPForZeroShotImageClassification",
+        "type": "CLIPForZeroShotImageClassification",
+        "params": 427944193,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "clip",
+            "type": "CLIP",
+            "params": 427944193,
+            "own_params": 1,
+            "children": [
+              {
+                "name": "visual",
+                "type": "_VisionTransformer",
+                "params": 304293888,
+                "own_params": 1378304,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 602112,
+                    "own_params": 602112,
+                    "children": []
+                  },
+                  {
+                    "name": "ln_pre",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "transformer",
+                    "type": "TransformerTower",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 302309376,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "ResidualAttentionBlock",
+                            "params": 12596224,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "ln_1",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "MultiheadAttention",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "ln_2",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 8393728,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 4198400,
+                                    "own_params": 4198400,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "QuickGELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Linear",
+                                    "params": 4195328,
+                                    "own_params": 4195328,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 24
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_post",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "textual",
+                "type": "_TextTransformer",
+                "params": 123650304,
+                "own_params": 648960,
+                "children": [
+                  {
+                    "name": "token_embedding",
+                    "type": "Embedding",
+                    "params": 37945344,
+                    "own_params": 37945344,
+                    "children": []
+                  },
+                  {
+                    "name": "transformer",
+                    "type": "TransformerTower",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 85054464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "ResidualAttentionBlock",
+                            "params": 7087872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "ln_1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "MultiheadAttention",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "ln_2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "QuickGELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 12
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_final",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "clip_vit_large_14_zero_shot",
+      "path": "lucid.models.multimodal.clip._pretrained.clip_vit_large_14_zero_shot",
+      "kind": "function",
+      "labels": [],
+      "signature": "clip_vit_large_14_zero_shot(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/multimodal/clip/_pretrained.py#L362",
+      "subcategory": "pretrained",
+      "summary": "ViT-L/14 CLIP posed as an open-vocabulary classifier.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Load the OpenAI WIT-400M checkpoint from the Lucid hub.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `CLIPConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "CLIPForZeroShotImageClassification",
+        "description": "Scores images against tokenised prompts."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import clip_vit_large_14_zero_shot\n>>> model = clip_vit_large_14_zero_shot()\n>>> model.config.embed_dim\n768"
+      ],
+      "notes": [
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), Table 11 —\nthe variant the paper's headline zero-shot ImageNet number comes\nfrom."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "CLIPForZeroShotImageClassification",
+        "type": "CLIPForZeroShotImageClassification",
+        "params": 427616513,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "clip",
+            "type": "CLIP",
+            "params": 427616513,
+            "own_params": 1,
+            "children": [
+              {
+                "name": "visual",
+                "type": "_VisionTransformer",
+                "params": 303966208,
+                "own_params": 1050624,
+                "children": [
+                  {
+                    "name": "conv1",
+                    "type": "Conv2d",
+                    "params": 602112,
+                    "own_params": 602112,
+                    "children": []
+                  },
+                  {
+                    "name": "ln_pre",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "transformer",
+                    "type": "TransformerTower",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 302309376,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "ResidualAttentionBlock",
+                            "params": 12596224,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "ln_1",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "MultiheadAttention",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "ln_2",
+                                "type": "LayerNorm",
+                                "params": 2048,
+                                "own_params": 2048,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 8393728,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 4198400,
+                                    "own_params": 4198400,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "QuickGELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Linear",
+                                    "params": 4195328,
+                                    "own_params": 4195328,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 24
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_post",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "textual",
+                "type": "_TextTransformer",
+                "params": 123650304,
+                "own_params": 648960,
+                "children": [
+                  {
+                    "name": "token_embedding",
+                    "type": "Embedding",
+                    "params": 37945344,
+                    "own_params": 37945344,
+                    "children": []
+                  },
+                  {
+                    "name": "transformer",
+                    "type": "TransformerTower",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 85054464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "ResidualAttentionBlock",
+                            "params": 7087872,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "ln_1",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "MultiheadAttention",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "ln_2",
+                                "type": "LayerNorm",
+                                "params": 1536,
+                                "own_params": 1536,
+                                "children": []
+                              },
+                              {
+                                "name": "mlp",
+                                "type": "Sequential",
+                                "params": 4722432,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "Linear",
+                                    "params": 2362368,
+                                    "own_params": 2362368,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "1",
+                                    "type": "QuickGELU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "2",
+                                    "type": "Linear",
+                                    "params": 2360064,
+                                    "own_params": 2360064,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 12
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ln_final",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "CLIP family — Radford et al., ICML 2021.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "CLIP",
+  "citation": "Radford, Alec, et al. \"Learning Transferable Visual Models From Natural Language Supervision.\" ICML, 2021, pp. 8748–8763.",
+  "theory": "CLIP learns a joint embedding space for images and text by\ncontrasting the pairings that actually occurred in a batch against\nthe ones that did not.  Given $N$ image-caption pairs, an image\ntower $f$ and a text tower $g$ produce $N$\nembeddings each; the objective maximises the cosine similarity of the\n$N$ matched pairs and minimises it for the $N^2 - N$\nmismatched ones.  Writing $u_i = f(I_i)/\\|f(I_i)\\|$ and\n$v_j = g(T_j)/\\|g(T_j)\\|$, the logits are\n\n\n\n$$\n\\ell_{ij} = \\exp(t)\\, u_i^\\top v_j,\n$$\n\nand the loss is a cross-entropy over rows and columns alike,\n\n\n\n$$\n\\mathcal{L} = \\tfrac{1}{2}\\big(\n    \\mathrm{CE}(\\ell, \\mathrm{diag}) +\n    \\mathrm{CE}(\\ell^\\top, \\mathrm{diag})\\big).\n$$\n\nThe symmetry matters: a one-sided loss lets one tower collapse onto\nthe other's geometry, because only one direction is ever scored.\n\nThe scalar $t$ is learned rather than fixed.  It is stored in\nlog space and exponentiated, so the optimiser moves it\nmultiplicatively and it cannot become negative — a temperature is a\nscale, and gradient descent on the scale itself would happily cross\nzero.  The paper initialises it at the equivalent of\n$\\tau = 0.07$ and caps the resulting multiplier at 100, which\nkeeps the softmax from saturating early in training when the\nembeddings are still arbitrary.\n\nWhat makes the representation transferable is that the text tower is\nan open-ended classifier.  A fixed-label model can only answer with\nthe classes it was fitted to; CLIP answers with whatever captions it\nis given, so a new task is posed by writing its labels as sentences\nrather than by training a new head.  This is why the prompt matters\nat inference time and why the paper reports prompt ensembling as an\naccuracy lever rather than a curiosity.",
+  "tasks": [
+    "zero-shot-image-classification"
+  ]
+}

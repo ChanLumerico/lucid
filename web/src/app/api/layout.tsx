@@ -43,6 +43,7 @@ const PACKAGE_TAG_OVERRIDES: Record<string, string | null> = {
   "lucid.models.vision":     null,
   "lucid.models.text":       null,
   "lucid.models.generative": null,
+  "lucid.models.multimodal": null,
   // C++ engine — pinned to the bottom under its own divider; the path tag
   // ("lucid._C.engine") just duplicates what the divider already conveys.
   "lucid._C.engine":         null,

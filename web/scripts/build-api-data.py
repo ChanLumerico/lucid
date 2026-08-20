@@ -135,6 +135,7 @@ _FAMILY_ROOTS: set[str] = {
     "lucid.models.vision",
     "lucid.models.text",
     "lucid.models.generative",
+    "lucid.models.multimodal",
 }
 
 
@@ -1963,6 +1964,7 @@ _LUCID_MODELS_FAMILY_GROUPS = [
     {"slug": "lucid.models.vision",     "label": "Vision",     "icon": "image"},
     {"slug": "lucid.models.text",       "label": "Text",       "icon": "text"},
     {"slug": "lucid.models.generative", "label": "Generative", "icon": "sparkles"},
+    {"slug": "lucid.models.multimodal", "label": "Multimodal", "icon": "layers"},
 ]
 
 

@@ -3,7 +3,7 @@
   "name": "models",
   "path": "lucid.models",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/__init__.py#L1",
   "members": [
     {
       "name": "AutoConfig",
@@ -13,7 +13,7 @@
       "bases": [],
       "labels": [],
       "signature": "AutoConfig()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L243",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L243",
       "subcategory": "auto",
       "methods": [
         {
@@ -22,7 +22,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L277",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L277",
           "subcategory": "auto",
           "summary": null,
           "extended": null,
@@ -46,7 +46,7 @@
             "classmethod"
           ],
           "signature": "from_pretrained(name_or_path: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L282",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L282",
           "subcategory": "auto",
           "summary": "Return the `ModelConfig` for `name_or_path`.",
           "extended": null,
@@ -108,7 +108,7 @@
       ],
       "labels": [],
       "signature": "AutoModel()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L412",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L412",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads the *backbone* of any family.",
@@ -136,7 +136,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForCausalLM()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L530",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L530",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a causal (left-to-right) LM.",
@@ -164,7 +164,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForImageClassification()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L444",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L444",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a registered image classifier.",
@@ -192,7 +192,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForImageGeneration()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L679",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L679",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads an image-generation model.",
@@ -220,7 +220,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForMaskedLM()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L557",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L557",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a masked-LM model.",
@@ -248,7 +248,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForObjectDetection()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L480",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L480",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a registered object detector.",
@@ -276,7 +276,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForQuestionAnswering()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L656",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L656",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a SQuAD-style QA head.",
@@ -304,7 +304,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForSemanticSegmentation()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L506",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L506",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a semantic-segmentation model.",
@@ -332,7 +332,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForSeq2SeqLM()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L582",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L582",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a seq2seq (encoder-decoder) model.",
@@ -360,7 +360,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForSequenceClassification()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L608",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L608",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a sentence-level classifier.",
@@ -388,7 +388,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForTokenClassification()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L632",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L632",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a per-token classifier.",
@@ -416,7 +416,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForWorldModeling()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_auto.py#L704",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L704",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a world model.",
@@ -435,6 +435,34 @@
       "see_also": []
     },
     {
+      "name": "AutoModelForZeroShotImageClassification",
+      "path": "lucid.models._auto.AutoModelForZeroShotImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "_BaseAutoClass"
+      ],
+      "labels": [],
+      "signature": "AutoModelForZeroShotImageClassification()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_auto.py#L734",
+      "subcategory": "auto",
+      "methods": [],
+      "summary": "Auto-dispatching wrapper that loads an open-vocabulary classifier.",
+      "extended": "Resolves names like `\"clip_vit_base_32_zero_shot\"` to their\nconcrete `{Family}ForZeroShotImageClassification` subclass.\n\n\"Zero-shot\" here is not a fine-tuning regime — nothing is trained and\nthere is no head. The classes arrive at call time as tokenised\nprompts, so the label set is an argument rather than a property of\nthe weights, and two callers can ask the same model different\nquestions without either of them touching it.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoModelForZeroShotImageClassification\n>>> model = AutoModelForZeroShotImageClassification.from_pretrained(\n...     \"clip_vit_base_32_zero_shot\")\n>>> type(model).__name__\n'CLIPForZeroShotImageClassification'"
+      ],
+      "notes": [
+        "The forward therefore takes two tensors: the images and the candidate\nprompts. Their batch dimensions are independent — `B` images scored\nagainst `P` prompts yield `(B, P)` logits — unlike the paired\nbatches the contrastive objective is trained on."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "ModelConfig",
       "path": "lucid.models._base.ModelConfig",
       "kind": "class",
@@ -444,7 +472,7 @@
       ],
       "labels": [],
       "signature": "ModelConfig()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L15",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L15",
       "subcategory": "base",
       "methods": [
         {
@@ -453,7 +481,7 @@
           "kind": "function",
           "labels": [],
           "signature": "to_dict()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L100",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L100",
           "subcategory": "base",
           "summary": "Serialise the config (including `model_type`) to a plain dict.",
           "extended": null,
@@ -484,7 +512,7 @@
             "classmethod"
           ],
           "signature": "from_dict(d: dict[str, object])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L127",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L127",
           "subcategory": "base",
           "summary": "Reconstruct a config from a plain dict (inverse of `to_dict`).",
           "extended": null,
@@ -525,7 +553,7 @@
           "kind": "function",
           "labels": [],
           "signature": "save(path: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L182",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L182",
           "subcategory": "base",
           "summary": "Write the config as pretty-printed JSON to `path`.",
           "extended": null,
@@ -558,7 +586,7 @@
             "classmethod"
           ],
           "signature": "load(path: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L198",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L198",
           "subcategory": "base",
           "summary": "Load a config from a JSON file (inverse of `save`).",
           "extended": null,
@@ -641,7 +669,7 @@
       ],
       "labels": [],
       "signature": "PretrainedModel(config: ModelConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L228",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L228",
       "subcategory": "base",
       "methods": [
         {
@@ -650,7 +678,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ModelConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L283",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L283",
           "subcategory": "base",
           "summary": "Initialise the module and validate the supplied config.",
           "extended": null,
@@ -686,7 +714,7 @@
             "classmethod"
           ],
           "signature": "from_pretrained(name_or_path: str, strict: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L313",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L313",
           "subcategory": "base",
           "summary": "Load a model from a registered name or a local directory.",
           "extended": "Two modes are supported:\n\n1. **Registered name** (`\"resnet_50\"` / `\"resnet-50\"`) —\n   looked up in the global registry; the factory is invoked with\n   `pretrained=True`.  The factory result is validated to be an\n   instance of `cls` (so subclass calls like\n   `ResNet.from_pretrained(\"vit_base_16\")` raise rather than\n   silently returning the wrong family).\n2. **Local directory** containing `config.json` plus either\n   `model.safetensors` (preferred) or `weights.lucid`.  The\n   config is restored via `cls.config_class.load` and the\n   weights are loaded with `lucid.load`.",
@@ -738,7 +766,7 @@
           "kind": "function",
           "labels": [],
           "signature": "save_pretrained(path: str, safe_serialization: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L416",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L416",
           "subcategory": "base",
           "summary": "Write `config.json` and weights to `path`.",
           "extended": null,
@@ -777,7 +805,7 @@
           "kind": "function",
           "labels": [],
           "signature": "num_parameters(only_trainable: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L462",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L462",
           "subcategory": "base",
           "summary": "Return the total number of elements across all parameters.",
           "extended": null,
@@ -808,7 +836,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_input_embeddings()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L497",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L497",
           "subcategory": "base",
           "summary": "Return the input-embedding submodule, or `None` if not applicable.",
           "extended": null,
@@ -832,7 +860,7 @@
           "kind": "function",
           "labels": [],
           "signature": "set_input_embeddings(value: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_base.py#L514",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_base.py#L514",
           "subcategory": "base",
           "summary": "Replace the input-embedding submodule.",
           "extended": null,
@@ -895,530 +923,6 @@
       "see_also": []
     },
     {
-      "name": "BackboneMixin",
-      "path": "lucid.models._mixins.BackboneMixin",
-      "kind": "class",
-      "class_kind": "abstract",
-      "bases": [
-        "ABC"
-      ],
-      "labels": [],
-      "signature": "BackboneMixin()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L63",
-      "subcategory": "mixins",
-      "methods": [
-        {
-          "name": "forward_features",
-          "path": "lucid.models._mixins.BackboneMixin.forward_features",
-          "kind": "function",
-          "labels": [
-            "abstractmethod"
-          ],
-          "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L93",
-          "subcategory": "mixins",
-          "summary": "Run the backbone's feature-extraction pass.",
-          "extended": null,
-          "parameters": [
-            {
-              "name": "x",
-              "annotation": "Tensor",
-              "description": "Input image batch, shape `(B, C, H, W)`.",
-              "default": null
-            }
-          ],
-          "returns": {
-            "annotation": "Tensor",
-            "description": "Feature map at the deepest stage.  Concrete subclasses may\nadditionally stash earlier stages on the instance so\nmulti-stage consumers can fetch them."
-          },
-          "raises": [],
-          "examples": [],
-          "notes": [],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        },
-        {
-          "name": "feature_info",
-          "path": "lucid.models._mixins.BackboneMixin.feature_info",
-          "kind": "function",
-          "labels": [
-            "abstractmethod",
-            "property"
-          ],
-          "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L113",
-          "summary": "Return the per-stage feature pyramid specification.",
-          "extended": null,
-          "parameters": [],
-          "returns": {
-            "annotation": "list[FeatureInfo]",
-            "description": ""
-          },
-          "raises": [],
-          "examples": [],
-          "notes": [],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        }
-      ],
-      "summary": "Marker mixin for models usable as feature extractors.",
-      "extended": "Detection and segmentation heads consume backbones through this small\nprotocol: a `forward_features(x)` that emits the deepest stage's\nfeature map, and a `feature_info` property enumerating every\nemitted stage's spec.  Implementing classes get a uniform interface\nthat head builders (FPN, BiFPN, …) can target.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> class MyBackbone(PretrainedModel, BackboneMixin):\n...     def forward_features(self, x):\n...         return self.stages(x)\n...     @property\n...     def feature_info(self):\n...         return [FeatureInfo(0, 64, 4), FeatureInfo(1, 128, 8)]"
-      ],
-      "notes": [
-        "The mixin carries no state — it only declares two abstract slots.\nSubclasses MUST override:\n\n* `forward_features` — returns the final stage's feature map\n  (and may stash intermediate stages on `self` for downstream\n  use).\n* `feature_info` — returns a `list[FeatureInfo]` with one\n  entry per stage the backbone exposes."
-      ],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "ClassificationHeadMixin",
-      "path": "lucid.models._mixins.ClassificationHeadMixin",
-      "kind": "class",
-      "class_kind": "regular",
-      "bases": [],
-      "labels": [],
-      "signature": "ClassificationHeadMixin()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L118",
-      "subcategory": "mixins",
-      "methods": [
-        {
-          "name": "reset_classifier",
-          "path": "lucid.models._mixins.ClassificationHeadMixin.reset_classifier",
-          "kind": "function",
-          "labels": [],
-          "signature": "reset_classifier(num_classes: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L186",
-          "subcategory": "mixins",
-          "summary": "Replace the final `Linear` with a freshly initialised one.",
-          "extended": null,
-          "parameters": [
-            {
-              "name": "num_classes",
-              "annotation": "int",
-              "description": "New output dimensionality.  `in_features` is preserved from\nthe current head.",
-              "default": null
-            }
-          ],
-          "returns": {
-            "annotation": "None",
-            "description": ""
-          },
-          "raises": [
-            {
-              "annotation": "RuntimeError",
-              "description": "If the head is a `Sequential` containing no `Linear`."
-            },
-            {
-              "annotation": "NotImplementedError",
-              "description": "If the head is some other custom module type."
-            }
-          ],
-          "examples": [
-            ">>> model = AutoModelForImageClassification.from_pretrained(\"resnet_50\")\n>>> model.reset_classifier(num_classes=10)\n>>> model(lucid.randn(1, 3, 224, 224)).logits.shape\n(1, 10)"
-          ],
-          "notes": [
-            "Used during transfer learning — typically called immediately\nafter `from_pretrained` to adapt a 1000-class ImageNet head\nto a downstream task with a different label set."
-          ],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        }
-      ],
-      "summary": "Standard Linear classification head + transfer-learning helper.",
-      "extended": "Adds two methods to any classifier subclass: `_build_classifier`\nconstructs a `Linear` (optionally wrapped in a `Dropout`)\naccording to the config, and `reset_classifier` swaps in a\nfreshly-initialised Linear with a new `num_classes` for transfer\nlearning.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> class MyClassifier(PretrainedModel, ClassificationHeadMixin):\n...     def __init__(self, config):\n...         super().__init__(config)\n...         self.backbone = MyBackbone(config)\n...         self._build_classifier(config.hidden_size, config.num_classes,\n...                                dropout=config.dropout)\n>>> model = MyClassifier(cfg)\n>>> model.reset_classifier(num_classes=10)"
-      ],
-      "notes": [
-        "The contract: subclasses must call `self._build_classifier(...)`\ninside their `__init__` *after* `super().__init__(config)` so the\nbackbone is in place before the head is attached.\n\nThe host class exposes `self.classifier` as either a plain\n`nn.Linear` (no dropout configured) or an `nn.Sequential` of\n`[Dropout, Linear]`; `reset_classifier` handles both shapes."
-      ],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "DiffusionMixin",
-      "path": "lucid.models._mixins.DiffusionMixin",
-      "kind": "class",
-      "class_kind": "regular",
-      "bases": [],
-      "labels": [],
-      "signature": "DiffusionMixin()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L576",
-      "subcategory": "mixins",
-      "methods": [
-        {
-          "name": "generate",
-          "path": "lucid.models._mixins.DiffusionMixin.generate",
-          "kind": "function",
-          "labels": [],
-          "signature": "generate(scheduler: DiffusionScheduler, n_samples: int = 1, num_inference_steps: int | None = None, generator_shape: tuple[int, ...] | None = None, return_intermediates: bool = False, device: str = 'cpu')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L609",
-          "subcategory": "mixins",
-          "summary": "Sample `n_samples` images via the reverse diffusion process.",
-          "extended": null,
-          "parameters": [
-            {
-              "name": "scheduler",
-              "annotation": "DiffusionScheduler",
-              "description": "Already-constructed scheduler (DDPM, DDIM, etc.).  Encapsulates\nthe noise schedule and the per-step update rule.",
-              "default": null
-            },
-            {
-              "name": "n_samples",
-              "annotation": "(int, optional, keyword - only)",
-              "description": "Batch size of the generated output.",
-              "default": "1"
-            },
-            {
-              "name": "num_inference_steps",
-              "annotation": "(int or None, optional, keyword - only)",
-              "description": "If `None`, the scheduler's `timesteps` are used as-is;\notherwise `scheduler.set_timesteps(num_inference_steps, ...)`\nis called first to (re)build the timestep schedule.",
-              "default": "None"
-            },
-            {
-              "name": "generator_shape",
-              "annotation": "(tuple[int, ...] or None, optional, keyword - only)",
-              "description": "Per-sample tensor shape, `(C, H, W)`.  When omitted,\ndefaults to `(in_channels, H, W)` derived from\n`self.config`.",
-              "default": "None"
-            },
-            {
-              "name": "return_intermediates",
-              "annotation": "(bool, optional, keyword - only)",
-              "description": "If `True`, every per-step sample is recorded and returned\nin `GenerationOutput.intermediates`.",
-              "default": "False"
-            },
-            {
-              "name": "device",
-              "annotation": "(str, optional, keyword - only)",
-              "description": "Device to allocate the initial Gaussian noise tensor on.",
-              "default": "\"cpu\""
-            }
-          ],
-          "returns": {
-            "annotation": "GenerationOutput",
-            "description": "`.samples` is the final `(n_samples, C, H, W)` batch;\n`.intermediates` is populated when `return_intermediates`\nis `True`."
-          },
-          "raises": [
-            {
-              "annotation": "RuntimeError",
-              "description": "If `generator_shape` is `None` and the model lacks a\n`config` with `sample_size` / `in_channels` fields."
-            }
-          ],
-          "examples": [
-            ">>> model = AutoModelForImageGeneration.from_pretrained(\"ddpm_cifar_gen\")\n>>> scheduler = DDPMScheduler(num_train_timesteps=1000)\n>>> out = model.generate(scheduler, n_samples=4, num_inference_steps=50,\n...                      device=\"cpu\")\n>>> out.samples.shape\n(4, 3, 32, 32)"
-          ],
-          "notes": [
-            "Decorated with `lucid.no_grad` — sampling never builds an\nautograd graph.  Standard reverse-process loop:\n\n1. Draw $x_T \\sim \\mathcal{N}(0, I)$.\n2. For each `t` in `scheduler.timesteps` (descending):\n   run the model forward, then apply\n   `scheduler.step(model_pred, t, x_t)` to obtain $x_{t-1}$."
-          ],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        }
-      ],
-      "summary": "Reverse-process sampling loop for diffusion-family generative models.",
-      "extended": "Concrete subclasses must:\n\n* Inherit from `lucid.models.PretrainedModel`.\n* Define `forward(sample, timestep, ...) -> DiffusionModelOutput`\n  that returns the network's prediction at the supplied timestep.\n* Expose a `config` attribute carrying `sample_size` /\n  `in_channels` (fields `DiffusionModelConfig` defines) — or\n  explicitly pass `generator_shape` to `generate`.\n\nThe mixin then provides `generate` — a vanilla reverse-process\nloop parametrised by an externally-supplied\n`DiffusionScheduler`.  Sampler choice (DDPM, DDIM, …) is thus\na runtime knob rather than baked into the model class.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> from lucid.models import DDPMScheduler, AutoModelForImageGeneration\n>>> model = AutoModelForImageGeneration.from_pretrained(\"ddpm_cifar_gen\")\n>>> scheduler = DDPMScheduler(num_train_timesteps=1000)\n>>> out = model.generate(scheduler, n_samples=4, num_inference_steps=50)\n>>> out.samples.shape\n(4, 3, 32, 32)"
-      ],
-      "notes": [
-        "The mixin is stateless.  All hyper-parameters (number of inference\nsteps, image shape, batch size) flow through `generate`'s\nkeyword arguments; the model class itself stays sampler-agnostic."
-      ],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "FeatureInfo",
-      "path": "lucid.models._mixins.FeatureInfo",
-      "kind": "class",
-      "class_kind": "dataclass",
-      "bases": [],
-      "labels": [],
-      "signature": "FeatureInfo(stage: int, num_channels: int, reduction: int)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L26",
-      "subcategory": "mixins",
-      "methods": [
-        {
-          "name": "__init__",
-          "path": "lucid.models._mixins.FeatureInfo.__init__",
-          "kind": "function",
-          "labels": [],
-          "signature": "__init__(stage: int, num_channels: int, reduction: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L1",
-          "subcategory": "mixins",
-          "summary": null,
-          "extended": null,
-          "parameters": [],
-          "returns": {
-            "annotation": "None",
-            "description": ""
-          },
-          "raises": [],
-          "examples": [],
-          "notes": [],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        }
-      ],
-      "summary": "Specification of one stage emitted by a feature-extracting backbone.",
-      "extended": "Used by detection / segmentation heads that consume a *feature\npyramid*: each entry describes the channel count and spatial\ndown-sampling factor of one backbone stage relative to the input.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> info = FeatureInfo(stage=3, num_channels=512, reduction=32)\n>>> info.reduction\n32"
-      ],
-      "notes": [
-        "The layout is timm-compatible: detection heads that consume timm\nbackbones drop in unchanged.  See `BackboneMixin` for the\nprotocol that produces a `list[FeatureInfo]`."
-      ],
-      "attributes": [
-        {
-          "name": "stage",
-          "annotation": "int",
-          "description": "Zero-based stage index, in the order the backbone emits features\n(typically deepening from stage 0 toward higher receptive field)."
-        },
-        {
-          "name": "num_channels",
-          "annotation": "int",
-          "description": "Channel count of the feature map at this stage."
-        },
-        {
-          "name": "reduction",
-          "annotation": "int",
-          "description": "Spatial down-sampling factor vs the network input — e.g. `4`,\n`8`, `16`, `32` for the canonical CNN stage taps."
-        }
-      ],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "CausalLMMixin",
-      "path": "lucid.models._mixins.CausalLMMixin",
-      "kind": "class",
-      "class_kind": "regular",
-      "bases": [],
-      "labels": [],
-      "signature": "CausalLMMixin()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L319",
-      "subcategory": "mixins",
-      "methods": [
-        {
-          "name": "generate",
-          "path": "lucid.models._mixins.CausalLMMixin.generate",
-          "kind": "function",
-          "labels": [],
-          "signature": "generate(input_ids: Tensor, max_length: int = 20, max_new_tokens: int | None = None, do_sample: bool = False, temperature: float = 1.0, top_k: int | None = None, top_p: float | None = None, repetition_penalty: float = 1.0, pad_token_id: int | None = None, eos_token_id: int | None = None, use_cache: bool = True, cache_implementation: str = 'dynamic', max_cache_len: int | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L357",
-          "subcategory": "mixins",
-          "summary": "Autoregressively extend `input_ids` until a stop condition.",
-          "extended": null,
-          "parameters": [
-            {
-              "name": "input_ids",
-              "annotation": "Tensor",
-              "description": "`(B, T_prompt)` int prompt tokens.",
-              "default": null
-            },
-            {
-              "name": "max_length",
-              "annotation": "(int, optional, keyword - only)",
-              "description": "Total sequence length cap (prompt + generated).  Ignored when\n`max_new_tokens` is supplied.",
-              "default": "20"
-            },
-            {
-              "name": "max_new_tokens",
-              "annotation": "(int or None, optional, keyword - only)",
-              "description": "Cap on the number of *new* tokens to generate, additive over\nthe prompt length.  Takes precedence over `max_length`.",
-              "default": "None"
-            },
-            {
-              "name": "do_sample",
-              "annotation": "(bool, optional, keyword - only)",
-              "description": "`False` → greedy argmax decoding; `True` → stochastic\nsampling honouring `temperature` / `top_k` / `top_p`.",
-              "default": "False"
-            },
-            {
-              "name": "temperature",
-              "annotation": "(float, optional, keyword - only)",
-              "description": "Logit divisor before softmax.  `< 1` sharpens, `> 1`\nflattens.  Ignored under greedy decoding.",
-              "default": "1.0"
-            },
-            {
-              "name": "top_k",
-              "annotation": "(int or None, optional, keyword - only)",
-              "description": "Keep only the K highest-probability tokens before sampling.\n`None` disables.",
-              "default": "None"
-            },
-            {
-              "name": "top_p",
-              "annotation": "(float or None, optional, keyword - only)",
-              "description": "Nucleus sampling — keep the smallest token set whose\ncumulative probability ≥ `top_p`.  `None` disables.",
-              "default": "None"
-            },
-            {
-              "name": "repetition_penalty",
-              "annotation": "(float, optional, keyword - only)",
-              "description": "Multiply the logit of every previously generated token by\n`1 / penalty` (and by `penalty` if the logit is\nnegative).  `1.0` → no effect; `> 1` discourages\nrepetition.",
-              "default": "1.0"
-            },
-            {
-              "name": "pad_token_id",
-              "annotation": "(int or None, optional, keyword - only)",
-              "description": "Token id used to pad finished sequences after they emit\n`eos_token_id`.  Defaults to `config.pad_token_id`, then\n`0` if unset.",
-              "default": "None"
-            },
-            {
-              "name": "eos_token_id",
-              "annotation": "(int or None, optional, keyword - only)",
-              "description": "Stop generating per-sequence once this id is emitted.\nDefaults to `config.eos_token_id`.",
-              "default": "None"
-            },
-            {
-              "name": "use_cache",
-              "annotation": "(bool, optional, keyword - only)",
-              "description": "Use a KV cache so each step only encodes the new token (O(T²)\ngeneration) instead of re-running the whole prefix (O(T³)).  Falls\nback to re-encoding automatically when the host model has no cache.",
-              "default": "True"
-            },
-            {
-              "name": "cache_implementation",
-              "annotation": "(str, optional, keyword - only)",
-              "description": "`\"dynamic\"` → `lucid.utils.cache.DynamicCache` (grows by\nconcatenation); `\"static\"` →\n`lucid.utils.cache.StaticCache` (fixed pre-allocated buffer\nwritten in place at `cache_position`, attending over only the filled\nprefix).  `\"static\"` is *faster* on compute-bound batches (in-place\nwrite + filled-prefix attention beat the growing concat — ~1.4× at\nGPT-2-base / B=16) and tied at `B=1`; it needs `max_cache_len`.",
-              "default": "\"dynamic\""
-            },
-            {
-              "name": "max_cache_len",
-              "annotation": "(int or None, optional, keyword - only)",
-              "description": "Buffer capacity for `cache_implementation=\"static\"`; defaults to\nthe total target length (prompt + generated).  An over-sized buffer is\nfree — attention narrows to the filled prefix regardless.",
-              "default": "None"
-            }
-          ],
-          "returns": {
-            "annotation": "Tensor",
-            "description": "`(B, T_final)` int tensor where `T_final` ≤ `max_length`\n(or `T_prompt + max_new_tokens`).  Sequences that hit\n`eos_token_id` early are right-padded with `pad_token_id`."
-          },
-          "raises": [
-            {
-              "annotation": "ValueError",
-              "description": "If `input_ids` is not 2-D."
-            }
-          ],
-          "examples": [
-            ">>> model = AutoModelForCausalLM.from_pretrained(\"gpt\")\n>>> tokens = lucid.tensor([[1, 2, 3]]).long()\n>>> out = model.generate(tokens, max_new_tokens=5)\n>>> out.shape\n(1, 8)"
-          ],
-          "notes": [
-            "Decorated with `lucid.no_grad` — generation never builds an\nautograd graph.  Each step:\n\n1. Materialise the current prefix as `(B, T_cur)`.\n2. Run a forward pass; take logits at the last position.\n3. Apply repetition penalty.\n4. Greedy argmax, or apply temperature / top-k / top-p and\n   inverse-CDF sample one token per row.\n5. Replace finished rows' tokens with `pad_token_id`.\n\nLoop breaks early when every row has emitted EOS."
-          ],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        }
-      ],
-      "summary": "Decoder-only autoregressive sampling for causal LM heads.",
-      "extended": "The generation counterpart of `MaskedLMMixin` (the two canonical LM\nobjectives: causal vs masked).  This drives **autoregressive token-by-token**\ntext generation — distinct from `DiffusionMixin`, which runs an\niterative denoising loop for image-generation models.\n\nProvides `generate` — greedy or stochastic next-token sampling\nwith temperature, top-k, top-p (nucleus), and repetition-penalty\nknobs.  Per-sequence stopping at `eos_token_id` is honoured.\n\nConcrete subclasses must:\n\n* Inherit from `lucid.models.PretrainedModel`.\n* Define `forward(input_ids, ...)` returning a\n  `lucid.models.CausalLMOutput` with `logits` of shape\n  `(B, T, vocab_size)`.\n* Expose a `config` attribute carrying `vocab_size` /\n  `pad_token_id` / `bos_token_id` / `eos_token_id` (fields\n  `lucid.models.text.LanguageModelConfig` defines).",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> model = AutoModelForCausalLM.from_pretrained(\"gpt2_small\")\n>>> prompt = lucid.tensor([[1, 2, 3]]).long()\n>>> out = model.generate(prompt, max_new_tokens=10, do_sample=True, top_p=0.9)\n>>> out.shape\n(1, 13)"
-      ],
-      "notes": [
-        "The first implementation does **not** use the model's KV cache —\nevery step re-runs the full prefix.  This is correct but O(T²) in\nthe prefix length.  Cache support is planned once GPT-2 lands and a\nconcrete `past_key_values` shape is available to plumb through."
-      ],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "MaskedLMMixin",
-      "path": "lucid.models._mixins.MaskedLMMixin",
-      "kind": "class",
-      "class_kind": "regular",
-      "bases": [],
-      "labels": [],
-      "signature": "MaskedLMMixin()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L239",
-      "subcategory": "mixins",
-      "methods": [
-        {
-          "name": "compute_lm_loss",
-          "path": "lucid.models._mixins.MaskedLMMixin.compute_lm_loss",
-          "kind": "function",
-          "labels": [
-            "staticmethod"
-          ],
-          "signature": "compute_lm_loss(logits: Tensor, labels: Tensor, ignore_index: int = -100)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_mixins.py#L265",
-          "subcategory": "mixins",
-          "summary": "Compute per-token cross-entropy loss for an LM head.",
-          "extended": null,
-          "parameters": [
-            {
-              "name": "logits",
-              "annotation": "Tensor",
-              "description": "`(B, T, V)` per-token logits.",
-              "default": null
-            },
-            {
-              "name": "labels",
-              "annotation": "Tensor",
-              "description": "`(B, T)` int target token ids.  Entries equal to\n`ignore_index` contribute zero loss and zero gradient.",
-              "default": null
-            },
-            {
-              "name": "ignore_index",
-              "annotation": "(int, optional, keyword - only)",
-              "description": "Token id to skip during reduction.  Convention from the wider\nML ecosystem: `-100` marks non-masked positions in MLM and\npadding tokens in token classification.",
-              "default": "-100"
-            }
-          ],
-          "returns": {
-            "annotation": "Tensor",
-            "description": "Scalar loss tensor (mean over the contributing positions)."
-          },
-          "raises": [],
-          "examples": [
-            ">>> logits = lucid.randn(2, 10, 32000)\n>>> labels = lucid.randint(0, 32000, (2, 10))\n>>> loss = MaskedLMMixin.compute_lm_loss(logits, labels)\n>>> loss.shape\n()"
-          ],
-          "notes": [
-            "Implementation: flatten `logits` to `(B*T, V)` and `labels`\nto `(B*T,)`, cast labels to `long`, then call\n`lucid.nn.functional.cross_entropy`.  No probabilistic\nreweighting; the loss is a plain mean over non-ignored positions."
-          ],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        }
-      ],
-      "summary": "Per-token cross-entropy loss helper for masked-LM / token-class heads.",
-      "extended": "Encoder text families (BERT, RoFormer, …) all reduce a `(B, T, V)`\nlogit tensor against `(B, T)` labels with the same recipe: flatten\nthe sequence axis into the batch axis, then run\n`lucid.nn.functional.cross_entropy` with `ignore_index=-100`.\nCentralising the call here removes a 3-line stanza repeated across\nevery `ForMaskedLM` / `ForTokenClassification` class.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> class BERTForMaskedLM(PretrainedModel, MaskedLMMixin):\n...     def forward(self, input_ids, labels=None):\n...         logits = self.head(self.bert(input_ids))\n...         loss = self.compute_lm_loss(logits, labels) if labels else None\n...         return MaskedLMOutput(logits=logits, loss=loss)"
-      ],
-      "notes": [
-        "The mixin is stateless and exposes a single `@staticmethod` —\ninheriting from it is purely a documentation / discoverability\nconvenience; the same effect is obtained by calling\n`MaskedLMMixin.compute_lm_loss(...)` directly."
-      ],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
       "name": "ModelOutput",
       "path": "lucid.models._output.ModelOutput",
       "kind": "class",
@@ -1426,7 +930,7 @@
       "bases": [],
       "labels": [],
       "signature": "ModelOutput()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L18",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L18",
       "subcategory": "output",
       "methods": [
         {
@@ -1435,7 +939,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L49",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L49",
           "subcategory": "output",
           "summary": "Yield each non-`None` field value in declaration order.",
           "extended": null,
@@ -1457,7 +961,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__getitem__(idx: int | str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L56",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L56",
           "subcategory": "output",
           "summary": "Look up a field by name (`str`) or position (`int`).",
           "extended": null,
@@ -1495,7 +999,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L84",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L84",
           "subcategory": "output",
           "summary": "Return the number of non-`None` fields.",
           "extended": null,
@@ -1517,7 +1021,7 @@
           "kind": "function",
           "labels": [],
           "signature": "to_tuple()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L98",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L98",
           "subcategory": "output",
           "summary": "Return a tuple of non-`None` field values in declaration order.",
           "extended": null,
@@ -1541,7 +1045,7 @@
           "kind": "function",
           "labels": [],
           "signature": "keys()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L109",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L109",
           "subcategory": "output",
           "summary": "Names of fields whose value is not `None`, in declaration order.",
           "extended": null,
@@ -1563,7 +1067,7 @@
           "kind": "function",
           "labels": [],
           "signature": "values()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L117",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L117",
           "subcategory": "output",
           "summary": "Values of non-`None` fields, in declaration order.",
           "extended": null,
@@ -1585,7 +1089,7 @@
           "kind": "function",
           "labels": [],
           "signature": "items()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L121",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L121",
           "subcategory": "output",
           "summary": "`(name, value)` pairs of non-`None` fields.",
           "extended": null,
@@ -1627,7 +1131,7 @@
       ],
       "labels": [],
       "signature": "BaseModelOutput(last_hidden_state: Tensor, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L126",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L126",
       "subcategory": "output",
       "methods": [
         {
@@ -1636,7 +1140,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(last_hidden_state: Tensor, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": "Wrap `model` for cached graph-capture execution.",
           "extended": null,
@@ -1707,7 +1211,7 @@
       ],
       "labels": [],
       "signature": "BaseModelOutputWithPooling(last_hidden_state: Tensor, pooler_output: Tensor, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L164",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L164",
       "subcategory": "output",
       "methods": [
         {
@@ -1716,7 +1220,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(last_hidden_state: Tensor, pooler_output: Tensor, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1779,7 +1283,7 @@
       ],
       "labels": [],
       "signature": "ImageClassificationOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L203",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L203",
       "subcategory": "output",
       "methods": [
         {
@@ -1788,7 +1292,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1851,7 +1355,7 @@
       ],
       "labels": [],
       "signature": "ObjectDetectionOutput(logits: Tensor, pred_boxes: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None, objectness: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L240",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L240",
       "subcategory": "output",
       "methods": [
         {
@@ -1860,7 +1364,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, pred_boxes: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None, objectness: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1933,7 +1437,7 @@
       ],
       "labels": [],
       "signature": "InstanceSegmentationOutput(logits: Tensor, pred_boxes: Tensor, pred_masks: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L294",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L294",
       "subcategory": "output",
       "methods": [
         {
@@ -1942,7 +1446,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, pred_boxes: Tensor, pred_masks: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2015,7 +1519,7 @@
       ],
       "labels": [],
       "signature": "SemanticSegmentationOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L340",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L340",
       "subcategory": "output",
       "methods": [
         {
@@ -2024,7 +1528,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2082,7 +1586,7 @@
       ],
       "labels": [],
       "signature": "CausalLMOutput(logits: Tensor, loss: Tensor | None = None, past_key_values: Cache | tuple[tuple[Tensor, Tensor], ...] | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L374",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L374",
       "subcategory": "output",
       "methods": [
         {
@@ -2091,7 +1595,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, past_key_values: Cache | tuple[tuple[Tensor, Tensor], ...] | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2159,7 +1663,7 @@
       ],
       "labels": [],
       "signature": "MaskedLMOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L416",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L416",
       "subcategory": "output",
       "methods": [
         {
@@ -2168,7 +1672,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2231,7 +1735,7 @@
       ],
       "labels": [],
       "signature": "Seq2SeqLMOutput(logits: Tensor, loss: Tensor | None = None, past_key_values: EncoderDecoderCache | tuple[tuple[Tensor, Tensor], ...] | None = None, decoder_hidden_states: tuple[Tensor, ...] | None = None, decoder_attentions: tuple[Tensor, ...] | None = None, encoder_last_hidden_state: Tensor | None = None, encoder_hidden_states: tuple[Tensor, ...] | None = None, encoder_attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L452",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L452",
       "subcategory": "output",
       "methods": [
         {
@@ -2240,7 +1744,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, past_key_values: EncoderDecoderCache | tuple[tuple[Tensor, Tensor], ...] | None = None, decoder_hidden_states: tuple[Tensor, ...] | None = None, decoder_attentions: tuple[Tensor, ...] | None = None, encoder_last_hidden_state: Tensor | None = None, encoder_hidden_states: tuple[Tensor, ...] | None = None, encoder_attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2323,7 +1827,7 @@
       ],
       "labels": [],
       "signature": "SequenceClassificationOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L677",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L677",
       "subcategory": "output",
       "methods": [
         {
@@ -2332,7 +1836,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2395,7 +1899,7 @@
       ],
       "labels": [],
       "signature": "TokenClassificationOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L714",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L714",
       "subcategory": "output",
       "methods": [
         {
@@ -2404,7 +1908,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2467,7 +1971,7 @@
       ],
       "labels": [],
       "signature": "QuestionAnsweringOutput(start_logits: Tensor, end_logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L749",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L749",
       "subcategory": "output",
       "methods": [
         {
@@ -2476,7 +1980,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(start_logits: Tensor, end_logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2544,7 +2048,7 @@
       ],
       "labels": [],
       "signature": "DiffusionModelOutput(sample: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L509",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L509",
       "subcategory": "output",
       "methods": [
         {
@@ -2553,7 +2057,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2606,7 +2110,7 @@
       ],
       "labels": [],
       "signature": "VAEOutput(sample: Tensor, latent: Tensor, mu: Tensor, logvar: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, kl_loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L546",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L546",
       "subcategory": "output",
       "methods": [
         {
@@ -2615,7 +2119,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample: Tensor, latent: Tensor, mu: Tensor, logvar: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, kl_loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2693,7 +2197,7 @@
       ],
       "labels": [],
       "signature": "NormalizingFlowOutput(latent: Tensor, log_det_jacobian: Tensor, log_prob: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L592",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L592",
       "subcategory": "output",
       "methods": [
         {
@@ -2702,7 +2206,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(latent: Tensor, log_det_jacobian: Tensor, log_prob: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2765,7 +2269,7 @@
       ],
       "labels": [],
       "signature": "GenerationOutput(samples: Tensor, intermediates: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L642",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L642",
       "subcategory": "output",
       "methods": [
         {
@@ -2774,7 +2278,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(samples: Tensor, intermediates: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2818,332 +2322,12 @@
       "see_also": []
     },
     {
-      "name": "BackboneProtocol",
-      "path": "lucid.models._protocols.BackboneProtocol",
-      "kind": "class",
-      "class_kind": "protocol",
-      "bases": [
-        "PretrainedModelProtocol",
-        "Protocol"
-      ],
-      "labels": [],
-      "signature": "BackboneProtocol(config: Any)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L286",
-      "subcategory": "protocols",
-      "methods": [],
-      "summary": "Refinement of `PretrainedModelProtocol` for the family's\n*direct* (backbone) model — the class whose name does **not**\ncontain `For<Task>` (e.g. `ResNet`, `BERTModel`, `ViT`,\n`DDPMModel`).",
-      "extended": "Currently identical in shape to the base protocol; the dedicated\ntype exists so static checkers can distinguish backbones from\ntask wrappers at call sites that demand one or the other.  A\nfeature-extraction utility, for example, should require a\nbackbone — not an `ImageClassification` head — to avoid\naccidentally pulling logits.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> from lucid.models.vision.resnet import ResNet\n>>> from lucid.models._protocols import BackboneProtocol, TaskWrapperProtocol\n>>> isinstance(ResNet, BackboneProtocol)\nTrue\n>>> isinstance(ResNet, TaskWrapperProtocol)\nTrue  # all backbones structurally satisfy the wrapper protocol too;\n      # nominal naming is what distinguishes them"
-      ],
-      "notes": [
-        "Naming rule: any public class in `_model.py` whose name lacks\nthe `For<CapWord>` pattern is treated as the backbone.  See\n`arch-models-family-contract` slot 2."
-      ],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "HasConfigClass",
-      "path": "lucid.models._protocols.HasConfigClass",
-      "kind": "class",
-      "class_kind": "protocol",
-      "bases": [
-        "Protocol"
-      ],
-      "labels": [],
-      "signature": "HasConfigClass()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L133",
-      "subcategory": "protocols",
-      "methods": [],
-      "summary": "Building-block protocol: model class points at its family's\nConfig via the `config_class` ClassVar.",
-      "extended": "Every concrete `PretrainedModel` subclass — backbone or\ntask wrapper — declares `config_class: ClassVar[type[...]] =\n<FamilyConfig>`.  The base `PretrainedModel.__init__` uses the\nattribute to validate the runtime config argument and\n`from_pretrained` uses it to reconstruct the config from\nJSON on disk.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> from lucid.models.vision.resnet import ResNet\n>>> from lucid.models._protocols import HasConfigClass\n>>> isinstance(ResNet, HasConfigClass)\nTrue\n>>> ResNet.config_class.__name__\n'ResNetConfig'"
-      ],
-      "notes": [
-        "Component of `PretrainedModelProtocol`.  Refine to\n`BackboneProtocol` or `TaskWrapperProtocol` in\nsignatures that need finer distinctions."
-      ],
-      "attributes": [
-        {
-          "name": "config_class",
-          "annotation": "ClassVar[type]",
-          "description": "Pointer to the family's `ModelConfig` subclass.  Set\non every concrete model class; left as `None` on the\nabstract `PretrainedModel` base so a missing override\nraises a clear `TypeError` at first instantiation."
-        }
-      ],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "HasFamilyMeta",
-      "path": "lucid.models._protocols.HasFamilyMeta",
-      "kind": "class",
-      "class_kind": "protocol",
-      "bases": [
-        "Protocol"
-      ],
-      "labels": [],
-      "signature": "HasFamilyMeta()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L87",
-      "subcategory": "protocols",
-      "methods": [],
-      "summary": "Building-block protocol: class has been decorated with\n`@model_family_meta` and so carries the docs-facing metadata\ntriple at `__model_family_meta__`.",
-      "extended": "The decorator attaches a `ModelFamilyMeta` instance holding\n`canonical_name` / `citation` / `theory` strings.  The docs\nsite reads these to render family-root index cards, sidebar\nlabels, and paper headers.  The Lucid contract requires every\nconcrete family Config to be wrapped.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> from lucid.models.vision.vit import ViTConfig\n>>> from lucid.models._protocols import HasFamilyMeta\n>>> isinstance(ViTConfig, HasFamilyMeta)\nTrue\nA bare class without the decorator fails the check:\n>>> class Bare: model_type = \"bare\"\n>>> isinstance(Bare, HasFamilyMeta)\nFalse"
-      ],
-      "notes": [
-        "Component of `ModelConfigProtocol`.  Adding this protocol\nto a function signature signals \"must be a docs-discoverable\nfamily Config\" without committing to the rest of the contract\n(registry id, dataclass-ness)."
-      ],
-      "attributes": [
-        {
-          "name": "__model_family_meta__",
-          "annotation": "ClassVar[object]",
-          "description": "Frozen `lucid.models._meta.ModelFamilyMeta` instance set\nby `@model_family_meta`.  The annotation is `object` here\nbecause `Protocol` cannot import its concrete dataclass\nwithout creating a circular dependency; use\n`ModelFamilyMeta` in real signatures that need the typed\nfields."
-        }
-      ],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "HasModelType",
-      "path": "lucid.models._protocols.HasModelType",
-      "kind": "class",
-      "class_kind": "protocol",
-      "bases": [
-        "Protocol"
-      ],
-      "labels": [],
-      "signature": "HasModelType()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L36",
-      "subcategory": "protocols",
-      "methods": [],
-      "summary": "Building-block protocol: class carries a `model_type` ClassVar.",
-      "extended": "The simplest of the family-contract pieces.  Every concrete family\nConfig (`ResNetConfig`, `BERTConfig`, …) overrides this ClassVar\nto a unique short identifier (`\"resnet\"`, `\"bert\"`) used by the\nregistry, `config.json` persistence, and `AutoConfig` dispatch.\n\nIntermediate abstract bases — `ModelConfig` itself,\n`LanguageModelConfig`, `GenerativeModelConfig`,\n`DiffusionModelConfig`, `NormalizingFlowConfig`,\n`WorldModelConfig` — carry an identifier naming the *tier* rather\nthan a family (`\"base\"`, `\"generative\"`, `\"diffusion\"`,\n`\"normalizing_flow\"`, `\"world_model\"`).  None of them is a family\nConfig, and none satisfies the stricter protocols (e.g.\n`ModelConfigProtocol`) that compose this one.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        "Every documented family Config carries the attribute:\n>>> from lucid.models.vision.resnet import ResNetConfig\n>>> from lucid.models._protocols import HasModelType\n>>> isinstance(ResNetConfig, HasModelType)\nTrue\nA plain class without the ClassVar does not satisfy it:\n>>> class Plain: pass\n>>> isinstance(Plain, HasModelType)\nFalse"
-      ],
-      "notes": [
-        "Component of the composite `ModelConfigProtocol`.  Use this\nprotocol alone in signatures that only need the family identifier\n(e.g. logging utilities, registry lookups) without also requiring\nthe full `@model_family_meta` machinery."
-      ],
-      "attributes": [
-        {
-          "name": "model_type",
-          "annotation": "ClassVar[str]",
-          "description": "Persistent family identifier — embedded in checkpoint\n`config.json` and used by directory-based loading to dispatch\nto the correct registry entry."
-        }
-      ],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "ModelConfigProtocol",
-      "path": "lucid.models._protocols.ModelConfigProtocol",
-      "kind": "class",
-      "class_kind": "protocol",
-      "bases": [
-        "HasModelType",
-        "HasFamilyMeta",
-        "Protocol"
-      ],
-      "labels": [],
-      "signature": "ModelConfigProtocol()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L177",
-      "subcategory": "protocols",
-      "methods": [],
-      "summary": "Composite structural contract for a family Config class.",
-      "extended": "A class satisfies this protocol when it simultaneously\n1. declares a non-empty `model_type` ClassVar\n   (`HasModelType`),\n2. has been decorated with `@model_family_meta` so that\n   `__model_family_meta__` is set (`HasFamilyMeta`),\n3. is a `@dataclass` — the `__dataclass_fields__` ClassVar\n   below is the witness that the dataclass transform ran.\n\nUse this protocol in any function that accepts arbitrary family\nConfigs without coupling to the nominal `ModelConfig`\nbase — third-party model packages may satisfy it via duck\ntyping.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        "Every documented family Config satisfies the contract:\n>>> from lucid.models.vision.resnet import ResNetConfig\n>>> from lucid.models.text.bert import BERTConfig\n>>> from lucid.models._protocols import ModelConfigProtocol\n>>> all(isinstance(c, ModelConfigProtocol) for c in (ResNetConfig, BERTConfig))\nTrue\nA duck-typed third-party Config with the right shape also\nqualifies — no need to inherit from ModelConfig:\n>>> from typing import ClassVar\n>>> class Stranger:\n...     model_type: ClassVar[str] = \"stranger\"\n...     __model_family_meta__: ClassVar[object] = object()\n...     __dataclass_fields__: ClassVar[dict] = {}\n>>> isinstance(Stranger, ModelConfigProtocol)\nTrue"
-      ],
-      "notes": [
-        "The protocol is `runtime_checkable`, so the static\nvalidator (`tools/validate_model_zoo.py --runtime`) can use\n`isinstance(cls, ModelConfigProtocol)` to catch refactor drift\n(e.g. a decorator that silently strips\n`__model_family_meta__`).  See `arch-models-family-contract`\nfor the full 5-slot family layout."
-      ],
-      "attributes": [
-        {
-          "name": "model_type",
-          "annotation": "ClassVar[str]",
-          "description": "Inherited from `HasModelType` — see that protocol."
-        },
-        {
-          "name": "__model_family_meta__",
-          "annotation": "ClassVar[object]",
-          "description": "Inherited from `HasFamilyMeta` — see that protocol."
-        },
-        {
-          "name": "__dataclass_fields__",
-          "annotation": "ClassVar[dict[str, Any]]",
-          "description": "Standard attribute set by `dataclasses.dataclass`;\nused here as the runtime witness that the class went through\nthe dataclass transform."
-        }
-      ],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "OutputDataclassProtocol",
-      "path": "lucid.models._protocols.OutputDataclassProtocol",
-      "kind": "class",
-      "class_kind": "protocol",
-      "bases": [
-        "Protocol"
-      ],
-      "labels": [],
-      "signature": "OutputDataclassProtocol()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L348",
-      "subcategory": "protocols",
-      "methods": [],
-      "summary": "Forward-return dataclass shape — any dataclass whose name ends\nwith `Output` (e.g. `ImageClassificationOutput`,\n`MaskedLMOutput`).  Carries at least an `logits` /\nfamily-specific tensor field plus an optional `loss`.",
-      "extended": "The exact field set differs across tasks (logits / boxes / masks\n/ samples / hidden_states / past_key_values / …), so the protocol\nintentionally requires only the structural `__dataclass_fields__`\nwitness — no concrete field constraint.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> from lucid.models import ImageClassificationOutput\n>>> from lucid.models._protocols import OutputDataclassProtocol\n>>> isinstance(ImageClassificationOutput, OutputDataclassProtocol)\nTrue"
-      ],
-      "notes": [
-        "Output dataclasses are hidden from the docs sidebar\n(`_model.py` 4-slot rule, slot 4) because they are *return\ntypes* rather than user-facing entry points.  The protocol is\nstill useful for return-type hints in framework utilities (e.g.\nmetrics computation, loss aggregation) that accept any output\nshape."
-      ],
-      "attributes": [
-        {
-          "name": "__dataclass_fields__",
-          "annotation": "ClassVar[dict[str, Any]]",
-          "description": "Standard attribute set by `dataclasses.dataclass`."
-        }
-      ],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "PretrainedModelProtocol",
-      "path": "lucid.models._protocols.PretrainedModelProtocol",
-      "kind": "class",
-      "class_kind": "protocol",
-      "bases": [
-        "HasConfigClass",
-        "Protocol"
-      ],
-      "labels": [],
-      "signature": "PretrainedModelProtocol(config: Any)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L239",
-      "subcategory": "protocols",
-      "methods": [
-        {
-          "name": "__init__",
-          "path": "lucid.models._protocols.PretrainedModelProtocol.__init__",
-          "kind": "function",
-          "labels": [],
-          "signature": "__init__(config: Any)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L282",
-          "subcategory": "protocols",
-          "summary": null,
-          "extended": null,
-          "parameters": [],
-          "returns": {
-            "annotation": "None",
-            "description": ""
-          },
-          "raises": [],
-          "examples": [],
-          "notes": [],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        },
-        {
-          "name": "forward",
-          "path": "lucid.models._protocols.PretrainedModelProtocol.forward",
-          "kind": "function",
-          "labels": [],
-          "signature": "forward(args: Any = (), kwargs: Any = {})",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L283",
-          "subcategory": "protocols",
-          "summary": null,
-          "extended": null,
-          "parameters": [],
-          "returns": {
-            "annotation": "Any",
-            "description": ""
-          },
-          "raises": [],
-          "examples": [],
-          "notes": [],
-          "attributes": [],
-          "warns": [],
-          "see_also": []
-        }
-      ],
-      "summary": "Composite structural contract for a family's *model* class —\neither the backbone (`ResNet`, `BERTModel`) or a task wrapper\n(`ResNetForImageClassification`, `BERTForMaskedLM`).",
-      "extended": "The protocol requires (i) the `config_class` pointer (from\n`HasConfigClass`) and (ii) the two methods every\nframework-consumed model exposes: `__init__(self, config)` and\n`forward(...)`.  Concrete framework subclasses additionally\ninherit `lucid.nn.Module` — so `parameters()` /\n`state_dict()` / `train()` / `eval()` come for free — but\nthose are intentionally *not* part of the structural contract:\nthe protocol is meant to be checkable against the **class object\nalone**, before instantiation, so the static validator can use\nit.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> from lucid.models.vision.resnet import (\n...     ResNet, ResNetForImageClassification,\n... )\n>>> from lucid.models._protocols import PretrainedModelProtocol\n>>> isinstance(ResNet, PretrainedModelProtocol)\nTrue\n>>> isinstance(ResNetForImageClassification, PretrainedModelProtocol)\nTrue"
-      ],
-      "notes": [
-        "Refinements: `BackboneProtocol` for direct-model classes\n(no `For<Task>` in name); `TaskWrapperProtocol` for\n`*For<Task>` heads.  Use the refined protocol in signatures\nthat need to distinguish — e.g. a feature extractor utility\nshould take a `BackboneProtocol`, while a fine-tuning\nhelper might take a `TaskWrapperProtocol`."
-      ],
-      "attributes": [
-        {
-          "name": "config_class",
-          "annotation": "ClassVar[type]",
-          "description": "Inherited from `HasConfigClass`."
-        }
-      ],
-      "warns": [],
-      "see_also": []
-    },
-    {
-      "name": "TaskWrapperProtocol",
-      "path": "lucid.models._protocols.TaskWrapperProtocol",
-      "kind": "class",
-      "class_kind": "protocol",
-      "bases": [
-        "PretrainedModelProtocol",
-        "Protocol"
-      ],
-      "labels": [],
-      "signature": "TaskWrapperProtocol(config: Any)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_protocols.py#L318",
-      "subcategory": "protocols",
-      "methods": [],
-      "summary": "Refinement of `PretrainedModelProtocol` for `*For<Task>`\nhead classes (e.g. `ResNetForImageClassification`,\n`BERTForMaskedLM`).",
-      "extended": "Implementations are expected to return a task-specific `*Output`\ndataclass from `forward` — `ImageClassificationOutput`\nfor classifiers, `MaskedLMOutput` for MLM heads, etc.  The\noutput type is not encoded in the protocol because Python's\nstructural typing cannot constrain method *return* shapes\nwithout a Generic parameter, which would complicate the\nruntime-checkable surface.",
-      "parameters": [],
-      "returns": null,
-      "raises": [],
-      "examples": [
-        ">>> from lucid.models.vision.resnet import ResNetForImageClassification\n>>> from lucid.models._protocols import TaskWrapperProtocol\n>>> isinstance(ResNetForImageClassification, TaskWrapperProtocol)\nTrue"
-      ],
-      "notes": [
-        "Naming rule: the class name ends with `For<CapWord>` matching\na key in `_TASK_SUFFIX_MAP` (see build script).  The validator\nflags `For<Unknown>` suffixes with MZ050 so new task types\nmust be explicitly registered."
-      ],
-      "attributes": [],
-      "warns": [],
-      "see_also": []
-    },
-    {
       "name": "create_model",
       "path": "lucid.models._registry.create_model",
       "kind": "function",
       "labels": [],
       "signature": "create_model(name: str, pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_registry.py#L366",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_registry.py#L366",
       "subcategory": "registry",
       "summary": "Look up `name` and call its factory — the timm-style entry point.",
       "extended": null,
@@ -3193,7 +2377,7 @@
       "kind": "function",
       "labels": [],
       "signature": "is_model(name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_registry.py#L301",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_registry.py#L301",
       "subcategory": "registry",
       "summary": "Return whether `name` is registered (case / separator insensitive).",
       "extended": null,
@@ -3224,7 +2408,7 @@
       "kind": "function",
       "labels": [],
       "signature": "list_models(task: str | None = None, family: str | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_registry.py#L259",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_registry.py#L259",
       "subcategory": "registry",
       "summary": "List all registered model names, optionally filtered by task / family.",
       "extended": null,
@@ -3263,7 +2447,7 @@
       "kind": "function",
       "labels": [],
       "signature": "model_entrypoint(name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_registry.py#L327",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_registry.py#L327",
       "subcategory": "registry",
       "summary": "Return the registered factory callable for `name`.",
       "extended": null,
@@ -3301,7 +2485,7 @@
       "kind": "function",
       "labels": [],
       "signature": "register_model(task: str = 'base', family: str | None = None, model_type: str | None = None, model_class: type[PretrainedModel] | None = None, default_config: ModelConfig | None = None, params: int | None = None, summary: object = 'auto')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f7c16b363/lucid/models/_registry.py#L139",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1ead0992c/lucid/models/_registry.py#L139",
       "subcategory": "registry",
       "summary": "Decorator that registers a factory function under its `__name__`.",
       "extended": "The global registry is the single source of truth for which models\nLucid exposes.  Every public factory in `lucid/models/**/_pretrained.py`\nis decorated with `@register_model` so it becomes discoverable via\n`create_model`, `list_models`, and the `AutoModelFor*`\nfamily.",
@@ -3395,6 +2579,11 @@
       "slug": "lucid.models.generative",
       "label": "Generative",
       "icon": "sparkles"
+    },
+    {
+      "slug": "lucid.models.multimodal",
+      "label": "Multimodal",
+      "icon": "layers"
     }
   ]
 }
