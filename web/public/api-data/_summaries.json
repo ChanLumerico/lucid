@@ -315780,13 +315780,13 @@
   "stable_diffusion_v1": {
     "name": "StableDiffusionModel",
     "type": "StableDiffusionModel",
-    "params": 894163499,
+    "params": 943174827,
     "own_params": 0,
     "children": [
       {
         "name": "vae",
         "type": "AutoencoderKL",
-        "params": 84179175,
+        "params": 83653863,
         "own_params": 0,
         "children": [
           {
@@ -316145,7 +316145,7 @@
           {
             "name": "mid_attn",
             "type": "_SelfAttention2d",
-            "params": 1314304,
+            "params": 1051648,
             "own_params": 0,
             "children": [
               {
@@ -316160,13 +316160,6 @@
                 "type": "MultiheadAttention",
                 "params": 1050624,
                 "own_params": 1050624,
-                "children": []
-              },
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 262656,
-                "own_params": 262656,
                 "children": []
               }
             ]
@@ -316295,7 +316288,7 @@
           {
             "name": "decoder_mid_attn",
             "type": "_SelfAttention2d",
-            "params": 1314304,
+            "params": 1051648,
             "own_params": 0,
             "children": [
               {
@@ -316310,13 +316303,6 @@
                 "type": "MultiheadAttention",
                 "params": 1050624,
                 "own_params": 1050624,
-                "children": []
-              },
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 262656,
-                "own_params": 262656,
                 "children": []
               }
             ]
@@ -316716,7 +316702,7 @@
       {
         "name": "unet",
         "type": "UNet2DConditionModel",
-        "params": 809984324,
+        "params": 859520964,
         "own_params": 0,
         "children": [
           {
@@ -317032,13 +317018,13 @@
           {
             "name": "down_attns",
             "type": "ModuleList",
-            "params": 75797120,
+            "params": 92991360,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SpatialTransformer",
-                "params": 2137280,
+                "params": 2546240,
                 "own_params": 0,
                 "children": [
                   {
@@ -317058,14 +317044,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 1931200,
+                    "params": 2340160,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 1931200,
-                        "own_params": 0,
+                        "params": 2340160,
+                        "own_params": 640,
                         "children": [
                           {
                             "name": "norm1",
@@ -317077,8 +317063,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 410880,
-                            "own_params": 410880,
+                            "params": 409600,
+                            "own_params": 409600,
                             "children": []
                           },
                           {
@@ -317091,8 +317077,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 697600,
-                            "own_params": 697600,
+                            "params": 696320,
+                            "own_params": 696320,
                             "children": []
                           },
                           {
@@ -317105,25 +317091,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 820800,
+                            "params": 1231680,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 410880,
-                                "own_params": 410880,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 821760,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 821760,
+                                    "own_params": 821760,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 409920,
                                 "own_params": 409920,
@@ -317148,7 +317135,7 @@
               {
                 "name": "2",
                 "type": "_SpatialTransformer",
-                "params": 7551360,
+                "params": 9188480,
                 "own_params": 0,
                 "children": [
                   {
@@ -317168,14 +317155,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 6729600,
+                    "params": 8366720,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 6729600,
-                        "own_params": 0,
+                        "params": 8366720,
+                        "own_params": 1280,
                         "children": [
                           {
                             "name": "norm1",
@@ -317187,8 +317174,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 1640960,
-                            "own_params": 1640960,
+                            "params": 1638400,
+                            "own_params": 1638400,
                             "children": []
                           },
                           {
@@ -317201,8 +317188,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 1804800,
-                            "own_params": 1804800,
+                            "params": 1802240,
+                            "own_params": 1802240,
                             "children": []
                           },
                           {
@@ -317215,25 +317202,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 3280000,
+                            "params": 4920960,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 1640960,
-                                "own_params": 1640960,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 3281920,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 3281920,
+                                    "own_params": 3281920,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 1639040,
                                 "own_params": 1639040,
@@ -317258,7 +317246,7 @@
               {
                 "name": "4",
                 "type": "_SpatialTransformer",
-                "params": 28209920,
+                "params": 34760960,
                 "own_params": 0,
                 "children": [
                   {
@@ -317278,14 +317266,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 24928000,
+                    "params": 31479040,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 24928000,
-                        "own_params": 0,
+                        "params": 31479040,
+                        "own_params": 2560,
                         "children": [
                           {
                             "name": "norm1",
@@ -317297,8 +317285,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 6558720,
-                            "own_params": 6558720,
+                            "params": 6553600,
+                            "own_params": 6553600,
                             "children": []
                           },
                           {
@@ -317311,8 +317299,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 5248000,
-                            "own_params": 5248000,
+                            "params": 5242880,
+                            "own_params": 5242880,
                             "children": []
                           },
                           {
@@ -317325,25 +317313,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 13113600,
+                            "params": 19672320,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 6558720,
-                                "own_params": 6558720,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 13117440,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 13117440,
+                                    "own_params": 13117440,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 6554880,
                                 "own_params": 6554880,
@@ -317464,7 +317453,7 @@
           {
             "name": "mid_attn",
             "type": "_SpatialTransformer",
-            "params": 28209920,
+            "params": 34760960,
             "own_params": 0,
             "children": [
               {
@@ -317484,14 +317473,14 @@
               {
                 "name": "blocks",
                 "type": "ModuleList",
-                "params": 24928000,
+                "params": 31479040,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_TransformerBlock",
-                    "params": 24928000,
-                    "own_params": 0,
+                    "params": 31479040,
+                    "own_params": 2560,
                     "children": [
                       {
                         "name": "norm1",
@@ -317503,8 +317492,8 @@
                       {
                         "name": "attn1",
                         "type": "MultiheadAttention",
-                        "params": 6558720,
-                        "own_params": 6558720,
+                        "params": 6553600,
+                        "own_params": 6553600,
                         "children": []
                       },
                       {
@@ -317517,8 +317506,8 @@
                       {
                         "name": "attn2",
                         "type": "MultiheadAttention",
-                        "params": 5248000,
-                        "own_params": 5248000,
+                        "params": 5242880,
+                        "own_params": 5242880,
                         "children": []
                       },
                       {
@@ -317531,25 +317520,26 @@
                       {
                         "name": "ff",
                         "type": "Sequential",
-                        "params": 13113600,
+                        "params": 19672320,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
-                            "type": "Linear",
-                            "params": 6558720,
-                            "own_params": 6558720,
-                            "children": []
+                            "type": "_GEGLU",
+                            "params": 13117440,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 13117440,
+                                "own_params": 13117440,
+                                "children": []
+                              }
+                            ]
                           },
                           {
                             "name": "1",
-                            "type": "GELU",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          },
-                          {
-                            "name": "2",
                             "type": "Linear",
                             "params": 6554880,
                             "own_params": 6554880,
@@ -318032,7 +318022,7 @@
           {
             "name": "up_attns",
             "type": "ModuleList",
-            "params": 113695680,
+            "params": 139487040,
             "own_params": 0,
             "children": [
               {
@@ -318046,7 +318036,7 @@
               {
                 "name": "3",
                 "type": "_SpatialTransformer",
-                "params": 28209920,
+                "params": 34760960,
                 "own_params": 0,
                 "children": [
                   {
@@ -318066,14 +318056,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 24928000,
+                    "params": 31479040,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 24928000,
-                        "own_params": 0,
+                        "params": 31479040,
+                        "own_params": 2560,
                         "children": [
                           {
                             "name": "norm1",
@@ -318085,8 +318075,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 6558720,
-                            "own_params": 6558720,
+                            "params": 6553600,
+                            "own_params": 6553600,
                             "children": []
                           },
                           {
@@ -318099,8 +318089,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 5248000,
-                            "own_params": 5248000,
+                            "params": 5242880,
+                            "own_params": 5242880,
                             "children": []
                           },
                           {
@@ -318113,25 +318103,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 13113600,
+                            "params": 19672320,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 6558720,
-                                "own_params": 6558720,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 13117440,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 13117440,
+                                    "own_params": 13117440,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 6554880,
                                 "own_params": 6554880,
@@ -318156,7 +318147,7 @@
               {
                 "name": "6",
                 "type": "_SpatialTransformer",
-                "params": 7551360,
+                "params": 9188480,
                 "own_params": 0,
                 "children": [
                   {
@@ -318176,14 +318167,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 6729600,
+                    "params": 8366720,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 6729600,
-                        "own_params": 0,
+                        "params": 8366720,
+                        "own_params": 1280,
                         "children": [
                           {
                             "name": "norm1",
@@ -318195,8 +318186,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 1640960,
-                            "own_params": 1640960,
+                            "params": 1638400,
+                            "own_params": 1638400,
                             "children": []
                           },
                           {
@@ -318209,8 +318200,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 1804800,
-                            "own_params": 1804800,
+                            "params": 1802240,
+                            "own_params": 1802240,
                             "children": []
                           },
                           {
@@ -318223,25 +318214,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 3280000,
+                            "params": 4920960,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 1640960,
-                                "own_params": 1640960,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 3281920,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 3281920,
+                                    "own_params": 3281920,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 1639040,
                                 "own_params": 1639040,
@@ -318266,7 +318258,7 @@
               {
                 "name": "9",
                 "type": "_SpatialTransformer",
-                "params": 2137280,
+                "params": 2546240,
                 "own_params": 0,
                 "children": [
                   {
@@ -318286,14 +318278,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 1931200,
+                    "params": 2340160,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 1931200,
-                        "own_params": 0,
+                        "params": 2340160,
+                        "own_params": 640,
                         "children": [
                           {
                             "name": "norm1",
@@ -318305,8 +318297,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 410880,
-                            "own_params": 410880,
+                            "params": 409600,
+                            "own_params": 409600,
                             "children": []
                           },
                           {
@@ -318319,8 +318311,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 697600,
-                            "own_params": 697600,
+                            "params": 696320,
+                            "own_params": 696320,
                             "children": []
                           },
                           {
@@ -318333,25 +318325,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 820800,
+                            "params": 1231680,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 410880,
-                                "own_params": 410880,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 821760,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 821760,
+                                    "own_params": 821760,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 409920,
                                 "own_params": 409920,
@@ -318440,19 +318433,19 @@
   "stable_diffusion_v1_gen": {
     "name": "StableDiffusionForImageGeneration",
     "type": "StableDiffusionForImageGeneration",
-    "params": 894163499,
+    "params": 943174827,
     "own_params": 0,
     "children": [
       {
         "name": "stable_diffusion",
         "type": "StableDiffusionModel",
-        "params": 894163499,
+        "params": 943174827,
         "own_params": 0,
         "children": [
           {
             "name": "vae",
             "type": "AutoencoderKL",
-            "params": 84179175,
+            "params": 83653863,
             "own_params": 0,
             "children": [
               {
@@ -318811,7 +318804,7 @@
               {
                 "name": "mid_attn",
                 "type": "_SelfAttention2d",
-                "params": 1314304,
+                "params": 1051648,
                 "own_params": 0,
                 "children": [
                   {
@@ -318826,13 +318819,6 @@
                     "type": "MultiheadAttention",
                     "params": 1050624,
                     "own_params": 1050624,
-                    "children": []
-                  },
-                  {
-                    "name": "proj",
-                    "type": "Conv2d",
-                    "params": 262656,
-                    "own_params": 262656,
                     "children": []
                   }
                 ]
@@ -318961,7 +318947,7 @@
               {
                 "name": "decoder_mid_attn",
                 "type": "_SelfAttention2d",
-                "params": 1314304,
+                "params": 1051648,
                 "own_params": 0,
                 "children": [
                   {
@@ -318976,13 +318962,6 @@
                     "type": "MultiheadAttention",
                     "params": 1050624,
                     "own_params": 1050624,
-                    "children": []
-                  },
-                  {
-                    "name": "proj",
-                    "type": "Conv2d",
-                    "params": 262656,
-                    "own_params": 262656,
                     "children": []
                   }
                 ]
@@ -319382,7 +319361,7 @@
           {
             "name": "unet",
             "type": "UNet2DConditionModel",
-            "params": 809984324,
+            "params": 859520964,
             "own_params": 0,
             "children": [
               {
@@ -319698,13 +319677,13 @@
               {
                 "name": "down_attns",
                 "type": "ModuleList",
-                "params": 75797120,
+                "params": 92991360,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_SpatialTransformer",
-                    "params": 2137280,
+                    "params": 2546240,
                     "own_params": 0,
                     "children": [
                       {
@@ -319724,14 +319703,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 1931200,
+                        "params": 2340160,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 1931200,
-                            "own_params": 0,
+                            "params": 2340160,
+                            "own_params": 640,
                             "children": [
                               {
                                 "name": "norm1",
@@ -319743,8 +319722,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 410880,
-                                "own_params": 410880,
+                                "params": 409600,
+                                "own_params": 409600,
                                 "children": []
                               },
                               {
@@ -319757,8 +319736,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 697600,
-                                "own_params": 697600,
+                                "params": 696320,
+                                "own_params": 696320,
                                 "children": []
                               },
                               {
@@ -319771,25 +319750,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 820800,
+                                "params": 1231680,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 410880,
-                                    "own_params": 410880,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 821760,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 821760,
+                                        "own_params": 821760,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 409920,
                                     "own_params": 409920,
@@ -319814,7 +319794,7 @@
                   {
                     "name": "2",
                     "type": "_SpatialTransformer",
-                    "params": 7551360,
+                    "params": 9188480,
                     "own_params": 0,
                     "children": [
                       {
@@ -319834,14 +319814,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 6729600,
+                        "params": 8366720,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 6729600,
-                            "own_params": 0,
+                            "params": 8366720,
+                            "own_params": 1280,
                             "children": [
                               {
                                 "name": "norm1",
@@ -319853,8 +319833,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 1640960,
-                                "own_params": 1640960,
+                                "params": 1638400,
+                                "own_params": 1638400,
                                 "children": []
                               },
                               {
@@ -319867,8 +319847,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 1804800,
-                                "own_params": 1804800,
+                                "params": 1802240,
+                                "own_params": 1802240,
                                 "children": []
                               },
                               {
@@ -319881,25 +319861,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 3280000,
+                                "params": 4920960,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 1640960,
-                                    "own_params": 1640960,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 3281920,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 3281920,
+                                        "own_params": 3281920,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 1639040,
                                     "own_params": 1639040,
@@ -319924,7 +319905,7 @@
                   {
                     "name": "4",
                     "type": "_SpatialTransformer",
-                    "params": 28209920,
+                    "params": 34760960,
                     "own_params": 0,
                     "children": [
                       {
@@ -319944,14 +319925,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 24928000,
+                        "params": 31479040,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 24928000,
-                            "own_params": 0,
+                            "params": 31479040,
+                            "own_params": 2560,
                             "children": [
                               {
                                 "name": "norm1",
@@ -319963,8 +319944,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 6558720,
-                                "own_params": 6558720,
+                                "params": 6553600,
+                                "own_params": 6553600,
                                 "children": []
                               },
                               {
@@ -319977,8 +319958,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 5248000,
-                                "own_params": 5248000,
+                                "params": 5242880,
+                                "own_params": 5242880,
                                 "children": []
                               },
                               {
@@ -319991,25 +319972,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 13113600,
+                                "params": 19672320,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 6558720,
-                                    "own_params": 6558720,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 13117440,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 13117440,
+                                        "own_params": 13117440,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 6554880,
                                     "own_params": 6554880,
@@ -320130,7 +320112,7 @@
               {
                 "name": "mid_attn",
                 "type": "_SpatialTransformer",
-                "params": 28209920,
+                "params": 34760960,
                 "own_params": 0,
                 "children": [
                   {
@@ -320150,14 +320132,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 24928000,
+                    "params": 31479040,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 24928000,
-                        "own_params": 0,
+                        "params": 31479040,
+                        "own_params": 2560,
                         "children": [
                           {
                             "name": "norm1",
@@ -320169,8 +320151,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 6558720,
-                            "own_params": 6558720,
+                            "params": 6553600,
+                            "own_params": 6553600,
                             "children": []
                           },
                           {
@@ -320183,8 +320165,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 5248000,
-                            "own_params": 5248000,
+                            "params": 5242880,
+                            "own_params": 5242880,
                             "children": []
                           },
                           {
@@ -320197,25 +320179,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 13113600,
+                            "params": 19672320,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 6558720,
-                                "own_params": 6558720,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 13117440,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 13117440,
+                                    "own_params": 13117440,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 6554880,
                                 "own_params": 6554880,
@@ -320698,7 +320681,7 @@
               {
                 "name": "up_attns",
                 "type": "ModuleList",
-                "params": 113695680,
+                "params": 139487040,
                 "own_params": 0,
                 "children": [
                   {
@@ -320712,7 +320695,7 @@
                   {
                     "name": "3",
                     "type": "_SpatialTransformer",
-                    "params": 28209920,
+                    "params": 34760960,
                     "own_params": 0,
                     "children": [
                       {
@@ -320732,14 +320715,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 24928000,
+                        "params": 31479040,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 24928000,
-                            "own_params": 0,
+                            "params": 31479040,
+                            "own_params": 2560,
                             "children": [
                               {
                                 "name": "norm1",
@@ -320751,8 +320734,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 6558720,
-                                "own_params": 6558720,
+                                "params": 6553600,
+                                "own_params": 6553600,
                                 "children": []
                               },
                               {
@@ -320765,8 +320748,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 5248000,
-                                "own_params": 5248000,
+                                "params": 5242880,
+                                "own_params": 5242880,
                                 "children": []
                               },
                               {
@@ -320779,25 +320762,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 13113600,
+                                "params": 19672320,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 6558720,
-                                    "own_params": 6558720,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 13117440,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 13117440,
+                                        "own_params": 13117440,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 6554880,
                                     "own_params": 6554880,
@@ -320822,7 +320806,7 @@
                   {
                     "name": "6",
                     "type": "_SpatialTransformer",
-                    "params": 7551360,
+                    "params": 9188480,
                     "own_params": 0,
                     "children": [
                       {
@@ -320842,14 +320826,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 6729600,
+                        "params": 8366720,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 6729600,
-                            "own_params": 0,
+                            "params": 8366720,
+                            "own_params": 1280,
                             "children": [
                               {
                                 "name": "norm1",
@@ -320861,8 +320845,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 1640960,
-                                "own_params": 1640960,
+                                "params": 1638400,
+                                "own_params": 1638400,
                                 "children": []
                               },
                               {
@@ -320875,8 +320859,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 1804800,
-                                "own_params": 1804800,
+                                "params": 1802240,
+                                "own_params": 1802240,
                                 "children": []
                               },
                               {
@@ -320889,25 +320873,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 3280000,
+                                "params": 4920960,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 1640960,
-                                    "own_params": 1640960,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 3281920,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 3281920,
+                                        "own_params": 3281920,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 1639040,
                                     "own_params": 1639040,
@@ -320932,7 +320917,7 @@
                   {
                     "name": "9",
                     "type": "_SpatialTransformer",
-                    "params": 2137280,
+                    "params": 2546240,
                     "own_params": 0,
                     "children": [
                       {
@@ -320952,14 +320937,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 1931200,
+                        "params": 2340160,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 1931200,
-                            "own_params": 0,
+                            "params": 2340160,
+                            "own_params": 640,
                             "children": [
                               {
                                 "name": "norm1",
@@ -320971,8 +320956,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 410880,
-                                "own_params": 410880,
+                                "params": 409600,
+                                "own_params": 409600,
                                 "children": []
                               },
                               {
@@ -320985,8 +320970,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 697600,
-                                "own_params": 697600,
+                                "params": 696320,
+                                "own_params": 696320,
                                 "children": []
                               },
                               {
@@ -320999,25 +320984,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 820800,
+                                "params": 1231680,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 410880,
-                                    "own_params": 410880,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 821760,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 821760,
+                                        "own_params": 821760,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 409920,
                                     "own_params": 409920,
@@ -321108,13 +321094,13 @@
   "stable_diffusion_v2": {
     "name": "StableDiffusionModel",
     "type": "StableDiffusionModel",
-    "params": 900553259,
+    "params": 949564587,
     "own_params": 0,
     "children": [
       {
         "name": "vae",
         "type": "AutoencoderKL",
-        "params": 84179175,
+        "params": 83653863,
         "own_params": 0,
         "children": [
           {
@@ -321473,7 +321459,7 @@
           {
             "name": "mid_attn",
             "type": "_SelfAttention2d",
-            "params": 1314304,
+            "params": 1051648,
             "own_params": 0,
             "children": [
               {
@@ -321488,13 +321474,6 @@
                 "type": "MultiheadAttention",
                 "params": 1050624,
                 "own_params": 1050624,
-                "children": []
-              },
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 262656,
-                "own_params": 262656,
                 "children": []
               }
             ]
@@ -321623,7 +321602,7 @@
           {
             "name": "decoder_mid_attn",
             "type": "_SelfAttention2d",
-            "params": 1314304,
+            "params": 1051648,
             "own_params": 0,
             "children": [
               {
@@ -321638,13 +321617,6 @@
                 "type": "MultiheadAttention",
                 "params": 1050624,
                 "own_params": 1050624,
-                "children": []
-              },
-              {
-                "name": "proj",
-                "type": "Conv2d",
-                "params": 262656,
-                "own_params": 262656,
                 "children": []
               }
             ]
@@ -322044,7 +322016,7 @@
       {
         "name": "unet",
         "type": "UNet2DConditionModel",
-        "params": 816374084,
+        "params": 865910724,
         "own_params": 0,
         "children": [
           {
@@ -322360,13 +322332,13 @@
           {
             "name": "down_attns",
             "type": "ModuleList",
-            "params": 78090880,
+            "params": 95285120,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SpatialTransformer",
-                "params": 2301120,
+                "params": 2710080,
                 "own_params": 0,
                 "children": [
                   {
@@ -322386,14 +322358,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 2095040,
+                    "params": 2504000,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 2095040,
-                        "own_params": 0,
+                        "params": 2504000,
+                        "own_params": 640,
                         "children": [
                           {
                             "name": "norm1",
@@ -322405,8 +322377,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 410880,
-                            "own_params": 410880,
+                            "params": 409600,
+                            "own_params": 409600,
                             "children": []
                           },
                           {
@@ -322419,8 +322391,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 861440,
-                            "own_params": 861440,
+                            "params": 860160,
+                            "own_params": 860160,
                             "children": []
                           },
                           {
@@ -322433,25 +322405,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 820800,
+                            "params": 1231680,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 410880,
-                                "own_params": 410880,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 821760,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 821760,
+                                    "own_params": 821760,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 409920,
                                 "own_params": 409920,
@@ -322476,7 +322449,7 @@
               {
                 "name": "2",
                 "type": "_SpatialTransformer",
-                "params": 7879040,
+                "params": 9516160,
                 "own_params": 0,
                 "children": [
                   {
@@ -322496,14 +322469,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 7057280,
+                    "params": 8694400,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 7057280,
-                        "own_params": 0,
+                        "params": 8694400,
+                        "own_params": 1280,
                         "children": [
                           {
                             "name": "norm1",
@@ -322515,8 +322488,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 1640960,
-                            "own_params": 1640960,
+                            "params": 1638400,
+                            "own_params": 1638400,
                             "children": []
                           },
                           {
@@ -322529,8 +322502,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 2132480,
-                            "own_params": 2132480,
+                            "params": 2129920,
+                            "own_params": 2129920,
                             "children": []
                           },
                           {
@@ -322543,25 +322516,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 3280000,
+                            "params": 4920960,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 1640960,
-                                "own_params": 1640960,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 3281920,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 3281920,
+                                    "own_params": 3281920,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 1639040,
                                 "own_params": 1639040,
@@ -322586,7 +322560,7 @@
               {
                 "name": "4",
                 "type": "_SpatialTransformer",
-                "params": 28865280,
+                "params": 35416320,
                 "own_params": 0,
                 "children": [
                   {
@@ -322606,14 +322580,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 25583360,
+                    "params": 32134400,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 25583360,
-                        "own_params": 0,
+                        "params": 32134400,
+                        "own_params": 2560,
                         "children": [
                           {
                             "name": "norm1",
@@ -322625,8 +322599,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 6558720,
-                            "own_params": 6558720,
+                            "params": 6553600,
+                            "own_params": 6553600,
                             "children": []
                           },
                           {
@@ -322639,8 +322613,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 5903360,
-                            "own_params": 5903360,
+                            "params": 5898240,
+                            "own_params": 5898240,
                             "children": []
                           },
                           {
@@ -322653,25 +322627,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 13113600,
+                            "params": 19672320,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 6558720,
-                                "own_params": 6558720,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 13117440,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 13117440,
+                                    "own_params": 13117440,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 6554880,
                                 "own_params": 6554880,
@@ -322792,7 +322767,7 @@
           {
             "name": "mid_attn",
             "type": "_SpatialTransformer",
-            "params": 28865280,
+            "params": 35416320,
             "own_params": 0,
             "children": [
               {
@@ -322812,14 +322787,14 @@
               {
                 "name": "blocks",
                 "type": "ModuleList",
-                "params": 25583360,
+                "params": 32134400,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_TransformerBlock",
-                    "params": 25583360,
-                    "own_params": 0,
+                    "params": 32134400,
+                    "own_params": 2560,
                     "children": [
                       {
                         "name": "norm1",
@@ -322831,8 +322806,8 @@
                       {
                         "name": "attn1",
                         "type": "MultiheadAttention",
-                        "params": 6558720,
-                        "own_params": 6558720,
+                        "params": 6553600,
+                        "own_params": 6553600,
                         "children": []
                       },
                       {
@@ -322845,8 +322820,8 @@
                       {
                         "name": "attn2",
                         "type": "MultiheadAttention",
-                        "params": 5903360,
-                        "own_params": 5903360,
+                        "params": 5898240,
+                        "own_params": 5898240,
                         "children": []
                       },
                       {
@@ -322859,25 +322834,26 @@
                       {
                         "name": "ff",
                         "type": "Sequential",
-                        "params": 13113600,
+                        "params": 19672320,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
-                            "type": "Linear",
-                            "params": 6558720,
-                            "own_params": 6558720,
-                            "children": []
+                            "type": "_GEGLU",
+                            "params": 13117440,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 13117440,
+                                "own_params": 13117440,
+                                "children": []
+                              }
+                            ]
                           },
                           {
                             "name": "1",
-                            "type": "GELU",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          },
-                          {
-                            "name": "2",
                             "type": "Linear",
                             "params": 6554880,
                             "own_params": 6554880,
@@ -323360,7 +323336,7 @@
           {
             "name": "up_attns",
             "type": "ModuleList",
-            "params": 117136320,
+            "params": 142927680,
             "own_params": 0,
             "children": [
               {
@@ -323374,7 +323350,7 @@
               {
                 "name": "3",
                 "type": "_SpatialTransformer",
-                "params": 28865280,
+                "params": 35416320,
                 "own_params": 0,
                 "children": [
                   {
@@ -323394,14 +323370,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 25583360,
+                    "params": 32134400,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 25583360,
-                        "own_params": 0,
+                        "params": 32134400,
+                        "own_params": 2560,
                         "children": [
                           {
                             "name": "norm1",
@@ -323413,8 +323389,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 6558720,
-                            "own_params": 6558720,
+                            "params": 6553600,
+                            "own_params": 6553600,
                             "children": []
                           },
                           {
@@ -323427,8 +323403,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 5903360,
-                            "own_params": 5903360,
+                            "params": 5898240,
+                            "own_params": 5898240,
                             "children": []
                           },
                           {
@@ -323441,25 +323417,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 13113600,
+                            "params": 19672320,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 6558720,
-                                "own_params": 6558720,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 13117440,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 13117440,
+                                    "own_params": 13117440,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 6554880,
                                 "own_params": 6554880,
@@ -323484,7 +323461,7 @@
               {
                 "name": "6",
                 "type": "_SpatialTransformer",
-                "params": 7879040,
+                "params": 9516160,
                 "own_params": 0,
                 "children": [
                   {
@@ -323504,14 +323481,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 7057280,
+                    "params": 8694400,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 7057280,
-                        "own_params": 0,
+                        "params": 8694400,
+                        "own_params": 1280,
                         "children": [
                           {
                             "name": "norm1",
@@ -323523,8 +323500,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 1640960,
-                            "own_params": 1640960,
+                            "params": 1638400,
+                            "own_params": 1638400,
                             "children": []
                           },
                           {
@@ -323537,8 +323514,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 2132480,
-                            "own_params": 2132480,
+                            "params": 2129920,
+                            "own_params": 2129920,
                             "children": []
                           },
                           {
@@ -323551,25 +323528,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 3280000,
+                            "params": 4920960,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 1640960,
-                                "own_params": 1640960,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 3281920,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 3281920,
+                                    "own_params": 3281920,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 1639040,
                                 "own_params": 1639040,
@@ -323594,7 +323572,7 @@
               {
                 "name": "9",
                 "type": "_SpatialTransformer",
-                "params": 2301120,
+                "params": 2710080,
                 "own_params": 0,
                 "children": [
                   {
@@ -323614,14 +323592,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 2095040,
+                    "params": 2504000,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 2095040,
-                        "own_params": 0,
+                        "params": 2504000,
+                        "own_params": 640,
                         "children": [
                           {
                             "name": "norm1",
@@ -323633,8 +323611,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 410880,
-                            "own_params": 410880,
+                            "params": 409600,
+                            "own_params": 409600,
                             "children": []
                           },
                           {
@@ -323647,8 +323625,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 861440,
-                            "own_params": 861440,
+                            "params": 860160,
+                            "own_params": 860160,
                             "children": []
                           },
                           {
@@ -323661,25 +323639,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 820800,
+                            "params": 1231680,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 410880,
-                                "own_params": 410880,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 821760,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 821760,
+                                    "own_params": 821760,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 409920,
                                 "own_params": 409920,
@@ -323768,19 +323747,19 @@
   "stable_diffusion_v2_gen": {
     "name": "StableDiffusionForImageGeneration",
     "type": "StableDiffusionForImageGeneration",
-    "params": 900553259,
+    "params": 949564587,
     "own_params": 0,
     "children": [
       {
         "name": "stable_diffusion",
         "type": "StableDiffusionModel",
-        "params": 900553259,
+        "params": 949564587,
         "own_params": 0,
         "children": [
           {
             "name": "vae",
             "type": "AutoencoderKL",
-            "params": 84179175,
+            "params": 83653863,
             "own_params": 0,
             "children": [
               {
@@ -324139,7 +324118,7 @@
               {
                 "name": "mid_attn",
                 "type": "_SelfAttention2d",
-                "params": 1314304,
+                "params": 1051648,
                 "own_params": 0,
                 "children": [
                   {
@@ -324154,13 +324133,6 @@
                     "type": "MultiheadAttention",
                     "params": 1050624,
                     "own_params": 1050624,
-                    "children": []
-                  },
-                  {
-                    "name": "proj",
-                    "type": "Conv2d",
-                    "params": 262656,
-                    "own_params": 262656,
                     "children": []
                   }
                 ]
@@ -324289,7 +324261,7 @@
               {
                 "name": "decoder_mid_attn",
                 "type": "_SelfAttention2d",
-                "params": 1314304,
+                "params": 1051648,
                 "own_params": 0,
                 "children": [
                   {
@@ -324304,13 +324276,6 @@
                     "type": "MultiheadAttention",
                     "params": 1050624,
                     "own_params": 1050624,
-                    "children": []
-                  },
-                  {
-                    "name": "proj",
-                    "type": "Conv2d",
-                    "params": 262656,
-                    "own_params": 262656,
                     "children": []
                   }
                 ]
@@ -324710,7 +324675,7 @@
           {
             "name": "unet",
             "type": "UNet2DConditionModel",
-            "params": 816374084,
+            "params": 865910724,
             "own_params": 0,
             "children": [
               {
@@ -325026,13 +324991,13 @@
               {
                 "name": "down_attns",
                 "type": "ModuleList",
-                "params": 78090880,
+                "params": 95285120,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "0",
                     "type": "_SpatialTransformer",
-                    "params": 2301120,
+                    "params": 2710080,
                     "own_params": 0,
                     "children": [
                       {
@@ -325052,14 +325017,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 2095040,
+                        "params": 2504000,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 2095040,
-                            "own_params": 0,
+                            "params": 2504000,
+                            "own_params": 640,
                             "children": [
                               {
                                 "name": "norm1",
@@ -325071,8 +325036,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 410880,
-                                "own_params": 410880,
+                                "params": 409600,
+                                "own_params": 409600,
                                 "children": []
                               },
                               {
@@ -325085,8 +325050,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 861440,
-                                "own_params": 861440,
+                                "params": 860160,
+                                "own_params": 860160,
                                 "children": []
                               },
                               {
@@ -325099,25 +325064,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 820800,
+                                "params": 1231680,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 410880,
-                                    "own_params": 410880,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 821760,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 821760,
+                                        "own_params": 821760,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 409920,
                                     "own_params": 409920,
@@ -325142,7 +325108,7 @@
                   {
                     "name": "2",
                     "type": "_SpatialTransformer",
-                    "params": 7879040,
+                    "params": 9516160,
                     "own_params": 0,
                     "children": [
                       {
@@ -325162,14 +325128,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 7057280,
+                        "params": 8694400,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 7057280,
-                            "own_params": 0,
+                            "params": 8694400,
+                            "own_params": 1280,
                             "children": [
                               {
                                 "name": "norm1",
@@ -325181,8 +325147,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 1640960,
-                                "own_params": 1640960,
+                                "params": 1638400,
+                                "own_params": 1638400,
                                 "children": []
                               },
                               {
@@ -325195,8 +325161,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 2132480,
-                                "own_params": 2132480,
+                                "params": 2129920,
+                                "own_params": 2129920,
                                 "children": []
                               },
                               {
@@ -325209,25 +325175,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 3280000,
+                                "params": 4920960,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 1640960,
-                                    "own_params": 1640960,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 3281920,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 3281920,
+                                        "own_params": 3281920,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 1639040,
                                     "own_params": 1639040,
@@ -325252,7 +325219,7 @@
                   {
                     "name": "4",
                     "type": "_SpatialTransformer",
-                    "params": 28865280,
+                    "params": 35416320,
                     "own_params": 0,
                     "children": [
                       {
@@ -325272,14 +325239,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 25583360,
+                        "params": 32134400,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 25583360,
-                            "own_params": 0,
+                            "params": 32134400,
+                            "own_params": 2560,
                             "children": [
                               {
                                 "name": "norm1",
@@ -325291,8 +325258,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 6558720,
-                                "own_params": 6558720,
+                                "params": 6553600,
+                                "own_params": 6553600,
                                 "children": []
                               },
                               {
@@ -325305,8 +325272,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 5903360,
-                                "own_params": 5903360,
+                                "params": 5898240,
+                                "own_params": 5898240,
                                 "children": []
                               },
                               {
@@ -325319,25 +325286,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 13113600,
+                                "params": 19672320,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 6558720,
-                                    "own_params": 6558720,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 13117440,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 13117440,
+                                        "own_params": 13117440,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 6554880,
                                     "own_params": 6554880,
@@ -325458,7 +325426,7 @@
               {
                 "name": "mid_attn",
                 "type": "_SpatialTransformer",
-                "params": 28865280,
+                "params": 35416320,
                 "own_params": 0,
                 "children": [
                   {
@@ -325478,14 +325446,14 @@
                   {
                     "name": "blocks",
                     "type": "ModuleList",
-                    "params": 25583360,
+                    "params": 32134400,
                     "own_params": 0,
                     "children": [
                       {
                         "name": "0",
                         "type": "_TransformerBlock",
-                        "params": 25583360,
-                        "own_params": 0,
+                        "params": 32134400,
+                        "own_params": 2560,
                         "children": [
                           {
                             "name": "norm1",
@@ -325497,8 +325465,8 @@
                           {
                             "name": "attn1",
                             "type": "MultiheadAttention",
-                            "params": 6558720,
-                            "own_params": 6558720,
+                            "params": 6553600,
+                            "own_params": 6553600,
                             "children": []
                           },
                           {
@@ -325511,8 +325479,8 @@
                           {
                             "name": "attn2",
                             "type": "MultiheadAttention",
-                            "params": 5903360,
-                            "own_params": 5903360,
+                            "params": 5898240,
+                            "own_params": 5898240,
                             "children": []
                           },
                           {
@@ -325525,25 +325493,26 @@
                           {
                             "name": "ff",
                             "type": "Sequential",
-                            "params": 13113600,
+                            "params": 19672320,
                             "own_params": 0,
                             "children": [
                               {
                                 "name": "0",
-                                "type": "Linear",
-                                "params": 6558720,
-                                "own_params": 6558720,
-                                "children": []
+                                "type": "_GEGLU",
+                                "params": 13117440,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Linear",
+                                    "params": 13117440,
+                                    "own_params": 13117440,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
                                 "name": "1",
-                                "type": "GELU",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
-                              {
-                                "name": "2",
                                 "type": "Linear",
                                 "params": 6554880,
                                 "own_params": 6554880,
@@ -326026,7 +325995,7 @@
               {
                 "name": "up_attns",
                 "type": "ModuleList",
-                "params": 117136320,
+                "params": 142927680,
                 "own_params": 0,
                 "children": [
                   {
@@ -326040,7 +326009,7 @@
                   {
                     "name": "3",
                     "type": "_SpatialTransformer",
-                    "params": 28865280,
+                    "params": 35416320,
                     "own_params": 0,
                     "children": [
                       {
@@ -326060,14 +326029,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 25583360,
+                        "params": 32134400,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 25583360,
-                            "own_params": 0,
+                            "params": 32134400,
+                            "own_params": 2560,
                             "children": [
                               {
                                 "name": "norm1",
@@ -326079,8 +326048,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 6558720,
-                                "own_params": 6558720,
+                                "params": 6553600,
+                                "own_params": 6553600,
                                 "children": []
                               },
                               {
@@ -326093,8 +326062,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 5903360,
-                                "own_params": 5903360,
+                                "params": 5898240,
+                                "own_params": 5898240,
                                 "children": []
                               },
                               {
@@ -326107,25 +326076,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 13113600,
+                                "params": 19672320,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 6558720,
-                                    "own_params": 6558720,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 13117440,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 13117440,
+                                        "own_params": 13117440,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 6554880,
                                     "own_params": 6554880,
@@ -326150,7 +326120,7 @@
                   {
                     "name": "6",
                     "type": "_SpatialTransformer",
-                    "params": 7879040,
+                    "params": 9516160,
                     "own_params": 0,
                     "children": [
                       {
@@ -326170,14 +326140,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 7057280,
+                        "params": 8694400,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 7057280,
-                            "own_params": 0,
+                            "params": 8694400,
+                            "own_params": 1280,
                             "children": [
                               {
                                 "name": "norm1",
@@ -326189,8 +326159,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 1640960,
-                                "own_params": 1640960,
+                                "params": 1638400,
+                                "own_params": 1638400,
                                 "children": []
                               },
                               {
@@ -326203,8 +326173,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 2132480,
-                                "own_params": 2132480,
+                                "params": 2129920,
+                                "own_params": 2129920,
                                 "children": []
                               },
                               {
@@ -326217,25 +326187,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 3280000,
+                                "params": 4920960,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 1640960,
-                                    "own_params": 1640960,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 3281920,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 3281920,
+                                        "own_params": 3281920,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 1639040,
                                     "own_params": 1639040,
@@ -326260,7 +326231,7 @@
                   {
                     "name": "9",
                     "type": "_SpatialTransformer",
-                    "params": 2301120,
+                    "params": 2710080,
                     "own_params": 0,
                     "children": [
                       {
@@ -326280,14 +326251,14 @@
                       {
                         "name": "blocks",
                         "type": "ModuleList",
-                        "params": 2095040,
+                        "params": 2504000,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "0",
                             "type": "_TransformerBlock",
-                            "params": 2095040,
-                            "own_params": 0,
+                            "params": 2504000,
+                            "own_params": 640,
                             "children": [
                               {
                                 "name": "norm1",
@@ -326299,8 +326270,8 @@
                               {
                                 "name": "attn1",
                                 "type": "MultiheadAttention",
-                                "params": 410880,
-                                "own_params": 410880,
+                                "params": 409600,
+                                "own_params": 409600,
                                 "children": []
                               },
                               {
@@ -326313,8 +326284,8 @@
                               {
                                 "name": "attn2",
                                 "type": "MultiheadAttention",
-                                "params": 861440,
-                                "own_params": 861440,
+                                "params": 860160,
+                                "own_params": 860160,
                                 "children": []
                               },
                               {
@@ -326327,25 +326298,26 @@
                               {
                                 "name": "ff",
                                 "type": "Sequential",
-                                "params": 820800,
+                                "params": 1231680,
                                 "own_params": 0,
                                 "children": [
                                   {
                                     "name": "0",
-                                    "type": "Linear",
-                                    "params": 410880,
-                                    "own_params": 410880,
-                                    "children": []
+                                    "type": "_GEGLU",
+                                    "params": 821760,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Linear",
+                                        "params": 821760,
+                                        "own_params": 821760,
+                                        "children": []
+                                      }
+                                    ]
                                   },
                                   {
                                     "name": "1",
-                                    "type": "GELU",
-                                    "params": 0,
-                                    "own_params": 0,
-                                    "children": []
-                                  },
-                                  {
-                                    "name": "2",
                                     "type": "Linear",
                                     "params": 409920,
                                     "own_params": 409920,

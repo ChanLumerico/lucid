@@ -27,6 +27,7 @@ from typing import cast, final, override
 
 import lucid
 import lucid.nn as nn
+import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
 
@@ -129,6 +130,52 @@ class _ResBlock(nn.Module):
 
 
 @final
+class _GEGLU(nn.Module):
+    r"""Gated GELU — ``(xW + b) \odot \mathrm{gelu}(xV + c)``.
+
+    Parameters
+    ----------
+    in_features, out_features : int
+        Widths.  The projection is twice ``out_features`` wide and its
+        halves are the value and the gate.
+
+    Notes
+    -----
+    Not interchangeable with ``Linear -> GELU``.  A GEGLU feed-forward
+    carries :math:`3 d^2` parameters against a plain one's :math:`2 d^2`
+    at the same inner width, and the released U-Net is built from the
+    former — the difference is 49.5M parameters across its sixteen
+    transformer blocks, which is how its absence was found.
+
+    Reference: Shazeer, *"GLU Variants Improve Transformer"*, 2020
+    (`arXiv:2002.05202 <https://arxiv.org/abs/2002.05202>`_).
+    """
+
+    def __init__(self, in_features: int, out_features: int) -> None:
+        """Initialise the layer. See the class docstring for parameters."""
+        super().__init__()
+        self.proj = nn.Linear(in_features, out_features * 2)
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        """Project, split, and gate.
+
+        Parameters
+        ----------
+        x : Tensor
+            ``(..., in_features)``.
+
+        Returns
+        -------
+        Tensor
+            ``(..., out_features)``.
+        """
+        projected = cast(Tensor, self.proj(x))
+        half = int(projected.shape[-1]) // 2
+        return projected[..., :half] * F.gelu(projected[..., half:])
+
+
+@final
 class _TransformerBlock(nn.Module):
     """Self-attention, then cross-attention, then a feed-forward.
 
@@ -148,21 +195,41 @@ class _TransformerBlock(nn.Module):
     accepts differing key/value widths through ``kdim`` / ``vdim``, so no
     projection of the conditioning to the image width is needed and the
     conditioning arrives at its own dimension.
+
+    The released blocks carry **no bias on q/k/v and a bias on the output
+    projection** — the checkpoint has ``to_q.weight`` with no
+    ``to_q.bias`` beside it, and ``to_out.0.bias`` present.
+    ``MultiheadAttention`` controls both with one flag, so the attention
+    is built bias-free and the output bias is a separate parameter added
+    afterwards. Folding it into the flag instead costs 24,960 parameters
+    across the U-Net, which is exactly how the discrepancy was located.
     """
 
     def __init__(self, channels: int, heads: int, context_dim: int) -> None:
         """Initialise the block. See the class docstring for parameters."""
         super().__init__()
         self.norm1 = nn.LayerNorm(channels)
-        self.attn1 = nn.MultiheadAttention(channels, heads, batch_first=True)
+        # SD's attention projections carry no bias — the released
+        # checkpoint has ``to_q.weight`` and ``to_k.weight`` with no
+        # matching ``.bias`` entries.
+        self.attn1 = nn.MultiheadAttention(
+            channels, heads, bias=False, batch_first=True
+        )
         self.norm2 = nn.LayerNorm(channels)
         self.attn2 = nn.MultiheadAttention(
-            channels, heads, kdim=context_dim, vdim=context_dim, batch_first=True
+            channels,
+            heads,
+            kdim=context_dim,
+            vdim=context_dim,
+            bias=False,
+            batch_first=True,
         )
+        # Restores the output bias ``bias=False`` removed above.
+        self.attn1_out_bias = nn.Parameter(lucid.zeros((channels,)))
+        self.attn2_out_bias = nn.Parameter(lucid.zeros((channels,)))
         self.norm3 = nn.LayerNorm(channels)
         self.ff = nn.Sequential(
-            nn.Linear(channels, channels * 4),
-            nn.GELU(),
+            _GEGLU(channels, channels * 4),
             nn.Linear(channels * 4, channels),
         )
 
@@ -184,13 +251,13 @@ class _TransformerBlock(nn.Module):
         """
         normed = cast(Tensor, self.norm1(x))
         attended, _ = self.attn1(normed, normed, normed, need_weights=False)
-        x = x + attended
+        x = x + attended + cast(Tensor, self.attn1_out_bias)
 
         # The load-bearing line: query from the image, key/value from the
         # conditioning.  Reversed, this still runs and still trains.
         query = cast(Tensor, self.norm2(x))
         crossed, _ = self.attn2(query, context, context, need_weights=False)
-        x = x + crossed
+        x = x + crossed + cast(Tensor, self.attn2_out_bias)
 
         return x + cast(Tensor, self.ff(cast(Tensor, self.norm3(x))))
 

@@ -182,6 +182,14 @@ class _SelfAttention2d(nn.Module):
     autoencoder's only non-local operation — everything else is a
     convolution, so without it the receptive field would never cover the
     frame.
+
+    The released block is ``group_norm`` then ``query`` / ``key`` /
+    ``value`` then ``proj_attn`` — four projections, no more.
+    :class:`lucid.nn.MultiheadAttention` already owns the fourth as its
+    output projection, so adding another one after it is an extra
+    :math:`C^2 + C` per block. That is 525,312 parameters across this
+    autoencoder's two attention blocks, and is how the surplus was
+    located.
     """
 
     def __init__(self, channels: int, groups: int) -> None:
@@ -189,7 +197,6 @@ class _SelfAttention2d(nn.Module):
         super().__init__()
         self.norm = nn.GroupNorm(groups, channels)
         self.attn = nn.MultiheadAttention(channels, 1, batch_first=True)
-        self.proj = nn.Conv2d(channels, channels, kernel_size=1)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -208,8 +215,7 @@ class _SelfAttention2d(nn.Module):
         b, c, h, w = (int(s) for s in x.shape)
         normed = cast(Tensor, self.norm(x)).reshape(b, c, h * w).swapaxes(1, 2)
         attended, _ = self.attn(normed, normed, normed, need_weights=False)
-        attended = attended.swapaxes(1, 2).reshape(b, c, h, w)
-        return x + cast(Tensor, self.proj(attended))
+        return x + attended.swapaxes(1, 2).reshape(b, c, h, w)
 
 
 @dataclass(slots=True)

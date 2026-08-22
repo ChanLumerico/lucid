@@ -399,3 +399,61 @@ class TestTimestepEmbedding:
         assert float((emb[0] - emb[1]).abs().max().item()) > 1e-6
         assert float((emb[1] - emb[2]).abs().max().item()) > 1e-6
         assert math.isfinite(float(emb.abs().max().item()))
+
+
+class TestItMatchesTheReleasedCheckpoint:
+    """Parameter counts against the published archives, tensor for tensor.
+
+    This is the check that found three architecture defects at once, and
+    none of them was visible in a forward pass:
+
+    * the feed-forward was ``Linear -> GELU -> Linear`` where the
+      released blocks are GEGLU — 49,536,640 parameters short across
+      sixteen transformer blocks;
+    * the attention carried a bias on q/k/v, which the release does not,
+      and lost the one on the output projection, which it does —
+      24,960 either way;
+    * the autoencoder's attention had a projection after
+      ``MultiheadAttention``'s own output projection — 525,312 surplus
+      across its two blocks.
+
+    Every one of them trains, denoises and samples. The count is the
+    only cheap thing that disagrees.
+    """
+
+    @staticmethod
+    def _count(module: object) -> int:
+        return sum(
+            math.prod(tuple(int(s) for s in p.shape))
+            for p in module.parameters()  # type: ignore[attr-defined]
+        )
+
+    def test_the_unet_has_the_published_size(self) -> None:
+        assert self._count(M.stable_diffusion_v1().unet) == 859_520_964
+
+    def test_the_autoencoder_has_the_published_size(self) -> None:
+        assert self._count(M.stable_diffusion_v1().vae) == 83_653_863
+
+    def test_the_feed_forward_is_gated(self) -> None:
+        """GEGLU projects to twice the inner width and gates with half.
+
+        A plain ``Linear`` of the same inner width is the wrong size by a
+        factor the count above catches, but this states the reason so a
+        future edit does not "simplify" it back.
+        """
+        from lucid.models.generative.stable_diffusion._unet import _GEGLU
+
+        layer = _GEGLU(8, 16)
+        assert tuple(layer.proj.weight.shape) == (32, 8)
+        assert layer(lucid.randn((2, 8))).shape == (2, 16)
+
+    def test_attention_has_no_input_bias_and_one_output_bias(self) -> None:
+        """The released layout: ``to_q.weight`` with no ``to_q.bias``,
+        and ``to_out.0.bias`` present."""
+        from lucid.models.generative.stable_diffusion._unet import _TransformerBlock
+
+        block = _TransformerBlock(32, 4, 16)
+        names = {name for name, _ in block.named_parameters()}
+        assert "attn1.in_proj_bias" not in names
+        assert "attn1.out_proj_bias" not in names
+        assert "attn1_out_bias" in names and "attn2_out_bias" in names
