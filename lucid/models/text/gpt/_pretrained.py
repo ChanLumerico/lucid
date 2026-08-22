@@ -128,7 +128,7 @@ def gpt_lm(
     Same trunk as :func:`gpt` (L=12, H=768, A=12, ~117M parameters), wrapped
     with a tied LM head that reuses the input token-embedding matrix as the
     output projection.  This is the pre-training entry point and the host
-    of :meth:`lucid.models.CausalLMMixin.generate` for free-form
+    of :meth:`lucid.models._mixins.CausalLMMixin.generate` for free-form
     autoregressive sampling.
 
     Parameters

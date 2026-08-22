@@ -16,7 +16,7 @@ Generation
 ----------
 ``TransformerForSeq2SeqLM.generate`` performs greedy / sampled decoding by
 running the encoder once and unrolling the decoder one token at a time.  It
-does **not** reuse :class:`lucid.models.CausalLMMixin` because that mixin
+does **not** reuse :class:`lucid.models._mixins.CausalLMMixin` because that mixin
 is decoder-only — encoder-decoder semantics differ enough to warrant a
 local implementation.
 """

@@ -387,10 +387,13 @@ class OutputDataclassProtocol(Protocol):
 # ---------------------------------------------------------------------------
 
 
-# Public, deliberately module-level: ``lucid.models.ConfigT`` is re-exported for
-# users writing Config-parametric helpers.  PEP 695 inline params can't be
-# *shared* across unrelated user signatures, so an exported TypeVar stays the
-# right tool here (mirrors how ``typing`` itself exports reusable TypeVars).
+# Module-level and importable as ``lucid.models._protocols.ConfigT`` by anyone
+# writing Config-parametric helpers.  PEP 695 inline params can't be *shared*
+# across unrelated user signatures, so a named TypeVar stays the right tool
+# here (mirrors how ``typing`` itself exposes reusable TypeVars).
+#
+# It is **not** re-exported from ``lucid.models``: the top level is the
+# model-using surface, and a TypeVar is authoring machinery.
 ConfigT = TypeVar("ConfigT", bound=ModelConfigProtocol)
 r"""Type variable for family-Config-parameterised generics.
 

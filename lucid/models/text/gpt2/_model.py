@@ -457,7 +457,7 @@ class GPT2LMHeadModel(PretrainedModel, CausalLMMixin):
     matrix is bound to the input ``wte`` embedding table when
     ``config.tie_word_embeddings`` is ``True`` — halving the parameter cost
     of the softmax layer.  This is the entry point for
-    :meth:`lucid.models.CausalLMMixin.generate` and is the
+    :meth:`lucid.models._mixins.CausalLMMixin.generate` and is the
     standard recipe for both pre-training and downstream generative use.
 
     Parameters

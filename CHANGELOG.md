@@ -14,9 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
-
 ### Added
-- _Pending the next release._
+- add CLIP and the multimodal domain — four paper-cited ViT variants (B/32, B/16, L/14, L/14@336px) with pretrained weights on the Lucid hub, verified against the reference to 3.8e-07..1.5e-06 relative error
+- add CLIPTokenizer and CLIPTokenizerFast — byte-level BPE with the paper's end-of-word marker; the fast path runs the merge loop in C++ by folding the marker into a single codepoint
+- add AutoModelForZeroShotImageClassification and the zero-shot-image-classification task
+
+### Removed
+
+- remove 43 entries from lucid.models's top-level surface — protocols, mixins, model_family_meta, ConfigT, RSSM, the diffusion schedulers, DDPMUNet, family-specific Output dataclasses and the Literal aliases. All remain importable from their own modules (lucid.models._protocols, lucid.models.generative, the family packages); only the top-level shortcut is gone
+
+### Changed
+
+- move QuickGELU, ResidualAttentionBlock and TransformerTower into the CLIP family — a domain-level module is for what several families share
 
 ---
 

@@ -403,7 +403,7 @@ class GPTLMHeadModel(PretrainedModel, CausalLMMixin):
     bound to the input ``tokens_embed`` table when
     ``config.tie_word_embeddings`` is ``True`` — halving the parameter
     cost of the softmax layer.  This is both the pre-training entry point
-    and the host of :meth:`lucid.models.CausalLMMixin.generate` for
+    and the host of :meth:`lucid.models._mixins.CausalLMMixin.generate` for
     free-form autoregressive sampling.
 
     Parameters
