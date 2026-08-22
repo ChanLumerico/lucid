@@ -337,11 +337,14 @@ class UNet2DConditionModel(nn.Module):
 
     Cross-attention runs at every resolution except the deepest
     down-sampling stage, which is the released arrangement
-    (``CrossAttnDownBlock2D`` three times, then ``DownBlock2D``). The
-    head count at each resolution is ``width // attention_head_dim`` —
-    the released configuration names a head *dimension*, not a count, so
-    a 1280-wide stage gets 160 heads of 8 channels rather than 8 heads of
-    160.
+    (``CrossAttnDownBlock2D`` three times, then ``DownBlock2D``).
+
+    ``attention_head_dim`` is read as a head **count**, not a dimension,
+    despite its name. The released configuration says ``8`` and the
+    reference builds eight heads of forty channels at the 320-wide
+    stage — not forty heads of eight. Reading it the other way costs
+    nothing in parameters, so the counts still match tensor for tensor;
+    only the activations disagree, which is how it was found.
 
     Examples
     --------
@@ -366,7 +369,7 @@ class UNet2DConditionModel(nn.Module):
         self.config = config
         widths = config.unet_block_out_channels
         groups = config.norm_num_groups
-        head_dim = config.attention_head_dim
+        heads = config.attention_head_dim
         context_dim = config.cross_attention_dim
         time_dim = widths[0] * 4
         self.time_dim = time_dim
@@ -393,9 +396,7 @@ class UNet2DConditionModel(nn.Module):
                 self.down_attns.append(
                     nn.Identity()
                     if last
-                    else _SpatialTransformer(
-                        width, width // head_dim, context_dim, groups
-                    )
+                    else _SpatialTransformer(width, heads, context_dim, groups)
                 )
                 self.skip_channels.append(current)
             if not last:
@@ -407,9 +408,7 @@ class UNet2DConditionModel(nn.Module):
                 self.downsamplers.append(nn.Identity())
 
         self.mid_block_1 = _ResBlock(current, current, time_dim, groups)
-        self.mid_attn = _SpatialTransformer(
-            current, current // head_dim, context_dim, groups
-        )
+        self.mid_attn = _SpatialTransformer(current, heads, context_dim, groups)
         self.mid_block_2 = _ResBlock(current, current, time_dim, groups)
 
         # Up path — one extra block per level for the extra skip.
@@ -427,9 +426,7 @@ class UNet2DConditionModel(nn.Module):
                 self.up_attns.append(
                     nn.Identity()
                     if first
-                    else _SpatialTransformer(
-                        width, width // head_dim, context_dim, groups
-                    )
+                    else _SpatialTransformer(width, heads, context_dim, groups)
                 )
             self.upsamplers.append(
                 nn.Identity()

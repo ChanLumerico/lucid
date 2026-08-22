@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add scaled_linear to BetaSchedule and make_beta_schedule — linear in sqrt(beta), which is what the released diffusion models use and is a different curve from linear between the same endpoints
 
+- publish the v1 weights
+
 ### Removed
 
 - remove 43 entries from lucid.models's top-level surface — protocols, mixins, model_family_meta, ConfigT, RSSM, the diffusion schedulers, DDPMUNet, family-specific Output dataclasses and the Literal aliases. All remain importable from their own modules (lucid.models._protocols, lucid.models.generative, the family packages); only the top-level shortcut is gone

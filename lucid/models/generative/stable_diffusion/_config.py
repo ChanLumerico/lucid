@@ -91,10 +91,12 @@ class StableDiffusionConfig(DiffusionModelConfig):
     unet_layers_per_block : int, default=2
         Residual blocks per resolution in the U-Net.
     attention_head_dim : int, default=8
-        Channels per attention head.  Note this is a *head dimension*,
-        not a head count — the released configs name it
-        ``attention_head_dim`` and the head count at each resolution is
-        ``width // 8``.
+        Attention **heads**, despite the name.  The released
+        configuration calls it ``attention_head_dim`` and the reference
+        reads it as a count: at ``8`` a 320-wide stage gets eight heads
+        of forty channels.  Reading it as a dimension gives forty heads
+        of eight, which has exactly the same parameters and different
+        activations.
     cross_attention_dim : int, default=768
         Width of the conditioning sequence, and therefore of
         :math:`\tau_\theta`'s output.  768 is CLIP ViT-L/14's text width;

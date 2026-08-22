@@ -41,7 +41,7 @@ _TINY = dict(
     vae_layers_per_block=1,
     unet_block_out_channels=(32, 64),
     unet_layers_per_block=1,
-    attention_head_dim=32,
+    attention_head_dim=4,
     cross_attention_dim=16,
     context_length=4,
     norm_num_groups=32,
@@ -71,6 +71,25 @@ class TestConfig:
     def test_an_unknown_schedule_is_refused(self) -> None:
         with pytest.raises(ValueError, match="beta_schedule"):
             _tiny(beta_schedule="cosine")
+
+    def test_attention_head_dim_is_a_count_not_a_dimension(self) -> None:
+        """The released field name lies, and reading it the other way is
+        free in parameters and wrong in activations.
+
+        At 320 wide with the released value of 8 the reference builds
+        eight heads of forty channels. Building forty heads of eight has
+        identical shapes, identical parameter counts, and a relative
+        error of 0.36 against the reference — which is how this was
+        found, and why the count is asserted here rather than trusted.
+        """
+        from lucid.models.generative.stable_diffusion._unet import (
+            _SpatialTransformer,
+        )
+
+        config = StableDiffusionConfig()
+        assert config.attention_head_dim == 8
+        tower = _SpatialTransformer(320, config.attention_head_dim, 768, 32)
+        assert tower.blocks[0].attn1.num_heads == 8
 
     def test_the_defaults_are_the_released_configuration(self) -> None:
         """Read from the published unet/vae/scheduler configs, not memory."""

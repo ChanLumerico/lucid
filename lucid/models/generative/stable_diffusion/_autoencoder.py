@@ -28,6 +28,7 @@ import lucid
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._output import ModelOutput
+import lucid.nn.functional as F
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
 
 __all__ = ["AutoencoderKL", "AutoencoderKLOutput", "DiagonalGaussian"]
@@ -218,6 +219,48 @@ class _SelfAttention2d(nn.Module):
         return x + attended.swapaxes(1, 2).reshape(b, c, h, w)
 
 
+@final
+class _Downsample2d(nn.Module):
+    r"""Stride-2 convolution with the released asymmetric padding.
+
+    Parameters
+    ----------
+    channels : int
+        Width; unchanged by the operation.
+
+    Notes
+    -----
+    The reference pads ``(0, 1, 0, 1)`` — bottom and right only — and
+    convolves with ``padding=0``.  A symmetric ``padding=1`` produces a
+    map of the same shape offset by half a pixel, so every subsequent
+    layer sees the image shifted.  Nothing about the shapes complains;
+    the encoder simply stops agreeing with its own decoder, which is how
+    this was found — the decoder matched the reference to 1.4e-04 while
+    the encoder did not match at all.
+    """
+
+    def __init__(self, channels: int) -> None:
+        """Initialise the layer. See the class docstring for parameters."""
+        super().__init__()
+        self.conv = nn.Conv2d(channels, channels, kernel_size=3, stride=2, padding=0)
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        """Pad bottom-right, then convolve.
+
+        Parameters
+        ----------
+        x : Tensor
+            ``(B, C, H, W)``.
+
+        Returns
+        -------
+        Tensor
+            ``(B, C, H/2, W/2)``.
+        """
+        return cast(Tensor, self.conv(F.pad(x, (0, 1, 0, 1))))
+
+
 @dataclass(slots=True)
 class AutoencoderKLOutput(ModelOutput):
     """What :class:`AutoencoderKL` returns.
@@ -290,9 +333,7 @@ class AutoencoderKL(nn.Module):
                 down.append(_ResnetBlock(current, width, groups))
                 current = width
             if level != len(widths) - 1:
-                down.append(
-                    nn.Conv2d(current, current, kernel_size=3, stride=2, padding=1)
-                )
+                down.append(_Downsample2d(current))
         self.down = nn.ModuleList(down)
 
         self.mid_block_1 = _ResnetBlock(current, current, groups)
