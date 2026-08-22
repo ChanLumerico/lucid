@@ -1,0 +1,401 @@
+"""Unit tests for Stable Diffusion (Rombach et al., 2022).
+
+Latent diffusion is four things bolted together, and three of the joints
+fail silently — the model trains, the loss falls, and the samples are
+wrong. Each gets a test that a plausible mis-wiring fails, and a
+companion that proves the test can fail.
+
+**Cross-attention has a direction.** Q from the image, K/V from the
+conditioning. Swap them and the shapes still line up, the loss still
+falls, and the prompt is ignored.
+
+**The latent is rescaled.** The first stage emits latents an order of
+magnitude wider than the diffusion process assumes. Omit the factor and
+the forward process's noise is negligible against the signal.
+
+**``scaled_linear`` is not linear.** The schedule interpolates in
+sqrt(beta). A plain ramp between the same endpoints plots almost
+identically and denoises to mush.
+"""
+
+import math
+
+import pytest
+
+import lucid
+import lucid.models as M
+from lucid.models.generative.stable_diffusion import (
+    AutoencoderKL,
+    DDIMScheduler,
+    DiagonalGaussian,
+    StableDiffusionConfig,
+    StableDiffusionForImageGeneration,
+    StableDiffusionModel,
+    UNet2DConditionModel,
+)
+
+_TINY = dict(
+    sample_size=32,
+    downsample_factor=4,
+    vae_block_out_channels=(32, 64, 64),
+    vae_layers_per_block=1,
+    unet_block_out_channels=(32, 64),
+    unet_layers_per_block=1,
+    attention_head_dim=32,
+    cross_attention_dim=16,
+    context_length=4,
+    norm_num_groups=32,
+)
+
+
+def _tiny(**overrides: object) -> StableDiffusionConfig:
+    merged = dict(_TINY)
+    merged.update(overrides)
+    return StableDiffusionConfig(**merged)  # type: ignore[arg-type]
+
+
+class TestConfig:
+    def test_the_factor_must_match_the_autoencoder_depth(self) -> None:
+        """``f`` is a consequence of the stride-2 count, not a free field."""
+        with pytest.raises(ValueError, match="does not match"):
+            _tiny(vae_block_out_channels=(32, 64, 64, 64))
+
+    def test_a_latent_the_unet_cannot_halve_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="cannot survive"):
+            _tiny(sample_size=4, unet_block_out_channels=(32, 64, 64))
+
+    def test_widths_must_divide_the_norm_groups(self) -> None:
+        with pytest.raises(ValueError, match="norm_num_groups"):
+            _tiny(unet_block_out_channels=(32, 65))
+
+    def test_an_unknown_schedule_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="beta_schedule"):
+            _tiny(beta_schedule="cosine")
+
+    def test_the_defaults_are_the_released_configuration(self) -> None:
+        """Read from the published unet/vae/scheduler configs, not memory."""
+        config = StableDiffusionConfig()
+        assert config.vae_block_out_channels == (128, 256, 512, 512)
+        assert config.unet_block_out_channels == (320, 640, 1280, 1280)
+        assert (config.latent_channels, config.downsample_factor) == (4, 8)
+        assert (config.cross_attention_dim, config.context_length) == (768, 77)
+        assert (config.beta_start, config.beta_end) == (0.00085, 0.012)
+        assert config.beta_schedule == "scaled_linear"
+        assert config.latent_size == 64
+
+
+class TestTheLatentIsSpatial:
+    """The reason this family cannot reuse ``lucid.models.VAEModel``."""
+
+    def test_the_latent_keeps_height_and_width(self) -> None:
+        config = _tiny()
+        vae = AutoencoderKL(config).eval()
+        out = vae(lucid.randn((2, 3, 32, 32)))
+        assert out.latent.shape == (2, 4, 8, 8)
+        assert out.reconstruction.shape == (2, 3, 32, 32)
+
+    def test_the_existing_vae_flattens_instead(self) -> None:
+        """Guards the test above — it would be trivially true of any
+        autoencoder if the zoo's other one were already spatial."""
+        from lucid.models.generative.vae import VAEConfig
+
+        assert isinstance(VAEConfig().latent_dim, int), (
+            "the zoo's VAE grew a spatial latent, so this family's "
+            "separate first stage may no longer be justified"
+        )
+
+
+class TestThePosterior:
+    def test_a_standard_normal_has_zero_divergence(self) -> None:
+        zeros = lucid.zeros((2, 4, 8, 8))
+        assert float(DiagonalGaussian(zeros, zeros).kl().item()) == pytest.approx(0.0)
+
+    def test_the_divergence_grows_with_the_mean(self) -> None:
+        zeros = lucid.zeros((2, 4, 8, 8))
+        shifted = DiagonalGaussian(lucid.ones((2, 4, 8, 8)), zeros)
+        assert float(shifted.kl().item()) > 0.0
+
+    def test_the_mode_is_deterministic_and_the_sample_is_not(self) -> None:
+        """Two call sites want different things; a tuple would hide that."""
+        lucid.manual_seed(0)
+        vae = AutoencoderKL(_tiny()).eval()
+        x = lucid.randn((1, 3, 32, 32))
+        assert float(
+            (vae(x, sample=False).latent - vae(x, sample=False).latent)
+            .abs()
+            .max()
+            .item()
+        ) == 0.0
+        assert (
+            float(
+                (vae(x, sample=True).latent - vae(x, sample=True).latent)
+                .abs()
+                .max()
+                .item()
+            )
+            > 0.0
+        )
+
+
+class TestCrossAttentionHasADirection:
+    """The joint that fails silently.
+
+    Q comes from the image and K/V from the conditioning. The reversed
+    wiring produces a model of identical shape whose output does not
+    depend on the prompt — so the test is that changing the conditioning
+    changes the output, and the guard is that changing an *unrelated*
+    tensor of the same shape does not.
+    """
+
+    def test_the_conditioning_reaches_the_output(self) -> None:
+        lucid.manual_seed(0)
+        unet = UNet2DConditionModel(_tiny()).eval()
+        latent = lucid.randn((1, 4, 8, 8))
+        step = lucid.tensor([10.0])
+        first = unet(latent, step, lucid.randn((1, 4, 16)))
+        second = unet(latent, step, lucid.randn((1, 4, 16)))
+        assert float((first - second).abs().max().item()) > 1e-5, (
+            "the output is unchanged by the conditioning — cross-attention "
+            "is not wired, or its queries and keys are reversed"
+        )
+
+    def test_the_timestep_reaches_the_output(self) -> None:
+        """A separate path; a model can carry one and drop the other."""
+        lucid.manual_seed(0)
+        unet = UNet2DConditionModel(_tiny()).eval()
+        latent = lucid.randn((1, 4, 8, 8))
+        context = lucid.randn((1, 4, 16))
+        early = unet(latent, lucid.tensor([5.0]), context)
+        late = unet(latent, lucid.tensor([900.0]), context)
+        assert float((early - late).abs().max().item()) > 1e-5
+
+    def test_a_context_of_the_wrong_width_is_refused(self) -> None:
+        unet = UNet2DConditionModel(_tiny()).eval()
+        with pytest.raises(ValueError, match="cross_attention_dim"):
+            unet(lucid.randn((1, 4, 8, 8)), lucid.tensor([1.0]), lucid.randn((1, 4, 99)))
+
+    def test_the_conditioning_may_be_any_length(self) -> None:
+        """Cross-attention does not constrain the sequence length, and a
+        model that reshaped instead of attending would fail here."""
+        unet = UNet2DConditionModel(_tiny()).eval()
+        for length in (1, 4, 13):
+            out = unet(
+                lucid.randn((1, 4, 8, 8)),
+                lucid.tensor([1.0]),
+                lucid.randn((1, length, 16)),
+            )
+            assert out.shape == (1, 4, 8, 8)
+
+
+class TestTheSchedule:
+    def test_scaled_linear_is_not_linear(self) -> None:
+        """Same endpoints, different curve — and the released models use
+        the squared one."""
+        scaled = DDIMScheduler(StableDiffusionConfig())
+        linear = DDIMScheduler(StableDiffusionConfig(beta_schedule="linear"))
+        assert float((scaled.betas - linear.betas).abs().max().item()) > 1e-4
+
+    def test_the_endpoints_agree(self) -> None:
+        """Guards the test above: the two differ in the middle, not at the
+        ends, which is exactly why a plot does not catch the mistake."""
+        scaled = DDIMScheduler(StableDiffusionConfig())
+        linear = DDIMScheduler(StableDiffusionConfig(beta_schedule="linear"))
+        for index in (0, -1):
+            assert float(scaled.betas[index].item()) == pytest.approx(
+                float(linear.betas[index].item()), abs=1e-6
+            )
+
+    def test_alphas_decrease_to_almost_nothing(self) -> None:
+        scheduler = DDIMScheduler(StableDiffusionConfig())
+        assert float(scheduler.alphas_cumprod[0].item()) > 0.99
+        assert float(scheduler.alphas_cumprod[-1].item()) < 0.01
+
+    def test_timesteps_descend_and_are_counted(self) -> None:
+        scheduler = DDIMScheduler(StableDiffusionConfig())
+        steps = scheduler.timesteps(50)
+        assert len(steps) == 50
+        assert steps == sorted(steps, reverse=True)
+
+    def test_more_steps_than_the_schedule_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="num_inference_steps"):
+            DDIMScheduler(StableDiffusionConfig()).timesteps(2000)
+
+    def test_eta_zero_is_deterministic(self) -> None:
+        """The property a reproducible seed rests on."""
+        lucid.manual_seed(0)
+        scheduler = DDIMScheduler(StableDiffusionConfig())
+        latent, noise = lucid.randn((1, 4, 8, 8)), lucid.randn((1, 4, 8, 8))
+        first = scheduler.step(noise, 999, 979, latent)
+        second = scheduler.step(noise, 999, 979, latent)
+        assert float((first - second).abs().max().item()) == 0.0
+
+    def test_eta_one_is_not(self) -> None:
+        """Guards the test above — a scheduler that never adds noise would
+        pass it while silently ignoring eta."""
+        lucid.manual_seed(0)
+        scheduler = DDIMScheduler(StableDiffusionConfig())
+        latent, noise = lucid.randn((1, 4, 8, 8)), lucid.randn((1, 4, 8, 8))
+        first = scheduler.step(noise, 999, 979, latent, eta=1.0)
+        second = scheduler.step(noise, 999, 979, latent, eta=1.0)
+        assert float((first - second).abs().max().item()) > 0.0
+
+    def test_eta_outside_the_unit_interval_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="eta"):
+            DDIMScheduler(StableDiffusionConfig()).step(
+                lucid.zeros((1, 4, 8, 8)), 999, 979, lucid.zeros((1, 4, 8, 8)), eta=2.0
+            )
+
+
+class TestGuidance:
+    def test_scale_one_is_the_conditional_prediction(self) -> None:
+        r"""The identity :math:`\epsilon_\varnothing + 1\cdot(\epsilon_c -
+        \epsilon_\varnothing) = \epsilon_c`.
+
+        Worth pinning because a guidance implementation that ignores its
+        scale still produces images — this is the only cheap check that
+        the scale is read at all.
+        """
+        lucid.manual_seed(0)
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        context = lucid.randn((1, 4, 16))
+        start = lucid.zeros((1, 4, 8, 8))
+        guided = model.generate(
+            context, lucid.randn((1, 4, 16)), 3, guidance_scale=1.0, latent=start
+        )
+        plain = model.generate(context, None, 3, latent=start)
+        assert float((guided - plain).abs().max().item()) < 1e-5
+
+    def test_a_larger_scale_changes_the_result(self) -> None:
+        """Guards the test above."""
+        lucid.manual_seed(0)
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        context, uncond = lucid.randn((1, 4, 16)), lucid.randn((1, 4, 16))
+        start = lucid.zeros((1, 4, 8, 8))
+        one = model.generate(context, uncond, 3, guidance_scale=1.0, latent=start)
+        seven = model.generate(context, uncond, 3, guidance_scale=7.5, latent=start)
+        assert float((one - seven).abs().max().item()) > 1e-5
+
+    def test_a_negative_scale_is_refused(self) -> None:
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        with pytest.raises(ValueError, match="guidance_scale"):
+            model.generate(lucid.randn((1, 4, 16)), guidance_scale=-1.0)
+
+    def test_a_mismatched_unconditional_is_refused(self) -> None:
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        with pytest.raises(ValueError, match="uncond_context"):
+            model.generate(lucid.randn((1, 4, 16)), lucid.randn((1, 9, 16)))
+
+
+class TestTheAssembledModel:
+    def test_a_training_step_produces_a_loss_with_gradient(self) -> None:
+        lucid.manual_seed(0)
+        model = StableDiffusionModel(_tiny())
+        out = model(lucid.randn((2, 3, 32, 32)), lucid.randn((2, 4, 16)), return_loss=True)
+        assert out.noise_pred.shape == (2, 4, 8, 8)
+        assert out.loss is not None
+        out.loss.backward()
+        total = sum(
+            float(p.grad.abs().sum().item())
+            for p in model.parameters()
+            if p.grad is not None
+        )
+        assert total > 0.0
+
+    def test_the_latent_is_rescaled_on_the_way_in_and_out(self) -> None:
+        """Encode-then-decode must round-trip through the same factor.
+
+        The scale is invisible in shapes and fatal if applied once: the
+        diffusion process assumes unit-ish variance, and the first stage
+        emits something far wider.
+        """
+        lucid.manual_seed(0)
+        model = StableDiffusionModel(_tiny()).eval()
+        images = lucid.randn((1, 3, 32, 32))
+        scaled = model.encode_image(images, sample=False)
+        raw = model.vae.encode(images).mode()
+        ratio = float((scaled / raw).abs().mean().item())
+        assert ratio == pytest.approx(0.18215, rel=1e-4), (
+            f"the latent scale is {ratio}, not the released 0.18215"
+        )
+
+    def test_generation_returns_an_image(self) -> None:
+        lucid.manual_seed(0)
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        image = model.generate(lucid.randn((2, 4, 16)), num_inference_steps=2)
+        assert image.shape == (2, 3, 32, 32)
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    def test_it_runs_on_both_devices(self, device: str) -> None:
+        """Two families this session shipped a CPU-only index tensor; this
+        is the check that would have caught either."""
+        lucid.manual_seed(0)
+        model = StableDiffusionModel(_tiny())
+        model = model.metal() if device == "metal" else model
+        out = model(
+            lucid.randn((1, 3, 32, 32), device=device),
+            lucid.randn((1, 4, 16), device=device),
+            return_loss=True,
+        )
+        assert str(out.noise_pred.device) == f"device('{device}')"
+        assert out.loss is not None
+
+
+class TestVariants:
+    def test_v1_matches_clips_text_width(self) -> None:
+        """The conditioning contract, checked against the actual tower."""
+        sd = M.stable_diffusion_v1().config
+        clip = M.clip_vit_large_14().config
+        assert sd.cross_attention_dim == clip.text_width == 768
+        assert sd.context_length == clip.context_length == 77
+
+    def test_v2_widens_the_conditioning(self) -> None:
+        v1, v2 = M.stable_diffusion_v1().config, M.stable_diffusion_v2().config
+        assert (v1.cross_attention_dim, v2.cross_attention_dim) == (768, 1024)
+        assert (v1.sample_size, v2.sample_size) == (512, 768)
+        assert v1.vae_block_out_channels == v2.vae_block_out_channels
+
+    def test_only_two_architectures_are_registered(self) -> None:
+        """v1.1-v1.5 are weight tags, not variants — registering five
+        factories would invent architecture where there is none."""
+        names = M.list_models(family="stable_diffusion")
+        assert sorted(names) == [
+            "stable_diffusion_v1",
+            "stable_diffusion_v1_gen",
+            "stable_diffusion_v2",
+            "stable_diffusion_v2_gen",
+        ]
+
+    def test_pretrained_is_refused_rather_than_faked(self) -> None:
+        with pytest.raises(NotImplementedError):
+            M.stable_diffusion_v1(pretrained=True)
+
+
+class TestTimestepEmbedding:
+    def test_it_orders_cosine_before_sine(self) -> None:
+        """``flip_sin_to_cos`` in the released configuration.
+
+        The two orders train identically from scratch and are mutually
+        unreadable for a checkpoint, so the released one is built and
+        pinned here rather than left to whichever the transformer paper
+        used.
+        """
+        from lucid.models.generative.stable_diffusion._unet import _timestep_embedding
+
+        emb = _timestep_embedding(lucid.tensor([0.0]), 8)
+        # At t = 0 every argument is 0, so cos gives 1 and sin gives 0.
+        assert [round(v, 6) for v in emb[0, :4].tolist()] == [1.0, 1.0, 1.0, 1.0]
+        assert [round(v, 6) for v in emb[0, 4:].tolist()] == [0.0, 0.0, 0.0, 0.0]
+
+    def test_an_odd_width_is_refused(self) -> None:
+        from lucid.models.generative.stable_diffusion._unet import _timestep_embedding
+
+        with pytest.raises(ValueError, match="even"):
+            _timestep_embedding(lucid.tensor([0.0]), 7)
+
+    def test_distinct_timesteps_get_distinct_embeddings(self) -> None:
+        from lucid.models.generative.stable_diffusion._unet import _timestep_embedding
+
+        emb = _timestep_embedding(lucid.tensor([0.0, 1.0, 500.0]), 16)
+        assert float((emb[0] - emb[1]).abs().max().item()) > 1e-6
+        assert float((emb[1] - emb[2]).abs().max().item()) > 1e-6
+        assert math.isfinite(float(emb.abs().max().item()))

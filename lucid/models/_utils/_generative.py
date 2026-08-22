@@ -64,8 +64,8 @@ def make_beta_schedule(
 
     Args:
         num_steps:  Number of diffusion timesteps ``T``.
-        schedule:   ``"linear"`` (Ho 2020) or ``"cosine"`` (Nichol-Dhariwal
-                    2021).  Cosine uses the formula from Improved DDPM §3:
+        schedule:   ``"linear"`` (Ho 2020), ``"scaled_linear"`` (Rombach
+                    2022) or ``"cosine"`` (Nichol-Dhariwal 2021).  Cosine uses the formula from Improved DDPM §3:
                     ``ᾱ_t = cos((t/T + s) / (1 + s) · π/2)² with s = 0.008``.
         beta_start: Start of the linear schedule (ignored for cosine).
         beta_end:   End of the linear schedule (ignored for cosine).
@@ -77,6 +77,16 @@ def make_beta_schedule(
     if schedule == "linear":
         step = (beta_end - beta_start) / max(num_steps - 1, 1)
         values = [beta_start + i * step for i in range(num_steps)]
+        return lucid.tensor(values, device=device)
+
+    if schedule == "scaled_linear":
+        # Stable Diffusion's schedule: linear in sqrt(beta), then squared.
+        # Between the same endpoints this differs from "linear" only in
+        # the middle, which is why it needs its own name — a plot of the
+        # two is nearly indistinguishable and the samples are not.
+        root_start, root_end = beta_start**0.5, beta_end**0.5
+        step = (root_end - root_start) / max(num_steps - 1, 1)
+        values = [(root_start + i * step) ** 2 for i in range(num_steps)]
         return lucid.tensor(values, device=device)
 
     if schedule == "cosine":

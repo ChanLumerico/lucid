@@ -394,5 +394,9 @@
   "clip_vit_large_14": "cd7cb042154cd16e",
   "clip_vit_large_14_336": "cd7cb042154cd16e",
   "clip_vit_large_14_336_zero_shot": "cd7cb042154cd16e",
-  "clip_vit_large_14_zero_shot": "cd7cb042154cd16e"
+  "clip_vit_large_14_zero_shot": "cd7cb042154cd16e",
+  "stable_diffusion_v1": "e0203a24c8462ffc",
+  "stable_diffusion_v1_gen": "e0203a24c8462ffc",
+  "stable_diffusion_v2": "e0203a24c8462ffc",
+  "stable_diffusion_v2_gen": "e0203a24c8462ffc"
 }

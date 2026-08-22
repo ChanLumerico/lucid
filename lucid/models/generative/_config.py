@@ -24,7 +24,7 @@ from lucid.models._base import ModelConfig
 GenerativeActivation = Literal["silu", "swish", "relu", "gelu", "elu"]
 
 # Noise schedule shape — see ``make_beta_schedule`` in ``_utils/_generative``.
-BetaSchedule = Literal["linear", "cosine"]
+BetaSchedule = Literal["linear", "cosine", "scaled_linear"]
 
 # Factorised base distribution of a normalizing flow's latent space — see
 # ``flow_prior_log_prob`` in ``_utils/_generative``.
@@ -76,7 +76,10 @@ class DiffusionModelConfig(GenerativeModelConfig):
             uses 1000, NCSN traditionally a smaller grid.
         beta_start / beta_end: Endpoints of the linear noise schedule
             ``β_1 … β_T``.  Ignored when ``beta_schedule == "cosine"``.
-        beta_schedule: ``"linear"`` (Ho et al., 2020) or ``"cosine"`` (Nichol
+        beta_schedule: ``"linear"`` (Ho et al., 2020), ``"scaled_linear"``
+            (Rombach et al., 2022 — linear in ``sqrt(beta)``, then squared;
+            *not* the same curve as ``"linear"`` between the same
+            endpoints) or ``"cosine"`` (Nichol
             & Dhariwal, 2021 — improves low-resolution sample quality).
         prediction_type: What the network predicts at each step.  ``"epsilon"``
             (the noise, default) is the canonical Ho parameterisation;

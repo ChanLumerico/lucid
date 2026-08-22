@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - add CLIPTokenizer and CLIPTokenizerFast — byte-level BPE with the paper's end-of-word marker; the fast path runs the merge loop in C++ by folding the marker into a single codepoint
 - add AutoModelForZeroShotImageClassification and the zero-shot-image-classification task
 
+- add Stable Diffusion — latent diffusion with a spatial KL autoencoder, a cross-attention UNet, a DDIM sampler and classifier-free guidance; conditioning is injected rather than owned, and at the default width it is CLIP ViT-L/14's
+
+- add scaled_linear to BetaSchedule and make_beta_schedule — linear in sqrt(beta), which is what the released diffusion models use and is a different curve from linear between the same endpoints
+
 ### Removed
 
 - remove 43 entries from lucid.models's top-level surface — protocols, mixins, model_family_meta, ConfigT, RSSM, the diffusion schedulers, DDPMUNet, family-specific Output dataclasses and the Literal aliases. All remain importable from their own modules (lucid.models._protocols, lucid.models.generative, the family packages); only the top-level shortcut is gone
