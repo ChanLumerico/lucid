@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add scaled_linear to BetaSchedule and make_beta_schedule — linear in sqrt(beta), which is what the released diffusion models use and is a different curve from linear between the same endpoints
 
-- publish the v1 weights
+- publish Stable Diffusion v1 weights on the Lucid hub — pretrained=True downloads, SHA-verifies and loads both sub-models, verified against the reference to 9.2e-05 (U-Net) and 2.7e-04 / 1.4e-04 (autoencoder)
 
 ### Removed
 

@@ -13,19 +13,24 @@ text-to-image LDM, which is a different model from the released ones —
 quoting it here would attribute the paper's figure to Stability's
 network.  ``summary="auto"`` reports what is actually built.
 
-No weights either.  The published checkpoints are single-file archives
-holding all three sub-models under their own key layout; converting
-them is a separate piece of work from implementing the architecture,
-and shipping a `pretrained=True` that silently fails is worse than one
-that says no.
+v1 ships pretrained weights, converted by
+:mod:`tools.convert_weights.stable_diffusion` and verified against the
+reference to float32 round-off before publication.  v2 does not yet —
+its checkpoint is a separate archive with a wider conditioning tower,
+and an unconverted `pretrained=True` says no rather than failing
+quietly.
 """
 
 from dataclasses import replace
 from typing import Any, cast
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models._utils._common import reject_unavailable_pretrained
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
+from lucid.models.generative.stable_diffusion._weights import (
+    StableDiffusionV1Weights,
+)
 from lucid.models.generative.stable_diffusion._model import (
     StableDiffusionForImageGeneration,
     StableDiffusionModel,
@@ -66,7 +71,7 @@ def stable_diffusion_v1(
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the released v1 checkpoint from the Lucid hub.
     **overrides : object
         Optional :class:`StableDiffusionConfig` field overrides.
 
@@ -90,9 +95,11 @@ def stable_diffusion_v1(
     >>> model.config.latent_size, model.config.cross_attention_dim
     (64, 768)
     """
-    if pretrained:
-        reject_unavailable_pretrained("stable_diffusion_v1")
-    return StableDiffusionModel(_apply(_CFG_V1, overrides))
+    model = StableDiffusionModel(_apply(_CFG_V1, overrides))
+    entry = weights_mod.resolve_weights(StableDiffusionV1Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="stable_diffusion_v1")
+    return model
 
 
 @register_model(
@@ -177,9 +184,13 @@ def stable_diffusion_v1_gen(
     >>> model.config.sample_size
     512
     """
-    if pretrained:
-        reject_unavailable_pretrained("stable_diffusion_v1_gen")
-    return StableDiffusionForImageGeneration(_apply(_CFG_V1, overrides))
+    model = StableDiffusionForImageGeneration(_apply(_CFG_V1, overrides))
+    entry = weights_mod.resolve_weights(StableDiffusionV1Weights, pretrained, None)
+    if entry is not None:
+        weights_mod.load_weight_entry(
+            model.stable_diffusion, entry, name="stable_diffusion_v1_gen"
+        )
+    return model
 
 
 @register_model(

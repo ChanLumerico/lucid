@@ -384,9 +384,28 @@ class TestVariants:
             "stable_diffusion_v2_gen",
         ]
 
-    def test_pretrained_is_refused_rather_than_faked(self) -> None:
+    def test_v2_pretrained_is_refused_rather_than_faked(self) -> None:
+        """v1 ships weights; v2's checkpoint is not converted, and says
+        so rather than loading v1's into a differently-shaped tower."""
         with pytest.raises(NotImplementedError):
-            M.stable_diffusion_v1(pretrained=True)
+            M.stable_diffusion_v2(pretrained=True)
+
+    def test_v1_declares_weights(self) -> None:
+        """The registry entry, checked offline against the model it loads
+        into — a stale ``num_params`` is invisible until a user
+        downloads three and a half gigabytes."""
+        from lucid.models.generative.stable_diffusion import (
+            StableDiffusionV1Weights,
+        )
+
+        entry = StableDiffusionV1Weights.DEFAULT.value
+        model = M.stable_diffusion_v1()
+        total = sum(
+            math.prod(tuple(int(s) for s in p.shape)) for p in model.parameters()
+        )
+        assert entry.meta["num_params"] == total
+        assert entry.url.endswith("CompVis_LAION/model.safetensors")
+        assert len(entry.sha256) == 64
 
 
 class TestTimestepEmbedding:
