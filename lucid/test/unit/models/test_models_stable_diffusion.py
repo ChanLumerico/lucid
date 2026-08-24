@@ -139,12 +139,15 @@ class TestThePosterior:
         lucid.manual_seed(0)
         vae = AutoencoderKL(_tiny()).eval()
         x = lucid.randn((1, 3, 32, 32))
-        assert float(
-            (vae(x, sample=False).latent - vae(x, sample=False).latent)
-            .abs()
-            .max()
-            .item()
-        ) == 0.0
+        assert (
+            float(
+                (vae(x, sample=False).latent - vae(x, sample=False).latent)
+                .abs()
+                .max()
+                .item()
+            )
+            == 0.0
+        )
         assert (
             float(
                 (vae(x, sample=True).latent - vae(x, sample=True).latent)
@@ -191,7 +194,9 @@ class TestCrossAttentionHasADirection:
     def test_a_context_of_the_wrong_width_is_refused(self) -> None:
         unet = UNet2DConditionModel(_tiny()).eval()
         with pytest.raises(ValueError, match="cross_attention_dim"):
-            unet(lucid.randn((1, 4, 8, 8)), lucid.tensor([1.0]), lucid.randn((1, 4, 99)))
+            unet(
+                lucid.randn((1, 4, 8, 8)), lucid.tensor([1.0]), lucid.randn((1, 4, 99))
+            )
 
     def test_the_conditioning_may_be_any_length(self) -> None:
         """Cross-attention does not constrain the sequence length, and a
@@ -234,6 +239,38 @@ class TestTheSchedule:
         steps = scheduler.timesteps(50)
         assert len(steps) == 50
         assert steps == sorted(steps, reverse=True)
+
+    def test_the_trajectory_carries_the_released_offset(self) -> None:
+        """``steps_offset`` shifts every visited time by one.
+
+        The per-step arithmetic is identical with or without it, so a
+        trajectory built on the wrong times takes correct steps to a
+        different image. Measured against the reference: the offset is
+        the difference between a relative error of 7.4e-01 and 5.2e-07
+        over ten steps.
+        """
+        steps = DDIMScheduler(StableDiffusionConfig()).timesteps(10)
+        assert steps[:3] == [901, 801, 701]
+        assert steps[-1] == 1
+
+    def test_dropping_the_offset_would_change_the_times(self) -> None:
+        """Guards the test above."""
+        plain = DDIMScheduler(StableDiffusionConfig(steps_offset=0))
+        assert plain.timesteps(10)[:3] == [900, 800, 700]
+
+    def test_the_final_step_bootstraps_from_alpha_zero(self) -> None:
+        """``set_alpha_to_one`` is false in the release, so the step past
+        the end uses ``alphas_cumprod[0]`` — near one, and not one."""
+        config = StableDiffusionConfig()
+        assert config.set_alpha_to_one is False
+        scheduler = DDIMScheduler(config)
+        latent = lucid.zeros((1, 4, 8, 8))
+        noise = lucid.ones((1, 4, 8, 8))
+        released = scheduler.step(noise, 1, -1, latent)
+        one = DDIMScheduler(StableDiffusionConfig(set_alpha_to_one=True)).step(
+            noise, 1, -1, latent
+        )
+        assert float((released - one).abs().max().item()) > 1e-6
 
     def test_more_steps_than_the_schedule_is_refused(self) -> None:
         with pytest.raises(ValueError, match="num_inference_steps"):
@@ -309,7 +346,9 @@ class TestTheAssembledModel:
     def test_a_training_step_produces_a_loss_with_gradient(self) -> None:
         lucid.manual_seed(0)
         model = StableDiffusionModel(_tiny())
-        out = model(lucid.randn((2, 3, 32, 32)), lucid.randn((2, 4, 16)), return_loss=True)
+        out = model(
+            lucid.randn((2, 3, 32, 32)), lucid.randn((2, 4, 16)), return_loss=True
+        )
         assert out.noise_pred.shape == (2, 4, 8, 8)
         assert out.loss is not None
         out.loss.backward()
@@ -333,9 +372,9 @@ class TestTheAssembledModel:
         scaled = model.encode_image(images, sample=False)
         raw = model.vae.encode(images).mode()
         ratio = float((scaled / raw).abs().mean().item())
-        assert ratio == pytest.approx(0.18215, rel=1e-4), (
-            f"the latent scale is {ratio}, not the released 0.18215"
-        )
+        assert ratio == pytest.approx(
+            0.18215, rel=1e-4
+        ), f"the latent scale is {ratio}, not the released 0.18215"
 
     def test_generation_returns_an_image(self) -> None:
         lucid.manual_seed(0)
@@ -367,28 +406,15 @@ class TestVariants:
         assert sd.cross_attention_dim == clip.text_width == 768
         assert sd.context_length == clip.context_length == 77
 
-    def test_v2_widens_the_conditioning(self) -> None:
-        v1, v2 = M.stable_diffusion_v1().config, M.stable_diffusion_v2().config
-        assert (v1.cross_attention_dim, v2.cross_attention_dim) == (768, 1024)
-        assert (v1.sample_size, v2.sample_size) == (512, 768)
-        assert v1.vae_block_out_channels == v2.vae_block_out_channels
-
-    def test_only_two_architectures_are_registered(self) -> None:
-        """v1.1-v1.5 are weight tags, not variants — registering five
-        factories would invent architecture where there is none."""
+    def test_only_the_citable_architecture_is_registered(self) -> None:
+        """v1.1-v1.5 are weight tags, not variants, and v2's published
+        configuration could not be read from the primary source — so one
+        architecture is registered rather than five or two."""
         names = M.list_models(family="stable_diffusion")
         assert sorted(names) == [
             "stable_diffusion_v1",
             "stable_diffusion_v1_gen",
-            "stable_diffusion_v2",
-            "stable_diffusion_v2_gen",
         ]
-
-    def test_v2_pretrained_is_refused_rather_than_faked(self) -> None:
-        """v1 ships weights; v2's checkpoint is not converted, and says
-        so rather than loading v1's into a differently-shaped tower."""
-        with pytest.raises(NotImplementedError):
-            M.stable_diffusion_v2(pretrained=True)
 
     def test_v1_declares_weights(self) -> None:
         """The registry entry, checked offline against the model it loads

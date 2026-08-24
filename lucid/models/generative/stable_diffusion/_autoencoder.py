@@ -159,8 +159,12 @@ class _ResnetBlock(nn.Module):
         Tensor
             ``(B, out_channels, H, W)``.
         """
-        h = cast(Tensor, self.conv1(cast(Tensor, self.act(cast(Tensor, self.norm1(x))))))
-        h = cast(Tensor, self.conv2(cast(Tensor, self.act(cast(Tensor, self.norm2(h))))))
+        h = cast(
+            Tensor, self.conv1(cast(Tensor, self.act(cast(Tensor, self.norm1(x)))))
+        )
+        h = cast(
+            Tensor, self.conv2(cast(Tensor, self.act(cast(Tensor, self.norm2(h)))))
+        )
         skip = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
         return skip + h
 
@@ -385,7 +389,10 @@ class AutoencoderKL(nn.Module):
         h = cast(Tensor, self.mid_block_1(h))
         h = cast(Tensor, self.mid_attn(h))
         h = cast(Tensor, self.mid_block_2(h))
-        h = cast(Tensor, self.conv_out(cast(Tensor, self.act(cast(Tensor, self.norm_out(h))))))
+        h = cast(
+            Tensor,
+            self.conv_out(cast(Tensor, self.act(cast(Tensor, self.norm_out(h))))),
+        )
         moments = cast(Tensor, self.quant_conv(h))
         channels = int(moments.shape[1]) // 2
         return DiagonalGaussian(moments[:, :channels], moments[:, channels:])
@@ -411,7 +418,9 @@ class AutoencoderKL(nn.Module):
             h = cast(Tensor, block(h))
         return cast(
             Tensor,
-            self.decoder_conv_out(cast(Tensor, self.act(cast(Tensor, self.decoder_norm_out(h))))),
+            self.decoder_conv_out(
+                cast(Tensor, self.act(cast(Tensor, self.decoder_norm_out(h))))
+            ),
         )
 
     @override

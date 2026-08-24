@@ -209,16 +209,12 @@ class StableDiffusionModel(PretrainedModel):
             ],
             dim=0,
         )
-        prediction = cast(
-            Tensor, self.unet(noised, timestep.to(latent.dtype), context)
-        )
+        prediction = cast(Tensor, self.unet(noised, timestep.to(latent.dtype), context))
 
         loss: Tensor | None = None
         if return_loss:
             loss = ((prediction - noise) ** 2).mean()
-        return StableDiffusionOutput(
-            noise_pred=prediction, latent=noised, loss=loss
-        )
+        return StableDiffusionOutput(noise_pred=prediction, latent=noised, loss=loss)
 
 
 class StableDiffusionForImageGeneration(PretrainedModel):

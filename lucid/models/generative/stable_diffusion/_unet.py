@@ -121,10 +121,14 @@ class _ResBlock(nn.Module):
         Tensor
             ``(B, out_channels, H, W)``.
         """
-        h = cast(Tensor, self.conv1(cast(Tensor, self.act(cast(Tensor, self.norm1(x))))))
+        h = cast(
+            Tensor, self.conv1(cast(Tensor, self.act(cast(Tensor, self.norm1(x)))))
+        )
         shift = cast(Tensor, self.time_proj(cast(Tensor, self.act(emb))))
         h = h + shift.reshape(int(shift.shape[0]), int(shift.shape[1]), 1, 1)
-        h = cast(Tensor, self.conv2(cast(Tensor, self.act(cast(Tensor, self.norm2(h))))))
+        h = cast(
+            Tensor, self.conv2(cast(Tensor, self.act(cast(Tensor, self.norm2(h)))))
+        )
         skip = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
         return skip + h
 
@@ -512,5 +516,6 @@ class UNet2DConditionModel(nn.Module):
                 h = cast(Tensor, sampler(cast(Tensor, self.upsample(h))))
 
         return cast(
-            Tensor, self.conv_out(cast(Tensor, self.act(cast(Tensor, self.norm_out(h)))))
+            Tensor,
+            self.conv_out(cast(Tensor, self.act(cast(Tensor, self.norm_out(h))))),
         )

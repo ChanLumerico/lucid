@@ -76,6 +76,8 @@ class DDIMScheduler:
     50
     >>> scheduler.timesteps(50)[0] > scheduler.timesteps(50)[-1]
     True
+    >>> scheduler.timesteps(10)[:3]
+    [901, 801, 701]
     """
 
     def __init__(self, config: StableDiffusionConfig) -> None:
@@ -118,7 +120,14 @@ class DDIMScheduler:
                 f"{num_inference_steps}"
             )
         stride = total // num_inference_steps
-        return [int(i) for i in range(total - 1, -1, -stride)][:num_inference_steps]
+        # The released schedule is ``arange(n) * stride`` reversed, plus
+        # ``steps_offset`` — 901, 801, … rather than 999, 899, ….  The
+        # per-step arithmetic is identical either way, so a trajectory
+        # built on the wrong times takes correct steps to a different
+        # image and nothing reports it.
+        ascending = [i * stride + self.config.steps_offset for i in
+                     range(num_inference_steps)]
+        return ascending[::-1]
 
     def add_noise(self, latent: Tensor, noise: Tensor, timestep: int) -> Tensor:
         r"""The forward process — :math:`z_t` from :math:`z_0`.
@@ -178,10 +187,15 @@ class DDIMScheduler:
         if not 0.0 <= eta <= 1.0:
             raise ValueError(f"eta must lie in [0, 1], got {eta}")
         alpha_t = float(self.alphas_cumprod[timestep].item())
+        # Past the end the reference bootstraps from ``alphas_cumprod[0]``
+        # unless ``set_alpha_to_one``; the released config leaves it off.
+        final = 1.0 if self.config.set_alpha_to_one else float(
+            self.alphas_cumprod[0].item()
+        )
         alpha_prev = (
             float(self.alphas_cumprod[previous_timestep].item())
             if previous_timestep >= 0
-            else 1.0
+            else final
         )
 
         predicted_x0 = (latent - (1.0 - alpha_t) ** 0.5 * model_output) / alpha_t**0.5

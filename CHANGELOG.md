@@ -29,9 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - remove 43 entries from lucid.models's top-level surface — protocols, mixins, model_family_meta, ConfigT, RSSM, the diffusion schedulers, DDPMUNet, family-specific Output dataclasses and the Literal aliases. All remain importable from their own modules (lucid.models._protocols, lucid.models.generative, the family packages); only the top-level shortcut is gone
 
+- drop the stable_diffusion_v2 factories — the released configuration could not be read from the primary source, and the field that decides its attention shape is named for the opposite of what it means
+
 ### Changed
 
 - move QuickGELU, ResidualAttentionBlock and TransformerTower into the CLIP family — a domain-level module is for what several families share
+
+### Fixed
+
+- implement the released sampler's steps_offset and final-alpha settings — the per-step arithmetic already matched but the trajectory visited 999, 899, ... where the reference visits 901, 801, ...
 
 ---
 

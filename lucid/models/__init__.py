@@ -79,8 +79,7 @@ from lucid.models.generative.dreamer_v3 import (
 from lucid.models.generative.stable_diffusion import (
     StableDiffusionConfig, StableDiffusionModel,
     StableDiffusionForImageGeneration,
-    stable_diffusion_v1, stable_diffusion_v2,
-    stable_diffusion_v1_gen, stable_diffusion_v2_gen,
+    stable_diffusion_v1, stable_diffusion_v1_gen,
 )
 # 2021 — CLIP (Radford et al.)
 from lucid.models.multimodal.clip import (
@@ -495,9 +494,7 @@ __all__ = [    # ── Infrastructure ─────────────�
     "StableDiffusionModel",
     "StableDiffusionForImageGeneration",
     "stable_diffusion_v1",
-    "stable_diffusion_v2",
     "stable_diffusion_v1_gen",
-    "stable_diffusion_v2_gen",
     "CLIPForZeroShotImageClassification",
     "clip_vit_base_32",
     "clip_vit_base_16",

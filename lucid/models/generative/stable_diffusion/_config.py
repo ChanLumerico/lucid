@@ -107,6 +107,16 @@ class StableDiffusionConfig(DiffusionModelConfig):
         Diffusion steps the noise schedule spans.
     beta_start, beta_end : float
         Endpoints of the schedule.
+    steps_offset : int, default=1
+        Added to every sampled timestep.  The released scheduler visits
+        901, 801, … rather than 999, 899, …, and the offset is what
+        produces the shift.  A trajectory that omits it takes correct
+        steps between the wrong times.
+    set_alpha_to_one : bool, default=False
+        Whether the step past the end uses
+        :math:`\bar\alpha = 1` or :math:`\bar\alpha_0`.  The released
+        configuration says false, so the final step bootstraps from
+        ``alphas_cumprod[0]`` — very close to 1, and not 1.
     beta_schedule : str, default="scaled_linear"
         ``"scaled_linear"`` interpolates linearly in
         :math:`\sqrt{\beta}` — not in :math:`\beta`.  Getting this wrong
@@ -158,6 +168,8 @@ class StableDiffusionConfig(DiffusionModelConfig):
     beta_start: float = 0.00085
     beta_end: float = 0.012
     beta_schedule: BetaSchedule = "scaled_linear"
+    steps_offset: int = 1
+    set_alpha_to_one: bool = False
 
     norm_num_groups: int = 32
 

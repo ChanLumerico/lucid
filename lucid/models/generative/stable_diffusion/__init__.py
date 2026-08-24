@@ -14,8 +14,6 @@ from lucid.models.generative.stable_diffusion._model import (
 from lucid.models.generative.stable_diffusion._pretrained import (
     stable_diffusion_v1,
     stable_diffusion_v1_gen,
-    stable_diffusion_v2,
-    stable_diffusion_v2_gen,
 )
 from lucid.models.generative.stable_diffusion._scheduler import DDIMScheduler
 from lucid.models.generative.stable_diffusion._unet import UNet2DConditionModel
@@ -35,7 +33,5 @@ __all__ = [
     "DDIMScheduler",
     "StableDiffusionV1Weights",
     "stable_diffusion_v1",
-    "stable_diffusion_v2",
     "stable_diffusion_v1_gen",
-    "stable_diffusion_v2_gen",
 ]
