@@ -3,28 +3,28 @@
   "name": "mobilenet",
   "path": "lucid.models.vision.mobilenet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/__init__.py#L1",
   "members": [
     {
-      "name": "MobileNetV1Config",
-      "path": "lucid.models.vision.mobilenet._config.MobileNetV1Config",
+      "name": "MobileNetConfig",
+      "path": "lucid.models.vision.mobilenet._config.MobileNetConfig",
       "kind": "class",
       "class_kind": "dataclass",
       "bases": [
         "ModelConfig"
       ],
       "labels": [],
-      "signature": "MobileNetV1Config(num_classes: int = 1000, in_channels: int = 3, width_mult: float = 1.0, dropout: float = 0.001)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_config.py#L10",
+      "signature": "MobileNetConfig(num_classes: int = 1000, in_channels: int = 3, width_mult: float = 1.0, dropout: float = 0.001)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
           "name": "__init__",
-          "path": "lucid.models.vision.mobilenet._config.MobileNetV1Config.__init__",
+          "path": "lucid.models.vision.mobilenet._config.MobileNetConfig.__init__",
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, width_mult: float = 1.0, dropout: float = 0.001)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -53,8 +53,8 @@
       "see_also": []
     },
     {
-      "name": "MobileNetV1",
-      "path": "lucid.models.vision.mobilenet._model.MobileNetV1",
+      "name": "MobileNet",
+      "path": "lucid.models.vision.mobilenet._model.MobileNet",
       "kind": "class",
       "class_kind": "regular",
       "bases": [
@@ -62,17 +62,17 @@
         "BackboneMixin"
       ],
       "labels": [],
-      "signature": "MobileNetV1(config: MobileNetV1Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_model.py#L103",
+      "signature": "MobileNet(config: MobileNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_model.py#L103",
       "subcategory": "model",
       "methods": [
         {
           "name": "__init__",
-          "path": "lucid.models.vision.mobilenet._model.MobileNetV1.__init__",
+          "path": "lucid.models.vision.mobilenet._model.MobileNet.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(config: MobileNetV1Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_model.py#L188",
+          "signature": "__init__(config: MobileNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_model.py#L188",
           "subcategory": "model",
           "summary": "Initialise the ReLU module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -90,13 +90,13 @@
         },
         {
           "name": "feature_info",
-          "path": "lucid.models.vision.mobilenet._model.MobileNetV1.feature_info",
+          "path": "lucid.models.vision.mobilenet._model.MobileNet.feature_info",
           "kind": "function",
           "labels": [
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_model.py#L210",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_model.py#L210",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -113,11 +113,11 @@
         },
         {
           "name": "forward_features",
-          "path": "lucid.models.vision.mobilenet._model.MobileNetV1.forward_features",
+          "path": "lucid.models.vision.mobilenet._model.MobileNet.forward_features",
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_model.py#L213",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_model.py#L213",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -135,25 +135,18 @@
         },
         {
           "name": "forward",
-          "path": "lucid.models.vision.mobilenet._model.MobileNetV1.forward",
+          "path": "lucid.models.vision.mobilenet._model.MobileNet.forward",
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_model.py#L223",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_model.py#L223",
           "subcategory": "model",
-          "summary": "Apply the activation function element-wise.",
+          "summary": "Return bias tensor of shape (1, num_heads, ws², ws²).",
           "extended": null,
-          "parameters": [
-            {
-              "name": "input",
-              "annotation": "Tensor",
-              "description": "Input tensor of arbitrary shape.",
-              "default": null
-            }
-          ],
+          "parameters": [],
           "returns": {
-            "annotation": "Tensor",
-            "description": "Output tensor of the same shape as `input`."
+            "annotation": "BaseModelOutput",
+            "description": ""
           },
           "raises": [],
           "examples": [],
@@ -168,15 +161,15 @@
       "parameters": [
         {
           "name": "config",
-          "annotation": "MobileNetV1Config",
-          "description": "Frozen architecture spec.  Use the factory functions\n(`mobilenet_v1`, `mobilenet_v1_075`, …) for\npaper-cited width-multiplier variants.",
+          "annotation": "MobileNetConfig",
+          "description": "Frozen architecture spec.  Use the factory functions\n(`mobilenet`, `mobilenet_075`, …) for\npaper-cited width-multiplier variants.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
       "examples": [
-        "Build a MobileNet-v1 backbone and run a forward pass:\n>>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1\n>>> backbone = mobilenet_v1()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = backbone(x)\n>>> out.last_hidden_state.shape\n(2, 1024, 1, 1)\nInspect the per-stage feature map descriptors for FPN integration:\n>>> info = backbone.feature_info\n>>> [(fi.stage, fi.num_channels, fi.reduction) for fi in info]\n[(1, 64, 2), (2, 128, 4), (3, 256, 8), (4, 512, 16), (5, 1024, 32)]"
+        "Build a MobileNet-v1 backbone and run a forward pass:\n>>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet\n>>> backbone = mobilenet()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = backbone(x)\n>>> out.last_hidden_state.shape\n(2, 1024, 7, 7)\nInspect the per-stage feature map descriptors for FPN integration:\n>>> info = backbone.feature_info\n>>> [(fi.stage, fi.num_channels, fi.reduction) for fi in info]\n[(1, 64, 2), (2, 128, 4), (3, 256, 8), (4, 512, 16), (5, 1024, 32)]"
       ],
       "notes": [
         "Each depthwise-separable block computes\n\n\n\n$$\n\\mathrm{PW}\\big(\\sigma(\\mathrm{BN}(\\mathrm{DW}_{3\\times3}(x)))\\big)\n\\;\\;\\to\\;\\; \\sigma(\\mathrm{BN}(\\,\\cdot\\,)),\n$$\n\nwhere $\\mathrm{DW}_{3\\times3}$ is the per-channel\n$3 \\times 3$ spatial filter (`groups=in_channels`),\n$\\mathrm{PW}$ is the $1 \\times 1$ channel-mixing\nconvolution, and $\\sigma$ is ReLU6 (see `_dw_pw` for why the\nreferences diverge from the paper's plain ReLU here).  The width\nmultiplier\n$\\alpha \\in (0, 1]$ uniformly scales every channel count\nso that the same architecture can target sub-mW edge devices\n($\\alpha = 0.25$) up to full desktop deployment\n($\\alpha = 1.0$)."
@@ -184,7 +177,7 @@
       "attributes": [
         {
           "name": "config",
-          "annotation": "MobileNetV1Config",
+          "annotation": "MobileNetConfig",
           "description": "Stored copy of the config that built this model."
         },
         {
@@ -207,8 +200,8 @@
       "see_also": []
     },
     {
-      "name": "MobileNetV1ForImageClassification",
-      "path": "lucid.models.vision.mobilenet._model.MobileNetV1ForImageClassification",
+      "name": "MobileNetForImageClassification",
+      "path": "lucid.models.vision.mobilenet._model.MobileNetForImageClassification",
       "kind": "class",
       "class_kind": "regular",
       "bases": [
@@ -216,17 +209,17 @@
         "ClassificationHeadMixin"
       ],
       "labels": [],
-      "signature": "MobileNetV1ForImageClassification(config: MobileNetV1Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_model.py#L233",
+      "signature": "MobileNetForImageClassification(config: MobileNetConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_model.py#L233",
       "subcategory": "model",
       "methods": [
         {
           "name": "__init__",
-          "path": "lucid.models.vision.mobilenet._model.MobileNetV1ForImageClassification.__init__",
+          "path": "lucid.models.vision.mobilenet._model.MobileNetForImageClassification.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(config: MobileNetV1Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_model.py#L308",
+          "signature": "__init__(config: MobileNetConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_model.py#L308",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -244,11 +237,11 @@
         },
         {
           "name": "forward",
-          "path": "lucid.models.vision.mobilenet._model.MobileNetV1ForImageClassification.forward",
+          "path": "lucid.models.vision.mobilenet._model.MobileNetForImageClassification.forward",
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_model.py#L316",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_model.py#L316",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -266,19 +259,19 @@
         }
       ],
       "summary": "MobileNet v1 with global-average-pooled linear classification head.",
-      "extended": "Combines a `MobileNetV1` backbone with the standard\nImageNet classification head: an `lucid.nn.AdaptiveAvgPool2d`\nto pool every spatial location into a single feature vector,\na `lucid.nn.Dropout` (probability `config.dropout`,\ndefault 0.001 per the paper), and a `lucid.nn.Linear`\nprojection to `config.num_classes` logits.  When `labels`\nare supplied to `forward`, a cross-entropy loss is\ncomputed and returned alongside the logits.",
+      "extended": "Combines a `MobileNet` backbone with the standard\nImageNet classification head: an `lucid.nn.AdaptiveAvgPool2d`\nto pool every spatial location into a single feature vector,\na `lucid.nn.Dropout` (probability `config.dropout`,\ndefault 0.001 per the paper), and a `lucid.nn.Linear`\nprojection to `config.num_classes` logits.  When `labels`\nare supplied to `forward`, a cross-entropy loss is\ncomputed and returned alongside the logits.",
       "parameters": [
         {
           "name": "config",
-          "annotation": "MobileNetV1Config",
-          "description": "Architecture spec.  Use the `*_cls` factory functions\n(`mobilenet_v1_cls`, `mobilenet_v1_075_cls`, …)\nto obtain a paper-cited configuration; pass a custom config\nto retarget `num_classes` or change `width_mult`.",
+          "annotation": "MobileNetConfig",
+          "description": "Architecture spec.  Use the `*_cls` factory functions\n(`mobilenet_cls`, `mobilenet_075_cls`, …)\nto obtain a paper-cited configuration; pass a custom config\nto retarget `num_classes` or change `width_mult`.",
           "default": null
         }
       ],
       "returns": null,
       "raises": [],
       "examples": [
-        "Run inference on a batch of 224×224 RGB images:\n>>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_cls\n>>> model = mobilenet_v1_cls()\n>>> x = lucid.randn(4, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 1000)\n>>> out.loss is None\nTrue\nCompute a loss given labels (e.g. during training):\n>>> labels = lucid.tensor([0, 1, 2, 3], dtype=lucid.int64)\n>>> out = model(x, labels=labels)\n>>> out.loss.shape\n()"
+        "Run inference on a batch of 224×224 RGB images:\n>>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_cls\n>>> model = mobilenet_cls()\n>>> x = lucid.randn(4, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 1000)\n>>> out.loss is None\nTrue\nCompute a loss given labels (e.g. during training):\n>>> labels = lucid.tensor([0, 1, 2, 3], dtype=lucid.int64)\n>>> out = model(x, labels=labels)\n>>> out.loss.shape\n()"
       ],
       "notes": [
         "The classification flow is\n\n\n\n$$\n\\text{logits} = W \\,\\operatorname{Drop}\\!\\left(\n    \\operatorname{GAP}(\\,\\mathrm{backbone}(x)\\,)\n\\right) + b,\n$$\n\nwhere $\\operatorname{GAP}$ is the global average pool.\nLoss is the standard categorical cross-entropy, computed only\nwhen `labels` is not `None`."
@@ -286,13 +279,13 @@
       "attributes": [
         {
           "name": "config",
-          "annotation": "MobileNetV1Config",
+          "annotation": "MobileNetConfig",
           "description": "Stored copy of the config that built this model."
         },
         {
           "name": "features",
           "annotation": "nn.Sequential",
-          "description": "Same depthwise-separable stack as on `MobileNetV1`."
+          "description": "Same depthwise-separable stack as on `MobileNet`."
         },
         {
           "name": "avgpool",
@@ -314,15 +307,15 @@
       "see_also": []
     },
     {
-      "name": "mobilenet_v1",
-      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_v1",
+      "name": "mobilenet",
+      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet",
       "kind": "function",
       "labels": [],
-      "signature": "mobilenet_v1(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_pretrained.py#L37",
+      "signature": "mobilenet(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_pretrained.py#L35",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 backbone at width multiplier $\\alpha = 1.0$.",
-      "extended": "Builds a `MobileNetV1` with the canonical paper topology:\na 3×3 stem (stride 2) followed by 13 depthwise+pointwise blocks,\nyielding approximately 4.2M parameters.  Howard et al., 2017\nreport a 70.6% ImageNet-1k top-1 validation accuracy with this\nconfiguration (Table 6).  The default choice when the full\naccuracy budget is available.",
+      "extended": "Builds a `MobileNet` with the canonical paper topology:\na 3×3 stem (stride 2) followed by 13 depthwise+pointwise blocks,\nyielding approximately 4.2M parameters.  Howard et al., 2017\nreport a 70.6% ImageNet-1k top-1 validation accuracy with this\nconfiguration (Table 6).  The default choice when the full\naccuracy budget is available.",
       "parameters": [
         {
           "name": "pretrained",
@@ -333,17 +326,17 @@
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `MobileNetV1Config`\n(e.g. `in_channels=1` for grayscale input).",
+          "description": "Keyword overrides forwarded into `MobileNetConfig`\n(e.g. `in_channels=1` for grayscale input).",
           "default": "{}"
         }
       ],
       "returns": {
-        "annotation": "MobileNetV1",
+        "annotation": "MobileNet",
         "description": "Backbone with the MobileNet-v1 ($\\alpha = 1.0$)\nconfiguration applied (or with `overrides` merged on top\nof it)."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1\n>>> model = mobilenet_v1()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1024, 1, 1)"
+        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet\n>>> model = mobilenet()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1024, 7, 7)"
       ],
       "notes": [
         "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 1 and Table 6."
@@ -353,8 +346,8 @@
       "see_also": [],
       "param_count": 3206976,
       "model_summary": {
-        "name": "MobileNetV1",
-        "type": "MobileNetV1",
+        "name": "MobileNet",
+        "type": "MobileNet",
         "params": 3206976,
         "own_params": 0,
         "children": [
@@ -849,42 +842,42 @@
       }
     },
     {
-      "name": "mobilenet_v1_cls",
-      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_cls",
+      "name": "mobilenet_cls",
+      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_cls",
       "kind": "function",
       "labels": [],
-      "signature": "mobilenet_v1_cls(pretrained: bool | str = False, weights: MobileNetV1Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_pretrained.py#L262",
+      "signature": "mobilenet_cls(pretrained: bool | str = False, weights: MobileNetWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_pretrained.py#L254",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 image classifier at width multiplier $\\alpha = 1.0$.",
-      "extended": "Builds a `MobileNetV1ForImageClassification` with the\ncanonical paper topology (13 depthwise+pointwise blocks) followed\nby global average pooling and a linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\nApproximately 4.2M parameters and 70.6% ImageNet-1k top-1 in\nHoward et al., 2017 (Table 6).",
+      "extended": "Builds a `MobileNetForImageClassification` with the\ncanonical paper topology (13 depthwise+pointwise blocks) followed\nby global average pooling and a linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\nApproximately 4.2M parameters and 70.6% ImageNet-1k top-1 in\nHoward et al., 2017 (Table 6).",
       "parameters": [
         {
           "name": "pretrained",
           "annotation": "bool or str",
-          "description": "Pretrained-weight selector.  `False` → random init; `True`\n→ the `DEFAULT` tag (`MobileNetV1Weights.RA4_E3600_R224_IN1K`);\na tag string → that specific checkpoint.  Mutually exclusive with\n`weights` (which wins if both are given).",
+          "description": "Pretrained-weight selector.  `False` → random init; `True`\n→ the `DEFAULT` tag (`MobileNetWeights.RA4_E3600_R224_IN1K`);\na tag string → that specific checkpoint.  Mutually exclusive with\n`weights` (which wins if both are given).",
           "default": "False"
         },
         {
           "name": "weights",
-          "annotation": "(MobileNetV1Weights, optional, keyword - only)",
+          "annotation": "(MobileNetWeights, optional, keyword - only)",
           "description": "Explicit weights enum member.  Takes precedence over\n`pretrained`.",
           "default": "None"
         },
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `MobileNetV1Config`\n(typically `num_classes` to retarget the classifier).",
+          "description": "Keyword overrides forwarded into `MobileNetConfig`\n(typically `num_classes` to retarget the classifier).",
           "default": "{}"
         }
       ],
       "returns": {
-        "annotation": "MobileNetV1ForImageClassification",
+        "annotation": "MobileNetForImageClassification",
         "description": "Classifier with the MobileNet-v1 ($\\alpha = 1.0$)\nconfiguration applied (or with `overrides` merged on top\nof it)."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_cls\n>>> model = mobilenet_v1_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
+        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_cls\n>>> model = mobilenet_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)"
       ],
       "notes": [
         "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 6.  Pretrained weights are converted from timm's\n`mobilenetv1_100.ra4_e3600_r224_in1k` (75.4% top-1 at 224x224\nunder the RA4 recipe) and hosted under `lucid-dl/mobilenet-v1`."
@@ -894,8 +887,8 @@
       "see_also": [],
       "param_count": 4231976,
       "model_summary": {
-        "name": "MobileNetV1ForImageClassification",
-        "type": "MobileNetV1ForImageClassification",
+        "name": "MobileNetForImageClassification",
+        "type": "MobileNetForImageClassification",
         "params": 4231976,
         "own_params": 0,
         "children": [
@@ -1404,15 +1397,15 @@
       }
     },
     {
-      "name": "mobilenet_v1_075",
-      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_075",
+      "name": "mobilenet_075",
+      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_075",
       "kind": "function",
       "labels": [],
-      "signature": "mobilenet_v1_075(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_pretrained.py#L92",
+      "signature": "mobilenet_075(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_pretrained.py#L90",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 backbone at width multiplier $\\alpha = 0.75$.",
-      "extended": "Builds a `MobileNetV1` with every channel count multiplied\nby 0.75 — approximately 2.6M parameters.  Howard et al., 2017\nreport 68.4% ImageNet-1k top-1 accuracy with this configuration\n(Table 6), at roughly 60% of the FLOPs of the full-width model.",
+      "extended": "Builds a `MobileNet` with every channel count multiplied\nby 0.75 — approximately 2.6M parameters.  Howard et al., 2017\nreport 68.4% ImageNet-1k top-1 accuracy with this configuration\n(Table 6), at roughly 60% of the FLOPs of the full-width model.",
       "parameters": [
         {
           "name": "pretrained",
@@ -1423,17 +1416,17 @@
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `MobileNetV1Config`.",
+          "description": "Keyword overrides forwarded into `MobileNetConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
-        "annotation": "MobileNetV1",
+        "annotation": "MobileNet",
         "description": "Backbone with the MobileNet-v1 ($\\alpha = 0.75$)\nconfiguration applied (or with `overrides` merged on top\nof it)."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_075\n>>> model = mobilenet_v1_075()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 768, 1, 1)"
+        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_075\n>>> model = mobilenet_075()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 768, 7, 7)"
       ],
       "notes": [
         "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 6."
@@ -1443,8 +1436,8 @@
       "see_also": [],
       "param_count": 1816560,
       "model_summary": {
-        "name": "MobileNetV1",
-        "type": "MobileNetV1",
+        "name": "MobileNet",
+        "type": "MobileNet",
         "params": 1816560,
         "own_params": 0,
         "children": [
@@ -1939,15 +1932,15 @@
       }
     },
     {
-      "name": "mobilenet_v1_075_cls",
-      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_075_cls",
+      "name": "mobilenet_075_cls",
+      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_075_cls",
       "kind": "function",
       "labels": [],
-      "signature": "mobilenet_v1_075_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_pretrained.py#L331",
+      "signature": "mobilenet_075_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_pretrained.py#L323",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 image classifier at width multiplier $\\alpha = 0.75$.",
-      "extended": "Builds a `MobileNetV1ForImageClassification` with the\npaper-cited 0.75-width topology — approximately 2.6M parameters\nand 68.4% ImageNet-1k top-1 in Howard et al., 2017 (Table 6).",
+      "extended": "Builds a `MobileNetForImageClassification` with the\npaper-cited 0.75-width topology — approximately 2.6M parameters\nand 68.4% ImageNet-1k top-1 in Howard et al., 2017 (Table 6).",
       "parameters": [
         {
           "name": "pretrained",
@@ -1958,17 +1951,17 @@
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `MobileNetV1Config`.",
+          "description": "Keyword overrides forwarded into `MobileNetConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
-        "annotation": "MobileNetV1ForImageClassification",
+        "annotation": "MobileNetForImageClassification",
         "description": "Classifier with the MobileNet-v1 ($\\alpha = 0.75$)\nconfiguration applied (or with `overrides` merged on top\nof it)."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_075_cls\n>>> model = mobilenet_v1_075_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_075_cls\n>>> model = mobilenet_075_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
         "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 6."
@@ -1978,8 +1971,8 @@
       "see_also": [],
       "param_count": 2585560,
       "model_summary": {
-        "name": "MobileNetV1ForImageClassification",
-        "type": "MobileNetV1ForImageClassification",
+        "name": "MobileNetForImageClassification",
+        "type": "MobileNetForImageClassification",
         "params": 2585560,
         "own_params": 0,
         "children": [
@@ -2488,15 +2481,15 @@
       }
     },
     {
-      "name": "mobilenet_v1_050",
-      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_050",
+      "name": "mobilenet_050",
+      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_050",
       "kind": "function",
       "labels": [],
-      "signature": "mobilenet_v1_050(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_pretrained.py#L146",
+      "signature": "mobilenet_050(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_pretrained.py#L142",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 backbone at width multiplier $\\alpha = 0.5$.",
-      "extended": "Builds a `MobileNetV1` with every channel count multiplied\nby 0.5 — approximately 1.3M parameters.  Howard et al., 2017\nreport 63.7% ImageNet-1k top-1 accuracy with this configuration\n(Table 6), at roughly 27% of the FLOPs of the full-width model.",
+      "extended": "Builds a `MobileNet` with every channel count multiplied\nby 0.5 — approximately 1.3M parameters.  Howard et al., 2017\nreport 63.7% ImageNet-1k top-1 accuracy with this configuration\n(Table 6), at roughly 27% of the FLOPs of the full-width model.",
       "parameters": [
         {
           "name": "pretrained",
@@ -2507,17 +2500,17 @@
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `MobileNetV1Config`.",
+          "description": "Keyword overrides forwarded into `MobileNetConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
-        "annotation": "MobileNetV1",
+        "annotation": "MobileNet",
         "description": "Backbone with the MobileNet-v1 ($\\alpha = 0.5$)\nconfiguration applied (or with `overrides` merged on top\nof it)."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_050\n>>> model = mobilenet_v1_050()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 1, 1)"
+        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_050\n>>> model = mobilenet_050()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 512, 7, 7)"
       ],
       "notes": [
         "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 6."
@@ -2527,8 +2520,8 @@
       "see_also": [],
       "param_count": 818592,
       "model_summary": {
-        "name": "MobileNetV1",
-        "type": "MobileNetV1",
+        "name": "MobileNet",
+        "type": "MobileNet",
         "params": 818592,
         "own_params": 0,
         "children": [
@@ -3023,15 +3016,15 @@
       }
     },
     {
-      "name": "mobilenet_v1_050_cls",
-      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_050_cls",
+      "name": "mobilenet_050_cls",
+      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_050_cls",
       "kind": "function",
       "labels": [],
-      "signature": "mobilenet_v1_050_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_pretrained.py#L386",
+      "signature": "mobilenet_050_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_pretrained.py#L376",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 image classifier at width multiplier $\\alpha = 0.5$.",
-      "extended": "Builds a `MobileNetV1ForImageClassification` with the\npaper-cited 0.5-width topology — approximately 1.3M parameters\nand 63.7% ImageNet-1k top-1 in Howard et al., 2017 (Table 6).",
+      "extended": "Builds a `MobileNetForImageClassification` with the\npaper-cited 0.5-width topology — approximately 1.3M parameters\nand 63.7% ImageNet-1k top-1 in Howard et al., 2017 (Table 6).",
       "parameters": [
         {
           "name": "pretrained",
@@ -3042,17 +3035,17 @@
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `MobileNetV1Config`.",
+          "description": "Keyword overrides forwarded into `MobileNetConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
-        "annotation": "MobileNetV1ForImageClassification",
+        "annotation": "MobileNetForImageClassification",
         "description": "Classifier with the MobileNet-v1 ($\\alpha = 0.5$)\nconfiguration applied (or with `overrides` merged on top\nof it)."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_050_cls\n>>> model = mobilenet_v1_050_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_050_cls\n>>> model = mobilenet_050_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
         "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 6."
@@ -3062,8 +3055,8 @@
       "see_also": [],
       "param_count": 1331592,
       "model_summary": {
-        "name": "MobileNetV1ForImageClassification",
-        "type": "MobileNetV1ForImageClassification",
+        "name": "MobileNetForImageClassification",
+        "type": "MobileNetForImageClassification",
         "params": 1331592,
         "own_params": 0,
         "children": [
@@ -3572,15 +3565,15 @@
       }
     },
     {
-      "name": "mobilenet_v1_025",
-      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_025",
+      "name": "mobilenet_025",
+      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_025",
       "kind": "function",
       "labels": [],
-      "signature": "mobilenet_v1_025(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_pretrained.py#L200",
+      "signature": "mobilenet_025(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_pretrained.py#L194",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 backbone at width multiplier $\\alpha = 0.25$.",
-      "extended": "Builds a `MobileNetV1` with every channel count multiplied\nby 0.25 — approximately 0.5M parameters.  Howard et al., 2017\nreport 50.6% ImageNet-1k top-1 accuracy with this configuration\n(Table 6) — the smallest MobileNet-v1 variant, targeted at\nextreme edge deployments where parameter count is the binding\nconstraint.",
+      "extended": "Builds a `MobileNet` with every channel count multiplied\nby 0.25 — approximately 0.5M parameters.  Howard et al., 2017\nreport 50.6% ImageNet-1k top-1 accuracy with this configuration\n(Table 6) — the smallest MobileNet-v1 variant, targeted at\nextreme edge deployments where parameter count is the binding\nconstraint.",
       "parameters": [
         {
           "name": "pretrained",
@@ -3591,17 +3584,17 @@
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `MobileNetV1Config`.",
+          "description": "Keyword overrides forwarded into `MobileNetConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
-        "annotation": "MobileNetV1",
+        "annotation": "MobileNet",
         "description": "Backbone with the MobileNet-v1 ($\\alpha = 0.25$)\nconfiguration applied (or with `overrides` merged on top\nof it)."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_025\n>>> model = mobilenet_v1_025()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 256, 1, 1)"
+        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_025\n>>> model = mobilenet_025()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 256, 7, 7)"
       ],
       "notes": [
         "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 6."
@@ -3611,8 +3604,8 @@
       "see_also": [],
       "param_count": 213072,
       "model_summary": {
-        "name": "MobileNetV1",
-        "type": "MobileNetV1",
+        "name": "MobileNet",
+        "type": "MobileNet",
         "params": 213072,
         "own_params": 0,
         "children": [
@@ -4107,15 +4100,15 @@
       }
     },
     {
-      "name": "mobilenet_v1_025_cls",
-      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_025_cls",
+      "name": "mobilenet_025_cls",
+      "path": "lucid.models.vision.mobilenet._pretrained.mobilenet_025_cls",
       "kind": "function",
       "labels": [],
-      "signature": "mobilenet_v1_025_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_pretrained.py#L441",
+      "signature": "mobilenet_025_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_pretrained.py#L429",
       "subcategory": "pretrained",
       "summary": "MobileNet-v1 image classifier at width multiplier $\\alpha = 0.25$.",
-      "extended": "Builds a `MobileNetV1ForImageClassification` with the\npaper-cited 0.25-width topology — approximately 0.5M parameters\nand 50.6% ImageNet-1k top-1 in Howard et al., 2017 (Table 6).\nThe smallest variant in the family, targeted at extreme edge\ndeployments.",
+      "extended": "Builds a `MobileNetForImageClassification` with the\npaper-cited 0.25-width topology — approximately 0.5M parameters\nand 50.6% ImageNet-1k top-1 in Howard et al., 2017 (Table 6).\nThe smallest variant in the family, targeted at extreme edge\ndeployments.",
       "parameters": [
         {
           "name": "pretrained",
@@ -4126,17 +4119,17 @@
         {
           "name": "**overrides",
           "annotation": "object",
-          "description": "Keyword overrides forwarded into `MobileNetV1Config`.",
+          "description": "Keyword overrides forwarded into `MobileNetConfig`.",
           "default": "{}"
         }
       ],
       "returns": {
-        "annotation": "MobileNetV1ForImageClassification",
+        "annotation": "MobileNetForImageClassification",
         "description": "Classifier with the MobileNet-v1 ($\\alpha = 0.25$)\nconfiguration applied (or with `overrides` merged on top\nof it)."
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_v1_025_cls\n>>> model = mobilenet_v1_025_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
+        ">>> import lucid\n>>> from lucid.models.vision.mobilenet import mobilenet_025_cls\n>>> model = mobilenet_025_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
         "See Howard et al., \"MobileNets: Efficient Convolutional Neural\nNetworks for Mobile Vision Applications\", [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017,\nTable 6."
@@ -4146,8 +4139,8 @@
       "see_also": [],
       "param_count": 470072,
       "model_summary": {
-        "name": "MobileNetV1ForImageClassification",
-        "type": "MobileNetV1ForImageClassification",
+        "name": "MobileNetForImageClassification",
+        "type": "MobileNetForImageClassification",
         "params": 470072,
         "own_params": 0,
         "children": [
@@ -4656,19 +4649,19 @@
       }
     },
     {
-      "name": "MobileNetV1Weights",
-      "path": "lucid.models.vision.mobilenet._weights.MobileNetV1Weights",
+      "name": "MobileNetWeights",
+      "path": "lucid.models.vision.mobilenet._weights.MobileNetWeights",
       "kind": "class",
       "class_kind": "regular",
       "bases": [
         "WeightsEnum"
       ],
       "labels": [],
-      "signature": "MobileNetV1Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/vision/mobilenet/_weights.py#L28",
+      "signature": "MobileNetWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/vision/mobilenet/_weights.py#L28",
       "subcategory": "weights",
       "methods": [],
-      "summary": "Pretrained weights for `lucid.models.mobilenet_v1_cls`.",
+      "summary": "Pretrained weights for `lucid.models.mobilenet_cls`.",
       "extended": "Single ImageNet-1k checkpoint converted from timm's\n`mobilenetv1_100.ra4_e3600_r224_in1k` (Howard et al., 2017;\n~4.2M params, 75.4% top-1 at 224x224 under timm's RA4 recipe).",
       "parameters": [],
       "returns": null,
@@ -4692,7 +4685,7 @@
   "see_also": [],
   "canonical_name": "MobileNet",
   "citation": "Howard, Andrew G., et al. \"MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications.\" arXiv preprint [arXiv:1704.04861](https://arxiv.org/abs/1704.04861), 2017.",
-  "theory": "MobileNet is built around the *depthwise separable convolution*, a\nfactorisation that decomposes a standard convolution into two much\ncheaper stages: a per-channel **depthwise** $3 \\times 3$\nspatial filter followed by a $1 \\times 1$ **pointwise**\nconvolution that mixes channels.  For an input of $M$\nchannels and an output of $N$ channels with kernel size\n$D_K$, the cost drops from\n$D_K \\cdot D_K \\cdot M \\cdot N \\cdot D_F \\cdot D_F$ to\n\n\n\n$$\nD_K \\cdot D_K \\cdot M \\cdot D_F \\cdot D_F\n\\;+\\; M \\cdot N \\cdot D_F \\cdot D_F,\n$$\n\na reduction of roughly $1/N + 1/D_K^2$.  For\n$D_K = 3$ and the typical $N$ of a few hundred,\nthat is an 8–9× FLOPs saving with only a small accuracy loss\non ImageNet.\n\nTwo scalar hyper-parameters expose a smooth accuracy–latency\ntrade-off curve at inference time without retraining the whole\nfamily.  The **width multiplier** $\\alpha \\in (0, 1]$\nuniformly thins every layer (input and output channels become\n$\\alpha M$ and $\\alpha N$), giving four standard\nvariants at $\\alpha \\in \\{1.0, 0.75, 0.5, 0.25\\}$.  The\n**resolution multiplier** $\\rho$ rescales the input spatial\nsize — it does not change the model itself, only the feature\nmaps flowing through it, and is therefore not enforced inside\nthe network.\n\nTogether these two knobs let MobileNet-v1 cover a wide spectrum\nof mobile/embedded budgets from sub-mW edge devices up to\ndesktop-class deployment, while keeping a single training recipe\nand a single `MobileNetV1Config` schema.",
+  "theory": "MobileNet is built around the *depthwise separable convolution*, a\nfactorisation that decomposes a standard convolution into two much\ncheaper stages: a per-channel **depthwise** $3 \\times 3$\nspatial filter followed by a $1 \\times 1$ **pointwise**\nconvolution that mixes channels.  For an input of $M$\nchannels and an output of $N$ channels with kernel size\n$D_K$, the cost drops from\n$D_K \\cdot D_K \\cdot M \\cdot N \\cdot D_F \\cdot D_F$ to\n\n\n\n$$\nD_K \\cdot D_K \\cdot M \\cdot D_F \\cdot D_F\n\\;+\\; M \\cdot N \\cdot D_F \\cdot D_F,\n$$\n\na reduction of roughly $1/N + 1/D_K^2$.  For\n$D_K = 3$ and the typical $N$ of a few hundred,\nthat is an 8–9× FLOPs saving with only a small accuracy loss\non ImageNet.\n\nTwo scalar hyper-parameters expose a smooth accuracy–latency\ntrade-off curve at inference time without retraining the whole\nfamily.  The **width multiplier** $\\alpha \\in (0, 1]$\nuniformly thins every layer (input and output channels become\n$\\alpha M$ and $\\alpha N$), giving four standard\nvariants at $\\alpha \\in \\{1.0, 0.75, 0.5, 0.25\\}$.  The\n**resolution multiplier** $\\rho$ rescales the input spatial\nsize — it does not change the model itself, only the feature\nmaps flowing through it, and is therefore not enforced inside\nthe network.\n\nTogether these two knobs let MobileNet-v1 cover a wide spectrum\nof mobile/embedded budgets from sub-mW edge devices up to\ndesktop-class deployment, while keeping a single training recipe\nand a single `MobileNetConfig` schema.",
   "tasks": [
     "image-classification"
   ]

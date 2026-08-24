@@ -79,7 +79,7 @@ from lucid.models.generative.dreamer_v3 import (
 from lucid.models.generative.stable_diffusion import (
     StableDiffusionConfig, StableDiffusionModel,
     StableDiffusionForImageGeneration,
-    stable_diffusion_v1, stable_diffusion_v1_gen,
+    stable_diffusion, stable_diffusion_gen,
 )
 # 2021 — CLIP (Radford et al.)
 from lucid.models.multimodal.clip import (
@@ -251,11 +251,11 @@ from lucid.models.vision.xception import (
 )
 # 2017 — MobileNet v1 (Howard et al.)
 from lucid.models.vision.mobilenet import (
-    MobileNetV1Config, MobileNetV1, MobileNetV1ForImageClassification,
-    mobilenet_v1,     mobilenet_v1_cls,
-    mobilenet_v1_075, mobilenet_v1_075_cls,
-    mobilenet_v1_050, mobilenet_v1_050_cls,
-    mobilenet_v1_025, mobilenet_v1_025_cls,
+    MobileNetConfig, MobileNet, MobileNetForImageClassification,
+    mobilenet,     mobilenet_cls,
+    mobilenet_075, mobilenet_075_cls,
+    mobilenet_050, mobilenet_050_cls,
+    mobilenet_025, mobilenet_025_cls,
 )
 # 2018 — SENet (Hu et al.)
 from lucid.models.vision.senet import (
@@ -460,8 +460,8 @@ from lucid.models.vision.mask2former import (
 )
 # 2016–2020 — YOLO family (Redmon et al., Bochkovskiy et al.)
 from lucid.models.vision.yolo import (
-    YOLOV1Config, YOLOV1ForObjectDetection,
-    yolo_v1, yolo_v1_tiny,
+    YOLOConfig, YOLOForObjectDetection,
+    yolo, yolo_tiny,
     YOLOV2Config, YOLOV2ForObjectDetection,
     yolo_v2,
     YOLOV3Config, YOLOV3ForObjectDetection,
@@ -493,8 +493,8 @@ __all__ = [    # ── Infrastructure ─────────────�
     "StableDiffusionConfig",
     "StableDiffusionModel",
     "StableDiffusionForImageGeneration",
-    "stable_diffusion_v1",
-    "stable_diffusion_v1_gen",
+    "stable_diffusion",
+    "stable_diffusion_gen",
     "CLIPForZeroShotImageClassification",
     "clip_vit_base_32",
     "clip_vit_base_16",
@@ -549,11 +549,11 @@ __all__ = [    # ── Infrastructure ─────────────�
     # ── Vision (2017) Xception ────────────────────────────────────────────────
     "XceptionConfig", "Xception", "XceptionForImageClassification", "xception", "xception_cls",
     # ── Vision (2017) MobileNet v1 ────────────────────────────────────────────
-    "MobileNetV1Config", "MobileNetV1", "MobileNetV1ForImageClassification",
-    "mobilenet_v1", "mobilenet_v1_cls",
-    "mobilenet_v1_075", "mobilenet_v1_075_cls",
-    "mobilenet_v1_050", "mobilenet_v1_050_cls",
-    "mobilenet_v1_025", "mobilenet_v1_025_cls",
+    "MobileNetConfig", "MobileNet", "MobileNetForImageClassification",
+    "mobilenet", "mobilenet_cls",
+    "mobilenet_075", "mobilenet_075_cls",
+    "mobilenet_050", "mobilenet_050_cls",
+    "mobilenet_025", "mobilenet_025_cls",
     # ── Vision (2018) SENet ───────────────────────────────────────────────────
     "SENetConfig", "SENet", "SENetForImageClassification",
     "se_resnet_18", "se_resnet_18_cls", "se_resnet_34", "se_resnet_34_cls",
@@ -712,8 +712,8 @@ __all__ = [    # ── Infrastructure ─────────────�
     "roformer",
     "roformer_mlm", "roformer_cls", "roformer_token_cls",
     # ── Vision (2016) YOLOv1 ──────────────────────────────────────────────────
-    "YOLOV1Config", "YOLOV1ForObjectDetection",
-    "yolo_v1", "yolo_v1_tiny",
+    "YOLOConfig", "YOLOForObjectDetection",
+    "yolo", "yolo_tiny",
     # ── Vision (2017) YOLOv2 ──────────────────────────────────────────────────
     "YOLOV2Config", "YOLOV2ForObjectDetection",
     "yolo_v2",

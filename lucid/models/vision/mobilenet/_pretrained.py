@@ -5,28 +5,26 @@ from typing import Any, cast
 
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
-from lucid.models.vision.mobilenet._config import MobileNetV1Config
+from lucid.models.vision.mobilenet._config import MobileNetConfig
 from lucid.models.vision.mobilenet._model import (
-    MobileNetV1,
-    MobileNetV1ForImageClassification,
+    MobileNet,
+    MobileNetForImageClassification,
 )
-from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
+from lucid.models.vision.mobilenet._weights import MobileNetWeights
 from lucid.models._utils._common import reject_unavailable_pretrained
 
-_CFG_100 = MobileNetV1Config(width_mult=1.0)
-_CFG_075 = MobileNetV1Config(width_mult=0.75)
-_CFG_050 = MobileNetV1Config(width_mult=0.5)
-_CFG_025 = MobileNetV1Config(width_mult=0.25)
+_CFG_100 = MobileNetConfig(width_mult=1.0)
+_CFG_075 = MobileNetConfig(width_mult=0.75)
+_CFG_050 = MobileNetConfig(width_mult=0.5)
+_CFG_025 = MobileNetConfig(width_mult=0.25)
 
 
-def _b(cfg: MobileNetV1Config, kw: dict[str, object]) -> MobileNetV1:
-    return MobileNetV1(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
+def _b(cfg: MobileNetConfig, kw: dict[str, object]) -> MobileNet:
+    return MobileNet(replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg)
 
 
-def _c(
-    cfg: MobileNetV1Config, kw: dict[str, object]
-) -> MobileNetV1ForImageClassification:
-    return MobileNetV1ForImageClassification(
+def _c(cfg: MobileNetConfig, kw: dict[str, object]) -> MobileNetForImageClassification:
+    return MobileNetForImageClassification(
         replace(cfg, **cast(dict[str, Any], kw)) if kw else cfg
     )
 
@@ -37,15 +35,15 @@ def _c(
 @register_model(
     task="base",
     family="mobilenet",
-    model_type="mobilenet_v1",
-    model_class=MobileNetV1,
+    model_type="mobilenet",
+    model_class=MobileNet,
     default_config=_CFG_100,
     params=3_206_976,
 )
-def mobilenet_v1(pretrained: bool = False, **overrides: object) -> MobileNetV1:
+def mobilenet(pretrained: bool = False, **overrides: object) -> MobileNet:
     r"""MobileNet-v1 backbone at width multiplier :math:`\alpha = 1.0`.
 
-    Builds a :class:`MobileNetV1` with the canonical paper topology:
+    Builds a :class:`MobileNet` with the canonical paper topology:
     a 3×3 stem (stride 2) followed by 13 depthwise+pointwise blocks,
     yielding approximately 4.2M parameters.  Howard et al., 2017
     report a 70.6% ImageNet-1k top-1 validation accuracy with this
@@ -58,12 +56,12 @@ def mobilenet_v1(pretrained: bool = False, **overrides: object) -> MobileNetV1:
         Reserved for future pretrained-weight loading.  Currently
         ignored — the returned model is randomly initialised.
     **overrides
-        Keyword overrides forwarded into :class:`MobileNetV1Config`
+        Keyword overrides forwarded into :class:`MobileNetConfig`
         (e.g. ``in_channels=1`` for grayscale input).
 
     Returns
     -------
-    MobileNetV1
+    MobileNet
         Backbone with the MobileNet-v1 (:math:`\alpha = 1.0`)
         configuration applied (or with ``overrides`` merged on top
         of it).
@@ -77,30 +75,30 @@ def mobilenet_v1(pretrained: bool = False, **overrides: object) -> MobileNetV1:
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1
-    >>> model = mobilenet_v1()
+    >>> from lucid.models.vision.mobilenet import mobilenet
+    >>> model = mobilenet()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.last_hidden_state.shape
-    (1, 1024, 1, 1)
+    (1, 1024, 7, 7)
     """
     if pretrained:
-        reject_unavailable_pretrained("mobilenet_v1", alternative="mobilenet_v1_cls")
+        reject_unavailable_pretrained("mobilenet", alternative="mobilenet_cls")
     return _b(_CFG_100, overrides)
 
 
 @register_model(
     task="base",
     family="mobilenet",
-    model_type="mobilenet_v1",
-    model_class=MobileNetV1,
+    model_type="mobilenet",
+    model_class=MobileNet,
     default_config=_CFG_075,
     params=1_816_560,
 )
-def mobilenet_v1_075(pretrained: bool = False, **overrides: object) -> MobileNetV1:
+def mobilenet_075(pretrained: bool = False, **overrides: object) -> MobileNet:
     r"""MobileNet-v1 backbone at width multiplier :math:`\alpha = 0.75`.
 
-    Builds a :class:`MobileNetV1` with every channel count multiplied
+    Builds a :class:`MobileNet` with every channel count multiplied
     by 0.75 — approximately 2.6M parameters.  Howard et al., 2017
     report 68.4% ImageNet-1k top-1 accuracy with this configuration
     (Table 6), at roughly 60% of the FLOPs of the full-width model.
@@ -111,11 +109,11 @@ def mobilenet_v1_075(pretrained: bool = False, **overrides: object) -> MobileNet
         Reserved for future pretrained-weight loading.  Currently
         ignored.
     **overrides
-        Keyword overrides forwarded into :class:`MobileNetV1Config`.
+        Keyword overrides forwarded into :class:`MobileNetConfig`.
 
     Returns
     -------
-    MobileNetV1
+    MobileNet
         Backbone with the MobileNet-v1 (:math:`\alpha = 0.75`)
         configuration applied (or with ``overrides`` merged on top
         of it).
@@ -129,32 +127,30 @@ def mobilenet_v1_075(pretrained: bool = False, **overrides: object) -> MobileNet
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1_075
-    >>> model = mobilenet_v1_075()
+    >>> from lucid.models.vision.mobilenet import mobilenet_075
+    >>> model = mobilenet_075()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.last_hidden_state.shape
-    (1, 768, 1, 1)
+    (1, 768, 7, 7)
     """
     if pretrained:
-        reject_unavailable_pretrained(
-            "mobilenet_v1_075", alternative="mobilenet_v1_cls"
-        )
+        reject_unavailable_pretrained("mobilenet_075", alternative="mobilenet_cls")
     return _b(_CFG_075, overrides)
 
 
 @register_model(
     task="base",
     family="mobilenet",
-    model_type="mobilenet_v1",
-    model_class=MobileNetV1,
+    model_type="mobilenet",
+    model_class=MobileNet,
     default_config=_CFG_050,
     params=818_592,
 )
-def mobilenet_v1_050(pretrained: bool = False, **overrides: object) -> MobileNetV1:
+def mobilenet_050(pretrained: bool = False, **overrides: object) -> MobileNet:
     r"""MobileNet-v1 backbone at width multiplier :math:`\alpha = 0.5`.
 
-    Builds a :class:`MobileNetV1` with every channel count multiplied
+    Builds a :class:`MobileNet` with every channel count multiplied
     by 0.5 — approximately 1.3M parameters.  Howard et al., 2017
     report 63.7% ImageNet-1k top-1 accuracy with this configuration
     (Table 6), at roughly 27% of the FLOPs of the full-width model.
@@ -165,11 +161,11 @@ def mobilenet_v1_050(pretrained: bool = False, **overrides: object) -> MobileNet
         Reserved for future pretrained-weight loading.  Currently
         ignored.
     **overrides
-        Keyword overrides forwarded into :class:`MobileNetV1Config`.
+        Keyword overrides forwarded into :class:`MobileNetConfig`.
 
     Returns
     -------
-    MobileNetV1
+    MobileNet
         Backbone with the MobileNet-v1 (:math:`\alpha = 0.5`)
         configuration applied (or with ``overrides`` merged on top
         of it).
@@ -183,32 +179,30 @@ def mobilenet_v1_050(pretrained: bool = False, **overrides: object) -> MobileNet
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1_050
-    >>> model = mobilenet_v1_050()
+    >>> from lucid.models.vision.mobilenet import mobilenet_050
+    >>> model = mobilenet_050()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.last_hidden_state.shape
-    (1, 512, 1, 1)
+    (1, 512, 7, 7)
     """
     if pretrained:
-        reject_unavailable_pretrained(
-            "mobilenet_v1_050", alternative="mobilenet_v1_cls"
-        )
+        reject_unavailable_pretrained("mobilenet_050", alternative="mobilenet_cls")
     return _b(_CFG_050, overrides)
 
 
 @register_model(
     task="base",
     family="mobilenet",
-    model_type="mobilenet_v1",
-    model_class=MobileNetV1,
+    model_type="mobilenet",
+    model_class=MobileNet,
     default_config=_CFG_025,
     params=213_072,
 )
-def mobilenet_v1_025(pretrained: bool = False, **overrides: object) -> MobileNetV1:
+def mobilenet_025(pretrained: bool = False, **overrides: object) -> MobileNet:
     r"""MobileNet-v1 backbone at width multiplier :math:`\alpha = 0.25`.
 
-    Builds a :class:`MobileNetV1` with every channel count multiplied
+    Builds a :class:`MobileNet` with every channel count multiplied
     by 0.25 — approximately 0.5M parameters.  Howard et al., 2017
     report 50.6% ImageNet-1k top-1 accuracy with this configuration
     (Table 6) — the smallest MobileNet-v1 variant, targeted at
@@ -221,11 +215,11 @@ def mobilenet_v1_025(pretrained: bool = False, **overrides: object) -> MobileNet
         Reserved for future pretrained-weight loading.  Currently
         ignored.
     **overrides
-        Keyword overrides forwarded into :class:`MobileNetV1Config`.
+        Keyword overrides forwarded into :class:`MobileNetConfig`.
 
     Returns
     -------
-    MobileNetV1
+    MobileNet
         Backbone with the MobileNet-v1 (:math:`\alpha = 0.25`)
         configuration applied (or with ``overrides`` merged on top
         of it).
@@ -239,43 +233,41 @@ def mobilenet_v1_025(pretrained: bool = False, **overrides: object) -> MobileNet
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1_025
-    >>> model = mobilenet_v1_025()
+    >>> from lucid.models.vision.mobilenet import mobilenet_025
+    >>> model = mobilenet_025()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.last_hidden_state.shape
-    (1, 256, 1, 1)
+    (1, 256, 7, 7)
     """
     if pretrained:
-        reject_unavailable_pretrained(
-            "mobilenet_v1_025", alternative="mobilenet_v1_cls"
-        )
+        reject_unavailable_pretrained("mobilenet_025", alternative="mobilenet_cls")
     return _b(_CFG_025, overrides)
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-# reason: mobilenet_v1_cls adds typed weights= kwarg (per-model WeightsEnum);
+# reason: mobilenet_cls adds typed weights= kwarg (per-model WeightsEnum);
 # ModelFactory protocol predates the v3.1 weights system and still names only
 # pretrained + **overrides.
 @register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="mobilenet",
-    model_type="mobilenet_v1",
-    model_class=MobileNetV1ForImageClassification,
+    model_type="mobilenet",
+    model_class=MobileNetForImageClassification,
     default_config=_CFG_100,
     params=4_231_976,
 )
-def mobilenet_v1_cls(
+def mobilenet_cls(
     pretrained: bool | str = False,
     *,
-    weights: MobileNetV1Weights | None = None,
+    weights: MobileNetWeights | None = None,
     **overrides: object,
-) -> MobileNetV1ForImageClassification:
+) -> MobileNetForImageClassification:
     r"""MobileNet-v1 image classifier at width multiplier :math:`\alpha = 1.0`.
 
-    Builds a :class:`MobileNetV1ForImageClassification` with the
+    Builds a :class:`MobileNetForImageClassification` with the
     canonical paper topology (13 depthwise+pointwise blocks) followed
     by global average pooling and a linear projection to
     ``config.num_classes`` (default 1000 for ImageNet-1k).
@@ -286,19 +278,19 @@ def mobilenet_v1_cls(
     ----------
     pretrained : bool or str, optional, default=False
         Pretrained-weight selector.  ``False`` → random init; ``True``
-        → the ``DEFAULT`` tag (:attr:`MobileNetV1Weights.RA4_E3600_R224_IN1K`);
+        → the ``DEFAULT`` tag (:attr:`MobileNetWeights.RA4_E3600_R224_IN1K`);
         a tag string → that specific checkpoint.  Mutually exclusive with
         ``weights`` (which wins if both are given).
-    weights : MobileNetV1Weights, optional, keyword-only
+    weights : MobileNetWeights, optional, keyword-only
         Explicit weights enum member.  Takes precedence over
         ``pretrained``.
     **overrides
-        Keyword overrides forwarded into :class:`MobileNetV1Config`
+        Keyword overrides forwarded into :class:`MobileNetConfig`
         (typically ``num_classes`` to retarget the classifier).
 
     Returns
     -------
-    MobileNetV1ForImageClassification
+    MobileNetForImageClassification
         Classifier with the MobileNet-v1 (:math:`\alpha = 1.0`)
         configuration applied (or with ``overrides`` merged on top
         of it).
@@ -314,34 +306,34 @@ def mobilenet_v1_cls(
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1_cls
-    >>> model = mobilenet_v1_cls(num_classes=10)
+    >>> from lucid.models.vision.mobilenet import mobilenet_cls
+    >>> model = mobilenet_cls(num_classes=10)
     >>> x = lucid.randn(2, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (2, 10)
     """
-    entry = weights_mod.resolve_weights(MobileNetV1Weights, pretrained, weights)
+    entry = weights_mod.resolve_weights(MobileNetWeights, pretrained, weights)
     model = _c(_CFG_100, overrides)
     if entry is not None:
-        weights_mod.load_weight_entry(model, entry, name="mobilenet_v1_cls")
+        weights_mod.load_weight_entry(model, entry, name="mobilenet_cls")
     return model
 
 
 @register_model(
     task="image-classification",
     family="mobilenet",
-    model_type="mobilenet_v1",
-    model_class=MobileNetV1ForImageClassification,
+    model_type="mobilenet",
+    model_class=MobileNetForImageClassification,
     default_config=_CFG_075,
     params=2_585_560,
 )
-def mobilenet_v1_075_cls(
+def mobilenet_075_cls(
     pretrained: bool = False, **overrides: object
-) -> MobileNetV1ForImageClassification:
+) -> MobileNetForImageClassification:
     r"""MobileNet-v1 image classifier at width multiplier :math:`\alpha = 0.75`.
 
-    Builds a :class:`MobileNetV1ForImageClassification` with the
+    Builds a :class:`MobileNetForImageClassification` with the
     paper-cited 0.75-width topology — approximately 2.6M parameters
     and 68.4% ImageNet-1k top-1 in Howard et al., 2017 (Table 6).
 
@@ -351,11 +343,11 @@ def mobilenet_v1_075_cls(
         Reserved for future pretrained-weight loading.  Currently
         ignored.
     **overrides
-        Keyword overrides forwarded into :class:`MobileNetV1Config`.
+        Keyword overrides forwarded into :class:`MobileNetConfig`.
 
     Returns
     -------
-    MobileNetV1ForImageClassification
+    MobileNetForImageClassification
         Classifier with the MobileNet-v1 (:math:`\alpha = 0.75`)
         configuration applied (or with ``overrides`` merged on top
         of it).
@@ -369,34 +361,32 @@ def mobilenet_v1_075_cls(
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1_075_cls
-    >>> model = mobilenet_v1_075_cls()
+    >>> from lucid.models.vision.mobilenet import mobilenet_075_cls
+    >>> model = mobilenet_075_cls()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
     if pretrained:
-        reject_unavailable_pretrained(
-            "mobilenet_v1_075_cls", alternative="mobilenet_v1_cls"
-        )
+        reject_unavailable_pretrained("mobilenet_075_cls", alternative="mobilenet_cls")
     return _c(_CFG_075, overrides)
 
 
 @register_model(
     task="image-classification",
     family="mobilenet",
-    model_type="mobilenet_v1",
-    model_class=MobileNetV1ForImageClassification,
+    model_type="mobilenet",
+    model_class=MobileNetForImageClassification,
     default_config=_CFG_050,
     params=1_331_592,
 )
-def mobilenet_v1_050_cls(
+def mobilenet_050_cls(
     pretrained: bool = False, **overrides: object
-) -> MobileNetV1ForImageClassification:
+) -> MobileNetForImageClassification:
     r"""MobileNet-v1 image classifier at width multiplier :math:`\alpha = 0.5`.
 
-    Builds a :class:`MobileNetV1ForImageClassification` with the
+    Builds a :class:`MobileNetForImageClassification` with the
     paper-cited 0.5-width topology — approximately 1.3M parameters
     and 63.7% ImageNet-1k top-1 in Howard et al., 2017 (Table 6).
 
@@ -406,11 +396,11 @@ def mobilenet_v1_050_cls(
         Reserved for future pretrained-weight loading.  Currently
         ignored.
     **overrides
-        Keyword overrides forwarded into :class:`MobileNetV1Config`.
+        Keyword overrides forwarded into :class:`MobileNetConfig`.
 
     Returns
     -------
-    MobileNetV1ForImageClassification
+    MobileNetForImageClassification
         Classifier with the MobileNet-v1 (:math:`\alpha = 0.5`)
         configuration applied (or with ``overrides`` merged on top
         of it).
@@ -424,34 +414,32 @@ def mobilenet_v1_050_cls(
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1_050_cls
-    >>> model = mobilenet_v1_050_cls()
+    >>> from lucid.models.vision.mobilenet import mobilenet_050_cls
+    >>> model = mobilenet_050_cls()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
     if pretrained:
-        reject_unavailable_pretrained(
-            "mobilenet_v1_050_cls", alternative="mobilenet_v1_cls"
-        )
+        reject_unavailable_pretrained("mobilenet_050_cls", alternative="mobilenet_cls")
     return _c(_CFG_050, overrides)
 
 
 @register_model(
     task="image-classification",
     family="mobilenet",
-    model_type="mobilenet_v1",
-    model_class=MobileNetV1ForImageClassification,
+    model_type="mobilenet",
+    model_class=MobileNetForImageClassification,
     default_config=_CFG_025,
     params=470_072,
 )
-def mobilenet_v1_025_cls(
+def mobilenet_025_cls(
     pretrained: bool = False, **overrides: object
-) -> MobileNetV1ForImageClassification:
+) -> MobileNetForImageClassification:
     r"""MobileNet-v1 image classifier at width multiplier :math:`\alpha = 0.25`.
 
-    Builds a :class:`MobileNetV1ForImageClassification` with the
+    Builds a :class:`MobileNetForImageClassification` with the
     paper-cited 0.25-width topology — approximately 0.5M parameters
     and 50.6% ImageNet-1k top-1 in Howard et al., 2017 (Table 6).
     The smallest variant in the family, targeted at extreme edge
@@ -463,11 +451,11 @@ def mobilenet_v1_025_cls(
         Reserved for future pretrained-weight loading.  Currently
         ignored.
     **overrides
-        Keyword overrides forwarded into :class:`MobileNetV1Config`.
+        Keyword overrides forwarded into :class:`MobileNetConfig`.
 
     Returns
     -------
-    MobileNetV1ForImageClassification
+    MobileNetForImageClassification
         Classifier with the MobileNet-v1 (:math:`\alpha = 0.25`)
         configuration applied (or with ``overrides`` merged on top
         of it).
@@ -481,15 +469,13 @@ def mobilenet_v1_025_cls(
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1_025_cls
-    >>> model = mobilenet_v1_025_cls()
+    >>> from lucid.models.vision.mobilenet import mobilenet_025_cls
+    >>> model = mobilenet_025_cls()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
     if pretrained:
-        reject_unavailable_pretrained(
-            "mobilenet_v1_025_cls", alternative="mobilenet_v1_cls"
-        )
+        reject_unavailable_pretrained("mobilenet_025_cls", alternative="mobilenet_cls")
     return _c(_CFG_025, overrides)

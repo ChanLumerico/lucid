@@ -152,7 +152,7 @@ _ARCH_TINY: list[object] = [
     """,
 )
 @dataclass(frozen=True)
-class YOLOV1Config(ModelConfig):
+class YOLOConfig(ModelConfig):
     """Configuration for YOLOv1 (Redmon et al., CVPR 2016).
 
     Args:
@@ -167,7 +167,7 @@ class YOLOV1Config(ModelConfig):
         tiny:         Use the tiny Darknet backbone instead of the full one.
     """
 
-    model_type: ClassVar[str] = "yolo_v1"
+    model_type: ClassVar[str] = "yolo"
 
     num_classes: int = 80
     in_channels: int = 3
@@ -247,7 +247,7 @@ def _build_darknet(
 # ---------------------------------------------------------------------------
 
 
-class YOLOV1ForObjectDetection(PretrainedModel):
+class YOLOForObjectDetection(PretrainedModel):
     r"""YOLOv1 single-shot object detector (Redmon et al., CVPR 2016).
 
     The original "You Only Look Once" detector — recasts object detection
@@ -262,9 +262,9 @@ class YOLOV1ForObjectDetection(PretrainedModel):
 
     Parameters
     ----------
-    config : YOLOV1Config
-        Frozen architecture spec.  Use :func:`yolo_v1` for the full
-        Darknet backbone or :func:`yolo_v1_tiny` for the lightweight
+    config : YOLOConfig
+        Frozen architecture spec.  Use :func:`yolo` for the full
+        Darknet backbone or :func:`yolo_tiny` for the lightweight
         Tiny variant.  Both use the paper's ``S = 7``, ``B = 2`` grid but
         default to ``C = 80`` (COCO), the repo-wide convention for
         detection configs — the paper's own model is ``C = 20`` (VOC),
@@ -272,7 +272,7 @@ class YOLOV1ForObjectDetection(PretrainedModel):
 
     Attributes
     ----------
-    config : YOLOV1Config
+    config : YOLOConfig
         Stored copy of the config that built this model.
     darknet : nn.Sequential
         Backbone convolutional stack (full or tiny depending on
@@ -315,20 +315,20 @@ class YOLOV1ForObjectDetection(PretrainedModel):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.yolo._v1 import yolo_v1
-    >>> model = yolo_v1()
+    >>> from lucid.models.vision.yolo._v1 import yolo
+    >>> model = yolo()
     >>> x = lucid.randn(1, 3, 448, 448)   # YOLOv1 trained at 448
     >>> out = model(x)
     >>> out.logits.shape[-1] >= 20
     True
     """
 
-    config_class: ClassVar[type[YOLOV1Config]] = YOLOV1Config
+    config_class: ClassVar[type[YOLOConfig]] = YOLOConfig
     base_model_prefix: ClassVar[str] = "darknet"
 
-    config: YOLOV1Config
+    config: YOLOConfig
 
-    def __init__(self, config: YOLOV1Config) -> None:
+    def __init__(self, config: YOLOConfig) -> None:
         super().__init__(config)
         S = config.split_size
         B = config.num_boxes
@@ -787,7 +787,7 @@ class YOLOV1ForObjectDetection(PretrainedModel):
 # Factory functions
 # ---------------------------------------------------------------------------
 
-_CFG_V1 = YOLOV1Config(
+_CFG_V1 = YOLOConfig(
     num_classes=80,
     in_channels=3,
     split_size=7,
@@ -799,7 +799,7 @@ _CFG_V1 = YOLOV1Config(
     tiny=False,
 )
 
-_CFG_V1_TINY = YOLOV1Config(
+_CFG_V1_TINY = YOLOConfig(
     num_classes=80,
     in_channels=3,
     split_size=7,
@@ -812,25 +812,23 @@ _CFG_V1_TINY = YOLOV1Config(
 )
 
 
-def _make_v1(
-    cfg: YOLOV1Config, overrides: dict[str, object]
-) -> YOLOV1ForObjectDetection:
+def _make_v1(cfg: YOLOConfig, overrides: dict[str, object]) -> YOLOForObjectDetection:
     if overrides:
         cfg = replace(cfg, **cast(dict[str, Any], overrides))
-    return YOLOV1ForObjectDetection(cfg)
+    return YOLOForObjectDetection(cfg)
 
 
 @register_model(
     task="object-detection",
     family="yolo",
-    model_type="yolo_v1",
-    model_class=YOLOV1ForObjectDetection,
+    model_type="yolo",
+    model_class=YOLOForObjectDetection,
     default_config=_CFG_V1,
 )
-def yolo_v1(
+def yolo(
     pretrained: bool = False,
     **overrides: object,
-) -> YOLOV1ForObjectDetection:
+) -> YOLOForObjectDetection:
     r"""YOLOv1 with full Darknet backbone (Redmon et al., CVPR 2016).
 
     Builds the paper-cited full YOLOv1 detector: 24-layer Darknet
@@ -845,13 +843,13 @@ def yolo_v1(
     pretrained : bool, optional, default=False
         Reserved for future pretrained-weight loading.  Currently ignored.
     **overrides
-        Keyword overrides forwarded into :class:`YOLOV1Config` —
+        Keyword overrides forwarded into :class:`YOLOConfig` —
         ``num_classes``, ``split_size`` (S), ``num_boxes`` (B),
         ``score_thresh``, ``nms_thresh``, and loss weights.
 
     Returns
     -------
-    YOLOV1ForObjectDetection
+    YOLOForObjectDetection
         Detector with the full YOLOv1 configuration applied (or with
         ``overrides`` merged on top of it).
 
@@ -863,8 +861,8 @@ def yolo_v1(
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.yolo._v1 import yolo_v1
-    >>> model = yolo_v1()
+    >>> from lucid.models.vision.yolo._v1 import yolo
+    >>> model = yolo()
     >>> x = lucid.randn(1, 3, 448, 448)
     >>> out = model(x)
     >>> out.logits.shape[0]
@@ -876,14 +874,14 @@ def yolo_v1(
 @register_model(
     task="object-detection",
     family="yolo",
-    model_type="yolo_v1",
-    model_class=YOLOV1ForObjectDetection,
+    model_type="yolo",
+    model_class=YOLOForObjectDetection,
     default_config=_CFG_V1_TINY,
 )
-def yolo_v1_tiny(
+def yolo_tiny(
     pretrained: bool = False,
     **overrides: object,
-) -> YOLOV1ForObjectDetection:
+) -> YOLOForObjectDetection:
     r"""YOLOv1-Tiny with reduced Darknet backbone (Redmon et al., CVPR 2016).
 
     Builds the lightweight variant described in the YOLOv1 paper alongside
@@ -900,11 +898,11 @@ def yolo_v1_tiny(
     pretrained : bool, optional, default=False
         Reserved for future pretrained-weight loading.  Currently ignored.
     **overrides
-        Keyword overrides forwarded into :class:`YOLOV1Config`.
+        Keyword overrides forwarded into :class:`YOLOConfig`.
 
     Returns
     -------
-    YOLOV1ForObjectDetection
+    YOLOForObjectDetection
         Detector with the YOLOv1-Tiny configuration applied (or with
         ``overrides`` merged on top of it).
 
@@ -917,8 +915,8 @@ def yolo_v1_tiny(
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.vision.yolo._v1 import yolo_v1_tiny
-    >>> model = yolo_v1_tiny()
+    >>> from lucid.models.vision.yolo._v1 import yolo_tiny
+    >>> model = yolo_tiny()
     >>> x = lucid.randn(1, 3, 448, 448)
     >>> out = model(x)
     >>> out.logits.shape[0]

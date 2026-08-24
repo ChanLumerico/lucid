@@ -409,7 +409,7 @@ class TestTheAssembledModel:
 class TestVariants:
     def test_v1_matches_clips_text_width(self) -> None:
         """The conditioning contract, checked against the actual tower."""
-        sd = M.stable_diffusion_v1().config
+        sd = M.stable_diffusion().config
         clip = M.clip_vit_large_14().config
         assert sd.cross_attention_dim == clip.text_width == 768
         assert sd.context_length == clip.context_length == 77
@@ -420,8 +420,8 @@ class TestVariants:
         architecture is registered rather than five or two."""
         names = M.list_models(family="stable_diffusion")
         assert sorted(names) == [
-            "stable_diffusion_v1",
-            "stable_diffusion_v1_gen",
+            "stable_diffusion",
+            "stable_diffusion_gen",
         ]
 
     def test_v1_declares_weights(self) -> None:
@@ -429,11 +429,11 @@ class TestVariants:
         into — a stale ``num_params`` is invisible until a user
         downloads three and a half gigabytes."""
         from lucid.models.generative.stable_diffusion import (
-            StableDiffusionV1Weights,
+            StableDiffusionWeights,
         )
 
-        entry = StableDiffusionV1Weights.DEFAULT.value
-        model = M.stable_diffusion_v1()
+        entry = StableDiffusionWeights.DEFAULT.value
+        model = M.stable_diffusion()
         total = sum(
             math.prod(tuple(int(s) for s in p.shape)) for p in model.parameters()
         )
@@ -501,10 +501,10 @@ class TestItMatchesTheReleasedCheckpoint:
         )
 
     def test_the_unet_has_the_published_size(self) -> None:
-        assert self._count(M.stable_diffusion_v1().unet) == 859_520_964
+        assert self._count(M.stable_diffusion().unet) == 859_520_964
 
     def test_the_autoencoder_has_the_published_size(self) -> None:
-        assert self._count(M.stable_diffusion_v1().vae) == 83_653_863
+        assert self._count(M.stable_diffusion().vae) == 83_653_863
 
     def test_the_feed_forward_is_gated(self) -> None:
         """GEGLU projects to twice the inner width and gates with half.

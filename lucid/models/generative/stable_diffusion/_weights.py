@@ -34,7 +34,7 @@ whose own weights are published separately.
 from lucid.utils.transforms import ImageClassification
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-__all__ = ["StableDiffusionV1Weights"]
+__all__ = ["StableDiffusionWeights"]
 
 # The first stage works in [-1, 1] rather than on dataset statistics —
 # it is an autoencoder, not a classifier, and has no notion of a mean
@@ -47,9 +47,9 @@ _PRESET_512 = ImageClassification(
 )
 
 
-@register_weights("stable_diffusion_v1")
-class StableDiffusionV1Weights(WeightsEnum):
-    """Pretrained weights for :func:`lucid.models.stable_diffusion_v1`.
+@register_weights("stable_diffusion")
+class StableDiffusionWeights(WeightsEnum):
+    """Pretrained weights for :func:`lucid.models.stable_diffusion`.
 
     The v1 line's released checkpoint, trained on LAION subsets.
     ``num_classes`` is 0: a diffusion model has no label set, and the

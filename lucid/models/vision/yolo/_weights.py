@@ -13,9 +13,9 @@ square canvas and feed raw :math:`[0, 1]` pixels.  No dataset mean/std is
 subtracted anywhere in darknet's pipeline, so the presets below pass
 ``mean = 0`` / ``std = 1``.  The letterbox pad value is 0.5 grey.
 
-``yolo_v1`` has no entry here: the weights pjreddie published under
+``yolo`` has no entry here: the weights pjreddie published under
 ``yolov1/`` are for a different configuration than the paper's detector,
-and they do not fit this family's ``yolo_v1`` topology.
+and they do not fit this family's ``yolo`` topology.
 """
 
 from lucid.utils.transforms import Detection

@@ -14,6 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+
+---
+
+## [3.9.0] — 2026-08-25
+
+> **Upgrading from 3.8.x.** `lucid.models`'s top-level surface lost 43 names
+> (see **Removed**). Nothing was aliased, so importing one of them from
+> `lucid.models` now raises `ImportError` rather than warning. All 43 are still
+> importable, from the module that owns them — `lucid.models._protocols` (9),
+> `lucid.models.generative` (7), `lucid.models._mixins` (6),
+> `lucid.models._meta` (2), and the family package for the rest, e.g.
+> `from lucid.models.generative.ddpm import DDPMUNet`. No capability was
+> removed and the engine ABI is unchanged (8).
+>
+> Ten factory names also lost a `v1` suffix (see **Changed**) —
+> `mobilenet_v1` → `mobilenet`, `yolo_v1` → `yolo`, and their variants. These
+> are renames, not removals: the models, weights and behaviour are unchanged.
+
 ### Added
 - add CLIP and the multimodal domain — four paper-cited ViT variants (B/32, B/16, L/14, L/14@336px) with pretrained weights on the Lucid hub, verified against the reference to 3.8e-07..1.5e-06 relative error
 - add CLIPTokenizer and CLIPTokenizerFast — byte-level BPE with the paper's end-of-word marker; the fast path runs the merge loop in C++ by folding the marker into a single codepoint
@@ -23,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add scaled_linear to BetaSchedule and make_beta_schedule — linear in sqrt(beta), which is what the released diffusion models use and is a different curve from linear between the same endpoints
 
-- publish Stable Diffusion v1 weights on the Lucid hub — pretrained=True downloads, SHA-verifies and loads both sub-models, verified against the reference to 9.2e-05 (U-Net) and 2.7e-04 / 1.4e-04 (autoencoder)
+- publish Stable Diffusion weights on the Lucid hub — pretrained=True downloads, SHA-verifies and loads both sub-models, verified against the reference to 9.2e-05 (U-Net) and 2.7e-04 / 1.4e-04 (autoencoder)
 
 - sample with PNDM, because that is what the release ships
 
@@ -34,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - drop the stable_diffusion_v2 factories — the released configuration could not be read from the primary source, and the field that decides its attention shape is named for the opposite of what it means
 
 ### Changed
+
+- drop the `v1` suffix from every model name that carried one — `mobilenet_v1` is now `mobilenet` (and `mobilenet_v1_025` → `mobilenet_025`, `_cls` variants likewise), `yolo_v1` is now `yolo`, `yolo_v1_tiny` is now `yolo_tiny`. The classes follow: `MobileNetV1` → `MobileNet`, `YOLOV1Config` → `YOLOConfig`, `MobileNetV1Weights` → `MobileNetWeights`. A first version does not need a version in its name, and these now match the display names the docs site was already using. `v2`/`v3`/`v4` keep their suffixes; the published weight repositories keep their URLs, so `pretrained=True` still resolves
 
 - move QuickGELU, ResidualAttentionBlock and TransformerTower into the CLIP family — a domain-level module is for what several families share
 
@@ -3431,7 +3451,8 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.8.0...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.9.0...HEAD
+[3.9.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.9.0
 [3.8.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.8.0
 [3.7.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.7.1
 [3.7.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.7.0

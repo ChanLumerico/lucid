@@ -55,7 +55,7 @@ _CITATION = (
 )
 
 _RELEASES: dict[str, tuple[str, dict[str, object]]] = {
-    "stable_diffusion_v1": ("stable-diffusion-v1-5/stable-diffusion-v1-5", {}),
+    "stable_diffusion": ("stable-diffusion-v1-5/stable-diffusion-v1-5", {}),
 }
 
 
@@ -394,7 +394,7 @@ def _vae_attn_leaf(leaf: str) -> str:
     }.get(leaf, leaf)
 
 
-@register_arch("stable_diffusion_v1")
-def _stable_diffusion_v1(tag: str) -> StableDiffusionArch:
+@register_arch("stable_diffusion")
+def _stable_diffusion(tag: str) -> StableDiffusionArch:
     """Build the v1 recipe."""
-    return StableDiffusionArch("stable_diffusion_v1", tag)
+    return StableDiffusionArch("stable_diffusion", tag)

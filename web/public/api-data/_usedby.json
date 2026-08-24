@@ -4039,13 +4039,13 @@
       "module": "lucid.models.generative.stable_diffusion"
     }
   ],
-  "lucid.models.generative.stable_diffusion._pretrained.stable_diffusion_v1": [
+  "lucid.models.generative.stable_diffusion._pretrained.stable_diffusion": [
     {
       "kind": "module",
       "module": "lucid.models.generative.stable_diffusion"
     }
   ],
-  "lucid.models.generative.stable_diffusion._pretrained.stable_diffusion_v1_gen": [
+  "lucid.models.generative.stable_diffusion._pretrained.stable_diffusion_gen": [
     {
       "kind": "module",
       "module": "lucid.models.generative.stable_diffusion"
@@ -4081,7 +4081,7 @@
       "module": "lucid.models.generative.stable_diffusion._model"
     }
   ],
-  "lucid.models.generative.stable_diffusion._weights.StableDiffusionV1Weights": [
+  "lucid.models.generative.stable_diffusion._weights.StableDiffusionWeights": [
     {
       "kind": "module",
       "module": "lucid.models.generative.stable_diffusion"
@@ -7789,7 +7789,7 @@
       "module": "lucid.models"
     }
   ],
-  "lucid.models.vision.mobilenet._config.MobileNetV1Config": [
+  "lucid.models.vision.mobilenet._config.MobileNetConfig": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
@@ -7803,7 +7803,7 @@
       "module": "lucid.models.vision.mobilenet._pretrained"
     }
   ],
-  "lucid.models.vision.mobilenet._model.MobileNetV1": [
+  "lucid.models.vision.mobilenet._model.MobileNet": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
@@ -7813,7 +7813,7 @@
       "module": "lucid.models.vision.mobilenet._pretrained"
     }
   ],
-  "lucid.models.vision.mobilenet._model.MobileNetV1ForImageClassification": [
+  "lucid.models.vision.mobilenet._model.MobileNetForImageClassification": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
@@ -7823,55 +7823,55 @@
       "module": "lucid.models.vision.mobilenet._pretrained"
     }
   ],
-  "lucid.models.vision.mobilenet._pretrained.mobilenet_v1": [
+  "lucid.models.vision.mobilenet._pretrained.mobilenet": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
     }
   ],
-  "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_025": [
+  "lucid.models.vision.mobilenet._pretrained.mobilenet_025": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
     }
   ],
-  "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_025_cls": [
+  "lucid.models.vision.mobilenet._pretrained.mobilenet_025_cls": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
     }
   ],
-  "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_050": [
+  "lucid.models.vision.mobilenet._pretrained.mobilenet_050": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
     }
   ],
-  "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_050_cls": [
+  "lucid.models.vision.mobilenet._pretrained.mobilenet_050_cls": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
     }
   ],
-  "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_075": [
+  "lucid.models.vision.mobilenet._pretrained.mobilenet_075": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
     }
   ],
-  "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_075_cls": [
+  "lucid.models.vision.mobilenet._pretrained.mobilenet_075_cls": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
     }
   ],
-  "lucid.models.vision.mobilenet._pretrained.mobilenet_v1_cls": [
+  "lucid.models.vision.mobilenet._pretrained.mobilenet_cls": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
     }
   ],
-  "lucid.models.vision.mobilenet._weights.MobileNetV1Weights": [
+  "lucid.models.vision.mobilenet._weights.MobileNetWeights": [
     {
       "kind": "module",
       "module": "lucid.models.vision.mobilenet"
@@ -9815,25 +9815,25 @@
       "module": "lucid.models"
     }
   ],
-  "lucid.models.vision.yolo._v1.YOLOV1Config": [
+  "lucid.models.vision.yolo._v1.YOLOConfig": [
     {
       "kind": "module",
       "module": "lucid.models.vision.yolo"
     }
   ],
-  "lucid.models.vision.yolo._v1.YOLOV1ForObjectDetection": [
+  "lucid.models.vision.yolo._v1.YOLOForObjectDetection": [
     {
       "kind": "module",
       "module": "lucid.models.vision.yolo"
     }
   ],
-  "lucid.models.vision.yolo._v1.yolo_v1": [
+  "lucid.models.vision.yolo._v1.yolo": [
     {
       "kind": "module",
       "module": "lucid.models.vision.yolo"
     }
   ],
-  "lucid.models.vision.yolo._v1.yolo_v1_tiny": [
+  "lucid.models.vision.yolo._v1.yolo_tiny": [
     {
       "kind": "module",
       "module": "lucid.models.vision.yolo"

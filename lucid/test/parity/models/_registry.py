@@ -434,10 +434,10 @@ SPECS: list[ParitySpec] = [
         use_positional_fallback=True,
     ),
     # ── MobileNet v1 — no timm exact equivalent ───────────────────────────────
-    ParitySpec(M.mobilenet_v1_cls, None),
-    ParitySpec(M.mobilenet_v1_075_cls, None),
-    ParitySpec(M.mobilenet_v1_050_cls, None),
-    ParitySpec(M.mobilenet_v1_025_cls, None),
+    ParitySpec(M.mobilenet_cls, None),
+    ParitySpec(M.mobilenet_075_cls, None),
+    ParitySpec(M.mobilenet_050_cls, None),
+    ParitySpec(M.mobilenet_025_cls, None),
     # ── MobileNet v2 ──────────────────────────────────────────────────────────
     # timm head: classifier.weight (exact match).  Feature block names differ
     # from timm's MBConv naming → positional fallback for body alignment.

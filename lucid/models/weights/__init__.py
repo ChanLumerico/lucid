@@ -202,7 +202,7 @@ from lucid.models.vision.mask2former._weights import (
 )
 
 # 2017 — MobileNet v1 (Howard et al.)
-from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
+from lucid.models.vision.mobilenet._weights import MobileNetWeights
 
 # 2022 — EfficientFormer (Li et al.)
 from lucid.models.vision.efficientformer._weights import (
@@ -393,7 +393,7 @@ __all__ = [
     "Mask2FormerSwinBaseWeights",
     "Mask2FormerSwinLargeWeights",
     # ── Vision (2017) MobileNet v1 ────────────────────────────────────
-    "MobileNetV1Weights",
+    "MobileNetWeights",
     # ── Vision (2022) EfficientFormer ─────────────────────────────────
     "EfficientFormerL1Weights",
     "EfficientFormerL3Weights",

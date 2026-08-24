@@ -169,8 +169,8 @@ def _cases(quick: bool) -> list[tuple[str, callable, callable]]:
             lambda: lucid.randn(1, 3, 224, 224),
         ),
         (
-            "mobilenet_v1 (1×3×224²)",
-            lambda: M.mobilenet_v1(num_classes=10),
+            "mobilenet (1×3×224²)",
+            lambda: M.mobilenet(num_classes=10),
             lambda: lucid.randn(1, 3, 224, 224),
         ),
         (

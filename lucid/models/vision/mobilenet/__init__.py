@@ -1,34 +1,34 @@
 """MobileNet v1 family — Howard et al., 2017."""
 
-from lucid.models.vision.mobilenet._config import MobileNetV1Config
+from lucid.models.vision.mobilenet._config import MobileNetConfig
 from lucid.models.vision.mobilenet._model import (
-    MobileNetV1,
-    MobileNetV1ForImageClassification,
+    MobileNet,
+    MobileNetForImageClassification,
 )
 from lucid.models.vision.mobilenet._pretrained import (
-    mobilenet_v1,
-    mobilenet_v1_cls,
-    mobilenet_v1_075,
-    mobilenet_v1_075_cls,
-    mobilenet_v1_050,
-    mobilenet_v1_050_cls,
-    mobilenet_v1_025,
-    mobilenet_v1_025_cls,
+    mobilenet,
+    mobilenet_cls,
+    mobilenet_075,
+    mobilenet_075_cls,
+    mobilenet_050,
+    mobilenet_050_cls,
+    mobilenet_025,
+    mobilenet_025_cls,
 )
-from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
+from lucid.models.vision.mobilenet._weights import MobileNetWeights
 
 __all__ = [
-    "MobileNetV1Config",
-    "MobileNetV1",
-    "MobileNetV1ForImageClassification",
-    "mobilenet_v1",
-    "mobilenet_v1_cls",
-    "mobilenet_v1_075",
-    "mobilenet_v1_075_cls",
-    "mobilenet_v1_050",
-    "mobilenet_v1_050_cls",
-    "mobilenet_v1_025",
-    "mobilenet_v1_025_cls",
+    "MobileNetConfig",
+    "MobileNet",
+    "MobileNetForImageClassification",
+    "mobilenet",
+    "mobilenet_cls",
+    "mobilenet_075",
+    "mobilenet_075_cls",
+    "mobilenet_050",
+    "mobilenet_050_cls",
+    "mobilenet_025",
+    "mobilenet_025_cls",
     # Pretrained weight enums
-    "MobileNetV1Weights",
+    "MobileNetWeights",
 ]

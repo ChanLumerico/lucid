@@ -9,10 +9,10 @@ References
 """
 
 from lucid.models.vision.yolo._v1 import (
-    YOLOV1Config,
-    YOLOV1ForObjectDetection,
-    yolo_v1,
-    yolo_v1_tiny,
+    YOLOConfig,
+    YOLOForObjectDetection,
+    yolo,
+    yolo_tiny,
 )
 from lucid.models._utils._detection import MultiScaleResolution
 from lucid.models.vision.yolo._v2 import (
@@ -40,10 +40,10 @@ from lucid.models.vision.yolo._weights import (
 
 __all__ = [
     # YOLOv1
-    "YOLOV1Config",
-    "YOLOV1ForObjectDetection",
-    "yolo_v1",
-    "yolo_v1_tiny",
+    "YOLOConfig",
+    "YOLOForObjectDetection",
+    "yolo",
+    "yolo_tiny",
     # YOLOv2
     "MultiScaleResolution",
     "YOLOV2Config",

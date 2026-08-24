@@ -67,10 +67,10 @@ MODEL_CASES = [
         id="vgg_11",
     ),
     pytest.param(
-        "mobilenet_v1",
-        lambda: M.mobilenet_v1(num_classes=10),
+        "mobilenet",
+        lambda: M.mobilenet(num_classes=10),
         lambda: metal_tensor(1, 3, 224, 224),
-        id="mobilenet_v1",
+        id="mobilenet",
     ),
     pytest.param(
         "efficientnet_b0",

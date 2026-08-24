@@ -23,7 +23,7 @@ timm                                Lucid
 ==================================  =========================
 
 The activation-parity blocker this file used to warn about is resolved
-in both directions: ``MobileNetV1`` uses :class:`~lucid.nn.ReLU6`
+in both directions: ``MobileNet`` uses :class:`~lucid.nn.ReLU6`
 throughout (stem and both activations of every separable block), matching
 the timm checkpoint and the TensorFlow reference, and the converted
 weights *are* wired — ``_weights.py`` carries a pinned sha256 and
@@ -54,8 +54,8 @@ _MOBILENET_V1_PAPER_URL = (
 
 # arch -> (lucid_cls_factory, repo_id, title, timm_model_name)
 _MOBILENET_V1_VARIANTS: dict[str, tuple[str, str, str, str]] = {
-    "mobilenet_v1": (
-        "mobilenet_v1_cls",
+    "mobilenet": (
+        "mobilenet_cls",
         "lucid-dl/mobilenet-v1",
         "MobileNet V1",
         "mobilenetv1_100.ra4_e3600_r224_in1k",
@@ -65,14 +65,14 @@ _MOBILENET_V1_VARIANTS: dict[str, tuple[str, str, str, str]] = {
 _STEM_DW_PW_BLOCKS = 13  # paper Table 1 — 13 depthwise+pointwise blocks
 
 
-class MobileNetV1Arch(Architecture):
+class MobileNetArch(Architecture):
     """Converter for one timm MobileNet-v1 variant + tag."""
 
     def __init__(self, arch: str, tag: str) -> None:
         import timm
 
         if arch not in _MOBILENET_V1_VARIANTS:
-            raise KeyError(f"MobileNetV1Arch: unknown arch {arch!r}")
+            raise KeyError(f"MobileNetArch: unknown arch {arch!r}")
         self.arch = arch
         self.tag = tag
         self._timm_name = _MOBILENET_V1_VARIANTS[arch][3]
@@ -171,7 +171,7 @@ class MobileNetV1Arch(Architecture):
             repo_id=repo_id,
             tag=self.tag,
             task="image-classification",
-            model_type="mobilenet_v1",
+            model_type="mobilenet",
             source=f"timm/{self._timm_name}",
             license=str(cfg.get("license", "apache-2.0")),
             num_classes=int(model.config.num_classes),
@@ -186,6 +186,6 @@ class MobileNetV1Arch(Architecture):
         )
 
 
-@register_arch("mobilenet_v1")
-def _build_mobilenet_v1(tag: str) -> Architecture:
-    return MobileNetV1Arch("mobilenet_v1", tag)
+@register_arch("mobilenet")
+def _build_mobilenet(tag: str) -> Architecture:
+    return MobileNetArch("mobilenet", tag)

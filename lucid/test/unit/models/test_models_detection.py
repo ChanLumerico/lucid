@@ -841,12 +841,12 @@ class TestEfficientDetD0:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestYOLOV1:
+class TestYOLO:
     def test_factory_and_forward(self, device: str) -> None:
-        from lucid.models.vision.yolo import yolo_v1, YOLOV1ForObjectDetection
+        from lucid.models.vision.yolo import yolo, YOLOForObjectDetection
 
-        m = _build(yolo_v1, device)
-        assert isinstance(m, YOLOV1ForObjectDetection)
+        m = _build(yolo, device)
+        assert isinstance(m, YOLOForObjectDetection)
 
         x = _img(device)
         out = m(x)
@@ -864,9 +864,9 @@ class TestYOLOV1:
         assert diff < 1e-5
 
     def test_tiny_variant(self, device: str) -> None:
-        from lucid.models.vision.yolo import yolo_v1_tiny
+        from lucid.models.vision.yolo import yolo_tiny
 
-        m = _build(yolo_v1_tiny, device)
+        m = _build(yolo_tiny, device)
         out = m(_img(device))
         assert isinstance(out, ObjectDetectionOutput)
 
@@ -976,8 +976,8 @@ class TestDetectionRegistry:
             "detr_resnet101",
             "efficientdet_d0",
             "efficientdet_d7",
-            "yolo_v1",
-            "yolo_v1_tiny",
+            "yolo",
+            "yolo_tiny",
             "yolo_v2",
             "yolo_v3",
             "yolo_v3_tiny",

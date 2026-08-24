@@ -31,7 +31,7 @@ import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
 from lucid.models.generative.stable_diffusion._weights import (
-    StableDiffusionV1Weights,
+    StableDiffusionWeights,
 )
 from lucid.models.generative.stable_diffusion._model import (
     StableDiffusionForImageGeneration,
@@ -39,11 +39,13 @@ from lucid.models.generative.stable_diffusion._model import (
 )
 
 __all__ = [
-    "stable_diffusion_v1",
-    "stable_diffusion_v1_gen",
+    "stable_diffusion",
+    "stable_diffusion_gen",
 ]
 
 _CFG_V1 = StableDiffusionConfig()
+
+
 def _apply(
     cfg: StableDiffusionConfig, overrides: dict[str, object]
 ) -> StableDiffusionConfig:
@@ -58,7 +60,7 @@ def _apply(
     default_config=_CFG_V1,
     summary="auto",
 )
-def stable_diffusion_v1(
+def stable_diffusion(
     pretrained: bool = False, **overrides: object
 ) -> StableDiffusionModel:
     """Construct the v1 architecture — 512 pixels, CLIP ViT-L/14 width.
@@ -85,17 +87,16 @@ def stable_diffusion_v1(
 
     Examples
     --------
-    >>> from lucid.models import stable_diffusion_v1
-    >>> model = stable_diffusion_v1()
+    >>> from lucid.models import stable_diffusion
+    >>> model = stable_diffusion()
     >>> model.config.latent_size, model.config.cross_attention_dim
     (64, 768)
     """
     model = StableDiffusionModel(_apply(_CFG_V1, overrides))
-    entry = weights_mod.resolve_weights(StableDiffusionV1Weights, pretrained, None)
+    entry = weights_mod.resolve_weights(StableDiffusionWeights, pretrained, None)
     if entry is not None:
-        weights_mod.load_weight_entry(model, entry, name="stable_diffusion_v1")
+        weights_mod.load_weight_entry(model, entry, name="stable_diffusion")
     return model
-
 
 
 @register_model(
@@ -106,7 +107,7 @@ def stable_diffusion_v1(
     default_config=_CFG_V1,
     summary="auto",
 )
-def stable_diffusion_v1_gen(
+def stable_diffusion_gen(
     pretrained: bool = False, **overrides: object
 ) -> StableDiffusionForImageGeneration:
     """v1 posed as a sampler.
@@ -129,17 +130,15 @@ def stable_diffusion_v1_gen(
 
     Examples
     --------
-    >>> from lucid.models import stable_diffusion_v1_gen
-    >>> model = stable_diffusion_v1_gen()
+    >>> from lucid.models import stable_diffusion_gen
+    >>> model = stable_diffusion_gen()
     >>> model.config.sample_size
     512
     """
     model = StableDiffusionForImageGeneration(_apply(_CFG_V1, overrides))
-    entry = weights_mod.resolve_weights(StableDiffusionV1Weights, pretrained, None)
+    entry = weights_mod.resolve_weights(StableDiffusionWeights, pretrained, None)
     if entry is not None:
         weights_mod.load_weight_entry(
-            model.stable_diffusion, entry, name="stable_diffusion_v1_gen"
+            model.stable_diffusion, entry, name="stable_diffusion_gen"
         )
     return model
-
-

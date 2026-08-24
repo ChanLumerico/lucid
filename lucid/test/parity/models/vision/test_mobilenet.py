@@ -14,10 +14,10 @@ from lucid.test.parity.models._utils import (
 
 _FACTORIES = frozenset(
     {
-        M.mobilenet_v1_cls,
-        M.mobilenet_v1_075_cls,
-        M.mobilenet_v1_050_cls,
-        M.mobilenet_v1_025_cls,
+        M.mobilenet_cls,
+        M.mobilenet_075_cls,
+        M.mobilenet_050_cls,
+        M.mobilenet_025_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

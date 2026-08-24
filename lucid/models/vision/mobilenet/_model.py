@@ -32,14 +32,14 @@ from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models._utils._common import make_divisible as _make_divisible
-from lucid.models.vision.mobilenet._config import MobileNetV1Config
+from lucid.models.vision.mobilenet._config import MobileNetConfig
 
 
 def _dw_pw(in_ch: int, out_ch: int, stride: int) -> nn.Sequential:
     """Depthwise + pointwise block with BN and ReLU6.
 
     Section 3.1 of the paper says plain ReLU; both canonical references
-    (TF-Slim's ``mobilenet_v1_arg_scope`` and timm's ``_gen_mobilenet_v1``)
+    (TF-Slim's ``mobilenet_arg_scope`` and timm's ``_gen_mobilenet``)
     use ReLU6, and the converted checkpoint was trained with it, so ReLU6
     is what is built here.
     """
@@ -73,7 +73,7 @@ _DW_PW_SPECS: list[tuple[int, int]] = [
 ]
 
 
-def _build_features(cfg: MobileNetV1Config) -> tuple[nn.Sequential, int]:
+def _build_features(cfg: MobileNetConfig) -> tuple[nn.Sequential, int]:
     """Build the full feature extractor. Returns (Sequential, num_out_channels)."""
     w = cfg.width_mult
 
@@ -100,7 +100,7 @@ def _build_features(cfg: MobileNetV1Config) -> tuple[nn.Sequential, int]:
 # ---------------------------------------------------------------------------
 
 
-class MobileNetV1(PretrainedModel, BackboneMixin):
+class MobileNet(PretrainedModel, BackboneMixin):
     r"""MobileNet v1 feature-extracting backbone (no classification head).
 
     Implements the depthwise-separable convolutional topology from
@@ -122,14 +122,14 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
 
     Parameters
     ----------
-    config : MobileNetV1Config
+    config : MobileNetConfig
         Frozen architecture spec.  Use the factory functions
-        (:func:`mobilenet_v1`, :func:`mobilenet_v1_075`, …) for
+        (:func:`mobilenet`, :func:`mobilenet_075`, …) for
         paper-cited width-multiplier variants.
 
     Attributes
     ----------
-    config : MobileNetV1Config
+    config : MobileNetConfig
         Stored copy of the config that built this model.
     features : nn.Sequential
         Stem :math:`3 \times 3` conv (stride 2) followed by 13
@@ -168,12 +168,12 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
     Build a MobileNet-v1 backbone and run a forward pass:
 
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1
-    >>> backbone = mobilenet_v1()
+    >>> from lucid.models.vision.mobilenet import mobilenet
+    >>> backbone = mobilenet()
     >>> x = lucid.randn(2, 3, 224, 224)
     >>> out = backbone(x)
     >>> out.last_hidden_state.shape
-    (2, 1024, 1, 1)
+    (2, 1024, 7, 7)
 
     Inspect the per-stage feature map descriptors for FPN integration:
 
@@ -182,10 +182,10 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
     [(1, 64, 2), (2, 128, 4), (3, 256, 8), (4, 512, 16), (5, 1024, 32)]
     """
 
-    config_class: ClassVar[type[MobileNetV1Config]] = MobileNetV1Config
-    base_model_prefix: ClassVar[str] = "mobilenet_v1"
+    config_class: ClassVar[type[MobileNetConfig]] = MobileNetConfig
+    base_model_prefix: ClassVar[str] = "mobilenet"
 
-    def __init__(self, config: MobileNetV1Config) -> None:
+    def __init__(self, config: MobileNetConfig) -> None:
         super().__init__(config)
         features, num_features = _build_features(config)
         self.features = features
@@ -230,10 +230,10 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class MobileNetV1ForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class MobileNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
     r"""MobileNet v1 with global-average-pooled linear classification head.
 
-    Combines a :class:`MobileNetV1` backbone with the standard
+    Combines a :class:`MobileNet` backbone with the standard
     ImageNet classification head: an :class:`~lucid.nn.AdaptiveAvgPool2d`
     to pool every spatial location into a single feature vector,
     a :class:`~lucid.nn.Dropout` (probability ``config.dropout``,
@@ -244,18 +244,18 @@ class MobileNetV1ForImageClassification(PretrainedModel, ClassificationHeadMixin
 
     Parameters
     ----------
-    config : MobileNetV1Config
+    config : MobileNetConfig
         Architecture spec.  Use the ``*_cls`` factory functions
-        (:func:`mobilenet_v1_cls`, :func:`mobilenet_v1_075_cls`, …)
+        (:func:`mobilenet_cls`, :func:`mobilenet_075_cls`, …)
         to obtain a paper-cited configuration; pass a custom config
         to retarget ``num_classes`` or change ``width_mult``.
 
     Attributes
     ----------
-    config : MobileNetV1Config
+    config : MobileNetConfig
         Stored copy of the config that built this model.
     features : nn.Sequential
-        Same depthwise-separable stack as on :class:`MobileNetV1`.
+        Same depthwise-separable stack as on :class:`MobileNet`.
     avgpool : nn.AdaptiveAvgPool2d
         Global average pool collapsing the final feature map to
         ``1 × 1``.
@@ -285,8 +285,8 @@ class MobileNetV1ForImageClassification(PretrainedModel, ClassificationHeadMixin
     Run inference on a batch of 224×224 RGB images:
 
     >>> import lucid
-    >>> from lucid.models.vision.mobilenet import mobilenet_v1_cls
-    >>> model = mobilenet_v1_cls()
+    >>> from lucid.models.vision.mobilenet import mobilenet_cls
+    >>> model = mobilenet_cls()
     >>> x = lucid.randn(4, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
@@ -302,10 +302,10 @@ class MobileNetV1ForImageClassification(PretrainedModel, ClassificationHeadMixin
     ()
     """
 
-    config_class: ClassVar[type[MobileNetV1Config]] = MobileNetV1Config
-    base_model_prefix: ClassVar[str] = "mobilenet_v1"
+    config_class: ClassVar[type[MobileNetConfig]] = MobileNetConfig
+    base_model_prefix: ClassVar[str] = "mobilenet"
 
-    def __init__(self, config: MobileNetV1Config) -> None:
+    def __init__(self, config: MobileNetConfig) -> None:
         super().__init__(config)
         features, num_features = _build_features(config)
         self.features = features

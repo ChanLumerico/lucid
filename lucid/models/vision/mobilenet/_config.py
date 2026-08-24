@@ -48,11 +48,11 @@ from lucid.models._meta import model_family_meta
     Together these two knobs let MobileNet-v1 cover a wide spectrum
     of mobile/embedded budgets from sub-mW edge devices up to
     desktop-class deployment, while keeping a single training recipe
-    and a single :class:`MobileNetV1Config` schema.
+    and a single :class:`MobileNetConfig` schema.
     """,
 )
 @dataclass(frozen=True)
-class MobileNetV1Config(ModelConfig):
+class MobileNetConfig(ModelConfig):
     """Configuration for MobileNet v1.
 
     ``width_mult`` — uniform channel multiplier (α in the paper).
@@ -71,7 +71,7 @@ class MobileNetV1Config(ModelConfig):
     what the released model was trained with.
     """
 
-    model_type: ClassVar[str] = "mobilenet_v1"
+    model_type: ClassVar[str] = "mobilenet"
 
     num_classes: int = 1000
     in_channels: int = 3

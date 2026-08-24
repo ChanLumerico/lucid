@@ -3,7 +3,7 @@
 One paper-cited variant (Howard et al., 2017) ships an ImageNet-1k
 checkpoint converted from timm's
 ``mobilenetv1_100.ra4_e3600_r224_in1k`` model zoo:
-:class:`MobileNetV1Weights`.  This is the full-width
+:class:`MobileNetWeights`.  This is the full-width
 (:math:`\\alpha = 1.0`) classifier; the slim 0.75 / 0.5 / 0.25 width
 variants are not shipped because no clean upstream checkpoint exists
 for them.
@@ -25,9 +25,9 @@ _PRESET = ImageClassification(
 )
 
 
-@register_weights("mobilenet_v1_cls")
-class MobileNetV1Weights(WeightsEnum):
-    r"""Pretrained weights for :func:`lucid.models.mobilenet_v1_cls`.
+@register_weights("mobilenet_cls")
+class MobileNetWeights(WeightsEnum):
+    r"""Pretrained weights for :func:`lucid.models.mobilenet_cls`.
 
     Single ImageNet-1k checkpoint converted from timm's
     ``mobilenetv1_100.ra4_e3600_r224_in1k`` (Howard et al., 2017;
