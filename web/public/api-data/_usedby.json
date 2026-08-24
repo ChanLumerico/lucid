@@ -1784,6 +1784,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -2386,6 +2390,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._autoencoder"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vqvae._model"
     },
     {
@@ -2637,6 +2649,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.score_sde._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._pretrained"
     },
     {
       "kind": "module",
@@ -3941,6 +3957,128 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.score_sde"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._autoencoder.AutoencoderKL": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._model"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._autoencoder.AutoencoderKLOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._autoencoder.DiagonalGaussian": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._config.StableDiffusionConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._autoencoder"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._scheduler"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._unet"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._model.StableDiffusionForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._pretrained"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._model.StableDiffusionModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._pretrained"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._model.StableDiffusionOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._pretrained.stable_diffusion_v1": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._pretrained.stable_diffusion_v1_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._scheduler.DDIMScheduler": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._model"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._unet.UNet2DConditionModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._model"
+    }
+  ],
+  "lucid.models.generative.stable_diffusion._weights.StableDiffusionV1Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._pretrained"
     }
   ],
   "lucid.models.generative.vae": [
@@ -9938,6 +10076,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._autoencoder"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._unet"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -10333,6 +10479,14 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.rectified_flow._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._autoencoder"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._unet"
     },
     {
       "kind": "module",
@@ -15174,6 +15328,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._weights"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.multimodal.clip._weights"
     },
     {
@@ -16193,6 +16351,14 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._weights"
     },
     {
       "kind": "module",
