@@ -1,4 +1,18 @@
-r"""The sampler — DDIM, and the noise schedule the released models use.
+r"""The samplers — DDIM and PNDM — over the released noise schedule.
+
+**Which one the release actually uses.**  The published
+``scheduler_config.json`` names ``PNDMScheduler``, and ``model_index.json``
+wires it into the pipeline; ``skip_prk_steps`` in that file is a PNDM
+field and nothing else reads it.  The LDM paper, on the other hand,
+samples with DDIM and reports its FID under it.
+
+Both are here for that reason.  :class:`DDIMScheduler` is the paper's
+and the simpler contract — one parameter :math:`\eta` spanning DDPM at
+1 and deterministic DDIM at 0.  :class:`PNDMScheduler` is the release's
+default and is what reproduces its images.  They share the schedule,
+the :math:`\bar\alpha` table and the epsilon prediction; only the step
+rule differs, which is why PNDM is written on top of DDIM rather than
+beside it.
 
 DDPM's ancestral sampler needs one network evaluation per training
 timestep, so a thousand-step model costs a thousand forwards. DDIM
@@ -38,7 +52,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
 
-__all__ = ["DDIMScheduler"]
+__all__ = ["DDIMScheduler", "PNDMScheduler"]
 
 
 @final
@@ -76,8 +90,8 @@ class DDIMScheduler:
     50
     >>> scheduler.timesteps(50)[0] > scheduler.timesteps(50)[-1]
     True
-    >>> scheduler.timesteps(10)[:3]
-    [901, 801, 701]
+    >>> scheduler.timesteps(10)[:4]
+    [901, 801, 701, 601]
     """
 
     def __init__(self, config: StableDiffusionConfig) -> None:
@@ -125,8 +139,9 @@ class DDIMScheduler:
         # per-step arithmetic is identical either way, so a trajectory
         # built on the wrong times takes correct steps to a different
         # image and nothing reports it.
-        ascending = [i * stride + self.config.steps_offset for i in
-                     range(num_inference_steps)]
+        ascending = [
+            i * stride + self.config.steps_offset for i in range(num_inference_steps)
+        ]
         return ascending[::-1]
 
     def add_noise(self, latent: Tensor, noise: Tensor, timestep: int) -> Tensor:
@@ -189,8 +204,10 @@ class DDIMScheduler:
         alpha_t = float(self.alphas_cumprod[timestep].item())
         # Past the end the reference bootstraps from ``alphas_cumprod[0]``
         # unless ``set_alpha_to_one``; the released config leaves it off.
-        final = 1.0 if self.config.set_alpha_to_one else float(
-            self.alphas_cumprod[0].item()
+        final = (
+            1.0
+            if self.config.set_alpha_to_one
+            else float(self.alphas_cumprod[0].item())
         )
         alpha_prev = (
             float(self.alphas_cumprod[previous_timestep].item())
@@ -215,3 +232,211 @@ class DDIMScheduler:
                 dtype=latent.dtype,
             )
         return cast(Tensor, previous)
+
+
+@final
+class PNDMScheduler:
+    r"""The release's default sampler — linear multistep over DDIM's step.
+
+    Parameters
+    ----------
+    config : StableDiffusionConfig
+        Read for the same fields :class:`DDIMScheduler` uses.
+
+    Notes
+    -----
+    Reference: Liu et al., *"Pseudo Numerical Methods for Diffusion
+    Models on Manifolds"*, ICLR, 2022 (`arXiv:2202.09778
+    <https://arxiv.org/abs/2202.09778>`_); the constants are the released
+    Stable Diffusion configuration, whose ``_class_name`` is this.
+
+    The update is DDIM's at :math:`\eta = 0` applied not to the current
+    epsilon but to an Adams-Bashforth combination of the last four:
+
+    .. math::
+
+        \bar\epsilon_t = \tfrac{1}{24}\big(55\epsilon_t - 59\epsilon_{t-1}
+            + 37\epsilon_{t-2} - 9\epsilon_{t-3}\big),
+
+    with lower-order openers while the history fills — the plain
+    prediction first, then a trapezoid, then a two-term rule, then a
+    three-term one.  Four evaluations of information per step is what
+    buys the same image in fifty steps that DDIM needs more of.
+
+    **It carries state**, unlike :class:`DDIMScheduler`.  The history,
+    the step counter and the sample the opener began from live on the
+    object, so one instance cannot sample two trajectories at once.
+    Sequential reuse is safe: :meth:`timesteps` means "start a sample"
+    and clears the history, and :meth:`step` checks that the timestep it
+    is handed is the one at the counter's position.  That check is the
+    one that matters — the order of the correction is chosen by position,
+    so stepping out of order applies the wrong rule to right-looking
+    numbers.  :meth:`reset` is there for the caller who wants to say so
+    without asking for a trajectory.
+
+    The second step repeats the first timestep rather than advancing —
+    ``counter == 1`` in the reference — which looks like an off-by-one
+    and is the trapezoidal opener needing both endpoints.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.stable_diffusion import (
+    ...     PNDMScheduler, StableDiffusionConfig)
+    >>> scheduler = PNDMScheduler(StableDiffusionConfig())
+    >>> scheduler.timesteps(10)[:4]
+    [901, 801, 801, 701]
+    >>> scheduler.counter
+    0
+    """
+
+    def __init__(self, config: StableDiffusionConfig) -> None:
+        """Build the schedule. See the class docstring for parameters."""
+        self._ddim = DDIMScheduler(config)
+        self.config = config
+        self.betas = self._ddim.betas
+        self.alphas_cumprod = self._ddim.alphas_cumprod
+        self.reset()
+
+    def reset(self) -> None:
+        """Clear the history so a new trajectory starts clean."""
+        self.ets: list[Tensor] = []
+        self.counter = 0
+        self.cur_sample: Tensor | None = None
+        self._stride: int | None = None
+        self._trajectory: list[int] = []
+
+    def timesteps(self, num_inference_steps: int) -> list[int]:
+        """The decreasing subsequence to sample over.
+
+        Parameters
+        ----------
+        num_inference_steps : int
+            Steps to divide the schedule into.  One more evaluation than
+            this actually runs, because the opener visits its interval
+            twice.
+
+        Returns
+        -------
+        list of int
+            Descending indices, **one longer than requested**: the
+            *second* time is visited twice.
+
+        Notes
+        -----
+        Calling this starts a sample — it clears the history, the counter
+        and the saved opener sample.
+
+        The repeat is the trapezoidal opener, and the reference puts it
+        in the list rather than in the step.  Its slices —
+        ``[t[:-1], t[-2:-1], t[-1:]]`` — are taken on the *ascending*
+        array before reversal, so the duplicated entry lands **second**
+        in the descending order: 901, 801, 801, 701, and not
+        …, 101, 101, 1.  Reading those slices as descending puts the
+        opener at the end, where it is the wrong rule at the wrong time.
+        """
+        # Asking for a trajectory is the start of a sample, so the
+        # history goes with it.  Carrying it over is the silent failure
+        # this class is most exposed to: the derivatives of the previous
+        # sequence are the right shape and the wrong numbers.
+        self.reset()
+        self._stride = self.config.num_train_timesteps // num_inference_steps
+        ascending = self._ddim.timesteps(num_inference_steps)[::-1]
+        extended = ascending[:-1] + ascending[-2:-1] + ascending[-1:]
+        self._trajectory = extended[::-1]
+        return list(self._trajectory)
+
+    def step(self, model_output: Tensor, timestep: int, latent: Tensor) -> Tensor:
+        r"""One reverse step, using the history.
+
+        Parameters
+        ----------
+        model_output : Tensor
+            :math:`\epsilon_\theta` at ``timestep``.
+        timestep : int
+            Current :math:`t`.
+        latent : Tensor
+            :math:`z_t`.
+
+        Returns
+        -------
+        Tensor
+            :math:`z_{t-1}`.
+
+        Notes
+        -----
+        The previous timestep is derived from the stride rather than
+        passed, because the multistep rule is only valid on the uniform
+        grid :meth:`timesteps` produces.  Call that first; this raises
+        otherwise rather than assuming a stride.
+        """
+        if not hasattr(self, "_stride"):
+            raise RuntimeError(
+                "call timesteps() before step() — PNDM's multistep rule "
+                "needs the uniform grid that call establishes"
+            )
+        if self._stride is None:
+            raise RuntimeError(
+                "call timesteps() before step() — PNDM's stride comes from "
+                "the step count, and its trajectory repeats a timestep, so "
+                "it cannot be inferred from the timestep alone"
+            )
+        # The order of the rule is read off the counter, so the counter
+        # has to agree with the caller about where in the trajectory we
+        # are.  Checking the timestep is the cheapest way to say so.
+        if self.counter >= len(self._trajectory):
+            raise RuntimeError(
+                f"this trajectory has {len(self._trajectory)} steps and all "
+                "of them have been taken; call timesteps() again to start a "
+                "new sample"
+            )
+        expected = self._trajectory[self.counter]
+        if timestep != expected:
+            raise RuntimeError(
+                f"expected timestep {expected} at position {self.counter} of "
+                f"the trajectory but got {timestep}; PNDM's multistep rule "
+                "is chosen by position, so stepping out of order applies the "
+                "wrong order of correction"
+            )
+        previous = timestep - self._stride
+
+        # The repeated time is already in the list, so the only thing
+        # the counter decides here is whether the history advances.
+        if self.counter == 1:
+            previous, timestep = timestep, timestep + self._stride
+        else:
+            self.ets = self.ets[-3:]
+            self.ets.append(model_output)
+
+        if len(self.ets) == 1 and self.counter == 0:
+            combined = model_output
+            # The opener needs the sample it started from, not the one
+            # the repeated step produced — the second evaluation is of
+            # the *same* interval, so it must begin where the first did.
+            self.cur_sample = latent
+        elif len(self.ets) == 1 and self.counter == 1:
+            combined = (model_output + self.ets[-1]) / 2.0
+            opener, self.cur_sample = self.cur_sample, None
+            if opener is None:
+                raise RuntimeError(
+                    "the second PNDM step needs the sample the first one "
+                    "began from, and none was recorded; call reset() before "
+                    "reusing a scheduler on a new sequence"
+                )
+            latent = opener
+        elif len(self.ets) == 2:
+            combined = (3.0 * self.ets[-1] - self.ets[-2]) / 2.0
+        elif len(self.ets) == 3:
+            combined = (
+                23.0 * self.ets[-1] - 16.0 * self.ets[-2] + 5.0 * self.ets[-3]
+            ) / 12.0
+        else:
+            combined = (1.0 / 24.0) * (
+                55.0 * self.ets[-1]
+                - 59.0 * self.ets[-2]
+                + 37.0 * self.ets[-3]
+                - 9.0 * self.ets[-4]
+            )
+
+        self.counter += 1
+        return self._ddim.step(combined, timestep, previous, latent, eta=0.0)

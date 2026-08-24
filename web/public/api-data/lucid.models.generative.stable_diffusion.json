@@ -3,7 +3,7 @@
   "name": "stable_diffusion",
   "path": "lucid.models.generative.stable_diffusion",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/__init__.py#L1",
   "members": [
     {
       "name": "AutoencoderKL",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "AutoencoderKL(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L288",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L288",
       "subcategory": "autoencoder",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L322",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L322",
           "subcategory": "autoencoder",
           "summary": "Initialise the autoencoder. See the class docstring.",
           "extended": null,
@@ -46,7 +46,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L373",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L373",
           "subcategory": "autoencoder",
           "summary": "Map an image to its posterior over latents.",
           "extended": null,
@@ -75,7 +75,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(z: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L400",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L400",
           "subcategory": "autoencoder",
           "summary": "Map a latent back to an image.",
           "extended": null,
@@ -104,7 +104,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, sample: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L426",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L426",
           "subcategory": "autoencoder",
           "summary": "Encode, take a latent, and decode it back.",
           "extended": null,
@@ -166,7 +166,7 @@
       ],
       "labels": [],
       "signature": "AutoencoderKLOutput(reconstruction: Tensor, latent: Tensor, kl: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L268",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L268",
       "subcategory": "autoencoder",
       "methods": [
         {
@@ -175,7 +175,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(reconstruction: Tensor, latent: Tensor, kl: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L1",
           "subcategory": "autoencoder",
           "summary": "Hold the posterior. See the class docstring for parameters.",
           "extended": null,
@@ -227,7 +227,7 @@
       "bases": [],
       "labels": [],
       "signature": "DiagonalGaussian(mean: Tensor, logvar: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L37",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L37",
       "subcategory": "autoencoder",
       "methods": [
         {
@@ -236,7 +236,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(mean: Tensor, logvar: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L71",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L71",
           "subcategory": "autoencoder",
           "summary": "Hold the posterior. See the class docstring for parameters.",
           "extended": null,
@@ -258,7 +258,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sample()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L77",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L77",
           "subcategory": "autoencoder",
           "summary": "Draw a reparameterised sample.",
           "extended": null,
@@ -280,7 +280,7 @@
           "kind": "function",
           "labels": [],
           "signature": "mode()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L92",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L92",
           "subcategory": "autoencoder",
           "summary": "Return the distribution's mode, which for a Gaussian is its mean.",
           "extended": null,
@@ -302,7 +302,7 @@
           "kind": "function",
           "labels": [],
           "signature": "kl()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_autoencoder.py#L102",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_autoencoder.py#L102",
           "subcategory": "autoencoder",
           "summary": "KL against $\\mathcal{N}(0, I)$, averaged over the batch.",
           "extended": null,
@@ -359,7 +359,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionConfig(sample_size: int = 512, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_train_timesteps: int = 1000, beta_start: float = 0.00085, beta_end: float = 0.012, beta_schedule: BetaSchedule = 'scaled_linear', prediction_type: Literal['epsilon', 'sample', 'v_prediction'] = 'epsilon', latent_channels: int = 4, downsample_factor: int = 8, vae_block_out_channels: tuple[int, ...] = (128, 256, 512, 512), vae_layers_per_block: int = 2, unet_block_out_channels: tuple[int, ...] = (320, 640, 1280, 1280), unet_layers_per_block: int = 2, attention_head_dim: int = 8, cross_attention_dim: int = 768, context_length: int = 77, steps_offset: int = 1, set_alpha_to_one: bool = False, norm_num_groups: int = 32)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_config.py#L12",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_config.py#L12",
       "subcategory": "config",
       "methods": [
         {
@@ -370,7 +370,7 @@
             "property"
           ],
           "signature": "latent_size: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_config.py#L177",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_config.py#L177",
           "summary": "Side of the square latent the U-Net operates on.",
           "extended": null,
           "parameters": [],
@@ -391,7 +391,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int = 512, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_train_timesteps: int = 1000, beta_start: float = 0.00085, beta_end: float = 0.012, beta_schedule: BetaSchedule = 'scaled_linear', prediction_type: Literal['epsilon', 'sample', 'v_prediction'] = 'epsilon', latent_channels: int = 4, downsample_factor: int = 8, vae_block_out_channels: tuple[int, ...] = (128, 256, 512, 512), vae_layers_per_block: int = 2, unet_block_out_channels: tuple[int, ...] = (320, 640, 1280, 1280), unet_layers_per_block: int = 2, attention_head_dim: int = 8, cross_attention_dim: int = 768, context_length: int = 77, steps_offset: int = 1, set_alpha_to_one: bool = False, norm_num_groups: int = 32)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_config.py#L1",
           "subcategory": "config",
           "summary": "Hold the posterior. See the class docstring for parameters.",
           "extended": null,
@@ -536,7 +536,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionForImageGeneration(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L220",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L225",
       "subcategory": "model",
       "methods": [
         {
@@ -545,7 +545,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L257",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L262",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -566,8 +566,8 @@
           "path": "lucid.models.generative.stable_diffusion._model.StableDiffusionForImageGeneration.generate",
           "kind": "function",
           "labels": [],
-          "signature": "generate(context: Tensor, uncond_context: Tensor | None = None, num_inference_steps: int = 50, guidance_scale: float = 7.5, eta: float = 0.0, latent: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L262",
+          "signature": "generate(context: Tensor, uncond_context: Tensor | None = None, num_inference_steps: int = 50, guidance_scale: float = 7.5, eta: float = 0.0, latent: Tensor | None = None, sampler: str = 'pndm')",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L267",
           "subcategory": "model",
           "summary": "Sample an image from the conditioning.",
           "extended": null,
@@ -599,7 +599,7 @@
             {
               "name": "eta",
               "annotation": "float",
-              "description": "DDIM at 0, DDPM at 1.",
+              "description": "DDIM at 0, DDPM at 1.  Ignored by PNDM, which is\ndeterministic by construction.",
               "default": "0.0"
             },
             {
@@ -607,6 +607,12 @@
               "annotation": "Tensor or None",
               "description": "Starting noise. Drawn when absent.",
               "default": "None"
+            },
+            {
+              "name": "sampler",
+              "annotation": "str",
+              "description": "`\"pndm\"` reproduces the released pipeline — its\n`model_index.json` names `PNDMScheduler`.  `\"ddim\"` is\nthe paper's, and the one `eta` applies to.",
+              "default": "\"pndm\""
             }
           ],
           "returns": {
@@ -631,7 +637,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(context: Tensor, num_inference_steps: int = 50)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L343",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L363",
           "subcategory": "model",
           "summary": "Alias for `generate` with default guidance disabled.",
           "extended": null,
@@ -693,7 +699,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionModel(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L72",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L75",
       "subcategory": "model",
       "methods": [
         {
@@ -702,7 +708,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L122",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L127",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -724,7 +730,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode_image(images: Tensor, sample: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L130",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L135",
           "subcategory": "model",
           "summary": "Image to scaled latent.",
           "extended": null,
@@ -759,7 +765,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode_latent(latent: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L150",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L155",
           "subcategory": "model",
           "summary": "Scaled latent back to an image.",
           "extended": null,
@@ -788,7 +794,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(images: Tensor, context: Tensor, timestep: Tensor | None = None, return_loss: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L165",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L170",
           "subcategory": "model",
           "summary": "One training step's worth of the denoising objective.",
           "extended": null,
@@ -862,7 +868,7 @@
         {
           "name": "scheduler",
           "annotation": "DDIMScheduler",
-          "description": "Noise schedule and sampler."
+          "description": "The paper's sampler, and what `forward` uses to noise a\nlatent.  Sampling defaults to PNDM instead — see\n`StableDiffusionForImageGeneration.generate`."
         }
       ],
       "warns": [],
@@ -878,7 +884,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionOutput(noise_pred: Tensor, latent: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L53",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L56",
       "subcategory": "model",
       "methods": [
         {
@@ -887,7 +893,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(noise_pred: Tensor, latent: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -937,7 +943,7 @@
       "kind": "function",
       "labels": [],
       "signature": "stable_diffusion_v1(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_pretrained.py#L53",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_pretrained.py#L53",
       "subcategory": "pretrained",
       "summary": "Construct the v1 architecture — 512 pixels, CLIP ViT-L/14 width.",
       "extended": null,
@@ -1040,10 +1046,18 @@
                   },
                   {
                     "name": "2",
-                    "type": "Conv2d",
+                    "type": "_Downsample2d",
                     "params": 147584,
-                    "own_params": 147584,
-                    "children": []
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      }
+                    ]
                   },
                   {
                     "name": "3",
@@ -1140,10 +1154,18 @@
                   },
                   {
                     "name": "5",
-                    "type": "Conv2d",
+                    "type": "_Downsample2d",
                     "params": 590080,
-                    "own_params": 590080,
-                    "children": []
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      }
+                    ]
                   },
                   {
                     "name": "6",
@@ -1240,10 +1262,18 @@
                   },
                   {
                     "name": "8",
-                    "type": "Conv2d",
+                    "type": "_Downsample2d",
                     "params": 2359808,
-                    "own_params": 2359808,
-                    "children": []
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 2359808,
+                        "own_params": 2359808,
+                        "children": []
+                      }
+                    ]
                   },
                   {
                     "name": "9",
@@ -3629,7 +3659,7 @@
       "kind": "function",
       "labels": [],
       "signature": "stable_diffusion_v1_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_pretrained.py#L101",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_pretrained.py#L101",
       "subcategory": "pretrained",
       "summary": "v1 posed as a sampler.",
       "extended": null,
@@ -3738,10 +3768,18 @@
                       },
                       {
                         "name": "2",
-                        "type": "Conv2d",
+                        "type": "_Downsample2d",
                         "params": 147584,
-                        "own_params": 147584,
-                        "children": []
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 147584,
+                            "own_params": 147584,
+                            "children": []
+                          }
+                        ]
                       },
                       {
                         "name": "3",
@@ -3838,10 +3876,18 @@
                       },
                       {
                         "name": "5",
-                        "type": "Conv2d",
+                        "type": "_Downsample2d",
                         "params": 590080,
-                        "own_params": 590080,
-                        "children": []
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 590080,
+                            "own_params": 590080,
+                            "children": []
+                          }
+                        ]
                       },
                       {
                         "name": "6",
@@ -3938,10 +3984,18 @@
                       },
                       {
                         "name": "8",
-                        "type": "Conv2d",
+                        "type": "_Downsample2d",
                         "params": 2359808,
-                        "own_params": 2359808,
-                        "children": []
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 2359808,
+                            "own_params": 2359808,
+                            "children": []
+                          }
+                        ]
                       },
                       {
                         "name": "9",
@@ -6331,7 +6385,7 @@
       "bases": [],
       "labels": [],
       "signature": "DDIMScheduler(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_scheduler.py#L44",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L58",
       "subcategory": "scheduler",
       "methods": [
         {
@@ -6340,7 +6394,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_scheduler.py#L83",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L97",
           "subcategory": "scheduler",
           "summary": "Build the schedule. See the class docstring for parameters.",
           "extended": null,
@@ -6362,7 +6416,7 @@
           "kind": "function",
           "labels": [],
           "signature": "timesteps(num_inference_steps: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_scheduler.py#L98",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L112",
           "subcategory": "scheduler",
           "summary": "The decreasing subsequence to sample over.",
           "extended": null,
@@ -6396,7 +6450,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add_noise(latent: Tensor, noise: Tensor, timestep: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_scheduler.py#L132",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L147",
           "subcategory": "scheduler",
           "summary": "The forward process — $z_t$ from $z_0$.",
           "extended": null,
@@ -6437,7 +6491,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(model_output: Tensor, timestep: int, previous_timestep: int, latent: Tensor, eta: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_scheduler.py#L152",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L167",
           "subcategory": "scheduler",
           "summary": "One reverse step.",
           "extended": null,
@@ -6503,7 +6557,7 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     DDIMScheduler, StableDiffusionConfig)\n>>> scheduler = DDIMScheduler(StableDiffusionConfig())\n>>> len(scheduler.timesteps(50))\n50\n>>> scheduler.timesteps(50)[0] > scheduler.timesteps(50)[-1]\nTrue\n>>> scheduler.timesteps(10)[:3]\n[901, 801, 701]"
+        ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     DDIMScheduler, StableDiffusionConfig)\n>>> scheduler = DDIMScheduler(StableDiffusionConfig())\n>>> len(scheduler.timesteps(50))\n50\n>>> scheduler.timesteps(50)[0] > scheduler.timesteps(50)[-1]\nTrue\n>>> scheduler.timesteps(10)[:4]\n[901, 801, 701, 601]"
       ],
       "notes": [
         "Reference: Song, Meng and Ermon, *\"Denoising Diffusion Implicit\nModels\"*, ICLR, 2021 ([arXiv:2010.02502](https://arxiv.org/abs/2010.02502)); the schedule constants are\nthe released Stable Diffusion configuration.\n\nKept as a plain object rather than a `lucid.nn.Module`: it\nholds no parameters, and making it a Module would put its buffers in\nthe checkpoint of every model that uses one."
@@ -6519,6 +6573,158 @@
       "see_also": []
     },
     {
+      "name": "PNDMScheduler",
+      "path": "lucid.models.generative.stable_diffusion._scheduler.PNDMScheduler",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "PNDMScheduler(config: StableDiffusionConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L237",
+      "subcategory": "scheduler",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.stable_diffusion._scheduler.PNDMScheduler.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: StableDiffusionConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L293",
+          "subcategory": "scheduler",
+          "summary": "Build the schedule. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reset",
+          "path": "lucid.models.generative.stable_diffusion._scheduler.PNDMScheduler.reset",
+          "kind": "function",
+          "labels": [],
+          "signature": "reset()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L301",
+          "subcategory": "scheduler",
+          "summary": "Clear the history so a new trajectory starts clean.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "timesteps",
+          "path": "lucid.models.generative.stable_diffusion._scheduler.PNDMScheduler.timesteps",
+          "kind": "function",
+          "labels": [],
+          "signature": "timesteps(num_inference_steps: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L309",
+          "subcategory": "scheduler",
+          "summary": "The decreasing subsequence to sample over.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "num_inference_steps",
+              "annotation": "int",
+              "description": "Steps to divide the schedule into.  One more evaluation than\nthis actually runs, because the opener visits its interval\ntwice.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "list of int",
+            "description": "Descending indices, **one longer than requested**: the\n*second* time is visited twice."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Calling this starts a sample — it clears the history, the counter\nand the saved opener sample.\n\nThe repeat is the trapezoidal opener, and the reference puts it\nin the list rather than in the step.  Its slices —\n`[t[:-1], t[-2:-1], t[-1:]]` — are taken on the *ascending*\narray before reversal, so the duplicated entry lands **second**\nin the descending order: 901, 801, 801, 701, and not\n…, 101, 101, 1.  Reading those slices as descending puts the\nopener at the end, where it is the wrong rule at the wrong time."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step",
+          "path": "lucid.models.generative.stable_diffusion._scheduler.PNDMScheduler.step",
+          "kind": "function",
+          "labels": [],
+          "signature": "step(model_output: Tensor, timestep: int, latent: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_scheduler.py#L349",
+          "subcategory": "scheduler",
+          "summary": "One reverse step, using the history.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "model_output",
+              "annotation": "Tensor",
+              "description": "$\\epsilon_\\theta$ at `timestep`.",
+              "default": null
+            },
+            {
+              "name": "timestep",
+              "annotation": "int",
+              "description": "Current $t$.",
+              "default": null
+            },
+            {
+              "name": "latent",
+              "annotation": "Tensor",
+              "description": "$z_t$.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "$z_{t-1}$."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "The previous timestep is derived from the stride rather than\npassed, because the multistep rule is only valid on the uniform\ngrid `timesteps` produces.  Call that first; this raises\notherwise rather than assuming a stride."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "The release's default sampler — linear multistep over DDIM's step.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "StableDiffusionConfig",
+          "description": "Read for the same fields `DDIMScheduler` uses.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     PNDMScheduler, StableDiffusionConfig)\n>>> scheduler = PNDMScheduler(StableDiffusionConfig())\n>>> scheduler.timesteps(10)[:4]\n[901, 801, 801, 701]\n>>> scheduler.counter\n0"
+      ],
+      "notes": [
+        "Reference: Liu et al., *\"Pseudo Numerical Methods for Diffusion\nModels on Manifolds\"*, ICLR, 2022 ([arXiv:2202.09778](https://arxiv.org/abs/2202.09778)); the constants are the released\nStable Diffusion configuration, whose `_class_name` is this.\n\nThe update is DDIM's at $\\eta = 0$ applied not to the current\nepsilon but to an Adams-Bashforth combination of the last four:\n\n\n\n$$\n\\bar\\epsilon_t = \\tfrac{1}{24}\\big(55\\epsilon_t - 59\\epsilon_{t-1}\n    + 37\\epsilon_{t-2} - 9\\epsilon_{t-3}\\big),\n$$\n\nwith lower-order openers while the history fills — the plain\nprediction first, then a trapezoid, then a two-term rule, then a\nthree-term one.  Four evaluations of information per step is what\nbuys the same image in fifty steps that DDIM needs more of.\n\n**It carries state**, unlike `DDIMScheduler`.  The history,\nthe step counter and the sample the opener began from live on the\nobject, so one instance cannot sample two trajectories at once.\nSequential reuse is safe: `timesteps` means \"start a sample\"\nand clears the history, and `step` checks that the timestep it\nis handed is the one at the counter's position.  That check is the\none that matters — the order of the correction is chosen by position,\nso stepping out of order applies the wrong rule to right-looking\nnumbers.  `reset` is there for the caller who wants to say so\nwithout asking for a trajectory.\n\nThe second step repeats the first timestep rather than advancing —\n`counter == 1` in the reference — which looks like an off-by-one\nand is the trapezoidal opener needing both endpoints."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "UNet2DConditionModel",
       "path": "lucid.models.generative.stable_diffusion._unet.UNet2DConditionModel",
       "kind": "class",
@@ -6528,7 +6734,7 @@
       ],
       "labels": [],
       "signature": "UNet2DConditionModel(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_unet.py#L330",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_unet.py#L330",
       "subcategory": "unet",
       "methods": [
         {
@@ -6537,7 +6743,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_unet.py#L370",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_unet.py#L370",
           "subcategory": "unet",
           "summary": "Initialise the U-Net. See the class docstring for parameters.",
           "extended": null,
@@ -6559,7 +6765,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(latent: Tensor, timestep: Tensor, context: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_unet.py#L448",
+          "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_unet.py#L448",
           "subcategory": "unet",
           "summary": "Predict the noise in `latent` at `timestep`.",
           "extended": null,
@@ -6627,7 +6833,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionV1Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/35fc6dc8d/lucid/models/generative/stable_diffusion/_weights.py#L50",
+      "source": "https://github.com/ChanLumerico/lucid/blob/bd203d9cf/lucid/models/generative/stable_diffusion/_weights.py#L50",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.stable_diffusion_v1`.",

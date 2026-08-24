@@ -36,7 +36,10 @@ from lucid.models._base import PretrainedModel
 from lucid.models._output import ModelOutput
 from lucid.models.generative.stable_diffusion._autoencoder import AutoencoderKL
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
-from lucid.models.generative.stable_diffusion._scheduler import DDIMScheduler
+from lucid.models.generative.stable_diffusion._scheduler import (
+    DDIMScheduler,
+    PNDMScheduler,
+)
 from lucid.models.generative.stable_diffusion._unet import UNet2DConditionModel
 
 __all__ = [
@@ -84,7 +87,9 @@ class StableDiffusionModel(PretrainedModel):
     unet : UNet2DConditionModel
         Second stage.
     scheduler : DDIMScheduler
-        Noise schedule and sampler.
+        The paper's sampler, and what :meth:`forward` uses to noise a
+        latent.  Sampling defaults to PNDM instead — see
+        :meth:`StableDiffusionForImageGeneration.generate`.
 
     Notes
     -----
@@ -268,6 +273,7 @@ class StableDiffusionForImageGeneration(PretrainedModel):
         guidance_scale: float = 7.5,
         eta: float = 0.0,
         latent: Tensor | None = None,
+        sampler: str = "pndm",
     ) -> Tensor:
         r"""Sample an image from the conditioning.
 
@@ -284,9 +290,14 @@ class StableDiffusionForImageGeneration(PretrainedModel):
             :math:`s` in
             :math:`\epsilon_\varnothing + s(\epsilon_c - \epsilon_\varnothing)`.
         eta : float, default=0.0
-            DDIM at 0, DDPM at 1.
+            DDIM at 0, DDPM at 1.  Ignored by PNDM, which is
+            deterministic by construction.
         latent : Tensor or None, optional
             Starting noise. Drawn when absent.
+        sampler : str, default="pndm"
+            ``"pndm"`` reproduces the released pipeline — its
+            ``model_index.json`` names ``PNDMScheduler``.  ``"ddim"`` is
+            the paper's, and the one ``eta`` applies to.
 
         Returns
         -------
@@ -303,6 +314,9 @@ class StableDiffusionForImageGeneration(PretrainedModel):
             raise ValueError(
                 f"guidance_scale must be non-negative, got {guidance_scale}"
             )
+        if sampler not in ("pndm", "ddim"):
+            raise ValueError(f"sampler must be 'pndm' or 'ddim', got {sampler!r}")
+
         inner = self.stable_diffusion
         config = inner.config
         batch = int(context.shape[0])
@@ -322,9 +336,11 @@ class StableDiffusionForImageGeneration(PretrainedModel):
                 device=context.device.type,
             )
 
-        steps = inner.scheduler.timesteps(num_inference_steps)
+        pndm = PNDMScheduler(config) if sampler == "pndm" else None
+        scheduler = pndm if pndm is not None else inner.scheduler
+        steps = scheduler.timesteps(num_inference_steps)
+
         for index, step in enumerate(steps):
-            previous = steps[index + 1] if index + 1 < len(steps) else -1
             timestep = lucid.full(
                 (batch,), float(step), device=latent.device.type, dtype=latent.dtype
             )
@@ -336,7 +352,11 @@ class StableDiffusionForImageGeneration(PretrainedModel):
                 prediction = unconditional + guidance_scale * (
                     prediction - unconditional
                 )
-            latent = inner.scheduler.step(prediction, step, previous, latent, eta)
+            if pndm is not None:
+                latent = pndm.step(prediction, step, latent)
+            else:
+                previous = steps[index + 1] if index + 1 < len(steps) else -1
+                latent = inner.scheduler.step(prediction, step, previous, latent, eta)
 
         return inner.decode_latent(latent)
 

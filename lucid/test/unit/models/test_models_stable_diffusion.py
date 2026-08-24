@@ -28,6 +28,7 @@ from lucid.models.generative.stable_diffusion import (
     AutoencoderKL,
     DDIMScheduler,
     DiagonalGaussian,
+    PNDMScheduler,
     StableDiffusionConfig,
     StableDiffusionForImageGeneration,
     StableDiffusionModel,
@@ -46,6 +47,13 @@ _TINY = dict(
     context_length=4,
     norm_num_groups=32,
 )
+
+
+# Recorded from the reference PNDM implementation at skip_prk_steps=True,
+# stepping a ones latent with a constant 0.5 epsilon for ten steps, in
+# float64.  A constant epsilon makes the number a property of the sampler
+# alone — no weights, no network, nothing else that could drift.
+_REFERENCE_PNDM_MEAN = 4.267492704686
 
 
 def _tiny(**overrides: object) -> StableDiffusionConfig:
@@ -521,3 +529,200 @@ class TestItMatchesTheReleasedCheckpoint:
         assert "attn1.in_proj_bias" not in names
         assert "attn1.out_proj_bias" not in names
         assert "attn1_out_bias" in names and "attn2_out_bias" in names
+
+
+class TestPNDMIsWhatTheReleaseShips:
+    """The paper samples with DDIM; the released pipeline's
+    ``model_index.json`` names ``PNDMScheduler``.  Both are here, and both
+    were checked against the reference implementation — these tests pin
+    the parts where PNDM is not simply "DDIM with better coefficients"."""
+
+    def test_the_trajectory_repeats_its_second_step(self) -> None:
+        """The multistep rule needs a history it does not have on the first
+        call, so the opener evaluates one interval twice.  The reference
+        builds this by slicing the *ascending* array, which puts the repeat
+        second in descending order — not second to last."""
+        steps = PNDMScheduler(StableDiffusionConfig()).timesteps(10)
+        assert steps == [901, 801, 801, 701, 601, 501, 401, 301, 201, 101, 1]
+
+    def test_one_more_step_runs_than_was_asked_for(self) -> None:
+        """A caller asking for 50 gets 51 evaluations.  Worth stating: it
+        is the difference between a benchmark that matches the reference's
+        cost and one that looks 2 % faster for free."""
+        for count in (10, 20, 50):
+            assert len(PNDMScheduler(StableDiffusionConfig()).timesteps(count)) == (
+                count + 1
+            )
+
+    def test_the_repeat_starts_from_the_same_sample_twice(self) -> None:
+        """Both halves of the opener step from the latent the first one
+        began at.  Feeding the second the output of the first advances the
+        trajectory by an extra interval, which no shape check can see."""
+        scheduler = PNDMScheduler(StableDiffusionConfig())
+        steps = scheduler.timesteps(10)
+        start = lucid.randn((1, 4, 8, 8))
+
+        scheduler.step(lucid.ones_like(start), steps[0], start)
+        assert scheduler.cur_sample is not None
+        assert float((scheduler.cur_sample - start).abs().max().item()) == 0.0
+
+    def test_the_second_step_consumes_the_saved_sample(self) -> None:
+        scheduler = PNDMScheduler(StableDiffusionConfig())
+        steps = scheduler.timesteps(10)
+        latent = lucid.randn((1, 4, 8, 8))
+
+        first = scheduler.step(lucid.ones_like(latent), steps[0], latent)
+        scheduler.step(lucid.ones_like(latent), steps[1], first)
+        assert scheduler.cur_sample is None
+
+    def test_asking_for_a_trajectory_clears_the_history(self) -> None:
+        """The derivatives are state, and the second sample must not open
+        with the first one's.  They are the right shape and the wrong
+        numbers, so nothing downstream would notice."""
+        scheduler = PNDMScheduler(StableDiffusionConfig())
+        steps = scheduler.timesteps(10)
+        latent = lucid.randn((1, 4, 8, 8))
+
+        for step in steps[:4]:
+            latent = scheduler.step(lucid.ones_like(latent), step, latent)
+        assert scheduler.ets and scheduler.counter == 4
+
+        scheduler.timesteps(10)
+        assert scheduler.ets == [] and scheduler.counter == 0
+
+    def test_a_reused_scheduler_reproduces_itself(self) -> None:
+        """The guard above, stated as the property that matters: two
+        samples run back to back through one scheduler agree."""
+        scheduler = PNDMScheduler(StableDiffusionConfig())
+
+        def sample() -> float:
+            latent = lucid.ones((1, 4, 8, 8))
+            for step in scheduler.timesteps(10):
+                latent = scheduler.step(lucid.ones_like(latent) * 0.5, step, latent)
+            return float(latent.mean().item())
+
+        assert sample() == pytest.approx(sample(), rel=1e-6)
+
+    def test_stepping_out_of_order_is_refused(self) -> None:
+        """The order of the correction is chosen by position in the
+        trajectory, not by the timestep, so a caller that skips or repeats
+        one gets a plausible tensor computed by the wrong rule."""
+        scheduler = PNDMScheduler(StableDiffusionConfig())
+        steps = scheduler.timesteps(10)
+        latent = lucid.randn((1, 4, 8, 8))
+
+        with pytest.raises(RuntimeError, match="position"):
+            scheduler.step(lucid.ones_like(latent), steps[3], latent)
+
+    def test_running_past_the_end_is_refused(self) -> None:
+        scheduler = PNDMScheduler(StableDiffusionConfig())
+        steps = scheduler.timesteps(10)
+        latent = lucid.ones((1, 4, 8, 8))
+        for step in steps:
+            latent = scheduler.step(lucid.ones_like(latent) * 0.5, step, latent)
+
+        with pytest.raises(RuntimeError, match="all of them have been taken"):
+            scheduler.step(lucid.ones_like(latent), steps[-1], latent)
+
+    def test_step_needs_the_timestep_list_first(self) -> None:
+        """PNDM's stride cannot be recovered from a timestep, because the
+        trajectory repeats one."""
+        scheduler = PNDMScheduler(StableDiffusionConfig())
+        latent = lucid.randn((1, 4, 8, 8))
+
+        with pytest.raises(RuntimeError, match="timesteps"):
+            scheduler.step(lucid.ones_like(latent), 901, latent)
+
+    def test_the_history_stays_bounded(self) -> None:
+        """Fourth order needs four derivatives and keeps no more — an
+        unbounded list would hold every activation of a 50-step sample."""
+        scheduler = PNDMScheduler(StableDiffusionConfig())
+        steps = scheduler.timesteps(10)
+        latent = lucid.randn((1, 4, 8, 8))
+
+        for step in steps:
+            latent = scheduler.step(lucid.ones_like(latent), step, latent)
+        assert len(scheduler.ets) <= 4
+
+    def test_it_reproduces_the_reference_trajectory(self) -> None:
+        """Recorded from the reference implementation at
+        ``skip_prk_steps=True``, on a constant epsilon so the numbers depend
+        on the sampler and nothing else.  This is the test that caught the
+        opener stepping from the wrong sample: it was off by 8.7e-01 while
+        every shape and every timestep was already correct."""
+        scheduler = PNDMScheduler(StableDiffusionConfig())
+        steps = scheduler.timesteps(10)
+        latent = lucid.ones((1, 4, 8, 8))
+        for step in steps:
+            latent = scheduler.step(lucid.ones_like(latent) * 0.5, step, latent)
+
+        assert float(latent.mean().item()) == pytest.approx(
+            _REFERENCE_PNDM_MEAN, rel=1e-5
+        )
+
+    def test_generation_defaults_to_pndm(self) -> None:
+        """The default has to be the released pipeline's, or prompts tuned
+        against published samples land somewhere else."""
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        context = lucid.randn((1, 4, 16))
+
+        latent = lucid.randn((1, 4, 8, 8))
+        default = model.generate(
+            context, num_inference_steps=3, guidance_scale=1.0, latent=latent
+        )
+        pndm = model.generate(
+            context,
+            num_inference_steps=3,
+            guidance_scale=1.0,
+            latent=latent,
+            sampler="pndm",
+        )
+        assert float((default - pndm).abs().max().item()) == 0.0
+
+    def test_ddim_remains_reachable(self) -> None:
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        context = lucid.randn((1, 4, 16))
+
+        latent = lucid.randn((1, 4, 8, 8))
+        pndm = model.generate(
+            context,
+            num_inference_steps=3,
+            guidance_scale=1.0,
+            latent=latent,
+            sampler="pndm",
+        )
+        ddim = model.generate(
+            context,
+            num_inference_steps=3,
+            guidance_scale=1.0,
+            latent=latent,
+            sampler="ddim",
+        )
+        assert pndm.shape == ddim.shape
+        assert float((pndm - ddim).abs().max().item()) > 0.0
+
+    def test_an_unknown_sampler_is_rejected(self) -> None:
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        context = lucid.randn((1, 4, 16))
+
+        with pytest.raises(ValueError, match="pndm"):
+            model.generate(context, num_inference_steps=2, sampler="dpm")
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    def test_sampling_runs_on_both_devices(self, device: str) -> None:
+        """PNDM carries its derivative history across steps in a Python
+        list, which makes those tensors the ones most likely to be left
+        on the wrong device.  A single forward pass cannot show it — the
+        history is empty on the first step."""
+        lucid.manual_seed(0)
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        model = model.metal() if device == "metal" else model
+
+        image = model.generate(
+            lucid.randn((1, 4, 16), device=device),
+            num_inference_steps=3,
+            guidance_scale=1.0,
+            latent=lucid.randn((1, 4, 8, 8), device=device),
+        )
+        assert str(image.device) == f"device('{device}')"
+        assert image.shape == (1, 3, 32, 32)

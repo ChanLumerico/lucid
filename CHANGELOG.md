@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - publish Stable Diffusion v1 weights on the Lucid hub — pretrained=True downloads, SHA-verifies and loads both sub-models, verified against the reference to 9.2e-05 (U-Net) and 2.7e-04 / 1.4e-04 (autoencoder)
 
+- sample with PNDM, because that is what the release ships
+
 ### Removed
 
 - remove 43 entries from lucid.models's top-level surface — protocols, mixins, model_family_meta, ConfigT, RSSM, the diffusion schedulers, DDPMUNet, family-specific Output dataclasses and the Literal aliases. All remain importable from their own modules (lucid.models._protocols, lucid.models.generative, the family packages); only the top-level shortcut is gone

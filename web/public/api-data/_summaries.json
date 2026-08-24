@@ -315848,10 +315848,18 @@
               },
               {
                 "name": "2",
-                "type": "Conv2d",
+                "type": "_Downsample2d",
                 "params": 147584,
-                "own_params": 147584,
-                "children": []
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 147584,
+                    "own_params": 147584,
+                    "children": []
+                  }
+                ]
               },
               {
                 "name": "3",
@@ -315948,10 +315956,18 @@
               },
               {
                 "name": "5",
-                "type": "Conv2d",
+                "type": "_Downsample2d",
                 "params": 590080,
-                "own_params": 590080,
-                "children": []
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 590080,
+                    "own_params": 590080,
+                    "children": []
+                  }
+                ]
               },
               {
                 "name": "6",
@@ -316048,10 +316064,18 @@
               },
               {
                 "name": "8",
-                "type": "Conv2d",
+                "type": "_Downsample2d",
                 "params": 2359808,
-                "own_params": 2359808,
-                "children": []
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv",
+                    "type": "Conv2d",
+                    "params": 2359808,
+                    "own_params": 2359808,
+                    "children": []
+                  }
+                ]
               },
               {
                 "name": "9",
@@ -318507,10 +318531,18 @@
                   },
                   {
                     "name": "2",
-                    "type": "Conv2d",
+                    "type": "_Downsample2d",
                     "params": 147584,
-                    "own_params": 147584,
-                    "children": []
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 147584,
+                        "own_params": 147584,
+                        "children": []
+                      }
+                    ]
                   },
                   {
                     "name": "3",
@@ -318607,10 +318639,18 @@
                   },
                   {
                     "name": "5",
-                    "type": "Conv2d",
+                    "type": "_Downsample2d",
                     "params": 590080,
-                    "own_params": 590080,
-                    "children": []
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 590080,
+                        "own_params": 590080,
+                        "children": []
+                      }
+                    ]
                   },
                   {
                     "name": "6",
@@ -318707,10 +318747,18 @@
                   },
                   {
                     "name": "8",
-                    "type": "Conv2d",
+                    "type": "_Downsample2d",
                     "params": 2359808,
-                    "own_params": 2359808,
-                    "children": []
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv",
+                        "type": "Conv2d",
+                        "params": 2359808,
+                        "own_params": 2359808,
+                        "children": []
+                      }
+                    ]
                   },
                   {
                     "name": "9",

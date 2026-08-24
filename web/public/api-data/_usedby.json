@@ -4061,6 +4061,16 @@
       "module": "lucid.models.generative.stable_diffusion._model"
     }
   ],
+  "lucid.models.generative.stable_diffusion._scheduler.PNDMScheduler": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._model"
+    }
+  ],
   "lucid.models.generative.stable_diffusion._unet.UNet2DConditionModel": [
     {
       "kind": "module",

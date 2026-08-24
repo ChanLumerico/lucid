@@ -15,7 +15,10 @@ from lucid.models.generative.stable_diffusion._pretrained import (
     stable_diffusion_v1,
     stable_diffusion_v1_gen,
 )
-from lucid.models.generative.stable_diffusion._scheduler import DDIMScheduler
+from lucid.models.generative.stable_diffusion._scheduler import (
+    DDIMScheduler,
+    PNDMScheduler,
+)
 from lucid.models.generative.stable_diffusion._unet import UNet2DConditionModel
 from lucid.models.generative.stable_diffusion._weights import (
     StableDiffusionV1Weights,
@@ -31,6 +34,7 @@ __all__ = [
     "DiagonalGaussian",
     "UNet2DConditionModel",
     "DDIMScheduler",
+    "PNDMScheduler",
     "StableDiffusionV1Weights",
     "stable_diffusion_v1",
     "stable_diffusion_v1_gen",
