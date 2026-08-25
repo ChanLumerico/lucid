@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Fixed
+
+- the release does not use one normalisation epsilon
+
 ---
 
 ## [3.9.0] — 2026-08-25

@@ -33,6 +33,14 @@ from lucid.models.generative.stable_diffusion._config import StableDiffusionConf
 
 __all__ = ["AutoencoderKL", "AutoencoderKLOutput", "DiagonalGaussian"]
 
+# Every normalisation in the released first stage runs at 1e-6, not at
+# the 1e-5 the U-Net's residual blocks use and the framework defaults
+# to.  It is a tenth of a rounding error per layer and it compounds:
+# under the wrong value this decoder disagrees with the released one by
+# 1.1e-04 on the same weights, which is large enough to be mistaken for
+# float32 accumulation and small enough never to look like a bug.
+_VAE_NORM_EPS = 1e-6
+
 
 @final
 class DiagonalGaussian:
@@ -134,9 +142,9 @@ class _ResnetBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, groups: int) -> None:
         """Initialise the block. See the class docstring for parameters."""
         super().__init__()
-        self.norm1 = nn.GroupNorm(groups, in_channels)
+        self.norm1 = nn.GroupNorm(groups, in_channels, eps=_VAE_NORM_EPS)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-        self.norm2 = nn.GroupNorm(groups, out_channels)
+        self.norm2 = nn.GroupNorm(groups, out_channels, eps=_VAE_NORM_EPS)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
         self.act = nn.SiLU()
         self.shortcut: nn.Module | None = (
@@ -200,7 +208,7 @@ class _SelfAttention2d(nn.Module):
     def __init__(self, channels: int, groups: int) -> None:
         """Initialise the block. See the class docstring for parameters."""
         super().__init__()
-        self.norm = nn.GroupNorm(groups, channels)
+        self.norm = nn.GroupNorm(groups, channels, eps=_VAE_NORM_EPS)
         self.attn = nn.MultiheadAttention(channels, 1, batch_first=True)
 
     @override
@@ -344,7 +352,7 @@ class AutoencoderKL(nn.Module):
         self.mid_attn = _SelfAttention2d(current, groups)
         self.mid_block_2 = _ResnetBlock(current, current, groups)
 
-        self.norm_out = nn.GroupNorm(groups, current)
+        self.norm_out = nn.GroupNorm(groups, current, eps=_VAE_NORM_EPS)
         self.conv_out = nn.Conv2d(current, 2 * latent, kernel_size=3, padding=1)
         self.quant_conv = nn.Conv2d(2 * latent, 2 * latent, kernel_size=1)
 
@@ -364,7 +372,7 @@ class AutoencoderKL(nn.Module):
                 up.append(nn.Conv2d(current, current, kernel_size=3, padding=1))
         self.up = nn.ModuleList(up)
 
-        self.decoder_norm_out = nn.GroupNorm(groups, current)
+        self.decoder_norm_out = nn.GroupNorm(groups, current, eps=_VAE_NORM_EPS)
         self.decoder_conv_out = nn.Conv2d(
             current, config.out_channels, kernel_size=3, padding=1
         )

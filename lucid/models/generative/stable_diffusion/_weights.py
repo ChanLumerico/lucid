@@ -5,25 +5,39 @@ autoencoder and the U-Net separately and they are useless apart — a
 latent from one decoder is not a latent for another — so they are
 converted and published together under a single tag.
 
-Checked numerically against the reference before publication rather
-than merely loaded.  With these weights in place all three paths agree
-to float32 round-off:
+Checked numerically against the reference rather than merely loaded.
+With these weights in place, on a 512-pixel image and the 64x64 latent
+that implies:
 
-===================  ==========
-path                 rel. error
-===================  ==========
-U-Net epsilon        9.2e-05
-autoencoder encoder  2.7e-04
-autoencoder decoder  1.4e-04
-===================  ==========
+===================  =========  =========
+path                 Metal      CPU
+===================  =========  =========
+U-Net epsilon        4.5e-06    4.5e-06
+autoencoder encoder  3.4e-05    2.7e-03
+autoencoder decoder  5.9e-05    8.3e-04
+===================  =========  =========
+
+**The two columns differ for a reason that is not this conversion.**
+Lucid's CPU ``group_norm`` kernel accumulates a group's mean and
+variance in one ``float`` with a serial sum, so its error grows with
+the size of the group rather than staying flat: 8e-07 over 4k elements
+and 2e-04 over the million a 512-pixel autoencoder stage reduces.  MLX
+does not, which is why the Metal column holds its accuracy while the
+CPU column loses two digits between 256 and 512 pixels.  The U-Net is
+largely spared because its widest group is 41k elements rather than a
+million.  Read the Metal column as this conversion's accuracy; the gap
+between them is a framework issue and is tracked apart from this family.
 
 That check is what this family needed most, because the conversion had
 already passed a stricter-looking one.  The parameter counts matched the
-release *tensor for tensor* while two defects remained: the attention
+release *tensor for tensor* while three defects remained: the attention
 was built with forty heads of eight channels where the reference uses
-eight of forty, and the autoencoder's downsampler padded symmetrically
-where the reference pads bottom-right only.  Neither changes a shape,
-a count, or anything a forward pass reports.
+eight of forty, the autoencoder's downsampler padded symmetrically where
+the reference pads bottom-right only, and every normalisation ran at the
+framework's default epsilon where the release uses 1e-6 throughout the
+autoencoder and inside the U-Net's spatial transformers.  None of the
+three changes a shape, a count, or anything a forward pass reports; the
+last one alone was a factor of twenty on the U-Net's agreement.
 
 The text encoder is not here.  This family takes conditioning as an
 already-encoded sequence, and the released models condition on a frozen

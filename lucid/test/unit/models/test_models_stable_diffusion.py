@@ -32,6 +32,7 @@ from lucid.models.generative.stable_diffusion import (
     StableDiffusionConfig,
     StableDiffusionForImageGeneration,
     StableDiffusionModel,
+    StableDiffusionWeights,
     UNet2DConditionModel,
 )
 
@@ -428,10 +429,6 @@ class TestVariants:
         """The registry entry, checked offline against the model it loads
         into — a stale ``num_params`` is invisible until a user
         downloads three and a half gigabytes."""
-        from lucid.models.generative.stable_diffusion import (
-            StableDiffusionWeights,
-        )
-
         entry = StableDiffusionWeights.DEFAULT.value
         model = M.stable_diffusion()
         total = sum(
@@ -440,6 +437,28 @@ class TestVariants:
         assert entry.meta["num_params"] == total
         assert entry.url.endswith("CompVis_LAION/model.safetensors")
         assert len(entry.sha256) == 64
+
+    def test_the_sampler_takes_the_same_weights(self) -> None:
+        """``stable_diffusion_gen(pretrained=True)`` has somewhere to load.
+
+        It is the factory that produces images, so it is the one a
+        caller most wants weighted — and it loads the published entry
+        into the model it holds. Its docstring said the opposite for one
+        release, which is the sort of claim only a test reaches: the
+        code was right and nobody reading the documentation would have
+        tried it.
+        """
+        sampler = M.stable_diffusion_gen()
+        inner = {name for name, _ in sampler.stable_diffusion.named_parameters()}
+        direct = {name for name, _ in M.stable_diffusion().named_parameters()}
+        assert inner == direct
+
+        entry = StableDiffusionWeights.DEFAULT.value
+        total = sum(
+            math.prod(tuple(int(s) for s in p.shape))
+            for p in sampler.stable_diffusion.parameters()
+        )
+        assert entry.meta["num_params"] == total
 
 
 class TestTimestepEmbedding:
@@ -529,6 +548,69 @@ class TestItMatchesTheReleasedCheckpoint:
         assert "attn1.in_proj_bias" not in names
         assert "attn1.out_proj_bias" not in names
         assert "attn1_out_bias" in names and "attn2_out_bias" in names
+
+
+class TestTheNormalisationEpsilonIsTheReleasedOne:
+    """The released stages do not share one epsilon, and the difference shows.
+
+    Three values are in play and only one of them is the framework
+    default. The U-Net's residual blocks and its output norm run at
+    ``norm_eps`` = 1e-5; the norm *inside* every spatial transformer
+    runs at 1e-6; and the whole autoencoder runs at 1e-6.
+
+    Taking the default everywhere costs 1.1e-04 on the autoencoder's
+    decoder against the same weights — the size of a float32
+    accumulation over a network this deep, which is exactly why it
+    survived a conversion that was checked to "round-off". A count
+    cannot see it, a shape cannot see it, and a parity threshold set
+    from the wrong model agrees with itself.
+    """
+
+    @staticmethod
+    def _epsilons(module: object) -> set[float]:
+        return {
+            float(m.eps)
+            for m in module.modules()  # type: ignore[attr-defined]
+            if isinstance(m, lucid.nn.GroupNorm)
+        }
+
+    def test_every_autoencoder_norm_runs_at_one_e_minus_six(self) -> None:
+        vae = AutoencoderKL(_tiny())
+        assert self._epsilons(vae) == {1e-6}
+
+    def test_the_unet_transformer_norm_is_tighter_than_its_resnets(self) -> None:
+        from lucid.models.generative.stable_diffusion._unet import (
+            _ResBlock,
+            _SpatialTransformer,
+        )
+
+        assert self._epsilons(_SpatialTransformer(32, 4, 16, 32)) == {1e-6}
+        assert self._epsilons(_ResBlock(32, 32, 16, 32)) == {1e-5}
+
+    def test_the_unet_carries_both_values(self) -> None:
+        """Not one or the other — the released U-Net has both."""
+        unet = UNet2DConditionModel(_tiny())
+        assert self._epsilons(unet) == {1e-5, 1e-6}
+
+    def test_the_two_epsilons_are_distinguishable(self) -> None:
+        """The guard that keeps the three above from being vacuous.
+
+        If 1e-5 and 1e-6 produced the same activations there would be
+        nothing to pin. They do not: the same weights and the same input
+        under the two values disagree by more than float32 round-off.
+        """
+        vae = AutoencoderKL(_tiny()).eval()
+        image = lucid.randn((1, 3, 32, 32))
+        reference = vae.encode(image).mode()
+
+        for norm in vae.modules():
+            if isinstance(norm, lucid.nn.GroupNorm):
+                norm.eps = 1e-5
+        shifted = vae.encode(image).mode()
+
+        scale = float(lucid.abs(reference).max().item())
+        error = float(lucid.abs(shifted - reference).max().item()) / scale
+        assert error > 1e-7
 
 
 class TestPNDMIsWhatTheReleaseShips:

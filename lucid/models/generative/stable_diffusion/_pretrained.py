@@ -21,7 +21,9 @@ network.  ``summary="auto"`` reports what is actually built.
 
 The weights are converted by
 :mod:`tools.convert_weights.stable_diffusion` and were verified against
-the reference to float32 round-off before publication.
+the reference activation by activation, not merely loaded — see
+:mod:`._weights` for the numbers and for the one residual that is the
+CPU kernel's rather than the conversion's.
 """
 
 from dataclasses import replace
@@ -115,7 +117,10 @@ def stable_diffusion_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        No weights are published for this family; passing ``True`` raises.
+        Load the released v1 checkpoint into the sampler.  This is the
+        factory that produces images, so it is the one that most wants
+        the weights — it loads the same entry
+        :func:`stable_diffusion` does, into the model held inside.
     **overrides : object
         Optional :class:`StableDiffusionConfig` field overrides.
 

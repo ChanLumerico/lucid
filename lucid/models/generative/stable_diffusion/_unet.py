@@ -33,6 +33,15 @@ from lucid.models.generative.stable_diffusion._config import StableDiffusionConf
 
 __all__ = ["UNet2DConditionModel"]
 
+# The reference gives the transformer's own normalisation a tighter
+# epsilon than the residual blocks around it — 1e-6 against the U-Net
+# config's ``norm_eps`` of 1e-5, which is the framework default the
+# residual blocks pick up.  The two look interchangeable and are not:
+# a checkpoint converted under the wrong one denoises to a *slightly*
+# different image at every one of the sixteen transformer blocks, and
+# nothing about a shape, a count or a loss reports it.
+_ATTENTION_NORM_EPS = 1e-6
+
 
 def _timestep_embedding(timesteps: Tensor, dim: int) -> Tensor:
     r"""Sinusoidal features for a diffusion step — ``(B, dim)``.
@@ -294,7 +303,7 @@ class _SpatialTransformer(nn.Module):
     ) -> None:
         """Initialise the module. See the class docstring for parameters."""
         super().__init__()
-        self.norm = nn.GroupNorm(groups, channels)
+        self.norm = nn.GroupNorm(groups, channels, eps=_ATTENTION_NORM_EPS)
         self.proj_in = nn.Conv2d(channels, channels, kernel_size=1)
         self.blocks = nn.ModuleList(
             [_TransformerBlock(channels, heads, context_dim) for _ in range(depth)]
