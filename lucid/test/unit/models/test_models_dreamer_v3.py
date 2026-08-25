@@ -639,6 +639,78 @@ class TestForwardAndShapes:
         assert float(model.act(posteriors).abs().max().item()) <= 1.0
 
 
+class TestTheImaginationWeight:
+    """Every imagined step is worth the chance the episode reached it.
+
+    That product runs over the steps *before* the one being weighted, so
+    the first imagined step is worth exactly 1 — the trajectory has not
+    had a chance to end yet. ``_behavior`` says its two branches "mean
+    the same thing"; the constant-discount branch opens at
+    ``gamma ** 0``, so the learned-discount branch has to open at 1 too.
+
+    Folding ``pcont[0]`` in instead multiplies the actor's and the
+    critic's whole objective by the head's opinion of the state the
+    trajectory starts in — about 0.52 at initialisation, which is a
+    halved learning rate that no loss curve identifies as one. It costs
+    nothing in shape, in count or in gradient flow, because the weight is
+    detached before it is used.
+    """
+
+    @staticmethod
+    def _run(trainer: object) -> tuple[lucid.Tensor, lucid.Tensor]:
+        """The weight and the ``pcont`` it came from, on one call.
+
+        Both from the *same* forward: imagination samples, so a second
+        call produces a different continuation prediction and the two
+        would not be comparable.
+        """
+        seen: dict[str, lucid.Tensor] = {}
+        original = trainer._actor_objective  # type: ignore[attr-defined]
+
+        def spy(*args: object, **kwargs: object) -> object:
+            seen["weight"] = args[3]  # type: ignore[assignment]
+            return original(*args, **kwargs)
+
+        trainer._actor_objective = spy  # type: ignore[attr-defined]
+        try:
+            observations, actions, rewards = _batch(t=4)
+            output = trainer(  # type: ignore[operator]
+                observations, actions, rewards, lucid.ones((2, 4))
+            )
+        finally:
+            trainer._actor_objective = original  # type: ignore[attr-defined]
+
+        assert output.behavior is not None
+        pcont = output.behavior.imagined_discount
+        assert pcont is not None
+        return seen["weight"], pcont
+
+    def test_the_first_imagined_step_is_worth_one(self) -> None:
+        lucid.manual_seed(0)
+        model = DreamerV3ForWorldModeling(_tiny_cfg(pcont=True))
+        weight, _ = self._run(model)
+        assert float(weight[0][0].item()) == pytest.approx(1.0)
+
+    def test_it_is_the_product_over_the_earlier_steps(self) -> None:
+        """Not over the step itself — that is the off-by-one this pins."""
+        lucid.manual_seed(0)
+        model = DreamerV3ForWorldModeling(_tiny_cfg(pcont=True))
+        weight, pcont = self._run(model)
+
+        running = 1.0
+        for step in range(int(weight.shape[1])):
+            assert float(weight[0][step].item()) == pytest.approx(running, rel=1e-5)
+            running *= float(pcont[0][step].item())
+
+    def test_it_decreases(self) -> None:
+        """The guard: a weight of all ones would pass the first test."""
+        lucid.manual_seed(0)
+        model = DreamerV3ForWorldModeling(_tiny_cfg(pcont=True))
+        weight, _ = self._run(model)
+        row = [float(v) for v in weight[0].numpy()]
+        assert all(later < earlier for earlier, later in zip(row, row[1:]))
+
+
 class TestReplayCritic:
     def test_it_is_reported_and_scaled(self) -> None:
         lucid.manual_seed(0)

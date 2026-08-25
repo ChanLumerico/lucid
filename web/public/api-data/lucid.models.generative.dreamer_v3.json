@@ -3,7 +3,7 @@
   "name": "dreamer_v3",
   "path": "lucid.models.generative.dreamer_v3",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/__init__.py#L1",
   "members": [
     {
       "name": "DreamerV3Config",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "DreamerV3Config(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 4096, hidden_size: int = 512, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 1.0, kl_weight: float = 1.0, discrete: int = 32, unimix: float = 0.01, blocks: int = 8, dyn_scale: float = 1.0, rep_scale: float = 0.1, pred_scale: float = 1.0, num_bins: int = 255, bin_range: float = 20.0, reward_hidden: int = 512, reward_layers: int = 1, actor_hidden: int = 512, actor_layers: int = 3, value_hidden: int = 512, value_layers: int = 3, horizon: int = 15, discount: float = 0.997, lambda_: float = 0.95, actor_entropy: float = 0.0003, actor_min_std: float = 0.1, return_ema_decay: float = 0.99, return_low: float = 5.0, return_high: float = 95.0, critic_ema: float = 0.02, critic_slowreg: float = 1.0, replay_value_scale: float = 0.3, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 1, action_space: str = 'continuous')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_config.py#L34",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_config.py#L34",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "stoch_width: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_config.py#L341",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_config.py#L341",
           "summary": "Flattened width of the stochastic latent — `stoch_size * discrete`.",
           "extended": null,
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "latent_size: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_config.py#L347",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_config.py#L347",
           "summary": "Width of `[h; s]`, with `s` the flattened categorical grid.",
           "extended": null,
           "parameters": [],
@@ -70,7 +70,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 4096, hidden_size: int = 512, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 1.0, kl_weight: float = 1.0, discrete: int = 32, unimix: float = 0.01, blocks: int = 8, dyn_scale: float = 1.0, rep_scale: float = 0.1, pred_scale: float = 1.0, num_bins: int = 255, bin_range: float = 20.0, reward_hidden: int = 512, reward_layers: int = 1, actor_hidden: int = 512, actor_layers: int = 3, value_hidden: int = 512, value_layers: int = 3, horizon: int = 15, discount: float = 0.997, lambda_: float = 0.95, actor_entropy: float = 0.0003, actor_min_std: float = 0.1, return_ema_decay: float = 0.99, return_low: float = 5.0, return_high: float = 95.0, critic_ema: float = 0.02, critic_slowreg: float = 1.0, replay_value_scale: float = 0.3, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 1, action_space: str = 'continuous')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -289,7 +289,7 @@
         ">>> from lucid.models.generative.dreamer_v3 import DreamerV3Config\n>>> cfg = DreamerV3Config(action_dim=6)\n>>> cfg.stoch_size, cfg.discrete, cfg.free_nats\n(32, 32, 1.0)\n>>> cfg.discount, cfg.horizon, cfg.num_bins\n(0.997, 15, 255)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nThe scaling ladder moves five quantities together, so it is a table\nrather than a knob — see `DREAMER_V3_SIZES` and the factories\nbuilt from it:\n\n========  =======  ========  =======  =====  =====\nsize      deter    hidden    classes  depth  units\n========  =======  ========  =======  =====  =====\n`12m`   2048     256       16       16     256\n`25m`   3072     384       24       24     384\n`50m`   4096     512       32       32     512\n`100m`  6144     768       48       48     768\n`200m`  8192     1024      64       64     1024\n`400m`  12288    1536      96       96     1536\n========  =======  ========  =======  =====  =====\n\nTwo details of that table are worth writing down.  Its `12m` column\nprints 1024 recurrent units where the stated rule — eight times the\nhidden size — gives 2048; the released implementation uses 2048, and\nso does this.  And the paper's own default is the `200m` rung for\nevery benchmark except the two control suites, which use `12m`; the\ndefaults here are `50m`, the middle of the ladder, because a 200M\ndefault would make merely constructing the model an expensive\noperation.  Use `dreamer_v3_200m` for the paper's setting.\n\nThe released implementation carries a few things the paper does not\nreport — extra dynamics layers, an `absolute` posterior variant, and\na value- and advantage-normalisation pair disabled in every published\nconfiguration.  Where the two disagree the paper is followed, as it is\nfor the earlier families."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nThe scaling ladder moves five quantities together, so it is a table\nrather than a knob — see `DREAMER_V3_SIZES` and the factories\nbuilt from it:\n\n========  =======  ========  =======  =====  =====\nsize      deter    hidden    classes  depth  units\n========  =======  ========  =======  =====  =====\n`12m`   2048     256       16       16     256\n`25m`   3072     384       24       24     384\n`50m`   4096     512       32       32     512\n`100m`  6144     768       48       48     768\n`200m`  8192     1024      64       64     1024\n`400m`  12288    1536      96       96     1536\n========  =======  ========  =======  =====  =====\n\nTwo details of that table are worth writing down.  Its `12m` column\nprints 1024 recurrent units where the stated rule — eight times the\nhidden size — gives 2048; the released implementation uses 2048, and\nso does this.  And the paper's own default is the `200m` rung for\nevery benchmark except the two control suites, which use `12m`; the\ndefaults here are `50m`, the middle of the ladder, because a 200M\ndefault would make merely constructing the model an expensive\noperation.  Use `dreamer_v3_200m` for the paper's setting.\n\nThe released implementation carries a few things the paper does not\nreport — extra dynamics layers, an `absolute` posterior variant, and\na value- and advantage-normalisation pair disabled in every published\nconfiguration.  Where the two disagree the paper is followed, as it is\nfor the earlier families."
       ],
       "attributes": [],
       "warns": [],
@@ -305,7 +305,7 @@
       ],
       "labels": [],
       "signature": "DreamerV3BehaviorOutput(actor_loss: Tensor, value_loss: Tensor, lambda_return: Tensor, return_scale: float, entropy: Tensor, imagined_reward: Tensor, imagined_value: Tensor, imagined_action: Tensor, imagined_discount: Tensor | None = None, replay_value_loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L76",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L76",
       "subcategory": "model",
       "methods": [
         {
@@ -314,7 +314,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(actor_loss: Tensor, value_loss: Tensor, lambda_return: Tensor, return_scale: float, entropy: Tensor, imagined_reward: Tensor, imagined_value: Tensor, imagined_action: Tensor, imagined_discount: Tensor | None = None, replay_value_loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -395,7 +395,7 @@
       ],
       "labels": [],
       "signature": "DreamerV3ForWorldModeling(config: DreamerV3Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L497",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L497",
       "subcategory": "model",
       "methods": [
         {
@@ -404,7 +404,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DreamerV3Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L546",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L546",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -426,7 +426,7 @@
           "kind": "function",
           "labels": [],
           "signature": "world_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L571",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L571",
           "subcategory": "model",
           "summary": "Everything the world-model loss trains.",
           "extended": null,
@@ -448,7 +448,7 @@
           "kind": "function",
           "labels": [],
           "signature": "actor_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L591",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L591",
           "subcategory": "model",
           "summary": "The actor's parameters.",
           "extended": null,
@@ -470,7 +470,7 @@
           "kind": "function",
           "labels": [],
           "signature": "value_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L601",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L601",
           "subcategory": "model",
           "summary": "The learning critic's parameters — *not* the slow copy.",
           "extended": null,
@@ -492,7 +492,7 @@
           "kind": "function",
           "labels": [],
           "signature": "update_slow_critic()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L613",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L613",
           "subcategory": "model",
           "summary": "Move the slow critic a little toward the live one.",
           "extended": null,
@@ -516,7 +516,7 @@
           "kind": "function",
           "labels": [],
           "signature": "backward(output: DreamerV3Output)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L906",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L914",
           "subcategory": "model",
           "summary": "Give every parameter group the gradient of its own loss.",
           "extended": null,
@@ -552,7 +552,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor, rewards: Tensor, discounts: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L953",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L961",
           "subcategory": "model",
           "summary": "Train the world model and the behaviour on one batch.",
           "extended": null,
@@ -617,7 +617,7 @@
         ">>> import lucid\n>>> from lucid.models import dreamer_v3_12m_world_model\n>>> model = dreamer_v3_12m_world_model(action_dim=2, cnn_depth=2, stoch_size=3,\n...     discrete=4, deter_size=8, hidden_size=8, actor_hidden=8,\n...     value_hidden=8, reward_hidden=8, num_bins=5, horizon=4, pcont=False)\n>>> out = model(lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2)),\n...             lucid.randn((1, 3)))\n>>> bool(out.loss.ndim == 0), bool(out.behavior.actor_loss.ndim == 0)\n(True, True)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nSame three-optimiser contract as the earlier families, and the same\nreason for it.  Use `backward` — spending the losses by hand\neither contaminates the world model or raises, depending on the order.\n\n`update_slow_critic` must be called once per gradient step.  It\nis not folded into `backward` because it counts *optimiser*\nsteps, not backward passes, and only the caller knows when one has\nhappened.\n\nThe indexing is simpler than DreamerV2's, and the simplification is\nthe point.  Imagination produces `H + 1` states and `H` actions;\n`action[t]` is taken from `state[t]`, the return `R[t]` starts\nat `state[t]`, and the critic's estimate `v[t]` scores the same\nstate.  So the advantage is `R[t] - v(s_t)` paired with\n`log pi(a_t | s_t)` at every `t` in `0 .. H-1` — the textbook\nalignment, available here because the actor is score-function only\nand does not need the one-step shift dynamics backpropagation forced\non DreamerV2."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nSame three-optimiser contract as the earlier families, and the same\nreason for it.  Use `backward` — spending the losses by hand\neither contaminates the world model or raises, depending on the order.\n\n`update_slow_critic` must be called once per gradient step.  It\nis not folded into `backward` because it counts *optimiser*\nsteps, not backward passes, and only the caller knows when one has\nhappened.\n\nThe indexing is simpler than DreamerV2's, and the simplification is\nthe point.  Imagination produces `H + 1` states and `H` actions;\n`action[t]` is taken from `state[t]`, the return `R[t]` starts\nat `state[t]`, and the critic's estimate `v[t]` scores the same\nstate.  So the advantage is `R[t] - v(s_t)` paired with\n`log pi(a_t | s_t)` at every `t` in `0 .. H-1` — the textbook\nalignment, available here because the actor is score-function only\nand does not need the one-step shift dynamics backpropagation forced\non DreamerV2."
       ],
       "attributes": [],
       "warns": [],
@@ -633,7 +633,7 @@
       ],
       "labels": [],
       "signature": "DreamerV3Model(config: DreamerV3Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L194",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L194",
       "subcategory": "model",
       "methods": [
         {
@@ -642,7 +642,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DreamerV3Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L238",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L238",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -664,7 +664,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(observations: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L308",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L308",
           "subcategory": "model",
           "summary": "Embed a frame sequence — `(B, T, C, 64, 64) -> (B, T, embed_size)`.",
           "extended": null,
@@ -686,7 +686,7 @@
           "kind": "function",
           "labels": [],
           "signature": "observe(observations: Tensor, actions: Tensor, state: RSSMState | None = None, sample: bool | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L312",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L312",
           "subcategory": "model",
           "summary": "Filter a trajectory into posterior states.",
           "extended": null,
@@ -733,7 +733,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L342",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L342",
           "subcategory": "model",
           "summary": "Reconstruct frames from a state — `(B, T, C, 64, 64)`.",
           "extended": null,
@@ -757,7 +757,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_reward(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L354",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L354",
           "subcategory": "model",
           "summary": "Predict reward from a state — `(B, T)`, in reward units.",
           "extended": null,
@@ -779,7 +779,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_value(state: RSSMState, slow: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L358",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L358",
           "subcategory": "model",
           "summary": "Estimate a state's value — `(B, T)`.",
           "extended": null,
@@ -814,7 +814,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_pcont(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L378",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L378",
           "subcategory": "model",
           "summary": "Predict the discount at a state — logits, `(B, T)`.",
           "extended": null,
@@ -848,7 +848,7 @@
           "kind": "function",
           "labels": [],
           "signature": "act(state: RSSMState, sample: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L403",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L403",
           "subcategory": "model",
           "summary": "Propose actions — `(B, T, action_dim)` or `(B, action_dim)`.",
           "extended": null,
@@ -883,7 +883,7 @@
           "kind": "function",
           "labels": [],
           "signature": "imagine(state: RSSMState, horizon: int, sample: bool | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L420",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L420",
           "subcategory": "model",
           "summary": "Roll the dynamics forward under the actor's own policy.",
           "extended": null,
@@ -926,7 +926,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L476",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L476",
           "subcategory": "model",
           "summary": "Train the world model and the behaviour on one batch.",
           "extended": null,
@@ -991,7 +991,7 @@
         ">>> import lucid\n>>> from lucid.models import dreamer_v3_12m\n>>> model = dreamer_v3_12m(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,\n...     deter_size=8, hidden_size=8, actor_hidden=8, value_hidden=8,\n...     reward_hidden=8, num_bins=5)\n>>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),\n...                               lucid.randn((1, 3, 2)))\n>>> posteriors.is_discrete, model.act(posteriors, sample=False).shape\n(True, (1, 3, 2))"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nTwo architectural differences from DreamerV2 are visible here.\n\nThe reward and value heads are `.TwoHotHead`\\ s — they predict\na distribution over exponentially spaced bins and are read back\nthrough `symexp`, which is what decouples the gradients from the\nreward's magnitude.\n\nThe critic is duplicated, but the copy plays the opposite role to\nDreamerV2's.  There the frozen copy produced the *targets*; here the\nreturns bootstrap from the live critic and the slow copy appears only\nas a regulariser pulling the live one toward its own moving average.\nThe copy is therefore updated every step by a small fraction rather\nthan replaced wholesale on a schedule."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nTwo architectural differences from DreamerV2 are visible here.\n\nThe reward and value heads are `.TwoHotHead`\\ s — they predict\na distribution over exponentially spaced bins and are read back\nthrough `symexp`, which is what decouples the gradients from the\nreward's magnitude.\n\nThe critic is duplicated, but the copy plays the opposite role to\nDreamerV2's.  There the frozen copy produced the *targets*; here the\nreturns bootstrap from the live critic and the slow copy appears only\nas a regulariser pulling the live one toward its own moving average.\nThe copy is therefore updated every step by a small fraction rather\nthan replaced wholesale on a schedule."
       ],
       "attributes": [],
       "warns": [],
@@ -1007,7 +1007,7 @@
       ],
       "labels": [],
       "signature": "DreamerV3Output(observation: Tensor, reward: Tensor, value: Tensor, posterior_stoch: Tensor, posterior_logits: Tensor, prior_logits: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, dynamics_loss: Tensor | None = None, representation_loss: Tensor | None = None, kl_loss: Tensor | None = None, pcont_loss: Tensor | None = None, behavior: DreamerV3BehaviorOutput | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L129",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L129",
       "subcategory": "model",
       "methods": [
         {
@@ -1016,7 +1016,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(observation: Tensor, reward: Tensor, value: Tensor, posterior_stoch: Tensor, posterior_logits: Tensor, prior_logits: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, dynamics_loss: Tensor | None = None, representation_loss: Tensor | None = None, kl_loss: Tensor | None = None, pcont_loss: Tensor | None = None, behavior: DreamerV3BehaviorOutput | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -1098,7 +1098,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_12m(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L80",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L80",
       "subcategory": "pretrained",
       "summary": "Construct the smallest rung — no objectives, just the model.",
       "extended": "A model dimension of 256: a 2048-unit recurrence in eight blocks, 16\nclasses per latent, and a first convolution of 16 channels.  This is\nthe rung the paper uses for both Control Suites, where it reports the\nsame performance as the 200M model while being substantially faster.",
@@ -1125,7 +1125,7 @@
         ">>> from lucid.models import dreamer_v3_12m\n>>> model = dreamer_v3_12m(action_dim=6).eval()\n>>> model.config.deter_size, model.config.discrete, model.config.blocks\n(2048, 16, 8)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -1504,7 +1504,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_12m_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L128",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L128",
       "subcategory": "pretrained",
       "summary": "The smallest rung with all three objectives.",
       "extended": null,
@@ -1531,7 +1531,7 @@
         ">>> from lucid.models import dreamer_v3_12m_world_model\n>>> model = dreamer_v3_12m_world_model(action_dim=6).eval()\n>>> model.config.free_nats, model.config.rep_scale\n(1.0, 0.1)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nThe three losses take **three separate optimisers**; use\n`lucid.models.DreamerV3ForWorldModeling.backward` to fill their\ngradients, and call `update_slow_critic` once per step."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nThe three losses take **three separate optimisers**; use\n`lucid.models.DreamerV3ForWorldModeling.backward` to fill their\ngradients, and call `update_slow_critic` once per step."
       ],
       "attributes": [],
       "warns": [],
@@ -1918,7 +1918,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_25m(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L176",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L176",
       "subcategory": "pretrained",
       "summary": "Construct the second rung — no objectives, just the model.",
       "extended": "A model dimension of 384.  The ladder steps by roughly 1.5 each rung,\nalternating powers of two with powers of two times 1.5, which keeps\nevery tensor width a multiple of eight.",
@@ -1945,7 +1945,7 @@
         ">>> from lucid.models import dreamer_v3_25m\n>>> model = dreamer_v3_25m(action_dim=6).eval()\n>>> model.config.hidden_size, model.config.cnn_depth\n(384, 24)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -2324,7 +2324,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_25m_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L222",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L222",
       "subcategory": "pretrained",
       "summary": "The second rung with all three objectives.",
       "extended": null,
@@ -2351,7 +2351,7 @@
         ">>> from lucid.models import dreamer_v3_25m_world_model\n>>> model = dreamer_v3_25m_world_model(action_dim=6).eval()\n>>> model.config.horizon, model.config.lambda_\n(15, 0.95)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104))."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104)."
       ],
       "attributes": [],
       "warns": [],
@@ -2738,7 +2738,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_50m(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L266",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L266",
       "subcategory": "pretrained",
       "summary": "Construct the middle rung — no objectives, just the model.",
       "extended": "A model dimension of 512: a 4096-unit recurrence, 32 classes per\nlatent, 32 channels at the first convolution.  These are the values\n`DreamerV3Config` defaults to, so this rung and a bare\nconfiguration are the same model.",
@@ -2765,7 +2765,7 @@
         ">>> from lucid.models import dreamer_v3_50m\n>>> model = dreamer_v3_50m(action_dim=6).eval()\n>>> model.config.deter_size, model.config.discrete\n(4096, 32)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -3144,7 +3144,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_50m_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L313",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L313",
       "subcategory": "pretrained",
       "summary": "The middle rung with all three objectives.",
       "extended": null,
@@ -3171,7 +3171,7 @@
         ">>> from lucid.models import dreamer_v3_50m_world_model\n>>> model = dreamer_v3_50m_world_model(action_dim=6).eval()\n>>> model.config.critic_ema, model.config.replay_value_scale\n(0.02, 0.3)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104))."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104)."
       ],
       "attributes": [],
       "warns": [],
@@ -3558,7 +3558,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_100m(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L357",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L357",
       "subcategory": "pretrained",
       "summary": "Construct the fourth rung — no objectives, just the model.",
       "extended": "A model dimension of 768.",
@@ -3585,7 +3585,7 @@
         ">>> from lucid.models import dreamer_v3_100m\n>>> model = dreamer_v3_100m(action_dim=6).eval()\n>>> model.config.deter_size, model.config.hidden_size\n(6144, 768)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -3964,7 +3964,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_100m_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L401",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L401",
       "subcategory": "pretrained",
       "summary": "The fourth rung with all three objectives.",
       "extended": null,
@@ -3991,7 +3991,7 @@
         ">>> from lucid.models import dreamer_v3_100m_world_model\n>>> model = dreamer_v3_100m_world_model(action_dim=6).eval()\n>>> model.config.num_bins, model.config.bin_range\n(255, 20.0)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104))."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104)."
       ],
       "attributes": [],
       "warns": [],
@@ -4378,7 +4378,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_200m(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L445",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L445",
       "subcategory": "pretrained",
       "summary": "Construct the paper's default rung — no objectives, just the model.",
       "extended": "A model dimension of 1024: an 8192-unit recurrence in eight blocks, 64\nclasses per latent, 64 channels at the first convolution.  This is the\nsize behind every headline result in the paper except the two Control\nSuites — Minecraft, DMLab, ProcGen, Atari, Atari100K and BSuite all\nrun here, with identical hyperparameters.",
@@ -4405,7 +4405,7 @@
         ">>> from lucid.models import dreamer_v3_200m\n>>> model = dreamer_v3_200m(action_dim=18, action_space=\"discrete\").eval()\n>>> model.config.deter_size, model.config.discrete\n(8192, 64)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Tables 2 and 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Tables 2 and 3."
       ],
       "attributes": [],
       "warns": [],
@@ -4784,7 +4784,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_200m_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L493",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L493",
       "subcategory": "pretrained",
       "summary": "The paper's default rung with all three objectives.",
       "extended": null,
@@ -4811,7 +4811,7 @@
         ">>> from lucid.models import dreamer_v3_200m_world_model\n>>> model = dreamer_v3_200m_world_model(action_dim=18).eval()\n>>> model.config.discount, model.config.actor_entropy\n(0.997, 0.0003)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nThis is the configuration that collected diamonds in Minecraft from\nscratch — with, the paper is careful to note, the same hyperparameters\nas everything else.  What differs per benchmark is the *schedule*:\naction repeat, environment count and replay ratio, none of which are\nmodel fields.  Pass them to `lucid.utils.rollout.rollout` and to\nyour training loop."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nThis is the configuration that collected diamonds in Minecraft from\nscratch — with, the paper is careful to note, the same hyperparameters\nas everything else.  What differs per benchmark is the *schedule*:\naction repeat, environment count and replay ratio, none of which are\nmodel fields.  Pass them to `lucid.utils.rollout.rollout` and to\nyour training loop."
       ],
       "attributes": [],
       "warns": [],
@@ -5198,7 +5198,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_400m(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L544",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L544",
       "subcategory": "pretrained",
       "summary": "Construct the largest rung — no objectives, just the model.",
       "extended": "A model dimension of 1536.  The top of the scaling study, where the\npaper reports that larger models not only score higher but reach a\ngiven score in *fewer* environment steps — the data efficiency\nimproves with capacity rather than trading against it.",
@@ -5225,7 +5225,7 @@
         ">>> from lucid.models import dreamer_v3_400m\n>>> model = dreamer_v3_400m(action_dim=6).eval()\n>>> model.config.deter_size, model.config.hidden_size\n(12288, 1536)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Figure 6c and Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Figure 6c and Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -5604,7 +5604,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v3_400m_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f57c0a20a/lucid/models/generative/dreamer_v3/_pretrained.py#L591",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8fd1c3a65/lucid/models/generative/dreamer_v3/_pretrained.py#L591",
       "subcategory": "pretrained",
       "summary": "The largest rung with all three objectives.",
       "extended": null,
@@ -5631,7 +5631,7 @@
         ">>> from lucid.models import dreamer_v3_400m_world_model\n>>> model = dreamer_v3_400m_world_model(action_dim=6).eval()\n>>> model.config.blocks, model.config.deter_size // model.config.blocks\n(8, 1536)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104))."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104)."
       ],
       "attributes": [],
       "warns": [],

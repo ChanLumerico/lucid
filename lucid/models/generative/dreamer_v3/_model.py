@@ -686,9 +686,13 @@ class DreamerV3ForWorldModeling(PretrainedModel):
         target = lambda_return(reward, value, discount, self._lambda)
 
         # How much of the objective each imagined step is worth: the
-        # probability the episode is still running when it arrives.  With
-        # a learned discount that probability already carries gamma, which
-        # is why the two branches look different and mean the same thing.
+        # probability the episode is still running *when it arrives*, so
+        # the product runs over the steps before it and the first one is
+        # worth 1.  With a learned discount that probability already
+        # carries gamma, which is why the two branches look different and
+        # mean the same thing — and they only do while both start at 1.
+        # Including ``pcont[0]`` instead scales every objective by the
+        # head's opinion of a state the trajectory has not left yet.
         if pcont is None:
             weight = lucid.tensor(
                 [[self._discount**i for i in range(self._horizon)]],
@@ -696,7 +700,11 @@ class DreamerV3ForWorldModeling(PretrainedModel):
                 dtype=target.dtype,
             )
         else:
-            weight = lucid.cumprod(pcont[:, : self._horizon], dim=1).detach()
+            ones = lucid.ones(
+                (int(pcont.shape[0]), 1), device=pcont.device, dtype=pcont.dtype
+            )
+            running = lucid.cat([ones, pcont[:, : self._horizon - 1]], dim=1)
+            weight = lucid.cumprod(running, dim=1).detach()
 
         scale = self.returns.update(target) if self.training else self.returns.scale
         actor_loss, entropy = self._actor_objective(

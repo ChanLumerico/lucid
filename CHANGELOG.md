@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - the release does not use one normalisation epsilon
+- an imagined step is worth the chance of reaching it
 
 ---
 
