@@ -18,8 +18,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- the release does not use one normalisation epsilon
-- an imagined step is worth the chance of reaching it
+- **Stable Diffusion** built every `GroupNorm` at the framework's default
+  epsilon of `1e-5`. The release uses `1e-6` throughout the autoencoder and
+  inside the U-Net's spatial transformers, keeping `1e-5` only for the
+  U-Net's residual blocks. Agreement with the released checkpoint improves
+  from `9.2e-05` to `4.5e-06` on the U-Net. Affects anyone loading
+  `stable_diffusion(pretrained=True)`; no interface change.
+- `stable_diffusion_gen`'s docstring said `pretrained=True` raises. It
+  loads — the sampler takes the same published checkpoint the base factory
+  does.
+- **DreamerV3** weighted each imagined step by the continuation probability
+  up to *and including* it, so the first imagined step was worth `pcont[0]`
+  (about `0.52` at initialisation) rather than `1`. Every other Dreamer
+  family, and DreamerV3's own constant-discount branch, open at `1`. The
+  effect was a spurious scale on the actor and critic objectives.
+- **`GroupNorm` and `BatchNorm` on CPU** accumulated a group's mean and
+  variance in a single `float` with a serial sum, so their accuracy fell in
+  proportion to how much the layer reduced — measured `7.8e-07` over four
+  thousand elements against `2.1e-04` over a million. Widening the
+  accumulator makes the error flat in the group's size (`1.1e-07` at a
+  million) and removes a CPU/Metal divergence that grew with resolution.
+  Parameter gradients are now roughly eighty times more accurate than the
+  reference framework's on a million-element reduction. Affects every model
+  with either layer at a large feature map; the largest observed effect was
+  on Stable Diffusion's autoencoder at 512 pixels, `2.7e-03` to `1.0e-05`.
 
 ---
 

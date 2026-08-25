@@ -65,6 +65,8 @@
 #include <cstring>
 #include <limits>
 #include <numeric>
+#include <type_traits>
+#include <vector>
 
 #include "../../core/Allocator.h"
 #include "../../core/ErrorBuilder.h"
@@ -11551,27 +11553,29 @@ private:
                                          int channels,
                                          int spatial,
                                          double eps) {
+        using Acc = NormAcc<T>;
         const std::size_t M = static_cast<std::size_t>(batch) * spatial;
-        const T inv_M = T{1} / static_cast<T>(M);
+        const Acc inv_M = Acc{1} / static_cast<Acc>(M);
         for (int c = 0; c < channels; ++c) {
-            T mean = T{};
+            Acc mean_acc = Acc{};
             for (int b = 0; b < batch; ++b) {
                 const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
                 for (int i = 0; i < spatial; ++i)
-                    mean += xb[i];
+                    mean_acc += static_cast<Acc>(xb[i]);
             }
-            mean *= inv_M;
+            mean_acc *= inv_M;
+            const T mean = static_cast<T>(mean_acc);
 
-            T var = T{};
+            Acc var_acc = Acc{};
             for (int b = 0; b < batch; ++b) {
                 const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
                 for (int i = 0; i < spatial; ++i) {
-                    const T d = xb[i] - mean;
-                    var += d * d;
+                    const Acc d = static_cast<Acc>(xb[i]) - mean_acc;
+                    var_acc += d * d;
                 }
             }
-            var *= inv_M;
-            const T rstd = T{1} / std::sqrt(var + static_cast<T>(eps));
+            var_acc *= inv_M;
+            const T rstd = static_cast<T>(Acc{1} / std::sqrt(var_acc + static_cast<Acc>(eps)));
             const T g = gamma[c];
             const T be = beta[c];
             for (int b = 0; b < batch; ++b) {
@@ -11597,28 +11601,32 @@ private:
                                           int batch,
                                           int channels,
                                           int spatial) {
+        using Acc = NormAcc<T>;
         const std::size_t M = static_cast<std::size_t>(batch) * spatial;
-        const T inv_M = T{1} / static_cast<T>(M);
+        const Acc inv_M = Acc{1} / static_cast<Acc>(M);
         for (int c = 0; c < channels; ++c) {
             const T m = mean[c];
             const T r = rstd[c];
             const T gc = gamma[c];
-            T sum_dxn = T{};
-            T sum_dxn_xn = T{};
-            T sum_g = T{};
-            T sum_g_xn = T{};
+            Acc sum_dxn = Acc{};
+            Acc sum_dxn_xn = Acc{};
+            Acc sum_g = Acc{};
+            Acc sum_g_xn = Acc{};
             for (int b = 0; b < batch; ++b) {
                 const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
                 const T* gb = g + (static_cast<std::size_t>(b) * channels + c) * spatial;
                 for (int i = 0; i < spatial; ++i) {
-                    const T xn_i = (xb[i] - m) * r;
-                    const T dxn_i = gc * gb[i];
+                    const Acc xn_i = static_cast<Acc>((xb[i] - m) * r);
+                    const Acc dxn_i = static_cast<Acc>(gc * gb[i]);
                     sum_dxn += dxn_i;
                     sum_dxn_xn += dxn_i * xn_i;
-                    sum_g += gb[i];
-                    sum_g_xn += gb[i] * xn_i;
+                    sum_g += static_cast<Acc>(gb[i]);
+                    sum_g_xn += static_cast<Acc>(gb[i]) * xn_i;
                 }
             }
+            const T sum_dxn_t = static_cast<T>(sum_dxn);
+            const T sum_dxn_xn_t = static_cast<T>(sum_dxn_xn);
+            const T inv_M_t = static_cast<T>(inv_M);
             for (int b = 0; b < batch; ++b) {
                 const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
                 const T* gb = g + (static_cast<std::size_t>(b) * channels + c) * spatial;
@@ -11626,13 +11634,25 @@ private:
                 for (int i = 0; i < spatial; ++i) {
                     const T xn_i = (xb[i] - m) * r;
                     const T dxn_i = gc * gb[i];
-                    dxb[i] = inv_M * r * (static_cast<T>(M) * dxn_i - sum_dxn - xn_i * sum_dxn_xn);
+                    dxb[i] =
+                        inv_M_t * r * (static_cast<T>(M) * dxn_i - sum_dxn_t - xn_i * sum_dxn_xn_t);
                 }
             }
-            dgamma[c] = sum_g_xn;
-            dbeta[c] = sum_g;
+            dgamma[c] = static_cast<T>(sum_g_xn);
+            dbeta[c] = static_cast<T>(sum_g);
         }
     }
+
+    // Reductions over a whole normalisation group run to a million elements
+    // at production resolutions, and a serial float sum loses accuracy in
+    // proportion to how many terms it has taken -- roughly 2e-04 over 1M
+    // against 8e-07 over 4k.  MLX does not, so the same model disagrees with
+    // itself across devices and the gap reads as float32 accumulation rather
+    // than as a kernel.  LayerNorm escapes it here only because it reaches
+    // vDSP instead of a hand-written loop.  Widening the accumulator costs
+    // one register and removes the size dependence.
+    template <typename T>
+    using NormAcc = std::conditional_t<std::is_same_v<T, float>, double, T>;
 
     template <typename T>
     static void group_norm_forward_typed(const T* x,
@@ -11646,30 +11666,32 @@ private:
                                          int spatial,
                                          int groups,
                                          double eps) {
+        using Acc = NormAcc<T>;
         const int Cg = channels / groups;
         const std::size_t per_group = static_cast<std::size_t>(Cg) * spatial;
-        const T inv_pg = T{1} / static_cast<T>(per_group);
+        const Acc inv_pg = Acc{1} / static_cast<Acc>(per_group);
         for (int b = 0; b < batch; ++b) {
             for (int g = 0; g < groups; ++g) {
-                T mean = T{};
+                Acc mean_acc = Acc{};
                 for (int cc = 0; cc < Cg; ++cc) {
                     const int c = g * Cg + cc;
                     const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
                     for (int i = 0; i < spatial; ++i)
-                        mean += xb[i];
+                        mean_acc += static_cast<Acc>(xb[i]);
                 }
-                mean *= inv_pg;
-                T var = T{};
+                mean_acc *= inv_pg;
+                const T mean = static_cast<T>(mean_acc);
+                Acc var_acc = Acc{};
                 for (int cc = 0; cc < Cg; ++cc) {
                     const int c = g * Cg + cc;
                     const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
                     for (int i = 0; i < spatial; ++i) {
-                        const T d = xb[i] - mean;
-                        var += d * d;
+                        const Acc d = static_cast<Acc>(xb[i]) - mean_acc;
+                        var_acc += d * d;
                     }
                 }
-                var *= inv_pg;
-                const T rstd = T{1} / std::sqrt(var + static_cast<T>(eps));
+                var_acc *= inv_pg;
+                const T rstd = static_cast<T>(Acc{1} / std::sqrt(var_acc + static_cast<Acc>(eps)));
                 for (int cc = 0; cc < Cg; ++cc) {
                     const int c = g * Cg + cc;
                     const T gc = gamma[c];
@@ -11698,33 +11720,38 @@ private:
                                           int channels,
                                           int spatial,
                                           int groups) {
+        using Acc = NormAcc<T>;
         const int Cg = channels / groups;
         const std::size_t per_group = static_cast<std::size_t>(Cg) * spatial;
-        const T inv_pg = T{1} / static_cast<T>(per_group);
-        for (int co = 0; co < channels; ++co) {
-            dgamma[co] = T{};
-            dbeta[co] = T{};
-        }
+        const Acc inv_pg = Acc{1} / static_cast<Acc>(per_group);
+        // dgamma / dbeta run over batch * spatial per channel, which is the
+        // same length of sum the forward widened; they are accumulated apart
+        // and rounded once on the way out.
+        std::vector<Acc> dgamma_acc(static_cast<std::size_t>(channels), Acc{});
+        std::vector<Acc> dbeta_acc(static_cast<std::size_t>(channels), Acc{});
         for (int b = 0; b < batch; ++b) {
             for (int gi = 0; gi < groups; ++gi) {
                 const T m = mean_bg[b * groups + gi];
                 const T r = rstd_bg[b * groups + gi];
-                T sum_dxn = T{};
-                T sum_dxn_xn = T{};
+                Acc sum_dxn = Acc{};
+                Acc sum_dxn_xn = Acc{};
                 for (int cc = 0; cc < Cg; ++cc) {
                     const int c = gi * Cg + cc;
                     const T gc = gamma[c];
                     const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
                     const T* gb = g + (static_cast<std::size_t>(b) * channels + c) * spatial;
                     for (int i = 0; i < spatial; ++i) {
-                        const T xn_i = (xb[i] - m) * r;
-                        const T dxn_i = gc * gb[i];
+                        const Acc xn_i = static_cast<Acc>((xb[i] - m) * r);
+                        const Acc dxn_i = static_cast<Acc>(gc * gb[i]);
                         sum_dxn += dxn_i;
                         sum_dxn_xn += dxn_i * xn_i;
-                        dgamma[c] += gb[i] * xn_i;
-                        dbeta[c] += gb[i];
+                        dgamma_acc[c] += static_cast<Acc>(gb[i]) * xn_i;
+                        dbeta_acc[c] += static_cast<Acc>(gb[i]);
                     }
                 }
+                const T sum_dxn_t = static_cast<T>(sum_dxn);
+                const T sum_dxn_xn_t = static_cast<T>(sum_dxn_xn);
+                const T inv_pg_t = static_cast<T>(inv_pg);
                 for (int cc = 0; cc < Cg; ++cc) {
                     const int c = gi * Cg + cc;
                     const T gc = gamma[c];
@@ -11734,11 +11761,16 @@ private:
                     for (int i = 0; i < spatial; ++i) {
                         const T xn_i = (xb[i] - m) * r;
                         const T dxn_i = gc * gb[i];
-                        dxb[i] = inv_pg * r *
-                                 (static_cast<T>(per_group) * dxn_i - sum_dxn - xn_i * sum_dxn_xn);
+                        dxb[i] =
+                            inv_pg_t * r *
+                            (static_cast<T>(per_group) * dxn_i - sum_dxn_t - xn_i * sum_dxn_xn_t);
                     }
                 }
             }
+        }
+        for (int co = 0; co < channels; ++co) {
+            dgamma[co] = static_cast<T>(dgamma_acc[co]);
+            dbeta[co] = static_cast<T>(dbeta_acc[co]);
         }
     }
 

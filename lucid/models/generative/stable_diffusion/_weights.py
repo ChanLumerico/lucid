@@ -10,23 +10,20 @@ With these weights in place, on a 512-pixel image and the 64x64 latent
 that implies:
 
 ===================  =========  =========
-path                 Metal      CPU
+path                 CPU        Metal
 ===================  =========  =========
-U-Net epsilon        4.5e-06    4.5e-06
-autoencoder encoder  3.4e-05    2.7e-03
-autoencoder decoder  5.9e-05    8.3e-04
+U-Net epsilon        8.6e-07    8.6e-07
+autoencoder encoder  1.0e-05    3.4e-05
+autoencoder decoder  2.8e-05    5.9e-05
 ===================  =========  =========
 
-**The two columns differ for a reason that is not this conversion.**
-Lucid's CPU ``group_norm`` kernel accumulates a group's mean and
-variance in one ``float`` with a serial sum, so its error grows with
-the size of the group rather than staying flat: 8e-07 over 4k elements
-and 2e-04 over the million a 512-pixel autoencoder stage reduces.  MLX
-does not, which is why the Metal column holds its accuracy while the
-CPU column loses two digits between 256 and 512 pixels.  The U-Net is
-largely spared because its widest group is 41k elements rather than a
-million.  Read the Metal column as this conversion's accuracy; the gap
-between them is a framework issue and is tracked apart from this family.
+These are flat in the input's size, which is the property worth
+checking rather than the numbers themselves.  They were not always:
+Lucid's CPU ``group_norm`` accumulated a group's mean and variance in
+one ``float`` with a serial sum, so the autoencoder's error grew from
+1.8e-04 at 256 pixels to 2.7e-03 at 512 while Metal stayed near 3e-05.
+A residual that moves with the resolution is a kernel, not a
+conversion, and re-measuring at a second size is what separates them.
 
 That check is what this family needed most, because the conversion had
 already passed a stricter-looking one.  The parameter counts matched the
@@ -37,7 +34,8 @@ the reference pads bottom-right only, and every normalisation ran at the
 framework's default epsilon where the release uses 1e-6 throughout the
 autoencoder and inside the U-Net's spatial transformers.  None of the
 three changes a shape, a count, or anything a forward pass reports; the
-last one alone was a factor of twenty on the U-Net's agreement.
+epsilon alone was a factor of twenty on the U-Net's agreement, and the
+kernel behind it another five.
 
 The text encoder is not here.  This family takes conditioning as an
 already-encoded sequence, and the released models condition on a frozen
