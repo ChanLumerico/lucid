@@ -24,6 +24,7 @@ import pytest
 
 import lucid
 import lucid.models as M
+from lucid.nn._shadow import shadow_alloc
 from lucid.models.generative.stable_diffusion import (
     AutoencoderKL,
     DDIMScheduler,
@@ -408,10 +409,22 @@ class TestTheAssembledModel:
 
 
 class TestVariants:
+    """Structure and registration, built without weights.
+
+    Every assertion below is about shapes, names and counts, none of
+    which needs storage — so the models are built under
+    :func:`~lucid.nn._shadow.shadow_alloc`. At full size this family is
+    943M parameters, about three gigabytes a copy, and this file used to
+    build six of them to count things that ``shadow_alloc`` counts
+    exactly. It was the largest single contributor to a suite that
+    cannot finish in one process.
+    """
+
     def test_v1_matches_clips_text_width(self) -> None:
         """The conditioning contract, checked against the actual tower."""
-        sd = M.stable_diffusion().config
-        clip = M.clip_vit_large_14().config
+        with shadow_alloc():
+            sd = M.stable_diffusion().config
+            clip = M.clip_vit_large_14().config
         assert sd.cross_attention_dim == clip.text_width == 768
         assert sd.context_length == clip.context_length == 77
 
@@ -430,10 +443,12 @@ class TestVariants:
         into — a stale ``num_params`` is invisible until a user
         downloads three and a half gigabytes."""
         entry = StableDiffusionWeights.DEFAULT.value
-        model = M.stable_diffusion()
-        total = sum(
-            math.prod(tuple(int(s) for s in p.shape)) for p in model.parameters()
-        )
+        with shadow_alloc():
+            model = M.stable_diffusion()
+            total = sum(
+                math.prod(tuple(int(s) for s in p.shape))
+                for p in model.parameters()
+            )
         assert entry.meta["num_params"] == total
         assert entry.url.endswith("CompVis_LAION/model.safetensors")
         assert len(entry.sha256) == 64
@@ -448,16 +463,19 @@ class TestVariants:
         code was right and nobody reading the documentation would have
         tried it.
         """
-        sampler = M.stable_diffusion_gen()
-        inner = {name for name, _ in sampler.stable_diffusion.named_parameters()}
-        direct = {name for name, _ in M.stable_diffusion().named_parameters()}
-        assert inner == direct
+        with shadow_alloc():
+            sampler = M.stable_diffusion_gen()
+            inner = {
+                name for name, _ in sampler.stable_diffusion.named_parameters()
+            }
+            direct = {name for name, _ in M.stable_diffusion().named_parameters()}
+            assert inner == direct
 
-        entry = StableDiffusionWeights.DEFAULT.value
-        total = sum(
-            math.prod(tuple(int(s) for s in p.shape))
-            for p in sampler.stable_diffusion.parameters()
-        )
+            entry = StableDiffusionWeights.DEFAULT.value
+            total = sum(
+                math.prod(tuple(int(s) for s in p.shape))
+                for p in sampler.stable_diffusion.parameters()
+            )
         assert entry.meta["num_params"] == total
 
 
@@ -520,10 +538,12 @@ class TestItMatchesTheReleasedCheckpoint:
         )
 
     def test_the_unet_has_the_published_size(self) -> None:
-        assert self._count(M.stable_diffusion().unet) == 859_520_964
+        with shadow_alloc():
+            assert self._count(M.stable_diffusion().unet) == 859_520_964
 
     def test_the_autoencoder_has_the_published_size(self) -> None:
-        assert self._count(M.stable_diffusion().vae) == 83_653_863
+        with shadow_alloc():
+            assert self._count(M.stable_diffusion().vae) == 83_653_863
 
     def test_the_feed_forward_is_gated(self) -> None:
         """GEGLU projects to twice the inner width and gates with half.

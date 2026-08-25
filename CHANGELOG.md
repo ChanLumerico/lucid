@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (about `0.52` at initialisation) rather than `1`. Every other Dreamer
   family, and DreamerV3's own constant-discount branch, open at `1`. The
   effect was a spurious scale on the actor and critic objectives.
+- Stable Diffusion's two factory doctests each built the full 943M-parameter
+  model — about three gigabytes — to read one or two configuration fields,
+  and the unit tests built six more to count parameters. The examples now
+  read the configuration (the construction is shown but skipped) and the
+  tests build under `shadow_alloc`, which counts the same numbers without
+  allocating storage. `test_models_stable_diffusion.py` drops from ~57s and
+  several GB to 1.0s and 0.18 GB; the counts asserted are unchanged.
 - **`GroupNorm` and `BatchNorm` on CPU** accumulated a group's mean and
   variance in a single `float` with a serial sum, so their accuracy fell in
   proportion to how much the layer reduced — measured `7.8e-07` over four

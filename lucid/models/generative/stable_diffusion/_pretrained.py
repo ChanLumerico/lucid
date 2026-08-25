@@ -90,8 +90,16 @@ def stable_diffusion(
     Examples
     --------
     >>> from lucid.models import stable_diffusion
-    >>> model = stable_diffusion()
-    >>> model.config.latent_size, model.config.cross_attention_dim
+    >>> model = stable_diffusion()  # doctest: +SKIP
+
+    That call materialises 943M parameters — about three gigabytes — and
+    what it will build is a property of the configuration, so the shape
+    is read there instead:
+
+    >>> from lucid.models.generative.stable_diffusion import (
+    ...     StableDiffusionConfig)
+    >>> config = StableDiffusionConfig()
+    >>> config.latent_size, config.cross_attention_dim
     (64, 768)
     """
     model = StableDiffusionModel(_apply(_CFG_V1, overrides))
@@ -136,8 +144,14 @@ def stable_diffusion_gen(
     Examples
     --------
     >>> from lucid.models import stable_diffusion_gen
-    >>> model = stable_diffusion_gen()
-    >>> model.config.sample_size
+    >>> model = stable_diffusion_gen()  # doctest: +SKIP
+
+    Read from the configuration for the same reason as
+    :func:`stable_diffusion` — the sampler holds the same network:
+
+    >>> from lucid.models.generative.stable_diffusion import (
+    ...     StableDiffusionConfig)
+    >>> StableDiffusionConfig().sample_size
     512
     """
     model = StableDiffusionForImageGeneration(_apply(_CFG_V1, overrides))
