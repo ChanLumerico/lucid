@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dreamer v1** ran its convolutional encoder and decoder under ELU. The
+  released implementation carries two activations — `dense_act` is ELU and
+  `cnn_act` is ReLU — and the paper states the first while saying nothing
+  about the second. `DreamerConfig` gains a `cnn_act` field defaulting to
+  `"relu"`; `act_fn` continues to drive the RSSM and the dense heads. The
+  measured effect on control is inside seed noise, so this is a fidelity
+  correction rather than a performance one.
+
 - **Stable Diffusion** built every `GroupNorm` at the framework's default
   epsilon of `1e-5`. The release uses `1e-6` throughout the autoencoder and
   inside the U-Net's spatial transformers, keeping `1e-5` only for the

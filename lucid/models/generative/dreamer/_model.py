@@ -380,7 +380,9 @@ class DreamerModel(PretrainedModel):
 
     def __init__(self, config: DreamerConfig) -> None:
         super().__init__(config)
-        self.encoder = PixelEncoder(config.in_channels, config.cnn_depth, config.act_fn)
+        self.encoder = PixelEncoder(
+            config.in_channels, config.cnn_depth, config.cnn_act
+        )
         self.rssm = RSSM(
             stoch_size=config.stoch_size,
             deter_size=config.deter_size,
@@ -391,7 +393,7 @@ class DreamerModel(PretrainedModel):
             min_std=config.min_std,
         )
         self.decoder = PixelDecoder(
-            config.latent_size, config.out_channels, config.cnn_depth, config.act_fn
+            config.latent_size, config.out_channels, config.cnn_depth, config.cnn_act
         )
         self.reward_head = DenseHead(
             config.latent_size,

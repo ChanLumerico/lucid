@@ -92,6 +92,12 @@ class DreamerConfig(WorldModelConfig):
     lambda_ : float, default=0.95
         TD(:math:`\lambda`) weighting between short- and long-horizon
         returns.  Trailing underscore because ``lambda`` is a keyword.
+    cnn_act : {"silu", "swish", "relu", "gelu", "elu"}, default="relu"
+        Activation for the convolutional encoder and decoder only. The
+        released implementation carries two — ``dense_act`` is ELU and
+        ``cnn_act`` is ReLU — and the paper states the first while
+        saying nothing about the second, so this follows the rule the
+        rest of this class uses when the paper is silent.
     actor_hidden, actor_layers : int, default=300, 3
         Width and depth of the actor.
     value_hidden, value_layers : int, default=300, 3
@@ -159,6 +165,7 @@ class DreamerConfig(WorldModelConfig):
     actor depth     3                     4
     value depth     3                     3
     reward depth    not stated            2  (taken, as the default)
+    CNN activation  not stated            ReLU (taken; dense stays ELU)
     ==============  ====================  ==========================
 
     ``detach_actor_input`` is the one behavioural fork.  The released
@@ -188,6 +195,7 @@ class DreamerConfig(WorldModelConfig):
     model_type: ClassVar[str] = "dreamer"
 
     act_fn: GenerativeActivation = "elu"
+    cnn_act: GenerativeActivation = "relu"
 
     horizon: int = 15
     discount: float = 0.99
