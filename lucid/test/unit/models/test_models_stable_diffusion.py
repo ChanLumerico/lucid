@@ -408,6 +408,50 @@ class TestTheAssembledModel:
         assert out.loss is not None
 
 
+class TestTheSamplingDefaultsAreTheReleases:
+    """Three numbers that decide what an unqualified `generate()` produces.
+
+    The config's fields are covered by ``test_generative_provenance``,
+    which fails the suite for any field without a recorded source. These
+    are not config fields — they are :meth:`generate`'s own defaults —
+    so nothing was holding them to the released pipeline's, and a caller
+    who writes ``model.generate(prompt_embedding)`` gets whatever they
+    happen to be.
+
+    They are the released ``StableDiffusionPipeline.__call__``'s:
+    fifty steps, guidance 7.5, and eta 0 for the deterministic DDIM
+    trajectory that makes a seed reproduce an image.
+    """
+
+    @staticmethod
+    def _defaults(fn: object) -> dict[str, object]:
+        import inspect
+
+        return {
+            name: parameter.default
+            for name, parameter in inspect.signature(fn).parameters.items()
+        }
+
+    def test_generate_matches_the_released_pipeline(self) -> None:
+        defaults = self._defaults(StableDiffusionForImageGeneration.generate)
+        assert defaults["num_inference_steps"] == 50
+        assert defaults["guidance_scale"] == 7.5
+        assert defaults["eta"] == 0.0
+
+    def test_the_sampler_default_is_pndm(self) -> None:
+        """The release's `model_index.json` names PNDMScheduler.
+
+        The paper samples with DDIM, so this one is a choice between two
+        defensible answers and the released pipeline is the tiebreak.
+        """
+        defaults = self._defaults(StableDiffusionForImageGeneration.generate)
+        assert defaults["sampler"] == "pndm"
+
+    def test_ddim_defaults_to_the_deterministic_trajectory(self) -> None:
+        """eta = 0 is what makes a seed reproduce an image."""
+        assert self._defaults(DDIMScheduler.step)["eta"] == 0.0
+
+
 class TestVariants:
     """Structure and registration, built without weights.
 
