@@ -142,6 +142,12 @@ DREAMER: dict[str, tuple[Any, str]] = {
         "elu",
         'paper: Appendix A, "three dense layers of size 300 with ELU activations"',
     ),
+    "cnn_act": (
+        "relu",
+        "code: dreamer.py cnn_act = 'relu', which the released config keeps "
+        "separate from dense_act = 'elu'; the paper states the dense "
+        "activation and is silent on the convolutional one",
+    ),
     "stoch_size": (
         30,
         'paper: Appendix A, "Distributions in latent space are '
