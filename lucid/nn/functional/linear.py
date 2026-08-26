@@ -332,7 +332,7 @@ def scaled_noise(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.functional import scaled_noise
     >>> scaled_noise(lucid.tensor([-4.0, 0.0, 9.0]))
-    tensor([-2.0, 0.0, 3.0])
+    tensor([-2., 0., 3.])
     """
     import lucid as _l
 

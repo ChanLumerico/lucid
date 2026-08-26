@@ -61,17 +61,23 @@ class RemovableHandle:
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.nn import hooks
+    >>> model, x = nn.Linear(3, 2), lucid.zeros((1, 3))
     >>> def my_hook(mod, inputs):
     ...     print(f'about to call {type(mod).__name__}')
     >>> h = hooks.register_module_forward_pre_hook(my_hook)
-    >>> # ... forward passes print the message ...
+    >>> _ = model(x)
+    about to call Linear
     >>> h.remove()                    # explicit deregistration
+    >>> _ = model(x)                  # silent: the hook is gone
     >>>
     >>> # Or via context manager for scoped activation:
     >>> with hooks.register_module_forward_pre_hook(my_hook):
-    ...     model(x)                  # hook fires here
-    >>> # hook auto-removed on context exit
+    ...     _ = model(x)              # hook fires here
+    about to call Linear
+    >>> _ = model(x)                  # auto-removed on context exit
     """
 
     def __init__(
@@ -204,14 +210,17 @@ def register_module_forward_hook(
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.nn.hooks import register_module_forward_hook
+    >>> model, x = nn.Linear(3, 2), lucid.zeros((1, 3))
     >>> activations = {}
     >>> def capture(mod, inputs, output):
     ...     activations[type(mod).__name__] = output.detach()
     >>> with register_module_forward_hook(capture):
     ...     _ = model(x)
-    >>> activations.keys()
-    dict_keys([...])
+    >>> sorted(activations)
+    ['Linear']
     """
     key = _next_hook_id()
     _GLOBAL_FORWARD_HOOKS[key] = (hook, with_kwargs, always_call)
@@ -254,6 +263,7 @@ def register_module_full_backward_pre_hook(
     >>> def scale_grads(mod, grad_output):
     ...     return tuple(g * 0.5 for g in grad_output)
     >>> h = register_module_full_backward_pre_hook(scale_grads)
+    >>> h.remove()                   # global: leave nothing behind
     """
     key = _next_hook_id()
     _GLOBAL_BACKWARD_PRE_HOOKS[key] = hook
@@ -297,6 +307,7 @@ def register_module_full_backward_hook(
     ...         if g is not None:
     ...             print(f'{type(mod).__name__}.in[{i}].grad_norm = {g.norm().item()}')
     >>> handle = register_module_full_backward_hook(log_grad_norm)
+    >>> handle.remove()              # global: leave nothing behind
     """
     key = _next_hook_id()
     _GLOBAL_BACKWARD_HOOKS[key] = hook
@@ -347,6 +358,7 @@ def register_module_load_state_dict_pre_hook(
     ...             sd[k.replace('fc.', 'linear.', 1)] = sd.pop(k)
     >>> h = register_module_load_state_dict_pre_hook(rename_keys)
     >>> # model.load_state_dict(legacy_checkpoint) now succeeds
+    >>> h.remove()                   # global: leave nothing behind
     """
     key = _next_hook_id()
     _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS[key] = hook
@@ -393,6 +405,7 @@ def register_module_load_state_dict_post_hook(
     ...     for key in incompatible.missing_keys:
     ...         print(f'(post-load) {key} not in checkpoint — keeping init values')
     >>> h = register_module_load_state_dict_post_hook(reinit_missing)
+    >>> h.remove()                   # global: leave nothing behind
     """
     key = _next_hook_id()
     _GLOBAL_LOAD_STATE_DICT_POST_HOOKS[key] = hook
