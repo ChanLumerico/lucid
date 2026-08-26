@@ -800,6 +800,34 @@ class TestOvershooting:
 
 
 class TestPlanner:
+    def test_the_planner_defaults_are_the_papers(self) -> None:
+        """The four numbers that decide what "planning" costs here.
+
+        ``test_generative_provenance`` requires a recorded source for
+        every field of every config, and these are not config fields —
+        they are :meth:`plan`'s own defaults. So the inventory gate that
+        catches a wrong ``horizon`` in ``PlaNetConfig`` does not reach
+        the planning horizon, which is the one the paper's own results
+        were produced with. Changing any of them silently would leave
+        every gate green.
+
+        Appendix A: "planning horizon H = 12, optimization iterations
+        I = 10, candidate samples J = 1000, and refitting to the best
+        K = 100".
+        """
+        import inspect
+
+        defaults = {
+            name: parameter.default
+            for name, parameter in inspect.signature(
+                PlaNetForWorldModeling.plan
+            ).parameters.items()
+        }
+        assert defaults["horizon"] == 12
+        assert defaults["iterations"] == 10
+        assert defaults["candidates"] == 1000
+        assert defaults["elites"] == 100
+
     def test_returns_one_action_per_batch_item(self) -> None:
         model = PlaNetForWorldModeling(_tiny_cfg()).eval()
         action = model.plan(
