@@ -85,6 +85,7 @@ def _clip(model: object) -> None:
     nn.utils.clip_grad_norm_(model.value_parameters(), max_norm=100.0)
     nn.utils.clip_grad_norm_(model.actor_parameters(), max_norm=100.0)
 
+
 _DEVICE = "metal"
 
 # Larger than the suite's config and still small. The point of the

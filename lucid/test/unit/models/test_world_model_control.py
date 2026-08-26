@@ -69,6 +69,7 @@ def _clip(model: object) -> None:
     nn.utils.clip_grad_norm_(model.value_parameters(), max_norm=100.0)
     nn.utils.clip_grad_norm_(model.actor_parameters(), max_norm=100.0)
 
+
 _TINY = dict(
     action_dim=2,
     cnn_depth=8,
