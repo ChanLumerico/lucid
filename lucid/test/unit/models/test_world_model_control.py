@@ -36,6 +36,7 @@ import pytest
 
 import lucid
 import lucid.models as M
+import lucid.nn as nn
 import lucid.optim as optim
 from lucid.models.generative._actor import Actor
 from lucid.test._fixtures.classic_control import Pendulum
@@ -49,6 +50,24 @@ from lucid.utils.rollout import (
 )
 
 pytestmark = pytest.mark.slow
+
+
+def _clip(model: object) -> None:
+    """The gradient clipping the papers specify and this file omitted.
+
+    Dreamer clips at norm 100; DreamerV3's Table B.1 raises the world
+    model's cap to 1000 and keeps the actor-critic at 100. Training
+    without any is not the published algorithm.
+
+    The omission is not academic here. Measured on the moving-target
+    task, the critic's gradient norm reaches 2.3e4 and its value
+    estimate runs to 1286 for a task whose achievable return is about
+    14 — the return curve shows only that the agent does not improve,
+    which is the symptom these two numbers explain.
+    """
+    nn.utils.clip_grad_norm_(model.world_parameters(), max_norm=1000.0)
+    nn.utils.clip_grad_norm_(model.value_parameters(), max_norm=100.0)
+    nn.utils.clip_grad_norm_(model.actor_parameters(), max_norm=100.0)
 
 _TINY = dict(
     action_dim=2,
@@ -211,6 +230,7 @@ class TestDreamerLearnsControl:
             batch = replay.sample(BATCH, LENGTH)
             out = model(batch.observations, batch.actions, batch.rewards)
             model.backward(out)
+            _clip(model)
             for opt in optimisers:
                 opt.step()
 
@@ -369,6 +389,7 @@ class TestDreamerV2LearnsControl:
             entropy_first = entropy if step == 0 else entropy_first
             entropy_last = entropy
             model.backward(out)
+            _clip(model)
             for opt in optimisers:
                 opt.step()
             model.update_slow_target()
@@ -548,6 +569,7 @@ def _train_v3(steps: int = 60, world: bool = True) -> tuple:
         batch = replay.sample(BATCH, LENGTH)
         out = model(batch.observations, batch.actions, batch.rewards)
         model.backward(out)
+        _clip(model)
         if world:
             world_opt.step()
         value_opt.step()
@@ -683,6 +705,9 @@ def _train_planet(steps: int = 60, train: bool = True) -> tuple:
         out = model(batch.observations, batch.actions, batch.rewards)
         first = float(out.recon_loss.item()) if step == 0 else first
         out.loss.backward()
+        # PlaNet plans with CEM rather than an actor-critic, so the world
+        # model's cap is the only one that applies.
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1000.0)
         if train:
             opt.step()
     return model, env, replay, out, first
@@ -755,6 +780,110 @@ class TestPlaNetPlansThroughTheLoop:
             f"[{low:.3f}, {high:.3f}]"
         )
         assert float(out.recon_loss.item()) >= first * 0.9
+
+
+class TestTheDynamicsGradientCanLearn:
+    """The other way an actor is trained here, which had no test.
+
+    :class:`TestTheActorObjectiveCanLearn` covers the score function —
+    the estimator DreamerV2 uses for discrete actions and DreamerV3 uses
+    for both. Dreamer v1 does not use it for continuous ones. Its actor
+    loss is ``-(weight * returns).mean()`` with nothing detached between
+    the return and the policy, so the gradient arrives *through the
+    sampled action* and the dynamics that consumed it, not through a
+    log-probability.
+
+    The two paths fail differently. A score-function bug leaves the
+    log-probability intact and the advantage wrong; a pathwise bug
+    severs the action from the objective, and then the actor's gradient
+    is not small — it is exactly zero, or it is whatever the entropy
+    term alone contributes. Neither is visible in a return curve, and
+    neither is covered by the class above.
+
+    So: no RSSM, no critic. A differentiable score that is a known
+    function of the sampled action, and the question of whether the
+    policy climbs it by backpropagating *into the sample*.
+    """
+
+    @staticmethod
+    def _actor(action_dim: int = 1) -> Actor:
+        lucid.manual_seed(0)
+        return Actor(
+            latent_size=4,
+            hidden=32,
+            layers=2,
+            action_dim=action_dim,
+            act_fn="silu",
+            min_std=0.1,
+        )
+
+    @staticmethod
+    def _mode(actor: Actor, feature: lucid.Tensor) -> float:
+        with lucid.no_grad():
+            return float(actor.distribution(feature).mode[..., 0].mean().item())
+
+    def test_a_reparameterised_sample_carries_gradient(self) -> None:
+        """The property the whole path rests on.
+
+        ``rsample`` has to be differentiable with respect to the actor's
+        parameters. If it is not — if it silently detaches, as ``sample``
+        would — every test below still runs and the actor never moves.
+        """
+        actor = self._actor()
+        feature = lucid.ones((8, 1, 4))
+        action = actor.distribution(feature).rsample()
+        action[..., 0].mean().backward()
+        total = sum(
+            float((p.grad**2).sum().item())
+            for p in actor.parameters()
+            if p.grad is not None
+        )
+        assert total > 0.0, "no gradient reached the actor through rsample()"
+
+    def test_a_continuous_policy_climbs_the_pathwise_score(self) -> None:
+        """v1's objective in miniature: maximise a differentiable score.
+
+        The score is the action's own first component, so the optimum is
+        +1 and the gradient is available only by differentiating through
+        the sample.
+        """
+        actor = self._actor()
+        opt = optim.Adam(actor.parameters(), lr=3e-3)
+        feature = lucid.ones((64, 1, 4))
+        before = self._mode(actor, feature)
+        for _ in range(150):
+            action = actor.distribution(feature).rsample()
+            loss = -action[..., 0].mean()
+            actor.zero_grad()
+            loss.backward()
+            opt.step()
+        after = self._mode(actor, feature)
+        assert after > before + 0.5, (
+            f"the mode did not climb the pathwise score: "
+            f"{before:+.4f} -> {after:+.4f}"
+        )
+        assert after > 0.9, f"did not approach the optimum: {after:+.4f}"
+
+    def test_detaching_the_sample_stops_the_climb(self) -> None:
+        """Guards the test above by breaking the one thing it tests.
+
+        With the sample detached the loss is a constant as far as the
+        actor is concerned. If the policy still arrived at the optimum,
+        the climb above would be proving something else.
+        """
+        actor = self._actor()
+        opt = optim.Adam(actor.parameters(), lr=3e-3)
+        feature = lucid.ones((64, 1, 4))
+        for _ in range(150):
+            action = actor.distribution(feature).rsample().detach()
+            loss = -action[..., 0].mean()
+            actor.zero_grad()
+            loss.backward()
+            opt.step()
+        assert self._mode(actor, feature) < 0.9, (
+            "reached the optimum with the sample detached — the climb "
+            "above is not measuring the pathwise gradient"
+        )
 
 
 class TestTheActorObjectiveCanLearn:

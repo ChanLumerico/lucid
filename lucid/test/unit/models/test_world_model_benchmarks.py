@@ -35,6 +35,23 @@ on the best evaluation over the run, and the run is short enough that
 What this still does not establish is the paper's own scores. This is a
 64x64 toy with a dense Gaussian reward, not the Control Suite, and no
 claim about DMC or Atari numbers should be read out of it.
+
+**The discount here is hostile to Dreamer v1, and that is the task's
+doing rather than v1's.** Episodes run 20 steps and ``pcont`` is off, so
+imagination never terminates and ``discount=0.99`` asks the critic for an
+infinite-horizon value of roughly 70 on a task whose achievable return is
+about 14. v2 absorbs the mismatch with its target critic and v3 with its
+slow critic and return normalisation — measured, their value estimates
+settle at 26 and 36. v1 has neither, and its estimate runs to 1286 while
+the world model's reward predictions stay accurate; the actor then
+maximises a quantity that is running away from it.
+
+Matching the discount to the episode (``discount=0.95``) leaves v1's
+value at 15-18 and it clears the ceiling at 1.12x +/- 0.10 over four
+seeds, holding it to the final evaluation. So a v1 row added here at
+0.99 would measure the discount, not the implementation. Anyone
+extending this file to the earlier families should set the discount from
+the horizon first.
 """
 
 import itertools
@@ -43,11 +60,30 @@ import pytest
 
 import lucid
 import lucid.models as M
+import lucid.nn as nn
 import lucid.optim as optim
 from lucid.test._fixtures.point_mass import PointMass
 from lucid.utils.rollout import LatentPolicy, RandomPolicy, SequenceReplay, rollout
 
 pytestmark = [pytest.mark.control, pytest.mark.slow]
+
+
+def _clip(model: object) -> None:
+    """The gradient clipping the papers specify and this file omitted.
+
+    Dreamer clips at norm 100; DreamerV3's Table B.1 raises the world
+    model's cap to 1000 and keeps the actor-critic at 100. Training
+    without any is not the published algorithm.
+
+    The omission is not academic here. Measured on the moving-target
+    task, the critic's gradient norm reaches 2.3e4 and its value
+    estimate runs to 1286 for a task whose achievable return is about
+    14 — the return curve shows only that the agent does not improve,
+    which is the symptom these two numbers explain.
+    """
+    nn.utils.clip_grad_norm_(model.world_parameters(), max_norm=1000.0)
+    nn.utils.clip_grad_norm_(model.value_parameters(), max_norm=100.0)
+    nn.utils.clip_grad_norm_(model.actor_parameters(), max_norm=100.0)
 
 _DEVICE = "metal"
 
@@ -196,6 +232,7 @@ class TestDreamerV3BeatsTheBlindCeiling:
             batch = replay.sample(16, 15)
             out = model(batch.observations, batch.actions, batch.rewards)
             model.backward(out)
+            _clip(model)
             for opt in optimisers:
                 opt.step()
             model.update_slow_critic()
