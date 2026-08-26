@@ -1890,9 +1890,13 @@ public:
     virtual Storage add_scalar(const Storage& a, const Shape& shape, Dtype dt, double scalar) = 0;
     virtual Storage mul_scalar(const Storage& a, const Shape& shape, Dtype dt, double scalar) = 0;
 
-    // Returns a 0/1 mask where a[i] is in the closed interval [lo, hi].
-    virtual Storage
-    in_range_mask(const Storage& a, const Shape& shape, Dtype dt, double lo, double hi) = 0;
+    // Returns a 0/1 mask where a[i] is inside [lo, hi] -- closed when
+    // ``inclusive``, open when not.  Both are needed: the reference's
+    // ``clamp`` backward passes the gradient at the bound and its
+    // ``hardtanh``/``relu6`` backward does not, so the two ops that share
+    // this primitive want opposite ends of the same interval.
+    virtual Storage in_range_mask(
+        const Storage& a, const Shape& shape, Dtype dt, double lo, double hi, bool inclusive) = 0;
 
     // Returns slope*a[i] when a[i]<0, else a[i].  Used inside leaky-relu backward.
     virtual Storage leaky_mask(const Storage& a, const Shape& shape, Dtype dt, double slope) = 0;

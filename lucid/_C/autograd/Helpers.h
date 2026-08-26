@@ -703,8 +703,13 @@ Storage tanh_storage(const Storage& s, std::size_t numel, Dtype dt, Device devic
 // -------
 // Storage
 //     New storage holding the {0, 1} gate.
-Storage in_range_mask_storage(
-    const Storage& s, double lo, double hi, std::size_t numel, Dtype dt, Device device);
+Storage in_range_mask_storage(const Storage& s,
+                              double lo,
+                              double hi,
+                              std::size_t numel,
+                              Dtype dt,
+                              Device device,
+                              bool inclusive);
 
 // Mask elements that are strictly positive: ``(s > 0) ? 1 : 0``.
 //

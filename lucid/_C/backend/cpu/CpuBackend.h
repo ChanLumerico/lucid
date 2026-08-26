@@ -12511,15 +12511,19 @@ private:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
-    Storage
-    in_range_mask(const Storage& a, const Shape& shape, Dtype dt, double lo, double hi) override {
+    Storage in_range_mask(const Storage& a,
+                          const Shape& shape,
+                          Dtype dt,
+                          double lo,
+                          double hi,
+                          bool inclusive) override {
         // Accelerate has no half kernels, so the whole family widens at the door,
         // reuses the float path and rounds once on the way out.  as_f32 /
         // back_to_f16 key off each storage's own dtype, so index and mask
         // operands travel through untouched.  See detail::widen_half.
         if (detail::is_half_like(dt))
-            return detail::back_to_f16(in_range_mask(detail::as_f32(a), shape, Dtype::F32, lo, hi),
-                                       dt);
+            return detail::back_to_f16(
+                in_range_mask(detail::as_f32(a), shape, Dtype::F32, lo, hi, inclusive), dt);
         const auto& ca = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
         std::size_t nb = n * dtype_size(dt);
@@ -12529,12 +12533,15 @@ private:
             auto* q = reinterpret_cast<float*>(ptr.get());
             const auto flo = static_cast<float>(lo), fhi = static_cast<float>(hi);
             for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] >= flo && p[i] <= fhi) ? 1.f : 0.f;
+                q[i] = (inclusive ? (p[i] >= flo && p[i] <= fhi) : (p[i] > flo && p[i] < fhi))
+                           ? 1.f
+                           : 0.f;
         } else if (dt == Dtype::F64) {
             const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
             auto* q = reinterpret_cast<double*>(ptr.get());
             for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] >= lo && p[i] <= hi) ? 1.0 : 0.0;
+                q[i] =
+                    (inclusive ? (p[i] >= lo && p[i] <= hi) : (p[i] > lo && p[i] < hi)) ? 1.0 : 0.0;
         } else {
             ErrorBuilder("cpu_backend::in_range_mask").not_implemented("dtype not supported");
         }

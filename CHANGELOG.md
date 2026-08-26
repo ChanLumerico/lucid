@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `clip` and `relu6` disagreed with themselves at the bound: the gradient
+  came out differently depending on whether it was asked for by
+  `backward()` or by `autograd.grad(create_graph=True)`. The two ops want
+  *opposite* conventions there — the reference's `clamp` passes the
+  gradient at the bound and its `hardtanh` does not — and they were
+  sharing one inclusive mask. `in_range_mask` now takes the convention as
+  an argument. Surfaced through `F.two_hot`, which puts a value on a
+  bound whenever the encoded scalar lands on a bin; on a symmetric grid
+  that includes zero, so a zero reward hit it every time.
+
 - **Dreamer v1** ran its convolutional encoder and decoder under ELU. The
   released implementation carries two activations — `dense_act` is ELU and
   `cnn_act` is ReLU — and the paper states the first while saying nothing

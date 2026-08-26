@@ -312,10 +312,15 @@ Storage sign_storage(const Storage& s, std::size_t numel, Dtype dt, Device devic
     return backend::Dispatcher::for_device(device).sign(s, flat, dt);
 }
 
-Storage in_range_mask_storage(
-    const Storage& s, double lo, double hi, std::size_t numel, Dtype dt, Device device) {
+Storage in_range_mask_storage(const Storage& s,
+                              double lo,
+                              double hi,
+                              std::size_t numel,
+                              Dtype dt,
+                              Device device,
+                              bool inclusive) {
     const Shape flat{static_cast<std::int64_t>(numel)};
-    return backend::Dispatcher::for_device(device).in_range_mask(s, flat, dt, lo, hi);
+    return backend::Dispatcher::for_device(device).in_range_mask(s, flat, dt, lo, hi, inclusive);
 }
 
 // -------------------------------------------------------------------------

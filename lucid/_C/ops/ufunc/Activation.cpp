@@ -447,7 +447,11 @@ const OpSchema Relu6Backward::schema_v1{"relu6", 1, AmpPolicy::KeepInput, true};
 // dL/dx = (0 < x < 6) * dL/dy  using an in-range boolean mask.
 Storage Relu6Backward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    Storage mask = in_range_mask_storage(saved_inputs_[0], 0.0, 6.0, n, dtype_, device_);
+    // Exclusive, unlike ``clip``: the reference's ``hardtanh`` backward
+    // returns 0 at either bound, and ``grad_formula_impl`` above already
+    // did.  This used the inclusive mask, so the same gradient came out
+    // as 1 through ``backward()`` and 0 through ``grad(create_graph=True)``.
+    Storage mask = in_range_mask_storage(saved_inputs_[0], 0.0, 6.0, n, dtype_, device_, false);
     return multiply_storages(g, mask, n, dtype_, device_);
 }
 

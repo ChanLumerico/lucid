@@ -103,10 +103,12 @@ LUCID_REGISTER_OP(RPowScalarBackward)
 // clip — KeepInput: clamp is valid on integer inputs.
 const OpSchema ClipBackward::schema_v1{"clip", 1, AmpPolicy::KeepInput, true};
 
-// dL/dx = 1 if min_ < x < max_, else 0  (in-range boolean mask).
+// dL/dx = 1 where min_ <= x <= max_, else 0  (in-range boolean mask).
 Storage ClipBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    Storage mask = in_range_mask_storage(saved_inputs_[0], min_, max_, n, dtype_, device_);
+    // Inclusive: the reference's ``clamp`` backward passes the gradient at
+    // the bound, and ``grad_formula_impl`` below matches it.
+    Storage mask = in_range_mask_storage(saved_inputs_[0], min_, max_, n, dtype_, device_, true);
     return multiply_storages(g, mask, n, dtype_, device_);
 }
 
@@ -130,7 +132,21 @@ TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double
     return out;
 }
 
-// clip'(x) = 1 strictly inside the bounds, 0 at and beyond them.
+// clip'(x) = 1 on the closed interval, 0 outside it.
+//
+// The bound itself carries the gradient: at x == min_ the clamp is the
+// identity from the right, and the reference framework's ``clamp``
+// backward masks with ``(x >= min) & (x <= max)``.  This used to be
+// strict on both ends while ``grad_formula`` above used the inclusive
+// mask, so the same gradient came out differently depending on whether
+// it was asked for by ``backward()`` or ``grad(create_graph=True)`` --
+// exactly 1.0 relative disagreement at a value sitting on a bound.
+// ``two_hot`` puts one there whenever the encoded value lands on a bin,
+// which for a symmetric grid includes zero.
+//
+// Note this is the opposite convention to ``relu6``/``hardtanh``, where
+// the reference returns 0 at the bound.  They are different ops, not an
+// inconsistency to be smoothed over.
 //
 // Same omission as ``maximum``: no ``grad_formula_impl``, so every
 // composite over it — ``binary_cross_entropy``, ``hardtanh``,
@@ -138,8 +154,8 @@ TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double
 TensorImplPtr ClipBackward::grad_formula_impl(const TensorImplPtr& g,
                                               const TensorImplPtr& x,
                                               const TensorImplPtr&) {
-    auto above_low = greater_op(x, full_like_op(x, min_));
-    auto below_high = less_op(x, full_like_op(x, max_));
+    auto above_low = greater_equal_op(x, full_like_op(x, min_));
+    auto below_high = less_equal_op(x, full_like_op(x, max_));
     auto zero = zeros_like_op(x);
     auto slope = where_op(above_low, where_op(below_high, ones_like_op(x), zero), zero);
     return mul_op(g, slope);

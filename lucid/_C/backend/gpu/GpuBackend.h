@@ -7443,13 +7443,20 @@ private:
         });
     }
 
-    Storage
-    in_range_mask(const Storage& a, const Shape& shape, Dtype dt, double lo, double hi) override {
-        return mlx_unary(a, shape, dt, [lo, hi, dt](auto& x) {
+    Storage in_range_mask(const Storage& a,
+                          const Shape& shape,
+                          Dtype dt,
+                          double lo,
+                          double hi,
+                          bool inclusive) override {
+        return mlx_unary(a, shape, dt, [lo, hi, dt, inclusive](auto& x) {
             ::mlx::core::array lo_arr(lo, gpu::to_mlx_dtype(dt));
             ::mlx::core::array hi_arr(hi, gpu::to_mlx_dtype(dt));
-            auto in_range = ::mlx::core::logical_and(::mlx::core::greater_equal(x, lo_arr),
-                                                     ::mlx::core::less_equal(x, hi_arr));
+            auto above =
+                inclusive ? ::mlx::core::greater_equal(x, lo_arr) : ::mlx::core::greater(x, lo_arr);
+            auto below =
+                inclusive ? ::mlx::core::less_equal(x, hi_arr) : ::mlx::core::less(x, hi_arr);
+            auto in_range = ::mlx::core::logical_and(above, below);
             return ::mlx::core::astype(in_range, gpu::to_mlx_dtype(dt));
         });
     }
