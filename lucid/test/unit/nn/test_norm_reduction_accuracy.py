@@ -68,8 +68,8 @@ def _drift(layer_factory, shape, groups=None):
             layer.train()
         layer.load_state_dict(state)
         with lucid.no_grad():
-            outputs[cast] = layer(lucid.tensor(x.astype(cast))).numpy().astype(
-                np.float64
+            outputs[cast] = (
+                layer(lucid.tensor(x.astype(cast))).numpy().astype(np.float64)
             )
 
     exact = outputs[np.float64]
@@ -150,8 +150,7 @@ class TestTheBackwardReducesToo:
         got = self._grads(shape, lucid.float32, np.float32)
         exact = self._grads(shape, lucid.float64, np.float64)
         return [
-            float(np.abs(g - e).max() / np.abs(e).max())
-            for g, e in zip(got, exact)
+            float(np.abs(g - e).max() / np.abs(e).max()) for g, e in zip(got, exact)
         ]
 
     @pytest.mark.parametrize("index,name", [(0, "dx"), (1, "dweight"), (2, "dbias")])
@@ -162,9 +161,9 @@ class TestTheBackwardReducesToo:
         small = self._drifts(_SMALL)
         large = self._drifts(_LARGE)
         for name, s, l in zip(("dx", "dweight", "dbias"), small, large):
-            assert l < max(s, 1e-08) * _FLATNESS, (
-                f"{name} error grew from {s:.2e} to {l:.2e}"
-            )
+            assert (
+                l < max(s, 1e-08) * _FLATNESS
+            ), f"{name} error grew from {s:.2e} to {l:.2e}"
 
 
 class TestBatchNorm:

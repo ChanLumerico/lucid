@@ -446,8 +446,7 @@ class TestVariants:
         with shadow_alloc():
             model = M.stable_diffusion()
             total = sum(
-                math.prod(tuple(int(s) for s in p.shape))
-                for p in model.parameters()
+                math.prod(tuple(int(s) for s in p.shape)) for p in model.parameters()
             )
         assert entry.meta["num_params"] == total
         assert entry.url.endswith("CompVis_LAION/model.safetensors")
@@ -465,9 +464,7 @@ class TestVariants:
         """
         with shadow_alloc():
             sampler = M.stable_diffusion_gen()
-            inner = {
-                name for name, _ in sampler.stable_diffusion.named_parameters()
-            }
+            inner = {name for name, _ in sampler.stable_diffusion.named_parameters()}
             direct = {name for name, _ in M.stable_diffusion().named_parameters()}
             assert inner == direct
 
