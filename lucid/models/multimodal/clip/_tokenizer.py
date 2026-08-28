@@ -409,14 +409,27 @@ class CLIPTokenizerFast(CLIPTokenizer):
 
     Examples
     --------
+    A handful of tokens will not do: the constructor requires a *total*
+    byte-level vocabulary, for the reason given above, so the example has
+    to build one.  ``ByteLevel`` is where the alphabet comes from — the
+    same 256 symbols the pre-tokenizer maps bytes onto.
+
     >>> from lucid.models.multimodal.clip import CLIPTokenizerFast
-    >>> vocab = {"a": 0, "b</w>": 1, "ab</w>": 2,
-    ...          "<|startoftext|>": 3, "<|endoftext|>": 4}
+    >>> from lucid.utils.tokenizer._pre_tokenizers import ByteLevel
+    >>> alphabet = [ByteLevel.encode_bytes(bytes([b])) for b in range(256)]
+    >>> vocab = {symbol: i for i, symbol in enumerate(alphabet)}
+    >>> vocab.update({s + "</w>": 256 + i for i, s in enumerate(alphabet)})
+    >>> vocab["ab</w>"] = 512  # what the one merge below produces
+    >>> vocab["<|startoftext|>"], vocab["<|endoftext|>"] = 513, 514
     >>> tok = CLIPTokenizerFast(vocab=vocab, merges=[("a", "b</w>")])
     >>> tok.encode("ab")
-    [2]
+    [512]
     >>> tok.tokenize("ab", context_length=5)
-    [3, 2, 4, 0, 0]
+    [513, 512, 514, 0, 0]
+
+    Pass a partial vocabulary instead and the constructor raises rather
+    than quietly disagreeing with :class:`CLIPTokenizer`, which accepts
+    one and substitutes ``UNK``.
     """
 
     def __init__(

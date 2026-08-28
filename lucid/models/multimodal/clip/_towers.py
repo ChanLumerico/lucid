@@ -44,7 +44,7 @@ class QuickGELU(nn.Module):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.multimodal import QuickGELU
+    >>> from lucid.models.multimodal.clip._towers import QuickGELU
     >>> float(QuickGELU()(lucid.tensor([0.0])).item())
     0.0
     """
@@ -99,7 +99,7 @@ class ResidualAttentionBlock(nn.Module):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.multimodal import ResidualAttentionBlock
+    >>> from lucid.models.multimodal.clip._towers import ResidualAttentionBlock
     >>> block = ResidualAttentionBlock(32, 4).eval()
     >>> block(lucid.randn((2, 5, 32))).shape
     (2, 5, 32)
@@ -170,7 +170,7 @@ class TransformerTower(nn.Module):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.multimodal import TransformerTower
+    >>> from lucid.models.multimodal.clip._towers import TransformerTower
     >>> tower = TransformerTower(32, 2, 4, causal=True).eval()
     >>> tower(lucid.randn((1, 6, 32))).shape
     (1, 6, 32)

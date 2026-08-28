@@ -208,7 +208,7 @@ class _TextTransformer(nn.Module):
 
 @dataclass(slots=True)
 class CLIPOutput(ModelOutput):
-    """What :class:`CLIP` returns.
+    """What :class:`CLIPModel` returns.
 
     Attributes
     ----------
