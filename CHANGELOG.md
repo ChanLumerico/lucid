@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - publish the config parameters a family inherits
 
+- a filter that matches nothing is not a passing validation
+
 ### Performance
 
 - batch the two guidance passes

@@ -29,6 +29,7 @@ from __future__ import annotations  # tooling only — not Lucid runtime (H1 OK)
 
 import argparse
 import ast
+import difflib
 import importlib
 import re
 import sys
@@ -538,6 +539,11 @@ def iter_families(
             yield fam
 
 
+def _all_family_names() -> list[str]:
+    """Every family directory name, for suggesting a near miss on a typo."""
+    return [fam.name for fam in iter_families(None, None)]
+
+
 def _check_protocols(fam: Path, issues: list[Issue]) -> None:
     """Layer-3.5 structural check via ``isinstance(cls, Protocol)``.
 
@@ -630,6 +636,26 @@ def validate(
         f"\n{n_families} families checked: "
         f"{len(errors)} error(s), {len(warnings)} warning(s)"
     )
+    # A filter that matches nothing checked nothing, and "0 error(s)" over
+    # zero families reads as a pass — which is how ``--family vq_vae``
+    # (the directory is ``vqvae``) came back green.  A gate that turns
+    # green on a typo is worse than no gate, so this is an error.
+    if n_families == 0:
+        asked = ", ".join(
+            f"{k}={v!r}"
+            for k, v in (("domain", domain), ("family", family))
+            if v is not None
+        )
+        print(
+            f"error: no family matched ({asked or 'no filter'}) — nothing was "
+            f"validated.",
+            file=sys.stderr,
+        )
+        if family is not None:
+            near = difflib.get_close_matches(family, _all_family_names(), n=3)
+            if near:
+                print(f"       did you mean: {', '.join(near)}?", file=sys.stderr)
+        return 1
     if errors or (strict and warnings):
         return 1
     return 0

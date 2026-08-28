@@ -64,4 +64,4 @@ repos:
         entry: python -m tools.validate_model_zoo --runtime
         language: system
         pass_filenames: false
-        files: ^lucid/models/(vision|text|generative)/[^/]+/.*\.py$
+        files: ^lucid/models/(vision|text|generative|multimodal)/[^/]+/.*\.py$
