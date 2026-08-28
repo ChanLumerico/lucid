@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the span head returns what BERT's returns
 
+- the sidebar dropped members and named the wrong model
+
 ### Performance
 
 - batch the two guidance passes

@@ -14,6 +14,22 @@ import type { ApiMember, ApiModule } from "@/lib/types";
 // the synthetic-parent / sub-package nesting that shapes the sidebar tree.
 // ---------------------------------------------------------------------------
 
+// The eight task bases from ``lucid/models/_tasks.py``.  A class that
+// inherits one of them is a head-bearing wrapper; one that inherits
+// ``PretrainedModel`` directly is the family's backbone.  Kept here
+// rather than derived because the sidebar is built from the emitted JSON,
+// which carries base *names* and not the classes themselves.
+const TASK_BASES = new Set<string>([
+  "ImageClassificationModel",
+  "ImageGenerationModel",
+  "ObjectDetectionModel",
+  "SemanticSegmentationModel",
+  "SequenceClassificationModel",
+  "TokenClassificationModel",
+  "LanguageModelingModel",
+  "WorldModelingModel",
+]);
+
 // Explicit display order for the `lucid` top-level (mirrors lucid/ on disk).
 const LUCID_ORDER: string[] = [
   "tensor", "types", "dtypes", "device",
@@ -251,16 +267,30 @@ function buildFamilyLeafItem(slug: string, data: ApiModule): SidebarItem {
     (m) => isApiClass(m) || m.kind === "function",
   );
 
-  // Partition into the strict family slots.
-  const configClass = allMembers.find(
+  // Partition into the family slots.  Membership is decided by what a
+  // class *inherits*, not by where it happens to sit in the member list:
+  // the previous version took the first leftover class as the direct
+  // model, so Stable Diffusion — whose members sort ``autoencoder``
+  // before ``model`` — advertised ``AutoencoderKL`` as the model and
+  // dropped ``StableDiffusionModel`` entirely.
+  const configClasses = allMembers.filter(
     (m) => isApiClass(m) && m.name.endsWith("Config"),
   );
+  const configClass = configClasses[0];
+  // A head-bearing wrapper subclasses one of the eight task bases
+  // (``lucid/models/_tasks.py``).  Naming alone missed the families that
+  // predate the ``<Family>For<Task>`` convention — ``GPTLMHeadModel`` and
+  // ``GPT2DoubleHeadsModel`` carry heads but no "For" in the name, and so
+  // were competing for the direct-model slot instead of filling this one.
   const taskWrappers = allMembers.filter(
     (m) =>
       isApiClass(m) &&
-      m.name.includes("For") &&
       !m.name.endsWith("Output") &&
-      !m.name.endsWith("Config"),
+      !m.name.endsWith("Config") &&
+      // ``For`` must start a task name: ``RoFormerModel`` and
+      // ``MaskFormer`` contain the substring and are backbones, not
+      // wrappers, so a bare ``includes`` files them under the wrong slot.
+      ((m.bases ?? []).some((b) => TASK_BASES.has(b)) || /For[A-Z]/.test(m.name)),
   );
   // *Output classes are dataclasses for forward return types — not entry
   // points; suppress from the sidebar to keep the family tree clean.
@@ -274,18 +304,39 @@ function buildFamilyLeafItem(slug: string, data: ApiModule): SidebarItem {
   const weightClasses = allMembers.filter(
     (m) => isApiClass(m) && m.name.endsWith("Weights"),
   );
-  const directModel = allMembers.find(
-    (m) =>
-      isApiClass(m) &&
-      m !== configClass &&
-      !taskWrappers.includes(m) &&
-      !outputClasses.includes(m) &&
-      !weightClasses.includes(m),
+  // The backbone is the class that subclasses ``PretrainedModel``
+  // directly — the one slot the whole family tree hangs off.
+  const slotted = new Set<ApiMember>([
+    ...configClasses, ...taskWrappers, ...outputClasses, ...weightClasses,
+  ]);
+  const candidates = allMembers.filter((m) => isApiClass(m) && !slotted.has(m));
+  // Strictly ``PretrainedModel``: twelve detection and segmentation
+  // families define no separate backbone at all (the task wrapper *is*
+  // the model), and promoting whatever else they export would put a
+  // detection utility like ``MultiScaleResolution`` in the model slot.
+  const directModel = candidates.find(
+    (m) => isApiClass(m) && (m.bases ?? []).includes("PretrainedModel"),
   );
+  // Whatever is left is a composition primitive the family exports on
+  // purpose — Stable Diffusion's VAE, U-Net and schedulers, a text
+  // family's tokenizers, Score-SDE's SDE variants.  They used to fall out
+  // of the tree silently; twenty-one entries across eight families were
+  // reachable on the page and absent from the sidebar.
+  const components = candidates.filter((m) => m !== directModel);
   const pretrained = allMembers.filter((m) => m.kind === "function");
 
   const items: SidebarItem[] = [];
-  if (configClass) items.push(memberLeaf(slug, configClass));
+  // YOLO ships one Config per paper version; ``.find`` kept only the
+  // first and the other three never appeared.
+  if (configClasses.length === 1) {
+    items.push(memberLeaf(slug, configClasses[0]));
+  } else if (configClasses.length > 1) {
+    items.push({
+      title: "Configs",
+      badge: `${configClasses.length}`,
+      items: configClasses.map((m) => memberLeaf(slug, m)),
+    });
+  }
   if (directModel) items.push(memberLeaf(slug, directModel));
   if (taskWrappers.length > 0) {
     items.push({
@@ -301,6 +352,13 @@ function buildFamilyLeafItem(slug: string, data: ApiModule): SidebarItem {
       items: pretrained.map((m) => memberLeaf(slug, m)),
     });
   }
+  if (components.length > 0) {
+    items.push({
+      title: "Components",
+      badge: `${components.length}`,
+      items: components.map((m) => memberLeaf(slug, m)),
+    });
+  }
   if (weightClasses.length > 0) {
     items.push({
       title: "Weights",
@@ -310,9 +368,10 @@ function buildFamilyLeafItem(slug: string, data: ApiModule): SidebarItem {
   }
 
   const badgeCount =
-    (configClass ? 1 : 0) +
+    configClasses.length +
     (directModel ? 1 : 0) +
     taskWrappers.length +
+    components.length +
     pretrained.length +
     weightClasses.length;
 
