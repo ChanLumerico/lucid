@@ -321138,5 +321138,1975 @@
         "children": []
       }
     ]
+  },
+  "mean_flow_base_2": {
+    "name": "MeanFlowModel",
+    "type": "MeanFlowModel",
+    "params": 131877904,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "patch_embed",
+        "type": "Conv2d",
+        "params": 13056,
+        "own_params": 13056,
+        "children": []
+      },
+      {
+        "name": "time_mlps",
+        "type": "ModuleList",
+        "params": 2362368,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_TimeMLP",
+            "params": 1181184,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          }
+        ]
+      },
+      {
+        "name": "label_embed",
+        "type": "Embedding",
+        "params": 768768,
+        "own_params": 768768,
+        "children": []
+      },
+      {
+        "name": "blocks",
+        "type": "ModuleList",
+        "params": 127540224,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_DiTBlock",
+            "params": 10628352,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "attn",
+                "type": "MultiheadAttention",
+                "params": 2362368,
+                "own_params": 2362368,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "Sequential",
+                "params": 4722432,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 2362368,
+                    "own_params": 2362368,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "GELU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 2360064,
+                    "own_params": 2360064,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 3543552,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 3543552,
+                    "own_params": 3543552,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 12
+          }
+        ]
+      },
+      {
+        "name": "final",
+        "type": "_FinalLayer",
+        "params": 1193488,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "proj",
+            "type": "Linear",
+            "params": 12304,
+            "own_params": 12304,
+            "children": []
+          },
+          {
+            "name": "ada_ln",
+            "type": "Sequential",
+            "params": 1181184,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 1181184,
+                "own_params": 1181184,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "mean_flow_base_2_gen": {
+    "name": "MeanFlowForImageGeneration",
+    "type": "MeanFlowForImageGeneration",
+    "params": 131877904,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "mean_flow",
+        "type": "MeanFlowModel",
+        "params": 131877904,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 13056,
+            "own_params": 13056,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 2362368,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 768768,
+            "own_params": 768768,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 127540224,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 10628352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 2362368,
+                    "own_params": 2362368,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 3543552,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 3543552,
+                        "own_params": 3543552,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 1193488,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 12304,
+                "own_params": 12304,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 1181184,
+                    "own_params": 1181184,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "mean_flow_base_4": {
+    "name": "MeanFlowModel",
+    "type": "MeanFlowModel",
+    "params": 131951680,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "patch_embed",
+        "type": "Conv2d",
+        "params": 49920,
+        "own_params": 49920,
+        "children": []
+      },
+      {
+        "name": "time_mlps",
+        "type": "ModuleList",
+        "params": 2362368,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_TimeMLP",
+            "params": 1181184,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 590592,
+                "own_params": 590592,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          }
+        ]
+      },
+      {
+        "name": "label_embed",
+        "type": "Embedding",
+        "params": 768768,
+        "own_params": 768768,
+        "children": []
+      },
+      {
+        "name": "blocks",
+        "type": "ModuleList",
+        "params": 127540224,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_DiTBlock",
+            "params": 10628352,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "attn",
+                "type": "MultiheadAttention",
+                "params": 2362368,
+                "own_params": 2362368,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "Sequential",
+                "params": 4722432,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 2362368,
+                    "own_params": 2362368,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "GELU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 2360064,
+                    "own_params": 2360064,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 3543552,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 3543552,
+                    "own_params": 3543552,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 12
+          }
+        ]
+      },
+      {
+        "name": "final",
+        "type": "_FinalLayer",
+        "params": 1230400,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "proj",
+            "type": "Linear",
+            "params": 49216,
+            "own_params": 49216,
+            "children": []
+          },
+          {
+            "name": "ada_ln",
+            "type": "Sequential",
+            "params": 1181184,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 1181184,
+                "own_params": 1181184,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "mean_flow_base_4_gen": {
+    "name": "MeanFlowForImageGeneration",
+    "type": "MeanFlowForImageGeneration",
+    "params": 131951680,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "mean_flow",
+        "type": "MeanFlowModel",
+        "params": 131951680,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 49920,
+            "own_params": 49920,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 2362368,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 768768,
+            "own_params": 768768,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 127540224,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 10628352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 2362368,
+                    "own_params": 2362368,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 3543552,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 3543552,
+                        "own_params": 3543552,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 1230400,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 49216,
+                "own_params": 49216,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 1181184,
+                    "own_params": 1181184,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "mean_flow_large_2": {
+    "name": "MeanFlowModel",
+    "type": "MeanFlowModel",
+    "params": 460709904,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "patch_embed",
+        "type": "Conv2d",
+        "params": 17408,
+        "own_params": 17408,
+        "children": []
+      },
+      {
+        "name": "time_mlps",
+        "type": "ModuleList",
+        "params": 4198400,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_TimeMLP",
+            "params": 2099200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 1049600,
+                "own_params": 1049600,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 1049600,
+                "own_params": 1049600,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          }
+        ]
+      },
+      {
+        "name": "label_embed",
+        "type": "Embedding",
+        "params": 1025024,
+        "own_params": 1025024,
+        "children": []
+      },
+      {
+        "name": "blocks",
+        "type": "ModuleList",
+        "params": 453353472,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_DiTBlock",
+            "params": 18889728,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "attn",
+                "type": "MultiheadAttention",
+                "params": 4198400,
+                "own_params": 4198400,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "Sequential",
+                "params": 8393728,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 4198400,
+                    "own_params": 4198400,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "GELU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 4195328,
+                    "own_params": 4195328,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 6297600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 6297600,
+                    "own_params": 6297600,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 24
+          }
+        ]
+      },
+      {
+        "name": "final",
+        "type": "_FinalLayer",
+        "params": 2115600,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "proj",
+            "type": "Linear",
+            "params": 16400,
+            "own_params": 16400,
+            "children": []
+          },
+          {
+            "name": "ada_ln",
+            "type": "Sequential",
+            "params": 2099200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 2099200,
+                "own_params": 2099200,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "mean_flow_large_2_gen": {
+    "name": "MeanFlowForImageGeneration",
+    "type": "MeanFlowForImageGeneration",
+    "params": 460709904,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "mean_flow",
+        "type": "MeanFlowModel",
+        "params": 460709904,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 17408,
+            "own_params": 17408,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 4198400,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 1025024,
+            "own_params": 1025024,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 453353472,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 18889728,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 4198400,
+                    "own_params": 4198400,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 6297600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 6297600,
+                        "own_params": 6297600,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 2115600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 16400,
+                "own_params": 16400,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 2099200,
+                    "own_params": 2099200,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "mean_flow_medium_2": {
+    "name": "MeanFlowModel",
+    "type": "MeanFlowModel",
+    "params": 309592080,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "patch_embed",
+        "type": "Conv2d",
+        "params": 17408,
+        "own_params": 17408,
+        "children": []
+      },
+      {
+        "name": "time_mlps",
+        "type": "ModuleList",
+        "params": 4198400,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_TimeMLP",
+            "params": 2099200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 1049600,
+                "own_params": 1049600,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 1049600,
+                "own_params": 1049600,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          }
+        ]
+      },
+      {
+        "name": "label_embed",
+        "type": "Embedding",
+        "params": 1025024,
+        "own_params": 1025024,
+        "children": []
+      },
+      {
+        "name": "blocks",
+        "type": "ModuleList",
+        "params": 302235648,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_DiTBlock",
+            "params": 18889728,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "attn",
+                "type": "MultiheadAttention",
+                "params": 4198400,
+                "own_params": 4198400,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "Sequential",
+                "params": 8393728,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 4198400,
+                    "own_params": 4198400,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "GELU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 4195328,
+                    "own_params": 4195328,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 6297600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 6297600,
+                    "own_params": 6297600,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 16
+          }
+        ]
+      },
+      {
+        "name": "final",
+        "type": "_FinalLayer",
+        "params": 2115600,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "proj",
+            "type": "Linear",
+            "params": 16400,
+            "own_params": 16400,
+            "children": []
+          },
+          {
+            "name": "ada_ln",
+            "type": "Sequential",
+            "params": 2099200,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 2099200,
+                "own_params": 2099200,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "mean_flow_medium_2_gen": {
+    "name": "MeanFlowForImageGeneration",
+    "type": "MeanFlowForImageGeneration",
+    "params": 309592080,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "mean_flow",
+        "type": "MeanFlowModel",
+        "params": 309592080,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 17408,
+            "own_params": 17408,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 4198400,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 1025024,
+            "own_params": 1025024,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302235648,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 18889728,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 4198400,
+                    "own_params": 4198400,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 6297600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 6297600,
+                        "own_params": 6297600,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 16
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 2115600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 16400,
+                "own_params": 16400,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 2099200,
+                    "own_params": 2099200,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "mean_flow_xlarge_2": {
+    "name": "MeanFlowModel",
+    "type": "MeanFlowModel",
+    "params": 678504976,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "patch_embed",
+        "type": "Conv2d",
+        "params": 19584,
+        "own_params": 19584,
+        "children": []
+      },
+      {
+        "name": "time_mlps",
+        "type": "ModuleList",
+        "params": 5313024,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_TimeMLP",
+            "params": 2656512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 1328256,
+                "own_params": 1328256,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 1328256,
+                "own_params": 1328256,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          }
+        ]
+      },
+      {
+        "name": "label_embed",
+        "type": "Embedding",
+        "params": 1153152,
+        "own_params": 1153152,
+        "children": []
+      },
+      {
+        "name": "blocks",
+        "type": "ModuleList",
+        "params": 669344256,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_DiTBlock",
+            "params": 23905152,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "attn",
+                "type": "MultiheadAttention",
+                "params": 5313024,
+                "own_params": 5313024,
+                "children": []
+              },
+              {
+                "name": "norm2",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "Sequential",
+                "params": 10622592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 5313024,
+                    "own_params": 5313024,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "GELU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 5309568,
+                    "own_params": 5309568,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 7969536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 7969536,
+                    "own_params": 7969536,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 28
+          }
+        ]
+      },
+      {
+        "name": "final",
+        "type": "_FinalLayer",
+        "params": 2674960,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "proj",
+            "type": "Linear",
+            "params": 18448,
+            "own_params": 18448,
+            "children": []
+          },
+          {
+            "name": "ada_ln",
+            "type": "Sequential",
+            "params": 2656512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 2656512,
+                "own_params": 2656512,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "mean_flow_xlarge_2_gen": {
+    "name": "MeanFlowForImageGeneration",
+    "type": "MeanFlowForImageGeneration",
+    "params": 678504976,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "mean_flow",
+        "type": "MeanFlowModel",
+        "params": 678504976,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 19584,
+            "own_params": 19584,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 5313024,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 2656512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 1328256,
+                    "own_params": 1328256,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 1328256,
+                    "own_params": 1328256,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 1153152,
+            "own_params": 1153152,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 669344256,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 23905152,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 5313024,
+                    "own_params": 5313024,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 10622592,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 5313024,
+                        "own_params": 5313024,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 5309568,
+                        "own_params": 5309568,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 7969536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 7969536,
+                        "own_params": 7969536,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 28
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 2674960,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 18448,
+                "own_params": 18448,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 2656512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 2656512,
+                    "own_params": 2656512,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

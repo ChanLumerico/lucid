@@ -1417,6 +1417,12 @@
       "module": "lucid.distributions.kl"
     }
   ],
+  "lucid.func": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._model"
+    }
+  ],
   "lucid.linalg": [
     {
       "kind": "module",
@@ -1733,6 +1739,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._model"
     },
     {
       "kind": "module",
@@ -2110,6 +2120,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.mean_flow._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.ncsn._model"
     },
     {
@@ -2299,6 +2313,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.dreamer_v3._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._model"
     },
     {
       "kind": "module",
@@ -2549,6 +2567,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.flow_matching._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._pretrained"
     },
     {
       "kind": "module",
@@ -2825,6 +2847,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.flow_matching._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._config"
     },
     {
       "kind": "module",
@@ -3371,6 +3397,112 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.flow_matching"
+    }
+  ],
+  "lucid.models.generative.mean_flow": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.mean_flow._config.MeanFlowConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._pretrained"
+    }
+  ],
+  "lucid.models.generative.mean_flow._model.MeanFlowForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._pretrained"
+    }
+  ],
+  "lucid.models.generative.mean_flow._model.MeanFlowModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._pretrained"
+    }
+  ],
+  "lucid.models.generative.mean_flow._model.MeanFlowOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_base_2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_base_2_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_base_4": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_base_4_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_large_2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_large_2_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_medium_2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_medium_2_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_xlarge_2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
+    }
+  ],
+  "lucid.models.generative.mean_flow._pretrained.mean_flow_xlarge_2_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow"
     }
   ],
   "lucid.models.generative.ncsn": [
@@ -10128,6 +10260,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.mean_flow._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.ncsn._model"
     },
     {
@@ -10543,6 +10679,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.mean_flow._model"
     },
     {
       "kind": "module",

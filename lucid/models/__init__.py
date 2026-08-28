@@ -132,6 +132,14 @@ from lucid.models.generative.rectified_flow import (
     rectified_flow_church_gen, rectified_flow_celeba_hq_gen,
     rectified_flow_afhq_cat_gen,
 )
+# 2025 — MeanFlow (Geng, Deng, Bai, Kolter & He)
+from lucid.models.generative.mean_flow import (
+    MeanFlowConfig, MeanFlowModel, MeanFlowForImageGeneration,
+    mean_flow_base_4, mean_flow_base_2, mean_flow_medium_2,
+    mean_flow_large_2, mean_flow_xlarge_2,
+    mean_flow_base_4_gen, mean_flow_base_2_gen, mean_flow_medium_2_gen,
+    mean_flow_large_2_gen, mean_flow_xlarge_2_gen,
+)
 # 2019 — NCSN (Song & Ermon)
 from lucid.models.generative.ncsn import (
     NCSNConfig, NCSNModel, NCSNForImageGeneration,
@@ -787,6 +795,12 @@ __all__ = [    # ── Infrastructure ─────────────�
     "rectified_flow_cifar_gen", "rectified_flow_bedroom_gen",
     "rectified_flow_church_gen", "rectified_flow_celeba_hq_gen",
     "rectified_flow_afhq_cat_gen",
+    # ── Generative (2025) MeanFlow ────────────────────────────────────────────
+    "MeanFlowConfig", "MeanFlowModel", "MeanFlowForImageGeneration",
+    "mean_flow_base_4", "mean_flow_base_2", "mean_flow_medium_2",
+    "mean_flow_large_2", "mean_flow_xlarge_2",
+    "mean_flow_base_4_gen", "mean_flow_base_2_gen", "mean_flow_medium_2_gen",
+    "mean_flow_large_2_gen", "mean_flow_xlarge_2_gen",
     # ── Generative (2019) NCSN ────────────────────────────────────────────────
     "NCSNConfig", "NCSNModel", "NCSNForImageGeneration",
     "ncsn_cifar", "ncsn_celeba",

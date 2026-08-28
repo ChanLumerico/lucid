@@ -89,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - register the five wrappers nothing could build
+- add MeanFlow, the flow that stops integrating
 
 ---
 

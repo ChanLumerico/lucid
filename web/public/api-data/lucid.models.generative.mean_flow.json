@@ -1,0 +1,2947 @@
+{
+  "slug": "lucid.models.generative.mean_flow",
+  "name": "mean_flow",
+  "path": "lucid.models.generative.mean_flow",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/__init__.py#L1",
+  "members": [
+    {
+      "name": "MeanFlowConfig",
+      "path": "lucid.models.generative.mean_flow._config.MeanFlowConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "GenerativeModelConfig"
+      ],
+      "labels": [],
+      "signature": "MeanFlowConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 4, out_channels: int = 4, act_fn: GenerativeActivation = 'silu', patch_size: int = 2, hidden_size: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, num_classes: int = 1000, class_dropout: float = 0.1, time_conditioning: TimeConditioning = 't_interval', time_sampler: TimeSampler = 'lognorm', lognorm_mean: float = -0.4, lognorm_std: float = 1.0, ratio_r_not_t: float = 0.25, adaptive_weight_power: float = 1.0, adaptive_weight_eps: float = 0.001, guidance_scale: float = 1.0, guidance_mix: float = 0.0, guidance_interval: tuple[float, float] = (0.0, 1.0))",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_config.py#L47",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "num_patches",
+          "path": "lucid.models.generative.mean_flow._config.MeanFlowConfig.num_patches",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "num_patches: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_config.py#L234",
+          "summary": "Tokens the field is cut into — `(sample_size / patch_size)ˆ2`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.mean_flow._config.MeanFlowConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 4, out_channels: int = 4, act_fn: GenerativeActivation = 'silu', patch_size: int = 2, hidden_size: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, num_classes: int = 1000, class_dropout: float = 0.1, time_conditioning: TimeConditioning = 't_interval', time_sampler: TimeSampler = 'lognorm', lognorm_mean: float = -0.4, lognorm_std: float = 1.0, ratio_r_not_t: float = 0.25, adaptive_weight_power: float = 1.0, adaptive_weight_eps: float = 0.001, guidance_scale: float = 1.0, guidance_mix: float = 0.0, guidance_interval: tuple[float, float] = (0.0, 1.0))",
+          "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_config.py#L1",
+          "subcategory": "config",
+          "summary": "Initialise the head. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for the MeanFlow family.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "sample_size",
+          "annotation": "int",
+          "description": "Spatial extent of the field the model operates on.  For the\npaper's ImageNet models this is the VAE latent, `32`, not the\n256-pixel image.",
+          "default": "32"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Latent channels.  Four is the standard VAE tokenizer's width;\nthe CIFAR-10 experiment works in pixel space at three.",
+          "default": "4, 4"
+        },
+        {
+          "name": "out_channels",
+          "annotation": "int",
+          "description": "Latent channels.  Four is the standard VAE tokenizer's width;\nthe CIFAR-10 experiment works in pixel space at three.",
+          "default": "4, 4"
+        },
+        {
+          "name": "act_fn",
+          "annotation": "GenerativeActivation",
+          "description": "Activation used inside the trunk.  Most modern image\ngenerators default to `\"silu\"`.",
+          "default": "'silu'",
+          "inherited_from": "GenerativeModelConfig"
+        },
+        {
+          "name": "patch_size",
+          "annotation": "int",
+          "description": "Side of the square patch each token covers.  The suffix in the\npaper's variant names — `B/2` is the Base backbone at patch 2.",
+          "default": "2"
+        },
+        {
+          "name": "hidden_size",
+          "annotation": "int",
+          "description": "Transformer width.",
+          "default": "768"
+        },
+        {
+          "name": "depth",
+          "annotation": "int",
+          "description": "Number of transformer blocks.",
+          "default": "12"
+        },
+        {
+          "name": "num_heads",
+          "annotation": "int",
+          "description": "Attention heads per block.",
+          "default": "12"
+        },
+        {
+          "name": "mlp_ratio",
+          "annotation": "float",
+          "description": "Feed-forward expansion inside each block.",
+          "default": "4.0"
+        },
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Label vocabulary for class conditioning.  The extra index\n`num_classes` is the unconditional token the guidance dropout\nsubstitutes.",
+          "default": "1000"
+        },
+        {
+          "name": "class_dropout",
+          "annotation": "float",
+          "description": "Probability of replacing the label with the unconditional token\nduring training, which is what leaves the model able to produce\nthe unconditional field guidance needs.",
+          "default": "0.1"
+        },
+        {
+          "name": "time_conditioning",
+          "annotation": "(t_interval, t_r, t_r_interval, interval)",
+          "description": "Which time variables the network is conditioned on.  The\nJacobian-vector product is always taken with respect to\n$u_\\theta(\\cdot, r, t)$ regardless of this choice — the\nencoding changes the network's inputs, not the identity.",
+          "default": "\"t_interval\""
+        },
+        {
+          "name": "time_sampler",
+          "annotation": "(lognorm, uniform)",
+          "description": "Distribution the pair `(r, t)` is drawn from.",
+          "default": "\"lognorm\""
+        },
+        {
+          "name": "lognorm_mean",
+          "annotation": "float",
+          "description": "Parameters of the normal that `\"lognorm\"` squashes through the\nlogistic.  The paper's ImageNet setting; its CIFAR-10 setting is\n`(-2.0, 2.0)`.",
+          "default": "-0.4, 1.0"
+        },
+        {
+          "name": "lognorm_std",
+          "annotation": "float",
+          "description": "Parameters of the normal that `\"lognorm\"` squashes through the\nlogistic.  The paper's ImageNet setting; its CIFAR-10 setting is\n`(-2.0, 2.0)`.",
+          "default": "-0.4, 1.0"
+        },
+        {
+          "name": "ratio_r_not_t",
+          "annotation": "float",
+          "description": "Fraction of the batch that gets $r \\neq t$.  The rest\ntrains the instantaneous velocity, which is what anchors the\nfield.  Zero reduces the method to Flow Matching and does not\nproduce usable one-step samples.",
+          "default": "0.25"
+        },
+        {
+          "name": "adaptive_weight_power",
+          "annotation": "float",
+          "description": "$p$ in the loss weight $w = 1/(\\lVert\\Delta\\rVert^2 + c)^p$.  `0` is the plain squared error; `0.5` is close to the\npseudo-Huber loss of prior one-step work.",
+          "default": "1.0"
+        },
+        {
+          "name": "adaptive_weight_eps",
+          "annotation": "float",
+          "description": "$c$ above — keeps the weight finite where the error is\nnear zero.",
+          "default": "1e-3"
+        },
+        {
+          "name": "guidance_scale",
+          "annotation": "float",
+          "description": "$\\omega$ in the guided target.  One disables guidance and\nrecovers the plain objective.",
+          "default": "1.0"
+        },
+        {
+          "name": "guidance_mix",
+          "annotation": "float",
+          "description": "$\\kappa$, which mixes the model's own class-conditional\naverage velocity into the target alongside the class-unconditional\none.  The effective scale a sampler sees is\n$\\omega' = \\omega / (1 - \\kappa)$.",
+          "default": "0.0"
+        },
+        {
+          "name": "guidance_interval",
+          "annotation": "tuple of float",
+          "description": "The range of $t$ over which guidance is applied at all.\nThe larger models restrict it; `XL/2+` uses `(0.3, 0.8)`.",
+          "default": "(0.0, 1.0)"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.mean_flow import MeanFlowConfig\n>>> config = MeanFlowConfig()\n>>> config.hidden_size, config.depth, config.patch_size\n(768, 12, 2)\nThe variant names encode the backbone size and the patch side, so\nL/2 is the Large backbone tokenised at two:\n>>> large = MeanFlowConfig(hidden_size=1024, depth=24, num_heads=16)\n>>> large.num_patches\n256"
+      ],
+      "notes": [
+        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  Architecture and\ntraining settings are Table 4; the ablations that pin the defaults\nare Table 1.\n\nThe backbone is DiT's, unchanged — the paper is explicit that it\nkeeps \"the DiT architecture blocks untouched\" and that architectural\nimprovements are orthogonal.  What differs from a diffusion DiT is\nonly the conditioning: two time variables rather than one, each\nembedded and passed through a two-layer MLP before being summed."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MeanFlowForImageGeneration",
+      "path": "lucid.models.generative.mean_flow._model.MeanFlowForImageGeneration",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ImageGenerationModel"
+      ],
+      "labels": [],
+      "signature": "MeanFlowForImageGeneration(config: MeanFlowConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_model.py#L440",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.mean_flow._model.MeanFlowForImageGeneration.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: MeanFlowConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_model.py#L474",
+          "subcategory": "model",
+          "summary": "Initialise the model. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.mean_flow._model.MeanFlowForImageGeneration.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(images: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_model.py#L539",
+          "subcategory": "model",
+          "summary": "One training step of the MeanFlow objective.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "images",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)` — data, or the VAE latent of it.",
+              "default": null
+            },
+            {
+              "name": "labels",
+              "annotation": "Tensor or None",
+              "description": "`(B,)` class indices.  Dropped to the unconditional token\nwith probability `MeanFlowConfig.class_dropout`, which\nis what leaves the model able to produce both fields.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "MeanFlowOutput",
+            "description": "The weighted loss, the prediction and the target."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "The Jacobian-vector product is taken along $(v, 0, 1)$ —\nthe tangent that the chain rule gives for\n$\\frac{d}{dt}u(z_t, r, t)$ once $dz_t/dt = v$ and\n$dr/dt = 0$ are substituted.  Any other tangent trains a\ndifferent quantity: the paper's destructive ablation reports FID\n61.06 for this one and 137–329 for the alternatives."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "generate",
+          "path": "lucid.models.generative.mean_flow._model.MeanFlowForImageGeneration.generate",
+          "kind": "function",
+          "labels": [],
+          "signature": "generate(n_samples: int = 1, labels: Tensor | None = None, steps: int = 1, noise: Tensor | None = None, device: str | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_model.py#L625",
+          "subcategory": "model",
+          "summary": "Sample by walking the average velocity backwards from noise.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "n_samples",
+              "annotation": "int",
+              "description": "How many to draw.",
+              "default": "1"
+            },
+            {
+              "name": "labels",
+              "annotation": "Tensor or None",
+              "description": "`(n_samples,)` class indices.  `None` samples the\nunconditional field.",
+              "default": "None"
+            },
+            {
+              "name": "steps",
+              "annotation": "int",
+              "description": "Network evaluations.  One is the point of the method:\n$z_0 = z_1 - u(z_1, 0, 1)$ covers the whole path.  More\nsubdivide $[0, 1]$ and apply Eq. 12 on each piece, which\nthe paper notes is straightforward and reports at two.",
+              "default": "1"
+            },
+            {
+              "name": "noise",
+              "annotation": "Tensor or None",
+              "description": "Starting point $z_1$.  Drawn when absent.",
+              "default": "None"
+            },
+            {
+              "name": "device",
+              "annotation": "str or None",
+              "description": "Where to draw.  Defaults to the model's own device.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "GenerationOutput",
+            "description": "`samples` of shape `(n_samples, out_channels, H, W)`."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If `steps` is not positive."
+            }
+          ],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.mean_flow import (\n...     MeanFlowConfig, MeanFlowForImageGeneration)\n>>> config = MeanFlowConfig(sample_size=8, patch_size=2,\n...                         hidden_size=32, depth=2, num_heads=4,\n...                         num_classes=10)\n>>> model = MeanFlowForImageGeneration(config).eval()\n>>> model.generate(2).samples.shape\n(2, 4, 8, 8)"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "MeanFlow's objective and its one-step sampler.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "MeanFlowConfig",
+          "description": "The variant to build.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.mean_flow import (\n...     MeanFlowConfig, MeanFlowForImageGeneration)\n>>> config = MeanFlowConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                         depth=2, num_heads=4, num_classes=10)\n>>> model = MeanFlowForImageGeneration(config).eval()\n>>> model.generate(2).samples.shape\n(2, 4, 8, 8)"
+      ],
+      "notes": [
+        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  Training is\nAlgorithm 1, sampling is Algorithm 2 and Eq. 12."
+      ],
+      "attributes": [
+        {
+          "name": "mean_flow",
+          "annotation": "MeanFlowModel",
+          "description": "The average-velocity network."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MeanFlowModel",
+      "path": "lucid.models.generative.mean_flow._model.MeanFlowModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "MeanFlowModel(config: MeanFlowConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_model.py#L240",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.mean_flow._model.MeanFlowModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: MeanFlowConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_model.py#L290",
+          "subcategory": "model",
+          "summary": "Initialise the network. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.mean_flow._model.MeanFlowModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(z: Tensor, r: Tensor, t: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_model.py#L391",
+          "subcategory": "model",
+          "summary": "Evaluate the average-velocity field.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "z",
+              "annotation": "Tensor",
+              "description": "`(B, in_channels, H, W)` — the point on the path.",
+              "default": null
+            },
+            {
+              "name": "r",
+              "annotation": "Tensor",
+              "description": "`(B,)` — the interval's start.",
+              "default": null
+            },
+            {
+              "name": "t",
+              "annotation": "Tensor",
+              "description": "`(B,)` — the interval's end, and where `z` lives.",
+              "default": null
+            },
+            {
+              "name": "labels",
+              "annotation": "Tensor or None",
+              "description": "`(B,)` class indices.  `None` uses the unconditional\ntoken, which is index `num_classes`.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(B, out_channels, H, W)` — $u_\\theta(z, r, t)$."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "The average-velocity field $u_\\theta(z, r, t)$.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "MeanFlowConfig",
+          "description": "The variant to build.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.mean_flow import (\n...     MeanFlowConfig, MeanFlowModel)\n>>> config = MeanFlowConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                         depth=2, num_heads=4, num_classes=10)\n>>> model = MeanFlowModel(config).eval()\n>>> z = lucid.randn((1, 4, 8, 8))\n>>> t = lucid.tensor([1.0])\n>>> r = lucid.tensor([0.0])\n>>> model(z, r, t).shape\n(1, 4, 8, 8)"
+      ],
+      "notes": [
+        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  Backbone\nconfigurations are Table 4.\n\nThe forward takes both times.  Which of them reach the embedding is\n`MeanFlowConfig.time_conditioning`; the signature does not\nchange with it, because the Jacobian-vector product the objective\nneeds is always taken with respect to $(z, r, t)$ no matter how\nthe network chooses to encode them."
+      ],
+      "attributes": [
+        {
+          "name": "patch_embed",
+          "annotation": "lucid.nn.Conv2d",
+          "description": "Patchifying projection — stride equals kernel, so patches do not\noverlap."
+        },
+        {
+          "name": "pos_embed",
+          "annotation": "Tensor",
+          "description": "Frozen two-dimensional sine-cosine table, added to the tokens."
+        },
+        {
+          "name": "blocks",
+          "annotation": "lucid.nn.ModuleList",
+          "description": "The DiT blocks."
+        },
+        {
+          "name": "final",
+          "annotation": "_FinalLayer",
+          "description": "Modulated norm and projection back to patch space."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "MeanFlowOutput",
+      "path": "lucid.models.generative.mean_flow._model.MeanFlowOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "MeanFlowOutput(loss: Tensor, prediction: Tensor, target: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_model.py#L217",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.mean_flow._model.MeanFlowOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(loss: Tensor, prediction: Tensor, target: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Initialise the head. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What a MeanFlow training step reports.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "loss",
+          "annotation": "Tensor",
+          "description": "The adaptively weighted regression error, a scalar."
+        },
+        {
+          "name": "prediction",
+          "annotation": "Tensor",
+          "description": "`(B, C, H, W)` — the model's average velocity\n$u_\\theta(z_t, r, t)$ at the sampled times."
+        },
+        {
+          "name": "target",
+          "annotation": "Tensor",
+          "description": "The stop-gradiented target the prediction is regressed onto.\nReported because the gap between the two *is* the objective, and\nbecause a target that has drifted from the prediction's scale is\nthe first symptom of a mis-specified tangent."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "mean_flow_base_2",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_base_2",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_base_2(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L120",
+      "subcategory": "pretrained",
+      "summary": "Base width, patch 2 — the smallest reported model.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowModel",
+        "description": "The average-velocity network."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_base_2\n>>> config = mean_flow_base_2().config\n>>> config.hidden_size, config.depth, config.num_patches\n(768, 12, 256)"
+      ],
+      "notes": [
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Tables 2 and 4.\nReports 6.17 FID at one function evaluation on ImageNet 256x256."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 131000000,
+      "model_summary": {
+        "name": "MeanFlowModel",
+        "type": "MeanFlowModel",
+        "params": 131877904,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 13056,
+            "own_params": 13056,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 2362368,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 768768,
+            "own_params": 768768,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 127540224,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 10628352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 2362368,
+                    "own_params": 2362368,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 3543552,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 3543552,
+                        "own_params": 3543552,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 1193488,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 12304,
+                "own_params": 12304,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 1181184,
+                    "own_params": 1181184,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "mean_flow_base_2_gen",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_base_2_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_base_2_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L340",
+      "subcategory": "pretrained",
+      "summary": "`mean_flow_base_2` posed as a sampler.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowForImageGeneration",
+        "description": "Exposes the training objective and `generate`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_base_2_gen\n>>> model = mean_flow_base_2_gen()"
+      ],
+      "notes": [
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 131000000,
+      "model_summary": {
+        "name": "MeanFlowForImageGeneration",
+        "type": "MeanFlowForImageGeneration",
+        "params": 131877904,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "mean_flow",
+            "type": "MeanFlowModel",
+            "params": 131877904,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv2d",
+                "params": 13056,
+                "own_params": 13056,
+                "children": []
+              },
+              {
+                "name": "time_mlps",
+                "type": "ModuleList",
+                "params": 2362368,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_TimeMLP",
+                    "params": 1181184,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "label_embed",
+                "type": "Embedding",
+                "params": 768768,
+                "own_params": 768768,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 127540224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_DiTBlock",
+                    "params": 10628352,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ada_ln",
+                        "type": "Sequential",
+                        "params": 3543552,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "SiLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 3543552,
+                            "own_params": 3543552,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "final",
+                "type": "_FinalLayer",
+                "params": 1193488,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 12304,
+                    "own_params": 12304,
+                    "children": []
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 1181184,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 1181184,
+                        "own_params": 1181184,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "mean_flow_base_4",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_base_4",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_base_4(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L73",
+      "subcategory": "pretrained",
+      "summary": "The ablation backbone — Base width, patch 4.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowModel",
+        "description": "The average-velocity network."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_base_4\n>>> config = mean_flow_base_4().config\n>>> config.patch_size, config.num_patches\n(4, 64)"
+      ],
+      "notes": [
+        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Table 4.\n\nThis is the configuration every ablation in Table 1 runs on, at 80\nepochs rather than the 240 the reported models get — its FID of 61.06\nis a comparison point between design choices, not a headline number.\nPatch 4 over a 32-wide latent leaves 64 tokens against `B/2`'s 256,\nwhich is what makes a six-way study affordable."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 131000000,
+      "model_summary": {
+        "name": "MeanFlowModel",
+        "type": "MeanFlowModel",
+        "params": 131951680,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 49920,
+            "own_params": 49920,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 2362368,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 768768,
+            "own_params": 768768,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 127540224,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 10628352,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 2362368,
+                    "own_params": 2362368,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 4722432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 2360064,
+                        "own_params": 2360064,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 3543552,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 3543552,
+                        "own_params": 3543552,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 1230400,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 49216,
+                "own_params": 49216,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 1181184,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 1181184,
+                    "own_params": 1181184,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "mean_flow_base_4_gen",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_base_4_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_base_4_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L300",
+      "subcategory": "pretrained",
+      "summary": "`mean_flow_base_4` posed as a sampler.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowForImageGeneration",
+        "description": "Exposes the training objective and `generate`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_base_4_gen\n>>> model = mean_flow_base_4_gen()"
+      ],
+      "notes": [
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 131000000,
+      "model_summary": {
+        "name": "MeanFlowForImageGeneration",
+        "type": "MeanFlowForImageGeneration",
+        "params": 131951680,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "mean_flow",
+            "type": "MeanFlowModel",
+            "params": 131951680,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv2d",
+                "params": 49920,
+                "own_params": 49920,
+                "children": []
+              },
+              {
+                "name": "time_mlps",
+                "type": "ModuleList",
+                "params": 2362368,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_TimeMLP",
+                    "params": 1181184,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "label_embed",
+                "type": "Embedding",
+                "params": 768768,
+                "own_params": 768768,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 127540224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_DiTBlock",
+                    "params": 10628352,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 2362368,
+                        "own_params": 2362368,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ada_ln",
+                        "type": "Sequential",
+                        "params": 3543552,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "SiLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 3543552,
+                            "own_params": 3543552,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "final",
+                "type": "_FinalLayer",
+                "params": 1230400,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 49216,
+                    "own_params": 49216,
+                    "children": []
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 1181184,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 1181184,
+                        "own_params": 1181184,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "mean_flow_large_2",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_large_2",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_large_2(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L205",
+      "subcategory": "pretrained",
+      "summary": "Large width, patch 2.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowModel",
+        "description": "The average-velocity network."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_large_2\n>>> config = mean_flow_large_2().config\n>>> config.depth, config.guidance_interval\n(24, (0.0, 0.8))"
+      ],
+      "notes": [
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Tables 2 and 4.\nReports 3.84 FID at one function evaluation.\n\nThe guidance defaults change here: the paper drops the mixing weight\nto 0.2 and stops applying guidance above `t = 0.8`, which is a\ntuning of the target rather than of the network."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 459000000,
+      "model_summary": {
+        "name": "MeanFlowModel",
+        "type": "MeanFlowModel",
+        "params": 460709904,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 17408,
+            "own_params": 17408,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 4198400,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 1025024,
+            "own_params": 1025024,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 453353472,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 18889728,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 4198400,
+                    "own_params": 4198400,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 6297600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 6297600,
+                        "own_params": 6297600,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 2115600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 16400,
+                "own_params": 16400,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 2099200,
+                    "own_params": 2099200,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "mean_flow_large_2_gen",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_large_2_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_large_2_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L420",
+      "subcategory": "pretrained",
+      "summary": "`mean_flow_large_2` posed as a sampler.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowForImageGeneration",
+        "description": "Exposes the training objective and `generate`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_large_2_gen\n>>> model = mean_flow_large_2_gen()"
+      ],
+      "notes": [
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 459000000,
+      "model_summary": {
+        "name": "MeanFlowForImageGeneration",
+        "type": "MeanFlowForImageGeneration",
+        "params": 460709904,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "mean_flow",
+            "type": "MeanFlowModel",
+            "params": 460709904,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv2d",
+                "params": 17408,
+                "own_params": 17408,
+                "children": []
+              },
+              {
+                "name": "time_mlps",
+                "type": "ModuleList",
+                "params": 4198400,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_TimeMLP",
+                    "params": 2099200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "label_embed",
+                "type": "Embedding",
+                "params": 1025024,
+                "own_params": 1025024,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 453353472,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_DiTBlock",
+                    "params": 18889728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ada_ln",
+                        "type": "Sequential",
+                        "params": 6297600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "SiLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 6297600,
+                            "own_params": 6297600,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              },
+              {
+                "name": "final",
+                "type": "_FinalLayer",
+                "params": 2115600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 16400,
+                    "own_params": 16400,
+                    "children": []
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 2099200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 2099200,
+                        "own_params": 2099200,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "mean_flow_medium_2",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_medium_2",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_medium_2(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L161",
+      "subcategory": "pretrained",
+      "summary": "Medium width, patch 2.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowModel",
+        "description": "The average-velocity network."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_medium_2\n>>> config = mean_flow_medium_2().config\n>>> config.hidden_size, config.depth\n(1024, 16)"
+      ],
+      "notes": [
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Tables 2 and 4.\nReports 5.01 FID at one function evaluation.\n\nA size DiT does not define — the paper introduces it to fill the gap\nbetween Base and Large, at Large's width and two thirds of its depth."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 308000000,
+      "model_summary": {
+        "name": "MeanFlowModel",
+        "type": "MeanFlowModel",
+        "params": 309592080,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 17408,
+            "own_params": 17408,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 4198400,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 1049600,
+                    "own_params": 1049600,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 1025024,
+            "own_params": 1025024,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302235648,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 18889728,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 4198400,
+                    "own_params": 4198400,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 6297600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 6297600,
+                        "own_params": 6297600,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 16
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 2115600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 16400,
+                "own_params": 16400,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 2099200,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 2099200,
+                    "own_params": 2099200,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "mean_flow_medium_2_gen",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_medium_2_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_medium_2_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L380",
+      "subcategory": "pretrained",
+      "summary": "`mean_flow_medium_2` posed as a sampler.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowForImageGeneration",
+        "description": "Exposes the training objective and `generate`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_medium_2_gen\n>>> model = mean_flow_medium_2_gen()"
+      ],
+      "notes": [
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 308000000,
+      "model_summary": {
+        "name": "MeanFlowForImageGeneration",
+        "type": "MeanFlowForImageGeneration",
+        "params": 309592080,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "mean_flow",
+            "type": "MeanFlowModel",
+            "params": 309592080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv2d",
+                "params": 17408,
+                "own_params": 17408,
+                "children": []
+              },
+              {
+                "name": "time_mlps",
+                "type": "ModuleList",
+                "params": 4198400,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_TimeMLP",
+                    "params": 2099200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "label_embed",
+                "type": "Embedding",
+                "params": 1025024,
+                "own_params": 1025024,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 302235648,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_DiTBlock",
+                    "params": 18889728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ada_ln",
+                        "type": "Sequential",
+                        "params": 6297600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "SiLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 6297600,
+                            "own_params": 6297600,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 16
+                  }
+                ]
+              },
+              {
+                "name": "final",
+                "type": "_FinalLayer",
+                "params": 2115600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 16400,
+                    "own_params": 16400,
+                    "children": []
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 2099200,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 2099200,
+                        "own_params": 2099200,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "mean_flow_xlarge_2",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_xlarge_2",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_xlarge_2(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L250",
+      "subcategory": "pretrained",
+      "summary": "Extra-large width, patch 2 — the paper's headline model.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowModel",
+        "description": "The average-velocity network."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_xlarge_2\n>>> config = mean_flow_xlarge_2().config\n>>> config.hidden_size, config.depth, config.num_heads\n(1152, 28, 16)"
+      ],
+      "notes": [
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Tables 2 and 4.\nReports 3.43 FID at one function evaluation on ImageNet 256x256 and\n2.93 at two — the first figure being the one that closes most of the\ngap to 250-step diffusion models of the same backbone (DiT-XL/2 at\n2.27, SiT-XL/2 at 2.06)."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 676000000,
+      "model_summary": {
+        "name": "MeanFlowModel",
+        "type": "MeanFlowModel",
+        "params": 678504976,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 19584,
+            "own_params": 19584,
+            "children": []
+          },
+          {
+            "name": "time_mlps",
+            "type": "ModuleList",
+            "params": 5313024,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TimeMLP",
+                "params": 2656512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 1328256,
+                    "own_params": 1328256,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 1328256,
+                    "own_params": 1328256,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              }
+            ]
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 1153152,
+            "own_params": 1153152,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 669344256,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_DiTBlock",
+                "params": 23905152,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "MultiheadAttention",
+                    "params": 5313024,
+                    "own_params": 5313024,
+                    "children": []
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "Sequential",
+                    "params": 10622592,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 5313024,
+                        "own_params": 5313024,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 5309568,
+                        "own_params": 5309568,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 7969536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 7969536,
+                        "own_params": 7969536,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 28
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 2674960,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 18448,
+                "own_params": 18448,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 2656512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 2656512,
+                    "own_params": 2656512,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "mean_flow_xlarge_2_gen",
+      "path": "lucid.models.generative.mean_flow._pretrained.mean_flow_xlarge_2_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "mean_flow_xlarge_2_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/82e11404e/lucid/models/generative/mean_flow/_pretrained.py#L460",
+      "subcategory": "pretrained",
+      "summary": "`mean_flow_xlarge_2` posed as a sampler.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Accepted for signature parity with the rest of the zoo.  No\nMeanFlow checkpoint ships — the paper releases none, and a\n`True` here would have nothing to load.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `MeanFlowConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "MeanFlowForImageGeneration",
+        "description": "Exposes the training objective and `generate`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import mean_flow_xlarge_2_gen\n>>> model = mean_flow_xlarge_2_gen()"
+      ],
+      "notes": [
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  This is the\nconfiguration behind the 3.43 one-step FID."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 676000000,
+      "model_summary": {
+        "name": "MeanFlowForImageGeneration",
+        "type": "MeanFlowForImageGeneration",
+        "params": 678504976,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "mean_flow",
+            "type": "MeanFlowModel",
+            "params": 678504976,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv2d",
+                "params": 19584,
+                "own_params": 19584,
+                "children": []
+              },
+              {
+                "name": "time_mlps",
+                "type": "ModuleList",
+                "params": 5313024,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_TimeMLP",
+                    "params": 2656512,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 1328256,
+                        "own_params": 1328256,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 1328256,
+                        "own_params": 1328256,
+                        "children": []
+                      }
+                    ],
+                    "repeat": 2
+                  }
+                ]
+              },
+              {
+                "name": "label_embed",
+                "type": "Embedding",
+                "params": 1153152,
+                "own_params": 1153152,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 669344256,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_DiTBlock",
+                    "params": 23905152,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "MultiheadAttention",
+                        "params": 5313024,
+                        "own_params": 5313024,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "Sequential",
+                        "params": 10622592,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 5313024,
+                            "own_params": 5313024,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 5309568,
+                            "own_params": 5309568,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ada_ln",
+                        "type": "Sequential",
+                        "params": 7969536,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "SiLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "Linear",
+                            "params": 7969536,
+                            "own_params": 7969536,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 28
+                  }
+                ]
+              },
+              {
+                "name": "final",
+                "type": "_FinalLayer",
+                "params": 2674960,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 18448,
+                    "own_params": 18448,
+                    "children": []
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 2656512,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 2656512,
+                        "own_params": 2656512,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "MeanFlow — one-step generation by modelling the average velocity.",
+  "extended": "Geng, Deng, Bai, Kolter and He, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  The fifth step\nof the flow lineage and the one that removes the integral: where Flow\nMatching learns the instantaneous velocity and integrates it at sampling\ntime, MeanFlow learns the average velocity over an interval, which *is*\nthat integral, and reads a sample off a single evaluation.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "MeanFlow",
+  "citation": "Geng, Zhengyang, Mingyang Deng, Xingjian Bai, J. Zico Kolter, and Kaiming He. \"Mean Flows for One-step Generative Modeling.\" arXiv preprint [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.",
+  "theory": "Flow Matching models the **instantaneous** velocity $v(z_t, t)$\n— the tangent of the path at one instant — and recovers a sample by\nintegrating it.  MeanFlow models the **average** velocity over an\ninterval, defined as that integral divided by its width:\n\n\n\n$$\nu(z_t, r, t) \\triangleq \\frac{1}{t - r}\\int_r^t v(z_\\tau, \\tau)\\,d\\tau .\n$$\n\nThe two coincide only in the limit $r \\to t$.  Away from it the\naverage velocity points along the *displacement* between the two\ntimes rather than along the curve, which is exactly what a one-step\nsampler needs: with $u$ in hand the whole path is\n$z_r = z_t - (t - r)\\,u(z_t, r, t)$, and generation from noise\nis a single evaluation at $(r, t) = (0, 1)$.\n\nTraining on that definition directly would require the integral.  The\nway through is to multiply it out and differentiate with respect to\n$t$, holding $r$ fixed, which turns the integral into the\n**MeanFlow Identity**:\n\n\n\n$$\nu(z_t, r, t) = v(z_t, t) - (t - r)\\,\\frac{d}{dt}u(z_t, r, t).\n$$\n\nEvery term on the right is available.  The instantaneous velocity is\nthe closed-form conditional velocity Flow Matching already regresses\nonto, and the total derivative expands by the chain rule into\n\n\n\n$$\n\\frac{d}{dt}u(z_t, r, t) = v(z_t, t)\\,\\partial_z u + \\partial_t u,\n$$\n\nwhich is one Jacobian-vector product of $u_\\theta$ along the\ntangent $(v,\\, 0,\\, 1)$ — a single extra forward-mode pass, not\na second-order solve.  The identity becomes a regression target,\n\n\n\n$$\nu_{\\mathrm{tgt}} = v_t - (t - r)\\bigl(v_t\\,\\partial_z u_\\theta\n                                    + \\partial_t u_\\theta\\bigr),\n$$\n\nand the loss is $\\lVert u_\\theta - \\mathrm{sg}(u_{\\mathrm{tgt}}) \\rVert^2$.  The stop-gradient is what keeps the cost at one extra\npass: without it the Jacobian-vector product would itself need to be\ndifferentiated.\n\nSetting $r = t$ collapses the second term and recovers Flow\nMatching exactly, so the method is Flow Matching with a modified\ntarget rather than a different framework.  The paper draws\n$r \\neq t$ for only a quarter of samples; at 0% it *is* Flow\nMatching and one-step generation fails outright (FID 328.91 against\n61.06).",
+  "tasks": [
+    "image-generation"
+  ]
+}

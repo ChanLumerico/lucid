@@ -396,5 +396,15 @@
   "yolo_v3_tiny": "c229eb91793e8cfa",
   "yolo_v4": "c229eb91793e8cfa",
   "zfnet": "3aa36edf7c305dc7",
-  "zfnet_cls": "3aa36edf7c305dc7"
+  "zfnet_cls": "3aa36edf7c305dc7",
+  "mean_flow_base_2": "6b9359292d9fe3c7",
+  "mean_flow_base_2_gen": "6b9359292d9fe3c7",
+  "mean_flow_base_4": "6b9359292d9fe3c7",
+  "mean_flow_base_4_gen": "6b9359292d9fe3c7",
+  "mean_flow_large_2": "6b9359292d9fe3c7",
+  "mean_flow_large_2_gen": "6b9359292d9fe3c7",
+  "mean_flow_medium_2": "6b9359292d9fe3c7",
+  "mean_flow_medium_2_gen": "6b9359292d9fe3c7",
+  "mean_flow_xlarge_2": "6b9359292d9fe3c7",
+  "mean_flow_xlarge_2_gen": "6b9359292d9fe3c7"
 }
