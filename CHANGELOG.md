@@ -74,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a filter that matches nothing is not a passing validation
 
+- the span head returns what BERT's returns
+
 ### Performance
 
 - batch the two guidance passes

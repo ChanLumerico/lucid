@@ -2409,6 +2409,10 @@
     {
       "kind": "module",
       "module": "lucid.models.text.bert._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._model"
     }
   ],
   "lucid.models._output.SemanticSegmentationOutput": [

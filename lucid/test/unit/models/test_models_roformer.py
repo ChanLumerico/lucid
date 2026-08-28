@@ -217,7 +217,8 @@ class TestRoFormerExtras:
             start_positions=lucid.tensor([2]).long(),
             end_positions=lucid.tensor([4]).long(),
         )
-        assert tuple(out.logits.shape) == (1, 6, 2)
+        assert tuple(out.start_logits.shape) == (1, 6)
+        assert tuple(out.end_logits.shape) == (1, 6)
         assert out.loss is not None
 
 

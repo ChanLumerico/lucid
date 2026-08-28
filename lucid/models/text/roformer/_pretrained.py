@@ -435,14 +435,6 @@ def roformer_qa(
     Reference: Su et al., *"RoFormer: Enhanced Transformer with Rotary
     Position Embedding"*, Neurocomputing, vol. 568, 2024 (arXiv:2104.09864).
 
-    ⚠️ The output is a single ``(N, T, 2)`` ``logits`` tensor, where
-    :func:`~lucid.models.bert_base_qa` returns ``start_logits`` and
-    ``end_logits`` separately in a
-    :class:`~lucid.models.QuestionAnsweringOutput`.  The two families
-    disagree about the shape of an answer; unifying them is a change to
-    what the RoFormer wrapper returns, not a rename, so it is left alone
-    here and flagged instead.
-
     Examples
     --------
     >>> import lucid
@@ -451,8 +443,8 @@ def roformer_qa(
     ...                     num_hidden_layers=2, num_attention_heads=2,
     ...                     intermediate_size=64).eval()
     >>> out = model(lucid.tensor([[1, 2, 3, 4]]))
-    >>> out.logits.shape   # (N=1, T=4, 2) — start and end scores
-    (1, 4, 2)
+    >>> out.start_logits.shape, out.end_logits.shape
+    ((1, 4), (1, 4))
     """
     entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
     model = RoFormerForQuestionAnswering(_apply(_CFG_BASE, overrides))

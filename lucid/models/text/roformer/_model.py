@@ -28,6 +28,7 @@ from lucid.models._mixins import MaskedLMMixin
 from lucid.models._output import (
     BaseModelOutputWithPooling,
     MaskedLMOutput,
+    QuestionAnsweringOutput,
     SequenceClassificationOutput,
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
@@ -983,8 +984,13 @@ class RoFormerForQuestionAnswering(SequenceClassificationModel):
           + \mathrm{CE}(z^{\mathrm{end}},   y^{\mathrm{end}})
         \right).
 
-    The returned ``logits`` tensor has shape ``(B, T, 2)``; index
-    ``[..., 0]`` for start scores and ``[..., 1]`` for end scores.
+    The two score vectors are returned separately as ``start_logits`` and
+    ``end_logits``, each ``(B, T)``, in a
+    :class:`~lucid.models.QuestionAnsweringOutput` — the same shape
+    :class:`~lucid.models.BERTForQuestionAnswering` returns.  It used to
+    hand back one ``(B, T, 2)`` tensor and leave the caller to remember
+    which index was which, which made the "identical contract" claimed
+    above false for the one thing a caller actually touches.
 
     Examples
     --------
@@ -997,8 +1003,8 @@ class RoFormerForQuestionAnswering(SequenceClassificationModel):
     >>> model = RoFormerForQuestionAnswering(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 2040, 2003, 102, 1045, 2572, 102]])
     >>> out = model(input_ids)
-    >>> out.logits.shape   # (B=1, T=7, 2)
-    (1, 7, 2)
+    >>> out.start_logits.shape, out.end_logits.shape
+    ((1, 7), (1, 7))
     """
 
     config_class: ClassVar[type[RoFormerConfig]] = RoFormerConfig
@@ -1017,7 +1023,7 @@ class RoFormerForQuestionAnswering(SequenceClassificationModel):
         token_type_ids: Tensor | None = None,
         start_positions: Tensor | None = None,
         end_positions: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> QuestionAnsweringOutput:
         outputs = cast(
             BaseModelOutputWithPooling,
             self.roformer(
@@ -1027,11 +1033,11 @@ class RoFormerForQuestionAnswering(SequenceClassificationModel):
             ),
         )
         logits = cast(Tensor, self.qa_outputs(outputs.last_hidden_state))  # (B, T, 2)
+        start_logits = logits[..., 0]  # (B, T)
+        end_logits = logits[..., 1]  # (B, T)
 
         loss: Tensor | None = None
         if start_positions is not None and end_positions is not None:
-            start_logits = logits[..., 0]
-            end_logits = logits[..., 1]
             # Same contract as BERT's QA head: SQuAD's sliding window puts
             # some answers outside the current doc-stride span, so the
             # reference clamps those to a sentinel at the sequence end and
@@ -1050,4 +1056,6 @@ class RoFormerForQuestionAnswering(SequenceClassificationModel):
                     + F.cross_entropy(end_logits, end_t, ignore_index=ignored)
                 ) / 2.0
 
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return QuestionAnsweringOutput(
+            start_logits=start_logits, end_logits=end_logits, loss=loss
+        )
