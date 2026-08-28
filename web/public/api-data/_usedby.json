@@ -2875,6 +2875,68 @@
       "module": "lucid.models"
     }
   ],
+  "lucid.models.generative._config.DiffusionModelConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ddpm._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.stable_diffusion._config"
+    }
+  ],
+  "lucid.models.generative._config.GenerativeModelConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.flow_matching._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.ncsn._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.rectified_flow._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.score_sde._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vae._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vqvae._config"
+    }
+  ],
+  "lucid.models.generative._config.NormalizingFlowConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.neural_ode._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.nice._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.realnvp._config"
+    }
+  ],
   "lucid.models.generative.ddpm": [
     {
       "kind": "module",
@@ -4369,6 +4431,32 @@
     {
       "kind": "module",
       "module": "lucid.models"
+    }
+  ],
+  "lucid.models.text._config.LanguageModelConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.gpt2._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._config"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.transformer._config"
     }
   ],
   "lucid.models.text.bert": [

@@ -3,7 +3,7 @@
   "name": "transformer",
   "path": "lucid.models.text.transformer",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/__init__.py#L1",
   "members": [
     {
       "name": "TransformerConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "TransformerConfig(vocab_size: int = 37000, hidden_size: int = 512, num_hidden_layers: int = 6, num_attention_heads: int = 8, intermediate_size: int = 2048, hidden_act: TextActivation = 'relu', max_position_embeddings: int = 5000, pad_token_id: int | None = 0, bos_token_id: int | None = None, eos_token_id: int | None = None, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-12, tie_word_embeddings: bool = True, use_cache: bool = True, label_smoothing: float = 0.1, decoder_vocab_size: int | None = None, num_decoder_layers: int = 6, share_embeddings: bool = True, num_labels: int = 2, classifier_dropout: float | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_config.py#L23",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_config.py#L23",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "effective_decoder_vocab_size: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_config.py#L150",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_config.py#L150",
           "summary": "Resolved target-side vocabulary (handles `decoder_vocab_size=None`).",
           "extended": null,
           "parameters": [],
@@ -47,7 +47,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(vocab_size: int = 37000, hidden_size: int = 512, num_hidden_layers: int = 6, num_attention_heads: int = 8, intermediate_size: int = 2048, hidden_act: TextActivation = 'relu', max_position_embeddings: int = 5000, pad_token_id: int | None = 0, bos_token_id: int | None = None, eos_token_id: int | None = None, hidden_dropout: float = 0.1, attention_dropout: float = 0.1, initializer_range: float = 0.02, layer_norm_eps: float = 1e-12, tie_word_embeddings: bool = True, use_cache: bool = True, label_smoothing: float = 0.1, decoder_vocab_size: int | None = None, num_decoder_layers: int = 6, share_embeddings: bool = True, num_labels: int = 2, classifier_dropout: float | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -66,7 +66,120 @@
       ],
       "summary": "Configuration for every Vaswani-style Transformer variant.",
       "extended": "The paper shares one BPE vocabulary — and one embedding matrix — across\nsource, target and the pre-softmax projection (§3.4), which is the\ndefault here.  `decoder_vocab_size` / `share_embeddings` stay\nconfigurable so callers porting a checkpoint with split vocabularies can\nturn sharing off.",
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "vocab_size",
+          "annotation": "int",
+          "description": "Tokenizer vocabulary size.  The token / output embedding\nmatrices both have this many rows.",
+          "default": "30522",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "hidden_size",
+          "annotation": "int",
+          "description": "Transformer hidden dimension (`d_model`).",
+          "default": "768",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "num_hidden_layers",
+          "annotation": "int",
+          "description": "Number of stacked transformer blocks.",
+          "default": "12",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "num_attention_heads",
+          "annotation": "int",
+          "description": "Multi-head attention head count; `hidden_size`\nmust be divisible by this.",
+          "default": "12",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "intermediate_size",
+          "annotation": "int",
+          "description": "FFN inner dimension (4× hidden_size by paper\nconvention, but configurable per family).",
+          "default": "3072",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "hidden_act",
+          "annotation": "TextActivation",
+          "description": "FFN activation; one of `gelu / gelu_new / relu / silu /\nswish`.",
+          "default": "'gelu'",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "max_position_embeddings",
+          "annotation": "int",
+          "description": "Maximum sequence length supported by the\nabsolute / learned positional embedding lookup.  Models that use\nrotary or relative position embeddings still respect this as a\nsoft upper bound on training-time sequence length.",
+          "default": "512",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "pad_token_id",
+          "annotation": "int | None",
+          "description": "Token id used for padding, or `None` if the model\ndoes not pad (typical for GPT-style decoders).  `forward`\nimplementations should mask attention away from pad positions.",
+          "default": "0",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "bos_token_id",
+          "annotation": "int | None",
+          "description": "Begin-of-sequence token id, used by\n`CausalLMMixin` to seed generation.  `None` when the\ntokenizer does not define one.",
+          "default": "None",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "eos_token_id",
+          "annotation": "int | None",
+          "description": "End-of-sequence token id, which stops generation.\n`None` when the tokenizer does not define one.",
+          "default": "None",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "hidden_dropout",
+          "annotation": "float",
+          "description": "Dropout applied after embeddings and inside each\ntransformer block's residual path.",
+          "default": "0.1",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "attention_dropout",
+          "annotation": "float",
+          "description": "Dropout applied to the attention probabilities.",
+          "default": "0.1",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "initializer_range",
+          "annotation": "float",
+          "description": "Std-dev of the truncated normal initialiser for\n`Linear`/`Embedding` weights (HF convention is 0.02).",
+          "default": "0.02",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "layer_norm_eps",
+          "annotation": "float",
+          "description": "Numerical stabiliser for `nn.LayerNorm` —\nevery text family in HF uses 1e-12 by default.",
+          "default": "1e-12",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "tie_word_embeddings",
+          "annotation": "bool",
+          "description": "If True, the LM-head decoder weight is *the\nsame parameter* as the input token embedding (BERT MLM head,\nGPT-2 LM head).  If False, the two are independent (GPT-1).",
+          "default": "True",
+          "inherited_from": "LanguageModelConfig"
+        },
+        {
+          "name": "use_cache",
+          "annotation": "bool",
+          "description": "Decoder models can cache past key/value tensors for\n`generate()`.  This flag toggles cache emission in\n`forward`; runtime can still override it per-call.",
+          "default": "True",
+          "inherited_from": "LanguageModelConfig"
+        }
+      ],
       "returns": null,
       "raises": [],
       "examples": [],
@@ -85,7 +198,7 @@
       ],
       "labels": [],
       "signature": "TransformerForSeq2SeqLM(config: TransformerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L379",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L379",
       "subcategory": "model",
       "methods": [
         {
@@ -94,7 +207,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: TransformerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L441",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L441",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -116,7 +229,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, decoder_input_ids: Tensor, attention_mask: Tensor | None = None, decoder_attention_mask: Tensor | None = None, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L449",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L449",
           "subcategory": "model",
           "summary": "Full encode + decode pass.",
           "extended": null,
@@ -163,7 +276,7 @@
           "kind": "function",
           "labels": [],
           "signature": "generate(input_ids: Tensor, max_length: int = 32, bos_token_id: int | None = None, eos_token_id: int | None = None, pad_token_id: int | None = None, attention_mask: Tensor | None = None, use_cache: bool = True, do_sample: bool = False, temperature: float = 1.0, top_k: int | None = None, top_p: float | None = None, repetition_penalty: float = 1.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L489",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L489",
           "subcategory": "model",
           "summary": "Seq2seq decoding — greedy (default) or stochastic sampling.",
           "extended": "Encodes `input_ids` once, then unrolls the decoder one token at a\ntime (BOS-seeded) until `max_length` (or every batch row hits\n`eos_token_id`).  Token selection routes through the shared sampling\nprimitives, so `do_sample` / `temperature` / `top_k` / `top_p` /\n`repetition_penalty` behave exactly as for decoder-only models.",
@@ -296,7 +409,7 @@
       ],
       "labels": [],
       "signature": "TransformerForSequenceClassification(config: TransformerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L605",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L605",
       "subcategory": "model",
       "methods": [
         {
@@ -305,7 +418,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: TransformerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L664",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L664",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -327,7 +440,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L675",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L675",
           "subcategory": "model",
           "summary": "Full encode + decode pass.",
           "extended": null,
@@ -418,7 +531,7 @@
       ],
       "labels": [],
       "signature": "TransformerForTokenClassification(config: TransformerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L694",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L694",
       "subcategory": "model",
       "methods": [
         {
@@ -427,7 +540,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: TransformerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L752",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L752",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -449,7 +562,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, attention_mask: Tensor | None = None, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L763",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L763",
           "subcategory": "model",
           "summary": "Full encode + decode pass.",
           "extended": null,
@@ -539,7 +652,7 @@
       ],
       "labels": [],
       "signature": "TransformerModel(config: TransformerConfig, encoder_only: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L105",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L105",
       "subcategory": "model",
       "methods": [
         {
@@ -548,7 +661,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: TransformerConfig, encoder_only: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L183",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L183",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -570,7 +683,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_input_embeddings()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L230",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L230",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -592,7 +705,7 @@
           "kind": "function",
           "labels": [],
           "signature": "set_input_embeddings(value: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L234",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L234",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -614,7 +727,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_output_embeddings()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L242",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L242",
           "subcategory": "model",
           "summary": "Target-side embedding — used to tie an LM head against.",
           "extended": null,
@@ -636,7 +749,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(src_ids: Tensor, src_attention_mask: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L264",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L264",
           "subcategory": "model",
           "summary": "Run only the encoder; returns memory `(B, S, d_model)`.",
           "extended": null,
@@ -658,7 +771,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(tgt_ids: Tensor, memory: Tensor, tgt_attention_mask: Tensor | None = None, memory_attention_mask: Tensor | None = None, past_key_value: EncoderDecoderCache | None = None, use_cache: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L277",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L277",
           "subcategory": "model",
           "summary": "Run only the decoder against precomputed encoder memory.",
           "extended": "When `use_cache` is set, `past_key_value` accumulates the decoder\nself-attention keys/values (and caches the cross-attention projection\nof `memory` once), so each step only needs the freshly appended\n`tgt_ids` token(s).",
@@ -717,7 +830,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(input_ids: Tensor, decoder_input_ids: Tensor, attention_mask: Tensor | None = None, decoder_attention_mask: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L340",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L340",
           "subcategory": "model",
           "summary": "Full encode + decode pass.",
           "extended": null,
@@ -817,7 +930,7 @@
       ],
       "labels": [],
       "signature": "TransformerModelOutput(last_hidden_state: Tensor, encoder_last_hidden_state: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L74",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L74",
       "subcategory": "model",
       "methods": [
         {
@@ -826,7 +939,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(last_hidden_state: Tensor, encoder_last_hidden_state: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -875,7 +988,7 @@
       "kind": "function",
       "labels": [],
       "signature": "transformer_base(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_pretrained.py#L35",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_pretrained.py#L35",
       "subcategory": "pretrained",
       "summary": "Construct a Vaswani-style Transformer \"base\" encoder-decoder.",
       "extended": "Canonical seq2seq architecture from Vaswani, Shazeer, Parmar, Uszkoreit,\nJones, Gomez, Kaiser, and Polosukhin, 2017, Table 3 (\"base\" row):\n$N=6$ encoder + $N=6$ decoder layers, $d_{\\text{model}} = 512$, $h = 8$ heads, $d_{\\text{ff}} = 2048$, dropout 0.1.\nRoughly 65M parameters — the model that achieved SOTA on WMT 2014\nEn-De / En-Fr at a fraction of the training cost of prior recurrent\nseq2seq systems.",
@@ -1092,7 +1205,7 @@
       "kind": "function",
       "labels": [],
       "signature": "transformer_base_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_pretrained.py#L275",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_pretrained.py#L275",
       "subcategory": "pretrained",
       "summary": "Construct a Transformer \"base\" with a sequence-classification head.",
       "extended": "Same trunk as `transformer_base` (N=6, d_model=512, h=8); only the\nencoder half is used in `forward`.  The first source-side token's\nencoder hidden state is dropout-regularised and projected through a\nlinear of output width `config.num_labels`.  Pattern mirrors\n`BERTForSequenceClassification` and is appropriate for\nGLUE-style fine-tunes on the encoder-only half of the Vaswani trunk.",
@@ -1283,7 +1396,7 @@
       "kind": "function",
       "labels": [],
       "signature": "transformer_base_seq2seq(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_pretrained.py#L157",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_pretrained.py#L157",
       "subcategory": "pretrained",
       "summary": "Construct a Transformer \"base\" with a tied seq2seq-LM head.",
       "extended": "Same trunk as `transformer_base` (N=6, d_model=512, h=8),\naugmented with a linear LM head whose weight is tied to the target-side\nembedding when `config.tie_word_embeddings` is `True`.  Provides a\n`.generate(input_ids)` method for greedy seq2seq decoding (translation\n/ summarisation inference).",
@@ -1515,7 +1628,7 @@
       "kind": "function",
       "labels": [],
       "signature": "transformer_base_token_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_pretrained.py#L329",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_pretrained.py#L329",
       "subcategory": "pretrained",
       "summary": "Construct a Transformer \"base\" with a per-token classification head.",
       "extended": "Same trunk as `transformer_base` (N=6, d_model=512, h=8); only the\nencoder half is used in `forward`.  Every source-side token's hidden\nstate is dropout-regularised and projected through a linear of output\nwidth `config.num_labels`, with the standard masked cross-entropy\ninherited from `MaskedLMMixin`.  Use for sequence-labelling\ntasks (NER, POS) when an encoder-only Vaswani trunk is preferred to\nBERT.",
@@ -1706,7 +1819,7 @@
       "kind": "function",
       "labels": [],
       "signature": "transformer_large(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_pretrained.py#L99",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_pretrained.py#L99",
       "subcategory": "pretrained",
       "summary": "Construct a Vaswani-style Transformer \"big\" encoder-decoder.",
       "extended": "Larger of the two original variants from Vaswani et al., 2017, Table 3\n(\"big\" row): $N=6$ encoder + $N=6$ decoder layers,\n$d_{\\text{model}} = 1024$, $h = 16$ heads,\n$d_{\\text{ff}} = 4096$, dropout 0.3.  Roughly 213M parameters —\npushed BLEU on WMT 2014 En-De to 28.4 / En-Fr to 41.8 at release time.",
@@ -1923,7 +2036,7 @@
       "kind": "function",
       "labels": [],
       "signature": "transformer_large_seq2seq(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/05b434a/lucid/models/text/transformer/_pretrained.py#L220",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3dfbc6261/lucid/models/text/transformer/_pretrained.py#L220",
       "subcategory": "pretrained",
       "summary": "Construct a Transformer \"big\" with a tied seq2seq-LM head.",
       "extended": "Same trunk as `transformer_large` (N=6, d_model=1024, h=16),\naugmented with a linear LM head whose weight is tied to the target-side\nembedding when `config.tie_word_embeddings` is `True`.  Use for\nhigh-accuracy translation / summarisation fine-tunes when compute\npermits.",
