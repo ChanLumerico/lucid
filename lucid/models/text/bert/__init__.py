@@ -27,6 +27,9 @@ from lucid.models.text.bert._pretrained import (
     bert_mini,
     bert_small,
     bert_tiny,
+    bert_base_causal_lm,
+    bert_base_nsp,
+    bert_base_pretrain,
 )
 from lucid.models.text.bert._weights import (
     BERTBaseMLMWeights,
@@ -70,6 +73,9 @@ __all__ = [
     "bert_medium",
     "bert_base",
     "bert_large",
+    "bert_base_causal_lm",
+    "bert_base_nsp",
+    "bert_base_pretrain",
     "bert_base_mlm",
     "bert_large_mlm",
     "bert_base_cls",

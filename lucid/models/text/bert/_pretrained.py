@@ -26,7 +26,10 @@ import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.bert._config import BERTConfig
 from lucid.models.text.bert._model import (
+    BERTForCausalLM,
     BERTForMaskedLM,
+    BERTForNextSentencePrediction,
+    BERTForPreTraining,
     BERTForQuestionAnswering,
     BERTForSequenceClassification,
     BERTForTokenClassification,
@@ -924,11 +927,219 @@ def bert_large_qa(
     >>> model = bert_large_qa().eval()
     >>> input_ids = lucid.tensor([[101, 2040, 102, 1045, 2572, 102]])
     >>> out = model(input_ids)
-    >>> out.logits.shape   # (1, T=6, 2)
-    (1, 6, 2)
+    >>> out.start_logits.shape, out.end_logits.shape
+    ((1, 6), (1, 6))
     """
     entry = weights_mod.resolve_weights(BERTLargeQAWeights, pretrained, weights)
     model = BERTForQuestionAnswering(_apply(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_large_qa")
+    return model
+
+
+# reason: bert_base_causal_lm adds a typed weights= kwarg (the encoder
+# BERTBaseWeights); the ModelFactory protocol predates the weights system and
+# names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
+    task="language-modeling",
+    family="bert",
+    model_type="bert",
+    model_class=BERTForCausalLM,
+    default_config=_CFG_BASE,
+)
+def bert_base_causal_lm(
+    pretrained: bool | str = False,
+    *,
+    weights: BERTBaseWeights | None = None,
+    **overrides: object,
+) -> BERTForCausalLM:
+    r"""Construct a BERT-Base trunk with a left-to-right LM head.
+
+    The trunk of :func:`bert_base` under a causal attention mask, with the
+    tied vocabulary head predicting the *next* token rather than a masked
+    one.  BERT was not pre-trained this way — the checkpoints saw
+    bidirectional context — so the released weights are a starting point
+    for causal fine-tuning, not a generative model as they stand.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the :func:`bert_base` encoder
+        (:attr:`BERTBaseWeights.DEFAULT`) into the ``.bert`` trunk.
+    weights : BERTBaseWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
+    **overrides : object
+        Optional :class:`BERTConfig` field overrides.
+
+    Returns
+    -------
+    BERTForCausalLM
+        BERT-Base wrapped with the causal LM head.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805).  The paper's §3.1 objective is masked, not causal;
+    this wrapper exists because the architecture supports the mask and
+    downstream code asks for it, and :func:`bert_base_mlm` is the head the
+    checkpoints were trained with.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import bert_base_causal_lm
+    >>> model = bert_base_causal_lm(vocab_size=99, hidden_size=32,
+    ...                             num_hidden_layers=2,
+    ...                             num_attention_heads=2,
+    ...                             intermediate_size=64).eval()
+    >>> out = model(lucid.tensor([[1, 2, 3, 4]]))
+    >>> out.logits.shape   # (1, T=4, vocab_size=99)
+    (1, 4, 99)
+    """
+    entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
+    model = BERTForCausalLM(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
+    return model
+
+
+# reason: bert_base_nsp adds a typed weights= kwarg (the encoder
+# BERTBaseWeights); the ModelFactory protocol predates the weights system and
+# names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
+    task="sequence-classification",
+    family="bert",
+    model_type="bert",
+    model_class=BERTForNextSentencePrediction,
+    default_config=_CFG_BASE,
+)
+def bert_base_nsp(
+    pretrained: bool | str = False,
+    *,
+    weights: BERTBaseWeights | None = None,
+    **overrides: object,
+) -> BERTForNextSentencePrediction:
+    r"""Construct BERT-Base with the next-sentence-prediction head.
+
+    The binary head from pre-training task #2: given a sentence pair
+    packed with ``token_type_ids``, score whether the second follows the
+    first.  Unlike the fine-tuning heads, this one *was* trained — it is
+    half of the original objective — so the released encoder and this head
+    belong together.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the :func:`bert_base` encoder
+        (:attr:`BERTBaseWeights.DEFAULT`) into the ``.bert`` trunk.  **The
+        pooler and the two-way classifier are randomly initialised** — the
+        distributed checkpoint drops the NSP head.
+    weights : BERTBaseWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
+    **overrides : object
+        Optional :class:`BERTConfig` field overrides.
+
+    Returns
+    -------
+    BERTForNextSentencePrediction
+        BERT-Base wrapped with the two-way sentence-pair head.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805) §3.1 (task #2).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import bert_base_nsp
+    >>> model = bert_base_nsp(vocab_size=99, hidden_size=32,
+    ...                       num_hidden_layers=2, num_attention_heads=2,
+    ...                       intermediate_size=64).eval()
+    >>> out = model(lucid.tensor([[1, 2, 3, 4]]))
+    >>> out.logits.shape   # (N=1, 2) — IsNext / NotNext
+    (1, 2)
+    """
+    entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
+    model = BERTForNextSentencePrediction(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
+    return model
+
+
+# reason: bert_base_pretrain adds a typed weights= kwarg (the encoder
+# BERTBaseWeights); the ModelFactory protocol predates the weights system and
+# names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
+    task="sequence-classification",
+    family="bert",
+    model_type="bert",
+    model_class=BERTForPreTraining,
+    default_config=_CFG_BASE,
+)
+def bert_base_pretrain(
+    pretrained: bool | str = False,
+    *,
+    weights: BERTBaseWeights | None = None,
+    **overrides: object,
+) -> BERTForPreTraining:
+    r"""Construct BERT-Base with both pre-training heads attached.
+
+    The masked-LM head and the next-sentence head at once, which is the
+    configuration the paper trains: the two losses are summed, and the
+    forward returns each separately so a caller can weight or inspect
+    them.  This is the factory for continued pre-training on a domain
+    corpus; :func:`bert_base_mlm` is the one for mask-filling alone.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the :func:`bert_base` encoder
+        (:attr:`BERTBaseWeights.DEFAULT`) into the ``.bert`` trunk.  Both
+        heads are randomly initialised.
+    weights : BERTBaseWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
+    **overrides : object
+        Optional :class:`BERTConfig` field overrides.
+
+    Returns
+    -------
+    BERTForPreTraining
+        BERT-Base wrapped with the masked-LM and next-sentence heads.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805) §3.1.
+
+    The output carries ``prediction_logits`` and
+    ``seq_relationship_logits`` rather than a single ``logits`` — two heads
+    produce two predictions, and ``mlm_loss`` / ``nsp_loss`` are reported
+    beside the summed ``loss`` so the balance between them is visible.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import bert_base_pretrain
+    >>> model = bert_base_pretrain(vocab_size=99, hidden_size=32,
+    ...                            num_hidden_layers=2,
+    ...                            num_attention_heads=2,
+    ...                            intermediate_size=64).eval()
+    >>> out = model(lucid.tensor([[1, 2, 3, 4]]))
+    >>> out.prediction_logits.shape, out.seq_relationship_logits.shape
+    ((1, 4, 99), (1, 2))
+    """
+    entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
+    model = BERTForPreTraining(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
     return model

@@ -15,6 +15,8 @@ from lucid.models._registry import register_model
 from lucid.models.text.roformer._config import RoFormerConfig
 from lucid.models.text.roformer._model import (
     RoFormerForMaskedLM,
+    RoFormerForMultipleChoice,
+    RoFormerForQuestionAnswering,
     RoFormerForSequenceClassification,
     RoFormerForTokenClassification,
     RoFormerModel,
@@ -311,6 +313,149 @@ def roformer_token_cls(
     """
     entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
     model = RoFormerForTokenClassification(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.roformer, entry, name="roformer")
+    return model
+
+
+# reason: roformer_multiple_choice adds a typed weights= kwarg (the encoder
+# RoFormerWeights); the ModelFactory protocol predates the weights system and
+# names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
+    task="sequence-classification",
+    family="roformer",
+    model_type="roformer",
+    model_class=RoFormerForMultipleChoice,
+    default_config=_CFG_BASE,
+)
+def roformer_multiple_choice(
+    pretrained: bool | str = False,
+    *,
+    weights: RoFormerWeights | None = None,
+    **overrides: object,
+) -> RoFormerForMultipleChoice:
+    r"""Construct a RoFormer model with a multiple-choice head.
+
+    Scores each candidate independently and softmaxes across them, so the
+    input is ``(N, C, L)`` — batch, choices, tokens — rather than the
+    ``(N, L)`` every other head here takes.  The choices are flattened
+    into the batch, run through the shared trunk, and reshaped back to
+    ``(N, C)`` logits.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the :func:`roformer` encoder
+        (:attr:`RoFormerWeights.DEFAULT`) into the ``.roformer`` trunk.
+        **The scoring head is always randomly initialised.**
+    weights : RoFormerWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
+    **overrides : object
+        Optional :class:`RoFormerConfig` field overrides.  ``num_labels``
+        does not apply — the head is a single scalar per choice, and the
+        choice count comes from the input's second axis.
+
+    Returns
+    -------
+    RoFormerForMultipleChoice
+        RoFormer trunk wrapped with the per-choice scorer.
+
+    Notes
+    -----
+    Reference: Su et al., *"RoFormer: Enhanced Transformer with Rotary
+    Position Embedding"*, Neurocomputing, vol. 568, 2024 (arXiv:2104.09864).
+
+    The head reads the **last** token's hidden state, not a pooled ``[CLS]``
+    — see :class:`RoFormerForMultipleChoice` for why.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import roformer_multiple_choice
+    >>> model = roformer_multiple_choice(vocab_size=99, hidden_size=32,
+    ...                                  num_hidden_layers=2,
+    ...                                  num_attention_heads=2,
+    ...                                  intermediate_size=64).eval()
+    >>> ids = lucid.tensor([[[1, 2, 3, 4], [1, 2, 3, 5]]])   # (N=1, C=2, L=4)
+    >>> out = model(ids)
+    >>> out.logits.shape   # (N=1, C=2)
+    (1, 2)
+    """
+    entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
+    model = RoFormerForMultipleChoice(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.roformer, entry, name="roformer")
+    return model
+
+
+# reason: roformer_qa adds a typed weights= kwarg (the encoder
+# RoFormerWeights); the ModelFactory protocol predates the weights system and
+# names only pretrained + **overrides.
+@register_model(  # type: ignore[arg-type]
+    task="sequence-classification",
+    family="roformer",
+    model_type="roformer",
+    model_class=RoFormerForQuestionAnswering,
+    default_config=_CFG_BASE,
+)
+def roformer_qa(
+    pretrained: bool | str = False,
+    *,
+    weights: RoFormerWeights | None = None,
+    **overrides: object,
+) -> RoFormerForQuestionAnswering:
+    r"""Construct a RoFormer model with an extractive span head.
+
+    A two-way linear over each position, scoring it as the start and the
+    end of the answer span.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the :func:`roformer` encoder
+        (:attr:`RoFormerWeights.DEFAULT`) into the ``.roformer`` trunk.
+        **The span head is always randomly initialised** — no
+        SQuAD-fine-tuned RoFormer checkpoint ships here.
+    weights : RoFormerWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
+    **overrides : object
+        Optional :class:`RoFormerConfig` field overrides.
+
+    Returns
+    -------
+    RoFormerForQuestionAnswering
+        RoFormer trunk wrapped with the span head.
+
+    Notes
+    -----
+    Reference: Su et al., *"RoFormer: Enhanced Transformer with Rotary
+    Position Embedding"*, Neurocomputing, vol. 568, 2024 (arXiv:2104.09864).
+
+    ⚠️ The output is a single ``(N, T, 2)`` ``logits`` tensor, where
+    :func:`~lucid.models.bert_base_qa` returns ``start_logits`` and
+    ``end_logits`` separately in a
+    :class:`~lucid.models.QuestionAnsweringOutput`.  The two families
+    disagree about the shape of an answer; unifying them is a change to
+    what the RoFormer wrapper returns, not a rename, so it is left alone
+    here and flagged instead.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import roformer_qa
+    >>> model = roformer_qa(vocab_size=99, hidden_size=32,
+    ...                     num_hidden_layers=2, num_attention_heads=2,
+    ...                     intermediate_size=64).eval()
+    >>> out = model(lucid.tensor([[1, 2, 3, 4]]))
+    >>> out.logits.shape   # (N=1, T=4, 2) — start and end scores
+    (1, 4, 2)
+    """
+    entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
+    model = RoFormerForQuestionAnswering(_apply(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model.roformer, entry, name="roformer")
     return model

@@ -18,6 +18,8 @@ from lucid.models.text.roformer._pretrained import (
     roformer_cls,
     roformer_mlm,
     roformer_token_cls,
+    roformer_multiple_choice,
+    roformer_qa,
 )
 from lucid.models.text.roformer._weights import (
     RoFormerMLMWeights,
@@ -35,6 +37,8 @@ __all__ = [
     "RoFormerForSequenceClassification",
     "RoFormerForTokenClassification",
     "roformer",
+    "roformer_multiple_choice",
+    "roformer_qa",
     "roformer_mlm",
     "roformer_cls",
     "roformer_token_cls",

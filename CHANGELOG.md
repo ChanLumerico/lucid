@@ -82,6 +82,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - task wrappers get a base, fifteen tasks become eight
 
+### Added
+
+- register the five wrappers nothing could build
+
 ---
 
 ## [3.9.0] — 2026-08-25

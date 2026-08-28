@@ -2455,6 +2455,10 @@
     {
       "kind": "module",
       "module": "lucid.models.text.bert._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._model"
     }
   ],
   "lucid.models._output.TokenClassificationOutput": [
@@ -4403,6 +4407,10 @@
     {
       "kind": "module",
       "module": "lucid.models.text.bert"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
     }
   ],
   "lucid.models.text.bert._model.BERTForMaskedLM": [
@@ -4419,12 +4427,20 @@
     {
       "kind": "module",
       "module": "lucid.models.text.bert"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
     }
   ],
   "lucid.models.text.bert._model.BERTForPreTraining": [
     {
       "kind": "module",
       "module": "lucid.models.text.bert"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert._pretrained"
     }
   ],
   "lucid.models.text.bert._model.BERTForPreTrainingOutput": [
@@ -4479,6 +4495,12 @@
       "module": "lucid.models.text.bert"
     }
   ],
+  "lucid.models.text.bert._pretrained.bert_base_causal_lm": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
   "lucid.models.text.bert._pretrained.bert_base_cls": [
     {
       "kind": "module",
@@ -4486,6 +4508,18 @@
     }
   ],
   "lucid.models.text.bert._pretrained.bert_base_mlm": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
+  "lucid.models.text.bert._pretrained.bert_base_nsp": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.bert"
+    }
+  ],
+  "lucid.models.text.bert._pretrained.bert_base_pretrain": [
     {
       "kind": "module",
       "module": "lucid.models.text.bert"
@@ -5111,12 +5145,20 @@
     {
       "kind": "module",
       "module": "lucid.models.text.roformer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._pretrained"
     }
   ],
   "lucid.models.text.roformer._model.RoFormerForQuestionAnswering": [
     {
       "kind": "module",
       "module": "lucid.models.text.roformer"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._pretrained"
     }
   ],
   "lucid.models.text.roformer._model.RoFormerForSequenceClassification": [
@@ -5162,6 +5204,18 @@
     }
   ],
   "lucid.models.text.roformer._pretrained.roformer_mlm": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer"
+    }
+  ],
+  "lucid.models.text.roformer._pretrained.roformer_multiple_choice": [
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer"
+    }
+  ],
+  "lucid.models.text.roformer._pretrained.roformer_qa": [
     {
       "kind": "module",
       "module": "lucid.models.text.roformer"

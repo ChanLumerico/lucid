@@ -159,6 +159,7 @@ from lucid.models.text.bert import (
     bert_base_mlm, bert_large_mlm,
     bert_base_cls, bert_large_cls,
     bert_base_token_cls, bert_base_qa, bert_large_qa,
+    bert_base_causal_lm, bert_base_nsp, bert_base_pretrain,
 )
 # 2018 — GPT-1 (Radford et al.)
 from lucid.models.text.gpt import (
@@ -183,6 +184,7 @@ from lucid.models.text.roformer import (
     RoFormerForSequenceClassification, RoFormerForTokenClassification,
     roformer,
     roformer_mlm, roformer_cls, roformer_token_cls,
+    roformer_multiple_choice, roformer_qa,
 )
 
 # Vision families — chronological order of publication
@@ -700,7 +702,7 @@ __all__ = [    # ── Infrastructure ─────────────�
     "bert_tiny", "bert_mini", "bert_small", "bert_medium", "bert_base", "bert_large",
     "bert_base_mlm", "bert_large_mlm",
     "bert_base_cls", "bert_large_cls",
-    "bert_base_token_cls", "bert_base_qa", "bert_large_qa",
+    "bert_base_token_cls", "bert_base_causal_lm", "bert_base_nsp", "bert_base_pretrain", "bert_base_qa", "bert_large_qa",
     # ── Text (2018) GPT-1 ─────────────────────────────────────────────────────
     "GPTConfig", "GPTModel", "GPTLMHeadModel",
     "GPTDoubleHeadsModel", "GPTForSequenceClassification",
@@ -718,7 +720,7 @@ __all__ = [    # ── Infrastructure ─────────────�
     "RoFormerForQuestionAnswering",
     "RoFormerForSequenceClassification", "RoFormerForTokenClassification",
     "roformer",
-    "roformer_mlm", "roformer_cls", "roformer_token_cls",
+    "roformer_multiple_choice", "roformer_qa", "roformer_mlm", "roformer_cls", "roformer_token_cls",
     # ── Vision (2016) YOLOv1 ──────────────────────────────────────────────────
     "YOLOConfig", "YOLOForObjectDetection",
     "yolo", "yolo_tiny",

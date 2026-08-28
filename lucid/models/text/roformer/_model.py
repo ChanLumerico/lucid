@@ -28,6 +28,7 @@ from lucid.models._mixins import MaskedLMMixin
 from lucid.models._output import (
     BaseModelOutputWithPooling,
     MaskedLMOutput,
+    SequenceClassificationOutput,
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
 from lucid.nn.functional import apply_rotary_emb
@@ -892,7 +893,7 @@ class RoFormerForMultipleChoice(SequenceClassificationModel):
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> SequenceClassificationOutput:
         if input_ids.ndim != 3:
             raise ValueError(
                 f"RoFormerForMultipleChoice expects input_ids of shape (N, C, L), "
@@ -941,7 +942,7 @@ class RoFormerForMultipleChoice(SequenceClassificationModel):
         if labels is not None:
             loss = F.cross_entropy(logits, labels.long())
 
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return SequenceClassificationOutput(logits=logits, loss=loss)
 
 
 class RoFormerForQuestionAnswering(SequenceClassificationModel):
