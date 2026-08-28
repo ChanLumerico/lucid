@@ -607,7 +607,9 @@ class InceptionV3(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class InceptionV3ForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
+class InceptionV3ForImageClassification(
+    ImageClassificationModel, ClassificationHeadMixin
+):
     r"""Inception v3 image classifier with optional auxiliary classifier.
 
     Combines an :class:`InceptionV3` backbone with a global-average-pool

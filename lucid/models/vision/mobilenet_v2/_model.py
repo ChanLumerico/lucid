@@ -256,7 +256,9 @@ class MobileNetV2(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class MobileNetV2ForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
+class MobileNetV2ForImageClassification(
+    ImageClassificationModel, ClassificationHeadMixin
+):
     r"""MobileNet v2 with global-average-pooled linear classification head.
 
     Combines a :class:`MobileNetV2` backbone with the standard

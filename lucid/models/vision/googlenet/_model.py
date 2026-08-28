@@ -432,7 +432,9 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class GoogLeNetForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
+class GoogLeNetForImageClassification(
+    ImageClassificationModel, ClassificationHeadMixin
+):
     r"""GoogLeNet image classifier with optional auxiliary classifiers.
 
     Combines the GoogLeNet backbone with a global-average-pool +

@@ -598,7 +598,9 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class SwinTransformerForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
+class SwinTransformerForImageClassification(
+    ImageClassificationModel, ClassificationHeadMixin
+):
     r"""Swin Transformer with a linear classification head (Liu et al., 2021).
 
     Wraps the same hierarchical trunk as :class:`SwinTransformer` (patch

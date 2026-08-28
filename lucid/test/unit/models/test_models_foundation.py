@@ -482,7 +482,8 @@ class TestAutoModelTaskCoverage:
         from lucid.models._registry import list_models
 
         autos = [
-            getattr(models, n) for n in models.__all__
+            getattr(models, n)
+            for n in models.__all__
             if isinstance(getattr(models, n), type)
             and issubclass(getattr(models, n), _BaseAutoClass)
             and getattr(models, n) is not _BaseAutoClass
@@ -517,7 +518,9 @@ class TestAutoModelTaskCoverage:
                 and not issubclass(entry.model_class, TaskModel)
             }
         )
-        assert not offenders, f"registered under a task but not a TaskModel: {offenders}"
+        assert (
+            not offenders
+        ), f"registered under a task but not a TaskModel: {offenders}"
 
     def test_class_task_matches_the_tag_it_registers_under(self) -> None:
         """The base's ``task`` and the registry tag are the same string.
@@ -536,4 +539,6 @@ class TestAutoModelTaskCoverage:
             and entry.model_class is not None
             and getattr(entry.model_class, "task", None) != entry.task
         ]
-        assert not mismatched, f"class.task disagrees with registry tag: {mismatched[:5]}"
+        assert (
+            not mismatched
+        ), f"class.task disagrees with registry tag: {mismatched[:5]}"

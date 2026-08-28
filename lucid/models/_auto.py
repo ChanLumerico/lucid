@@ -658,5 +658,3 @@ class AutoModelForWorldModeling(_BaseAutoClass):
     """
 
     _task: ClassVar[str] = "world-modeling"
-
-

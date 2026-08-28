@@ -30,7 +30,11 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
-from lucid.models._tasks import LanguageModelingModel, SequenceClassificationModel, TokenClassificationModel
+from lucid.models._tasks import (
+    LanguageModelingModel,
+    SequenceClassificationModel,
+    TokenClassificationModel,
+)
 from lucid.models._mixins import MaskedLMMixin
 from lucid.models._output import (
     ModelOutput,

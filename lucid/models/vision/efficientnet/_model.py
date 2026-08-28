@@ -373,7 +373,9 @@ class EfficientNet(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class EfficientNetForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
+class EfficientNetForImageClassification(
+    ImageClassificationModel, ClassificationHeadMixin
+):
     r"""EfficientNet with global-average-pooled linear classification head.
 
     Combines an :class:`EfficientNet` backbone with the standard
