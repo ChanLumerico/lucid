@@ -19,6 +19,7 @@ import lucid
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import DiffusionModelOutput, GenerationOutput
 from lucid.models._utils._generative import (
     make_sigma_schedule,
@@ -215,7 +216,7 @@ class NCSNModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class NCSNForImageGeneration(PretrainedModel):
+class NCSNForImageGeneration(ImageGenerationModel):
     r"""NCSN with the DSM training loss and annealed Langevin ``.generate()``.
 
     Wraps :class:`NCSNModel` with denoising score matching (DSM) for

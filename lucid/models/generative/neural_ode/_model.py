@@ -25,6 +25,7 @@ import lucid.diffeq
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import GenerationOutput, NormalizingFlowOutput
 from lucid.models._utils._generative import (
     resolve_generation_device,
@@ -600,7 +601,7 @@ class NeuralODEModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class NeuralODEForImageGeneration(PretrainedModel):
+class NeuralODEForImageGeneration(ImageGenerationModel):
     r"""Neural ODE flow with a training loss and ``.generate()``.
 
     ``forward(x)`` returns a :class:`NormalizingFlowOutput` whose ``loss``

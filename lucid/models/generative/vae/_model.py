@@ -36,6 +36,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import GenerationOutput, VAEOutput
 from lucid.models._utils._generative import (
     resolve_generation_device,
@@ -410,7 +411,7 @@ class VAEModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class VAEForImageGeneration(PretrainedModel):
+class VAEForImageGeneration(ImageGenerationModel):
     r"""VAE with the ELBO training loss and prior-sample ``.generate()``.
 
     Wraps :class:`VAEModel` with the standard reconstruction +

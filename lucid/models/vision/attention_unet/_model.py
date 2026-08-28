@@ -49,7 +49,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import SemanticSegmentationModel
 from lucid.models._output import SemanticSegmentationOutput
 from lucid.models.vision.attention_unet._config import AttentionUNetConfig
 
@@ -256,7 +256,7 @@ class _DecoderBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-class AttentionUNetForSemanticSegmentation(PretrainedModel):
+class AttentionUNetForSemanticSegmentation(SemanticSegmentationModel):
     r"""Attention U-Net for medical image segmentation (Oktay et al., MIDL 2018).
 
     A U-Net variant that inserts a soft **attention gate** on every skip

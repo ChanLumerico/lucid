@@ -315,7 +315,7 @@ def gpt2_xlarge(
 # ModelFactory protocol predates the weights system and names only pretrained
 # + **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="causal-lm",
+    task="language-modeling",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2LMHeadModel,
@@ -374,7 +374,7 @@ def gpt2_small_lm(
 # ModelFactory protocol predates the weights system and names only pretrained
 # + **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="causal-lm",
+    task="language-modeling",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2LMHeadModel,
@@ -432,7 +432,7 @@ def gpt2_medium_lm(
 # ModelFactory protocol predates the weights system and names only pretrained
 # + **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="causal-lm",
+    task="language-modeling",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2LMHeadModel,
@@ -490,7 +490,7 @@ def gpt2_large_lm(
 # ModelFactory protocol predates the weights system and names only pretrained
 # + **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="causal-lm",
+    task="language-modeling",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2LMHeadModel,

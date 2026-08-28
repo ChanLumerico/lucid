@@ -19,6 +19,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import LanguageModelingModel, SequenceClassificationModel, TokenClassificationModel
 from lucid.models._mixins import MaskedLMMixin
 from lucid.models._output import (
     BaseModelOutputWithPooling,
@@ -511,7 +512,7 @@ class _RoFormerOnlyMLMHead(nn.Module):
         return cast(Tensor, self.predictions(x))
 
 
-class RoFormerForMaskedLM(PretrainedModel, MaskedLMMixin):
+class RoFormerForMaskedLM(LanguageModelingModel, MaskedLMMixin):
     r"""RoFormer with a tied masked-language-modeling head.
 
     Wraps :class:`RoFormerModel` with the BERT-style two-layer projection
@@ -603,7 +604,7 @@ class RoFormerForMaskedLM(PretrainedModel, MaskedLMMixin):
         return MaskedLMOutput(logits=prediction_scores, loss=loss)
 
 
-class RoFormerForSequenceClassification(PretrainedModel):
+class RoFormerForSequenceClassification(SequenceClassificationModel):
     r"""RoFormer with a pooled-CLS sequence-classification head.
 
     Wraps :class:`RoFormerModel` with the reference's own classification
@@ -710,7 +711,7 @@ class RoFormerForSequenceClassification(PretrainedModel):
         return MaskedLMOutput(logits=logits, loss=loss)
 
 
-class RoFormerForTokenClassification(PretrainedModel, MaskedLMMixin):
+class RoFormerForTokenClassification(TokenClassificationModel, MaskedLMMixin):
     r"""RoFormer with a per-token classification head.
 
     Wraps :class:`RoFormerModel` with a dropout-regularised linear
@@ -812,7 +813,7 @@ class RoFormerForTokenClassification(PretrainedModel, MaskedLMMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class RoFormerForMultipleChoice(PretrainedModel):
+class RoFormerForMultipleChoice(SequenceClassificationModel):
     r"""RoFormer with a per-choice multiple-choice classification head.
 
     Wraps :class:`RoFormerModel` with a per-choice CLS classifier.  Input
@@ -939,7 +940,7 @@ class RoFormerForMultipleChoice(PretrainedModel):
         return MaskedLMOutput(logits=logits, loss=loss)
 
 
-class RoFormerForQuestionAnswering(PretrainedModel):
+class RoFormerForQuestionAnswering(SequenceClassificationModel):
     r"""RoFormer with a 2-way span head for extractive question answering.
 
     Wraps :class:`RoFormerModel` with a single linear of output width 2,

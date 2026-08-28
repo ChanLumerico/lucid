@@ -26,6 +26,8 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import LanguageModelingModel
+from lucid.models._tasks import SequenceClassificationModel
 from lucid.models._mixins import CausalLMMixin
 from lucid.models._output import (
     BaseModelOutput,
@@ -396,7 +398,7 @@ class GPTModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class GPTLMHeadModel(PretrainedModel, CausalLMMixin):
+class GPTLMHeadModel(LanguageModelingModel, CausalLMMixin):
     r"""GPT-1 with a tied causal-language-modeling head.
 
     Wraps :class:`GPTModel` with an output linear whose weight matrix is
@@ -509,7 +511,7 @@ class GPTLMHeadModel(PretrainedModel, CausalLMMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class GPTForSequenceClassification(PretrainedModel):
+class GPTForSequenceClassification(SequenceClassificationModel):
     r"""GPT-1 with a last-token sequence-classification head.
 
     Wraps :class:`GPTModel` with a dropout-regularised linear classifier
@@ -709,7 +711,7 @@ class _GPTMultipleChoiceHead(nn.Module):
         return cast(Tensor, self.summary(pooled)).reshape(N, C)
 
 
-class GPTDoubleHeadsModel(PretrainedModel):
+class GPTDoubleHeadsModel(LanguageModelingModel):
     r"""GPT-1 + LM head + multiple-choice classification head.
 
     Implements the Radford 2018 §3.3 multi-task fine-tuning recipe.  Used

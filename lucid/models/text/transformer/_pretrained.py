@@ -155,7 +155,7 @@ def transformer_large(
 
 
 @register_model(
-    task="seq2seq-lm",
+    task="language-modeling",
     family="transformer",
     model_type="transformer",
     model_class=TransformerForSeq2SeqLM,
@@ -218,7 +218,7 @@ def transformer_base_seq2seq(
 
 
 @register_model(
-    task="seq2seq-lm",
+    task="language-modeling",
     family="transformer",
     model_type="transformer",
     model_class=TransformerForSeq2SeqLM,

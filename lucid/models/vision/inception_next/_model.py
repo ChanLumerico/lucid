@@ -38,6 +38,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._utils._classification import DropPath
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.inception_next._config import InceptionNeXtConfig
@@ -414,7 +415,7 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class InceptionNeXtForImageClassification(PretrainedModel):
+class InceptionNeXtForImageClassification(ImageClassificationModel):
     r"""InceptionNeXt with an MLP classification head (Yu et al., 2024).
 
     Wraps the same trunk as :class:`InceptionNeXt` (patchify stem +

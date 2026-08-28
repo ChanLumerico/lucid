@@ -33,6 +33,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models._utils._classification import DropPath
@@ -346,7 +347,7 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class ConvNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class ConvNeXtForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""ConvNeXt with a linear classification head (Liu et al., 2022).
 
     Wraps the same four-stage trunk as :class:`ConvNeXt` (patchify stem

@@ -167,10 +167,12 @@ export interface ApiModule extends DocstringParsed {
    *  the same MathText pipeline as docstring extended-description
    *  sections on family-root index pages. */
   theory?: string;
-  /** HF-style task identifiers (``"image-classification"``,
-   *  ``"fill-mask"``, …) inferred at build time from the family's
-   *  ``*For*`` task-wrapper class names.  Rendered as coloured pill
-   *  badges on the family card. */
+  /** The tasks this family registers — one or more of the eight tags in
+   *  ``lucid/models/_tasks.py`` (``"image-classification"``,
+   *  ``"language-modeling"``, …).  Read at build time from each
+   *  factory's ``@register_model(task=...)``, not re-derived from class
+   *  names, so the pills always say what the framework says.  Rendered
+   *  as coloured pill badges on the family card. */
   tasks?: string[];
 }
 

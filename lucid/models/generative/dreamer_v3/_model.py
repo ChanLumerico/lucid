@@ -48,6 +48,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import WorldModelingModel
 from lucid.models._output import ModelOutput
 from lucid.models.generative._actor import Actor
 from lucid.models.generative._pixel_nets import DenseHead, PixelDecoder, PixelEncoder
@@ -494,7 +495,7 @@ class DreamerV3Model(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class DreamerV3ForWorldModeling(PretrainedModel):
+class DreamerV3ForWorldModeling(WorldModelingModel):
     r"""DreamerV3 with its world-model, actor and critic objectives.
 
     Parameters

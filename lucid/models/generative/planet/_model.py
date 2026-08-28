@@ -34,6 +34,7 @@ from typing import ClassVar, cast, override
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import WorldModelingModel
 from lucid.models._output import ModelOutput
 from lucid.models.generative._pixel_nets import DenseHead, PixelDecoder, PixelEncoder
 from lucid.models.generative._rssm import RSSM, RSSMState, rssm_kl
@@ -302,7 +303,7 @@ class PlaNetModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class PlaNetForWorldModeling(PretrainedModel):
+class PlaNetForWorldModeling(WorldModelingModel):
     r"""PlaNet with the variational training objective.
 
     Wraps :class:`PlaNetModel` with the bound of Hafner et al., 2019:

@@ -24,6 +24,7 @@ import lucid
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import GenerationOutput, NormalizingFlowOutput
 from lucid.models._utils._generative import (
     resolve_generation_device,
@@ -327,7 +328,7 @@ class NICEModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class NICEForImageGeneration(PretrainedModel):
+class NICEForImageGeneration(ImageGenerationModel):
     r"""NICE with the exact maximum-likelihood loss and ``.generate()``.
 
     Wraps :class:`NICEModel` with the paper's training objective — plain

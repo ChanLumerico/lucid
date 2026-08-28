@@ -18,7 +18,7 @@ class _BaseAutoClass:
     r"""Internal mixin shared by every public ``AutoModelFor*`` shell.
 
     Concrete subclasses set a single class variable, ``_task``, naming the
-    task tag (``"image-classification"``, ``"causal-lm"``, …).  The shared
+    task tag (``"image-classification"``, ``"language-modeling"``, …).  The shared
     :meth:`from_pretrained` implementation then resolves a registered model
     name (or a local directory) through the registry and verifies that the
     registry entry's declared task matches ``_task``.
@@ -27,8 +27,8 @@ class _BaseAutoClass:
     ----------
     _task : ClassVar[str]
         Task tag every subclass must override.  Used to gate registry
-        lookups so that, for example, ``AutoModelForCausalLM`` refuses to
-        return an image-classification head.
+        lookups so that, for example, ``AutoModelForLanguageModeling``
+        refuses to return an image-classification head.
 
     Notes
     -----
@@ -527,82 +527,34 @@ class AutoModelForSemanticSegmentation(_BaseAutoClass):
     _task: ClassVar[str] = "semantic-segmentation"
 
 
-class AutoModelForCausalLM(_BaseAutoClass):
-    r"""Auto-dispatching wrapper that loads a causal (left-to-right) LM.
+class AutoModelForLanguageModeling(_BaseAutoClass):
+    r"""Auto-dispatching wrapper that loads a language model.
 
-    Resolves names like ``"gpt"`` / ``"gpt2_small"`` to their concrete
-    ``{Family}LMHeadModel`` subclass.  The model is suitable for
-    next-token prediction and autoregressive generation via
-    :meth:`CausalLMMixin.generate`.
+    Covers the masked, causal and sequence-to-sequence objectives, which
+    were three tasks until they were recognised as one — each trains a
+    language model, and what differs is which positions are visible when
+    a token is predicted.
 
     Notes
     -----
-    The forward returns a :class:`CausalLMOutput` with ``logits`` shaped
-    ``(B, T, vocab_size)`` and optionally a ``past_key_values`` tuple for
-    cache-friendly decoding.  Models tagged ``"causal-lm"`` typically
-    expose ``config.vocab_size`` / ``pad_token_id`` / ``bos_token_id`` /
-    ``eos_token_id``.
+    The three objectives keep their own output types
+    (:class:`MaskedLMOutput`, :class:`CausalLMOutput`,
+    :class:`Seq2SeqLMOutput`), and **the forward signatures are not
+    interchangeable** — an encoder-decoder model requires
+    ``decoder_input_ids`` as a second positional argument where a causal
+    model takes only ``input_ids``.  This class resolves a name to a
+    class; it does not promise you can call two of them the same way.
+    See :mod:`lucid.models._tasks`.
 
     Examples
     --------
-    >>> from lucid.models import AutoModelForCausalLM
-    >>> model = AutoModelForCausalLM.from_pretrained("gpt")
+    >>> from lucid.models import AutoModelForLanguageModeling
+    >>> model = AutoModelForLanguageModeling.from_pretrained("gpt")
     >>> type(model).__name__
     'GPTLMHeadModel'
     """
 
-    _task: ClassVar[str] = "causal-lm"
-
-
-class AutoModelForMaskedLM(_BaseAutoClass):
-    r"""Auto-dispatching wrapper that loads a masked-LM model.
-
-    Resolves names like ``"bert_base_mlm"`` / ``"roformer_mlm"`` to their
-    concrete ``{Family}ForMaskedLM`` subclass — bidirectional models
-    trained with the masked-token reconstruction objective.
-
-    Notes
-    -----
-    The forward returns a :class:`MaskedLMOutput` with ``logits`` of shape
-    ``(B, T, vocab_size)``.  Subclasses use
-    :meth:`MaskedLMMixin.compute_lm_loss` to reduce against ``(B, T)``
-    label tensors with ``ignore_index=-100`` for non-masked positions.
-
-    Examples
-    --------
-    >>> from lucid.models import AutoModelForMaskedLM
-    >>> model = AutoModelForMaskedLM.from_pretrained("bert_base_mlm")
-    >>> type(model).__name__
-    'BERTForMaskedLM'
-    """
-
-    _task: ClassVar[str] = "masked-lm"
-
-
-class AutoModelForSeq2SeqLM(_BaseAutoClass):
-    r"""Auto-dispatching wrapper that loads a seq2seq (encoder-decoder) model.
-
-    Covers translation / summarisation heads — currently the Vaswani
-    Transformer family (``transformer_base_seq2seq`` /
-    ``transformer_large_seq2seq``).  T5, BART, and mBART are the natural
-    future consumers of this Auto class.
-
-    Notes
-    -----
-    The forward returns a :class:`Seq2SeqLMOutput` carrying decoder
-    ``logits``, optional decoder hidden states / attentions, and the
-    encoder's outputs so callers can cache them across multiple decoder
-    passes.
-
-    Examples
-    --------
-    >>> from lucid.models import AutoModelForSeq2SeqLM
-    >>> model = AutoModelForSeq2SeqLM.from_pretrained("transformer_base_seq2seq")
-    >>> type(model).__name__
-    'TransformerForSeq2SeqLM'
-    """
-
-    _task: ClassVar[str] = "seq2seq-lm"
+    _task: ClassVar[str] = "language-modeling"
 
 
 class AutoModelForSequenceClassification(_BaseAutoClass):
@@ -651,29 +603,6 @@ class AutoModelForTokenClassification(_BaseAutoClass):
     """
 
     _task: ClassVar[str] = "token-classification"
-
-
-class AutoModelForQuestionAnswering(_BaseAutoClass):
-    r"""Auto-dispatching wrapper that loads a SQuAD-style QA head.
-
-    Resolves to ``{Family}ForQuestionAnswering`` across BERT / RoFormer —
-    models that emit per-token start / end logits over the input sequence.
-
-    Notes
-    -----
-    The forward returns an output with ``start_logits`` and ``end_logits``
-    of shape ``(B, T)`` each.  Inference picks the (start, end) span that
-    maximises ``start_logits[s] + end_logits[e]`` subject to ``s <= e``.
-
-    Examples
-    --------
-    >>> from lucid.models import AutoModelForQuestionAnswering
-    >>> model = AutoModelForQuestionAnswering.from_pretrained("bert_base_qa")
-    >>> type(model).__name__
-    'BERTForQuestionAnswering'
-    """
-
-    _task: ClassVar[str] = "question-answering"
 
 
 class AutoModelForImageGeneration(_BaseAutoClass):
@@ -731,32 +660,3 @@ class AutoModelForWorldModeling(_BaseAutoClass):
     _task: ClassVar[str] = "world-modeling"
 
 
-class AutoModelForZeroShotImageClassification(_BaseAutoClass):
-    r"""Auto-dispatching wrapper that loads an open-vocabulary classifier.
-
-    Resolves names like ``"clip_vit_base_32_zero_shot"`` to their
-    concrete ``{Family}ForZeroShotImageClassification`` subclass.
-
-    "Zero-shot" here is not a fine-tuning regime — nothing is trained and
-    there is no head. The classes arrive at call time as tokenised
-    prompts, so the label set is an argument rather than a property of
-    the weights, and two callers can ask the same model different
-    questions without either of them touching it.
-
-    Notes
-    -----
-    The forward therefore takes two tensors: the images and the candidate
-    prompts. Their batch dimensions are independent — ``B`` images scored
-    against ``P`` prompts yield ``(B, P)`` logits — unlike the paired
-    batches the contrastive objective is trained on.
-
-    Examples
-    --------
-    >>> from lucid.models import AutoModelForZeroShotImageClassification
-    >>> model = AutoModelForZeroShotImageClassification.from_pretrained(
-    ...     "clip_vit_base_32_zero_shot")
-    >>> type(model).__name__
-    'CLIPForZeroShotImageClassification'
-    """
-
-    _task: ClassVar[str] = "zero-shot-image-classification"

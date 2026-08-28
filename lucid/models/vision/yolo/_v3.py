@@ -51,7 +51,8 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import ModelConfig, PretrainedModel
+from lucid.models._base import ModelConfig
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
@@ -791,7 +792,7 @@ def _yolov3_loss(
 # ---------------------------------------------------------------------------
 
 
-class YOLOV3ForObjectDetection(PretrainedModel):
+class YOLOV3ForObjectDetection(ObjectDetectionModel):
     r"""YOLOv3 multi-scale object detector (Redmon & Farhadi, 2018).
 
     Adds a 53-layer **Darknet-53** backbone (residual connections, more
@@ -1070,7 +1071,7 @@ class YOLOV3ForObjectDetection(PretrainedModel):
 
 
 @final
-class _YOLOV3Tiny(PretrainedModel):
+class _YOLOV3Tiny(ObjectDetectionModel):
     """YOLOv3-Tiny — 2-scale lightweight variant.
 
     Uses _Darknet53Tiny backbone (6 conv stages + maxpool, no residuals)

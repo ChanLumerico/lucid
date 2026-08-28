@@ -462,7 +462,7 @@ def bert_large(
 # ModelFactory protocol predates the weights system and names only pretrained +
 # **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="masked-lm",
+    task="language-modeling",
     family="bert",
     model_type="bert",
     model_class=BERTForMaskedLM,
@@ -524,7 +524,7 @@ def bert_base_mlm(
 # ModelFactory protocol predates the weights system and names only pretrained +
 # **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="masked-lm",
+    task="language-modeling",
     family="bert",
     model_type="bert",
     model_class=BERTForMaskedLM,
@@ -802,7 +802,7 @@ def bert_base_token_cls(
 # ModelFactory protocol predates the weights system and names only pretrained +
 # **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="question-answering",
+    task="sequence-classification",
     family="bert",
     model_type="bert",
     model_class=BERTForQuestionAnswering,
@@ -869,7 +869,7 @@ def bert_base_qa(
 # reason: bert_large_qa adds a typed weights= kwarg (BERTLargeQAWeights); the ModelFactory
 # protocol predates the weights system and names only pretrained + **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="question-answering",
+    task="sequence-classification",
     family="bert",
     model_type="bert",
     model_class=BERTForQuestionAnswering,

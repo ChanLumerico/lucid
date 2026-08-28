@@ -288,60 +288,38 @@ function firstParagraph(text: string): string {
 }
 
 // Pretty-print a task identifier: ``image-classification`` →
-// ``Image Classification``.  Specific multi-word acronyms get manual
-// overrides so casing matches paper convention.
+// ``Image Classification``.  The keys are the eight tags declared in
+// ``lucid/models/_tasks.py`` — the build reads each family's registered
+// ``task=`` rather than re-deriving one from class names, so this table
+// and the framework cannot drift apart the way they had.
 const TASK_LABEL_OVERRIDES: Record<string, string> = {
-  "fill-mask":                  "Fill-Mask",
-  "text2text-generation":       "Text-to-Text Generation",
-  "image-to-image":             "Image-to-Image",
-  "next-sentence-prediction":   "Next Sentence Prediction",
-  "masked-image-modeling":      "Masked Image Modeling",
-  "image-classification":       "Image Classification",
-  "object-detection":           "Object Detection",
-  "instance-segmentation":      "Instance Segmentation",
-  "semantic-segmentation":      "Semantic Segmentation",
-  "panoptic-segmentation":      "Panoptic Segmentation",
-  "image-generation":           "Image Generation",
-  "world-modeling":             "World Modeling",
-  "zero-shot-image-classification": "Zero-Shot Image Classification",
-  "text-generation":            "Text Generation",
-  "text-classification":        "Text Classification",
-  "token-classification":       "Token Classification",
-  "question-answering":         "Question Answering",
-  "multiple-choice":            "Multiple Choice",
-  "pretraining":                "Pre-training",
+  "image-classification":     "Image Classification",
+  "image-generation":         "Image Generation",
+  "object-detection":         "Object Detection",
+  "semantic-segmentation":    "Semantic Segmentation",
+  "sequence-classification":  "Sequence Classification",
+  "token-classification":     "Token Classification",
+  "language-modeling":        "Language Modeling",
+  "world-modeling":           "World Modeling",
 };
 
 // Task → swatch slug.  The swatch values themselves live in globals.css
 // as ``--color-task-<slug>`` — see the "Task-tag palette" block there.
-// To re-theme a category, edit the CSS swatches.  To add a new task, add
-// one row here pointing at an existing swatch (or define a new swatch in
-// CSS first).  Adjacent swatches are intentionally separated within each
-// category so neighbouring task tags on the same card never look alike.
+// To re-theme a category, edit the CSS swatches.  Adjacent swatches are
+// intentionally separated within each category so neighbouring task tags
+// on the same card never look alike.
 const TASK_SWATCH: Record<string, string> = {
   // ── Vision (cool spectrum) ────────────────────────────────────────────────
   "image-classification":     "vision-1",
   "object-detection":         "vision-2",
-  "instance-segmentation":    "vision-3",
   "semantic-segmentation":    "vision-4",
-  "panoptic-segmentation":    "vision-5",
-  "image-to-image":           "vision-7",
-  "masked-image-modeling":    "vision-6",
   // ── Text (warm spectrum) ──────────────────────────────────────────────────
-  "fill-mask":                "text-1",
-  "text-generation":          "text-2",
-  "text2text-generation":     "text-3",
-  "text-classification":      "text-4",
+  "language-modeling":        "text-2",
+  "sequence-classification":  "text-4",
   "token-classification":     "text-5",
-  "question-answering":       "text-6",
-  "next-sentence-prediction": "text-7",
-  "multiple-choice":          "text-8",
   // ── Generative ────────────────────────────────────────────────────────────
   "image-generation":         "generative-1",
   "world-modeling":           "generative-2",
-  // ── Multi / meta ──────────────────────────────────────────────────────────
-  "pretraining":              "meta-1",
-  "zero-shot-image-classification": "meta-2",
 };
 
 const TASK_SWATCH_DEFAULT = "meta-1";

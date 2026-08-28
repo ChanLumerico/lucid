@@ -36,7 +36,7 @@ from typing import ClassVar, cast, final, override
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import SemanticSegmentationModel
 from lucid.models._output import SemanticSegmentationOutput
 from lucid.models.vision.fcn._config import FCNConfig
 
@@ -243,7 +243,7 @@ class FCNOutput(SemanticSegmentationOutput):
     aux_logits: Tensor | None = None
 
 
-class FCNForSemanticSegmentation(PretrainedModel):
+class FCNForSemanticSegmentation(SemanticSegmentationModel):
     r"""Fully Convolutional Network for semantic segmentation (Long et al., CVPR 2015).
 
     The original deep-learning semantic segmentation architecture: a

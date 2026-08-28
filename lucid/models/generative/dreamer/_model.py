@@ -36,6 +36,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import WorldModelingModel
 from lucid.models._output import ModelOutput
 from lucid.models.generative._dists import OneHotCategorical
 from lucid.models.generative._pixel_nets import DenseHead, PixelDecoder, PixelEncoder
@@ -650,7 +651,7 @@ class DreamerModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class DreamerForWorldModeling(PretrainedModel):
+class DreamerForWorldModeling(WorldModelingModel):
     r"""Dreamer with its world-model, actor and critic objectives.
 
     Three losses come out of one forward pass:

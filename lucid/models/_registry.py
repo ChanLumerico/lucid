@@ -68,8 +68,9 @@ class _RegistryEntry:
     factory : ModelFactory
         The decorated function that builds the model.
     task : str
-        Task tag (``"base"``, ``"image-classification"``, ``"causal-lm"``,
-        …) used by Auto classes for typed dispatch.
+        Task tag (``"base"``, ``"image-classification"``,
+        ``"language-modeling"``, …) used by Auto classes for typed
+        dispatch.  See :mod:`lucid.models._tasks` for the eight.
     family : str
         Architecture family identifier (e.g. ``"resnet"``, ``"bert"``).
         Inferred from the factory module path when not supplied.
@@ -157,12 +158,15 @@ def register_model(
     Parameters
     ----------
     task : str, default="base"
-        Task tag used by Auto classes for typed dispatch.  Common values:
-        ``"base"``, ``"image-classification"``, ``"object-detection"``,
-        ``"semantic-segmentation"``, ``"causal-lm"``, ``"masked-lm"``,
-        ``"seq2seq-lm"``, ``"sequence-classification"``,
-        ``"token-classification"``, ``"question-answering"``,
-        ``"image-generation"``.
+        Task tag used by Auto classes for typed dispatch.  One of
+        ``"base"`` (a backbone with no head) or the eight task tags
+        declared in :mod:`lucid.models._tasks`:
+        ``"image-classification"``, ``"image-generation"``,
+        ``"object-detection"``, ``"semantic-segmentation"``,
+        ``"sequence-classification"``, ``"token-classification"``,
+        ``"language-modeling"``, ``"world-modeling"``.  The tag a factory
+        passes must equal its ``model_class.task``, which the suite
+        asserts — the two used to be independent strings and drifted.
     family : str or None, optional
         Architecture family identifier (e.g. ``"resnet"``).  When ``None``,
         inferred from the factory's parent module name (the

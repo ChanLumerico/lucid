@@ -22,6 +22,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.diffeq import odeint
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import GenerationOutput, ModelOutput
 from lucid.models.generative.ddpm._config import DDPMConfig
 from lucid.models.generative.ddpm._model import DDPMUNet
@@ -215,7 +216,7 @@ class ScoreSDEModel(PretrainedModel):
         )
 
 
-class ScoreSDEForImageGeneration(PretrainedModel):
+class ScoreSDEForImageGeneration(ImageGenerationModel):
     r"""Score-SDE with its objective and the three samplers.
 
     Parameters

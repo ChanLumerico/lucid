@@ -117,7 +117,7 @@ def roformer(
 # ModelFactory protocol predates the weights system and names only pretrained +
 # **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="masked-lm",
+    task="language-modeling",
     family="roformer",
     model_type="roformer",
     model_class=RoFormerForMaskedLM,

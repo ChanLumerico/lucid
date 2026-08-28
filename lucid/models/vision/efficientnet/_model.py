@@ -34,6 +34,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models._utils._common import make_divisible as _make_divisible
@@ -372,7 +373,7 @@ class EfficientNet(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class EfficientNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class EfficientNetForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""EfficientNet with global-average-pooled linear classification head.
 
     Combines an :class:`EfficientNet` backbone with the standard

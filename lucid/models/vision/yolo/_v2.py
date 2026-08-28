@@ -70,7 +70,8 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import ModelConfig, PretrainedModel
+from lucid.models._base import ModelConfig
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
@@ -328,7 +329,7 @@ def _space_to_depth(x: Tensor, block_size: int) -> Tensor:
 # ---------------------------------------------------------------------------
 
 
-class YOLOV2ForObjectDetection(PretrainedModel):
+class YOLOV2ForObjectDetection(ObjectDetectionModel):
     r"""YOLOv2 / YOLO9000 object detector (Redmon & Farhadi, CVPR 2017).
 
     The successor to YOLOv1 with several decisive upgrades: a deeper

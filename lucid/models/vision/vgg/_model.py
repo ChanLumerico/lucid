@@ -19,6 +19,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.vgg._config import VGGConfig
@@ -156,7 +157,7 @@ class VGG(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class VGGForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class VGGForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""VGG with two 4096-dim fully-connected layers and a linear classifier.
 
     Combines a :class:`VGG` convolutional backbone with the standard

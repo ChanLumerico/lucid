@@ -34,6 +34,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.lenet._config import LeNetConfig
@@ -194,7 +195,7 @@ class LeNet(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class LeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class LeNetForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""LeNet-5 with F6 fully-connected layer and final classifier.
 
     Combines a :class:`LeNet` convolutional trunk with the original

@@ -37,6 +37,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._utils._classification import DropPath
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.pvt._config import PVTConfig
@@ -495,7 +496,7 @@ class PVT(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class PVTForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class PVTForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""PVT v2 with a linear classification head (Wang et al., 2022).
 
     Wraps the same hierarchical four-stage trunk as :class:`PVT`

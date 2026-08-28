@@ -388,8 +388,12 @@ def _check_models(
                 continue
 
             # MZ040: every non-output, non-config public class in _model.py
-            # should inherit from PretrainedModel.
-            if "PretrainedModel" not in bases:
+            # should inherit from PretrainedModel — directly for a bare
+            # backbone, or through one of the eight task bases for a
+            # head-bearing wrapper.  Checking the name alone flagged all
+            # eighty-two wrappers the moment the task bases were
+            # introduced, because AST cannot follow the indirection.
+            if not ({"PretrainedModel"} | _TASK_BASES) & set(bases):
                 issues.append(
                     Issue(
                         "warning",
@@ -397,7 +401,7 @@ def _check_models(
                         fp,
                         cls.lineno,
                         f"{cls.name}: public class in {fp.name} should inherit from "
-                        f"PretrainedModel.  Bases={bases}.",
+                        f"PretrainedModel or a task base.  Bases={bases}.",
                     )
                 )
 
@@ -537,6 +541,22 @@ def iter_families(
             if family_filter and fam.name != family_filter:
                 continue
             yield fam
+
+
+#: The task bases from ``lucid.models._tasks``.  A wrapper reaches
+#: ``PretrainedModel`` through one of these, so MZ040 accepts them as
+#: evidence of the contract just as it accepts the direct base.
+_TASK_BASES = {
+    "TaskModel",
+    "ImageClassificationModel",
+    "ImageGenerationModel",
+    "ObjectDetectionModel",
+    "SemanticSegmentationModel",
+    "SequenceClassificationModel",
+    "TokenClassificationModel",
+    "LanguageModelingModel",
+    "WorldModelingModel",
+}
 
 
 def _all_family_names() -> list[str]:

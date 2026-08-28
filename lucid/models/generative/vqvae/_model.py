@@ -39,6 +39,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import GenerationOutput, ModelOutput
 from lucid.models._utils._generative import (
     generative_activation,
@@ -413,7 +414,7 @@ class VQVAEModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class VQVAEForImageGeneration(PretrainedModel):
+class VQVAEForImageGeneration(ImageGenerationModel):
     r"""VQ-VAE with the full training objective and a codebook sampler.
 
     Wraps :class:`VQVAEModel` with the three-term objective of van den

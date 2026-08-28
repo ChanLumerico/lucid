@@ -55,7 +55,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import make_divisible
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
     AnchorGenerator,
@@ -500,7 +500,7 @@ def _focal_loss(
 # ---------------------------------------------------------------------------
 
 
-class EfficientDetForObjectDetection(PretrainedModel):
+class EfficientDetForObjectDetection(ObjectDetectionModel):
     r"""EfficientDet object detector (Tan et al., CVPR 2020).
 
     A family of compound-scaled single-stage detectors combining an

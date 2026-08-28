@@ -49,7 +49,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import SemanticSegmentationModel
 from lucid.models._output import SemanticSegmentationOutput
 from lucid.models.vision.maskformer._config import MaskFormerConfig
 
@@ -822,7 +822,7 @@ class MaskFormerOutput(SemanticSegmentationOutput):
     masks_queries_logits: Tensor | None = None
 
 
-class MaskFormerForSemanticSegmentation(PretrainedModel):
+class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
     r"""MaskFormer semantic-segmentation model (Cheng et al., NeurIPS 2021).
 
     Recasts semantic segmentation as **mask classification**: instead of

@@ -14,6 +14,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.resnext._config import ResNeXtConfig
@@ -322,7 +323,7 @@ class ResNeXt(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class ResNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class ResNeXtForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""ResNeXt image classifier (backbone + GAP + linear head).
 
     Combines a :class:`ResNeXt` backbone with the standard ImageNet

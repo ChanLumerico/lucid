@@ -37,6 +37,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import DiffusionModelOutput, GenerationOutput
 from lucid.models._utils._generative import (
     exact_divergence,
@@ -1425,7 +1426,7 @@ class RectifiedFlowModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class RectifiedFlowForImageGeneration(PretrainedModel):
+class RectifiedFlowForImageGeneration(ImageGenerationModel):
     r"""Rectified Flow with the training loss, reflow and ``.generate()``.
 
     ``forward(x)`` returns a :class:`DiffusionModelOutput` whose ``loss``

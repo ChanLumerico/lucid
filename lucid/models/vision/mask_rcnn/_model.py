@@ -52,7 +52,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._output import InstanceSegmentationOutput
 from lucid.models._utils._detection import (
     BalancedPositiveNegativeSampler,
@@ -213,7 +213,7 @@ class _MaskRoIHeads(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-class MaskRCNNForObjectDetection(PretrainedModel):
+class MaskRCNNForObjectDetection(ObjectDetectionModel):
     r"""Mask R-CNN with a ResNet-50-FPN backbone (He et al., ICCV 2017).
 
     The two-stage instance-segmentation detector in its modern reference

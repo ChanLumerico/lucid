@@ -1443,12 +1443,6 @@
       "module": "lucid.models"
     }
   ],
-  "lucid.models._auto.AutoModelForCausalLM": [
-    {
-      "kind": "module",
-      "module": "lucid.models"
-    }
-  ],
   "lucid.models._auto.AutoModelForImageClassification": [
     {
       "kind": "module",
@@ -1461,7 +1455,7 @@
       "module": "lucid.models"
     }
   ],
-  "lucid.models._auto.AutoModelForMaskedLM": [
+  "lucid.models._auto.AutoModelForLanguageModeling": [
     {
       "kind": "module",
       "module": "lucid.models"
@@ -1473,19 +1467,7 @@
       "module": "lucid.models"
     }
   ],
-  "lucid.models._auto.AutoModelForQuestionAnswering": [
-    {
-      "kind": "module",
-      "module": "lucid.models"
-    }
-  ],
   "lucid.models._auto.AutoModelForSemanticSegmentation": [
-    {
-      "kind": "module",
-      "module": "lucid.models"
-    }
-  ],
-  "lucid.models._auto.AutoModelForSeq2SeqLM": [
     {
       "kind": "module",
       "module": "lucid.models"
@@ -1504,12 +1486,6 @@
     }
   ],
   "lucid.models._auto.AutoModelForWorldModeling": [
-    {
-      "kind": "module",
-      "module": "lucid.models"
-    }
-  ],
-  "lucid.models._auto.AutoModelForZeroShotImageClassification": [
     {
       "kind": "module",
       "module": "lucid.models"
@@ -1736,6 +1712,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models._tasks"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
     },
     {
@@ -1824,10 +1804,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.vision.attention_unet._model"
-    },
-    {
-      "kind": "module",
       "module": "lucid.models.vision.coatnet._model"
     },
     {
@@ -1852,31 +1828,11 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.vision.detr._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.efficientdet._model"
-    },
-    {
-      "kind": "module",
       "module": "lucid.models.vision.efficientformer._model"
     },
     {
       "kind": "module",
       "module": "lucid.models.vision.efficientnet._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.fast_rcnn._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.faster_rcnn._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.fcn._model"
     },
     {
       "kind": "module",
@@ -1900,18 +1856,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.vision.mask2former._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.mask_rcnn._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.maskformer._model"
-    },
-    {
-      "kind": "module",
       "module": "lucid.models.vision.maxvit._model"
     },
     {
@@ -1929,10 +1873,6 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.pvt._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.rcnn._model"
     },
     {
       "kind": "module",
@@ -1960,10 +1900,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.vision.unet._model"
-    },
-    {
-      "kind": "module",
       "module": "lucid.models.vision.vgg._model"
     },
     {
@@ -1973,22 +1909,6 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.xception._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.yolo._v1"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.yolo._v2"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.yolo._v3"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.yolo._v4"
     },
     {
       "kind": "module",

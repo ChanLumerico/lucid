@@ -438,67 +438,102 @@ class TestAutoModelTaskCoverage:
         assert entry.model_class is BERTForTokenClassification
 
     def test_question_answering_dispatch(self) -> None:
+        """Span extraction is a sequence-classification model here.
+
+        It had its own task until the taxonomy was collapsed; the head
+        reads a pooled representation and scores it, which is what the
+        surviving task describes.  The output type stays its own.
+        """
         from lucid.models import (
-            AutoModelForQuestionAnswering,
+            AutoModelForSequenceClassification,
             BERTForQuestionAnswering,
         )
         from lucid.models._registry import _registry_lookup
 
         entry = _registry_lookup(
-            "bert_base_qa", task=AutoModelForQuestionAnswering._task
+            "bert_base_qa", task=AutoModelForSequenceClassification._task
         )
         assert entry.model_class is BERTForQuestionAnswering
 
     def test_seq2seq_lm_dispatch(self) -> None:
         from lucid.models import (
-            AutoModelForSeq2SeqLM,
+            AutoModelForLanguageModeling,
             TransformerForSeq2SeqLM,
         )
         from lucid.models._registry import _registry_lookup
 
         entry = _registry_lookup(
-            "transformer_base_seq2seq", task=AutoModelForSeq2SeqLM._task
+            "transformer_base_seq2seq", task=AutoModelForLanguageModeling._task
         )
         assert entry.model_class is TransformerForSeq2SeqLM
 
     def test_no_task_has_zero_models(self) -> None:
-        """Sanity: every Auto class's task tag has ≥1 registered factory."""
-        from lucid.models import (
-            AutoModel,
-            AutoModelForCausalLM,
-            AutoModelForImageClassification,
-            AutoModelForMaskedLM,
-            AutoModelForObjectDetection,
-            AutoModelForQuestionAnswering,
-            AutoModelForSemanticSegmentation,
-            AutoModelForSeq2SeqLM,
-            AutoModelForSequenceClassification,
-            AutoModelForImageGeneration,
-            AutoModelForTokenClassification,
-            AutoModelForWorldModeling,
-        )
+        """Every Auto class's task tag has at least one registered factory.
+
+        The list is derived rather than written out.  It used to be
+        hardcoded and had already gone stale twice — ImageGeneration and
+        WorldModeling were both missing, so the guard passed while not
+        covering them.  A list of the things to check, maintained by hand
+        beside the things themselves, drifts silently in exactly the way
+        the check is supposed to catch.
+        """
+        import lucid.models as models
+        from lucid.models._auto import _BaseAutoClass
         from lucid.models._registry import list_models
 
         autos = [
-            AutoModel,
-            AutoModelForImageClassification,
-            AutoModelForObjectDetection,
-            AutoModelForSemanticSegmentation,
-            AutoModelForCausalLM,
-            AutoModelForMaskedLM,
-            AutoModelForSeq2SeqLM,
-            AutoModelForSequenceClassification,
-            AutoModelForTokenClassification,
-            AutoModelForQuestionAnswering,
-            # Both were absent: ImageGeneration predates this list's last
-            # edit, WorldModeling is new. The guard only works if every
-            # Auto class is in it.
-            AutoModelForImageGeneration,
-            AutoModelForWorldModeling,
+            getattr(models, n) for n in models.__all__
+            if isinstance(getattr(models, n), type)
+            and issubclass(getattr(models, n), _BaseAutoClass)
+            and getattr(models, n) is not _BaseAutoClass
         ]
+        assert autos, "no Auto classes found — the derivation itself broke"
         for auto_cls in autos:
             registered = list_models(task=auto_cls._task)
             assert len(registered) > 0, (
                 f"{auto_cls.__name__} has task={auto_cls._task!r} but no models "
                 f"are registered under it — dispatch hole."
             )
+
+    def test_every_registered_wrapper_has_a_task_base(self) -> None:
+        """A model registered under a task inherits that task's base.
+
+        This is the invariant the eight task bases exist to hold. Before
+        them every wrapper subclassed ``PretrainedModel`` directly, so
+        "what is this model for" was answerable only from the class name
+        — and the families predating the ``For<Task>`` convention
+        (``GPTLMHeadModel``, ``GPT2LMHeadModel``) answered it differently
+        from the rest.
+        """
+        from lucid.models._registry import _REGISTRY
+        from lucid.models._tasks import TaskModel
+
+        offenders = sorted(
+            {
+                entry.model_class.__name__
+                for entry in _REGISTRY.values()
+                if entry.task != "base"
+                and entry.model_class is not None
+                and not issubclass(entry.model_class, TaskModel)
+            }
+        )
+        assert not offenders, f"registered under a task but not a TaskModel: {offenders}"
+
+    def test_class_task_matches_the_tag_it_registers_under(self) -> None:
+        """The base's ``task`` and the registry tag are the same string.
+
+        They were three separate lists (class-name suffix, registry tag,
+        Auto shell) that nothing forced to agree.  Now the base carries
+        the tag and this asserts the factory did not override it with
+        another.
+        """
+        from lucid.models._registry import _REGISTRY
+
+        mismatched = [
+            (name, entry.model_class.__name__, entry.task, entry.model_class.task)
+            for name, entry in _REGISTRY.items()
+            if entry.task != "base"
+            and entry.model_class is not None
+            and getattr(entry.model_class, "task", None) != entry.task
+        ]
+        assert not mismatched, f"class.task disagrees with registry tag: {mismatched[:5]}"

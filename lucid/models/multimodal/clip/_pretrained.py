@@ -270,7 +270,7 @@ def clip_vit_large_14_336(pretrained: bool = False, **overrides: object) -> CLIP
 
 
 @register_model(
-    task="zero-shot-image-classification",
+    task="image-classification",
     family="clip",
     model_type="clip",
     model_class=CLIPForZeroShotImageClassification,
@@ -315,7 +315,7 @@ def clip_vit_base_32_zero_shot(
 
 
 @register_model(
-    task="zero-shot-image-classification",
+    task="image-classification",
     family="clip",
     model_type="clip",
     model_class=CLIPForZeroShotImageClassification,
@@ -360,7 +360,7 @@ def clip_vit_base_16_zero_shot(
 
 
 @register_model(
-    task="zero-shot-image-classification",
+    task="image-classification",
     family="clip",
     model_type="clip",
     model_class=CLIPForZeroShotImageClassification,
@@ -407,7 +407,7 @@ def clip_vit_large_14_zero_shot(
 
 
 @register_model(
-    task="zero-shot-image-classification",
+    task="image-classification",
     family="clip",
     model_type="clip",
     model_class=CLIPForZeroShotImageClassification,

@@ -24,6 +24,7 @@ from typing import ClassVar, cast, final, override
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.cspnet._config import CSPNetConfig
@@ -460,7 +461,7 @@ class CSPNet(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class CSPNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class CSPNetForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""CSPNet image classifier — backbone + GAP + dropout + linear head.
 
     Wraps a :class:`CSPNet` trunk and appends the timm-style

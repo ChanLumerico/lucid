@@ -31,6 +31,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._output import ModelOutput
 from lucid.models.multimodal.clip._towers import (
     ResidualAttentionBlock,
@@ -459,7 +460,7 @@ class CLIPModel(PretrainedModel):
         )
 
 
-class CLIPForZeroShotImageClassification(PretrainedModel):
+class CLIPForZeroShotImageClassification(ImageClassificationModel):
     """CLIP posed as a classifier, by writing the labels as sentences.
 
     Parameters

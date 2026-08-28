@@ -48,7 +48,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import SemanticSegmentationModel
 from lucid.models._output import SemanticSegmentationOutput
 from lucid.models.vision.unet._config import UNetConfig
 
@@ -258,7 +258,7 @@ class _DecoderBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-class UNetForSemanticSegmentation(PretrainedModel):
+class UNetForSemanticSegmentation(SemanticSegmentationModel):
     r"""U-Net encoder-decoder for semantic segmentation (Ronneberger et al., MICCAI 2015).
 
     The canonical encoder-decoder segmentation architecture.  A contracting

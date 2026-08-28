@@ -4,18 +4,26 @@
 
 from lucid.models._auto import (
     AutoConfig, AutoModel,
-    AutoModelForCausalLM, AutoModelForImageClassification,
+    AutoModelForImageClassification,
     AutoModelForImageGeneration,
-    AutoModelForMaskedLM, AutoModelForObjectDetection,
-    AutoModelForQuestionAnswering,
+    AutoModelForLanguageModeling,
+    AutoModelForObjectDetection,
     AutoModelForSemanticSegmentation,
-    AutoModelForSeq2SeqLM,
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
     AutoModelForWorldModeling,
-    AutoModelForZeroShotImageClassification,
 )
 from lucid.models._base   import ModelConfig, PretrainedModel
+# The eight tasks a wrapper can be built for.  Exported so a caller can
+# ask what a model is for (``isinstance(m, ImageClassificationModel)``)
+# without matching on the class name — see ``lucid.models._tasks``.
+from lucid.models._tasks import (
+    TaskModel,
+    ImageClassificationModel, ImageGenerationModel,
+    LanguageModelingModel, ObjectDetectionModel,
+    SemanticSegmentationModel, SequenceClassificationModel,
+    TokenClassificationModel, WorldModelingModel,
+)
 from lucid.models._output import (
     ModelOutput, BaseModelOutput, BaseModelOutputWithPooling,
     ImageClassificationOutput, ObjectDetectionOutput, InstanceSegmentationOutput,
@@ -472,6 +480,8 @@ from lucid.models.vision.yolo import (
 
 __all__ = [    # ── Infrastructure ────────────────────────────────────────────────────────
     "ModelConfig", "PretrainedModel",
+    # Task bases — one per registered task tag.
+    "TaskModel", "ImageClassificationModel", "ImageGenerationModel", "LanguageModelingModel", "ObjectDetectionModel", "SemanticSegmentationModel", "SequenceClassificationModel", "TokenClassificationModel", "WorldModelingModel",
     "LanguageModelConfig", "GenerativeModelConfig", "DiffusionModelConfig", "NormalizingFlowConfig",
     "ModelOutput", "BaseModelOutput", "BaseModelOutputWithPooling",
     "ImageClassificationOutput", "ObjectDetectionOutput", "InstanceSegmentationOutput",
@@ -480,14 +490,12 @@ __all__ = [    # ── Infrastructure ─────────────�
     "QuestionAnsweringOutput",
     "DiffusionModelOutput", "VAEOutput", "NormalizingFlowOutput", "GenerationOutput",
     "AutoConfig", "AutoModel",
-    "AutoModelForCausalLM", "AutoModelForImageClassification",
-    "AutoModelForMaskedLM", "AutoModelForObjectDetection", "AutoModelForSemanticSegmentation",
-    "AutoModelForSeq2SeqLM",
+    "AutoModelForImageClassification",
+    "AutoModelForObjectDetection", "AutoModelForSemanticSegmentation",
+    "AutoModelForLanguageModeling",
     "AutoModelForSequenceClassification", "AutoModelForTokenClassification",
-    "AutoModelForQuestionAnswering",
     "AutoModelForImageGeneration",
     "AutoModelForWorldModeling",
-    "AutoModelForZeroShotImageClassification",
     "CLIPConfig",
     "CLIPModel",
     "StableDiffusionConfig",

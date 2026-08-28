@@ -111,7 +111,7 @@ def gpt(
 # reason: gpt_lm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory
 # protocol predates the weights system and names only pretrained + **overrides.
 @register_model(  # type: ignore[arg-type]
-    task="causal-lm",
+    task="language-modeling",
     family="gpt",
     model_type="gpt",
     model_class=GPTLMHeadModel,

@@ -36,7 +36,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
     encode_boxes,
@@ -178,7 +178,7 @@ class _FCHead(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-class RCNNForObjectDetection(PretrainedModel):
+class RCNNForObjectDetection(ObjectDetectionModel):
     r"""R-CNN object detector (Girshick et al., CVPR 2014).
 
     The first deep-learning detector to demonstrate that ImageNet-pretrained

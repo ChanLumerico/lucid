@@ -34,6 +34,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput
 from lucid.models.vision.xception._config import XceptionConfig
@@ -506,7 +507,7 @@ class Xception(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class XceptionForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class XceptionForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""Xception with dropout + linear classification head.
 
     Combines an :class:`Xception` backbone with a dropout layer

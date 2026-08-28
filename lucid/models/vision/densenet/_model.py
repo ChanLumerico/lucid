@@ -36,6 +36,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.densenet._config import DenseNetConfig
@@ -378,7 +379,7 @@ class DenseNet(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class DenseNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class DenseNetForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""DenseNet image classifier (backbone + GAP + linear head).
 
     Combines a :class:`DenseNet` backbone with a global-average-pool

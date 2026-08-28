@@ -1514,48 +1514,54 @@ def _rst_math_to_markdown(text: str) -> str:
 # ``*For*`` classes — no per-Config bookkeeping needed.  Identifiers use
 # kebab-case to match Hugging Face Hub conventions so the same tags travel
 # unchanged if/when the docs cross-link to external repos.
-_TASK_SUFFIX_MAP: dict[str, str] = {
-    "ForImageClassification":      "image-classification",
-    "ForObjectDetection":          "object-detection",
-    "ForInstanceSegmentation":     "instance-segmentation",
-    "ForSemanticSegmentation":     "semantic-segmentation",
-    "ForPanopticSegmentation":     "panoptic-segmentation",
-    "ForImageGeneration":          "image-generation",
-    "ForImageToImage":             "image-to-image",
-    "ForMaskedImageModeling":      "masked-image-modeling",
-    "ForMaskedLM":                 "fill-mask",
-    "ForCausalLM":                 "text-generation",
-    "ForSeq2SeqLM":                "text2text-generation",
-    "ForSequenceClassification":   "text-classification",
-    "ForTokenClassification":      "token-classification",
-    "ForQuestionAnswering":        "question-answering",
-    "ForNextSentencePrediction":   "next-sentence-prediction",
-    "ForMultipleChoice":           "multiple-choice",
-    "ForPreTraining":              "pretraining",
-    "ForWorldModeling":            "world-modeling",
-    "ForZeroShotImageClassification": "zero-shot-image-classification",
-    # Alternative head-style naming (GPT / GPT-2 follow reference-framework
-    # conventions: ``GPTLMHeadModel`` rather than ``GPTForCausalLM``).
-    "LMHeadModel":                 "text-generation",
-    "DoubleHeadsModel":            "pretraining",
-}
 
 
-def _infer_tasks(members: list[dict[str, Any]]) -> list[str]:
-    """Scan a module's serialised members for ``*For*`` task wrappers and
-    return the list of distinct task identifiers, preserving first-seen
-    order so the JSON output is stable.  Returns an empty list when no
-    public task wrapper exists (e.g. raw-backbone-only families)."""
+def _extract_family_tasks(slug: str) -> list[str]:
+    """The tasks a family registers, read from its ``@register_model``.
+
+    The site used to re-derive this from class-name suffixes through a
+    table of its own, which made it a fourth task taxonomy beside the
+    class names, the registry tags and the ``AutoModelFor*`` shells —
+    and the four disagreed.  ``lucid.models._tasks`` is now the single
+    list, so the pills come from what each factory actually registers.
+
+    Parsed with ``ast`` rather than imported, like
+    :func:`_extract_family_meta`, because this script must not depend on
+    importing the Lucid runtime.  ``"base"`` is skipped: a backbone with
+    no head is not a task the reader is looking for.  Order follows the
+    source so the JSON stays stable.
+    """
+    import ast as _ast
+
+    family_dir = _slug_to_family_dir(slug)
+    if not family_dir.is_dir():
+        return []
+
     seen: list[str] = []
-    for m in members:
-        if m.get("kind") != "class":
+    for path in sorted(family_dir.glob("*.py")):
+        try:
+            tree = _ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
             continue
-        name = m.get("name", "")
-        for suffix, task in _TASK_SUFFIX_MAP.items():
-            if name.endswith(suffix) and not name.endswith("Output"):
-                if task not in seen:
-                    seen.append(task)
-                break
+        for node in _ast.walk(tree):
+            if not isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                continue
+            for dec in node.decorator_list:
+                if not isinstance(dec, _ast.Call):
+                    continue
+                fn = dec.func
+                name = (
+                    fn.id if isinstance(fn, _ast.Name)
+                    else (fn.attr if isinstance(fn, _ast.Attribute) else None)
+                )
+                if name != "register_model":
+                    continue
+                for kw in dec.keywords:
+                    if kw.arg != "task" or not isinstance(kw.value, _ast.Constant):
+                        continue
+                    task = kw.value.value
+                    if isinstance(task, str) and task != "base" and task not in seen:
+                        seen.append(task)
     return seen
 
 
@@ -2155,7 +2161,7 @@ def build_one(slug: str, griffe_path: str, loader: Any, parser: Any, sha: str) -
                     # ``*For*`` task-wrapper class names.  Surfaced on the
                     # family-leaf JSON's top level so family-root cards
                     # can render them next to the canonical name.
-                    tasks = _infer_tasks(data.get("members", []))
+                    tasks = _extract_family_tasks(slug)
                     if tasks:
                         data["tasks"] = tasks
             elif isinstance(obj, GriffeClass):

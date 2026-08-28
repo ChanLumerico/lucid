@@ -23,6 +23,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import transform_input_imagenet_to_tf
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput
 from lucid.models.vision.inception._config import InceptionConfig
@@ -606,7 +607,7 @@ class InceptionV3(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class InceptionV3ForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""Inception v3 image classifier with optional auxiliary classifier.
 
     Combines an :class:`InceptionV3` backbone with a global-average-pool

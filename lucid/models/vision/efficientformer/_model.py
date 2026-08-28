@@ -40,6 +40,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models._utils._classification import DropPath, LayerScale
@@ -661,7 +662,7 @@ class EfficientFormerOutput(ImageClassificationOutput):
     head_dist_logits: Tensor | None = None
 
 
-class EfficientFormerForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class EfficientFormerForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""EfficientFormer with a distilled dual classification head (Li et al., 2022).
 
     Wraps the same trunk as :class:`EfficientFormer` and adds a final

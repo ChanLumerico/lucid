@@ -36,7 +36,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import SemanticSegmentationModel
 from lucid.models._output import SemanticSegmentationOutput
 from lucid.models._utils._detection import (
     multi_scale_deformable_attention,
@@ -1431,7 +1431,7 @@ def _m2f_stage_loss(
     return _mean(cls_parts), _mean(ce_parts), _mean(dice_parts)
 
 
-class Mask2FormerForSemanticSegmentation(PretrainedModel):
+class Mask2FormerForSemanticSegmentation(SemanticSegmentationModel):
     r"""Mask2Former universal segmentation model (Cheng et al., CVPR 2022).
 
     A unified mask-classification architecture that achieves state-of-the-art

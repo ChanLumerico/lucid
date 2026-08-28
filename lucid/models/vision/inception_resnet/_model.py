@@ -48,6 +48,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput
 from lucid.models.vision.inception_resnet._config import InceptionResNetConfig
@@ -600,7 +601,7 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class InceptionResNetV2ForImageClassification(PretrainedModel):
+class InceptionResNetV2ForImageClassification(ImageClassificationModel):
     r"""Inception-ResNet v2 image classifier (backbone + GAP + dropout + linear).
 
     Combines an :class:`InceptionResNetV2` backbone with a

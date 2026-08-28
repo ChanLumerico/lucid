@@ -46,7 +46,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
     BalancedPositiveNegativeSampler,
@@ -211,7 +211,7 @@ class _RoIHeads(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-class FasterRCNNForObjectDetection(PretrainedModel):
+class FasterRCNNForObjectDetection(ObjectDetectionModel):
     r"""Faster R-CNN with a ResNet-50-FPN backbone (Ren et al., NeurIPS 2015).
 
     The two-stage anchor-based detector in its modern reference

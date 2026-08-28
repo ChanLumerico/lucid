@@ -35,6 +35,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._mixins import DiffusionMixin
 from lucid.models._output import DiffusionModelOutput
 from lucid.models._utils._generative import (
@@ -663,7 +664,7 @@ def _x0_recovery_constants(betas: Tensor) -> tuple[Tensor, Tensor]:
     return lucid.tensor(recip, device=dev), lucid.tensor(recipm1, device=dev)
 
 
-class DDPMForImageGeneration(PretrainedModel, DiffusionMixin):
+class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
     r"""DDPM with the noise-prediction training loss and Markov-chain sampler.
 
     Wraps a :class:`DDPMUNet` denoiser, supplies the Ho 2020 §3.2

@@ -39,7 +39,8 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast, override
 import lucid
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import ModelConfig, PretrainedModel
+from lucid.models._base import ModelConfig
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
@@ -247,7 +248,7 @@ def _build_darknet(
 # ---------------------------------------------------------------------------
 
 
-class YOLOForObjectDetection(PretrainedModel):
+class YOLOForObjectDetection(ObjectDetectionModel):
     r"""YOLOv1 single-shot object detector (Redmon et al., CVPR 2016).
 
     The original "You Only Look Once" detector — recasts object detection

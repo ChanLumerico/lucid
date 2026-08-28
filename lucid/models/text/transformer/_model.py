@@ -30,6 +30,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import LanguageModelingModel, SequenceClassificationModel, TokenClassificationModel
 from lucid.models._mixins import MaskedLMMixin
 from lucid.models._output import (
     ModelOutput,
@@ -376,7 +377,7 @@ class TransformerModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TransformerForSeq2SeqLM(PretrainedModel):
+class TransformerForSeq2SeqLM(LanguageModelingModel):
     r"""Encoder-decoder Transformer with a tied seq2seq language-modeling head.
 
     Wraps :class:`TransformerModel` with a linear LM head projecting decoder
@@ -602,7 +603,7 @@ class TransformerForSeq2SeqLM(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TransformerForSequenceClassification(PretrainedModel):
+class TransformerForSequenceClassification(SequenceClassificationModel):
     r"""Encoder-only sentence classifier — pools the first source-side token.
 
     Wraps :class:`TransformerModel` and runs only the encoder half during
@@ -691,7 +692,7 @@ class TransformerForSequenceClassification(PretrainedModel):
         return MaskedLMOutput(logits=logits, loss=loss)
 
 
-class TransformerForTokenClassification(PretrainedModel, MaskedLMMixin):
+class TransformerForTokenClassification(TokenClassificationModel, MaskedLMMixin):
     r"""Encoder-only per-token classifier — NER / POS / chunking heads.
 
     Wraps :class:`TransformerModel` and runs only the encoder half during

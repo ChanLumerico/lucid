@@ -25,6 +25,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import GenerationOutput, NormalizingFlowOutput
 from lucid.models._utils._generative import (
     resolve_generation_device,
@@ -664,7 +665,7 @@ class RealNVPModel(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class RealNVPForImageGeneration(PretrainedModel):
+class RealNVPForImageGeneration(ImageGenerationModel):
     r"""RealNVP with the bits/dim training loss and ``.generate()``.
 
     ``forward(x)`` returns a :class:`NormalizingFlowOutput` whose ``loss``

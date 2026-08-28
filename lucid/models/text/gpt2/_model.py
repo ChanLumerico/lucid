@@ -32,6 +32,8 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import LanguageModelingModel
+from lucid.models._tasks import SequenceClassificationModel
 from lucid.models._mixins import CausalLMMixin
 from lucid.models._output import (
     BaseModelOutput,
@@ -450,7 +452,7 @@ class GPT2Model(PretrainedModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class GPT2LMHeadModel(PretrainedModel, CausalLMMixin):
+class GPT2LMHeadModel(LanguageModelingModel, CausalLMMixin):
     r"""GPT-2 with a tied causal-language-modeling head.
 
     Wraps :class:`GPT2Model` with an output linear projection whose weight
@@ -565,7 +567,7 @@ class GPT2LMHeadModel(PretrainedModel, CausalLMMixin):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class GPT2ForSequenceClassification(PretrainedModel):
+class GPT2ForSequenceClassification(SequenceClassificationModel):
     r"""GPT-2 with a last-token sequence-classification head.
 
     Wraps :class:`GPT2Model` with a dropout-regularised linear classifier
@@ -755,7 +757,7 @@ class _GPT2MultipleChoiceHead(nn.Module):
         return cast(Tensor, self.summary(pooled)).reshape(N, C)
 
 
-class GPT2DoubleHeadsModel(PretrainedModel):
+class GPT2DoubleHeadsModel(LanguageModelingModel):
     r"""GPT-2 + LM head + multiple-choice classification head.
 
     Identical contract to :class:`GPTDoubleHeadsModel` but with GPT-2's

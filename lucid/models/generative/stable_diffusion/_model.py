@@ -41,6 +41,7 @@ from typing import ClassVar, cast, override
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import ModelOutput
 from lucid.models.generative.stable_diffusion._autoencoder import AutoencoderKL
 from lucid.models.generative.stable_diffusion._config import StableDiffusionConfig
@@ -230,7 +231,7 @@ class StableDiffusionModel(PretrainedModel):
         return StableDiffusionOutput(noise_pred=prediction, latent=noised, loss=loss)
 
 
-class StableDiffusionForImageGeneration(PretrainedModel):
+class StableDiffusionForImageGeneration(ImageGenerationModel):
     """Stable Diffusion posed as a sampler.
 
     Parameters

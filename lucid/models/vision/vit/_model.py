@@ -23,6 +23,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.vit._config import ViTConfig
@@ -482,7 +483,7 @@ def _pool(x: Tensor, classifier: str) -> Tensor:
 # ---------------------------------------------------------------------------
 
 
-class ViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class ViTForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""Vision Transformer with a linear classification head on the CLS token.
 
     Wraps the same trunk as :class:`ViT` (patch embedding -> positional

@@ -37,7 +37,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
     batched_nms,
@@ -171,7 +171,7 @@ def _smooth_l1(x: Tensor, sigma: float = 1.0) -> Tensor:
 # ---------------------------------------------------------------------------
 
 
-class FastRCNNForObjectDetection(PretrainedModel):
+class FastRCNNForObjectDetection(ObjectDetectionModel):
     r"""Fast R-CNN object detector (Girshick, ICCV 2015).
 
     The successor to R-CNN that fixes its main bottleneck: rather than running

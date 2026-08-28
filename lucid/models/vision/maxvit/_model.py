@@ -53,6 +53,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_transformer_trunc_normal
 from lucid.models._utils._classification import DropPath
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.maxvit._config import MaxViTConfig
@@ -901,7 +902,7 @@ class _HeadNorm(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-class MaxViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class MaxViTForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""MaxViT with a linear classification head (Tu et al., 2022).
 
     Wraps the same multi-axis attention trunk as :class:`MaxViT`

@@ -7,6 +7,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_cnn_fan_out
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.resnet._config import ResNetConfig
@@ -452,7 +453,7 @@ class ResNet(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class ResNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class ResNetForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""ResNet with a global-average-pooled linear classification head.
 
     Combines a :class:`ResNet` backbone with the standard ImageNet

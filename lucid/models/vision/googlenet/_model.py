@@ -40,6 +40,7 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import transform_input_imagenet_to_tf
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models.vision.googlenet._config import GoogLeNetConfig
 
@@ -431,7 +432,7 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class GoogLeNetForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""GoogLeNet image classifier with optional auxiliary classifiers.
 
     Combines the GoogLeNet backbone with a global-average-pool +

@@ -55,7 +55,8 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models._base import ModelConfig, PretrainedModel
+from lucid.models._base import ModelConfig
+from lucid.models._tasks import ObjectDetectionModel
 from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
@@ -883,7 +884,7 @@ def _yolov4_loss(
 # ---------------------------------------------------------------------------
 
 
-class YOLOV4ForObjectDetection(PretrainedModel):
+class YOLOV4ForObjectDetection(ObjectDetectionModel):
     r"""YOLOv4 multi-scale object detector (Bochkovskiy et al., 2020).
 
     A heavily engineered iteration over YOLOv3 that combines several

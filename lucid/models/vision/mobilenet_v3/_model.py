@@ -14,6 +14,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import ImageClassificationModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models._utils._common import (
@@ -381,7 +382,7 @@ class MobileNetV3(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class MobileNetV3ForImageClassification(PretrainedModel, ClassificationHeadMixin):
+class MobileNetV3ForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
     r"""MobileNet v3 image classifier with the redesigned inverted head.
 
     Combines a :class:`MobileNetV3` feature stack with the paper's

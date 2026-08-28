@@ -23,6 +23,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
+from lucid.models._tasks import LanguageModelingModel, SequenceClassificationModel, TokenClassificationModel
 from lucid.models._mixins import MaskedLMMixin
 from lucid.models._output import (
     BaseModelOutputWithPooling,
@@ -653,7 +654,7 @@ class _BERTOnlyMLMHead(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class BERTForMaskedLM(PretrainedModel, MaskedLMMixin):
+class BERTForMaskedLM(LanguageModelingModel, MaskedLMMixin):
     r"""BERT with a tied masked-language-modeling head.
 
     Implements the masked-LM half of the Devlin et al. (2018) pre-training
@@ -750,7 +751,7 @@ class BERTForMaskedLM(PretrainedModel, MaskedLMMixin):
         return MaskedLMOutput(logits=prediction_scores, loss=loss)
 
 
-class BERTForSequenceClassification(PretrainedModel):
+class BERTForSequenceClassification(SequenceClassificationModel):
     r"""BERT with a pooled-CLS linear classifier for sequence-level tasks.
 
     Wraps the bidirectional encoder with a dropout-regularised linear head
@@ -848,7 +849,7 @@ class BERTForSequenceClassification(PretrainedModel):
         return SequenceClassificationOutput(logits=logits, loss=loss)
 
 
-class BERTForTokenClassification(PretrainedModel, MaskedLMMixin):
+class BERTForTokenClassification(TokenClassificationModel, MaskedLMMixin):
     r"""BERT with a per-token linear classifier for tagging tasks.
 
     Wraps the bidirectional encoder with a dropout-regularised linear head
@@ -942,7 +943,7 @@ class BERTForTokenClassification(PretrainedModel, MaskedLMMixin):
         return TokenClassificationOutput(logits=logits, loss=loss)
 
 
-class BERTForQuestionAnswering(PretrainedModel):
+class BERTForQuestionAnswering(SequenceClassificationModel):
     r"""BERT with a 2-way span head for extractive question answering.
 
     Wraps the bidirectional encoder with a single linear of output width 2,
@@ -1143,7 +1144,7 @@ class _BERTPreTrainingHeads(nn.Module):
         return prediction_scores, seq_relationship_score
 
 
-class BERTForPreTraining(PretrainedModel, MaskedLMMixin):
+class BERTForPreTraining(SequenceClassificationModel, MaskedLMMixin):
     r"""BERT with the original joint MLM + NSP pre-training objective.
 
     Combines the masked-language-modeling head (decoder weight tied to input
@@ -1260,7 +1261,7 @@ class BERTForPreTraining(PretrainedModel, MaskedLMMixin):
         )
 
 
-class BERTForNextSentencePrediction(PretrainedModel):
+class BERTForNextSentencePrediction(SequenceClassificationModel):
     r"""BERT with the standalone next-sentence-prediction head.
 
     Wraps the bidirectional encoder with a single binary linear classifier
@@ -1348,7 +1349,7 @@ class BERTForNextSentencePrediction(PretrainedModel):
         return SequenceClassificationOutput(logits=seq_relationship_score, loss=loss)
 
 
-class BERTForCausalLM(PretrainedModel):
+class BERTForCausalLM(LanguageModelingModel):
     r"""BERT trunk repurposed as a left-to-right (causal) language model.
 
     Standard BERT attends bidirectionally; this wrapper injects a
