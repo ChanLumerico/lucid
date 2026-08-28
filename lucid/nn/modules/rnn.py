@@ -601,8 +601,10 @@ class LSTM(Module):
 
         Args:
             layer_input: ``(T, B, *)`` input, padded if packed.
-            h0_layer / c0_layer: ``(1, B, *)`` initial states.
-            layer / direction: Which weight set to use.
+            h0_layer: ``(1, B, *)`` initial hidden state.
+            c0_layer: ``(1, B, *)`` initial cell state.
+            layer: Index of the stacked layer whose weights to use.
+            direction: ``0`` forward, ``1`` backward.
             batch_sizes: Active-set size per timestep, non-increasing.
 
         Returns:

@@ -69,13 +69,24 @@ class RoFormerConfig(LanguageModelConfig):
     """Configuration for every RoFormer variant.
 
     Args:
+        embedding_size: Width of the word and token-type tables when the
+            checkpoint factorises the embedding.  ``None`` — the default —
+            ties them to ``hidden_size``; when the two differ the tables
+            and their LayerNorm are sized here and an
+            ``embeddings_project`` linear maps up to ``hidden_size``.
         rotary_base: Frequency base ``θ_0`` for the rotary embedding
             (``θ_i = base ** (-2 i / d_head)``).  10000.0 per the paper.
+        rotary_value: Also rotate ``V``, not only ``Q`` and ``K``.  Off by
+            default because the paper's Eq. 16 rotates the two, and every
+            released checkpoint was trained that way; the switch exists
+            because the reference implementation carries it.
         type_vocab_size: Segment-id vocabulary (kept for BERT-parity even
             though RoFormer fine-tunes typically feed a single segment).
         position_embedding_type: Always ``"rotary"`` here — kept as a literal
             for forward compat with future variants (NTK-aware scaling, etc.).
-        num_labels / classifier_dropout: Downstream classification head knobs.
+        num_labels: Number of classes the sequence-classification head
+            projects to.
+        classifier_dropout: Dropout applied before that head.
     """
 
     model_type: ClassVar[str] = "roformer"

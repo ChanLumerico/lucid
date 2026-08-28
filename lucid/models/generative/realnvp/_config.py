@@ -109,11 +109,27 @@ class RealNVPConfig(NormalizingFlowConfig):
             an invertible rescaling that contributes to the
             log-determinant (paper §3.7).  Inversion uses the running
             statistics, so ``decode`` is exact in ``eval()`` mode.
+        batch_norm_running_stats_in_training: Normalise by the running
+            average during training rather than by the current batch —
+            the paper's "novel variant of batch normalization ... based
+            on a running average over recent minibatches, and is thus
+            more robust when training with very small minibatches"
+            (§3.7 / Appendix E).  Off by default: the two agree in the
+            large-batch limit where most training happens, and turning
+            it on changes the behaviour of runs already in flight.
         data_constraint: Width of the logit squash applied before the
             flow, matching the released implementation's
             ``data_constraint``: ``x`` in ``[0, 1]`` is mapped into
             ``[(1 - c) / 2, (1 + c) / 2]`` before the logit, i.e.
             ``alpha = 0.05`` at the default ``0.9``.
+        num_bits: Bit depth of the discrete data the reported likelihood
+            is measured against.  The flow is fitted to ``x`` in
+            ``[0, 1]``, but the paper models
+            ``logit(alpha + (1 - alpha) * x / 256)`` and reports
+            bits/dim on the 8-bit pixel scale, so the change of
+            variables from ``{0, ..., 255}`` back to ``[0, 1]``
+            contributes ``num_bits`` to the metric.  Table 1 is not
+            comparable without it.
 
     Notes:
         ``out_channels`` must equal ``in_channels`` — a flow is a

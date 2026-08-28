@@ -74,8 +74,10 @@ class DiffusionModelConfig(GenerativeModelConfig):
     Args:
         num_train_timesteps: Number of forward-process steps ``T``.  DDPM
             uses 1000, NCSN traditionally a smaller grid.
-        beta_start / beta_end: Endpoints of the linear noise schedule
-            ``β_1 … β_T``.  Ignored when ``beta_schedule == "cosine"``.
+        beta_start: First step's noise rate ``β_1``, the low end of the
+            linear schedule.  Ignored when ``beta_schedule == "cosine"``.
+        beta_end: Last step's noise rate ``β_T``, the high end of the
+            same schedule.  Ignored when ``beta_schedule == "cosine"``.
         beta_schedule: ``"linear"`` (Ho et al., 2020), ``"scaled_linear"``
             (Rombach et al., 2022 — linear in ``sqrt(beta)``, then squared;
             *not* the same curve as ``"linear"`` between the same

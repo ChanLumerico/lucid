@@ -3,7 +3,7 @@
 These are the cache- and family-agnostic building blocks of every
 :meth:`generate` loop in the model zoo — :class:`CausalLMMixin` (decoder-only)
 and ``TransformerForSeq2SeqLM`` (encoder-decoder) both drive their token
-selection through :func:`_select_and_append_next`, so greedy / temperature /
+selection through :func:`_select_next_ondevice`, so greedy / temperature /
 top-k / top-p / repetition-penalty sampling behaves identically regardless of
 model family or cache implementation.
 

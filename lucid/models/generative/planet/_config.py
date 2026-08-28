@@ -123,13 +123,12 @@ class PlaNetConfig(WorldModelConfig):
         the default is 1; the released implementation uses 10 — see
         Notes.
 
-    The state geometry (``stoch_size``, ``deter_size``, ``hidden_size``,
-    ``cnn_depth``, ``min_std``, ``mean_only``), the frame size, the action
-    width and the two KL knobs (``free_nats``, ``kl_weight``) are inherited
-    from :class:`WorldModelConfig` — Dreamer states the same values.
-
     Notes
     -----
+    The state geometry, the frame size, the action width and the two KL
+    knobs are inherited from :class:`WorldModelConfig`, which is where
+    Dreamer reads the same values from.
+
     Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,
     *"Learning Latent Dynamics for Planning from Pixels"*, ICML, 2019
     (arXiv:1811.04551).

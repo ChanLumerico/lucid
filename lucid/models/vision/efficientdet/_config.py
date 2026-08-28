@@ -86,7 +86,8 @@ class EfficientDetConfig(ModelConfig):
         -- Backbone (EfficientNet-B0–B7 widths/depths) --
         backbone_width_coeff:  Width multiplier (EfficientNet channel scaling).
         backbone_depth_coeff:  Depth multiplier (EfficientNet block repeat).
-        backbone_drop_rate:    Stochastic depth / dropout.
+        backbone_in_channels:  Channel widths of the three backbone stages
+            the BiFPN taps (C3, C4, C5), before its lateral 1x1s.
 
         -- BiFPN --
         fpn_channels:   BiFPN channel width (W_bifpn).
@@ -96,9 +97,17 @@ class EfficientDetConfig(ModelConfig):
         head_repeats:   Depth of class/box conv heads (D_head).
 
         -- Anchors --
-        anchor_scales:    Per-level anchor size multipliers.
-        anchor_ratios:    Anchor aspect ratios.
-        anchor_num_scales: Octave subdivisions per scale.
+        anchor_scales:     Size multipliers applied at every level.  The
+            default is the octave subdivision the paper uses,
+            ``2 ** (0/3), 2 ** (1/3), 2 ** (2/3)`` — the subdivisions are
+            these values, not a separate count.
+        anchor_ratios:     Anchor aspect ratios.
+        anchor_base_sizes: Base anchor edge length per pyramid level, in
+            input pixels.  Scaled by ``anchor_scales`` to give the
+            anchors of that level.
+
+        image_size:     Input resolution the anchors and strides are
+            defined against; the compound scaling ties it to ``phi``.
 
         -- Loss --
         focal_alpha:      Focal-loss class balance (paper: 0.25).

@@ -43,9 +43,11 @@ class LanguageModelConfig(ModelConfig):
         pad_token_id: Token id used for padding, or ``None`` if the model
             does not pad (typical for GPT-style decoders).  ``forward``
             implementations should mask attention away from pad positions.
-        bos_token_id / eos_token_id: Sentinel tokens for autoregressive
-            generation (used by :class:`CausalLMMixin`).  ``None`` when
-            the tokenizer does not define them.
+        bos_token_id: Begin-of-sequence token id, used by
+            :class:`CausalLMMixin` to seed generation.  ``None`` when the
+            tokenizer does not define one.
+        eos_token_id: End-of-sequence token id, which stops generation.
+            ``None`` when the tokenizer does not define one.
         hidden_dropout: Dropout applied after embeddings and inside each
             transformer block's residual path.
         attention_dropout: Dropout applied to the attention probabilities.

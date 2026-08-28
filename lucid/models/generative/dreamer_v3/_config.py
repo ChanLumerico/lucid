@@ -158,6 +158,13 @@ class DreamerV3Config(WorldModelConfig):
     actor_entropy : float, default=3e-4
         Entropy bonus.  Fixed across domains, which only works because
         the returns it competes with are normalised.
+    actor_min_std : float, default=0.1
+        Floor on the continuous policy's standard deviation, added
+        after the squashing: ``std = 2 * sigmoid(raw / 2) + min_std``.
+        Without a floor the actor can drive the deviation to zero,
+        which ends exploration and leaves the entropy bonus fighting a
+        term that has already collapsed.  Ignored when
+        ``action_space="discrete"``.
     return_ema_decay : float, default=0.99
         Decay of the moving return-spread estimate.
     return_low, return_high : float, default=5.0, 95.0
@@ -173,6 +180,22 @@ class DreamerV3Config(WorldModelConfig):
     replay_value_scale : float, default=0.3
         Weight on the critic's loss over *replayed* trajectories, in
         addition to imagined ones.
+    pcont : bool, default=True
+        Build the continuation head, which predicts whether the episode
+        is still running one step on.  With it, the discount applied to
+        an imagined step is that predicted probability rather than the
+        constant ``discount``, so a trajectory stops being credited
+        once the model expects it to have ended — the difference
+        between a world model that knows about termination and one that
+        assumes the episode runs forever.  Costs one filtered step per
+        sequence, because the last one has no successor to label it, so
+        training needs sequences of at least two.
+    pcont_scale : float, default=1.0
+        Weight on the continuation head's loss within the world-model
+        objective.
+    pcont_layers : int, default=1
+        Hidden layers in that head.  One is enough because it predicts
+        a single Bernoulli from a state the RSSM has already built.
     action_space : {"continuous", "discrete"}, default="continuous"
         What an action is, as in DreamerV2.
 
