@@ -68,6 +68,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with either layer at a large feature map; the largest observed effect was
   on Stable Diffusion's autoencoder at 512 pixels, `2.7e-03` to `1.0e-05`.
 
+### Performance
+
+- batch the two guidance passes
+
 ---
 
 ## [3.9.0] — 2026-08-25

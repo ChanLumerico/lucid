@@ -22,8 +22,8 @@ network.  ``summary="auto"`` reports what is actually built.
 The weights are converted by
 :mod:`tools.convert_weights.stable_diffusion` and were verified against
 the reference activation by activation, not merely loaded — see
-:mod:`._weights` for the numbers and for the one residual that is the
-CPU kernel's rather than the conversion's.
+:class:`StableDiffusionWeights` for the numbers and for the one
+residual that is the CPU kernel's rather than the conversion's.
 """
 
 from dataclasses import replace

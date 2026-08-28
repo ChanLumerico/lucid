@@ -332,14 +332,90 @@ class TestGuidance:
         assert float((guided - plain).abs().max().item()) < 1e-5
 
     def test_a_larger_scale_changes_the_result(self) -> None:
-        """Guards the test above."""
+        """Guards the test above — the scale has to be read, not just accepted.
+
+        The threshold is deliberately far above the noise floor. An
+        implementation that accepts the scale and multiplies by one
+        instead leaves a residue of about 1e-5 here, which is rounding,
+        not guidance; the genuine separation is about 2. A bound tucked
+        just over the rounding passes the moment anything perturbs the
+        arithmetic — batching the two conditionings into one forward is
+        enough to do it — so it is set two orders above instead.
+
+        The second comparison keeps both samples on the guided path, so
+        it is not distinguishing a branch that was taken from one that
+        was skipped.
+        """
         lucid.manual_seed(0)
         model = StableDiffusionForImageGeneration(_tiny()).eval()
         context, uncond = lucid.randn((1, 4, 16)), lucid.randn((1, 4, 16))
         start = lucid.zeros((1, 4, 8, 8))
         one = model.generate(context, uncond, 3, guidance_scale=1.0, latent=start)
+        two = model.generate(context, uncond, 3, guidance_scale=2.0, latent=start)
         seven = model.generate(context, uncond, 3, guidance_scale=7.5, latent=start)
-        assert float((one - seven).abs().max().item()) > 1e-5
+        assert float((one - seven).abs().max().item()) > 1e-2
+        assert float((two - seven).abs().max().item()) > 1e-2
+
+    def test_the_conditional_half_is_the_prompt(self) -> None:
+        r"""Which half of the stacked batch is which.
+
+        Guidance packs the two conditionings into one batch and slices
+        the result apart, so the halves can be swapped without any shape
+        objecting. The swap yields
+        :math:`\epsilon_c + s(\epsilon_\varnothing - \epsilon_c)` — a
+        reflection of the intended point, which still denoises to an
+        image and still moves further as :math:`s` grows. What separates
+        them is the limit: as :math:`s \to 1` the correct form collapses
+        onto the *conditional* prediction and the swap onto the
+        unconditional one. Exactly one skips the guided branch, so this
+        probes just beside it.
+        """
+        lucid.manual_seed(0)
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        context, uncond = lucid.randn((1, 4, 16)), lucid.randn((1, 4, 16))
+        start = lucid.zeros((1, 4, 8, 8))
+
+        guided = model.generate(
+            context, uncond, 3, guidance_scale=1.0 + 1e-4, latent=start
+        )
+        conditional = model.generate(context, None, 3, latent=start)
+        unconditional = model.generate(uncond, None, 3, latent=start)
+
+        to_conditional = float((guided - conditional).abs().max().item())
+        to_unconditional = float((guided - unconditional).abs().max().item())
+
+        # The guard: if the tiny model happened to predict the same thing
+        # from both sequences, everything below is trivially satisfied.
+        assert to_unconditional > 1e-3, "the two conditionings are not distinguishable"
+        assert to_conditional < 1e-3, f"guided is {to_conditional} from conditional"
+
+    def test_a_batch_is_guided_row_by_row(self) -> None:
+        """The split lands between the two conditionings, not inside a row.
+
+        The halves are ``[:batch]`` and ``[batch:]``; a split hardcoded
+        at one, or off by a row, still returns the right shape and still
+        produces an image — it just guides each row with a neighbour's
+        unconditional sequence. Only a batch above one can see it, so
+        two rows carrying different prompts are compared against
+        generating each of them alone.
+        """
+        lucid.manual_seed(0)
+        model = StableDiffusionForImageGeneration(_tiny()).eval()
+        context = lucid.randn((2, 4, 16))
+        uncond = lucid.randn((2, 4, 16))
+        start = lucid.randn((2, 4, 8, 8))
+
+        together = model.generate(context, uncond, 3, guidance_scale=7.5, latent=start)
+        for row in range(2):
+            alone = model.generate(
+                context[row : row + 1],
+                uncond[row : row + 1],
+                3,
+                guidance_scale=7.5,
+                latent=start[row : row + 1],
+            )
+            gap = float((together[row : row + 1] - alone).abs().max().item())
+            assert gap < 1e-4, f"row {row} differs by {gap}"
 
     def test_a_negative_scale_is_refused(self) -> None:
         model = StableDiffusionForImageGeneration(_tiny()).eval()
