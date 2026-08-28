@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the documented ways to build these fail
 
+- publish the config parameters a family inherits
+
 ### Performance
 
 - batch the two guidance passes

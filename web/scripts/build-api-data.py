@@ -1316,12 +1316,78 @@ def _serialise_property(attr: Any, sha: str) -> dict[str, Any]:
     }
 
 
+def _merge_inherited_parameters(cls: Any, doc: dict[str, Any], parser: Any) -> None:
+    """Fill in parameters the class accepts but does not itself describe.
+
+    A subclass documents what it adds and leaves the rest to its base —
+    which is correct in source and invisible on the site, because only
+    the class's own docstring was ever parsed.  ``PlaNetConfig`` takes
+    nineteen fields and showed ten; a reader could not learn that
+    ``cnn_depth`` exists, let alone what it does.  The base classes are
+    no help either: ``GenerativeModelConfig`` and friends are exported
+    from ``lucid.models`` but never emitted, so the descriptions were
+    on no page at all.
+
+    The rule is deliberately narrow: only a parameter that appears in
+    the class's *real* signature is filled in, and only from a base
+    that documents it.  Nothing is invented — an inherited field the
+    subclass does not accept, or one nobody documents, stays absent.
+    ``inherited_from`` records where the text came from so the page can
+    say so.
+    """
+    try:
+        accepted = [p.name for p in cls.parameters if p.name not in ("self", "cls")]
+    except Exception:
+        return
+    if not accepted:
+        return
+
+    described = {p["name"] for p in doc["parameters"]}
+    missing = [n for n in accepted if n not in described]
+    if not missing:
+        return
+
+    def _bases(obj: Any) -> list[Any]:
+        # ``resolved_bases`` resolves lazily and raises on a base Griffe
+        # cannot follow (a C extension, a conditional import).  A class
+        # whose ancestry is unreadable simply gets nothing merged.
+        try:
+            return list(getattr(obj, "resolved_bases", []) or [])
+        except Exception:
+            return []
+
+    seen: set[str] = set()
+    queue = _bases(cls)
+    while queue and missing:
+        base = queue.pop(0)
+        path = getattr(base, "path", None)
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        queue.extend(_bases(base))
+        try:
+            base_doc = _parse_docstring(base, parser)
+        except Exception:
+            continue
+        for item in base_doc["parameters"]:
+            if item["name"] in missing:
+                doc["parameters"].append(
+                    {**item, "inherited_from": getattr(base, "name", None)}
+                )
+                missing.remove(item["name"])
+
+    # Signature order, so the table reads like the constructor call.
+    order = {name: i for i, name in enumerate(accepted)}
+    doc["parameters"].sort(key=lambda p: order.get(p["name"], len(order)))
+
+
 def _serialise_class(
     cls: Any, parser: Any, sha: str, *,
     module_root: Path | None = None,
     is_lucid_toplevel: bool = False,
 ) -> dict[str, Any]:
     doc = _parse_docstring(cls, parser)
+    _merge_inherited_parameters(cls, doc, parser)
 
     # Collect public methods + properties
     # Keep selected dunders that are part of the public interface
@@ -1960,6 +2026,31 @@ with a slash (e.g. ``vision/resnet/pretrained``) is a family member and
 belongs on its own family page — keeping them here would make the index
 page ~500 members long and obscure the user-facing dispatch surface."""
 
+def _is_domain_infrastructure(subcategory: str | None) -> bool:
+    """Is this a domain's shared base layer rather than one family's code?
+
+    The filter above drops anything with a slash on the grounds that it
+    belongs to a family page.  That is right for ``generative/nice/config``
+    and wrong for ``generative/config`` — the second is the base layer the
+    families inherit from, and dropping it meant ``GenerativeModelConfig``,
+    ``DiffusionModelConfig``, ``NormalizingFlowConfig`` and
+    ``LanguageModelConfig`` were exported from ``lucid.models`` and emitted
+    to no page at all.  The descriptions of every inherited field lived
+    there, so they reached no page either.
+
+    A family member always carries two slashes (``<domain>/<family>/<file>``)
+    and a domain module exactly one, so the depth separates them without a
+    hardcoded list of file names.
+    """
+    if not subcategory:
+        return False
+    parts = subcategory.split("/")
+    if len(parts) != 2:
+        return False
+    domains = {g["slug"].rsplit(".", 1)[-1] for g in _LUCID_MODELS_FAMILY_GROUPS}
+    return parts[0] in domains
+
+
 _LUCID_MODELS_FAMILY_GROUPS = [
     {"slug": "lucid.models.vision",     "label": "Vision",     "icon": "image"},
     {"slug": "lucid.models.text",       "label": "Text",       "icon": "text"},
@@ -2078,6 +2169,7 @@ def build_one(slug: str, griffe_path: str, loader: Any, parser: Any, sha: str) -
             filtered = [
                 m for m in members
                 if (m.get("subcategory") or "") in _LUCID_MODELS_TIER1_SUBS
+                or _is_domain_infrastructure(m.get("subcategory"))
             ]
             data["members"] = filtered
             data["family_groups"] = _LUCID_MODELS_FAMILY_GROUPS
