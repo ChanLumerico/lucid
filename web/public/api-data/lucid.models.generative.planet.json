@@ -3,7 +3,7 @@
   "name": "planet",
   "path": "lucid.models.generative.planet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/__init__.py#L1",
   "members": [
     {
       "name": "PlaNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "PlaNetConfig(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'relu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 3.0, kl_weight: float = 1.0, overshoot_distance: int | None = None, overshoot_weight: float = 1.0, overshoot_reward_weight: float = 1.0, reward_hidden: int = 200, reward_layers: int = 2, reward_loss_scale: float = 1.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_config.py#L27",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_config.py#L27",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'relu', action_dim: int = 1, stoch_size: int = 30, deter_size: int = 200, hidden_size: int = 200, cnn_depth: int = 32, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 3.0, kl_weight: float = 1.0, overshoot_distance: int | None = None, overshoot_weight: float = 1.0, overshoot_reward_weight: float = 1.0, reward_hidden: int = 200, reward_layers: int = 2, reward_loss_scale: float = 1.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -177,7 +177,7 @@
         ">>> from lucid.models.generative.planet import PlaNetConfig\n>>> cfg = PlaNetConfig(action_dim=6)\n>>> cfg.stoch_size, cfg.deter_size, cfg.free_nats\n(30, 200, 3.0)\n>>> cfg.latent_size\n230"
       ],
       "notes": [
-        "The state geometry, the frame size, the action width and the two KL\nknobs are inherited from `WorldModelConfig`, which is where\nDreamer reads the same values from.\n\nReference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\n`sample_size` is pinned to 64 rather than made general.  The encoder\nis four stride-2 convolutions with 4x4 kernels and the decoder four\ntransposed convolutions with kernels `5, 5, 6, 6` — an irregular\nschedule that lands on `64` exactly (`1 -> 5 -> 13 -> 30 -> 64`) and\non nothing else.  Generalising it would mean inventing a schedule the\npaper does not give, so an unsupported size raises here instead of\nsilently reconstructing to the wrong shape.  Scale the model with\n`cnn_depth` / `deter_size` / `stoch_size`."
+        "The state geometry, the frame size, the action width and the two KL\nknobs are inherited from `WorldModelConfig`, which is where\nDreamer reads the same values from.\n\nReference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\n`sample_size` is pinned to 64 rather than made general.  The encoder\nis four stride-2 convolutions with 4x4 kernels and the decoder four\ntransposed convolutions with kernels `5, 5, 6, 6` — an irregular\nschedule that lands on `64` exactly (`1 -> 5 -> 13 -> 30 -> 64`) and\non nothing else.  Generalising it would mean inventing a schedule the\npaper does not give, so an unsupported size raises here instead of\nsilently reconstructing to the wrong shape.  Scale the model with\n`cnn_depth` / `deter_size` / `stoch_size`."
       ],
       "attributes": [],
       "warns": [],
@@ -193,7 +193,7 @@
       ],
       "labels": [],
       "signature": "PlaNetForWorldModeling(config: PlaNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L306",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L310",
       "subcategory": "model",
       "methods": [
         {
@@ -202,7 +202,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: PlaNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L371",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L375",
           "subcategory": "model",
           "summary": "Initialise the policy. See the class docstring for parameters.",
           "extended": null,
@@ -224,7 +224,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor, rewards: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L459",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L463",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -246,7 +246,7 @@
           "kind": "function",
           "labels": [],
           "signature": "plan(state: RSSMState, horizon: int = 12, iterations: int = 10, candidates: int = 1000, elites: int = 100)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L509",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L513",
           "subcategory": "model",
           "summary": "Choose an action by searching imagined trajectories (CEM).",
           "extended": "The paper's planner.  It never touches an environment: candidate\naction sequences are rolled forward through the learned dynamics\nand scored by the learned reward head, so the entire search is a\nforward pass over this model's own parameters.\n\nThe cross-entropy method fits a diagonal Gaussian over action\nsequences to its own best samples, repeatedly:\n\n$$\n\\mu, \\sigma \\;\\leftarrow\\;\n    \\mathrm{mean}, \\mathrm{std}\\Big(\n        \\operatorname*{top-K}_{a^{(j)} \\sim\n            \\mathcal{N}(\\mu, \\sigma^2)}\n        \\textstyle\\sum_{\\tau} r\\big(s_\\tau^{(j)}\\big)\n    \\Big),\n$$\n\nand the first action of the final mean is returned.  Searching in\na compact latent rather than in pixels is what makes a thousand\ncandidates per step affordable.",
@@ -314,7 +314,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.planet import (\n...     PlaNetConfig, PlaNetForWorldModeling,\n... )\n>>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,\n...                    hidden_size=8, cnn_depth=4, reward_hidden=8)\n>>> model = PlaNetForWorldModeling(cfg).eval()\n>>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)\n>>> out = model(obs, act, rewards=lucid.zeros(1, 3))\n>>> out.loss.shape, out.observation.shape\n((), (1, 3, 3, 64, 64))"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\n**The reconstruction term never reaches the prior head.**  Nothing\nreconstructed is computed from the prior — the decoder and the reward\nhead both read the posterior — so the KL is the prior's only teacher.\nTrain without it and the dynamics never learn to predict, while every\nshape and every loss value still looks reasonable.\n\nThe released implementation scales the reward term by 10 and uses\n3-layer, 300-unit heads.  Neither appears in the paper, which specifies\n\"two fully connected layers of size 200\"; the paper's values are used\nhere, and the discrepancy is recorded rather than silently split."
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\n**The reconstruction term never reaches the prior head.**  Nothing\nreconstructed is computed from the prior — the decoder and the reward\nhead both read the posterior — so the KL is the prior's only teacher.\nTrain without it and the dynamics never learn to predict, while every\nshape and every loss value still looks reasonable.\n\nThe released implementation scales the reward term by 10 and uses\n3-layer, 300-unit heads.  Neither appears in the paper, which specifies\n\"two fully connected layers of size 200\"; the paper's values are used\nhere, and the discrepancy is recorded rather than silently split."
       ],
       "attributes": [
         {
@@ -336,7 +336,7 @@
       ],
       "labels": [],
       "signature": "PlaNetModel(config: PlaNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L126",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L130",
       "subcategory": "model",
       "methods": [
         {
@@ -345,7 +345,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: PlaNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L190",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L194",
           "subcategory": "model",
           "summary": "Initialise the actor. See the class docstring for parameters.",
           "extended": null,
@@ -367,7 +367,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(observations: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L214",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L218",
           "subcategory": "model",
           "summary": "Embed a frame sequence — `(B, T, C, 64, 64) -> (B, T, embed_size)`.",
           "extended": null,
@@ -389,7 +389,7 @@
           "kind": "function",
           "labels": [],
           "signature": "observe(observations: Tensor, actions: Tensor, state: RSSMState | None = None, sample: bool | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L218",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L222",
           "subcategory": "model",
           "summary": "Filter a trajectory into posterior states.",
           "extended": null,
@@ -436,7 +436,7 @@
           "kind": "function",
           "labels": [],
           "signature": "imagine(state: RSSMState, actions: Tensor, sample: bool | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L251",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L255",
           "subcategory": "model",
           "summary": "Roll the dynamics forward with no observations at all.",
           "extended": null,
@@ -477,7 +477,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L274",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L278",
           "subcategory": "model",
           "summary": "Reconstruct frames from a state — `(B, T, C, 64, 64)`.",
           "extended": null,
@@ -499,7 +499,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_reward(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L278",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L282",
           "subcategory": "model",
           "summary": "Predict reward from a state — `(B, T)`.",
           "extended": null,
@@ -521,7 +521,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L282",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L286",
           "subcategory": "model",
           "summary": "Propose an action for a state — `(B, T, action_dim)` in `(-1, 1)`.",
           "extended": null,
@@ -567,7 +567,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.planet import PlaNetConfig, PlaNetModel\n>>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,\n...                    hidden_size=8, cnn_depth=4, reward_hidden=8)\n>>> model = PlaNetModel(cfg).eval()\n>>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)\n>>> priors, posteriors = model.observe(obs, act)\n>>> posteriors.stoch.shape\n(1, 3, 4)\n>>> model.imagine(model.rssm.initial(1), act).stoch.shape\n(1, 3, 4)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\n**Action alignment.**  `actions[:, t]` is the action taken *into*\nstep `t` — the one that produced `observations[:, t]`.  A caller\nholding $(o_0, a_0, o_1, a_1, \\dots)$ shifts by one and passes a\nzero action at index 0.\n\nPlanning is **not** implemented.  The paper pairs this model with a\ncross-entropy-method planner, which is a control algorithm rather than\na network; `imagine` is the piece of it that belongs to the\nmodel, and the search on top is left to the caller."
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\n**Action alignment.**  `actions[:, t]` is the action taken *into*\nstep `t` — the one that produced `observations[:, t]`.  A caller\nholding $(o_0, a_0, o_1, a_1, \\dots)$ shifts by one and passes a\nzero action at index 0.\n\nPlanning is **not** implemented.  The paper pairs this model with a\ncross-entropy-method planner, which is a control algorithm rather than\na network; `imagine` is the piece of it that belongs to the\nmodel, and the search on top is left to the caller."
       ],
       "attributes": [
         {
@@ -604,7 +604,7 @@
       ],
       "labels": [],
       "signature": "PlaNetOutput(observation: Tensor, reward: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, overshoot_kl_loss: Tensor | None = None, overshoot_reward_loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L48",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L52",
       "subcategory": "model",
       "methods": [
         {
@@ -613,7 +613,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(observation: Tensor, reward: Tensor, posterior_stoch: Tensor, posterior_mean: Tensor, posterior_std: Tensor, prior_mean: Tensor, prior_std: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, overshoot_kl_loss: Tensor | None = None, overshoot_reward_loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -697,7 +697,7 @@
       "kind": "function",
       "labels": [],
       "signature": "planet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_pretrained.py#L58",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_pretrained.py#L58",
       "subcategory": "pretrained",
       "summary": "Construct PlaNet's latent dynamics model — no training objective.",
       "extended": "The architecture of Hafner et al., 2019: a four-layer stride-2\nconvolutional encoder, a recurrent state-space model with a 200-unit\ndeterministic path and a 30-unit stochastic state, a mirrored\ntransposed-convolutional decoder, and a two-layer reward head.",
@@ -724,7 +724,7 @@
         ">>> from lucid.models.generative.planet import planet\n>>> model = planet(action_dim=6).eval()\n>>> model.config.stoch_size, model.config.deter_size\n(30, 200)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\nThe recurrence carries both a deterministic and a stochastic path:\n\n\n\n$$\nh_t = f\\big(h_{t-1},\\, s_{t-1},\\, a_{t-1}\\big),\n\\qquad\ns_t \\sim p\\big(s_t \\mid h_t\\big).\n$$"
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\nThe recurrence carries both a deterministic and a stochastic path:\n\n\n\n$$\nh_t = f\\big(h_{t-1},\\, s_{t-1},\\, a_{t-1}\\big),\n\\qquad\ns_t \\sim p\\big(s_t \\mid h_t\\big).\n$$"
       ],
       "attributes": [],
       "warns": [],
@@ -942,7 +942,7 @@
       "kind": "function",
       "labels": [],
       "signature": "planet_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/generative/planet/_pretrained.py#L117",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/planet/_pretrained.py#L117",
       "subcategory": "pretrained",
       "summary": "Construct PlaNet with its variational objective.",
       "extended": "Same trunk as `planet`, wrapped with the bound of Hafner et al.,\n2019 — reconstruction and reward likelihoods against a KL between the\nposterior and the dynamics' own prior, floored at `free_nats`.",
@@ -969,7 +969,7 @@
         ">>> from lucid.models.generative.planet import planet_world_model\n>>> model = planet_world_model(action_dim=6).eval()\n>>> model.config.free_nats\n3.0"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\nTraining objective:\n\n\n\n$$\n\\mathcal{L} = \\mathbb{E}_q\\big[\\log p(o_t \\mid h_t, s_t)\n                  + \\log p(r_t \\mid h_t, s_t)\\big]\n              - \\beta\\,\\mathrm{KL}\\big(q(s_t \\mid h_t, o_t)\n                  \\,\\|\\, p(s_t \\mid h_t)\\big).\n$$"
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\nTraining objective:\n\n\n\n$$\n\\mathcal{L} = \\mathbb{E}_q\\big[\\log p(o_t \\mid h_t, s_t)\n                  + \\log p(r_t \\mid h_t, s_t)\\big]\n              - \\beta\\,\\mathrm{KL}\\big(q(s_t \\mid h_t, o_t)\n                  \\,\\|\\, p(s_t \\mid h_t)\\big).\n$$"
       ],
       "attributes": [],
       "warns": [],

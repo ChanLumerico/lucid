@@ -3,7 +3,7 @@
   "name": "resnet",
   "path": "lucid.models.vision.resnet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/__init__.py#L1",
   "members": [
     {
       "name": "ResNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "ResNetConfig(num_classes: int = 1000, in_channels: int = 3, block_type: str = 'bottleneck', layers: tuple[int, ...] = (3, 4, 6, 3), stem_channels: int = 64, hidden_sizes: tuple[int, ...] = (64, 128, 256, 512), bottleneck_width_mult: int = 1, dropout: float = 0.0, zero_init_residual: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, block_type: str = 'bottleneck', layers: tuple[int, ...] = (3, 4, 6, 3), stem_channels: int = 64, hidden_sizes: tuple[int, ...] = (64, 128, 256, 512), bottleneck_width_mult: int = 1, dropout: float = 0.0, zero_init_residual: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_config.py#L1",
           "subcategory": "config",
           "summary": "Initialise the module and validate the supplied config.",
           "extended": null,
@@ -77,7 +77,7 @@
         {
           "name": "layers",
           "annotation": "tuple[int, ...]",
-          "description": "Block-repetition count for each of the four stages (stage-1\nthrough stage-4).  The default `(3, 4, 6, 3)` is the ResNet-50\nconfiguration from Table 1 of [He et al. (2015)](https://arxiv.org/abs/1502.01852).",
+          "description": "Block-repetition count for each of the four stages (stage-1\nthrough stage-4).  The default `(3, 4, 6, 3)` is the ResNet-50\nconfiguration from Table 1 of He et al. (2015).",
           "default": "(3, 4, 6, 3)"
         },
         {
@@ -117,7 +117,7 @@
         "Construct the ResNet-50 config and inspect it:\n>>> from lucid.models.vision.resnet import ResNetConfig\n>>> cfg = ResNetConfig(block_type=\"bottleneck\", layers=(3, 4, 6, 3))\n>>> cfg.num_classes\n1000\n>>> cfg.model_type\n'resnet'\nBuild a Wide ResNet-50-2 config (2x inner width, same output width):\n>>> wide = ResNetConfig(\n...     block_type=\"bottleneck\",\n...     layers=(3, 4, 6, 3),\n...     bottleneck_width_mult=2,\n... )\n>>> wide.bottleneck_width_mult\n2\nJSON round-trip (lists get coerced back to tuples):\n>>> import json\n>>> d = cfg.to_dict()\n>>> restored = ResNetConfig.from_dict(json.loads(json.dumps(d)))\n>>> isinstance(restored.layers, tuple)\nTrue"
       ],
       "notes": [
-        "The four canonical ImageNet variants from He et al., \"Deep Residual\nLearning for Image Recognition\", CVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385),\nTable 1) correspond to the following `(block_type, layers)`\ntuples:\n\n\n\n$$\n\\begin{aligned}\n    \\text{ResNet-18}  \\;&\\to\\; (\\text{basic},\\;     (2, 2, 2, 2))  \\\\\\\\\n    \\text{ResNet-34}  \\;&\\to\\; (\\text{basic},\\;     (3, 4, 6, 3))  \\\\\\\\\n    \\text{ResNet-50}  \\;&\\to\\; (\\text{bottleneck},\\; (3, 4, 6, 3))  \\\\\\\\\n    \\text{ResNet-101} \\;&\\to\\; (\\text{bottleneck},\\; (3, 4, 23, 3)) \\\\\\\\\n    \\text{ResNet-152} \\;&\\to\\; (\\text{bottleneck},\\; (3, 8, 36, 3))\n\\end{aligned}\n$$\n\nAlways prefer the factory functions in `._pretrained` (e.g.\n`resnet_50`) over hand-rolling a config — they encode the\nexact paper-cited topology and integrate with the model registry."
+        "The four canonical ImageNet variants from He et al., \"Deep Residual\nLearning for Image Recognition\", CVPR 2016 (arXiv:1512.03385,\nTable 1) correspond to the following `(block_type, layers)`\ntuples:\n\n\n\n$$\n\\begin{aligned}\n    \\text{ResNet-18}  \\;&\\to\\; (\\text{basic},\\;     (2, 2, 2, 2))  \\\\\\\\\n    \\text{ResNet-34}  \\;&\\to\\; (\\text{basic},\\;     (3, 4, 6, 3))  \\\\\\\\\n    \\text{ResNet-50}  \\;&\\to\\; (\\text{bottleneck},\\; (3, 4, 6, 3))  \\\\\\\\\n    \\text{ResNet-101} \\;&\\to\\; (\\text{bottleneck},\\; (3, 4, 23, 3)) \\\\\\\\\n    \\text{ResNet-152} \\;&\\to\\; (\\text{bottleneck},\\; (3, 8, 36, 3))\n\\end{aligned}\n$$\n\nAlways prefer the factory functions in `._pretrained` (e.g.\n`resnet_50`) over hand-rolling a config — they encode the\nexact paper-cited topology and integrate with the model registry."
       ],
       "attributes": [
         {
@@ -140,7 +140,7 @@
       ],
       "labels": [],
       "signature": "ResNet(config: ResNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_model.py#L318",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_model.py#L318",
       "subcategory": "model",
       "methods": [
         {
@@ -149,7 +149,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ResNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_model.py#L411",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_model.py#L411",
           "subcategory": "model",
           "summary": "Initialise the module and validate the supplied config.",
           "extended": null,
@@ -185,7 +185,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_model.py#L433",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_model.py#L433",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -206,7 +206,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_model.py#L436",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_model.py#L436",
           "subcategory": "model",
           "summary": "Pooled `(B, C)` feature vector, post head-norm.",
           "extended": "The per-stage maps this backbone's `feature_info` describes\nare left on `stage_features` for pyramid consumers.",
@@ -228,7 +228,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_model.py#L446",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_model.py#L446",
           "subcategory": "model",
           "summary": "Generate anchors for all FPN levels.",
           "extended": null,
@@ -265,7 +265,7 @@
         }
       ],
       "summary": "ResNet feature-extracting backbone (no classification head).",
-      "extended": "Implements the ResNet topology from He et al. in its *v1.5* form:\nthe downsampling stride sits on the bottleneck's 3x3 convolution.\nThe paper says only that \"downsampling is performed by conv3_1,\nconv4_1, and conv5_1 with a stride of 2\" without naming which conv\ncarries it; the original MSRA release put it on the first 1x1 (v1).\nv1.5 is what every modern reference builds and what the shipped\ncheckpoints were trained as., \"Deep\nResidual Learning for Image Recognition\", CVPR 2016\n([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), restricted to the convolutional trunk: a 7×7\nstem at stride 2, a 3×3 max-pool at stride 2, then four stages of\nresidual blocks producing feature maps at strides 4, 8, 16, and 32\nrelative to the input.  No global pooling, no flatten, and no\nlinear classifier — those live on `ResNetForImageClassification`.\n\nThe block topology is selected by `config.block_type`: ResNet-18\nand ResNet-34 use `_BasicBlock`, while the deeper ResNet-50\n/ 101 / 152 / 200 / 269 and Wide ResNet variants use\n`_Bottleneck`.  This class is the canonical feature\nextractor consumed by detection / segmentation heads (FPN,\nFaster R-CNN, Mask R-CNN, …) and by self-supervised pretraining\npipelines.",
+      "extended": "Implements the ResNet topology from He et al. in its *v1.5* form:\nthe downsampling stride sits on the bottleneck's 3x3 convolution.\nThe paper says only that \"downsampling is performed by conv3_1,\nconv4_1, and conv5_1 with a stride of 2\" without naming which conv\ncarries it; the original MSRA release put it on the first 1x1 (v1).\nv1.5 is what every modern reference builds and what the shipped\ncheckpoints were trained as., \"Deep\nResidual Learning for Image Recognition\", CVPR 2016\n(arXiv:1512.03385), restricted to the convolutional trunk: a 7×7\nstem at stride 2, a 3×3 max-pool at stride 2, then four stages of\nresidual blocks producing feature maps at strides 4, 8, 16, and 32\nrelative to the input.  No global pooling, no flatten, and no\nlinear classifier — those live on `ResNetForImageClassification`.\n\nThe block topology is selected by `config.block_type`: ResNet-18\nand ResNet-34 use `_BasicBlock`, while the deeper ResNet-50\n/ 101 / 152 / 200 / 269 and Wide ResNet variants use\n`_Bottleneck`.  This class is the canonical feature\nextractor consumed by detection / segmentation heads (FPN,\nFaster R-CNN, Mask R-CNN, …) and by self-supervised pretraining\npipelines.",
       "parameters": [
         {
           "name": "config",
@@ -323,7 +323,7 @@
       ],
       "labels": [],
       "signature": "ResNetForImageClassification(config: ResNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_model.py#L456",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_model.py#L456",
       "subcategory": "model",
       "methods": [
         {
@@ -332,7 +332,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ResNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_model.py#L539",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_model.py#L539",
           "subcategory": "model",
           "summary": "Initialise the module and validate the supplied config.",
           "extended": null,
@@ -366,7 +366,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_model.py#L561",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_model.py#L561",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -436,7 +436,7 @@
       ],
       "labels": [],
       "signature": "ResNet18Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_weights.py#L32",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_weights.py#L32",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.resnet_18_cls`.",
@@ -448,7 +448,7 @@
         ">>> from lucid.models import resnet_18_cls\n>>> model = resnet_18_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385))."
+        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 (arXiv:1512.03385)."
       ],
       "attributes": [
         {
@@ -475,7 +475,7 @@
       ],
       "labels": [],
       "signature": "ResNet34Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_weights.py#L80",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_weights.py#L80",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.resnet_34_cls`.",
@@ -487,7 +487,7 @@
         ">>> from lucid.models import resnet_34_cls\n>>> model = resnet_34_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385))."
+        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 (arXiv:1512.03385)."
       ],
       "attributes": [
         {
@@ -514,7 +514,7 @@
       ],
       "labels": [],
       "signature": "ResNet50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_weights.py#L122",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_weights.py#L122",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.resnet_50_cls`.",
@@ -526,7 +526,7 @@
         ">>> from lucid.models import resnet_50_cls\n>>> model = resnet_50_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385))."
+        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 (arXiv:1512.03385)."
       ],
       "attributes": [
         {
@@ -553,7 +553,7 @@
       ],
       "labels": [],
       "signature": "ResNet101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_weights.py#L164",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_weights.py#L164",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.resnet_101_cls`.",
@@ -565,7 +565,7 @@
         ">>> from lucid.models import resnet_101_cls\n>>> model = resnet_101_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385))."
+        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 (arXiv:1512.03385)."
       ],
       "attributes": [
         {
@@ -592,7 +592,7 @@
       ],
       "labels": [],
       "signature": "ResNet152Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_weights.py#L206",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_weights.py#L206",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.resnet_152_cls`.",
@@ -604,7 +604,7 @@
         ">>> from lucid.models import resnet_152_cls\n>>> model = resnet_152_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385))."
+        "Reference: He, Zhang, Ren, Sun, *\"Deep Residual Learning for Image\nRecognition\"*, CVPR 2016 (arXiv:1512.03385)."
       ],
       "attributes": [
         {
@@ -631,7 +631,7 @@
       ],
       "labels": [],
       "signature": "WideResNet50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_weights.py#L248",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_weights.py#L248",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.wide_resnet_50_cls`.",
@@ -643,7 +643,7 @@
         ">>> from lucid.models import wide_resnet_50_cls\n>>> model = wide_resnet_50_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Zagoruyko, Komodakis, *\"Wide Residual Networks\"*, BMVC\n2016 ([arXiv:1605.07146](https://arxiv.org/abs/1605.07146))."
+        "Reference: Zagoruyko, Komodakis, *\"Wide Residual Networks\"*, BMVC\n2016 (arXiv:1605.07146)."
       ],
       "attributes": [
         {
@@ -670,7 +670,7 @@
       ],
       "labels": [],
       "signature": "WideResNet101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_weights.py#L291",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_weights.py#L291",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.wide_resnet_101_cls`.",
@@ -682,7 +682,7 @@
         ">>> from lucid.models import wide_resnet_101_cls\n>>> model = wide_resnet_101_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Zagoruyko, Komodakis, *\"Wide Residual Networks\"*, BMVC\n2016 ([arXiv:1605.07146](https://arxiv.org/abs/1605.07146))."
+        "Reference: Zagoruyko, Komodakis, *\"Wide Residual Networks\"*, BMVC\n2016 (arXiv:1605.07146)."
       ],
       "attributes": [
         {
@@ -705,7 +705,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_18(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L50",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L50",
       "subcategory": "pretrained",
       "summary": "ResNet-18 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNet` with the paper-cited ResNet-18 topology:\n`_BasicBlock` blocks stacked `[2, 2, 2, 2]` over four\nstages, yielding approximately 11.7M parameters.  The original\npaper (He et al., 2015) reports a 69.76% ImageNet-1k top-1\nvalidation accuracy with this configuration (Table 4).  Used as a\nlightweight backbone where parameter / FLOP budget is tight.",
@@ -732,7 +732,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnet import resnet_18\n>>> model = resnet_18()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 512, H/32, W/32)\n(1, 512, 7, 7)"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  The key insight is the\nidentity shortcut\n\n\n\n$$\ny_{l+1} = \\sigma\\!\\left(F(y_l, W_l) + y_l\\right),\n$$\n\nwhich lets gradients propagate through a clean identity branch\neven in very deep networks."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  The key insight is the\nidentity shortcut\n\n\n\n$$\ny_{l+1} = \\sigma\\!\\left(F(y_l, W_l) + y_l\\right),\n$$\n\nwhich lets gradients propagate through a clean identity branch\neven in very deep networks."
       ],
       "attributes": [],
       "warns": [],
@@ -1189,7 +1189,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_18_cls(pretrained: bool | str = False, weights: ResNet18Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L358",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L358",
       "subcategory": "pretrained",
       "summary": "ResNet-18 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNetForImageClassification` with the paper-cited\nResNet-18 topology: `_BasicBlock` blocks stacked\n`[2, 2, 2, 2]` over four stages, followed by global average\npooling and a linear projection to `config.num_classes`\n(default 1000 for ImageNet-1k).  Approximately 11.7M parameters\nand 69.76% ImageNet-1k top-1 in He et al., 2015 (Table 4).",
@@ -1222,7 +1222,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnet import resnet_18_cls\n>>> model = resnet_18_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = resnet_18_cls(pretrained=True)            # DEFAULT tag\n>>> from lucid.models.vision.resnet import ResNet18Weights\n>>> model = resnet_18_cls(weights=ResNet18Weights.IMAGENET1K_V1)"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  Pretrained weights are\nconverted from reference_vision's `ResNet18_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/resnet-18`."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are\nconverted from reference_vision's `ResNet18_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/resnet-18`."
       ],
       "attributes": [],
       "warns": [],
@@ -1693,7 +1693,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_34(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L114",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L114",
       "subcategory": "pretrained",
       "summary": "ResNet-34 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNet` with the paper-cited ResNet-34 topology:\n`_BasicBlock` blocks stacked `[3, 4, 6, 3]` over four\nstages, yielding approximately 21.8M parameters.  Reaches 73.31%\nImageNet-1k top-1 in He et al., 2015 (Table 4).  A good middle\nground when ResNet-18 is too small but ResNet-50's bottleneck\noverhead is unwanted.",
@@ -1720,7 +1720,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnet import resnet_34\n>>> model = resnet_34()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 512, H/32, W/32)\n(1, 512, 7, 7)"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  Like ResNet-18 this\nvariant uses two-layer residual blocks, so the final-stage output\nis 512 channels (not 2048 as in the bottleneck variants)."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  Like ResNet-18 this\nvariant uses two-layer residual blocks, so the final-stage output\nis 512 channels (not 2048 as in the bottleneck variants)."
       ],
       "attributes": [],
       "warns": [],
@@ -2180,7 +2180,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_34_cls(pretrained: bool | str = False, weights: ResNet34Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L442",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L442",
       "subcategory": "pretrained",
       "summary": "ResNet-34 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNetForImageClassification` with the paper-cited\nResNet-34 topology: `_BasicBlock` blocks stacked\n`[3, 4, 6, 3]` over four stages, followed by global average\npooling and a linear projection to `config.num_classes`.\nApproximately 21.8M parameters and 73.31% ImageNet-1k top-1 in\nHe et al., 2015 (Table 4).",
@@ -2213,7 +2213,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnet import resnet_34_cls\n>>> model = resnet_34_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  Pretrained weights are\nconverted from reference_vision's `ResNet34_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/resnet-34`."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are\nconverted from reference_vision's `ResNet34_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/resnet-34`."
       ],
       "attributes": [],
       "warns": [],
@@ -2687,7 +2687,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_50(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L170",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L170",
       "subcategory": "pretrained",
       "summary": "ResNet-50 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNet` with the paper-cited ResNet-50 topology:\n`_Bottleneck` blocks stacked `[3, 4, 6, 3]` over four\nstages, yielding approximately 25.6M parameters.  Reaches 76.13%\nImageNet-1k top-1 in He et al., 2015 (Table 4).  By far the most\ncommon ResNet variant in production — used as the default backbone\nfor Faster R-CNN, Mask R-CNN, DeepLab, and many other downstream\ntasks.",
@@ -2714,7 +2714,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnet import resnet_50\n>>> model = resnet_50()\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)\n(2, 2048, 7, 7)"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  The bottleneck block\n\n\n\n$$\nF(x) = W_3 \\,\\sigma\\!\\left(W_2 \\,\\sigma(W_1 x)\\right)\n$$\n\ncompresses the channel count via the leading 1×1 convolution and\nre-expands it via the trailing 1×1, reducing FLOPs at depth.  The\nfinal-stage output is 2048 channels (`hidden_sizes[3] *\nexpansion`)."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  The bottleneck block\n\n\n\n$$\nF(x) = W_3 \\,\\sigma\\!\\left(W_2 \\,\\sigma(W_1 x)\\right)\n$$\n\ncompresses the channel count via the leading 1×1 convolution and\nre-expands it via the trailing 1×1, reducing FLOPs at depth.  The\nfinal-stage output is 2048 channels (`hidden_sizes[3] *\nexpansion`)."
       ],
       "attributes": [],
       "warns": [],
@@ -3351,7 +3351,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_50_cls(pretrained: bool | str = False, weights: ResNet50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L512",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L512",
       "subcategory": "pretrained",
       "summary": "ResNet-50 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNetForImageClassification` with the paper-cited\nResNet-50 topology: `_Bottleneck` blocks stacked\n`[3, 4, 6, 3]` over four stages, followed by global average\npooling and a linear projection to `config.num_classes`.\nApproximately 25.6M parameters and 76.13% ImageNet-1k top-1 in\nHe et al., 2015 (Table 4) — the canonical default for ImageNet\nclassification benchmarks.",
@@ -3384,7 +3384,7 @@
         "Run a forward pass without labels:\n>>> import lucid\n>>> from lucid.models.vision.resnet import resnet_50_cls\n>>> model = resnet_50_cls()\n>>> x = lucid.randn(4, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(4, 1000)\nRetarget to CIFAR-10 and add dropout:\n>>> model = resnet_50_cls(num_classes=10, dropout=0.1)\n>>> model.config.num_classes\n10"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  Final pre-classifier\nfeature has 2048 channels (`hidden_sizes[3] * expansion`).\nPretrained weights are converted from reference_vision's\n`ResNet50_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/resnet-50`."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  Final pre-classifier\nfeature has 2048 channels (`hidden_sizes[3] * expansion`).\nPretrained weights are converted from reference_vision's\n`ResNet50_Weights` and hosted on the Hugging Face Hub under\n`lucid-dl/resnet-50`."
       ],
       "attributes": [],
       "warns": [],
@@ -4035,7 +4035,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_101(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L235",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L235",
       "subcategory": "pretrained",
       "summary": "ResNet-101 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNet` with the paper-cited ResNet-101 topology:\n`_Bottleneck` blocks stacked `[3, 4, 23, 3]` over four\nstages, yielding approximately 44.5M parameters.  Reaches 77.37%\nImageNet-1k top-1 in He et al., 2015 (Table 4).  Higher-capacity\ndrop-in replacement for ResNet-50 when accuracy matters more than\ninference latency.",
@@ -4062,7 +4062,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnet import resnet_101\n>>> model = resnet_101()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  The bulk of the depth lives\nin stage-3 (23 bottleneck blocks); stages 1, 2, and 4 are identical\nto ResNet-50.  Final-stage output is 2048 channels."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  The bulk of the depth lives\nin stage-3 (23 bottleneck blocks); stages 1, 2, and 4 are identical\nto ResNet-50.  Final-stage output is 2048 channels."
       ],
       "attributes": [],
       "warns": [],
@@ -4699,7 +4699,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_101_cls(pretrained: bool | str = False, weights: ResNet101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L596",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L596",
       "subcategory": "pretrained",
       "summary": "ResNet-101 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNetForImageClassification` with the paper-cited\nResNet-101 topology: `_Bottleneck` blocks stacked\n`[3, 4, 23, 3]` over four stages, followed by global average\npooling and a linear projection to `config.num_classes`.\nApproximately 44.5M parameters and 77.37% ImageNet-1k top-1 in\nHe et al., 2015 (Table 4).",
@@ -4732,7 +4732,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnet import resnet_101_cls\n>>> model = resnet_101_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  Pretrained weights are\nconverted from reference_vision's `ResNet101_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/resnet-101`."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are\nconverted from reference_vision's `ResNet101_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/resnet-101`."
       ],
       "attributes": [],
       "warns": [],
@@ -5383,7 +5383,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_152(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L293",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L293",
       "subcategory": "pretrained",
       "summary": "ResNet-152 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNet` with the paper-cited ResNet-152 topology:\n`_Bottleneck` blocks stacked `[3, 8, 36, 3]` over four\nstages, yielding approximately 60.2M parameters.  Reaches 78.31%\nImageNet-1k top-1 in He et al., 2015 (Table 4) — the highest of\nthe canonical ResNet variants from the original paper.",
@@ -5410,7 +5410,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnet import resnet_152\n>>> model = resnet_152()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)\n(1, 2048, 7, 7)"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  The 36-block stage-3 is\nthe defining feature; stages 1 and 4 are unchanged from\nResNet-50/101, and stage-2 widens from 4 to 8 blocks.  Final-stage\noutput is 2048 channels."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  The 36-block stage-3 is\nthe defining feature; stages 1 and 4 are unchanged from\nResNet-50/101, and stage-2 widens from 4 to 8 blocks.  Final-stage\noutput is 2048 channels."
       ],
       "attributes": [],
       "warns": [],
@@ -6047,7 +6047,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_152_cls(pretrained: bool | str = False, weights: ResNet152Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L668",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L668",
       "subcategory": "pretrained",
       "summary": "ResNet-152 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNetForImageClassification` with the paper-cited\nResNet-152 topology: `_Bottleneck` blocks stacked\n`[3, 8, 36, 3]` over four stages, followed by global average\npooling and a linear projection to `config.num_classes`.\nApproximately 60.2M parameters and 78.31% ImageNet-1k top-1 in\nHe et al., 2015 (Table 4) — the deepest and most accurate of the\noriginal ResNet variants.",
@@ -6080,7 +6080,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.resnet import resnet_152_cls\n>>> model = resnet_152_cls()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), Table 1.  Pretrained weights are\nconverted from reference_vision's `ResNet152_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/resnet-152`."
+        "See He et al., \"Deep Residual Learning for Image Recognition\",\nCVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are\nconverted from reference_vision's `ResNet152_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/resnet-152`."
       ],
       "attributes": [],
       "warns": [],
@@ -6731,10 +6731,10 @@
       "kind": "function",
       "labels": [],
       "signature": "wide_resnet_50(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L744",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L744",
       "subcategory": "pretrained",
       "summary": "Wide ResNet-50-2 feature-extracting backbone (no classification head).",
-      "extended": "Builds a `ResNet` with ResNet-50's `[3, 4, 6, 3]`\n`_Bottleneck` layout but with a `bottleneck_width_mult=2`\nmultiplier on the inner 3×3 convolutions.  The per-stage output\nchannel count is unchanged from ResNet-50 (256 / 512 / 1024 /\n2048), but the inner bottleneck width doubles — yielding roughly\n68.9M parameters.  Defined in Zagoruyko & Komodakis, \"Wide\nResidual Networks\", BMVC 2016 ([arXiv:1605.07146](https://arxiv.org/abs/1605.07146)).",
+      "extended": "Builds a `ResNet` with ResNet-50's `[3, 4, 6, 3]`\n`_Bottleneck` layout but with a `bottleneck_width_mult=2`\nmultiplier on the inner 3×3 convolutions.  The per-stage output\nchannel count is unchanged from ResNet-50 (256 / 512 / 1024 /\n2048), but the inner bottleneck width doubles — yielding roughly\n68.9M parameters.  Defined in Zagoruyko & Komodakis, \"Wide\nResidual Networks\", BMVC 2016 (arXiv:1605.07146).",
       "parameters": [
         {
           "name": "pretrained",
@@ -7395,10 +7395,10 @@
       "kind": "function",
       "labels": [],
       "signature": "wide_resnet_50_cls(pretrained: bool | str = False, weights: WideResNet50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L809",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L809",
       "subcategory": "pretrained",
       "summary": "Wide ResNet-50-2 image classifier (backbone + GAP + linear head).",
-      "extended": "Builds a `ResNetForImageClassification` with the Wide\nResNet-50-2 configuration: ResNet-50's `[3, 4, 6, 3]` bottleneck\nlayout with a 2x inner-channel multiplier.  Approximately 68.9M\nparameters; from Zagoruyko & Komodakis, \"Wide Residual Networks\",\nBMVC 2016 ([arXiv:1605.07146](https://arxiv.org/abs/1605.07146)).",
+      "extended": "Builds a `ResNetForImageClassification` with the Wide\nResNet-50-2 configuration: ResNet-50's `[3, 4, 6, 3]` bottleneck\nlayout with a 2x inner-channel multiplier.  Approximately 68.9M\nparameters; from Zagoruyko & Komodakis, \"Wide Residual Networks\",\nBMVC 2016 (arXiv:1605.07146).",
       "parameters": [
         {
           "name": "pretrained",
@@ -8079,10 +8079,10 @@
       "kind": "function",
       "labels": [],
       "signature": "wide_resnet_101(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L885",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L885",
       "subcategory": "pretrained",
       "summary": "Wide ResNet-101-2 feature-extracting backbone (no classification head).",
-      "extended": "Builds a `ResNet` with ResNet-101's `[3, 4, 23, 3]`\n`_Bottleneck` layout and a `bottleneck_width_mult=2`\nmultiplier on the inner 3×3 convolutions.  Output channel counts\nmatch standard ResNet-101 (256 / 512 / 1024 / 2048); approximately\n126.9M parameters.  From Zagoruyko & Komodakis, \"Wide Residual\nNetworks\", BMVC 2016 ([arXiv:1605.07146](https://arxiv.org/abs/1605.07146)).",
+      "extended": "Builds a `ResNet` with ResNet-101's `[3, 4, 23, 3]`\n`_Bottleneck` layout and a `bottleneck_width_mult=2`\nmultiplier on the inner 3×3 convolutions.  Output channel counts\nmatch standard ResNet-101 (256 / 512 / 1024 / 2048); approximately\n126.9M parameters.  From Zagoruyko & Komodakis, \"Wide Residual\nNetworks\", BMVC 2016 (arXiv:1605.07146).",
       "parameters": [
         {
           "name": "pretrained",
@@ -8741,10 +8741,10 @@
       "kind": "function",
       "labels": [],
       "signature": "wide_resnet_101_cls(pretrained: bool | str = False, weights: WideResNet101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L942",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L942",
       "subcategory": "pretrained",
       "summary": "Wide ResNet-101-2 image classifier (backbone + GAP + linear head).",
-      "extended": "Builds a `ResNetForImageClassification` with the Wide\nResNet-101-2 configuration: ResNet-101's `[3, 4, 23, 3]`\nbottleneck layout with a 2x inner-channel multiplier.\nApproximately 126.9M parameters; from Zagoruyko & Komodakis,\n\"Wide Residual Networks\", BMVC 2016 ([arXiv:1605.07146](https://arxiv.org/abs/1605.07146)).",
+      "extended": "Builds a `ResNetForImageClassification` with the Wide\nResNet-101-2 configuration: ResNet-101's `[3, 4, 23, 3]`\nbottleneck layout with a 2x inner-channel multiplier.\nApproximately 126.9M parameters; from Zagoruyko & Komodakis,\n\"Wide Residual Networks\", BMVC 2016 (arXiv:1605.07146).",
       "parameters": [
         {
           "name": "pretrained",
@@ -9425,10 +9425,10 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_200(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L1018",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L1018",
       "subcategory": "pretrained",
       "summary": "ResNet-200 feature-extracting backbone (no classification head).",
-      "extended": "Builds a `ResNet` with the deep bottleneck topology\nintroduced in He et al., \"Identity Mappings in Deep Residual\nNetworks\", ECCV 2016 ([arXiv:1603.05027](https://arxiv.org/abs/1603.05027)): `_Bottleneck`\nblocks stacked `[3, 24, 36, 3]` over four stages — approximately\n64.7M parameters.  Used as a high-capacity backbone for ImageNet\npre-training in large-scale vision pipelines.",
+      "extended": "Builds a `ResNet` with the deep bottleneck topology\nintroduced in He et al., \"Identity Mappings in Deep Residual\nNetworks\", ECCV 2016 (arXiv:1603.05027): `_Bottleneck`\nblocks stacked `[3, 24, 36, 3]` over four stages — approximately\n64.7M parameters.  Used as a high-capacity backbone for ImageNet\npre-training in large-scale vision pipelines.",
       "parameters": [
         {
           "name": "pretrained",
@@ -10089,10 +10089,10 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_200_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L1074",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L1074",
       "subcategory": "pretrained",
       "summary": "ResNet-200 image classifier (backbone + GAP + linear head).",
-      "extended": "Builds a `ResNetForImageClassification` with the deep\nbottleneck topology `[3, 24, 36, 3]` from He et al., \"Identity\nMappings in Deep Residual Networks\", ECCV 2016 ([arXiv:1603.05027](https://arxiv.org/abs/1603.05027)).\nApproximately 64.7M parameters.",
+      "extended": "Builds a `ResNetForImageClassification` with the deep\nbottleneck topology `[3, 24, 36, 3]` from He et al., \"Identity\nMappings in Deep Residual Networks\", ECCV 2016 (arXiv:1603.05027).\nApproximately 64.7M parameters.",
       "parameters": [
         {
           "name": "pretrained",
@@ -10765,7 +10765,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_269(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L1129",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L1129",
       "subcategory": "pretrained",
       "summary": "ResNet-269 feature-extracting backbone (no classification head).",
       "extended": "Builds a `ResNet` with the very deep bottleneck topology\n`[3, 30, 48, 8]`, an extension of the canonical ResNet design\nstudied in subsequent deep-residual literature (notably as the\nteacher network in MXNet-style training pipelines and as an\ninception-resnet baseline).  Approximately 102.1M parameters.",
@@ -11429,7 +11429,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resnet_269_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/resnet/_pretrained.py#L1184",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/resnet/_pretrained.py#L1184",
       "subcategory": "pretrained",
       "summary": "ResNet-269 image classifier (backbone + GAP + linear head).",
       "extended": "Builds a `ResNetForImageClassification` with the very deep\nbottleneck topology `[3, 30, 48, 8]`.  Approximately 102.1M\nparameters — primarily useful as a high-capacity teacher in\nknowledge distillation pipelines.",
@@ -12101,7 +12101,7 @@
     }
   ],
   "summary": "ResNet model family — feature-extracting backbones and image classifiers.",
-  "extended": "Implements the residual-learning architecture from He et al., \"Deep Residual\nLearning for Image Recognition\", CVPR 2016 ([arXiv:1512.03385](https://arxiv.org/abs/1512.03385)), plus a few\nwidely-cited follow-up variants:\n\n- **Canonical ResNets** — `resnet_18`, `resnet_34`,\n  `resnet_50`, `resnet_101`, `resnet_152` and their\n  `*_cls` classification counterparts.\n- **Wide ResNets** (Zagoruyko & Komodakis, BMVC 2016) —\n  `wide_resnet_50`, `wide_resnet_101`.\n- **Deep bottleneck variants** — `resnet_200`, `resnet_269`.\n\nEvery variant shares the same architecture-specifying dataclass\n`ResNetConfig`.  Use the factory functions for paper-cited\nconfigurations; pass `**overrides` to tweak individual fields without\nwriting a config by hand.",
+  "extended": "Implements the residual-learning architecture from He et al., \"Deep Residual\nLearning for Image Recognition\", CVPR 2016 (arXiv:1512.03385), plus a few\nwidely-cited follow-up variants:\n\n- **Canonical ResNets** — `resnet_18`, `resnet_34`,\n  `resnet_50`, `resnet_101`, `resnet_152` and their\n  `*_cls` classification counterparts.\n- **Wide ResNets** (Zagoruyko & Komodakis, BMVC 2016) —\n  `wide_resnet_50`, `wide_resnet_101`.\n- **Deep bottleneck variants** — `resnet_200`, `resnet_269`.\n\nEvery variant shares the same architecture-specifying dataclass\n`ResNetConfig`.  Use the factory functions for paper-cited\nconfigurations; pass `**overrides` to tweak individual fields without\nwriting a config by hand.",
   "parameters": [],
   "returns": null,
   "raises": [],

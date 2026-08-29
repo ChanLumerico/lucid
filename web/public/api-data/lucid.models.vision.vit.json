@@ -3,7 +3,7 @@
   "name": "vit",
   "path": "lucid.models.vision.vit",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/__init__.py#L1",
   "members": [
     {
       "name": "ViTConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "ViTConfig(image_size: int = 224, patch_size: int = 16, num_classes: int = 1000, in_channels: int = 3, dim: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, dropout: float = 0.0, attention_dropout: float = 0.0, layer_norm_eps: float = 1e-06, representation_size: int | None = None, classifier: Literal['token', 'gap'] = 'token')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(image_size: int = 224, patch_size: int = 16, num_classes: int = 1000, in_channels: int = 3, dim: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, dropout: float = 0.0, attention_dropout: float = 0.0, layer_norm_eps: float = 1e-06, representation_size: int | None = None, classifier: Literal['token', 'gap'] = 'token')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,7 +42,7 @@
         }
       ],
       "summary": "Configuration dataclass for every Vision Transformer (ViT) variant.",
-      "extended": "`ViTConfig` is an immutable container that fully specifies the\narchitecture of a Vision Transformer.  It is consumed by both\n`ViT` (backbone) and `ViTForImageClassification`\n(classifier head on top of the CLS token).  All canonical variants\ndescribed in [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929) — Base / Large / Huge at patch\nsizes 14, 16, and 32 — can be expressed by choosing different values for\n`dim`, `depth`, `num_heads`, and `patch_size`.\n\nThe number of input tokens fed into the transformer encoder is\n$N + 1$, where $N = (\\text{image\\_size} / \\text{patch\\_size})^2$\nis the number of non-overlapping patches and the extra token is a\nlearnable `[CLS]` embedding prepended to the sequence.",
+      "extended": "`ViTConfig` is an immutable container that fully specifies the\narchitecture of a Vision Transformer.  It is consumed by both\n`ViT` (backbone) and `ViTForImageClassification`\n(classifier head on top of the CLS token).  All canonical variants\ndescribed in Dosovitskiy et al. (2020) — Base / Large / Huge at patch\nsizes 14, 16, and 32 — can be expressed by choosing different values for\n`dim`, `depth`, `num_heads`, and `patch_size`.\n\nThe number of input tokens fed into the transformer encoder is\n$N + 1$, where $N = (\\text{image\\_size} / \\text{patch\\_size})^2$\nis the number of non-overlapping patches and the extra token is a\nlearnable `[CLS]` embedding prepended to the sequence.",
       "parameters": [
         {
           "name": "image_size",
@@ -140,7 +140,7 @@
       ],
       "labels": [],
       "signature": "ViT(config: ViTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_model.py#L331",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_model.py#L331",
       "subcategory": "model",
       "methods": [
         {
@@ -149,9 +149,9 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ViTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_model.py#L423",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_model.py#L423",
           "subcategory": "model",
-          "summary": "Initialise the Flatten module. See the class docstring for parameter semantics.",
+          "summary": "Initialise the block. See the class docstring for parameters.",
           "extended": null,
           "parameters": [],
           "returns": {
@@ -173,7 +173,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_model.py#L446",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_model.py#L446",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -194,7 +194,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_model.py#L449",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_model.py#L449",
           "subcategory": "model",
           "summary": "Pooled `(B, C)` feature vector, post head-norm.",
           "extended": "The per-stage maps this backbone's `feature_info` describes\nare left on `stage_features` for pyramid consumers.",
@@ -216,14 +216,27 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_model.py#L461",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_model.py#L461",
           "subcategory": "model",
-          "summary": "Return bias tensor of shape (1, num_heads, ws², ws²).",
+          "summary": "Attention and MLP, each modulated and gated by `cond`.",
           "extended": null,
-          "parameters": [],
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "`(B, N, D)` token stream.",
+              "default": null
+            },
+            {
+              "name": "cond",
+              "annotation": "Tensor",
+              "description": "`(B, D)` conditioning vector.",
+              "default": null
+            }
+          ],
           "returns": {
-            "annotation": "BaseModelOutput",
-            "description": ""
+            "annotation": "Tensor",
+            "description": "`(B, N, D)`."
           },
           "raises": [],
           "examples": [],
@@ -302,7 +315,7 @@
       ],
       "labels": [],
       "signature": "ViTForImageClassification(config: ViTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_model.py#L486",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_model.py#L486",
       "subcategory": "model",
       "methods": [
         {
@@ -311,7 +324,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ViTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_model.py#L569",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_model.py#L569",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -333,7 +346,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset_classifier(num_classes: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_model.py#L601",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_model.py#L601",
           "subcategory": "model",
           "summary": "Replace the classification head with a freshly initialised one.",
           "extended": "ViT keeps the reference's `head` attribute name so checkpoints port\ndirectly, which means the mixin's default — which looks for\n`self.classifier` — cannot find it and raised `AttributeError`.",
@@ -355,7 +368,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_model.py#L611",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_model.py#L611",
           "subcategory": "model",
           "summary": "Return bias tensor of shape (1, num_heads, ws², ws²).",
           "extended": null,
@@ -436,7 +449,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_base_16(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L38",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L38",
       "subcategory": "pretrained",
       "summary": "ViT-Base/16 backbone (Dosovitskiy et al., 2020).",
       "extended": "Builds the canonical *ViT-Base* configuration with patch size 16:\n`dim=768`, `depth=12`, `num_heads=12`, `mlp_ratio=4.0`.  With\nthe default 224x224 input this yields $(224/16)^2 = 196$ patch\ntokens plus one CLS token, for an input sequence length of `197` to\nthe transformer encoder.  Approximately **86M parameters**.",
@@ -463,7 +476,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_16\n>>> model = vit_base_16()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> feat = model.forward_features(x)\n>>> feat.shape\n(1, 768)"
       ],
       "notes": [
-        "ViT-Base/16 was pretrained on JFT-300M / ImageNet-21k and reported\n**84.15% top-1 / 97.20% top-5 on ImageNet-1k** after fine-tuning at\n384x384 in [Dosovitskiy et al. (2020, Table 5)](https://arxiv.org/abs/2010.11929).  See\n[arXiv:2010.11929](https://arxiv.org/abs/2010.11929)."
+        "ViT-Base/16 was pretrained on JFT-300M / ImageNet-21k and reported\n**84.15% top-1 / 97.20% top-5 on ImageNet-1k** after fine-tuning at\n384x384 in Dosovitskiy et al. (2020, Table 5).  See\n[arXiv:2010.11929](https://arxiv.org/abs/2010.11929)."
       ],
       "attributes": [],
       "warns": [],
@@ -602,7 +615,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_base_16_cls(pretrained: bool | str = False, weights: ViTBase16Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L295",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L295",
       "subcategory": "pretrained",
       "summary": "ViT-Base/16 image classifier (Dosovitskiy et al., 2020).",
       "extended": "Combines the `vit_base_16` backbone with a single\n`nn.Linear` classification head on the CLS token.  Default\noutput is `num_classes=1000` (ImageNet-1k); override via\n`num_classes=...`.  Approximately **86M parameters** for the\n1000-class head.",
@@ -788,7 +801,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_base_32(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L93",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L93",
       "subcategory": "pretrained",
       "summary": "ViT-Base/32 backbone (Dosovitskiy et al., 2020).",
       "extended": "Same ViT-Base trunk as `vit_base_16` (`dim=768`, `depth=12`,\n`num_heads=12`) but with patch size 32, which reduces the sequence\nlength to $(224/32)^2 = 49$ patch tokens (+1 CLS = 50).  The\nlarger patches trade fine-grained spatial detail for ~4x cheaper\nself-attention and ~88M parameters in total.",
@@ -815,7 +828,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_32\n>>> model = vit_base_32()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 768)"
       ],
       "notes": [
-        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  The `/32` variant\nis most useful when latency / FLOPs dominate over absolute accuracy."
+        "Reference: Dosovitskiy et al. (2020), Table 1.  The `/32` variant\nis most useful when latency / FLOPs dominate over absolute accuracy."
       ],
       "attributes": [],
       "warns": [],
@@ -954,7 +967,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_base_32_cls(pretrained: bool | str = False, weights: ViTBase32Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L366",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L366",
       "subcategory": "pretrained",
       "summary": "ViT-Base/32 image classifier (Dosovitskiy et al., 2020).",
       "extended": "Combines the `vit_base_32` backbone (`dim=768`, `depth=12`,\n`num_heads=12`, patch size 32) with a linear classification head on\nthe CLS token.  The `/32` patching yields a 49-token sequence,\nmaking this the cheapest ViT-Base classifier.",
@@ -987,7 +1000,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_base_32_cls\n>>> model = vit_base_32_cls(num_classes=10)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 10)"
       ],
       "notes": [
-        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  Pretrained weights are\nconverted from reference_vision's `ViT_B_32_Weights.IMAGENET1K_V1`\n(75.912% top-1) and hosted under `lucid-dl/vit-base-32`."
+        "Reference: Dosovitskiy et al. (2020), Table 1.  Pretrained weights are\nconverted from reference_vision's `ViT_B_32_Weights.IMAGENET1K_V1`\n(75.912% top-1) and hosted under `lucid-dl/vit-base-32`."
       ],
       "attributes": [],
       "warns": [],
@@ -1140,7 +1153,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_large_16(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L141",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L141",
       "subcategory": "pretrained",
       "summary": "ViT-Large/16 backbone (Dosovitskiy et al., 2020).",
       "extended": "The canonical *ViT-Large* configuration with patch size 16:\n`dim=1024`, `depth=24`, `num_heads=16`, `mlp_ratio=4.0`.  With\na 224x224 input it produces 197 tokens (196 patches + CLS) feeding 24\npre-norm transformer blocks of width 1024.  Approximately\n**307M parameters**.",
@@ -1306,7 +1319,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_large_16_cls(pretrained: bool | str = False, weights: ViTLarge16Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L429",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L429",
       "subcategory": "pretrained",
       "summary": "ViT-Large/16 image classifier (Dosovitskiy et al., 2020).",
       "extended": "Combines the `vit_large_16` backbone (`dim=1024`,\n`depth=24`, `num_heads=16`, patch size 16) with a linear\nclassification head on the CLS token.  Approximately\n**307M parameters**.",
@@ -1339,7 +1352,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_16_cls\n>>> model = vit_large_16_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 5.  Pretrained weights are\nconverted from reference_vision's `ViT_L_16_Weights.IMAGENET1K_V1`\n(79.662% top-1, 242-pixel resize) and hosted under\n`lucid-dl/vit-large-16`."
+        "Reference: Dosovitskiy et al. (2020), Table 5.  Pretrained weights are\nconverted from reference_vision's `ViT_L_16_Weights.IMAGENET1K_V1`\n(79.662% top-1, 242-pixel resize) and hosted under\n`lucid-dl/vit-large-16`."
       ],
       "attributes": [],
       "warns": [],
@@ -1492,7 +1505,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_large_32(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L190",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L190",
       "subcategory": "pretrained",
       "summary": "ViT-Large/32 backbone (Dosovitskiy et al., 2020).",
       "extended": "Same ViT-Large trunk as `vit_large_16` (`dim=1024`,\n`depth=24`, `num_heads=16`) but with patch size 32, producing only\n$(224/32)^2 = 49$ patch tokens (+1 CLS).  Approximately\n**307M parameters** with substantially reduced attention cost.",
@@ -1519,7 +1532,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_32\n>>> model = vit_large_32()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model.forward_features(x).shape\n(1, 1024)"
       ],
       "notes": [
-        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  Useful when Large\ncapacity is desired but the `/16` token count is too expensive."
+        "Reference: Dosovitskiy et al. (2020), Table 1.  Useful when Large\ncapacity is desired but the `/16` token count is too expensive."
       ],
       "attributes": [],
       "warns": [],
@@ -1658,7 +1671,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_large_32_cls(pretrained: bool | str = False, weights: ViTLarge32Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L493",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L493",
       "subcategory": "pretrained",
       "summary": "ViT-Large/32 image classifier (Dosovitskiy et al., 2020).",
       "extended": "Combines the `vit_large_32` backbone (`dim=1024`,\n`depth=24`, `num_heads=16`, patch size 32) with a linear\nclassification head on the CLS token.  The `/32` patching gives a\n49-token sequence and substantially lowers self-attention cost.",
@@ -1691,7 +1704,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.vit import vit_large_32_cls\n>>> model = vit_large_32_cls(num_classes=1000)\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> model(x).logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "Reference: [Dosovitskiy et al. (2020)](https://arxiv.org/abs/2010.11929), Table 1.  Pretrained weights are\nconverted from reference_vision's `ViT_L_32_Weights.IMAGENET1K_V1`\n(76.972% top-1) and hosted under `lucid-dl/vit-large-32`."
+        "Reference: Dosovitskiy et al. (2020), Table 1.  Pretrained weights are\nconverted from reference_vision's `ViT_L_32_Weights.IMAGENET1K_V1`\n(76.972% top-1) and hosted under `lucid-dl/vit-large-32`."
       ],
       "attributes": [],
       "warns": [],
@@ -1844,7 +1857,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_huge_14(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L237",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L237",
       "subcategory": "pretrained",
       "summary": "ViT-Huge/14 backbone (Dosovitskiy et al., 2020).",
       "extended": "The canonical *ViT-Huge* configuration with patch size 14:\n`dim=1280`, `depth=32`, `num_heads=16`, `mlp_ratio=4.0`.  With\na 224x224 input it produces $(224/14)^2 = 256$ patch tokens\n(+1 CLS = 257 total) feeding 32 transformer blocks of width 1280.\nApproximately **632M parameters** — the largest variant in the\npaper.",
@@ -2010,7 +2023,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vit_huge_14_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_pretrained.py#L553",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_pretrained.py#L553",
       "subcategory": "pretrained",
       "summary": "ViT-Huge/14 image classifier (Dosovitskiy et al., 2020).",
       "extended": "Combines the `vit_huge_14` backbone (`dim=1280`, `depth=32`,\n`num_heads=16`, patch size 14) with a linear classification head on\nthe CLS token.  Approximately **632M parameters** — the largest ViT\nvariant in the paper.",
@@ -2194,7 +2207,7 @@
       ],
       "labels": [],
       "signature": "ViTBase16Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_weights.py#L26",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_weights.py#L26",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vit_base_16_cls`.",
@@ -2218,7 +2231,7 @@
       ],
       "labels": [],
       "signature": "ViTBase32Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_weights.py#L51",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_weights.py#L51",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vit_base_32_cls`.",
@@ -2242,7 +2255,7 @@
       ],
       "labels": [],
       "signature": "ViTLarge16Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_weights.py#L76",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_weights.py#L76",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vit_large_16_cls`.",
@@ -2266,7 +2279,7 @@
       ],
       "labels": [],
       "signature": "ViTLarge32Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/vit/_weights.py#L104",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/vit/_weights.py#L104",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.vit_large_32_cls`.",

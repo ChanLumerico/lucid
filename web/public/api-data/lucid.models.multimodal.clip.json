@@ -3,7 +3,7 @@
   "name": "clip",
   "path": "lucid.models.multimodal.clip",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/__init__.py#L1",
   "members": [
     {
       "name": "CLIPConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "CLIPConfig(embed_dim: int = 512, act_fn: MultimodalActivation = 'quick_gelu', image_size: int = 224, patch_size: int = 32, vision_layers: int = 12, vision_width: int = 768, vision_heads: int = 12, context_length: int = 77, vocab_size: int = 49408, text_width: int = 512, text_heads: int = 8, text_layers: int = 12, logit_scale_init: float = 0.07, logit_scale_max: float = 100.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_config.py#L12",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_config.py#L12",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(embed_dim: int = 512, act_fn: MultimodalActivation = 'quick_gelu', image_size: int = 224, patch_size: int = 32, vision_layers: int = 12, vision_width: int = 768, vision_heads: int = 12, context_length: int = 77, vocab_size: int = 49408, text_width: int = 512, text_heads: int = 8, text_layers: int = 12, logit_scale_init: float = 0.07, logit_scale_max: float = 100.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_config.py#L1",
           "subcategory": "config",
           "summary": "Initialise the tower. See the class docstring for parameters.",
           "extended": null,
@@ -152,7 +152,7 @@
       ],
       "labels": [],
       "signature": "CLIPModel(config: CLIPConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L255",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L255",
       "subcategory": "model",
       "methods": [
         {
@@ -161,7 +161,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CLIPConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L301",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L301",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -185,7 +185,7 @@
             "property"
           ],
           "signature": "scale: Tensor",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L371",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L371",
           "summary": "The temperature as a multiplier — `exp(logit_scale)`, capped.",
           "extended": null,
           "parameters": [],
@@ -208,7 +208,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode_image(pixel_values: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L391",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L391",
           "subcategory": "model",
           "summary": "Embed images into the joint space, L2-normalised.",
           "extended": null,
@@ -237,7 +237,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode_text(input_ids: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L406",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L406",
           "subcategory": "model",
           "summary": "Embed captions into the joint space, L2-normalised.",
           "extended": null,
@@ -266,7 +266,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(pixel_values: Tensor, input_ids: Tensor, return_loss: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L421",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L421",
           "subcategory": "model",
           "summary": "Score every image against every caption in the batch.",
           "extended": null,
@@ -350,7 +350,7 @@
       ],
       "labels": [],
       "signature": "CLIPForZeroShotImageClassification(config: CLIPConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L463",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L463",
       "subcategory": "model",
       "methods": [
         {
@@ -359,7 +359,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: CLIPConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L502",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L502",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -381,7 +381,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(pixel_values: Tensor, prompt_ids: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L507",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L507",
           "subcategory": "model",
           "summary": "Score each image against each candidate prompt.",
           "extended": null,
@@ -443,7 +443,7 @@
       ],
       "labels": [],
       "signature": "CLIPOutput(image_embeds: Tensor, text_embeds: Tensor, logits_per_image: Tensor, logits_per_text: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L210",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L210",
       "subcategory": "model",
       "methods": [
         {
@@ -452,7 +452,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(image_embeds: Tensor, text_embeds: Tensor, logits_per_image: Tensor, logits_per_text: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the tower. See the class docstring for parameters.",
           "extended": null,
@@ -511,7 +511,7 @@
       ],
       "labels": [],
       "signature": "CLIPZeroShotOutput(logits: Tensor, image_embeds: Tensor, text_embeds: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L237",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L237",
       "subcategory": "model",
       "methods": [
         {
@@ -520,7 +520,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, image_embeds: Tensor, text_embeds: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the tower. See the class docstring for parameters.",
           "extended": null,
@@ -569,7 +569,7 @@
       ],
       "labels": [],
       "signature": "CLIPViTBase16Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_weights.py#L88",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_weights.py#L88",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.clip_vit_base_16`.",
@@ -593,7 +593,7 @@
       ],
       "labels": [],
       "signature": "CLIPViTBase32Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_weights.py#L63",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_weights.py#L63",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.clip_vit_base_32`.",
@@ -617,7 +617,7 @@
       ],
       "labels": [],
       "signature": "CLIPViTLarge14_336Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_weights.py#L139",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_weights.py#L139",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.clip_vit_large_14_336`.",
@@ -643,7 +643,7 @@
       ],
       "labels": [],
       "signature": "CLIPViTLarge14Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_weights.py#L114",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_weights.py#L114",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.clip_vit_large_14`.",
@@ -667,7 +667,7 @@
       ],
       "labels": [],
       "signature": "CLIPTokenizer(vocab: dict[str, int], merges: list[tuple[str, str]], normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_tokenizer.py#L143",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_tokenizer.py#L143",
       "subcategory": "tokenizer",
       "methods": [
         {
@@ -676,7 +676,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(vocab: dict[str, int], merges: list[tuple[str, str]], normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_tokenizer.py#L183",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_tokenizer.py#L183",
           "subcategory": "tokenizer",
           "summary": "Construct the tokenizer. See the class docstring for parameters.",
           "extended": null,
@@ -698,7 +698,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(text: str, add_special_tokens: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_tokenizer.py#L230",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_tokenizer.py#L230",
           "subcategory": "tokenizer",
           "summary": "Return the BPE ids of `text`, unframed and unpadded.",
           "extended": null,
@@ -735,7 +735,7 @@
           "kind": "function",
           "labels": [],
           "signature": "tokenize(text: str, context_length: int = 77)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_tokenizer.py#L261",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_tokenizer.py#L261",
           "subcategory": "tokenizer",
           "summary": "Frame a caption with the sentinels and pad it to a fixed width.",
           "extended": null,
@@ -808,7 +808,7 @@
         ">>> from lucid.models.multimodal.clip import CLIPTokenizer\n>>> vocab = {\"a\": 0, \"b</w>\": 1, \"ab</w>\": 2,\n...          \"<|startoftext|>\": 3, \"<|endoftext|>\": 4}\n>>> tok = CLIPTokenizer(vocab=vocab, merges=[(\"a\", \"b</w>\")])\n>>> tok.encode(\"ab\")\n[2]\n>>> tok.tokenize(\"ab\", context_length=5)\n[3, 2, 4, 0, 0]"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.3.\n\n`tokenize` is the method the model wants: it frames each\ncaption with the two sentinels and pads to a fixed width, which is\nwhat makes `argmax` over the ids find `[EOS]`.  `encode`\nis inherited and does neither — it returns the bare BPE ids, which\nis what a caller building their own framing wants."
+        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.3.\n\n`tokenize` is the method the model wants: it frames each\ncaption with the two sentinels and pads to a fixed width, which is\nwhat makes `argmax` over the ids find `[EOS]`.  `encode`\nis inherited and does neither — it returns the bare BPE ids, which\nis what a caller building their own framing wants."
       ],
       "attributes": [],
       "warns": [],
@@ -824,7 +824,7 @@
       ],
       "labels": [],
       "signature": "CLIPTokenizerFast(vocab: dict[str, int], merges: list[tuple[str, str]], normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_tokenizer.py#L371",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_tokenizer.py#L371",
       "subcategory": "tokenizer",
       "methods": [
         {
@@ -833,7 +833,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(vocab: dict[str, int], merges: list[tuple[str, str]], normalizer: Normalizer | None = None, special_tokens: SpecialTokens | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_tokenizer.py#L435",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_tokenizer.py#L435",
           "subcategory": "tokenizer",
           "summary": "Construct the tokenizer. See the class docstring for parameters.",
           "extended": null,
@@ -896,7 +896,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_vit_base_16(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_pretrained.py#L135",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_pretrained.py#L135",
       "subcategory": "pretrained",
       "summary": "Construct CLIP with a ViT-B/16 image tower.",
       "extended": null,
@@ -923,7 +923,7 @@
         ">>> from lucid.models import clip_vit_base_16\n>>> model = clip_vit_base_16()\n>>> model.config.patch_size, model.config.vision_width\n(16, 768)"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.4.\n\nIdentical to ViT-B/32 apart from the patch size, which alone\nquadruples the token count — the paper's evidence that resolution of\nthe tokenisation, not width, is what the image tower was starved of."
+        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.4.\n\nIdentical to ViT-B/32 apart from the patch size, which alone\nquadruples the token count — the paper's evidence that resolution of\nthe tokenisation, not width, is what the image tower was starved of."
       ],
       "attributes": [],
       "warns": [],
@@ -1144,7 +1144,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_vit_base_16_zero_shot(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_pretrained.py#L317",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_pretrained.py#L317",
       "subcategory": "pretrained",
       "summary": "ViT-B/16 CLIP posed as an open-vocabulary classifier.",
       "extended": null,
@@ -1171,7 +1171,7 @@
         ">>> from lucid.models import clip_vit_base_16_zero_shot\n>>> model = clip_vit_base_16_zero_shot()\n>>> model.config.patch_size\n16"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §3.1."
+        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §3.1."
       ],
       "attributes": [],
       "warns": [],
@@ -1400,7 +1400,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_vit_base_32(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_pretrained.py#L90",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_pretrained.py#L90",
       "subcategory": "pretrained",
       "summary": "Construct CLIP with a ViT-B/32 image tower.",
       "extended": null,
@@ -1427,7 +1427,7 @@
         ">>> from lucid.models import clip_vit_base_32\n>>> model = clip_vit_base_32()\n>>> model.config.patch_size, model.config.embed_dim\n(32, 512)"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.4.\n\nThe cheapest of the ViT variants: 32-pixel patches leave 49 patch\ntokens at 224 pixels, against ViT-B/16's 196, so it costs roughly a\nquarter of the attention for the same depth and width."
+        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.4.\n\nThe cheapest of the ViT variants: 32-pixel patches leave 49 patch\ntokens at 224 pixels, against ViT-B/16's 196, so it costs roughly a\nquarter of the attention for the same depth and width."
       ],
       "attributes": [],
       "warns": [],
@@ -1648,7 +1648,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_vit_base_32_zero_shot(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_pretrained.py#L272",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_pretrained.py#L272",
       "subcategory": "pretrained",
       "summary": "ViT-B/32 CLIP posed as an open-vocabulary classifier.",
       "extended": null,
@@ -1675,7 +1675,7 @@
         ">>> from lucid.models import clip_vit_base_32_zero_shot\n>>> model = clip_vit_base_32_zero_shot()\n>>> model.config.patch_size\n32"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §3.1."
+        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §3.1."
       ],
       "attributes": [],
       "warns": [],
@@ -1904,7 +1904,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_vit_large_14(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_pretrained.py#L180",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_pretrained.py#L180",
       "subcategory": "pretrained",
       "summary": "Construct CLIP with a ViT-L/14 image tower.",
       "extended": null,
@@ -1931,7 +1931,7 @@
         ">>> from lucid.models import clip_vit_large_14\n>>> model = clip_vit_large_14()\n>>> model.config.vision_layers, model.config.text_width\n(24, 768)"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.4.\n\nThe best-performing variant in the paper, and the one whose text\ntower is widened along with the image tower — 768 wide with 12 heads\nagainst the base models' 512 and 8, at the same 12 layers."
+        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.4.\n\nThe best-performing variant in the paper, and the one whose text\ntower is widened along with the image tower — 768 wide with 12 heads\nagainst the base models' 512 and 8, at the same 12 layers."
       ],
       "attributes": [],
       "warns": [],
@@ -2152,7 +2152,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_vit_large_14_336(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_pretrained.py#L225",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_pretrained.py#L225",
       "subcategory": "pretrained",
       "summary": "Construct CLIP with a ViT-L/14 image tower at 336 pixels.",
       "extended": null,
@@ -2179,7 +2179,7 @@
         ">>> from lucid.models import clip_vit_large_14_336\n>>> model = clip_vit_large_14_336()\n>>> model.config.image_size\n336"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.5 — \"for\nthe ViT-L/14 we also pre-train at a higher 336 pixel resolution for\none additional epoch\", denoted ViT-L/14@336px.\n\nArchitecturally this differs from `clip_vit_large_14` in one\nnumber, but that number changes the positional table from 257 rows to\n577, so the two are not weight-compatible."
+        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.5 — \"for\nthe ViT-L/14 we also pre-train at a higher 336 pixel resolution for\none additional epoch\", denoted ViT-L/14@336px.\n\nArchitecturally this differs from `clip_vit_large_14` in one\nnumber, but that number changes the positional table from 257 rows to\n577, so the two are not weight-compatible."
       ],
       "attributes": [],
       "warns": [],
@@ -2400,7 +2400,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_vit_large_14_336_zero_shot(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_pretrained.py#L409",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_pretrained.py#L409",
       "subcategory": "pretrained",
       "summary": "ViT-L/14@336px CLIP posed as an open-vocabulary classifier.",
       "extended": null,
@@ -2427,7 +2427,7 @@
         ">>> from lucid.models import clip_vit_large_14_336_zero_shot\n>>> model = clip_vit_large_14_336_zero_shot()\n>>> model.config.image_size\n336"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.5."
+        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.5."
       ],
       "attributes": [],
       "warns": [],
@@ -2656,7 +2656,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_vit_large_14_zero_shot(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/multimodal/clip/_pretrained.py#L362",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/multimodal/clip/_pretrained.py#L362",
       "subcategory": "pretrained",
       "summary": "ViT-L/14 CLIP posed as an open-vocabulary classifier.",
       "extended": null,
@@ -2683,7 +2683,7 @@
         ">>> from lucid.models import clip_vit_large_14_zero_shot\n>>> model = clip_vit_large_14_zero_shot()\n>>> model.config.embed_dim\n768"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), Table 11 —\nthe variant the paper's headline zero-shot ImageNet number comes\nfrom."
+        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), Table 11 —\nthe variant the paper's headline zero-shot ImageNet number comes\nfrom."
       ],
       "attributes": [],
       "warns": [],

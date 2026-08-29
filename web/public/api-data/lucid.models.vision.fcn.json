@@ -3,7 +3,7 @@
   "name": "fcn",
   "path": "lucid.models.vision.fcn",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/__init__.py#L1",
   "members": [
     {
       "name": "FCNConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "FCNConfig(num_classes: int = 21, in_channels: int = 3, backbone: str = 'resnet50', variant: str = 'fcn32s', classifier_hidden_channels: int = 512, aux_hidden_channels: int = 256, dropout: float = 0.1, ignore_index: int = 255)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 21, in_channels: int = 3, backbone: str = 'resnet50', variant: str = 'fcn32s', classifier_hidden_channels: int = 512, aux_hidden_channels: int = 256, dropout: float = 0.1, ignore_index: int = 255)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -107,7 +107,7 @@
       ],
       "labels": [],
       "signature": "FCNForSemanticSegmentation(config: FCNConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/_model.py#L246",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/_model.py#L246",
       "subcategory": "model",
       "methods": [
         {
@@ -116,7 +116,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: FCNConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/_model.py#L320",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/_model.py#L320",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -138,7 +138,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/_model.py#L346",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/_model.py#L346",
           "subcategory": "model",
           "summary": "Run FCN forward pass.",
           "extended": null,
@@ -184,7 +184,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.fcn import fcn_resnet50\n>>> model = fcn_resnet50()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape    # (B, num_classes, H, W)\n(1, 21, 512, 512)"
       ],
       "notes": [
-        "See Long et al., \"Fully Convolutional Networks for Semantic\nSegmentation\", CVPR 2015 ([arXiv:1411.4038](https://arxiv.org/abs/1411.4038)).  The bilinear\nupsampling at the end is equivalent to a learnable transpose\nconvolution initialised to bilinear weights — but kept fixed in\nthis modernised dilated-ResNet variant.  Training loss is\n\n\n\n$$\n\\mathcal{L} = \\mathcal{L}_\\mathrm{CE}(\\mathrm{main}, y)\n            + 0.4\\, \\mathcal{L}_\\mathrm{CE}(\\mathrm{aux}, y),\n$$\n\nwith categorical cross-entropy **averaged** over the non-ignored\npixels.  The paper (§4.1) defines the objective as an unnormalised\nspatial *sum*, and its quoted learning rates are calibrated to that\nscale; the reference recipe that produced the shipped checkpoints\nuses the mean instead, and this implementation follows the\nreference so those weights reproduce.  Scale the learning rate\naccordingly if switching to the paper's formulation."
+        "See Long et al., \"Fully Convolutional Networks for Semantic\nSegmentation\", CVPR 2015 (arXiv:1411.4038).  The bilinear\nupsampling at the end is equivalent to a learnable transpose\nconvolution initialised to bilinear weights — but kept fixed in\nthis modernised dilated-ResNet variant.  Training loss is\n\n\n\n$$\n\\mathcal{L} = \\mathcal{L}_\\mathrm{CE}(\\mathrm{main}, y)\n            + 0.4\\, \\mathcal{L}_\\mathrm{CE}(\\mathrm{aux}, y),\n$$\n\nwith categorical cross-entropy **averaged** over the non-ignored\npixels.  The paper (§4.1) defines the objective as an unnormalised\nspatial *sum*, and its quoted learning rates are calibrated to that\nscale; the reference recipe that produced the shipped checkpoints\nuses the mean instead, and this implementation follows the\nreference so those weights reproduce.  Scale the learning rate\naccordingly if switching to the paper's formulation."
       ],
       "attributes": [
         {
@@ -217,7 +217,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fcn_resnet50(pretrained: bool | str = False, weights: FCNResNet50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/_pretrained.py#L45",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/_pretrained.py#L45",
       "subcategory": "pretrained",
       "summary": "FCN with ResNet-50 backbone (Long et al., CVPR 2015).",
       "extended": "Builds an `FCNForSemanticSegmentation` with a dilated\nResNet-50 backbone (`layer3` dilation = 2, `layer4` dilation = 4),\n21 output classes (Pascal VOC default), a 512-channel main FCN head,\nand a 256-channel auxiliary head.  The dilation trick keeps the\nfinal feature map at stride 8 instead of stride 32, retaining 16x\nmore spatial sampling for dense prediction.",
@@ -250,7 +250,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.fcn import fcn_resnet50\n>>> model = fcn_resnet50()\n>>> x = lucid.randn(1, 3, 512, 512)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 21, 512, 512)"
       ],
       "notes": [
-        "See Long et al., \"Fully Convolutional Networks for Semantic\nSegmentation\", CVPR 2015 ([arXiv:1411.4038](https://arxiv.org/abs/1411.4038)).  The dilated variant\nfollows the DeepLab v1 trick (Chen et al., 2015) of replacing\nstride-2 downsampling in layer3 / layer4 with atrous convolution."
+        "See Long et al., \"Fully Convolutional Networks for Semantic\nSegmentation\", CVPR 2015 (arXiv:1411.4038).  The dilated variant\nfollows the DeepLab v1 trick (Chen et al., 2015) of replacing\nstride-2 downsampling in layer3 / layer4 with atrous convolution."
       ],
       "attributes": [],
       "warns": [],
@@ -924,7 +924,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fcn_resnet101(pretrained: bool | str = False, weights: FCNResNet101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/_pretrained.py#L113",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/_pretrained.py#L113",
       "subcategory": "pretrained",
       "summary": "FCN with ResNet-101 backbone (Long et al., CVPR 2015).",
       "extended": "Builds an `FCNForSemanticSegmentation` with the same head\nconfiguration as `fcn_resnet50` but a deeper dilated ResNet-101\nbackbone (23 blocks in layer3 vs 6 for ResNet-50).  Typically gains\n1-2 mIoU points on Pascal VOC at the cost of ~70% more FLOPs.",
@@ -1633,7 +1633,7 @@
       ],
       "labels": [],
       "signature": "FCNResNet50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/_weights.py#L23",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/_weights.py#L23",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.fcn_resnet50`.",
@@ -1657,7 +1657,7 @@
       ],
       "labels": [],
       "signature": "FCNResNet101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/491f2b476/lucid/models/vision/fcn/_weights.py#L49",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/fcn/_weights.py#L49",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.fcn_resnet101`.",
