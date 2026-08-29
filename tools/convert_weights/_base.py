@@ -11,6 +11,7 @@ load, safetensors writing with embedded metadata, and ``config.json`` /
 
 import abc
 import hashlib
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -20,7 +21,11 @@ import lucid.serialization as _serial
 from lucid._factories.converters import from_numpy
 from lucid.nn import Module
 
-from tools.convert_weights._templates import render_config_json, render_model_card
+from tools.convert_weights._templates import (
+    _SIBLING_LOOKUP,
+    render_config_json,
+    render_model_card,
+)
 
 
 @dataclass
@@ -237,7 +242,27 @@ def write(
     spec.meta = {**spec.meta, "sha256": sha, "file_size_mb": file_size_mb}
 
     (tag_dir / "config.json").write_text(render_config_json(spec), encoding="utf-8")
-    (repo_dir / "README.md").write_text(render_model_card(spec), encoding="utf-8")
+    # The card is repo-level but rendered from one tag's spec, so with two
+    # tags the second overwrote the first and the table advertised the
+    # wrong default.  Sibling tag directories are what the repo actually
+    # holds, so they are what the table lists.
+    siblings = sorted(
+        d.name
+        for d in repo_dir.iterdir()
+        if d.is_dir() and (d / "config.json").is_file()
+    )
+    lookup: dict[str, tuple[dict[str, object], str]] = {}
+    for tag in siblings:
+        if tag == spec.tag:
+            continue
+        payload = json.loads((repo_dir / tag / "config.json").read_text())
+        weights = payload.get("weights", {})
+        lookup[tag] = (dict(weights), str(weights.get("source", "")))
+    _SIBLING_LOOKUP.clear()
+    _SIBLING_LOOKUP.update(lookup)
+    (repo_dir / "README.md").write_text(
+        render_model_card(spec, siblings), encoding="utf-8"
+    )
     return tag_dir
 
 

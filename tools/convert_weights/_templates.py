@@ -55,6 +55,11 @@ _HF_PIPELINE_TAG: dict[str, str] = {
     # generator passes an unmapped task straight through as the tag, which
     # would be invalid; "reinforcement-learning" is the closest valid one.
     "world-modeling": "reinforcement-learning",
+    # Same shape of problem: the Hub has no class-conditional generation
+    # pipeline, and "image-generation" is not on its list at all, so it
+    # passed straight through and the Hub rejected the frontmatter.
+    # "unconditional-image-generation" is the diffusion entry it does have.
+    "image-generation": "unconditional-image-generation",
     # Text tasks (Lucid task string → HF Hub pipeline_tag).
     "base": "feature-extraction",
     "masked-lm": "fill-mask",
@@ -95,37 +100,98 @@ def _first_metrics(spec: "ConversionSpec") -> dict[str, object]:
     return {}
 
 
-def _metrics_table(spec: "ConversionSpec") -> str:
+def _source_label(source: str) -> str:
+    """Short provenance label for the weights table.
+
+    ``source`` is either a framework path (``torchvision/ResNet18_Weights…``)
+    or a Hub URL.  Splitting on the first slash suits the former and turns
+    the latter into the useless ``https:`` — so a URL is reduced to its
+    ``owner/repo`` instead.
+    """
+    if source.startswith(("http://", "https://")):
+        parts = [p for p in source.split("/") if p]
+        return "/".join(parts[-2:]) if len(parts) >= 2 else source
+    return source.split("/")[0]
+
+
+def _metrics_table(
+    spec: "ConversionSpec", tags: "list[str] | None" = None
+) -> str:
     """Build the full markdown tag-comparison table.
 
     The metric columns are taken from whatever keys the converter put in
     ``meta['metrics'][<dataset>]`` (``acc@1``/``acc@5`` for classification,
     ``box mAP``/``mask mAP`` for detection, ``mIoU`` for segmentation, …),
     so the table is task-agnostic.
+
+    Parameters
+    ----------
+    spec : ConversionSpec
+        The tag currently being written.
+    tags : list of str or None, optional
+        Every tag the repo holds, when more than this one exists.  Rows
+        for the others are read back from their ``config.json``, which
+        is the only place a previous conversion's numbers survive — the
+        spec in hand describes one tag.
     """
     vals = _first_metrics(spec)
     metric_keys = list(vals.keys())
-
-    params = spec.meta.get("num_params", "—")
-    params_m = f"{params / 1e6:.1f}M" if isinstance(params, (int, float)) else "—"
-    gflops = spec.meta.get("gflops", "—")
-    size = spec.meta.get("file_size_mb", "—")
-    size_s = f"{size} MB" if size != "—" else "—"
-    src = spec.source.split("/")[0]
-
     headers = ["Tag", *metric_keys, "Params", "GFLOPs", "Size", "Source"]
+
+    def _row(tag: str, meta: dict[str, object], source: str) -> str:
+        params = meta.get("num_params", "—")
+        params_m = f"{params / 1e6:.1f}M" if isinstance(params, (int, float)) else "—"
+        size = meta.get("file_size_mb", "—")
+        metrics = meta.get("metrics", {})
+        first: dict[str, object] = {}
+        if isinstance(metrics, dict):
+            for _dataset, entry in metrics.items():
+                if isinstance(entry, dict):
+                    first = dict(entry)
+                break
+        cells = [
+            f"`{tag}`" + (" *(default)*" if tag == _DEFAULT_OF(tags, spec) else ""),
+            *[str(first.get(k, "—")) for k in metric_keys],
+            params_m,
+            str(meta.get("gflops", "—")),
+            f"{size} MB" if size != "—" else "—",
+            _source_label(source),
+        ]
+        return "| " + " | ".join(cells) + " |"
+
+    rows = []
+    for tag in tags or [spec.tag]:
+        if tag == spec.tag:
+            rows.append(_row(tag, dict(spec.meta), spec.source))
+            continue
+        sibling = _SIBLING_META(tag)
+        rows.append(_row(tag, sibling[0], sibling[1]))
+
     header_row = "| " + " | ".join(headers) + " |"
     sep_row = "|" + "|".join(["---"] * len(headers)) + "|"
-    cells = [
-        f"`{spec.tag}` *(default)*",
-        *[str(vals[k]) for k in metric_keys],
-        params_m,
-        str(gflops),
-        size_s,
-        src,
-    ]
-    data_row = "| " + " | ".join(cells) + " |"
-    return f"{header_row}\n{sep_row}\n{data_row}"
+    return "\n".join([header_row, sep_row, *rows])
+
+
+# Filled in by :func:`render_model_card` before the table is built, so the
+# row builder can reach the sibling tags' recorded numbers without the
+# renderer having to thread a directory through every helper.
+_SIBLING_LOOKUP: "dict[str, tuple[dict[str, object], str]]" = {}
+
+
+def _SIBLING_META(tag: str) -> "tuple[dict[str, object], str]":
+    """Recorded meta + source for a tag written by an earlier conversion."""
+    return _SIBLING_LOOKUP.get(tag, ({}, ""))
+
+
+def _DEFAULT_OF(tags: "list[str] | None", spec: "ConversionSpec") -> str:
+    """Which tag the card marks as the default.
+
+    With one tag it is that tag.  With several the card cannot know the
+    enum's ``DEFAULT``, and guessing "whichever was written last" is how
+    the first version of this card advertised the wrong one — so the
+    lowest-sorted tag is used, which is stable across write order.
+    """
+    return spec.tag if not tags or len(tags) == 1 else sorted(tags)[0]
 
 
 def _text_usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
@@ -186,6 +252,11 @@ def _usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
             "# SemanticSegmentationOutput: per-pixel class logits (B, C, H, W)\n"
             "seg = out.logits.argmax(axis=1)  # (B, H, W) class indices\n"
         )
+    elif spec.task == "image-generation":
+        tail = (
+            "# A latent diffusion backbone predicts noise, not labels.\n"
+            "eps = out[:, : model.config.in_channels]  # (B, C, H, W)\n"
+        )
     else:  # image-classification
         tail = "logits = out.logits  # (B, num_classes)\n"
     return preamble + tail
@@ -214,12 +285,24 @@ def _model_index(spec: "ConversionSpec") -> str:
     )
 
 
-def render_model_card(spec: "ConversionSpec") -> str:
+def render_model_card(
+    spec: "ConversionSpec", tags: "list[str] | None" = None
+) -> str:
     """Render the repo-level ``README.md`` model card.
 
     YAML frontmatter (``library_name``, license, tags, datasets,
     ``pipeline_tag``, ``model-index``) + a tag comparison table + usage
     snippet + conversion provenance + license + citation.
+
+    Parameters
+    ----------
+    spec : ConversionSpec
+        The tag being written.  Its title and provenance head the card.
+    tags : list of str or None, optional
+        Every tag the repo holds.  The card is repo-level but rendered
+        from one tag, so without this a second tag's write silently
+        replaced the first and the table named the wrong default.  When
+        given, rows are emitted for all of them.
     """
     metrics = spec.meta.get("metrics", {})
     # spec.datasets wins (lets a converter list every dataset the checkpoint
@@ -269,7 +352,7 @@ converted to Lucid-native safetensors.
 
 ## Available weights
 
-{_metrics_table(spec)}
+{_metrics_table(spec, tags)}
 
 ## Usage
 
