@@ -1516,15 +1516,15 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative._config"
+      "module": "lucid.models.generative._common._config"
     },
     {
       "kind": "module",
-      "module": "lucid.models.multimodal._config"
+      "module": "lucid.models.multimodal._common._config"
     },
     {
       "kind": "module",
-      "module": "lucid.models.text._config"
+      "module": "lucid.models.text._common._config"
     },
     {
       "kind": "module",
@@ -1723,6 +1723,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._model"
     },
     {
       "kind": "module",
@@ -2116,6 +2120,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dit._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.flow_matching._model"
     },
     {
@@ -2301,6 +2309,10 @@
     {
       "kind": "module",
       "module": "lucid.models"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._model"
     },
     {
       "kind": "module",
@@ -2551,6 +2563,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._pretrained"
     },
     {
       "kind": "module",
@@ -2825,72 +2841,6 @@
       "module": "lucid.models"
     }
   ],
-  "lucid.models.generative._config.DiffusionModelConfig": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.ddpm._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.stable_diffusion._config"
-    }
-  ],
-  "lucid.models.generative._config.GenerativeModelConfig": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.flow_matching._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.mean_flow._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.ncsn._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.rectified_flow._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.score_sde._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.vae._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.vqvae._config"
-    }
-  ],
-  "lucid.models.generative._config.NormalizingFlowConfig": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.neural_ode._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.nice._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.realnvp._config"
-    }
-  ],
   "lucid.models.generative.ddpm": [
     {
       "kind": "module",
@@ -3021,6 +2971,206 @@
     {
       "kind": "module",
       "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.generative.dit": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.dit._config.DiTConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._pretrained"
+    }
+  ],
+  "lucid.models.generative.dit._model.DiTForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._pretrained"
+    }
+  ],
+  "lucid.models.generative.dit._model.DiTModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._pretrained"
+    }
+  ],
+  "lucid.models.generative.dit._model.DiTOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_base_2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_base_2_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_base_4": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_base_4_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_base_8": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_base_8_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_large_2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_large_2_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_large_4": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_large_4_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_large_8": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_large_8_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_small_2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_small_2_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_small_4": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_small_4_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_small_8": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_small_8_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_xlarge_2": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_xlarge_2_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_xlarge_4": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_xlarge_4_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_xlarge_8": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._pretrained.dit_xlarge_8_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    }
+  ],
+  "lucid.models.generative.dit._weights.DiTXLarge2Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._pretrained"
     }
   ],
   "lucid.models.generative.dreamer": [
@@ -4491,32 +4641,6 @@
     {
       "kind": "module",
       "module": "lucid.models"
-    }
-  ],
-  "lucid.models.text._config.LanguageModelConfig": [
-    {
-      "kind": "module",
-      "module": "lucid.models.text"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.text.bert._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.text.gpt2._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.text.roformer._config"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.text.transformer._config"
     }
   ],
   "lucid.models.text.bert": [
@@ -10224,19 +10348,27 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative._actor"
+      "module": "lucid.models.generative._common._actor"
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative._pixel_nets"
+      "module": "lucid.models.generative._common._pixel_nets"
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative._rssm"
+      "module": "lucid.models.generative._common._rssm"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative._common._transformers"
     },
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._model"
     },
     {
       "kind": "module",
@@ -10646,15 +10778,15 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative._actor"
+      "module": "lucid.models.generative._common._actor"
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative._dists"
+      "module": "lucid.models.generative._common._dists"
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative._rssm"
+      "module": "lucid.models.generative._common._rssm"
     },
     {
       "kind": "module",
@@ -15544,6 +15676,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.dit._weights"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.stable_diffusion._weights"
     },
     {
@@ -16567,6 +16703,14 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.dit._weights"
     },
     {
       "kind": "module",

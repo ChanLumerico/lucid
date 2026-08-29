@@ -3,7 +3,7 @@
   "name": "score_sde",
   "path": "lucid.models.generative.score_sde",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/__init__.py#L1",
   "members": [
     {
       "name": "ScoreSDEConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "ScoreSDEConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', sde_type: str = 'vp', sigma_min: float = 0.01, sigma_max: float = 50.0, beta_min: float = 0.1, beta_max: float = 20.0, num_scales: int = 1000, snr: float = 0.16, corrector_steps: int = 1, base_channels: int = 128, channel_mult: tuple[int, ...] = (1, 2, 2, 2), num_res_blocks: int = 2, attention_resolutions: tuple[int, ...] = (lambda: (16,))(), num_heads: int = 4, dropout: float = 0.1, resnet_groups: int = 32)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_config.py#L16",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_config.py#L16",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', sde_type: str = 'vp', sigma_min: float = 0.01, sigma_max: float = 50.0, beta_min: float = 0.1, beta_max: float = 20.0, num_scales: int = 1000, snr: float = 0.16, corrector_steps: int = 1, base_channels: int = 128, channel_mult: tuple[int, ...] = (1, 2, 2, 2), num_res_blocks: int = 2, attention_resolutions: tuple[int, ...] = (lambda: (16,))(), num_heads: int = 4, dropout: float = 0.1, resnet_groups: int = 32)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -93,13 +93,13 @@
         {
           "name": "beta_min",
           "annotation": "float",
-          "description": "VP and sub-VP's linear rate range, set by the paper \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "VP and sub-VP's linear rate range, set by the paper \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1, 20.0"
         },
         {
           "name": "beta_max",
           "annotation": "float",
-          "description": "VP and sub-VP's linear rate range, set by the paper \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "VP and sub-VP's linear rate range, set by the paper \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1, 20.0"
         },
         {
@@ -169,7 +169,7 @@
         ">>> from lucid.models.generative.score_sde import ScoreSDEConfig\n>>> cfg = ScoreSDEConfig()\n>>> cfg.sde_type, cfg.beta_min, cfg.beta_max\n('vp', 0.1, 20.0)"
       ],
       "notes": [
-        "Reference: Song, Sohl-Dickstein, Kingma, Kumar, Ermon, and Poole,\n*\"Score-Based Generative Modeling through Stochastic Differential\nEquations\"*, ICLR, 2021 (arXiv:2011.13456).\n\n**The network is DDPM's U-Net.**  The paper's NCSN++ and DDPM++ are\nthat architecture plus a set of separately-ablated modifications —\nFIR up/downsampling, rescaled skip connections, progressive growing,\nand doubled depth for the \"deep\" rows of its Table 3.  None of those\nare implemented here, so a configuration in this family is the\npaper's SDE machinery over the backbone this zoo already ships, and\nthe reported FID numbers do not transfer.  The SDEs, the samplers and\nthe objective are the paper's; the backbone is not.\n\n**Continuous time reaches the U-Net through the discrete embedding.**\n`DDPMUNet` conditions on an integer timestep, so a continuous\n$t \\in [0, 1]$ is scaled by `num_scales - 1` before it is\nhanded over — which is what the reference implementation does for its\ncontinuous VP models."
+        "Reference: Song, Sohl-Dickstein, Kingma, Kumar, Ermon, and Poole,\n*\"Score-Based Generative Modeling through Stochastic Differential\nEquations\"*, ICLR, 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)).\n\n**The network is DDPM's U-Net.**  The paper's NCSN++ and DDPM++ are\nthat architecture plus a set of separately-ablated modifications —\nFIR up/downsampling, rescaled skip connections, progressive growing,\nand doubled depth for the \"deep\" rows of its Table 3.  None of those\nare implemented here, so a configuration in this family is the\npaper's SDE machinery over the backbone this zoo already ships, and\nthe reported FID numbers do not transfer.  The SDEs, the samplers and\nthe objective are the paper's; the backbone is not.\n\n**Continuous time reaches the U-Net through the discrete embedding.**\n`DDPMUNet` conditions on an integer timestep, so a continuous\n$t \\in [0, 1]$ is scaled by `num_scales - 1` before it is\nhanded over — which is what the reference implementation does for its\ncontinuous VP models."
       ],
       "attributes": [],
       "warns": [],
@@ -185,7 +185,7 @@
       ],
       "labels": [],
       "signature": "ScoreSDEForImageGeneration(config: ScoreSDEConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L219",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L219",
       "subcategory": "model",
       "methods": [
         {
@@ -194,7 +194,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ScoreSDEConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L264",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L264",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -218,7 +218,7 @@
             "property"
           ],
           "signature": "sde: SDE",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L272",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L272",
           "summary": "The process this model was trained under.",
           "extended": null,
           "parameters": [],
@@ -239,7 +239,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, t: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L276",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L276",
           "subcategory": "model",
           "summary": "Denoising score matching.",
           "extended": null,
@@ -274,7 +274,7 @@
           "kind": "function",
           "labels": [],
           "signature": "generate(n_samples: int = 1, method: str = 'pc', steps: int | None = None, device: str | None = None, guidance: _Guidance | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L364",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L364",
           "subcategory": "model",
           "summary": "Draw samples by integrating backwards from the prior.",
           "extended": null,
@@ -332,7 +332,7 @@
           "kind": "function",
           "labels": [],
           "signature": "log_likelihood(x: Tensor, steps: int = 100, eps: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L474",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L474",
           "subcategory": "model",
           "summary": "Exact log-likelihood of the data, in nats.",
           "extended": null,
@@ -388,7 +388,7 @@
         ">>> import lucid\n>>> from lucid.models import score_sde_vp_gen\n>>> model = score_sde_vp_gen(sample_size=8, base_channels=8,\n...     channel_mult=(1,), num_res_blocks=1, resnet_groups=4,\n...     attention_resolutions=()).eval()\n>>> out = model(lucid.randn((2, 3, 8, 8)))\n>>> bool(out.loss.ndim == 0)\nTrue"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456).\n\nTrained by denoising score matching, equation 7, in the form that\nweights each time by $\\sigma(t)^2$ — which makes the loss the\nplain mean squared error between the predicted and the actual noise,\nsince the $\\sigma$ in the score and the $\\sigma^2$ in the\nweight cancel to one.  That is the same objective DDPM optimises,\nwhich is the paper's point.\n\nThree ways to sample, all from one trained network:\n\n`\"euler\"`\n    Integrate the reverse-time SDE, equation 6.\n`\"pc\"`\n    The same, with Langevin corrector steps at fixed $t$.  The\n    paper's Predictor-Corrector.\n`\"ode\"`\n    The probability-flow ODE, equation 13, handed to\n    `lucid.diffeq.odeint`."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)).\n\nTrained by denoising score matching, equation 7, in the form that\nweights each time by $\\sigma(t)^2$ — which makes the loss the\nplain mean squared error between the predicted and the actual noise,\nsince the $\\sigma$ in the score and the $\\sigma^2$ in the\nweight cancel to one.  That is the same objective DDPM optimises,\nwhich is the paper's point.\n\nThree ways to sample, all from one trained network:\n\n`\"euler\"`\n    Integrate the reverse-time SDE, equation 6.\n`\"pc\"`\n    The same, with Langevin corrector steps at fixed $t$.  The\n    paper's Predictor-Corrector.\n`\"ode\"`\n    The probability-flow ODE, equation 13, handed to\n    `lucid.diffeq.odeint`."
       ],
       "attributes": [],
       "warns": [],
@@ -404,7 +404,7 @@
       ],
       "labels": [],
       "signature": "ScoreSDEModel(config: ScoreSDEConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L78",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L78",
       "subcategory": "model",
       "methods": [
         {
@@ -413,7 +413,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ScoreSDEConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L120",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L120",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -435,7 +435,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_noise(x: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L163",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L163",
           "subcategory": "model",
           "summary": "What the network thinks was added — same shape as `x`.",
           "extended": null,
@@ -457,7 +457,7 @@
           "kind": "function",
           "labels": [],
           "signature": "score(x: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L167",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L167",
           "subcategory": "model",
           "summary": "$\\nabla_x \\log p_t(x)$, the quantity every sampler wants.",
           "extended": null,
@@ -492,7 +492,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, t: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L186",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L186",
           "subcategory": "model",
           "summary": "Perturb, then score.",
           "extended": null,
@@ -538,7 +538,7 @@
         ">>> import lucid\n>>> from lucid.models import score_sde_ve\n>>> model = score_sde_ve(sample_size=8, base_channels=8,\n...     channel_mult=(1,), num_res_blocks=1, resnet_groups=4,\n...     attention_resolutions=()).eval()\n>>> model.sde.__class__.__name__\n'VESDE'"
       ],
       "notes": [
-        "Reference: Song, Sohl-Dickstein, Kingma, Kumar, Ermon, and Poole,\n*\"Score-Based Generative Modeling through Stochastic Differential\nEquations\"*, ICLR, 2021 (arXiv:2011.13456).\n\nThe network predicts the noise that was added; the score follows from\nthe perturbation kernel, since for\n$x(t) = \\mu + \\sigma \\epsilon$\n\n\n\n$$\n\\nabla_x \\log p_{0t}(x(t) \\mid x(0))\n    = -\\frac{x(t) - \\mu}{\\sigma^2}\n    = -\\frac{\\epsilon}{\\sigma}.\n$$\n\nDividing by $\\sigma$ rather than folding it into the network is\nwhat lets one trained model serve every sampler here — the samplers\nask for a score and get one at whatever $t$ they are at."
+        "Reference: Song, Sohl-Dickstein, Kingma, Kumar, Ermon, and Poole,\n*\"Score-Based Generative Modeling through Stochastic Differential\nEquations\"*, ICLR, 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)).\n\nThe network predicts the noise that was added; the score follows from\nthe perturbation kernel, since for\n$x(t) = \\mu + \\sigma \\epsilon$\n\n\n\n$$\n\\nabla_x \\log p_{0t}(x(t) \\mid x(0))\n    = -\\frac{x(t) - \\mu}{\\sigma^2}\n    = -\\frac{\\epsilon}{\\sigma}.\n$$\n\nDividing by $\\sigma$ rather than folding it into the network is\nwhat lets one trained model serve every sampler here — the samplers\nask for a score and get one at whatever $t$ they are at."
       ],
       "attributes": [],
       "warns": [],
@@ -554,7 +554,7 @@
       ],
       "labels": [],
       "signature": "ScoreSDEOutput(score: Tensor, noise: Tensor, target: Tensor, std: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L37",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L37",
       "subcategory": "model",
       "methods": [
         {
@@ -563,7 +563,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(score: Tensor, noise: Tensor, target: Tensor, std: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -625,7 +625,7 @@
       "kind": "function",
       "labels": [],
       "signature": "score_sde_subvp(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_pretrained.py#L199",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_pretrained.py#L199",
       "subcategory": "pretrained",
       "summary": "Construct the sub-VP model — the SDE this paper introduces.",
       "extended": null,
@@ -652,7 +652,7 @@
         ">>> from lucid.models import score_sde_subvp\n>>> model = score_sde_subvp().eval()\n>>> model.config.sde_type\n'subvp'"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456), equation 12.\n\nIts variance is bounded by the VP process at every intermediate step,\nand the paper's best likelihoods — 2.99 bits per dimension on\nCIFAR-10 — are reported here."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)), equation 12.\n\nIts variance is bounded by the VP process at every intermediate step,\nand the paper's best likelihoods — 2.99 bits per dimension on\nCIFAR-10 — are reported here."
       ],
       "attributes": [],
       "warns": [],
@@ -1477,7 +1477,7 @@
       "kind": "function",
       "labels": [],
       "signature": "score_sde_subvp_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_pretrained.py#L242",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_pretrained.py#L242",
       "subcategory": "pretrained",
       "summary": "The sub-VP model with its objective and the three samplers.",
       "extended": null,
@@ -1504,7 +1504,7 @@
         ">>> from lucid.models import score_sde_subvp_gen\n>>> model = score_sde_subvp_gen().eval()\n>>> model.config.sde_type\n'subvp'"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456)."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456))."
       ],
       "attributes": [],
       "warns": [],
@@ -2337,7 +2337,7 @@
       "kind": "function",
       "labels": [],
       "signature": "score_sde_ve(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_pretrained.py#L114",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_pretrained.py#L114",
       "subcategory": "pretrained",
       "summary": "Construct the Variance Exploding model — NCSN's continuous limit.",
       "extended": null,
@@ -2364,7 +2364,7 @@
         ">>> from lucid.models import score_sde_ve\n>>> model = score_sde_ve().eval()\n>>> model.config.sigma_min, model.config.sigma_max\n(0.01, 50.0)"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456), equation 30."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)), equation 30."
       ],
       "attributes": [],
       "warns": [],
@@ -3189,7 +3189,7 @@
       "kind": "function",
       "labels": [],
       "signature": "score_sde_ve_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_pretrained.py#L154",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_pretrained.py#L154",
       "subcategory": "pretrained",
       "summary": "The VE model with its objective and the three samplers.",
       "extended": null,
@@ -3216,7 +3216,7 @@
         ">>> from lucid.models import score_sde_ve_gen\n>>> model = score_sde_ve_gen().eval()\n>>> model.sde.__class__.__name__\n'VESDE'"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456).\n\nThe VE prior is wide — $\\mathcal{N}(0, \\sigma_{\\max}^2 I)$ —\nso a sampler that starts from a standard normal will not work here,\nwhich is why the prior belongs to the SDE rather than the sampler."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)).\n\nThe VE prior is wide — $\\mathcal{N}(0, \\sigma_{\\max}^2 I)$ —\nso a sampler that starts from a standard normal will not work here,\nwhich is why the prior belongs to the SDE rather than the sampler."
       ],
       "attributes": [],
       "warns": [],
@@ -4049,7 +4049,7 @@
       "kind": "function",
       "labels": [],
       "signature": "score_sde_vp(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_pretrained.py#L33",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_pretrained.py#L33",
       "subcategory": "pretrained",
       "summary": "Construct the Variance Preserving model — DDPM's continuous limit.",
       "extended": null,
@@ -4076,7 +4076,7 @@
         ">>> from lucid.models import score_sde_vp\n>>> model = score_sde_vp().eval()\n>>> model.config.sde_type, model.config.beta_max\n('vp', 20.0)"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456), equation 32."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)), equation 32."
       ],
       "attributes": [],
       "warns": [],
@@ -4901,7 +4901,7 @@
       "kind": "function",
       "labels": [],
       "signature": "score_sde_vp_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_pretrained.py#L72",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_pretrained.py#L72",
       "subcategory": "pretrained",
       "summary": "The VP model with its objective and the three samplers.",
       "extended": null,
@@ -4928,7 +4928,7 @@
         ">>> from lucid.models import score_sde_vp_gen\n>>> model = score_sde_vp_gen().eval()\n>>> model.config.num_scales\n1000"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456)."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456))."
       ],
       "attributes": [],
       "warns": [],
@@ -5765,7 +5765,7 @@
       ],
       "labels": [],
       "signature": "SDE()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L35",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L35",
       "subcategory": "sde",
       "methods": [
         {
@@ -5776,7 +5776,7 @@
             "abstractmethod"
           ],
           "signature": "drift(x: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L47",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L47",
           "subcategory": "sde",
           "summary": "$f(x, t)$, the deterministic part of the forward SDE.",
           "extended": null,
@@ -5800,7 +5800,7 @@
             "abstractmethod"
           ],
           "signature": "diffusion(t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L51",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L51",
           "subcategory": "sde",
           "summary": "$g(t)$, per sample.",
           "extended": null,
@@ -5824,7 +5824,7 @@
             "abstractmethod"
           ],
           "signature": "marginal_prob(x: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L55",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L55",
           "subcategory": "sde",
           "summary": "The perturbation kernel $p_{0t}(x(t) \\mid x(0))$.",
           "extended": null,
@@ -5861,7 +5861,7 @@
             "abstractmethod"
           ],
           "signature": "prior_sampling(shape: tuple[int, ...], device: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L74",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L74",
           "subcategory": "sde",
           "summary": "Draw from the distribution the reverse process starts at.",
           "extended": null,
@@ -5886,7 +5886,7 @@
             "property"
           ],
           "signature": "t_min: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L80",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L80",
           "summary": "The earliest time the SDE is defined at.",
           "extended": null,
           "parameters": [],
@@ -5910,7 +5910,7 @@
             "property"
           ],
           "signature": "prior_variance: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L85",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L85",
           "summary": "Variance of the distribution `prior_sampling` draws from.",
           "extended": "Needed by the exact-likelihood computation, which has to evaluate\n$\\log p_T$ rather than merely sample it — and VE's prior is\nas wide as `sigma_max` while VP's is unit, so assuming either\nwould be wrong for the other.",
           "parameters": [],
@@ -5949,7 +5949,7 @@
       ],
       "labels": [],
       "signature": "SubVPSDE(beta_min: float = 0.1, beta_max: float = 20.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L251",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L251",
       "subcategory": "sde",
       "methods": [
         {
@@ -5958,7 +5958,7 @@
           "kind": "function",
           "labels": [],
           "signature": "diffusion(t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L279",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L279",
           "subcategory": "sde",
           "summary": "Equation 12's damped coefficient.",
           "extended": null,
@@ -5980,7 +5980,7 @@
           "kind": "function",
           "labels": [],
           "signature": "marginal_prob(x: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L285",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L285",
           "subcategory": "sde",
           "summary": "Equation 29's sub-VP row — note the square, not a square root.",
           "extended": null,
@@ -6003,14 +6003,14 @@
         {
           "name": "beta_min",
           "annotation": "float",
-          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1",
           "inherited_from": "VPSDE"
         },
         {
           "name": "beta_max",
           "annotation": "float",
-          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1",
           "inherited_from": "VPSDE"
         }
@@ -6035,7 +6035,7 @@
       ],
       "labels": [],
       "signature": "VESDE(sigma_min: float = 0.01, sigma_max: float = 50.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L95",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L95",
       "subcategory": "sde",
       "methods": [
         {
@@ -6044,7 +6044,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sigma_min: float = 0.01, sigma_max: float = 50.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L125",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L125",
           "subcategory": "sde",
           "summary": "Initialise the SDE. See the class docstring for parameters.",
           "extended": null,
@@ -6068,7 +6068,7 @@
             "property"
           ],
           "signature": "t_min: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L138",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L138",
           "summary": "Sampling stops here — see the class docstring on `t = 0`.",
           "extended": null,
           "parameters": [],
@@ -6089,7 +6089,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sigma(t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L142",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L142",
           "subcategory": "sde",
           "summary": "$\\sigma(t) = \\sigma_{\\min}(\\sigma_{\\max}/\\sigma_{\\min})^t$.",
           "extended": null,
@@ -6113,7 +6113,7 @@
             "property"
           ],
           "signature": "prior_variance: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L148",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L148",
           "summary": "$\\sigma_{\\max}^2$.",
           "extended": null,
           "parameters": [],
@@ -6134,7 +6134,7 @@
           "kind": "function",
           "labels": [],
           "signature": "drift(x: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L152",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L152",
           "subcategory": "sde",
           "summary": "Zero — the VE process only adds variance.",
           "extended": null,
@@ -6156,7 +6156,7 @@
           "kind": "function",
           "labels": [],
           "signature": "diffusion(t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L157",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L157",
           "subcategory": "sde",
           "summary": "Equation 30's coefficient.",
           "extended": null,
@@ -6178,7 +6178,7 @@
           "kind": "function",
           "labels": [],
           "signature": "marginal_prob(x: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L162",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L162",
           "subcategory": "sde",
           "summary": "Equation 31 — the mean is the sample itself.",
           "extended": null,
@@ -6200,7 +6200,7 @@
           "kind": "function",
           "labels": [],
           "signature": "prior_sampling(shape: tuple[int, ...], device: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L167",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L167",
           "subcategory": "sde",
           "summary": "$\\mathcal{N}(0, \\sigma_{\\max}^2 I)$.",
           "extended": null,
@@ -6253,7 +6253,7 @@
       ],
       "labels": [],
       "signature": "VPSDE(beta_min: float = 0.1, beta_max: float = 20.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L173",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L173",
       "subcategory": "sde",
       "methods": [
         {
@@ -6262,7 +6262,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(beta_min: float = 0.1, beta_max: float = 20.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L198",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L198",
           "subcategory": "sde",
           "summary": "Initialise the SDE. See the class docstring for parameters.",
           "extended": null,
@@ -6286,7 +6286,7 @@
             "property"
           ],
           "signature": "t_min: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L209",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L209",
           "summary": "The paper's sampling epsilon, chosen so the variance matches DDPM's.",
           "extended": null,
           "parameters": [],
@@ -6309,7 +6309,7 @@
             "property"
           ],
           "signature": "prior_variance: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L215",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L215",
           "summary": "One — the process is variance preserving.",
           "extended": null,
           "parameters": [],
@@ -6330,7 +6330,7 @@
           "kind": "function",
           "labels": [],
           "signature": "beta(t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L219",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L219",
           "subcategory": "sde",
           "summary": "$\\beta(t) = \\bar\\beta_{\\min} + t(\\bar\\beta_{\\max} - \\bar\\beta_{\\min})$.",
           "extended": null,
@@ -6352,7 +6352,7 @@
           "kind": "function",
           "labels": [],
           "signature": "drift(x: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L227",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L227",
           "subcategory": "sde",
           "summary": "$-\\tfrac{1}{2}\\beta(t)x$.",
           "extended": null,
@@ -6374,7 +6374,7 @@
           "kind": "function",
           "labels": [],
           "signature": "diffusion(t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L232",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L232",
           "subcategory": "sde",
           "summary": "$\\sqrt{\\beta(t)}$.",
           "extended": null,
@@ -6396,7 +6396,7 @@
           "kind": "function",
           "labels": [],
           "signature": "marginal_prob(x: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L237",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L237",
           "subcategory": "sde",
           "summary": "Equation 33.",
           "extended": null,
@@ -6418,7 +6418,7 @@
           "kind": "function",
           "labels": [],
           "signature": "prior_sampling(shape: tuple[int, ...], device: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/score_sde/_sde.py#L245",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/score_sde/_sde.py#L245",
           "subcategory": "sde",
           "summary": "$\\mathcal{N}(0, I)$.",
           "extended": null,
@@ -6441,13 +6441,13 @@
         {
           "name": "beta_min",
           "annotation": "float",
-          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1"
         },
         {
           "name": "beta_max",
           "annotation": "float",
-          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1"
         }
       ],

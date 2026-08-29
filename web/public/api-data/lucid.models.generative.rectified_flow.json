@@ -3,7 +3,7 @@
   "name": "rectified_flow",
   "path": "lucid.models.generative.rectified_flow",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/__init__.py#L1",
   "members": [
     {
       "name": "RectifiedFlowConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "RectifiedFlowConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', base_channels: int = 128, channel_mult: tuple[int, ...] = (lambda: (1, 2, 2, 2))(), num_res_blocks: int = 4, attention_resolutions: tuple[int, ...] = (lambda: (16,))(), dropout: float = 0.15, resnet_groups: int = 32, fir: bool = False, fir_kernel: tuple[int, ...] = (lambda: (1, 3, 3, 1))(), progressive: Progressive = 'none', progressive_input: ProgressiveInput = 'none', embedding_type: TimeEmbedding = 'positional', fourier_scale: float = 16.0, data_centered: bool = True, skip_rescale: bool = True, init_scale: float = 0.0, scale_by_sigma: bool = False, t_schedule: TimeSchedule | int = 'uniform', time_eps: float = 0.001, solver: str = 'dopri5', rtol: float = 1e-05, atol: float = 1e-05, trace_method: TraceMethod | None = None, trace_noise: TraceNoise = 'rademacher', exact_trace_max_dim: int = 32)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_config.py#L55",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_config.py#L55",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "data_dim: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_config.py#L269",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_config.py#L269",
           "summary": "int: Flattened width of one sample.",
           "extended": null,
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "is_distillation: bool",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_config.py#L276",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_config.py#L276",
           "summary": "bool: Whether `t_schedule` pins the time rather than drawing it.",
           "extended": "True for `\"t0\"`, `\"t1\"` and any integer `k`.  A distilling\nmodel is trained to be stepped a fixed number of times, so its\nloss is only meaningful on reflow pairs.",
           "parameters": [],
@@ -72,7 +72,7 @@
             "property"
           ],
           "signature": "resolved_trace_method: TraceMethod",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_config.py#L286",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_config.py#L286",
           "summary": "TraceMethod: `trace_method`, or the one implied by the dimension.",
           "extended": null,
           "parameters": [],
@@ -93,7 +93,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', base_channels: int = 128, channel_mult: tuple[int, ...] = (lambda: (1, 2, 2, 2))(), num_res_blocks: int = 4, attention_resolutions: tuple[int, ...] = (lambda: (16,))(), dropout: float = 0.15, resnet_groups: int = 32, fir: bool = False, fir_kernel: tuple[int, ...] = (lambda: (1, 3, 3, 1))(), progressive: Progressive = 'none', progressive_input: ProgressiveInput = 'none', embedding_type: TimeEmbedding = 'positional', fourier_scale: float = 16.0, data_centered: bool = True, skip_rescale: bool = True, init_scale: float = 0.0, scale_by_sigma: bool = False, t_schedule: TimeSchedule | int = 'uniform', time_eps: float = 0.001, solver: str = 'dopri5', rtol: float = 1e-05, atol: float = 1e-05, trace_method: TraceMethod | None = None, trace_noise: TraceNoise = 'rademacher', exact_trace_max_dim: int = 32)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -298,7 +298,7 @@
       ],
       "labels": [],
       "signature": "RectifiedFlowForImageGeneration(config: RectifiedFlowConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1429",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1429",
       "subcategory": "model",
       "methods": [
         {
@@ -307,7 +307,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: RectifiedFlowConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1479",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1479",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -331,7 +331,7 @@
             "property"
           ],
           "signature": "nfe: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1484",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1484",
           "summary": "int: Field evaluations spent by the most recent solve.",
           "extended": null,
           "parameters": [],
@@ -352,7 +352,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1488",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1488",
           "subcategory": "model",
           "summary": "Evaluate the velocity field.",
           "extended": null,
@@ -387,7 +387,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reflow_pairs(n_samples: int = 1, steps: int | None = None, device: str = 'cpu', noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1495",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1495",
           "subcategory": "model",
           "summary": "Couplings for the next round — see `RectifiedFlowModel.reflow_pairs`.",
           "extended": null,
@@ -409,7 +409,7 @@
           "kind": "function",
           "labels": [],
           "signature": "generate(n_samples: int = 1, steps: int | None = None, device: str = 'cpu', noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1512",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1512",
           "subcategory": "model",
           "summary": "Sample by integrating the field from `t = 0` to `t = 1`.",
           "extended": null,
@@ -467,7 +467,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.rectified_flow import (\n...     RectifiedFlowConfig, RectifiedFlowForImageGeneration,\n... )\n>>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,\n...                           channel_mult=(1, 2), num_res_blocks=1,\n...                           attention_resolutions=())\n>>> model = RectifiedFlowForImageGeneration(cfg).eval()\n>>> model(lucid.randn((2, 3, 8, 8))).loss.shape\n()\n>>> model.generate(n_samples=2, steps=1).samples.shape\n(2, 3, 8, 8)"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003).  Reported: a one-step FID of **4.85** on CIFAR-10,\nstate of the art among one-step diffusion and flow models at\npublication.\n\nA full run is three stages, all through this one class:\n\n1. train with `forward(x)` — the 1-rectified flow;\n2. `reflow_pairs()`, then train with `forward(z1, noise=z0)`;\n3. optionally rebuild with `t_schedule=\"t0\"` and train on the same\n   pairs — one-step distillation."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003)).  Reported: a one-step FID of **4.85** on CIFAR-10,\nstate of the art among one-step diffusion and flow models at\npublication.\n\nA full run is three stages, all through this one class:\n\n1. train with `forward(x)` — the 1-rectified flow;\n2. `reflow_pairs()`, then train with `forward(z1, noise=z0)`;\n3. optionally rebuild with `t_schedule=\"t0\"` and train on the same\n   pairs — one-step distillation."
       ],
       "attributes": [
         {
@@ -489,7 +489,7 @@
       ],
       "labels": [],
       "signature": "RectifiedFlowModel(config: RectifiedFlowConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L818",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L818",
       "subcategory": "model",
       "methods": [
         {
@@ -498,7 +498,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: RectifiedFlowConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L915",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L915",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -522,7 +522,7 @@
             "property"
           ],
           "signature": "input_dim: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L933",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L933",
           "summary": "int: Flattened width `D` of one sample.",
           "extended": null,
           "parameters": [],
@@ -545,7 +545,7 @@
             "property"
           ],
           "signature": "t_schedule: TimeSchedule | int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L938",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L938",
           "summary": "str or int: Which times the objective draws.",
           "extended": null,
           "parameters": [],
@@ -568,7 +568,7 @@
             "property"
           ],
           "signature": "trace_method: str",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L943",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L943",
           "summary": "str: How the divergence is obtained when scoring likelihood.",
           "extended": null,
           "parameters": [],
@@ -591,7 +591,7 @@
             "property"
           ],
           "signature": "nfe: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L948",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L948",
           "summary": "int: Field evaluations spent by the most recent solve.",
           "extended": "Zero after a training step — nothing is solved there.  The number\nthe paper is about: a straight flow needs one.",
           "parameters": [],
@@ -612,7 +612,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sample_times(batch: int, device: str = 'cpu')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L968",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L968",
           "subcategory": "model",
           "summary": "Draw the times the objective is evaluated at.",
           "extended": "Four behaviours, one per `t_schedule`:\n\n* `\"uniform\"` — $t \\sim U[\\varepsilon, 1]$, the objective\n  itself and what reflow retrains under.\n* `\"t0\"` — every `t` at $\\varepsilon$.  Regressing there\n  makes one Euler step a generator: one-step distillation.\n* `\"t1\"` — every `t` at 1, distilling the reverse map.\n* `k` — the `k`-point grid a `k`-step Euler sampler visits,\n  for `k`-step distillation.",
@@ -647,7 +647,7 @@
           "kind": "function",
           "labels": [],
           "signature": "path_sample(x1: Tensor, x0: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1011",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1011",
           "subcategory": "model",
           "summary": "The point $x_t = t x_1 + (1 - t) x_0$ on the straight line.",
           "extended": null,
@@ -688,7 +688,7 @@
           "kind": "function",
           "labels": [],
           "signature": "conditional_target(x1: Tensor, x0: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1032",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1032",
           "subcategory": "model",
           "summary": "The velocity of that line, $x_1 - x_0$.",
           "extended": "Independent of `t` — a straight line traversed at constant speed\nhas one velocity — which is why `t` is accepted but unused.  It\nstays in the signature because the quantity *is* a function of\ntime in general, and a caller comparing paths should not have to\nspecial-case this one.",
@@ -729,7 +729,7 @@
           "kind": "function",
           "labels": [],
           "signature": "rectified_flow_loss(x1: Tensor, noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1056",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1056",
           "subcategory": "model",
           "summary": "One optimisation step of eq. (1) — no ODE is solved.",
           "extended": null,
@@ -769,7 +769,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sample(n_samples: int = 1, steps: int | None = None, device: str = 'cpu', noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1136",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1136",
           "subcategory": "model",
           "summary": "Generate by integrating the field from noise to data.",
           "extended": null,
@@ -818,7 +818,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reflow_pairs(n_samples: int = 1, steps: int | None = None, device: str = 'cpu', noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1218",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1218",
           "subcategory": "model",
           "summary": "Couplings $(Z_0, Z_1)$ for the next rectified flow.",
           "extended": "Draws from the source, solves the current flow forward, and\nreturns both ends.  Theorem 3.3 is what licenses feeding these\nback in: the solve preserves the marginals, so `z1` is still\ndistributed as the data while the pair is no longer independent —\nand it is that dependence the next round exploits.",
@@ -867,7 +867,7 @@
           "kind": "function",
           "labels": [],
           "signature": "one_step(noise: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1266",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1266",
           "subcategory": "model",
           "summary": "The one-step map $z_0 + v(z_0, \\varepsilon)$.",
           "extended": "A single explicit Euler step across the whole interval.  Exact if\nthe flow is straight, which is what reflow and then `t0`\ndistillation are for; on a 1-rectified flow it is a crude\napproximation and is expected to look it.",
@@ -896,7 +896,7 @@
           "kind": "function",
           "labels": [],
           "signature": "straightness(noise: Tensor | None = None, n_samples: int = 1, steps: int = 32)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1293",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1293",
           "subcategory": "model",
           "summary": "The measure $S(\\mathbf{Z})$ of paper eq. (3).",
           "extended": "$$\nS(\\mathbf{Z}) = \\int_0^1 \\mathbb{E}\\Bigl[\n    \\bigl\\| (Z_1 - Z_0) - \\dot{Z}_t \\bigr\\|^2\n\\Bigr]\\,\\mathrm{d}t\n$$\n\nEstimated by stepping the flow on a uniform grid, recording the\nfield along the way, and comparing each velocity against the chord\nthe trajectory actually spans.  Zero exactly when every path is a\nstraight line at constant speed — and therefore exactly when one\nEuler step is enough.",
@@ -939,7 +939,7 @@
           "kind": "function",
           "labels": [],
           "signature": "log_prob(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1366",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1366",
           "subcategory": "model",
           "summary": "Per-sample $\\log p_1(x)$ in nats.",
           "extended": "Integrates the field from `t = 1` back to `t = time_eps`\nalongside the accumulated divergence, then scores the arrival\nagainst the standard normal the path starts from.",
@@ -970,7 +970,7 @@
           "kind": "function",
           "labels": [],
           "signature": "bits_per_dim(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1414",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1414",
           "subcategory": "model",
           "summary": "Per-sample negative log-likelihood in bits per dimension.",
           "extended": null,
@@ -992,7 +992,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(sample: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_model.py#L1418",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_model.py#L1418",
           "subcategory": "model",
           "summary": "Evaluate the velocity field at `(x, t)`.",
           "extended": null,
@@ -1025,7 +1025,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.rectified_flow import (\n...     RectifiedFlowConfig, RectifiedFlowModel,\n... )\n>>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,\n...                           channel_mult=(1, 2), num_res_blocks=1,\n...                           attention_resolutions=())\n>>> model = RectifiedFlowModel(cfg).eval()\n>>> loss, _, _ = model.rectified_flow_loss(lucid.randn((2, 3, 8, 8)))\n>>> loss.shape\n()\n>>> model.sample(n_samples=2, steps=4).shape\n(2, 3, 8, 8)"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast: Learning to\nGenerate and Transfer Data with Rectified Flow\"*, ICLR, 2023\n(arXiv:2209.03003).  Eq. (1) is the objective, eq. (3) the straightness\nmeasure, and Theorem 3.3 the marginal preservation that makes reflow\nlegitimate.\n\n**On the coupling.**  `rectified_flow_loss(x1)` draws `x0`\nindependently, which is the 1-rectified flow of the paper.  Passing\n`noise=` supplies a *paired* `x0` instead and is what turns the\nsame call into reflow — there is no separate objective.\n\n**On transfer.**  Nothing here requires the source to be Gaussian.\nThe paper's other half — transporting between two image domains\nrather than from noise — is the same objective with `x0` drawn from\nthe first domain instead of a prior, so it goes through\n`rectified_flow_loss`, `sample` and `reflow_pairs`\nunchanged by passing `noise=`.  Only `log_prob` assumes a\nstandard normal at `t = 0`, and a likelihood is not defined for a\ndomain-to-domain transport anyway.\n\n**Where to run it.**  Training is a plain convolutional forward and\nbackward with no solve, so it belongs on `\"metal\"`.  Generating\nreflow pairs is a solve per batch and is the expensive part of the\nmethod; the paper generates on the order of a million.\n\n**Not implemented, and why.**  Two settings the reference exposes are\nabsent rather than overlooked:\n\n* **A perceptual reflow loss.**  The reference offers `lpips` and\n  `lpips+l2` alongside `l2` for the distillation stage.  Both\n  score images through a pre-trained external network, which Lucid's\n  compute paths may not depend on, so only the squared error is\n  available here.  It is the reference's own default.\n* **The stochastic sampler.**  The reference can add noise of\n  magnitude `(1 - t) * sigma_variance` to turn the probability-flow\n  ODE into an SDE.  Its default is `0`, and the paper is stated and\n  evaluated as an ODE method, so sampling here is deterministic given\n  the starting point.\n\nWeight averaging (the reference's `ema_rate`) is a property of a\ntraining loop rather than of a model, and is not part of any family\nin this zoo."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast: Learning to\nGenerate and Transfer Data with Rectified Flow\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003)).  Eq. (1) is the objective, eq. (3) the straightness\nmeasure, and Theorem 3.3 the marginal preservation that makes reflow\nlegitimate.\n\n**On the coupling.**  `rectified_flow_loss(x1)` draws `x0`\nindependently, which is the 1-rectified flow of the paper.  Passing\n`noise=` supplies a *paired* `x0` instead and is what turns the\nsame call into reflow — there is no separate objective.\n\n**On transfer.**  Nothing here requires the source to be Gaussian.\nThe paper's other half — transporting between two image domains\nrather than from noise — is the same objective with `x0` drawn from\nthe first domain instead of a prior, so it goes through\n`rectified_flow_loss`, `sample` and `reflow_pairs`\nunchanged by passing `noise=`.  Only `log_prob` assumes a\nstandard normal at `t = 0`, and a likelihood is not defined for a\ndomain-to-domain transport anyway.\n\n**Where to run it.**  Training is a plain convolutional forward and\nbackward with no solve, so it belongs on `\"metal\"`.  Generating\nreflow pairs is a solve per batch and is the expensive part of the\nmethod; the paper generates on the order of a million.\n\n**Not implemented, and why.**  Two settings the reference exposes are\nabsent rather than overlooked:\n\n* **A perceptual reflow loss.**  The reference offers `lpips` and\n  `lpips+l2` alongside `l2` for the distillation stage.  Both\n  score images through a pre-trained external network, which Lucid's\n  compute paths may not depend on, so only the squared error is\n  available here.  It is the reference's own default.\n* **The stochastic sampler.**  The reference can add noise of\n  magnitude `(1 - t) * sigma_variance` to turn the probability-flow\n  ODE into an SDE.  Its default is `0`, and the paper is stated and\n  evaluated as an ODE method, so sampling here is deterministic given\n  the starting point.\n\nWeight averaging (the reference's `ema_rate`) is a property of a\ntraining loop rather than of a model, and is not part of any family\nin this zoo."
       ],
       "attributes": [
         {
@@ -1043,7 +1043,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_afhq_cat(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L278",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L278",
       "subcategory": "pretrained",
       "summary": "Rectified Flow velocity field for AFHQ-Cat `256 x 256`.",
       "extended": null,
@@ -1070,7 +1070,7 @@
         ">>> from lucid.models.generative.rectified_flow import rectified_flow_afhq_cat\n>>> rectified_flow_afhq_cat().config.num_res_blocks\n2"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003).  The paper's Figure 1 uses this dataset for both\ngeneration and face-to-face transfer."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003)).  The paper's Figure 1 uses this dataset for both\ngeneration and face-to-face transfer."
       ],
       "attributes": [],
       "warns": [],
@@ -2173,7 +2173,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_afhq_cat_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L497",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L497",
       "subcategory": "pretrained",
       "summary": "Rectified Flow generator for AFHQ-Cat `256 x 256`.",
       "extended": null,
@@ -2200,7 +2200,7 @@
         ">>> from lucid.models.generative.rectified_flow import (\n...     rectified_flow_afhq_cat_gen,\n... )\n>>> rectified_flow_afhq_cat_gen().config.progressive_input\n'input_skip'"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003)."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003))."
       ],
       "attributes": [],
       "warns": [],
@@ -3311,7 +3311,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_bedroom(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L155",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L155",
       "subcategory": "pretrained",
       "summary": "Rectified Flow velocity field for LSUN Bedroom `256 x 256`.",
       "extended": null,
@@ -3338,7 +3338,7 @@
         ">>> from lucid.models.generative.rectified_flow import rectified_flow_bedroom\n>>> rectified_flow_bedroom().config.fir\nTrue"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003).  The paper reports high-resolution generation\nqualitatively; no FID is quoted for this dataset."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003)).  The paper reports high-resolution generation\nqualitatively; no FID is quoted for this dataset."
       ],
       "attributes": [],
       "warns": [],
@@ -4441,7 +4441,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_bedroom_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L371",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L371",
       "subcategory": "pretrained",
       "summary": "Rectified Flow generator for LSUN Bedroom `256 x 256`.",
       "extended": null,
@@ -4468,7 +4468,7 @@
         ">>> from lucid.models.generative.rectified_flow import (\n...     rectified_flow_bedroom_gen,\n... )\n>>> rectified_flow_bedroom_gen().rectified_flow.input_dim\n196608"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003)."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003))."
       ],
       "attributes": [],
       "warns": [],
@@ -5579,7 +5579,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_celeba_hq(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L236",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L236",
       "subcategory": "pretrained",
       "summary": "Rectified Flow velocity field for CelebA-HQ `256 x 256`.",
       "extended": null,
@@ -5606,7 +5606,7 @@
         ">>> from lucid.models.generative.rectified_flow import rectified_flow_celeba_hq\n>>> rectified_flow_celeba_hq().config.embedding_type\n'fourier'"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003).  This is one of the datasets the paper's *transfer*\nexperiments run on — the method is not restricted to a Gaussian\nsource, and the same objective transports between two image domains."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003)).  This is one of the datasets the paper's *transfer*\nexperiments run on — the method is not restricted to a Gaussian\nsource, and the same objective transports between two image domains."
       ],
       "attributes": [],
       "warns": [],
@@ -6709,7 +6709,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_celeba_hq_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L455",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L455",
       "subcategory": "pretrained",
       "summary": "Rectified Flow generator for CelebA-HQ `256 x 256`.",
       "extended": null,
@@ -6736,7 +6736,7 @@
         ">>> from lucid.models.generative.rectified_flow import (\n...     rectified_flow_celeba_hq_gen,\n... )\n>>> rectified_flow_celeba_hq_gen().config.sample_size\n256"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003)."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003))."
       ],
       "attributes": [],
       "warns": [],
@@ -7847,7 +7847,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_church(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L196",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L196",
       "subcategory": "pretrained",
       "summary": "Rectified Flow velocity field for LSUN Church `256 x 256`.",
       "extended": null,
@@ -7874,7 +7874,7 @@
         ">>> from lucid.models.generative.rectified_flow import rectified_flow_church\n>>> rectified_flow_church().config.progressive\n'output_skip'"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003)."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003))."
       ],
       "attributes": [],
       "warns": [],
@@ -8977,7 +8977,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_church_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L413",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L413",
       "subcategory": "pretrained",
       "summary": "Rectified Flow generator for LSUN Church `256 x 256`.",
       "extended": null,
@@ -9004,7 +9004,7 @@
         ">>> from lucid.models.generative.rectified_flow import (\n...     rectified_flow_church_gen,\n... )\n>>> rectified_flow_church_gen().rectified_flow.t_schedule\n'uniform'"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003)."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003))."
       ],
       "attributes": [],
       "warns": [],
@@ -10115,7 +10115,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_cifar(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L102",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L102",
       "subcategory": "pretrained",
       "summary": "Rectified Flow velocity field for the CIFAR-10 setup.",
       "extended": "The configuration the paper's headline result was produced with.\nTrained by regressing onto the constant velocity of the straight line\nbetween a noise sample and a data sample; reflow and distillation are\nthe same call with paired inputs and a pinned time.",
@@ -10142,7 +10142,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.rectified_flow import rectified_flow_cifar\n>>> model = rectified_flow_cifar(sample_size=8, base_channels=16,\n...                              channel_mult=(1, 2), num_res_blocks=1,\n...                              attention_resolutions=()).eval()\n>>> loss, _, _ = model.rectified_flow_loss(lucid.randn((2, 3, 8, 8)))\n>>> model.nfe                      # training solves nothing\n0"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003).  Reported on CIFAR-10: **4.85 FID with a single\nfunction evaluation**, state of the art among one-step diffusion and\nflow models at publication."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003)).  Reported on CIFAR-10: **4.85 FID with a single\nfunction evaluation**, state of the art among one-step diffusion and\nflow models at publication."
       ],
       "attributes": [],
       "warns": [],
@@ -11084,7 +11084,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rectified_flow_cifar_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/rectified_flow/_pretrained.py#L322",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/rectified_flow/_pretrained.py#L322",
       "subcategory": "pretrained",
       "summary": "Rectified Flow generator for CIFAR-10 `32 x 32`.",
       "extended": "Same field as `rectified_flow_cifar`, wrapped with the\nobjective, `RectifiedFlowForImageGeneration.reflow_pairs` and\nthe sampler.",
@@ -11111,7 +11111,7 @@
         ">>> from lucid.models.generative.rectified_flow import rectified_flow_cifar_gen\n>>> model = rectified_flow_cifar_gen(sample_size=8, base_channels=16,\n...                                  channel_mult=(1, 2), num_res_blocks=1,\n...                                  attention_resolutions=()).eval()\n>>> z0, z1 = model.reflow_pairs(n_samples=2, steps=4)\n>>> model(z1, noise=z0).loss.shape          # the reflow objective\n()"
       ],
       "notes": [
-        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n(arXiv:2209.03003).  Reported: 4.85 FID at one function evaluation."
+        "Reference: Liu, Gong, and Liu, *\"Flow Straight and Fast\"*, ICLR, 2023\n([arXiv:2209.03003](https://arxiv.org/abs/2209.03003)).  Reported: 4.85 FID at one function evaluation."
       ],
       "attributes": [],
       "warns": [],

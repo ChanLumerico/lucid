@@ -3,7 +3,7 @@
   "name": "efficientnet",
   "path": "lucid.models.vision.efficientnet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/__init__.py#L1",
   "members": [
     {
       "name": "EfficientNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetConfig(num_classes: int = 1000, in_channels: int = 3, width_mult: float = 1.0, depth_mult: float = 1.0, dropout: float = 0.2, drop_connect_rate: float = 0.2, se_ratio: float = 0.25, bn_eps: float = 1e-05, bn_momentum: float = 0.1)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, width_mult: float = 1.0, depth_mult: float = 1.0, dropout: float = 0.2, drop_connect_rate: float = 0.2, se_ratio: float = 0.25, bn_eps: float = 1e-05, bn_momentum: float = 0.1)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "EfficientNet(config: EfficientNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_model.py#L253",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_model.py#L253",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: EfficientNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_model.py#L333",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_model.py#L333",
           "subcategory": "model",
           "summary": "Initialise the ReLU module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_model.py#L358",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_model.py#L358",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_model.py#L361",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_model.py#L361",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_model.py#L366",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_model.py#L366",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -164,7 +164,7 @@
         }
       ],
       "summary": "EfficientNet feature-extracting backbone (no classification head).",
-      "extended": "Implements the compound-scaled topology from Tan & Le,\n\"EfficientNet: Rethinking Model Scaling for Convolutional Neural\nNetworks\", ICML 2019 (arXiv:1905.11946).  The baseline (B0) is a\nNAS-designed network of MBConv blocks — inverted-residual\nbottlenecks (MobileNet-v2 style) augmented with a\nsqueeze-and-excitation module and the swish (SiLU) activation.\nSuccessive B-variants (B0 through B7) apply the paper's\ncompound-scaling rule\n\n$$\nd = \\alpha^\\phi, \\quad w = \\beta^\\phi, \\quad r = \\gamma^\\phi,\n\\qquad \\alpha \\beta^2 \\gamma^2 \\approx 2,\n$$\n\nto scale depth, width, and resolution jointly along a single\ncoefficient $\\phi$.\n\nThe body is a 3×3 stem (stride 2) followed by seven MBConv\nstages and a final 1×1 head expansion to `round(1280 ·\nwidth_mult)` channels.  Stochastic depth (`drop_connect_rate`)\nis applied linearly across blocks as a strong regulariser at\nlarge depth.",
+      "extended": "Implements the compound-scaled topology from Tan & Le,\n\"EfficientNet: Rethinking Model Scaling for Convolutional Neural\nNetworks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)).  The baseline (B0) is a\nNAS-designed network of MBConv blocks — inverted-residual\nbottlenecks (MobileNet-v2 style) augmented with a\nsqueeze-and-excitation module and the swish (SiLU) activation.\nSuccessive B-variants (B0 through B7) apply the paper's\ncompound-scaling rule\n\n$$\nd = \\alpha^\\phi, \\quad w = \\beta^\\phi, \\quad r = \\gamma^\\phi,\n\\qquad \\alpha \\beta^2 \\gamma^2 \\approx 2,\n$$\n\nto scale depth, width, and resolution jointly along a single\ncoefficient $\\phi$.\n\nThe body is a 3×3 stem (stride 2) followed by seven MBConv\nstages and a final 1×1 head expansion to `round(1280 ·\nwidth_mult)` channels.  Stochastic depth (`drop_connect_rate`)\nis applied linearly across blocks as a strong regulariser at\nlarge depth.",
       "parameters": [
         {
           "name": "config",
@@ -217,7 +217,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetForImageClassification(config: EfficientNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_model.py#L376",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_model.py#L376",
       "subcategory": "model",
       "methods": [
         {
@@ -226,7 +226,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: EfficientNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_model.py#L449",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_model.py#L449",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -248,7 +248,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_model.py#L457",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_model.py#L457",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -319,7 +319,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b0(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L61",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L61",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B0 feature-extracting backbone (compound coefficient $\\phi = 0$).",
       "extended": "Builds an `EfficientNet` with the NAS-designed baseline\ntopology from Tan & Le, 2019 (Table 1): seven MBConv stages\nwith block repeats `(1, 2, 2, 3, 3, 4, 1)`, channel\nprogression `16 → 24 → 40 → 80 → 112 → 192 → 320`, and a\n1×1 head expansion to 1280 channels.  Approximately 5.3M\nparameters and 77.1% ImageNet-1k top-1 accuracy at the\n224×224 native resolution (Table 2).",
@@ -346,7 +346,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b0\n>>> model = efficientnet_b0()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1280, 1, 1)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 1 and Table 2."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 1 and Table 2."
       ],
       "attributes": [],
       "warns": [],
@@ -1617,7 +1617,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b0_cls(pretrained: bool | str = False, weights: EfficientNetB0Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L495",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L495",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B0 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `EfficientNetForImageClassification` with the\nNAS-designed B0 topology followed by global average pooling,\ndropout ($p = 0.2$), and a linear projection to\n`config.num_classes` (default 1000 for ImageNet-1k).\nApproximately 5.3M parameters and 77.1% ImageNet-1k top-1\naccuracy at 224×224 (Tan & Le, 2019, Table 2).",
@@ -1650,7 +1650,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b0_cls\n>>> model = efficientnet_b0_cls(num_classes=10)\n>>> x = lucid.randn(2, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape\n(2, 10)\nLoad ImageNet-pretrained weights:\n>>> model = efficientnet_b0_cls(pretrained=True)            # DEFAULT tag"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B0_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/efficientnet-b0`."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B0_Weights` and hosted on the\nHugging Face Hub under `lucid-dl/efficientnet-b0`."
       ],
       "attributes": [],
       "warns": [],
@@ -2935,7 +2935,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b1(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L116",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L116",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B1 feature-extracting backbone (compound coefficient $\\phi = 0.5$).",
       "extended": "Builds an `EfficientNet` with depth multiplier 1.1 and\nwidth multiplier 1.0 — same channel counts as B0 but with\nblock repeats scaled up by `ceil(n · 1.1)`.  Approximately\n7.8M parameters and 79.1% ImageNet-1k top-1 accuracy at the\n240×240 native resolution (Tan & Le, 2019, Table 2).",
@@ -2962,7 +2962,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b1\n>>> model = efficientnet_b1()\n>>> x = lucid.randn(1, 3, 240, 240)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1280, 1, 1)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2."
       ],
       "attributes": [],
       "warns": [],
@@ -4416,7 +4416,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b1_cls(pretrained: bool | str = False, weights: EfficientNetB1Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L574",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L574",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B1 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `EfficientNetForImageClassification` with the\nB1 compound-scaling configuration (depth × 1.1, width × 1.0)\nfollowed by dropout ($p = 0.2$) and a linear classifier.\nApproximately 7.8M parameters and 79.1% ImageNet-1k top-1\naccuracy at 240×240 (Tan & Le, 2019, Table 2).",
@@ -4449,7 +4449,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b1_cls\n>>> model = efficientnet_b1_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 240, 240)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B1_Weights` and hosted under\n`lucid-dl/efficientnet-b1`."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B1_Weights` and hosted under\n`lucid-dl/efficientnet-b1`."
       ],
       "attributes": [],
       "warns": [],
@@ -5917,7 +5917,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L169",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L169",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B2 feature-extracting backbone (compound coefficient $\\phi = 1$).",
       "extended": "Builds an `EfficientNet` with width multiplier 1.1 and\ndepth multiplier 1.2.  Approximately 9.2M parameters and\n80.1% ImageNet-1k top-1 accuracy at the 260×260 native\nresolution (Tan & Le, 2019, Table 2).",
@@ -5944,7 +5944,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b2\n>>> model = efficientnet_b2()\n>>> x = lucid.randn(1, 3, 260, 260)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1408, 1, 1)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Head expansion: `round(1280 · 1.1) = 1408`\nchannels."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Head expansion: `round(1280 · 1.1) = 1408`\nchannels."
       ],
       "attributes": [],
       "warns": [],
@@ -7398,7 +7398,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b2_cls(pretrained: bool | str = False, weights: EfficientNetB2Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L643",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L643",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B2 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `EfficientNetForImageClassification` with the\nB2 compound-scaling configuration (width × 1.1, depth × 1.2)\nfollowed by dropout ($p = 0.3$) and a linear classifier.\nApproximately 9.2M parameters and 80.1% ImageNet-1k top-1\naccuracy at 260×260 (Tan & Le, 2019, Table 2).",
@@ -7431,7 +7431,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b2_cls\n>>> model = efficientnet_b2_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 260, 260)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B2_Weights` and hosted under\n`lucid-dl/efficientnet-b2`."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B2_Weights` and hosted under\n`lucid-dl/efficientnet-b2`."
       ],
       "attributes": [],
       "warns": [],
@@ -8899,7 +8899,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b3(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L222",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L222",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B3 feature-extracting backbone (compound coefficient $\\phi = 2$).",
       "extended": "Builds an `EfficientNet` with width multiplier 1.2 and\ndepth multiplier 1.4.  Approximately 12M parameters and\n81.6% ImageNet-1k top-1 accuracy at the 300×300 native\nresolution (Tan & Le, 2019, Table 2).",
@@ -8926,7 +8926,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b3\n>>> model = efficientnet_b3()\n>>> x = lucid.randn(1, 3, 300, 300)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1536, 1, 1)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Head expansion: `round(1280 · 1.2) = 1536`\nchannels."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Head expansion: `round(1280 · 1.2) = 1536`\nchannels."
       ],
       "attributes": [],
       "warns": [],
@@ -10380,7 +10380,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b3_cls(pretrained: bool | str = False, weights: EfficientNetB3Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L712",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L712",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B3 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `EfficientNetForImageClassification` with the\nB3 compound-scaling configuration (width × 1.2, depth × 1.4)\nfollowed by dropout ($p = 0.3$) and a linear classifier.\nApproximately 12M parameters and 81.6% ImageNet-1k top-1\naccuracy at 300×300 (Tan & Le, 2019, Table 2).",
@@ -10413,7 +10413,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b3_cls\n>>> model = efficientnet_b3_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 300, 300)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B3_Weights` and hosted under\n`lucid-dl/efficientnet-b3`."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B3_Weights` and hosted under\n`lucid-dl/efficientnet-b3`."
       ],
       "attributes": [],
       "warns": [],
@@ -11881,7 +11881,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b4(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L275",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L275",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B4 feature-extracting backbone (compound coefficient $\\phi = 3$).",
       "extended": "Builds an `EfficientNet` with width multiplier 1.4 and\ndepth multiplier 1.8.  Approximately 19M parameters and\n82.9% ImageNet-1k top-1 accuracy at the 380×380 native\nresolution (Tan & Le, 2019, Table 2).",
@@ -11908,7 +11908,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b4\n>>> model = efficientnet_b4()\n>>> x = lucid.randn(1, 3, 380, 380)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 1792, 1, 1)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Head expansion: `round(1280 · 1.4) = 1792`\nchannels."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Head expansion: `round(1280 · 1.4) = 1792`\nchannels."
       ],
       "attributes": [],
       "warns": [],
@@ -13362,7 +13362,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b4_cls(pretrained: bool | str = False, weights: EfficientNetB4Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L781",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L781",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B4 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `EfficientNetForImageClassification` with the\nB4 compound-scaling configuration (width × 1.4, depth × 1.8)\nfollowed by dropout ($p = 0.4$) and a linear classifier.\nApproximately 19M parameters and 82.9% ImageNet-1k top-1\naccuracy at 380×380 (Tan & Le, 2019, Table 2).",
@@ -13395,7 +13395,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b4_cls\n>>> model = efficientnet_b4_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 380, 380)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B4_Weights` and hosted under\n`lucid-dl/efficientnet-b4`."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B4_Weights` and hosted under\n`lucid-dl/efficientnet-b4`."
       ],
       "attributes": [],
       "warns": [],
@@ -14863,7 +14863,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b5(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L328",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L328",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B5 feature-extracting backbone (compound coefficient $\\phi = 4$).",
       "extended": "Builds an `EfficientNet` with width multiplier 1.6 and\ndepth multiplier 2.2.  Approximately 30M parameters and\n83.6% ImageNet-1k top-1 accuracy at the 456×456 native\nresolution (Tan & Le, 2019, Table 2).",
@@ -14890,7 +14890,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b5\n>>> model = efficientnet_b5()\n>>> x = lucid.randn(1, 3, 456, 456)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2048, 1, 1)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Head expansion: `round(1280 · 1.6) = 2048`\nchannels."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Head expansion: `round(1280 · 1.6) = 2048`\nchannels."
       ],
       "attributes": [],
       "warns": [],
@@ -16346,7 +16346,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b5_cls(pretrained: bool | str = False, weights: EfficientNetB5Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L850",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L850",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B5 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `EfficientNetForImageClassification` with the\nB5 compound-scaling configuration (width × 1.6, depth × 2.2)\nfollowed by dropout ($p = 0.4$) and a linear classifier.\nApproximately 30M parameters and 83.6% ImageNet-1k top-1\naccuracy at 456×456 (Tan & Le, 2019, Table 2).",
@@ -16379,7 +16379,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b5_cls\n>>> model = efficientnet_b5_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 456, 456)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B5_Weights` and hosted under\n`lucid-dl/efficientnet-b5`."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B5_Weights` and hosted under\n`lucid-dl/efficientnet-b5`."
       ],
       "attributes": [],
       "warns": [],
@@ -17849,7 +17849,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b6(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L381",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L381",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B6 feature-extracting backbone (compound coefficient $\\phi = 5$).",
       "extended": "Builds an `EfficientNet` with width multiplier 1.8 and\ndepth multiplier 2.6.  Approximately 43M parameters and\n84.0% ImageNet-1k top-1 accuracy at the 528×528 native\nresolution (Tan & Le, 2019, Table 2).",
@@ -17876,7 +17876,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b6\n>>> model = efficientnet_b6()\n>>> x = lucid.randn(1, 3, 528, 528)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2304, 1, 1)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Head expansion: `round(1280 · 1.8) = 2304`\nchannels."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Head expansion: `round(1280 · 1.8) = 2304`\nchannels."
       ],
       "attributes": [],
       "warns": [],
@@ -19332,7 +19332,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b6_cls(pretrained: bool | str = False, weights: EfficientNetB6Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L919",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L919",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B6 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `EfficientNetForImageClassification` with the\nB6 compound-scaling configuration (width × 1.8, depth × 2.6)\nfollowed by dropout ($p = 0.5$) and a linear classifier.\nApproximately 43M parameters and 84.0% ImageNet-1k top-1\naccuracy at 528×528 (Tan & Le, 2019, Table 2).",
@@ -19365,7 +19365,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b6_cls\n>>> model = efficientnet_b6_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 528, 528)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B6_Weights` and hosted under\n`lucid-dl/efficientnet-b6`."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Pretrained weights are converted from the\nreference-framework `EfficientNet_B6_Weights` and hosted under\n`lucid-dl/efficientnet-b6`."
       ],
       "attributes": [],
       "warns": [],
@@ -20835,7 +20835,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b7(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L434",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L434",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B7 feature-extracting backbone (compound coefficient $\\phi = 6$).",
       "extended": "Builds an `EfficientNet` with width multiplier 2.0 and\ndepth multiplier 3.1 — the largest variant in the original\npaper.  Approximately 66M parameters and 84.4% ImageNet-1k\ntop-1 accuracy at the 600×600 native resolution (Tan & Le,\n2019, Table 2), state-of-the-art at the time of publication.",
@@ -20862,7 +20862,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b7\n>>> model = efficientnet_b7()\n>>> x = lucid.randn(1, 3, 600, 600)\n>>> out = model(x)\n>>> out.last_hidden_state.shape\n(1, 2560, 1, 1)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  Head expansion: `round(1280 · 2.0) = 2560`\nchannels.  Memory footprint at 600×600 is substantial — plan\naccordingly for training."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  Head expansion: `round(1280 · 2.0) = 2560`\nchannels.  Memory footprint at 600×600 is substantial — plan\naccordingly for training."
       ],
       "attributes": [],
       "warns": [],
@@ -22318,7 +22318,7 @@
       "kind": "function",
       "labels": [],
       "signature": "efficientnet_b7_cls(pretrained: bool | str = False, weights: EfficientNetB7Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_pretrained.py#L988",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_pretrained.py#L988",
       "subcategory": "pretrained",
       "summary": "EfficientNet-B7 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `EfficientNetForImageClassification` with the\nB7 compound-scaling configuration (width × 2.0, depth × 3.1)\nfollowed by dropout ($p = 0.5$) and a linear classifier —\nthe largest variant in the original paper.  Approximately\n66M parameters and 84.4% ImageNet-1k top-1 accuracy at\n600×600 (Tan & Le, 2019, Table 2), state-of-the-art at the\ntime of publication.",
@@ -22351,7 +22351,7 @@
         ">>> import lucid\n>>> from lucid.models.vision.efficientnet import efficientnet_b7_cls\n>>> model = efficientnet_b7_cls(pretrained=True)\n>>> x = lucid.randn(1, 3, 600, 600)\n>>> out = model(x)\n>>> out.logits.shape\n(1, 1000)"
       ],
       "notes": [
-        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 (arXiv:1905.11946),\nTable 2.  At 600×600 input resolution memory usage is\nsubstantial — plan inference accordingly.  Pretrained weights are\nconverted from the reference-framework `EfficientNet_B7_Weights`\nand hosted under `lucid-dl/efficientnet-b7`."
+        "See Tan & Le, \"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\", ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946)),\nTable 2.  At 600×600 input resolution memory usage is\nsubstantial — plan inference accordingly.  Pretrained weights are\nconverted from the reference-framework `EfficientNet_B7_Weights`\nand hosted under `lucid-dl/efficientnet-b7`."
       ],
       "attributes": [],
       "warns": [],
@@ -23825,7 +23825,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetB0Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_weights.py#L62",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_weights.py#L62",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.efficientnet_b0_cls`.",
@@ -23837,7 +23837,7 @@
         ">>> from lucid.models import efficientnet_b0_cls\n>>> model = efficientnet_b0_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 (arXiv:1905.11946)."
+        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946))."
       ],
       "attributes": [
         {
@@ -23864,7 +23864,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetB1Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_weights.py#L104",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_weights.py#L104",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.efficientnet_b1_cls`.",
@@ -23876,7 +23876,7 @@
         ">>> from lucid.models import efficientnet_b1_cls\n>>> model = efficientnet_b1_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 (arXiv:1905.11946)."
+        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946))."
       ],
       "attributes": [
         {
@@ -23903,7 +23903,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetB2Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_weights.py#L146",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_weights.py#L146",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.efficientnet_b2_cls`.",
@@ -23915,7 +23915,7 @@
         ">>> from lucid.models import efficientnet_b2_cls\n>>> model = efficientnet_b2_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 (arXiv:1905.11946)."
+        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946))."
       ],
       "attributes": [
         {
@@ -23942,7 +23942,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetB3Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_weights.py#L188",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_weights.py#L188",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.efficientnet_b3_cls`.",
@@ -23954,7 +23954,7 @@
         ">>> from lucid.models import efficientnet_b3_cls\n>>> model = efficientnet_b3_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 (arXiv:1905.11946)."
+        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946))."
       ],
       "attributes": [
         {
@@ -23981,7 +23981,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetB4Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_weights.py#L230",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_weights.py#L230",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.efficientnet_b4_cls`.",
@@ -23993,7 +23993,7 @@
         ">>> from lucid.models import efficientnet_b4_cls\n>>> model = efficientnet_b4_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 (arXiv:1905.11946)."
+        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946))."
       ],
       "attributes": [
         {
@@ -24020,7 +24020,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetB5Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_weights.py#L272",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_weights.py#L272",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.efficientnet_b5_cls`.",
@@ -24032,7 +24032,7 @@
         ">>> from lucid.models import efficientnet_b5_cls\n>>> model = efficientnet_b5_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 (arXiv:1905.11946)."
+        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946))."
       ],
       "attributes": [
         {
@@ -24059,7 +24059,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetB6Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_weights.py#L314",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_weights.py#L314",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.efficientnet_b6_cls`.",
@@ -24071,7 +24071,7 @@
         ">>> from lucid.models import efficientnet_b6_cls\n>>> model = efficientnet_b6_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 (arXiv:1905.11946)."
+        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946))."
       ],
       "attributes": [
         {
@@ -24098,7 +24098,7 @@
       ],
       "labels": [],
       "signature": "EfficientNetB7Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/efficientnet/_weights.py#L356",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/efficientnet/_weights.py#L356",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.efficientnet_b7_cls`.",
@@ -24110,7 +24110,7 @@
         ">>> from lucid.models import efficientnet_b7_cls\n>>> model = efficientnet_b7_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 (arXiv:1905.11946)."
+        "Reference: Tan, Le, *\"EfficientNet: Rethinking Model Scaling for\nConvolutional Neural Networks\"*, ICML 2019 ([arXiv:1905.11946](https://arxiv.org/abs/1905.11946))."
       ],
       "attributes": [
         {

@@ -3,7 +3,7 @@
   "name": "mean_flow",
   "path": "lucid.models.generative.mean_flow",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/__init__.py#L1",
   "members": [
     {
       "name": "MeanFlowConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "MeanFlowConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 4, out_channels: int = 4, act_fn: GenerativeActivation = 'silu', patch_size: int = 2, hidden_size: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, frequency_embedding_size: int = 256, num_classes: int = 1000, class_dropout: float = 0.1, time_conditioning: TimeConditioning = 't_interval', time_sampler: TimeSampler = 'lognorm', lognorm_mean: float = -0.4, lognorm_std: float = 1.0, ratio_r_not_t: float = 0.25, adaptive_weight_power: float = 1.0, adaptive_weight_eps: float = 0.001, guidance_scale: float = 1.0, guidance_mix: float = 0.0, guidance_interval: tuple[float, float] = (0.0, 1.0))",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_config.py#L47",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_config.py#L47",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "num_patches: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_config.py#L235",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_config.py#L235",
           "summary": "Tokens the field is cut into — `(sample_size / patch_size)ˆ2`.",
           "extended": null,
           "parameters": [],
@@ -47,7 +47,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 4, out_channels: int = 4, act_fn: GenerativeActivation = 'silu', patch_size: int = 2, hidden_size: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, frequency_embedding_size: int = 256, num_classes: int = 1000, class_dropout: float = 0.1, time_conditioning: TimeConditioning = 't_interval', time_sampler: TimeSampler = 'lognorm', lognorm_mean: float = -0.4, lognorm_std: float = 1.0, ratio_r_not_t: float = 0.25, adaptive_weight_power: float = 1.0, adaptive_weight_eps: float = 0.001, guidance_scale: float = 1.0, guidance_mix: float = 0.0, guidance_interval: tuple[float, float] = (0.0, 1.0))",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_config.py#L1",
           "subcategory": "config",
           "summary": "Initialise the head. See the class docstring for parameters.",
           "extended": null,
@@ -201,7 +201,7 @@
         ">>> from lucid.models.generative.mean_flow import MeanFlowConfig\n>>> config = MeanFlowConfig()\n>>> config.hidden_size, config.depth, config.patch_size\n(768, 12, 2)\nThe variant names encode the backbone size and the patch side, so\nL/2 is the Large backbone tokenised at two:\n>>> large = MeanFlowConfig(hidden_size=1024, depth=24, num_heads=16)\n>>> large.num_patches\n256"
       ],
       "notes": [
-        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, arXiv:2505.13447, 2025.  Architecture and\ntraining settings are Table 4; the ablations that pin the defaults\nare Table 1.\n\nThe backbone is DiT's, unchanged — the paper is explicit that it\nkeeps \"the DiT architecture blocks untouched\" and that architectural\nimprovements are orthogonal.  What differs from a diffusion DiT is\nonly the conditioning: two time variables rather than one, each\nembedded and passed through a two-layer MLP before being summed."
+        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  Architecture and\ntraining settings are Table 4; the ablations that pin the defaults\nare Table 1.\n\nThe backbone is DiT's, unchanged — the paper is explicit that it\nkeeps \"the DiT architecture blocks untouched\" and that architectural\nimprovements are orthogonal.  What differs from a diffusion DiT is\nonly the conditioning: two time variables rather than one, each\nembedded and passed through a two-layer MLP before being summed."
       ],
       "attributes": [],
       "warns": [],
@@ -217,7 +217,7 @@
       ],
       "labels": [],
       "signature": "MeanFlowForImageGeneration(config: MeanFlowConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_model.py#L293",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_model.py#L293",
       "subcategory": "model",
       "methods": [
         {
@@ -226,7 +226,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MeanFlowConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_model.py#L327",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_model.py#L327",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -248,7 +248,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(images: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_model.py#L392",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_model.py#L392",
           "subcategory": "model",
           "summary": "One training step of the MeanFlow objective.",
           "extended": null,
@@ -285,7 +285,7 @@
           "kind": "function",
           "labels": [],
           "signature": "generate(n_samples: int = 1, labels: Tensor | None = None, steps: int = 1, noise: Tensor | None = None, device: str | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_model.py#L478",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_model.py#L478",
           "subcategory": "model",
           "summary": "Sample by walking the average velocity backwards from noise.",
           "extended": null,
@@ -356,7 +356,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.mean_flow import (\n...     MeanFlowConfig, MeanFlowForImageGeneration)\n>>> config = MeanFlowConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                         depth=2, num_heads=4, num_classes=10)\n>>> model = MeanFlowForImageGeneration(config).eval()\n>>> model.generate(2).samples.shape\n(2, 4, 8, 8)"
       ],
       "notes": [
-        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, arXiv:2505.13447, 2025.  Training is\nAlgorithm 1, sampling is Algorithm 2 and Eq. 12."
+        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  Training is\nAlgorithm 1, sampling is Algorithm 2 and Eq. 12."
       ],
       "attributes": [
         {
@@ -378,7 +378,7 @@
       ],
       "labels": [],
       "signature": "MeanFlowModel(config: MeanFlowConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_model.py#L101",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_model.py#L101",
       "subcategory": "model",
       "methods": [
         {
@@ -387,7 +387,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MeanFlowConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_model.py#L151",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_model.py#L151",
           "subcategory": "model",
           "summary": "Initialise the network. See the class docstring for parameters.",
           "extended": null,
@@ -409,7 +409,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(z: Tensor, r: Tensor, t: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_model.py#L244",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_model.py#L244",
           "subcategory": "model",
           "summary": "Evaluate the average-velocity field.",
           "extended": null,
@@ -467,7 +467,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.mean_flow import (\n...     MeanFlowConfig, MeanFlowModel)\n>>> config = MeanFlowConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                         depth=2, num_heads=4, num_classes=10)\n>>> model = MeanFlowModel(config).eval()\n>>> z = lucid.randn((1, 4, 8, 8))\n>>> t = lucid.tensor([1.0])\n>>> r = lucid.tensor([0.0])\n>>> model(z, r, t).shape\n(1, 4, 8, 8)"
       ],
       "notes": [
-        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, arXiv:2505.13447, 2025.  Backbone\nconfigurations are Table 4.\n\nThe forward takes both times.  Which of them reach the embedding is\n`MeanFlowConfig.time_conditioning`; the signature does not\nchange with it, because the Jacobian-vector product the objective\nneeds is always taken with respect to $(z, r, t)$ no matter how\nthe network chooses to encode them."
+        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  Backbone\nconfigurations are Table 4.\n\nThe forward takes both times.  Which of them reach the embedding is\n`MeanFlowConfig.time_conditioning`; the signature does not\nchange with it, because the Jacobian-vector product the objective\nneeds is always taken with respect to $(z, r, t)$ no matter how\nthe network chooses to encode them."
       ],
       "attributes": [
         {
@@ -504,7 +504,7 @@
       ],
       "labels": [],
       "signature": "MeanFlowOutput(loss: Tensor, prediction: Tensor, target: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_model.py#L78",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_model.py#L78",
       "subcategory": "model",
       "methods": [
         {
@@ -513,7 +513,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(loss: Tensor, prediction: Tensor, target: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the head. See the class docstring for parameters.",
           "extended": null,
@@ -563,7 +563,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_base_2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L120",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L120",
       "subcategory": "pretrained",
       "summary": "Base width, patch 2 — the smallest reported model.",
       "extended": null,
@@ -590,7 +590,7 @@
         ">>> from lucid.models import mean_flow_base_2\n>>> config = mean_flow_base_2().config\n>>> config.hidden_size, config.depth, config.num_patches\n(768, 12, 256)"
       ],
       "notes": [
-        "Reference: Geng et al., arXiv:2505.13447, 2025, Tables 2 and 4.\nReports 6.17 FID at one function evaluation on ImageNet 256x256."
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Tables 2 and 4.\nReports 6.17 FID at one function evaluation on ImageNet 256x256."
       ],
       "attributes": [],
       "warns": [],
@@ -796,7 +796,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_base_2_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L340",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L340",
       "subcategory": "pretrained",
       "summary": "`mean_flow_base_2` posed as a sampler.",
       "extended": null,
@@ -823,7 +823,7 @@
         ">>> from lucid.models import mean_flow_base_2_gen\n>>> model = mean_flow_base_2_gen()"
       ],
       "notes": [
-        "Reference: Geng et al., arXiv:2505.13447, 2025."
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025."
       ],
       "attributes": [],
       "warns": [],
@@ -1037,7 +1037,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_base_4(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L73",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L73",
       "subcategory": "pretrained",
       "summary": "The ablation backbone — Base width, patch 4.",
       "extended": null,
@@ -1064,7 +1064,7 @@
         ">>> from lucid.models import mean_flow_base_4\n>>> config = mean_flow_base_4().config\n>>> config.patch_size, config.num_patches\n(4, 64)"
       ],
       "notes": [
-        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, arXiv:2505.13447, 2025, Table 4.\n\nThis is the configuration every ablation in Table 1 runs on, at 80\nepochs rather than the 240 the reported models get — its FID of 61.06\nis a comparison point between design choices, not a headline number.\nPatch 4 over a 32-wide latent leaves 64 tokens against `B/2`'s 256,\nwhich is what makes a six-way study affordable."
+        "Reference: Geng, Deng, Bai, Kolter, and He, *\"Mean Flows for One-step\nGenerative Modeling\"*, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Table 4.\n\nThis is the configuration every ablation in Table 1 runs on, at 80\nepochs rather than the 240 the reported models get — its FID of 61.06\nis a comparison point between design choices, not a headline number.\nPatch 4 over a 32-wide latent leaves 64 tokens against `B/2`'s 256,\nwhich is what makes a six-way study affordable."
       ],
       "attributes": [],
       "warns": [],
@@ -1270,7 +1270,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_base_4_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L300",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L300",
       "subcategory": "pretrained",
       "summary": "`mean_flow_base_4` posed as a sampler.",
       "extended": null,
@@ -1297,7 +1297,7 @@
         ">>> from lucid.models import mean_flow_base_4_gen\n>>> model = mean_flow_base_4_gen()"
       ],
       "notes": [
-        "Reference: Geng et al., arXiv:2505.13447, 2025."
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025."
       ],
       "attributes": [],
       "warns": [],
@@ -1511,7 +1511,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_large_2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L205",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L205",
       "subcategory": "pretrained",
       "summary": "Large width, patch 2.",
       "extended": null,
@@ -1538,7 +1538,7 @@
         ">>> from lucid.models import mean_flow_large_2\n>>> config = mean_flow_large_2().config\n>>> config.depth, config.guidance_interval\n(24, (0.0, 0.8))"
       ],
       "notes": [
-        "Reference: Geng et al., arXiv:2505.13447, 2025, Tables 2 and 4.\nReports 3.84 FID at one function evaluation.\n\nThe guidance defaults change here: the paper drops the mixing weight\nto 0.2 and stops applying guidance above `t = 0.8`, which is a\ntuning of the target rather than of the network."
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Tables 2 and 4.\nReports 3.84 FID at one function evaluation.\n\nThe guidance defaults change here: the paper drops the mixing weight\nto 0.2 and stops applying guidance above `t = 0.8`, which is a\ntuning of the target rather than of the network."
       ],
       "attributes": [],
       "warns": [],
@@ -1744,7 +1744,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_large_2_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L420",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L420",
       "subcategory": "pretrained",
       "summary": "`mean_flow_large_2` posed as a sampler.",
       "extended": null,
@@ -1771,7 +1771,7 @@
         ">>> from lucid.models import mean_flow_large_2_gen\n>>> model = mean_flow_large_2_gen()"
       ],
       "notes": [
-        "Reference: Geng et al., arXiv:2505.13447, 2025."
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025."
       ],
       "attributes": [],
       "warns": [],
@@ -1985,7 +1985,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_medium_2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L161",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L161",
       "subcategory": "pretrained",
       "summary": "Medium width, patch 2.",
       "extended": null,
@@ -2012,7 +2012,7 @@
         ">>> from lucid.models import mean_flow_medium_2\n>>> config = mean_flow_medium_2().config\n>>> config.hidden_size, config.depth\n(1024, 16)"
       ],
       "notes": [
-        "Reference: Geng et al., arXiv:2505.13447, 2025, Tables 2 and 4.\nReports 5.01 FID at one function evaluation.\n\nA size DiT does not define — the paper introduces it to fill the gap\nbetween Base and Large, at Large's width and two thirds of its depth."
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Tables 2 and 4.\nReports 5.01 FID at one function evaluation.\n\nA size DiT does not define — the paper introduces it to fill the gap\nbetween Base and Large, at Large's width and two thirds of its depth."
       ],
       "attributes": [],
       "warns": [],
@@ -2218,7 +2218,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_medium_2_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L380",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L380",
       "subcategory": "pretrained",
       "summary": "`mean_flow_medium_2` posed as a sampler.",
       "extended": null,
@@ -2245,7 +2245,7 @@
         ">>> from lucid.models import mean_flow_medium_2_gen\n>>> model = mean_flow_medium_2_gen()"
       ],
       "notes": [
-        "Reference: Geng et al., arXiv:2505.13447, 2025."
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025."
       ],
       "attributes": [],
       "warns": [],
@@ -2459,7 +2459,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_xlarge_2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L250",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L250",
       "subcategory": "pretrained",
       "summary": "Extra-large width, patch 2 — the paper's headline model.",
       "extended": null,
@@ -2486,7 +2486,7 @@
         ">>> from lucid.models import mean_flow_xlarge_2\n>>> config = mean_flow_xlarge_2().config\n>>> config.hidden_size, config.depth, config.num_heads\n(1152, 28, 16)"
       ],
       "notes": [
-        "Reference: Geng et al., arXiv:2505.13447, 2025, Tables 2 and 4.\nReports 3.43 FID at one function evaluation on ImageNet 256x256 and\n2.93 at two — the first figure being the one that closes most of the\ngap to 250-step diffusion models of the same backbone (DiT-XL/2 at\n2.27, SiT-XL/2 at 2.06)."
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025, Tables 2 and 4.\nReports 3.43 FID at one function evaluation on ImageNet 256x256 and\n2.93 at two — the first figure being the one that closes most of the\ngap to 250-step diffusion models of the same backbone (DiT-XL/2 at\n2.27, SiT-XL/2 at 2.06)."
       ],
       "attributes": [],
       "warns": [],
@@ -2692,7 +2692,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mean_flow_xlarge_2_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/mean_flow/_pretrained.py#L460",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/mean_flow/_pretrained.py#L460",
       "subcategory": "pretrained",
       "summary": "`mean_flow_xlarge_2` posed as a sampler.",
       "extended": null,
@@ -2719,7 +2719,7 @@
         ">>> from lucid.models import mean_flow_xlarge_2_gen\n>>> model = mean_flow_xlarge_2_gen()"
       ],
       "notes": [
-        "Reference: Geng et al., arXiv:2505.13447, 2025.  This is the\nconfiguration behind the 3.43 one-step FID."
+        "Reference: Geng et al., [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  This is the\nconfiguration behind the 3.43 one-step FID."
       ],
       "attributes": [],
       "warns": [],
@@ -2929,7 +2929,7 @@
     }
   ],
   "summary": "MeanFlow — one-step generation by modelling the average velocity.",
-  "extended": "Geng, Deng, Bai, Kolter and He, arXiv:2505.13447, 2025.  The fifth step\nof the flow lineage and the one that removes the integral: where Flow\nMatching learns the instantaneous velocity and integrates it at sampling\ntime, MeanFlow learns the average velocity over an interval, which *is*\nthat integral, and reads a sample off a single evaluation.",
+  "extended": "Geng, Deng, Bai, Kolter and He, [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.  The fifth step\nof the flow lineage and the one that removes the integral: where Flow\nMatching learns the instantaneous velocity and integrates it at sampling\ntime, MeanFlow learns the average velocity over an interval, which *is*\nthat integral, and reads a sample off a single evaluation.",
   "parameters": [],
   "returns": null,
   "raises": [],
@@ -2939,7 +2939,7 @@
   "warns": [],
   "see_also": [],
   "canonical_name": "MeanFlow",
-  "citation": "Geng, Zhengyang, Mingyang Deng, Xingjian Bai, J. Zico Kolter, and Kaiming He. \"Mean Flows for One-step Generative Modeling.\" arXiv preprint arXiv:2505.13447, 2025.",
+  "citation": "Geng, Zhengyang, Mingyang Deng, Xingjian Bai, J. Zico Kolter, and Kaiming He. \"Mean Flows for One-step Generative Modeling.\" arXiv preprint [arXiv:2505.13447](https://arxiv.org/abs/2505.13447), 2025.",
   "theory": "Flow Matching models the **instantaneous** velocity $v(z_t, t)$\n— the tangent of the path at one instant — and recovers a sample by\nintegrating it.  MeanFlow models the **average** velocity over an\ninterval, defined as that integral divided by its width:\n\n\n\n$$\nu(z_t, r, t) \\triangleq \\frac{1}{t - r}\\int_r^t v(z_\\tau, \\tau)\\,d\\tau .\n$$\n\nThe two coincide only in the limit $r \\to t$.  Away from it the\naverage velocity points along the *displacement* between the two\ntimes rather than along the curve, which is exactly what a one-step\nsampler needs: with $u$ in hand the whole path is\n$z_r = z_t - (t - r)\\,u(z_t, r, t)$, and generation from noise\nis a single evaluation at $(r, t) = (0, 1)$.\n\nTraining on that definition directly would require the integral.  The\nway through is to multiply it out and differentiate with respect to\n$t$, holding $r$ fixed, which turns the integral into the\n**MeanFlow Identity**:\n\n\n\n$$\nu(z_t, r, t) = v(z_t, t) - (t - r)\\,\\frac{d}{dt}u(z_t, r, t).\n$$\n\nEvery term on the right is available.  The instantaneous velocity is\nthe closed-form conditional velocity Flow Matching already regresses\nonto, and the total derivative expands by the chain rule into\n\n\n\n$$\n\\frac{d}{dt}u(z_t, r, t) = v(z_t, t)\\,\\partial_z u + \\partial_t u,\n$$\n\nwhich is one Jacobian-vector product of $u_\\theta$ along the\ntangent $(v,\\, 0,\\, 1)$ — a single extra forward-mode pass, not\na second-order solve.  The identity becomes a regression target,\n\n\n\n$$\nu_{\\mathrm{tgt}} = v_t - (t - r)\\bigl(v_t\\,\\partial_z u_\\theta\n                                    + \\partial_t u_\\theta\\bigr),\n$$\n\nand the loss is $\\lVert u_\\theta - \\mathrm{sg}(u_{\\mathrm{tgt}}) \\rVert^2$.  The stop-gradient is what keeps the cost at one extra\npass: without it the Jacobian-vector product would itself need to be\ndifferentiated.\n\nSetting $r = t$ collapses the second term and recovers Flow\nMatching exactly, so the method is Flow Matching with a modified\ntarget rather than a different framework.  The paper draws\n$r \\neq t$ for only a quarter of samples; at 0% it *is* Flow\nMatching and one-step generation fails outright (FID 328.91 against\n61.06).",
   "tasks": [
     "image-generation"

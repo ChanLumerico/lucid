@@ -3,7 +3,7 @@
   "name": "alexnet",
   "path": "lucid.models.vision.alexnet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/__init__.py#L1",
   "members": [
     {
       "name": "AlexNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "AlexNetConfig(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "AlexNet(config: AlexNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_model.py#L122",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_model.py#L122",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: AlexNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_model.py#L201",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_model.py#L201",
           "subcategory": "model",
           "summary": "Initialise the LayerNorm module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_model.py#L220",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_model.py#L220",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_model.py#L223",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_model.py#L223",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_model.py#L228",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_model.py#L228",
           "subcategory": "model",
           "summary": "Run R-CNN on a batch of images.",
           "extended": null,
@@ -181,7 +181,7 @@
         }
       ],
       "summary": "AlexNet feature-extracting backbone (no fully-connected head).",
-      "extended": "Implements the single-stream, no-LRN derivation from Krizhevsky,\n\"One weird trick for parallelizing convolutional neural networks\",\narXiv:1404.5997 — the canonical re-derivation of the original\nKrizhevsky, Sutskever & Hinton 2012 two-GPU model into a single\nmerged stream with adjusted channel widths\n$(64, 192, 384, 256, 256)$.  Five convolutions\n($11\\times11$ stride-4 first; $5\\times5$ second; three\n$3\\times3$), each followed by ReLU, with overlapping\n$3\\times3$ stride-2 max-pools after blocks 1, 2, and 5.  A\nfinal `lucid.nn.AdaptiveAvgPool2d` collapses the feature\nmap to $6\\times6$ regardless of input resolution.",
+      "extended": "Implements the single-stream, no-LRN derivation from Krizhevsky,\n\"One weird trick for parallelizing convolutional neural networks\",\n[arXiv:1404.5997](https://arxiv.org/abs/1404.5997) — the canonical re-derivation of the original\nKrizhevsky, Sutskever & Hinton 2012 two-GPU model into a single\nmerged stream with adjusted channel widths\n$(64, 192, 384, 256, 256)$.  Five convolutions\n($11\\times11$ stride-4 first; $5\\times5$ second; three\n$3\\times3$), each followed by ReLU, with overlapping\n$3\\times3$ stride-2 max-pools after blocks 1, 2, and 5.  A\nfinal `lucid.nn.AdaptiveAvgPool2d` collapses the feature\nmap to $6\\times6$ regardless of input resolution.",
       "parameters": [
         {
           "name": "config",
@@ -234,7 +234,7 @@
       ],
       "labels": [],
       "signature": "AlexNetForImageClassification(config: AlexNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_model.py#L238",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_model.py#L238",
       "subcategory": "model",
       "methods": [
         {
@@ -243,7 +243,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: AlexNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_model.py#L313",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_model.py#L313",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -265,7 +265,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_model.py#L325",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_model.py#L325",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -336,7 +336,7 @@
       "kind": "function",
       "labels": [],
       "signature": "alexnet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_pretrained.py#L16",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_pretrained.py#L16",
       "subcategory": "pretrained",
       "summary": "AlexNet feature-extracting backbone (no fully-connected head).",
       "extended": "Builds an `AlexNet` with the Krizhevsky 2014 single-stream\nOWT topology: five convolutional blocks (Conv1: 3→64 with\n$11\\times11$ stride-4; Conv2: 64→192 with $5\\times5$;\nConv3: 192→384, Conv4: 384→256, Conv5: 256→256, all\n$3\\times3$), and overlapping $3\\times3$ max-pools\nafter blocks 1, 2, 5.  Approximately 2.5 M parameters in the\nconvolutional trunk alone (≈61.1 M for the full classifier\nvariant).",
@@ -490,7 +490,7 @@
       "kind": "function",
       "labels": [],
       "signature": "alexnet_cls(pretrained: bool | str = False, weights: AlexNetWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_pretrained.py#L83",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_pretrained.py#L83",
       "subcategory": "pretrained",
       "summary": "AlexNet image classifier (backbone + FC6 + FC7 + linear head).",
       "extended": "Builds an `AlexNetForImageClassification` with the\nKrizhevsky 2014 single-stream OWT topology: the five-block conv\ntrunk followed by FC6 (9216 → 4096), FC7 (4096 → 4096), and a\nfinal linear projection to `config.num_classes` (default 1000\nfor ImageNet-1k).  Approximately 61.1 M parameters total,\ndominated by the two 4096-dim FC layers (≈54.5 M).\n`lucid.nn.Dropout` with `p=config.dropout` (default 0.5)\nis applied after both hidden activations.",
@@ -683,7 +683,7 @@
       ],
       "labels": [],
       "signature": "AlexNetWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/vision/alexnet/_weights.py#L22",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/vision/alexnet/_weights.py#L22",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.alexnet_cls`.",
@@ -709,7 +709,7 @@
   "warns": [],
   "see_also": [],
   "canonical_name": "AlexNet",
-  "citation": "Krizhevsky, Alex, Ilya Sutskever, and Geoffrey E. Hinton. \"ImageNet Classification with Deep Convolutional Neural Networks.\" Advances in Neural Information Processing Systems, 2012.  Single-stream channel widths from Krizhevsky, Alex. \"One weird trick for parallelizing convolutional neural networks.\" arXiv:1404.5997 (2014).",
+  "citation": "Krizhevsky, Alex, Ilya Sutskever, and Geoffrey E. Hinton. \"ImageNet Classification with Deep Convolutional Neural Networks.\" Advances in Neural Information Processing Systems, 2012.  Single-stream channel widths from Krizhevsky, Alex. \"One weird trick for parallelizing convolutional neural networks.\" [arXiv:1404.5997](https://arxiv.org/abs/1404.5997) (2014).",
   "theory": "AlexNet is the architecture that re-ignited deep learning, winning\nthe ILSVRC-2012 ImageNet classification challenge with a top-5\nerror of 15.3% — more than ten percentage points below the\nrunner-up — and demonstrating for the first time that a large\nconvolutional network trained end-to-end on raw pixels could\ndecisively beat hand-engineered feature pipelines.\n\nThe architecture stacks five convolutional layers followed by\nthree fully-connected layers, taking $3\\times224\\times224$\nRGB inputs and producing 1000-way softmax logits.  Three\ncontributions made training such a deep network tractable on\n2012-era hardware: (i) the *rectified linear unit*\n$\\phi(x) = \\max(0, x)$ replaced saturating nonlinearities,\ncutting training time by several factors; (ii) *dropout* with\n$p=0.5$ in the two large 4096-dim fully-connected layers\nregularised the ≈61 M parameters against overfitting; and\n(iii) overlapping max-pooling combined with heavy data\naugmentation (random crops, horizontal flips, AlexNet-style PCA\ncolour jitter) closed the train-test gap.\n\nThe original 2012 paper split conv filters across two GPUs (model\nparallel) because a single GTX 580's 3 GB memory budget could not\nhold the network — Krizhevsky 2014 (\"One weird trick for\nparallelizing convolutional neural networks\") later re-derived\nthe network as a single merged stream with adjusted channel widths\n$(64, 192, 384, 256, 256)$ and no local response\nnormalisation; this single-stream variant is what Lucid (and every\npublished reference checkpoint) ships.  AlexNet's success\nestablished the now-standard recipe of deep ConvNet + ReLU +\ndropout + heavy data augmentation + SGD with momentum, and every\nsubsequent ImageNet-scale vision model descends from it directly.",
   "tasks": [
     "image-classification"

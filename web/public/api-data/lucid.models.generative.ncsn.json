@@ -3,7 +3,7 @@
   "name": "ncsn",
   "path": "lucid.models.generative.ncsn",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/__init__.py#L1",
   "members": [
     {
       "name": "NCSNConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "NCSNConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', base_channels: int = 128, channel_mult: tuple[int, ...] = (lambda: (1, 2, 2, 2))(), num_res_blocks: int = 2, attention_resolutions: tuple[int, ...] = (lambda: (16,))(), num_heads: int = 1, dropout: float = 0.0, resnet_groups: int = 32, backbone: Literal['ddpm_unet', 'refinenet'] = 'ddpm_unet', num_noise_levels: int = 10, sigma_max: float = 1.0, sigma_min: float = 0.01, langevin_steps: int = 100, langevin_eps: float = 2e-05, scale_by_sigma: bool = True, denoise: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_config.py#L25",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_config.py#L25",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', base_channels: int = 128, channel_mult: tuple[int, ...] = (lambda: (1, 2, 2, 2))(), num_res_blocks: int = 2, attention_resolutions: tuple[int, ...] = (lambda: (16,))(), num_heads: int = 1, dropout: float = 0.0, resnet_groups: int = 32, backbone: Literal['ddpm_unet', 'refinenet'] = 'ddpm_unet', num_noise_levels: int = 10, sigma_max: float = 1.0, sigma_min: float = 0.01, langevin_steps: int = 100, langevin_eps: float = 2e-05, scale_by_sigma: bool = True, denoise: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -169,7 +169,7 @@
       ],
       "labels": [],
       "signature": "NCSNForImageGeneration(config: NCSNConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_model.py#L219",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_model.py#L219",
       "subcategory": "model",
       "methods": [
         {
@@ -178,7 +178,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: NCSNConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_model.py#L295",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_model.py#L295",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -200,7 +200,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(sample: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_model.py#L322",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_model.py#L322",
           "subcategory": "model",
           "summary": "Denoising Score Matching loss (Song 2019 Eq. 6).",
           "extended": "For each image we sample `i ~ Uniform({0, …, L-1})`, perturb\n`x̃ = x + σ_i · z` with `z ~ N(0, I)`, and minimise\n\nL = ½ · E ‖ σ_i · s_θ(x̃, i) + z ‖²\n\nwhich is the σ-weighted DSM loss.",
@@ -222,7 +222,7 @@
           "kind": "function",
           "labels": [],
           "signature": "generate(n_samples: int = 1, langevin_steps: int | None = None, return_intermediates: bool = False, device: str | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_model.py#L362",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_model.py#L362",
           "subcategory": "model",
           "summary": "Annealed Langevin dynamics — Song 2019 Algorithm 1.",
           "extended": "Initialises `x ~ N(0, σ_max² I)` then iterates over the σ\nschedule from largest to smallest noise.  At each σ_i takes\n`langevin_steps` Langevin steps with step size\n`α_i = ε · σ_i² / σ_L²`:\n\nx ← x + (α_i / 2) · s_θ(x, i) + √α_i · z      z ~ N(0, I)",
@@ -280,7 +280,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ncsn import (\n...     NCSNConfig, NCSNForImageGeneration,\n... )\n>>> cfg = NCSNConfig(sample_size=32, base_channels=32,\n...                  channel_mult=(1, 2), num_res_blocks=1,\n...                  resnet_groups=16, num_noise_levels=10,\n...                  langevin_steps=2)\n>>> model = NCSNForImageGeneration(cfg).eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape, out.loss.shape   # score field + scalar loss\n((1, 3, 32, 32), ())"
       ],
       "notes": [
-        "Reference: Song and Ermon, *\"Generative Modeling by Estimating\nGradients of the Data Distribution\"*, NeurIPS, 2019 (arXiv:1907.05600);\nNCSNv2 refinements in Song and Ermon, 2020 (arXiv:2006.09011).\n\nDenoising score matching loss:\n\n\n\n$$\n\\mathcal{L}_{\\text{DSM}}(\\theta)\n    = \\tfrac{1}{2}\\,\n      \\mathbb{E}_{\\sigma, x, \\tilde{x}}\\!\\left[\n        \\big\\lVert\n            \\sigma\\, s_\\theta(\\tilde{x}, \\sigma) + z\n        \\big\\rVert^2\n      \\right],\n$$\n\nwith $\\tilde{x} = x + \\sigma z$, $z \\sim \\mathcal{N}(0, \\mathbf{I})$."
+        "Reference: Song and Ermon, *\"Generative Modeling by Estimating\nGradients of the Data Distribution\"*, NeurIPS, 2019 ([arXiv:1907.05600](https://arxiv.org/abs/1907.05600));\nNCSNv2 refinements in Song and Ermon, 2020 ([arXiv:2006.09011](https://arxiv.org/abs/2006.09011)).\n\nDenoising score matching loss:\n\n\n\n$$\n\\mathcal{L}_{\\text{DSM}}(\\theta)\n    = \\tfrac{1}{2}\\,\n      \\mathbb{E}_{\\sigma, x, \\tilde{x}}\\!\\left[\n        \\big\\lVert\n            \\sigma\\, s_\\theta(\\tilde{x}, \\sigma) + z\n        \\big\\rVert^2\n      \\right],\n$$\n\nwith $\\tilde{x} = x + \\sigma z$, $z \\sim \\mathcal{N}(0, \\mathbf{I})$."
       ],
       "attributes": [
         {
@@ -307,7 +307,7 @@
       ],
       "labels": [],
       "signature": "NCSNModel(config: NCSNConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_model.py#L69",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_model.py#L69",
       "subcategory": "model",
       "methods": [
         {
@@ -316,7 +316,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: NCSNConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_model.py#L144",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_model.py#L144",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -340,7 +340,7 @@
             "property"
           ],
           "signature": "num_noise_levels: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_model.py#L176",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_model.py#L176",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -361,7 +361,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(sample: Tensor, sigma_idx: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_model.py#L179",
+          "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_model.py#L179",
           "subcategory": "model",
           "summary": "Predict the score at `sample` for the given noise-level indices.",
           "extended": null,
@@ -407,7 +407,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ncsn import NCSNConfig, NCSNModel\n>>> cfg = NCSNConfig(sample_size=32, base_channels=32,\n...                  channel_mult=(1, 2), num_res_blocks=1,\n...                  resnet_groups=16, num_noise_levels=10)\n>>> model = NCSNModel(cfg).eval()\n>>> x_tilde = lucid.randn((1, 3, 32, 32))\n>>> sigma_idx = lucid.tensor([3]).long()\n>>> out = model(x_tilde, sigma_idx)\n>>> out.sample.shape   # (1, 3, 32, 32) — raw score\n(1, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Song and Ermon, *\"Generative Modeling by Estimating\nGradients of the Data Distribution\"*, NeurIPS, 2019\n(arXiv:1907.05600); NCSNv2 refinements in Song and Ermon, 2020\n(arXiv:2006.09011).\n\nThe trained score satisfies\n\n\n\n$$\ns_\\theta(\\tilde{x}, \\sigma)\n    \\;\\approx\\; \\nabla_{\\tilde{x}} \\log p_\\sigma(\\tilde{x}),\n$$\n\nwhere $p_\\sigma$ is the data distribution convolved with a\nGaussian of standard deviation $\\sigma$."
+        "Reference: Song and Ermon, *\"Generative Modeling by Estimating\nGradients of the Data Distribution\"*, NeurIPS, 2019\n([arXiv:1907.05600](https://arxiv.org/abs/1907.05600)); NCSNv2 refinements in Song and Ermon, 2020\n([arXiv:2006.09011](https://arxiv.org/abs/2006.09011)).\n\nThe trained score satisfies\n\n\n\n$$\ns_\\theta(\\tilde{x}, \\sigma)\n    \\;\\approx\\; \\nabla_{\\tilde{x}} \\log p_\\sigma(\\tilde{x}),\n$$\n\nwhere $p_\\sigma$ is the data distribution convolved with a\nGaussian of standard deviation $\\sigma$."
       ],
       "attributes": [
         {
@@ -430,7 +430,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ncsn_celeba(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_pretrained.py#L131",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_pretrained.py#L131",
       "subcategory": "pretrained",
       "summary": "Construct an NCSN score network for the CelebA 64x64 setup.",
       "extended": "Paper-faithful CelebA 64x64 configuration from NCSNv2 (Song 2020)\nAppendix C: sample size 64x64, `base_channels=128`,\n`channel_mult=(1, 1, 2, 2, 4, 4)`, 2 ResBlocks per stage,\nself-attention at the 16x16 feature map, $L = 500$ geometric\nnoise levels in $[\\sigma_{\\min} = 0.01, \\sigma_{\\max} = 90]$,\nand the NCSNv2 Langevin schedule ($T = 5$ steps per level,\n$\\epsilon = 2 \\cdot 10^{-5}$).",
@@ -457,7 +457,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ncsn import ncsn_celeba\n>>> model = ncsn_celeba().eval()\n>>> x_tilde = lucid.randn((1, 3, 64, 64))\n>>> sigma_idx = lucid.tensor([10]).long()\n>>> out = model(x_tilde, sigma_idx)\n>>> out.sample.shape   # (1, 3, 64, 64)\n(1, 3, 64, 64)"
       ],
       "notes": [
-        "Reference: Song and Ermon, *\"Improved Techniques for Training\nScore-Based Generative Models\"* (NCSNv2), NeurIPS, 2020\n(arXiv:2006.09011), Appendix C."
+        "Reference: Song and Ermon, *\"Improved Techniques for Training\nScore-Based Generative Models\"* (NCSNv2), NeurIPS, 2020\n([arXiv:2006.09011](https://arxiv.org/abs/2006.09011)), Appendix C."
       ],
       "attributes": [],
       "warns": [],
@@ -1616,7 +1616,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ncsn_celeba_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_pretrained.py#L237",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_pretrained.py#L237",
       "subcategory": "pretrained",
       "summary": "Construct an NCSN CelebA 64x64 model with DSM loss and `.generate()`.",
       "extended": "Same trunk as `ncsn_celeba` (CelebA 64x64 setup, $L = 500$\nnoise levels), wrapped with the denoising score-matching loss and\nannealed Langevin sampling.",
@@ -1643,7 +1643,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ncsn import ncsn_celeba_gen\n>>> model = ncsn_celeba_gen().eval()\n>>> x = lucid.randn((1, 3, 64, 64))\n>>> out = model(x)\n>>> out.sample.shape   # raw score field\n(1, 3, 64, 64)"
       ],
       "notes": [
-        "Reference: Song and Ermon, *\"Improved Techniques for Training\nScore-Based Generative Models\"* (NCSNv2), NeurIPS, 2020\n(arXiv:2006.09011), Appendix C."
+        "Reference: Song and Ermon, *\"Improved Techniques for Training\nScore-Based Generative Models\"* (NCSNv2), NeurIPS, 2020\n([arXiv:2006.09011](https://arxiv.org/abs/2006.09011)), Appendix C."
       ],
       "attributes": [],
       "warns": [],
@@ -2810,7 +2810,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ncsn_cifar(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_pretrained.py#L77",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_pretrained.py#L77",
       "subcategory": "pretrained",
       "summary": "Construct an NCSN score network for the CIFAR-10 setup.",
       "extended": "Paper-faithful CIFAR-10 configuration combining Song and Ermon, 2019\n§4.1 with the NCSNv2 (Song 2020) refinements: sample size\n32x32, `base_channels=128`, `channel_mult=(1, 2, 2, 2)`, 2\nResBlocks per stage, self-attention at the 16x16 feature map,\n$L = 232$ geometric noise levels in $[\\sigma_{\\min} = 0.01, \\sigma_{\\max} = 50]$, and the NCSNv2 §3.3 Langevin schedule\n($T = 5$ steps per level, $\\epsilon = 2 \\cdot 10^{-5}$).",
@@ -2837,7 +2837,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ncsn import ncsn_cifar\n>>> model = ncsn_cifar().eval()\n>>> x_tilde = lucid.randn((1, 3, 32, 32))\n>>> sigma_idx = lucid.tensor([3]).long()\n>>> out = model(x_tilde, sigma_idx)\n>>> out.sample.shape   # (1, 3, 32, 32) — raw score\n(1, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Song and Ermon, *\"Generative Modeling by Estimating\nGradients of the Data Distribution\"*, NeurIPS, 2019 (arXiv:1907.05600);\nNCSNv2 refinements in Song and Ermon, 2020 (arXiv:2006.09011)."
+        "Reference: Song and Ermon, *\"Generative Modeling by Estimating\nGradients of the Data Distribution\"*, NeurIPS, 2019 ([arXiv:1907.05600](https://arxiv.org/abs/1907.05600));\nNCSNv2 refinements in Song and Ermon, 2020 ([arXiv:2006.09011](https://arxiv.org/abs/2006.09011))."
       ],
       "attributes": [],
       "warns": [],
@@ -3662,7 +3662,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ncsn_cifar_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f830fa0d4/lucid/models/generative/ncsn/_pretrained.py#L188",
+      "source": "https://github.com/ChanLumerico/lucid/blob/1e0516e82/lucid/models/generative/ncsn/_pretrained.py#L188",
       "subcategory": "pretrained",
       "summary": "Construct an NCSN CIFAR-10 model with DSM loss and `.generate()`.",
       "extended": "Same trunk as `ncsn_cifar` (CIFAR-10 setup, $L = 232$\nnoise levels), wrapped with the denoising score-matching loss and\nannealed Langevin sampling.",
@@ -3689,7 +3689,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.ncsn import ncsn_cifar_gen\n>>> model = ncsn_cifar_gen().eval()\n>>> x = lucid.randn((1, 3, 32, 32))\n>>> out = model(x)\n>>> out.sample.shape   # raw score field\n(1, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Song and Ermon, NeurIPS, 2019 (arXiv:1907.05600); NCSNv2 in\nSong and Ermon, 2020 (arXiv:2006.09011)."
+        "Reference: Song and Ermon, NeurIPS, 2019 ([arXiv:1907.05600](https://arxiv.org/abs/1907.05600)); NCSNv2 in\nSong and Ermon, 2020 ([arXiv:2006.09011](https://arxiv.org/abs/2006.09011))."
       ],
       "attributes": [],
       "warns": [],
