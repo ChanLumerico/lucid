@@ -213,6 +213,7 @@ class MeanFlowConfig(GenerativeModelConfig):
     depth: int = 12
     num_heads: int = 12
     mlp_ratio: float = 4.0
+    frequency_embedding_size: int = 256
 
     num_classes: int = 1000
     class_dropout: float = 0.1
