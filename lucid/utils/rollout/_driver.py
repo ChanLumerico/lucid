@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     # (lucid.utils -> rollout -> models -> nn -> utils).  Nothing below
     # needs the class at runtime — LatentPolicy only calls methods on
     # whatever it is handed.
-    from lucid.models.generative._rssm import RSSM, RSSMState
+    from lucid.models.generative._common._rssm import RSSM, RSSMState
 
 __all__ = ["Policy", "RandomPolicy", "LatentPolicy", "rollout"]
 
