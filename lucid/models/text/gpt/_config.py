@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.text._config import LanguageModelConfig, TextActivation
+from lucid.models.text._common._config import LanguageModelConfig, TextActivation
 
 
 @model_family_meta(

@@ -23,11 +23,15 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._tasks import WorldModelingModel
 from lucid.models._output import ModelOutput
-from lucid.models.generative._pixel_nets import DenseHead, PixelDecoder, PixelEncoder
-from lucid.models.generative._returns import lambda_return
-from lucid.models.generative._rssm import RSSM, RSSMState, categorical_kl
+from lucid.models.generative._common._pixel_nets import (
+    DenseHead,
+    PixelDecoder,
+    PixelEncoder,
+)
+from lucid.models.generative._common._returns import lambda_return
+from lucid.models.generative._common._rssm import RSSM, RSSMState, categorical_kl
 from lucid.models.generative.dreamer_v2._config import DreamerV2Config
-from lucid.models.generative._actor import Actor
+from lucid.models.generative._common._actor import Actor
 
 __all__ = [
     "DreamerV2Model",

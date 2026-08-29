@@ -5,7 +5,7 @@ activation alias.  Positional-encoding primitives (RoPE, sinusoidal PE) live
 in :mod:`lucid.nn` — text families just import them from there.
 """
 
-from lucid.models.text._config import LanguageModelConfig, TextActivation
+from lucid.models.text._common._config import LanguageModelConfig, TextActivation
 
 __all__ = [
     "LanguageModelConfig",

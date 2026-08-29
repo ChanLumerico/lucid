@@ -46,8 +46,8 @@ from lucid.models import (
 )
 from lucid.models.generative.dreamer_v3 import DreamerV3BehaviorOutput, DreamerV3Output
 from lucid.models._utils._generative import generative_activation
-from lucid.models.generative._actor import Actor
-from lucid.models.generative._rssm import (
+from lucid.models.generative._common._actor import Actor
+from lucid.models.generative._common._rssm import (
     RSSM,
     BlockLinear,
     RSSMState,

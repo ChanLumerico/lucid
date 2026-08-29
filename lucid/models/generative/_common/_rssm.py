@@ -84,7 +84,7 @@ class RSSMState(NamedTuple):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative._rssm import RSSMState
+    >>> from lucid.models.generative._common._rssm import RSSMState
     >>> gaussian = RSSMState(lucid.zeros((2, 4)), lucid.zeros((2, 3)),
     ...                      lucid.zeros((2, 3)), lucid.ones((2, 3)))
     >>> gaussian.is_discrete
@@ -226,7 +226,7 @@ def _gumbel_argmax(logits: Tensor) -> Tensor:
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative._rssm import _gumbel_argmax
+    >>> from lucid.models.generative._common._rssm import _gumbel_argmax
     >>> _gumbel_argmax(lucid.zeros((4, 5))).shape
     (4,)
     """
@@ -282,7 +282,7 @@ class BlockLinear(nn.Module):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative._rssm import BlockLinear
+    >>> from lucid.models.generative._common._rssm import BlockLinear
     >>> layer = BlockLinear(12, 24, blocks=4)
     >>> layer(lucid.zeros((2, 12))).shape
     (2, 24)
@@ -432,7 +432,7 @@ class RSSM(nn.Module):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative._rssm import RSSM
+    >>> from lucid.models.generative._common._rssm import RSSM
     >>> rssm = RSSM(stoch_size=4, deter_size=8, hidden_size=8,
     ...             action_dim=2, embed_size=6).eval()
     >>> embed = lucid.randn((2, 5, 6))
@@ -1022,7 +1022,7 @@ def rssm_kl(
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative._rssm import RSSM, rssm_kl
+    >>> from lucid.models.generative._common._rssm import RSSM, rssm_kl
     >>> rssm = RSSM(stoch_size=4, deter_size=8, hidden_size=8,
     ...             action_dim=2, embed_size=6).eval()
     >>> priors, posteriors = rssm.observe(lucid.randn((2, 3, 6)),

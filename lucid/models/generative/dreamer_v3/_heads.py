@@ -25,7 +25,7 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models.generative._pixel_nets import DenseHead
+from lucid.models.generative._common._pixel_nets import DenseHead
 
 __all__ = ["TwoHotHead"]
 

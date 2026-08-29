@@ -13,7 +13,7 @@ Positional / timestep encoding primitives (``SinusoidalEmbedding``,
 from there rather than redefining locally.
 """
 
-from lucid.models.generative._config import (
+from lucid.models.generative._common._config import (
     BetaSchedule,
     DiffusionModelConfig,
     FlowPrior,
@@ -21,8 +21,11 @@ from lucid.models.generative._config import (
     GenerativeModelConfig,
     NormalizingFlowConfig,
 )
-from lucid.models.generative._rssm import RSSM, RSSMState
-from lucid.models.generative._schedulers import DDPMScheduler, DiffusionScheduler
+from lucid.models.generative._common._rssm import RSSM, RSSMState
+from lucid.models.generative._common._schedulers import (
+    DDPMScheduler,
+    DiffusionScheduler,
+)
 
 __all__ = [
     "BetaSchedule",

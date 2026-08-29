@@ -29,8 +29,8 @@ import pytest
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
-from lucid.models.generative._returns import lambda_return
-from lucid.models.generative._rssm import RSSM, BlockLinear, categorical_kl
+from lucid.models.generative._common._returns import lambda_return
+from lucid.models.generative._common._rssm import RSSM, BlockLinear, categorical_kl
 
 
 def _np(tensor: Any) -> Any:

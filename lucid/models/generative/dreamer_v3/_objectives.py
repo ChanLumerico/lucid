@@ -9,7 +9,7 @@ from typing import cast
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.models.generative._rssm import RSSMState, categorical_kl
+from lucid.models.generative._common._rssm import RSSMState, categorical_kl
 
 __all__ = ["free_bits_kl", "percentile", "ReturnNormaliser"]
 

@@ -36,7 +36,7 @@ from lucid.models import (
     list_models,
 )
 from lucid.models.generative.dreamer_v2 import DreamerV2BehaviorOutput, DreamerV2Output
-from lucid.models.generative._dists import (
+from lucid.models.generative._common._dists import (
     OneHotCategorical,
     TruncatedNormal,
 )
@@ -213,7 +213,7 @@ class TestKLBalancing:
         assert max(values) - min(values) < 1e-5
 
     def test_refuses_a_gaussian_state(self) -> None:
-        from lucid.models.generative._rssm import RSSM
+        from lucid.models.generative._common._rssm import RSSM
 
         gaussian = RSSM(
             stoch_size=4, deter_size=8, hidden_size=8, action_dim=2, embed_size=6
@@ -641,7 +641,7 @@ class TestGumbelBoundsAreExclusive:
         assert not (abs(float(gumbel.item())) < 1e30)
 
     def test_the_draw_is_finite_over_many_samples(self) -> None:
-        from lucid.models.generative._rssm import _gumbel_argmax
+        from lucid.models.generative._common._rssm import _gumbel_argmax
 
         drawn = _gumbel_argmax(lucid.randn((20000, 6)) * 20.0)
         as_float = drawn.to(lucid.float32)

@@ -2044,17 +2044,24 @@ def _is_domain_infrastructure(subcategory: str | None) -> bool:
     to no page at all.  The descriptions of every inherited field lived
     there, so they reached no page either.
 
-    A family member always carries two slashes (``<domain>/<family>/<file>``)
-    and a domain module exactly one, so the depth separates them without a
-    hardcoded list of file names.
+    Depth alone used to separate them — a family member carried two
+    slashes and a domain module one.  That stopped being true when the
+    shared modules moved under ``<domain>/_common/`` to keep the domain's
+    directory listing to families only: ``generative/_common/config`` now
+    has the same depth as ``generative/nice/config``.  So the second
+    segment is what decides, and the leading underscore is the marker no
+    family name can collide with (a family directory never starts with
+    one).
     """
     if not subcategory:
         return False
     parts = subcategory.split("/")
-    if len(parts) != 2:
+    if len(parts) not in (2, 3):
         return False
     domains = {g["slug"].rsplit(".", 1)[-1] for g in _LUCID_MODELS_FAMILY_GROUPS}
-    return parts[0] in domains
+    if parts[0] not in domains:
+        return False
+    return len(parts) == 2 or parts[1].startswith("_")
 
 
 _LUCID_MODELS_FAMILY_GROUPS = [

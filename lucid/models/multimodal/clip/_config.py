@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.multimodal._config import MultimodalModelConfig
+from lucid.models.multimodal._common._config import MultimodalModelConfig
 
 __all__ = ["CLIPConfig"]
 

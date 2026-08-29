@@ -38,7 +38,7 @@ import lucid
 import lucid.models as M
 import lucid.nn as nn
 import lucid.optim as optim
-from lucid.models.generative._actor import Actor
+from lucid.models.generative._common._actor import Actor
 from lucid.test._fixtures.classic_control import Pendulum
 from lucid.test._fixtures.point_mass import PointMass
 from lucid.utils.rollout import (

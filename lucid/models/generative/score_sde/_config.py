@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.generative._config import GenerativeModelConfig
+from lucid.models.generative._common._config import GenerativeModelConfig
 
 
 @model_family_meta(

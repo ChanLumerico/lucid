@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar, Literal, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.generative._config import GenerativeModelConfig
+from lucid.models.generative._common._config import GenerativeModelConfig
 
 # Which times the training objective draws.  ``"uniform"`` is the
 # rectified-flow objective itself and the one reflow retrains under;

@@ -20,7 +20,7 @@ from lucid.models._sampling import _SamplingParams, _select_next_ondevice
 
 if TYPE_CHECKING:
     from lucid.models._output import GenerationOutput
-    from lucid.models.generative._schedulers import DiffusionScheduler
+    from lucid.models.generative._common._schedulers import DiffusionScheduler
 
 
 @dataclass(frozen=True, slots=True)

@@ -26,7 +26,7 @@ from typing import cast, final, override
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._generative import generative_activation
-from lucid.models.generative._config import WORLD_MODEL_IMAGE_SIZE
+from lucid.models.generative._common._config import WORLD_MODEL_IMAGE_SIZE
 
 __all__ = [
     "PixelEncoder",

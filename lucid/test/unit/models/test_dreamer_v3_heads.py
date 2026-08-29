@@ -18,7 +18,7 @@ import pytest
 
 import lucid
 import lucid.optim as optim
-from lucid.models.generative._pixel_nets import DenseHead
+from lucid.models.generative._common._pixel_nets import DenseHead
 from lucid.models.generative.dreamer_v3._heads import TwoHotHead
 
 

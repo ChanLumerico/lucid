@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Literal, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.generative._config import GenerativeModelConfig
+from lucid.models.generative._common._config import GenerativeModelConfig
 
 # How ``(r, t)`` reach the network.  The field is a function of both, but
 # nothing forces the network to be conditioned on that exact pair — the

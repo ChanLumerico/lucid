@@ -25,7 +25,7 @@ from lucid.models import (
 )
 from lucid.models.generative.planet import PlaNetOutput
 from lucid.models._utils._generative import generative_activation
-from lucid.models.generative._rssm import (
+from lucid.models.generative._common._rssm import (
     RSSM,
     _gumbel_argmax,
     categorical_kl,

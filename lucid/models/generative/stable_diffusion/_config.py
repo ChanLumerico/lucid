@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.generative._config import BetaSchedule, DiffusionModelConfig
+from lucid.models.generative._common._config import BetaSchedule, DiffusionModelConfig
 
 __all__ = ["StableDiffusionConfig"]
 

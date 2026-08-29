@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Literal, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.generative._config import FlowPrior, NormalizingFlowConfig
+from lucid.models.generative._common._config import FlowPrior, NormalizingFlowConfig
 
 # How the divergence of the vector field is obtained each step.
 #

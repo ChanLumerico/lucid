@@ -30,8 +30,8 @@ from lucid.models import (
     list_models,
 )
 from lucid.models.generative.dreamer import DreamerBehaviorOutput, DreamerOutput
-from lucid.models.generative._rssm import RSSMState
-from lucid.models.generative._returns import lambda_return
+from lucid.models.generative._common._rssm import RSSMState
+from lucid.models.generative._common._returns import lambda_return
 
 
 def _tiny_cfg(**overrides: object) -> DreamerConfig:
@@ -110,7 +110,7 @@ class TestDreamerConfig:
         paper, ELU in the other.
         """
         from lucid.models import PlaNetConfig
-        from lucid.models.generative._config import WorldModelConfig
+        from lucid.models.generative._common._config import WorldModelConfig
 
         promoted = set(WorldModelConfig.__annotations__) - {"model_type"}
         assert "act_fn" not in promoted

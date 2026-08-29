@@ -17,7 +17,7 @@ import pytest
 
 import lucid
 import lucid.models as M
-from lucid.models.generative._rssm import RSSMState
+from lucid.models.generative._common._rssm import RSSMState
 
 DEVICES = ["cpu", "metal"]
 

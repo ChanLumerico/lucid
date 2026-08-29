@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar, Literal, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.generative._config import GenerativeModelConfig
+from lucid.models.generative._common._config import GenerativeModelConfig
 
 # Which conditional probability path the target vector field is derived
 # from.  ``"ot"`` is the paper's optimal-transport displacement path —

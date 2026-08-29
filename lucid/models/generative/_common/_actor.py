@@ -16,8 +16,8 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
-from lucid.models.generative._dists import OneHotCategorical, TruncatedNormal
-from lucid.models.generative._pixel_nets import DenseHead
+from lucid.models.generative._common._dists import OneHotCategorical, TruncatedNormal
+from lucid.models.generative._common._pixel_nets import DenseHead
 
 __all__ = ["Actor"]
 
@@ -59,7 +59,7 @@ class Actor(nn.Module):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative._actor import Actor
+    >>> from lucid.models.generative._common._actor import Actor
     >>> actor = Actor(8, 16, 2, 3, "silu", 0.1)
     >>> actor(lucid.zeros((2, 4, 8))).shape
     (2, 4, 3)

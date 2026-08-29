@@ -145,7 +145,7 @@ __all__ = [
 
 
 #: The only frame size the shared world-model convolutional schedule produces —
-#: see :mod:`lucid.models.generative._pixel_nets`.
+#: see :mod:`lucid.models.generative._common._pixel_nets`.
 WORLD_MODEL_IMAGE_SIZE = 64
 
 

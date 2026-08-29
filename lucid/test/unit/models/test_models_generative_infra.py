@@ -19,7 +19,7 @@ from lucid.models import (
 from lucid.models._mixins import DiffusionMixin
 from lucid.models.generative import DDPMScheduler, DiffusionScheduler
 from lucid.models._base import PretrainedModel
-from lucid.models.generative._rssm import RSSM, rssm_kl
+from lucid.models.generative._common._rssm import RSSM, rssm_kl
 from lucid.models._utils import (
     extract_into_tensor,
     gaussian_kl_divergence,

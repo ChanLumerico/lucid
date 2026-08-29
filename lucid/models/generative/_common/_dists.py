@@ -20,7 +20,7 @@ import math
 
 import lucid
 import lucid.nn.functional as F
-from lucid.models.generative._rssm import _gumbel_argmax
+from lucid.models.generative._common._rssm import _gumbel_argmax
 from lucid._tensor.tensor import Tensor
 
 __all__ = ["TruncatedNormal", "OneHotCategorical"]
@@ -77,7 +77,7 @@ class TruncatedNormal:
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative._dists import TruncatedNormal
+    >>> from lucid.models.generative._common._dists import TruncatedNormal
     >>> dist = TruncatedNormal(lucid.zeros((2, 3)), lucid.ones((2, 3)))
     >>> sample = dist.rsample()
     >>> bool((sample.abs() <= 1.0).all().item())
@@ -235,7 +235,7 @@ class OneHotCategorical:
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.generative._dists import OneHotCategorical
+    >>> from lucid.models.generative._common._dists import OneHotCategorical
     >>> dist = OneHotCategorical(lucid.zeros((2, 3, 4)))
     >>> sample = dist.rsample()
     >>> bool((sample.sum(dim=-1) - 1.0).abs().max().item() < 1e-6)
