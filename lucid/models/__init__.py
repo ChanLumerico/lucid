@@ -160,6 +160,11 @@ from lucid.models.generative.dit import (
     dit_xlarge_4_gen,
     dit_xlarge_8_gen,
 )
+# 2024 — DIAMOND (Alonso, Jelley, Micheli, Kanervisto, Storkey, Pearce & Fleuret)
+from lucid.models.generative.diamond import (
+    DIAMONDConfig, DIAMONDModel, DIAMONDForWorldModeling,
+    diamond, diamond_csgo, diamond_world_model,
+)
 # 2025 — MeanFlow (Geng, Deng, Bai, Kolter & He)
 from lucid.models.generative.mean_flow import (
     MeanFlowConfig, MeanFlowModel, MeanFlowForImageGeneration,
