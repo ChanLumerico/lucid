@@ -3,7 +3,7 @@
   "name": "diamond",
   "path": "lucid.models.generative.diamond",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/__init__.py#L1",
   "members": [
     {
       "name": "DIAMONDConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDConfig(sample_size: int | tuple[int, int] = 64, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_actions: int = 18, conditioning_frames: int = 4, unet_channels: tuple[int, ...] = (64, 64, 64, 64), unet_layers: tuple[int, ...] = (2, 2, 2, 2), cond_dim: int = 256, attn_depths: tuple[int, ...] | None = None, with_agent: bool = True, noise_previous_obs: bool = False, upsampler_channels: tuple[int, ...] | None = None, upsampler_layers: tuple[int, ...] | None = None, upsampler_attn_depths: tuple[int, ...] | None = None, upsampling_factor: int = 1, sigma_data: float = 0.5, p_mean: float = -0.4, p_std: float = 1.2, sigma_offset_noise: float = 0.3, attention_head_dim: int = 8, denoise_steps: int = 3, reward_channels: tuple[int, ...] = (32, 32, 32, 32), reward_layers: tuple[int, ...] = (2, 2, 2, 2), reward_cond_dim: int = 128, reward_frames: int = 2, reward_lstm_dim: int = 512, actor_channels: tuple[int, ...] = (32, 32, 64, 64), actor_layers: tuple[int, ...] = (1, 1, 1, 1), actor_lstm_dim: int = 512, horizon: int = 15, gamma: float = 0.985, lambda_: float = 0.95, entropy_weight: float = 0.001, burn_in: int = 4)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_config.py#L27",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_config.py#L27",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "frame_shape: tuple[int, int]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_config.py#L272",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_config.py#L272",
           "summary": "Frame height and width, whichever way `sample_size` was written.",
           "extended": "Atari's frames are square and CS:GO's are not — 150 by 280 —\nso nothing downstream may assume one number.",
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "denoiser_in_channels: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_config.py#L283",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_config.py#L283",
           "summary": "Channels the denoiser's first convolution reads.",
           "extended": "The noised next frame plus $L$ clean past frames, stacked.",
           "parameters": [],
@@ -70,7 +70,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 64, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_actions: int = 18, conditioning_frames: int = 4, unet_channels: tuple[int, ...] = (64, 64, 64, 64), unet_layers: tuple[int, ...] = (2, 2, 2, 2), cond_dim: int = 256, attn_depths: tuple[int, ...] | None = None, with_agent: bool = True, noise_previous_obs: bool = False, upsampler_channels: tuple[int, ...] | None = None, upsampler_layers: tuple[int, ...] | None = None, upsampler_attn_depths: tuple[int, ...] | None = None, upsampling_factor: int = 1, sigma_data: float = 0.5, p_mean: float = -0.4, p_std: float = 1.2, sigma_offset_noise: float = 0.3, attention_head_dim: int = 8, denoise_steps: int = 3, reward_channels: tuple[int, ...] = (32, 32, 32, 32), reward_layers: tuple[int, ...] = (2, 2, 2, 2), reward_cond_dim: int = 128, reward_frames: int = 2, reward_lstm_dim: int = 512, actor_channels: tuple[int, ...] = (32, 32, 64, 64), actor_layers: tuple[int, ...] = (1, 1, 1, 1), actor_lstm_dim: int = 512, horizon: int = 15, gamma: float = 0.985, lambda_: float = 0.95, entropy_weight: float = 0.001, burn_in: int = 4)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_config.py#L1",
           "subcategory": "config",
           "summary": "Initialise the layer.",
           "extended": null,
@@ -331,7 +331,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDBehaviorOutput(policy_loss: Tensor, value_loss: Tensor, entropy: Tensor, returns: Tensor, frames: Tensor, history: Tensor, history_actions: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L971",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L967",
       "subcategory": "model",
       "methods": [
         {
@@ -340,7 +340,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(policy_loss: Tensor, value_loss: Tensor, entropy: Tensor, returns: Tensor, frames: Tensor, history: Tensor, history_actions: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the layer.",
           "extended": null,
@@ -416,7 +416,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDForWorldModeling(config: DIAMONDConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1323",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1319",
       "subcategory": "model",
       "methods": [
         {
@@ -425,7 +425,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DIAMONDConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1369",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1365",
           "subcategory": "model",
           "summary": "Initialise the wrapper. See the class docstring for parameters.",
           "extended": null,
@@ -447,7 +447,7 @@
           "kind": "function",
           "labels": [],
           "signature": "act(frame: Tensor, state: tuple[Tensor, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1375",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1371",
           "subcategory": "model",
           "summary": "Sample an action from the policy.",
           "extended": null,
@@ -482,7 +482,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(frames: Tensor, actions: Tensor, horizon: int | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1395",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1391",
           "subcategory": "model",
           "summary": "Imagine a trajectory and score the policy on it.",
           "extended": null,
@@ -525,7 +525,7 @@
           "kind": "function",
           "labels": [],
           "signature": "world_model_loss(frames: Tensor, actions: Tensor, next_frame: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1526",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1522",
           "subcategory": "model",
           "summary": "Train the denoiser — `DIAMONDModel.forward` by another name.",
           "extended": null,
@@ -566,7 +566,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reward_end_loss(frames: Tensor, actions: Tensor, rewards: Tensor, ends: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1547",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1543",
           "subcategory": "model",
           "summary": "Cross-entropy on the reward's *sign* and on termination.",
           "extended": null,
@@ -646,7 +646,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDModel(config: DIAMONDConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1006",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1002",
       "subcategory": "model",
       "methods": [
         {
@@ -655,7 +655,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DIAMONDConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1054",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1050",
           "subcategory": "model",
           "summary": "Initialise the agent. See the class docstring for parameters.",
           "extended": null,
@@ -677,7 +677,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step_reward_end(frame: Tensor, next_frame: Tensor, action: Tensor, state: tuple[Tensor, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1068",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1064",
           "subcategory": "model",
           "summary": "One step of the reward/termination model, typed.",
           "extended": null,
@@ -724,7 +724,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step_actor_critic(frame: Tensor, state: tuple[Tensor, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1097",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1093",
           "subcategory": "model",
           "summary": "One step of the actor-critic, typed.",
           "extended": null,
@@ -759,7 +759,7 @@
           "kind": "function",
           "labels": [],
           "signature": "preconditioners(sigma: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1116",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1112",
           "subcategory": "model",
           "summary": "EDM's four scalings at a noise level.",
           "extended": null,
@@ -790,7 +790,7 @@
           "kind": "function",
           "labels": [],
           "signature": "denoise(noised: Tensor, sigma: Tensor, frames: Tensor, actions: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1143",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1139",
           "subcategory": "model",
           "summary": "Apply $D_\\theta$ — the preconditioned denoiser.",
           "extended": null,
@@ -837,7 +837,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sigma_schedule(steps: int, device: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1170",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1166",
           "subcategory": "model",
           "summary": "The noise levels an Euler sampler walks down.",
           "extended": null,
@@ -874,7 +874,7 @@
           "kind": "function",
           "labels": [],
           "signature": "imagine_frame(frames: Tensor, actions: Tensor, steps: int | None = None, noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1204",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1200",
           "subcategory": "model",
           "summary": "Sample the next frame with Euler's method.",
           "extended": null,
@@ -923,7 +923,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(frames: Tensor, actions: Tensor, next_frame: Tensor, sigma: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1260",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1256",
           "subcategory": "model",
           "summary": "Train the denoiser on one transition.",
           "extended": null,
@@ -1015,7 +1015,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDOutput(loss: Tensor, prediction: Tensor, sigma: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L948",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L944",
       "subcategory": "model",
       "methods": [
         {
@@ -1024,7 +1024,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(loss: Tensor, prediction: Tensor, sigma: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the layer.",
           "extended": null,
@@ -1081,7 +1081,7 @@
       "kind": "function",
       "labels": [],
       "signature": "diamond(pretrained: bool | str = False, weights: DIAMONDWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_pretrained.py#L143",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_pretrained.py#L143",
       "subcategory": "pretrained",
       "summary": "Construct the Atari agent — denoiser, reward/end model, actor-critic.",
       "extended": null,
@@ -1569,13 +1569,6 @@
                         "params": 36928,
                         "own_params": 0,
                         "children": [
-                          {
-                            "name": "up",
-                            "type": "Upsample",
-                            "params": 0,
-                            "own_params": 0,
-                            "children": []
-                          },
                           {
                             "name": "conv",
                             "type": "Conv2d",
@@ -2212,7 +2205,7 @@
       "kind": "function",
       "labels": [],
       "signature": "diamond_csgo(pretrained: bool | str = False, weights: DIAMONDWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_pretrained.py#L277",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_pretrained.py#L277",
       "subcategory": "pretrained",
       "summary": "Construct the *Counter-Strike* world model.",
       "extended": null,
@@ -2249,7 +2242,3248 @@
       ],
       "attributes": [],
       "warns": [],
-      "see_also": []
+      "see_also": [],
+      "model_summary": {
+        "name": "DIAMONDModel",
+        "type": "DIAMONDModel",
+        "params": 381642502,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "denoiser",
+            "type": "_Denoiser",
+            "params": 330491267,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "noise_emb",
+                "type": "_FourierFeatures",
+                "params": 1024,
+                "own_params": 1024,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "action_embed",
+                "type": "Embedding",
+                "params": 26112,
+                "own_params": 26112,
+                "children": []
+              },
+              {
+                "name": "cond_proj",
+                "type": "Sequential",
+                "params": 8392704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 4196352,
+                    "own_params": 4196352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 4196352,
+                    "own_params": 4196352,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "conv_in",
+                "type": "Conv2d",
+                "params": 17408,
+                "own_params": 17408,
+                "children": []
+              },
+              {
+                "name": "unet",
+                "type": "_UNet",
+                "params": 322049280,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "d_blocks",
+                    "type": "ModuleList",
+                    "params": 82944512,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResBlocks",
+                        "params": 2688512,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 2688512,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 1344256,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 147584,
+                                    "own_params": 147584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 147584,
+                                    "own_params": 147584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResBlocks",
+                        "params": 5770240,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 5770240,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 2491904,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 33024,
+                                    "own_params": 33024,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 295168,
+                                    "own_params": 295168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 590080,
+                                    "own_params": 590080,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "1",
+                                "type": "_ResBlock",
+                                "params": 3278336,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 590080,
+                                    "own_params": 590080,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 590080,
+                                    "own_params": 590080,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ResBlocks",
+                        "params": 17838080,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 17838080,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 7870464,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 131584,
+                                    "own_params": 131584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 1180160,
+                                    "own_params": 1180160,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 2098176,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 2098176,
+                                        "own_params": 2098176,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 2359808,
+                                    "own_params": 2359808,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 1051648,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 1024,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 1024,
+                                            "own_params": 1024,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 787968,
+                                        "own_params": 787968,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 262656,
+                                        "own_params": 262656,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "1",
+                                "type": "_ResBlock",
+                                "params": 9967616,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 2098176,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 2098176,
+                                        "own_params": 2098176,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 2359808,
+                                    "own_params": 2359808,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 2098176,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 2098176,
+                                        "own_params": 2098176,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 2359808,
+                                    "own_params": 2359808,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 1051648,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 1024,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 1024,
+                                            "own_params": 1024,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 787968,
+                                        "own_params": 787968,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 262656,
+                                        "own_params": 262656,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "3",
+                        "type": "_ResBlocks",
+                        "params": 56647680,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 56647680,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 25178112,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 525312,
+                                    "own_params": 525312,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 2098176,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 2098176,
+                                        "own_params": 2098176,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 4719616,
+                                    "own_params": 4719616,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 4196352,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 4196352,
+                                        "own_params": 4196352,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 9438208,
+                                    "own_params": 9438208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 4200448,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 2048,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 2048,
+                                            "own_params": 2048,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 3148800,
+                                        "own_params": 3148800,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 1049600,
+                                        "own_params": 1049600,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "1",
+                                "type": "_ResBlock",
+                                "params": 31469568,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 4196352,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 4196352,
+                                        "own_params": 4196352,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 9438208,
+                                    "own_params": 9438208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 4196352,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 4196352,
+                                        "own_params": 4196352,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 9438208,
+                                    "own_params": 9438208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 4200448,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 2048,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 2048,
+                                            "own_params": 2048,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 3148800,
+                                        "own_params": 3148800,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 1049600,
+                                        "own_params": 1049600,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "downsamples",
+                    "type": "ModuleList",
+                    "params": 3097472,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "_Downsample",
+                        "params": 147584,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 147584,
+                            "own_params": 147584,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_Downsample",
+                        "params": 590080,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 590080,
+                            "own_params": 590080,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "3",
+                        "type": "_Downsample",
+                        "params": 2359808,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 2359808,
+                            "own_params": 2359808,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "mid_blocks",
+                    "type": "_ResBlocks",
+                    "params": 62939136,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 62939136,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ResBlock",
+                            "params": 31469568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "_AdaGroupNorm",
+                                "params": 4196352,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "linear",
+                                    "type": "Linear",
+                                    "params": 4196352,
+                                    "own_params": 4196352,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "conv1",
+                                "type": "Conv2d",
+                                "params": 9438208,
+                                "own_params": 9438208,
+                                "children": []
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "_AdaGroupNorm",
+                                "params": 4196352,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "linear",
+                                    "type": "Linear",
+                                    "params": 4196352,
+                                    "own_params": 4196352,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "conv2",
+                                "type": "Conv2d",
+                                "params": 9438208,
+                                "own_params": 9438208,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_SelfAttention2d",
+                                "params": 4200448,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "_GroupNorm",
+                                    "params": 2048,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 2048,
+                                        "own_params": 2048,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "qkv_proj",
+                                    "type": "Conv2d",
+                                    "params": 3148800,
+                                    "own_params": 3148800,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "out_proj",
+                                    "type": "Conv2d",
+                                    "params": 1049600,
+                                    "own_params": 1049600,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "act",
+                                "type": "SiLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "u_blocks",
+                    "type": "ModuleList",
+                    "params": 169970688,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResBlocks",
+                        "params": 114072064,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 114072064,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 47201280,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 2098176,
+                                    "own_params": 2098176,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 8392704,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 8392704,
+                                        "own_params": 8392704,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 18875392,
+                                    "own_params": 18875392,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 4196352,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 4196352,
+                                        "own_params": 4196352,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 9438208,
+                                    "own_params": 9438208,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 4200448,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 2048,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 2048,
+                                            "own_params": 2048,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 3148800,
+                                        "own_params": 3148800,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 1049600,
+                                        "own_params": 1049600,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              },
+                              {
+                                "name": "2",
+                                "type": "_ResBlock",
+                                "params": 19669504,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 786944,
+                                    "own_params": 786944,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 6294528,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 6294528,
+                                        "own_params": 6294528,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 7078400,
+                                    "own_params": 7078400,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 2098176,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 2098176,
+                                        "own_params": 2098176,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 2359808,
+                                    "own_params": 2359808,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 1051648,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 1024,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 1024,
+                                            "own_params": 1024,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 787968,
+                                        "own_params": 787968,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 262656,
+                                        "own_params": 262656,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResBlocks",
+                        "params": 36916480,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 36916480,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 14949888,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 524800,
+                                    "own_params": 524800,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 4196352,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 4196352,
+                                        "own_params": 4196352,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 4719104,
+                                    "own_params": 4719104,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 2098176,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 2098176,
+                                        "own_params": 2098176,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 2359808,
+                                    "own_params": 2359808,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 1051648,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 1024,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 1024,
+                                            "own_params": 1024,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 787968,
+                                        "own_params": 787968,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 262656,
+                                        "own_params": 262656,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              },
+                              {
+                                "name": "2",
+                                "type": "_ResBlock",
+                                "params": 7016704,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 196864,
+                                    "own_params": 196864,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 3147264,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 3147264,
+                                        "own_params": 3147264,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 1769728,
+                                    "own_params": 1769728,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 590080,
+                                    "own_params": 590080,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 263680,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 512,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 512,
+                                            "own_params": 512,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 197376,
+                                        "own_params": 197376,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 65792,
+                                        "own_params": 65792,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ResBlocks",
+                        "params": 12834688,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 12834688,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 5048576,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 131328,
+                                    "own_params": 131328,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 2098176,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 2098176,
+                                        "own_params": 2098176,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 1179904,
+                                    "own_params": 1179904,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 590080,
+                                    "own_params": 590080,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              },
+                              {
+                                "name": "2",
+                                "type": "_ResBlock",
+                                "params": 2737536,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 49280,
+                                    "own_params": 49280,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1573632,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1573632,
+                                        "own_params": 1573632,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 442496,
+                                    "own_params": 442496,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 147584,
+                                    "own_params": 147584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "3",
+                        "type": "_ResBlocks",
+                        "params": 6147456,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 6147456,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 2049152,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 32896,
+                                    "own_params": 32896,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 295040,
+                                    "own_params": 295040,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 147584,
+                                    "own_params": 147584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "upsamples",
+                    "type": "ModuleList",
+                    "params": 3097472,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "_Upsample",
+                        "params": 2359808,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 2359808,
+                            "own_params": 2359808,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_Upsample",
+                        "params": 590080,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 590080,
+                            "own_params": 590080,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "3",
+                        "type": "_Upsample",
+                        "params": 147584,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 147584,
+                            "own_params": 147584,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "norm_out",
+                "type": "_GroupNorm",
+                "params": 256,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv_out",
+                "type": "Conv2d",
+                "params": 3459,
+                "own_params": 3459,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "upsampler",
+            "type": "_Upsampler",
+            "params": 51151235,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "noise_emb",
+                "type": "_FourierFeatures",
+                "params": 1024,
+                "own_params": 1024,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "cond_proj",
+                "type": "Sequential",
+                "params": 8392704,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 4196352,
+                    "own_params": 4196352,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 4196352,
+                    "own_params": 4196352,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "conv_in",
+                "type": "Conv2d",
+                "params": 5248,
+                "own_params": 5248,
+                "children": []
+              },
+              {
+                "name": "unet",
+                "type": "_UNet",
+                "params": 42749376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "d_blocks",
+                    "type": "ModuleList",
+                    "params": 11052032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResBlocks",
+                        "params": 1196800,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 1196800,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 598400,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 262272,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 262272,
+                                        "own_params": 262272,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 36928,
+                                    "own_params": 36928,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 262272,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 262272,
+                                        "own_params": 262272,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 36928,
+                                    "own_params": 36928,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ResBlocks",
+                        "params": 2360832,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 2360832,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 1016576,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 8320,
+                                    "own_params": 8320,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 262272,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 262272,
+                                        "own_params": 262272,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 73856,
+                                    "own_params": 73856,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 147584,
+                                    "own_params": 147584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "1",
+                                "type": "_ResBlock",
+                                "params": 1344256,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 147584,
+                                    "own_params": 147584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 147584,
+                                    "own_params": 147584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "3",
+                        "type": "_ResBlocks",
+                        "params": 6297600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 6297600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 2755584,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 33024,
+                                    "own_params": 33024,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 295168,
+                                    "own_params": 295168,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 590080,
+                                    "own_params": 590080,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 263680,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 512,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 512,
+                                            "own_params": 512,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 197376,
+                                        "own_params": 197376,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 65792,
+                                        "own_params": 65792,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "1",
+                                "type": "_ResBlock",
+                                "params": 3542016,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 590080,
+                                    "own_params": 590080,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 590080,
+                                    "own_params": 590080,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 263680,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 512,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 512,
+                                            "own_params": 512,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 197376,
+                                        "own_params": 197376,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 65792,
+                                        "own_params": 65792,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "downsamples",
+                    "type": "ModuleList",
+                    "params": 221440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "_Downsample",
+                        "params": 36928,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 36928,
+                            "own_params": 36928,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "3",
+                        "type": "_Downsample",
+                        "params": 147584,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 147584,
+                            "own_params": 147584,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "mid_blocks",
+                    "type": "_ResBlocks",
+                    "params": 7084032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 7084032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ResBlock",
+                            "params": 3542016,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "_AdaGroupNorm",
+                                "params": 1049088,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "linear",
+                                    "type": "Linear",
+                                    "params": 1049088,
+                                    "own_params": 1049088,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "conv1",
+                                "type": "Conv2d",
+                                "params": 590080,
+                                "own_params": 590080,
+                                "children": []
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "_AdaGroupNorm",
+                                "params": 1049088,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "linear",
+                                    "type": "Linear",
+                                    "params": 1049088,
+                                    "own_params": 1049088,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "conv2",
+                                "type": "Conv2d",
+                                "params": 590080,
+                                "own_params": 590080,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_SelfAttention2d",
+                                "params": 263680,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "_GroupNorm",
+                                    "params": 512,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 512,
+                                        "own_params": 512,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "qkv_proj",
+                                    "type": "Conv2d",
+                                    "params": 197376,
+                                    "own_params": 197376,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "out_proj",
+                                    "type": "Conv2d",
+                                    "params": 65792,
+                                    "own_params": 65792,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "act",
+                                "type": "SiLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "u_blocks",
+                    "type": "ModuleList",
+                    "params": 24170432,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResBlocks",
+                        "params": 13428352,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 13428352,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 5312256,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 131328,
+                                    "own_params": 131328,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 2098176,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 2098176,
+                                        "own_params": 2098176,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 1179904,
+                                    "own_params": 1179904,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 590080,
+                                    "own_params": 590080,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 263680,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 512,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 512,
+                                            "own_params": 512,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 197376,
+                                        "own_params": 197376,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 65792,
+                                        "own_params": 65792,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              },
+                              {
+                                "name": "2",
+                                "type": "_ResBlock",
+                                "params": 2803840,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 49280,
+                                    "own_params": 49280,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1573632,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1573632,
+                                        "own_params": 1573632,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 442496,
+                                    "own_params": 442496,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 147584,
+                                    "own_params": 147584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 66304,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 256,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 256,
+                                            "own_params": 256,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 49536,
+                                        "own_params": 49536,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 16512,
+                                        "own_params": 16512,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "1",
+                        "type": "_ResBlocks",
+                        "params": 5307328,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 5307328,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 2049152,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 32896,
+                                    "own_params": 32896,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 1049088,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 1049088,
+                                        "own_params": 1049088,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 295040,
+                                    "own_params": 295040,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 147584,
+                                    "own_params": 147584,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              },
+                              {
+                                "name": "2",
+                                "type": "_ResBlock",
+                                "params": 1209024,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 12352,
+                                    "own_params": 12352,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 786816,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 786816,
+                                        "own_params": 786816,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 110656,
+                                    "own_params": 110656,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 262272,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 262272,
+                                        "own_params": 262272,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 36928,
+                                    "own_params": 36928,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_ResBlocks",
+                        "params": 2717376,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 2717376,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 905792,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 8256,
+                                    "own_params": 8256,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 524544,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 524544,
+                                        "own_params": 524544,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 73792,
+                                    "own_params": 73792,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 262272,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 262272,
+                                        "own_params": 262272,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 36928,
+                                    "own_params": 36928,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  },
+                  {
+                    "name": "upsamples",
+                    "type": "ModuleList",
+                    "params": 221440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "_Upsample",
+                        "params": 147584,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 147584,
+                            "own_params": 147584,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "_Upsample",
+                        "params": 36928,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 36928,
+                            "own_params": 36928,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 2
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "norm_out",
+                "type": "_GroupNorm",
+                "params": 128,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 128,
+                    "own_params": 128,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv_out",
+                "type": "Conv2d",
+                "params": 1731,
+                "own_params": 1731,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "name": "diamond_world_model",
@@ -2257,7 +5491,7 @@
       "kind": "function",
       "labels": [],
       "signature": "diamond_world_model(pretrained: bool | str = False, weights: DIAMONDWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_pretrained.py#L205",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_pretrained.py#L205",
       "subcategory": "pretrained",
       "summary": "Construct DIAMOND with its objectives and imagination rollout.",
       "extended": null,
@@ -2751,13 +5985,6 @@
                             "params": 36928,
                             "own_params": 0,
                             "children": [
-                              {
-                                "name": "up",
-                                "type": "Upsample",
-                                "params": 0,
-                                "own_params": 0,
-                                "children": []
-                              },
                               {
                                 "name": "conv",
                                 "type": "Conv2d",
@@ -3400,7 +6627,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_weights.py#L38",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9baac15ac/lucid/models/generative/diamond/_weights.py#L38",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained agents for `lucid.models.diamond`.",
