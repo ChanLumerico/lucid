@@ -275,7 +275,13 @@ def diamond_world_model(
 # ModelFactory protocol fixes the signature at (pretrained, **overrides),
 # so the extra keyword widens it beyond what the alias can express.
 @register_model(  # type: ignore[arg-type]
-    task="world-modeling",
+    # "base", not "world-modeling", even though a world model is what it
+    # is.  The task tag names the *class* a factory returns, and this one
+    # returns the direct model: CS:GO has no agent, so the task wrapper's
+    # imagination and actor-critic would be machinery with nothing behind
+    # it.  Registering a `PretrainedModel` under a task breaks the zoo's
+    # invariant that every task-registered class inherits a task base.
+    task="base",
     family="diamond",
     model_type="diamond",
     model_class=DIAMONDModel,

@@ -573,3 +573,31 @@ class TestCSGO:
         # The hazard is real only because the two disagree on shape.
         assert DIAMONDWeights.DEFAULT.name == "BREAKOUT"
         assert DIAMONDWeights.CSGO.value.meta["num_actions"] == 51
+
+    def test_narrowing_the_unet_does_not_drag_stale_attention_flags(self) -> None:
+        """`replace` carries every field, including ones that no longer fit.
+
+        A caller who shrinks `unet_channels` to test something small has
+        not asked for attention anywhere, but the default config's
+        four-stage `attn_depths` rides along and the length check
+        rejects it.  Every factory override path hits this, which is how
+        the family's own doctest broke.
+
+        A mismatch that *does* name attention still fails: that one is a
+        real mistake rather than a leftover.
+        """
+        from lucid.models import diamond_world_model
+
+        model = diamond_world_model(
+            sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+            reward_channels=(8, 8), reward_layers=(1, 1),
+            actor_channels=(8, 8), actor_layers=(1, 1), cond_dim=16,
+            reward_cond_dim=8, reward_lstm_dim=16, actor_lstm_dim=16,
+            num_actions=4, horizon=3,
+        )
+        assert model.config.attn_depths == (0, 0)
+
+        with pytest.raises(ValueError, match="one flag per U-Net resolution"):
+            DIAMONDConfig(
+                unet_channels=(8, 8), unet_layers=(1, 1), attn_depths=(0, 0, 1, 1)
+            )

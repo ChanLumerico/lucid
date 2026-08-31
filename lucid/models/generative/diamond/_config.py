@@ -292,7 +292,16 @@ class DIAMONDConfig(GenerativeModelConfig):
         super().__post_init__()
         # JSON round-trips turn tuples into lists; the frozen dataclass
         # has to put them back or equality and hashing break.
-        if self.attn_depths is None:
+        # ``None`` means "none of them attend", and so does a stale length
+        # that asks for none.  Narrowing ``unet_channels`` through
+        # ``dataclasses.replace`` carries the old flags along, and a caller
+        # who shrank the U-Net to two stages did not thereby request
+        # attention anywhere — only a list that names some is worth
+        # failing over.
+        if self.attn_depths is None or (
+            len(self.attn_depths) != len(self.unet_channels)
+            and not any(self.attn_depths)
+        ):
             object.__setattr__(self, "attn_depths", (0,) * len(self.unet_channels))
         for name in (
             "unet_channels",
