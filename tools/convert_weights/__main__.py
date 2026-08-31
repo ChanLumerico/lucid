@@ -24,6 +24,7 @@ import tools.convert_weights.cspnet  # noqa: F401
 import tools.convert_weights.cvt  # noqa: F401
 import tools.convert_weights.ddpm  # noqa: F401
 import tools.convert_weights.densenet  # noqa: F401
+import tools.convert_weights.diamond  # noqa: F401
 import tools.convert_weights.dit  # noqa: F401
 import tools.convert_weights.detr  # noqa: F401
 import tools.convert_weights.efficientformer  # noqa: F401
