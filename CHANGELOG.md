@@ -20,6 +20,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.10.1] — 2026-09-01
+
+### Fixed
+
+- **DIAMOND's CS:GO weights could not express a single valid CS:GO
+  action.** The game's action is not one of 51 choices — it is 51
+  components combined: 11 keys, 2 mouse buttons, 23 horizontal bins and
+  15 vertical ones. Both mouse groups are always one-hot (the "not
+  moving" bin is still a bin), so *every* valid action sets at least two
+  components, and an index expresses none of them.
+
+  The released model runs that multi-hot row through the same embedding
+  matrix as an index, by matrix product instead of lookup. Lucid loaded
+  the matrix — correctly, at the right shape — and implemented only the
+  lookup, so 3.10.0 shipped CS:GO weights that were unusable for the
+  game they were trained on. `conditioning()` takes
+  `(B, L, num_actions)` now as well as `(B, L)`, and a one-hot row
+  reproduces its index exactly.
+
+  This is the same failure as the upsampler fixed in 3.10.0 — weights
+  loaded, no path to use them — and the end-to-end test added there
+  missed it because the test passed integer actions, inheriting the
+  implementation's assumption instead of checking it against the game.
+
 ## [3.10.0] — 2026-08-31
 
 ### Fixed

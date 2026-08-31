@@ -3,7 +3,7 @@
   "name": "diamond",
   "path": "lucid.models.generative.diamond",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/__init__.py#L1",
   "members": [
     {
       "name": "DIAMONDConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDConfig(sample_size: int | tuple[int, int] = 64, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_actions: int = 18, conditioning_frames: int = 4, unet_channels: tuple[int, ...] = (64, 64, 64, 64), unet_layers: tuple[int, ...] = (2, 2, 2, 2), cond_dim: int = 256, attn_depths: tuple[int, ...] | None = None, with_agent: bool = True, noise_previous_obs: bool = False, upsampler_channels: tuple[int, ...] | None = None, upsampler_layers: tuple[int, ...] | None = None, upsampler_attn_depths: tuple[int, ...] | None = None, upsampling_factor: int = 1, sigma_data: float = 0.5, p_mean: float = -0.4, p_std: float = 1.2, sigma_offset_noise: float = 0.3, attention_head_dim: int = 8, denoise_steps: int = 3, reward_channels: tuple[int, ...] = (32, 32, 32, 32), reward_layers: tuple[int, ...] = (2, 2, 2, 2), reward_cond_dim: int = 128, reward_frames: int = 2, reward_lstm_dim: int = 512, actor_channels: tuple[int, ...] = (32, 32, 64, 64), actor_layers: tuple[int, ...] = (1, 1, 1, 1), actor_lstm_dim: int = 512, horizon: int = 15, gamma: float = 0.985, lambda_: float = 0.95, entropy_weight: float = 0.001, burn_in: int = 4)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_config.py#L27",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_config.py#L27",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "frame_shape: tuple[int, int]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_config.py#L272",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_config.py#L272",
           "summary": "Frame height and width, whichever way `sample_size` was written.",
           "extended": "Atari's frames are square and CS:GO's are not — 150 by 280 —\nso nothing downstream may assume one number.",
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "denoiser_in_channels: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_config.py#L283",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_config.py#L283",
           "summary": "Channels the denoiser's first convolution reads.",
           "extended": "The noised next frame plus $L$ clean past frames, stacked.",
           "parameters": [],
@@ -70,7 +70,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 64, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_actions: int = 18, conditioning_frames: int = 4, unet_channels: tuple[int, ...] = (64, 64, 64, 64), unet_layers: tuple[int, ...] = (2, 2, 2, 2), cond_dim: int = 256, attn_depths: tuple[int, ...] | None = None, with_agent: bool = True, noise_previous_obs: bool = False, upsampler_channels: tuple[int, ...] | None = None, upsampler_layers: tuple[int, ...] | None = None, upsampler_attn_depths: tuple[int, ...] | None = None, upsampling_factor: int = 1, sigma_data: float = 0.5, p_mean: float = -0.4, p_std: float = 1.2, sigma_offset_noise: float = 0.3, attention_head_dim: int = 8, denoise_steps: int = 3, reward_channels: tuple[int, ...] = (32, 32, 32, 32), reward_layers: tuple[int, ...] = (2, 2, 2, 2), reward_cond_dim: int = 128, reward_frames: int = 2, reward_lstm_dim: int = 512, actor_channels: tuple[int, ...] = (32, 32, 64, 64), actor_layers: tuple[int, ...] = (1, 1, 1, 1), actor_lstm_dim: int = 512, horizon: int = 15, gamma: float = 0.985, lambda_: float = 0.95, entropy_weight: float = 0.001, burn_in: int = 4)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_config.py#L1",
           "subcategory": "config",
           "summary": "Initialise the layer.",
           "extended": null,
@@ -315,7 +315,7 @@
         ">>> from lucid.models.generative.diamond import DIAMONDConfig\n>>> config = DIAMONDConfig()\n>>> config.conditioning_frames, config.denoise_steps\n(4, 3)\nThe denoiser's first convolution has to take the noised frame *and*\nthe stack of past frames, which is what makes frame stacking cheap:\n>>> config.denoiser_in_channels\n15\nThree fields here have no counterpart in the paper — they come from\nthe released configuration, which is more specific than the text:\n>>> config.sigma_offset_noise, config.reward_frames\n(0.3, 2)"
       ],
       "notes": [
-        "Reference: Alonso et al., *\"Diffusion for World Modeling: Visual\nDetails Matter in Atari\"*, NeurIPS, 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)).\nArchitecture values are Table 2, training values Table 3, and the\npreconditioner constants Appendix C.\n\nThe base is `GenerativeModelConfig` rather than\n`WorldModelConfig`, even though this is a world model.  That\nbase describes a *latent* one — `stoch_size`, `deter_size`,\n`free_nats`, `kl_weight` — and DIAMOND has no posterior and no\nKL to free-bit.  Inheriting them would put six fields on the\ndocumentation page that nothing in this family reads."
+        "Reference: Alonso et al., *\"Diffusion for World Modeling: Visual\nDetails Matter in Atari\"*, NeurIPS, 2024 (arXiv:2405.12399).\nArchitecture values are Table 2, training values Table 3, and the\npreconditioner constants Appendix C.\n\nThe base is `GenerativeModelConfig` rather than\n`WorldModelConfig`, even though this is a world model.  That\nbase describes a *latent* one — `stoch_size`, `deter_size`,\n`free_nats`, `kl_weight` — and DIAMOND has no posterior and no\nKL to free-bit.  Inheriting them would put six fields on the\ndocumentation page that nothing in this family reads."
       ],
       "attributes": [],
       "warns": [],
@@ -331,7 +331,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDBehaviorOutput(policy_loss: Tensor, value_loss: Tensor, entropy: Tensor, returns: Tensor, frames: Tensor, history: Tensor, history_actions: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L967",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L977",
       "subcategory": "model",
       "methods": [
         {
@@ -340,7 +340,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(policy_loss: Tensor, value_loss: Tensor, entropy: Tensor, returns: Tensor, frames: Tensor, history: Tensor, history_actions: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the layer.",
           "extended": null,
@@ -416,7 +416,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDForWorldModeling(config: DIAMONDConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1478",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1486",
       "subcategory": "model",
       "methods": [
         {
@@ -425,7 +425,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DIAMONDConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1524",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1532",
           "subcategory": "model",
           "summary": "Initialise the wrapper. See the class docstring for parameters.",
           "extended": null,
@@ -447,7 +447,7 @@
           "kind": "function",
           "labels": [],
           "signature": "act(frame: Tensor, state: tuple[Tensor, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1530",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1538",
           "subcategory": "model",
           "summary": "Sample an action from the policy.",
           "extended": null,
@@ -482,7 +482,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(frames: Tensor, actions: Tensor, horizon: int | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1550",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1558",
           "subcategory": "model",
           "summary": "Imagine a trajectory and score the policy on it.",
           "extended": null,
@@ -513,7 +513,7 @@
           "raises": [],
           "examples": [],
           "notes": [
-            "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), equations 14-16.\nThe value target stops gradients, and the policy is REINFORCE\nagainst $\\Lambda_t - V(x_t)$ — an advantage estimate, but\none built from a *state-value* baseline rather than a critic."
+            "Reference: Alonso et al., arXiv:2405.12399, equations 14-16.\nThe value target stops gradients, and the policy is REINFORCE\nagainst $\\Lambda_t - V(x_t)$ — an advantage estimate, but\none built from a *state-value* baseline rather than a critic."
           ],
           "attributes": [],
           "warns": [],
@@ -525,7 +525,7 @@
           "kind": "function",
           "labels": [],
           "signature": "world_model_loss(frames: Tensor, actions: Tensor, next_frame: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1681",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1689",
           "subcategory": "model",
           "summary": "Train the denoiser — `DIAMONDModel.forward` by another name.",
           "extended": null,
@@ -566,7 +566,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reward_end_loss(frames: Tensor, actions: Tensor, rewards: Tensor, ends: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1702",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1710",
           "subcategory": "model",
           "summary": "Cross-entropy on the reward's *sign* and on termination.",
           "extended": null,
@@ -624,7 +624,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.diamond import (\n...     DIAMONDConfig, DIAMONDForWorldModeling)\n>>> config = DIAMONDConfig(\n...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),\n...     reward_channels=(8, 8), reward_layers=(1, 1),\n...     actor_channels=(8, 8), actor_layers=(1, 1),\n...     cond_dim=16, reward_cond_dim=8, reward_lstm_dim=16,\n...     actor_lstm_dim=16, num_actions=4, horizon=3)\n>>> model = DIAMONDForWorldModeling(config).eval()\n>>> frames = lucid.randn((2, 4, 3, 16, 16))\n>>> actions = lucid.tensor([[0, 1, 2, 3], [1, 1, 0, 2]], dtype=lucid.int64)\n>>> with lucid.no_grad():\n...     out = model(frames, actions)\n>>> out.frames.shape\n(2, 3, 3, 16, 16)"
       ],
       "notes": [
-        "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Appendix F and\nAlgorithm 1.\n\nThe imagined trajectory is autoregressive in the strong sense: the\nframe the denoiser produced and the action the policy chose from it\nboth become conditioning for the next step, so an error in either\ncompounds.  That is the whole reason the paper cares which diffusion\nparameterisation it uses."
+        "Reference: Alonso et al., arXiv:2405.12399, Appendix F and\nAlgorithm 1.\n\nThe imagined trajectory is autoregressive in the strong sense: the\nframe the denoiser produced and the action the policy chose from it\nboth become conditioning for the next step, so an error in either\ncompounds.  That is the whole reason the paper cares which diffusion\nparameterisation it uses."
       ],
       "attributes": [
         {
@@ -646,7 +646,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDModel(config: DIAMONDConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1002",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1012",
       "subcategory": "model",
       "methods": [
         {
@@ -655,7 +655,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DIAMONDConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1050",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1060",
           "subcategory": "model",
           "summary": "Initialise the agent. See the class docstring for parameters.",
           "extended": null,
@@ -677,7 +677,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step_reward_end(frame: Tensor, next_frame: Tensor, action: Tensor, state: tuple[Tensor, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1064",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1074",
           "subcategory": "model",
           "summary": "One step of the reward/termination model, typed.",
           "extended": null,
@@ -724,7 +724,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step_actor_critic(frame: Tensor, state: tuple[Tensor, Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1093",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1103",
           "subcategory": "model",
           "summary": "One step of the actor-critic, typed.",
           "extended": null,
@@ -759,7 +759,7 @@
           "kind": "function",
           "labels": [],
           "signature": "preconditioners(sigma: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1112",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1122",
           "subcategory": "model",
           "summary": "EDM's four scalings at a noise level.",
           "extended": null,
@@ -778,7 +778,7 @@
           "raises": [],
           "examples": [],
           "notes": [
-            "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Appendix C,\nequations 9-12, with $\\sigma_{\\text{data}} = 0.5$."
+            "Reference: Alonso et al., arXiv:2405.12399, Appendix C,\nequations 9-12, with $\\sigma_{\\text{data}} = 0.5$."
           ],
           "attributes": [],
           "warns": [],
@@ -790,7 +790,7 @@
           "kind": "function",
           "labels": [],
           "signature": "denoise(noised: Tensor, sigma: Tensor, frames: Tensor, actions: Tensor, cond_sigma: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1139",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1149",
           "subcategory": "model",
           "summary": "Apply $D_\\theta$ — the preconditioned denoiser.",
           "extended": null,
@@ -816,7 +816,7 @@
             {
               "name": "actions",
               "annotation": "Tensor",
-              "description": "`(B, L)` action indices.",
+              "description": "`(B, L)` indices, or `(B, L, num_actions)` multi-hot.",
               "default": null
             },
             {
@@ -843,7 +843,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sigma_schedule(steps: int, device: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1180",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1190",
           "subcategory": "model",
           "summary": "The noise levels an Euler sampler walks down.",
           "extended": null,
@@ -880,7 +880,7 @@
           "kind": "function",
           "labels": [],
           "signature": "upsample(noised: Tensor, sigma: Tensor, low_res: Tensor, previous: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1214",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1224",
           "subcategory": "model",
           "summary": "Apply the upsampler's $D_\\theta$.",
           "extended": null,
@@ -932,7 +932,7 @@
           "kind": "function",
           "labels": [],
           "signature": "upsample_frame(low_res: Tensor, previous: Tensor | None = None, steps: int | None = None, noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1260",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1268",
           "subcategory": "model",
           "summary": "Sample a full-resolution frame from a generated low-resolution one.",
           "extended": null,
@@ -988,7 +988,7 @@
           "kind": "function",
           "labels": [],
           "signature": "imagine_frame(frames: Tensor, actions: Tensor, steps: int | None = None, noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1350",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1358",
           "subcategory": "model",
           "summary": "Sample the next frame with Euler's method.",
           "extended": null,
@@ -1002,7 +1002,7 @@
             {
               "name": "actions",
               "annotation": "Tensor",
-              "description": "`(B, L)` action indices.",
+              "description": "`(B, L)` indices, or `(B, L, num_actions)` multi-hot.",
               "default": null
             },
             {
@@ -1037,7 +1037,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(frames: Tensor, actions: Tensor, next_frame: Tensor, sigma: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1406",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1414",
           "subcategory": "model",
           "summary": "Train the denoiser on one transition.",
           "extended": null,
@@ -1051,7 +1051,7 @@
             {
               "name": "actions",
               "annotation": "Tensor",
-              "description": "`(B, L)` action indices.",
+              "description": "`(B, L)` indices, or `(B, L, num_actions)` multi-hot.",
               "default": null
             },
             {
@@ -1074,7 +1074,7 @@
           "raises": [],
           "examples": [],
           "notes": [
-            "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Algorithm 1 — sample\n$\\log \\sigma \\sim \\mathcal{N}(P_{\\text{mean}}, P_{\\text{std}}^2)$, noise the target, and take the squared error\nin *pixel* space.  The EDM weighting is already inside\n$D_\\theta$, so no extra loss weight appears here."
+            "Reference: Alonso et al., arXiv:2405.12399, Algorithm 1 — sample\n$\\log \\sigma \\sim \\mathcal{N}(P_{\\text{mean}}, P_{\\text{std}}^2)$, noise the target, and take the squared error\nin *pixel* space.  The EDM weighting is already inside\n$D_\\theta$, so no extra loss weight appears here."
           ],
           "attributes": [],
           "warns": [],
@@ -1097,7 +1097,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.diamond import DIAMONDConfig, DIAMONDModel\n>>> config = DIAMONDConfig(\n...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),\n...     reward_channels=(8, 8), reward_layers=(1, 1),\n...     actor_channels=(8, 8), actor_layers=(1, 1),\n...     cond_dim=16, reward_cond_dim=8,\n...     reward_lstm_dim=16, actor_lstm_dim=16, num_actions=4)\n>>> model = DIAMONDModel(config).eval()\n>>> frames = lucid.randn((2, 4, 3, 16, 16))\n>>> actions = lucid.tensor([[0, 1, 2, 3], [1, 1, 0, 2]], dtype=lucid.int64)\n>>> with lucid.no_grad():\n...     nxt = model.imagine_frame(frames, actions)\n>>> nxt.shape\n(2, 3, 16, 16)"
       ],
       "notes": [
-        "Reference: Alonso, Eloi, et al., *\"Diffusion for World Modeling:\nVisual Details Matter in Atari\"*, NeurIPS, 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)).\n\nThe EDM preconditioners live on this class rather than inside the\nU-Net, because they are a property of the *diffusion*, not of the\nnetwork: the same U-Net under DDPM's parameterisation is the\ncomparison the paper's Section 5.1 runs, and it drifts."
+        "Reference: Alonso, Eloi, et al., *\"Diffusion for World Modeling:\nVisual Details Matter in Atari\"*, NeurIPS, 2024 (arXiv:2405.12399).\n\nThe EDM preconditioners live on this class rather than inside the\nU-Net, because they are a property of the *diffusion*, not of the\nnetwork: the same U-Net under DDPM's parameterisation is the\ncomparison the paper's Section 5.1 runs, and it drifts."
       ],
       "attributes": [
         {
@@ -1129,7 +1129,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDOutput(loss: Tensor, prediction: Tensor, sigma: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L944",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L954",
       "subcategory": "model",
       "methods": [
         {
@@ -1138,7 +1138,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(loss: Tensor, prediction: Tensor, sigma: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the layer.",
           "extended": null,
@@ -1195,7 +1195,7 @@
       "kind": "function",
       "labels": [],
       "signature": "diamond(pretrained: bool | str = False, weights: DIAMONDWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_pretrained.py#L143",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_pretrained.py#L143",
       "subcategory": "pretrained",
       "summary": "Construct the Atari agent — denoiser, reward/end model, actor-critic.",
       "extended": null,
@@ -1228,7 +1228,7 @@
         ">>> from lucid.models import diamond\n>>> config = diamond().config\n>>> config.conditioning_frames, config.denoise_steps, config.horizon\n(4, 3, 15)\nThe appendix's 3D-environment experiments condition on six frames\ninstead of four, which is a field rather than a second factory:\n>>> diamond(conditioning_frames=6).config.denoiser_in_channels\n21"
       ],
       "notes": [
-        "Reference: Alonso, Eloi, et al., *\"Diffusion for World Modeling:\nVisual Details Matter in Atari\"*, NeurIPS, 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)),\nTable 2 for the architecture and Table 3 for everything else."
+        "Reference: Alonso, Eloi, et al., *\"Diffusion for World Modeling:\nVisual Details Matter in Atari\"*, NeurIPS, 2024 (arXiv:2405.12399),\nTable 2 for the architecture and Table 3 for everything else."
       ],
       "attributes": [],
       "warns": [],
@@ -2319,7 +2319,7 @@
       "kind": "function",
       "labels": [],
       "signature": "diamond_csgo(pretrained: bool | str = False, weights: DIAMONDWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_pretrained.py#L277",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_pretrained.py#L277",
       "subcategory": "pretrained",
       "summary": "Construct the *Counter-Strike* world model.",
       "extended": null,
@@ -2352,7 +2352,7 @@
         ">>> from lucid.models import diamond_csgo\n>>> config = diamond_csgo().config\n>>> config.frame_shape, config.num_actions, config.upsampling_factor\n((30, 56), 51, 5)\n>>> config.with_agent\nFalse"
       ],
       "notes": [
-        "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Section 6 and Appendix M,\nwith the architecture taken from the released\n`config/agent/csgo.yaml` — the paper reports parameter counts for\nthis model but no channel widths or depths.\n\nFrames are `30x56` here and `150x280` after the upsampler, which\nis what makes a 3D scene affordable: diffusing at the full resolution\nwould cost far more for detail a cheaper second network can add."
+        "Reference: Alonso et al., arXiv:2405.12399, Section 6 and Appendix M,\nwith the architecture taken from the released\n`config/agent/csgo.yaml` — the paper reports parameter counts for\nthis model but no channel widths or depths.\n\nFrames are `30x56` here and `150x280` after the upsampler, which\nis what makes a 3D scene affordable: diffusing at the full resolution\nwould cost far more for detail a cheaper second network can add."
       ],
       "attributes": [],
       "warns": [],
@@ -5605,7 +5605,7 @@
       "kind": "function",
       "labels": [],
       "signature": "diamond_world_model(pretrained: bool | str = False, weights: DIAMONDWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_pretrained.py#L205",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_pretrained.py#L205",
       "subcategory": "pretrained",
       "summary": "Construct DIAMOND with its objectives and imagination rollout.",
       "extended": null,
@@ -5638,7 +5638,7 @@
         ">>> import lucid\n>>> from lucid.models import diamond_world_model\n>>> model = diamond_world_model(\n...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),\n...     reward_channels=(8, 8), reward_layers=(1, 1),\n...     actor_channels=(8, 8), actor_layers=(1, 1), cond_dim=16,\n...     reward_cond_dim=8, reward_lstm_dim=16, actor_lstm_dim=16,\n...     num_actions=4, horizon=3).eval()\n>>> frames = lucid.randn((1, 4, 3, 16, 16))\n>>> actions = lucid.tensor([[0, 1, 2, 3]], dtype=lucid.int64)\n>>> with lucid.no_grad():\n...     out = model(frames, actions)\n>>> out.frames.shape, out.returns.shape\n((1, 3, 3, 16, 16), (1, 3))"
       ],
       "notes": [
-        "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Appendix F for the two\nRL objectives and Algorithm 1 for the training loop they sit in.\n\nThe three losses are trained separately, in the order Algorithm 1\ngives: the denoiser on real transitions, the reward/termination model\non real sequences, and the actor-critic entirely on imagined ones."
+        "Reference: Alonso et al., arXiv:2405.12399, Appendix F for the two\nRL objectives and Algorithm 1 for the training loop they sit in.\n\nThe three losses are trained separately, in the order Algorithm 1\ngives: the denoiser on real transitions, the reward/termination model\non real sequences, and the actor-critic entirely on imagined ones."
       ],
       "attributes": [],
       "warns": [],
@@ -6741,7 +6741,7 @@
       ],
       "labels": [],
       "signature": "DIAMONDWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/08f0c2277/lucid/models/generative/diamond/_weights.py#L38",
+      "source": "https://github.com/ChanLumerico/lucid/blob/d28bd5ee0/lucid/models/generative/diamond/_weights.py#L38",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained agents for `lucid.models.diamond`.",
@@ -6751,7 +6751,7 @@
       "raises": [],
       "examples": [],
       "notes": [
-        "Reference: Alonso et al., NeurIPS 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)), Table 1\nfor the per-game scores these agents reach.\n\n`DEFAULT` is *Breakout*, which is the game the paper's own\nanalysis figures use.\n\n`CSGO` is the odd one out: a world model with no agent, at a\ndifferent resolution and nearly thirty times the size, from the\npaper's Section 6.  It loads into `lucid.models.diamond_csgo`\nrather than the Atari factories."
+        "Reference: Alonso et al., NeurIPS 2024 (arXiv:2405.12399), Table 1\nfor the per-game scores these agents reach.\n\n`DEFAULT` is *Breakout*, which is the game the paper's own\nanalysis figures use.\n\n`CSGO` is the odd one out: a world model with no agent, at a\ndifferent resolution and nearly thirty times the size, from the\npaper's Section 6.  It loads into `lucid.models.diamond_csgo`\nrather than the Atari factories."
       ],
       "attributes": [],
       "warns": [],
@@ -6759,7 +6759,7 @@
     }
   ],
   "summary": "DIAMOND — the world model that predicts frames, not latents.",
-  "extended": "Alonso et al., NeurIPS 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)).  A conditional diffusion\nmodel over pixels, an EDM parameterisation chosen so three denoising\nsteps suffice, and an agent trained entirely on what it imagines.",
+  "extended": "Alonso et al., NeurIPS 2024 (arXiv:2405.12399).  A conditional diffusion\nmodel over pixels, an EDM parameterisation chosen so three denoising\nsteps suffice, and an agent trained entirely on what it imagines.",
   "parameters": [],
   "returns": null,
   "raises": [],

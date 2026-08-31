@@ -65,7 +65,7 @@
 // Notes
 // -----
 // Resets to ``0`` whenever MAJOR or MINOR advances.
-#define LUCID_VERSION_PATCH 0
+#define LUCID_VERSION_PATCH 1
 
 // Human-readable version string embedded into the shared library.
 
@@ -77,7 +77,7 @@
 // optional pre-release tag (``-dev``, ``-rc1`` …) marks unstable
 // builds; release tarballs strip the tag.  Returned verbatim by
 // :func:`version_string`.
-#define LUCID_VERSION_STRING "0.10.0"
+#define LUCID_VERSION_STRING "0.10.1"
 
 // Monotonically increasing ABI generation counter.  Bump this whenever the
 // C++ binary interface changes in a way that makes old .so / .dylib objects

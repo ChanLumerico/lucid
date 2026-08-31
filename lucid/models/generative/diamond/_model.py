@@ -535,7 +535,8 @@ class _Denoiser(nn.Module):
         c_noise : Tensor
             ``(B,)`` preconditioned noise level of the frame being denoised.
         actions : Tensor
-            ``(B, L)`` past action indices.
+            Either ``(B, L)`` action indices, or ``(B, L, num_actions)``
+            multi-hot rows for an action set whose components combine.
         cond_noise : Tensor or None, optional
             ``(B,)`` level the *history* was noised at, when it was.
             Ignored unless the configuration asks for it.
@@ -546,7 +547,16 @@ class _Denoiser(nn.Module):
             ``(B, cond_dim)``.
         """
         time = cast(Tensor, self.noise_emb(c_noise))
-        embedded = cast(Tensor, self.action_embed(actions))
+        # An index selects one row of the embedding; a multi-hot row sums
+        # the rows it names.  Selecting row i *is* the one-hot case of that
+        # sum, so both go through the same weights — which is what lets one
+        # checkpoint serve a categorical action set and a compositional one.
+        if actions.ndim == 3:
+            embedded = actions.to(self.action_embed.weight.dtype) @ (
+                self.action_embed.weight
+            )
+        else:
+            embedded = cast(Tensor, self.action_embed(actions))
         flat = embedded.reshape(int(actions.shape[0]), -1)
         total = time + flat
         if self.noise_cond_emb is not None:
@@ -1155,7 +1165,7 @@ class DIAMONDModel(PretrainedModel):
         frames : Tensor
             ``(B, L, C, H, W)`` clean history.
         actions : Tensor
-            ``(B, L)`` action indices.
+            ``(B, L)`` indices, or ``(B, L, num_actions)`` multi-hot.
         cond_sigma : Tensor or None, optional
             ``(B,)`` level to noise the *history* at.  Only meaningful
             when the configuration asks for it; ``None`` leaves the
@@ -1360,7 +1370,7 @@ class DIAMONDModel(PretrainedModel):
         frames : Tensor
             ``(B, L, C, H, W)`` clean history.
         actions : Tensor
-            ``(B, L)`` action indices.
+            ``(B, L)`` indices, or ``(B, L, num_actions)`` multi-hot.
         steps : int or None, optional
             Denoising steps; defaults to the configured 3.
         noise : Tensor or None, optional
@@ -1417,7 +1427,7 @@ class DIAMONDModel(PretrainedModel):
         frames : Tensor
             ``(B, L, C, H, W)`` clean history.
         actions : Tensor
-            ``(B, L)`` action indices.
+            ``(B, L)`` indices, or ``(B, L, num_actions)`` multi-hot.
         next_frame : Tensor
             ``(B, C, H, W)`` the frame to predict.
         sigma : Tensor or None, optional, keyword-only

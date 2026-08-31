@@ -540,6 +540,54 @@ class TestDIAMONDCSGO:
         loss.backward()
         _assert_trained(model.upsampler)
 
+    def test_a_compositional_action_reaches_the_model(self) -> None:
+        """CS:GO's action is 51 components combined, not one of 51.
+
+        11 keys, 2 mouse buttons, 23 horizontal bins and 15 vertical ones.
+        Both mouse groups are always one-hot — the "not moving" bin is
+        still a bin — so every valid action sets at least two components
+        and an index can express none of them.
+
+        The released model runs the multi-hot row through the *same*
+        embedding matrix as an index, by matrix product rather than
+        lookup.  Lucid loaded that matrix and implemented only the
+        lookup, so the ported weights were unusable for the game they
+        were trained on.
+        """
+        config = dict(self.CONFIG, num_actions=51)  # the real action width
+        model = models.diamond_csgo(**config).eval()  # type: ignore[arg-type]
+        frames = lucid.randn((1, 4, 3, 30, 56))
+
+        actions = lucid.zeros((1, 4, 51))
+        for step in range(4):
+            for component in (0, 11, 13 + 11, 13 + 23 + 7):  # w, L, x=0, y=0
+                actions[0, step, component] = 1.0
+        assert int(actions[0, 0].sum().item()) == 4
+
+        with lucid.no_grad():
+            frame = model.imagine_frame(frames, actions, steps=1)
+        _assert_finite(frame, (1, 3, 30, 56))
+
+    def test_a_one_hot_action_equals_the_index_it_names(self) -> None:
+        """The two paths must be the same function, not merely both run.
+
+        Selecting row i is the one-hot case of summing the named rows, so
+        an index and its one-hot row have to produce the same
+        conditioning vector — exactly, not approximately.
+        """
+        config = dict(self.CONFIG, num_actions=51)
+        model = models.diamond_csgo(**config).eval()  # type: ignore[arg-type]
+        one_hot = lucid.zeros((1, 4, 51))
+        for step in range(4):
+            one_hot[0, step, 3] = 1.0
+        index = lucid.full((1, 4), 3, dtype=lucid.int64)
+
+        noise = lucid.zeros((1,))
+        with lucid.no_grad():
+            a = model.denoiser.conditioning(noise, one_hot)
+            b = model.denoiser.conditioning(noise, index)
+        assert float((a - b).abs().max().item()) == 0.0
+
     def test_the_upsampler_is_reachable_only_where_it_exists(self) -> None:
         """An Atari model has none, and says so rather than crashing."""
         model = models.diamond(**TestDIAMONDAtari.CONFIG)  # type: ignore[arg-type]
