@@ -109,6 +109,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every family added this cycle now has an end-to-end test.**
+  `test_models_recent_e2e.py` takes the sixteen families added since
+  2026-07-27 — NICE, RealNVP, Neural ODE, Flow Matching, Rectified Flow,
+  Score SDE, MeanFlow, DiT, VQ-VAE, CLIP, Stable Diffusion, Dreamer v1 to
+  v3, and DIAMOND for both Atari and CS:GO — and runs each one through
+  its *factory*: one training step with the gradients checked against the
+  parameter list, then the inference path with the output shape and
+  finiteness checked.  The families' own tests all reach inside, which is
+  how a module could be constructed, assigned, filled from a checkpoint
+  and callable from nowhere while every gate stayed green.
+
 - register the five wrappers nothing could build
 - add MeanFlow, the flow that stops integrating
 - add DiT, the diffusion model without a U-Net

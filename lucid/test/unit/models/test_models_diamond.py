@@ -589,11 +589,19 @@ class TestCSGO:
         from lucid.models import diamond_world_model
 
         model = diamond_world_model(
-            sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
-            reward_channels=(8, 8), reward_layers=(1, 1),
-            actor_channels=(8, 8), actor_layers=(1, 1), cond_dim=16,
-            reward_cond_dim=8, reward_lstm_dim=16, actor_lstm_dim=16,
-            num_actions=4, horizon=3,
+            sample_size=16,
+            unet_channels=(8, 8),
+            unet_layers=(1, 1),
+            reward_channels=(8, 8),
+            reward_layers=(1, 1),
+            actor_channels=(8, 8),
+            actor_layers=(1, 1),
+            cond_dim=16,
+            reward_cond_dim=8,
+            reward_lstm_dim=16,
+            actor_lstm_dim=16,
+            num_actions=4,
+            horizon=3,
         )
         assert model.config.attn_depths == (0, 0)
 
