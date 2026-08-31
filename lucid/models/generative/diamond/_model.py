@@ -1137,7 +1137,12 @@ class DIAMONDModel(PretrainedModel):
         return c_in, c_out, c_skip, c_noise
 
     def denoise(
-        self, noised: Tensor, sigma: Tensor, frames: Tensor, actions: Tensor
+        self,
+        noised: Tensor,
+        sigma: Tensor,
+        frames: Tensor,
+        actions: Tensor,
+        cond_sigma: Tensor | None = None,
     ) -> Tensor:
         r"""Apply :math:`D_\theta` — the preconditioned denoiser.
 
@@ -1151,6 +1156,10 @@ class DIAMONDModel(PretrainedModel):
             ``(B, L, C, H, W)`` clean history.
         actions : Tensor
             ``(B, L)`` action indices.
+        cond_sigma : Tensor or None, optional
+            ``(B,)`` level to noise the *history* at.  Only meaningful
+            when the configuration asks for it; ``None`` leaves the
+            history clean, which is what Atari does.
 
         Returns
         -------
@@ -1158,9 +1167,14 @@ class DIAMONDModel(PretrainedModel):
             ``(B, C, H, W)`` estimate of the clean next frame.
         """
         c_in, c_out, c_skip, c_noise = self.preconditioners(sigma)
+        if self.config.noise_previous_obs and cond_sigma is not None:
+            frames = frames + lucid.randn_like(frames) * cond_sigma.reshape(
+                -1, 1, 1, 1, 1
+            )
         history = frames.reshape(int(frames.shape[0]), -1, *frames.shape[3:])
         stacked = lucid.cat([noised * c_in, history], dim=1)
-        cond = self.denoiser.conditioning(c_noise, actions)
+        level = None if cond_sigma is None else lucid.log(cond_sigma) * 0.25
+        cond = self.denoiser.conditioning(c_noise, actions, level)
         return c_skip * noised + c_out * cast(Tensor, self.denoiser(stacked, cond))
 
     def sigma_schedule(self, steps: int, device: str) -> Tensor:
@@ -1196,6 +1210,140 @@ class DIAMONDModel(PretrainedModel):
             sigma_min ** (1.0 / rho) - sigma_max ** (1.0 / rho)
         )
         return lucid.cat([inv**rho, lucid.zeros((1,), device=device)], dim=0)
+
+    def upsample(
+        self,
+        noised: Tensor,
+        sigma: Tensor,
+        low_res: Tensor,
+        previous: Tensor,
+    ) -> Tensor:
+        r"""Apply the upsampler's :math:`D_\theta`.
+
+        Parameters
+        ----------
+        noised : Tensor
+            ``(B, C, H*f, W*f)`` the full-resolution frame with noise.
+        sigma : Tensor
+            ``(B,)`` noise levels.
+        low_res : Tensor
+            ``(B, C, H, W)`` the frame the world model generated.
+        previous : Tensor
+            ``(B, C, H*f, W*f)`` the previous full-resolution frame, so
+            the sharpening is temporally consistent rather than
+            independent per frame.
+
+        Returns
+        -------
+        Tensor
+            ``(B, C, H*f, W*f)``.
+
+        Raises
+        ------
+        ValueError
+            If this configuration has no upsampler.
+        """
+        if self.upsampler is None:
+            raise ValueError(
+                "this configuration has no upsampler — only the CS:GO one "
+                "does, and it generates at 30x56 to magnify five times"
+            )
+        c_in, c_out, c_skip, c_noise = self.preconditioners(sigma)
+        size = (int(noised.shape[2]), int(noised.shape[3]))
+        scaled = F.interpolate(low_res, size=size, mode="nearest")
+        stacked = lucid.cat([noised * c_in, scaled, previous], dim=1)
+        cond = self.upsampler.conditioning(c_noise)
+        return c_skip * noised + c_out * cast(Tensor, self.upsampler(stacked, cond))
+
+    def upsample_frame(
+        self,
+        low_res: Tensor,
+        previous: Tensor | None = None,
+        *,
+        steps: int | None = None,
+        noise: Tensor | None = None,
+    ) -> Tensor:
+        r"""Sample a full-resolution frame from a generated low-resolution one.
+
+        Parameters
+        ----------
+        low_res : Tensor
+            ``(B, C, H, W)`` — what :meth:`imagine_frame` produced.
+        previous : Tensor or None, optional
+            ``(B, C, H*f, W*f)`` previous full-resolution frame.  Absent
+            on the first frame of a rollout, where the low-resolution one
+            scaled up stands in for it.
+        steps : int or None, optional
+            Denoising steps; defaults to the configured 3.
+        noise : Tensor or None, optional
+            Starting sample, drawn when absent.
+
+        Returns
+        -------
+        Tensor
+            ``(B, C, H*f, W*f)``.
+
+        Raises
+        ------
+        ValueError
+            If this configuration has no upsampler, or ``steps`` is not
+            positive.
+
+        Notes
+        -----
+        ⚠️ The upsampler appears in the released CS:GO configuration and
+        nowhere in the paper.  It is why that experiment is affordable:
+        the world model diffuses at 30x56 and this brings the frame to
+        150x280, rather than paying full-resolution diffusion for detail
+        a cheaper network can add.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import diamond_csgo
+        >>> model = diamond_csgo(
+        ...     unet_channels=(8, 8), unet_layers=(1, 1), cond_dim=16,
+        ...     attn_depths=(0, 0), upsampler_channels=(4, 4),
+        ...     upsampler_layers=(1, 1), upsampler_attn_depths=(0, 0),
+        ...     num_actions=4).eval()
+        >>> low = lucid.randn((1, 3, 30, 56))
+        >>> with lucid.no_grad():
+        ...     full = model.upsample_frame(low, steps=1)
+        >>> full.shape
+        (1, 3, 150, 280)
+        """
+        if self.upsampler is None:
+            raise ValueError(
+                "this configuration has no upsampler — only the CS:GO one "
+                "does, and it generates at 30x56 to magnify five times"
+            )
+        steps = self.config.denoise_steps if steps is None else steps
+        if steps < 1:
+            raise ValueError(f"steps must be positive, got {steps}")
+
+        factor = self.config.upsampling_factor
+        batch = int(low_res.shape[0])
+        device = low_res.device.type
+        size = (int(low_res.shape[2]) * factor, int(low_res.shape[3]) * factor)
+        if previous is None:
+            # The first frame has no predecessor; its own upscaling is the
+            # closest thing to one, and is what the conditioning expects
+            # rather than a zero field the model never saw in training.
+            previous = F.interpolate(low_res, size=size, mode="nearest")
+
+        schedule = self.sigma_schedule(steps, device)
+        first = float(schedule[0].item())
+        x = (
+            lucid.randn((batch, self.config.in_channels, *size), device=device)
+            if noise is None
+            else noise
+        ) * first
+        for index in range(steps):
+            sigma = schedule[index]
+            level = sigma + lucid.zeros((batch,), device=device)
+            denoised = self.upsample(x, level, low_res, previous)
+            x = x + (x - denoised) / sigma * (schedule[index + 1] - sigma)
+        return x
 
     def imagine_frame(
         self,
@@ -1311,7 +1459,16 @@ class DIAMONDModel(PretrainedModel):
             + offset
             + lucid.randn_like(next_frame) * sigma.reshape(-1, 1, 1, 1)
         )
-        prediction = self.denoise(noised, sigma, frames, actions)
+        # The CS:GO configuration noises the history too — a form of
+        # augmentation against the error a long autoregressive rollout
+        # compounds.  Atari leaves it clean.
+        cond_sigma = None
+        if self.config.noise_previous_obs:
+            cond_sigma = lucid.exp(
+                lucid.randn((batch,), device=device) * self.config.p_std
+                + self.config.p_mean
+            )
+        prediction = self.denoise(noised, sigma, frames, actions, cond_sigma)
         loss = ((prediction - next_frame) ** 2).mean()
         return DIAMONDOutput(loss=loss, prediction=prediction, sigma=sigma)
 

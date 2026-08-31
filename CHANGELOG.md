@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **DIAMOND's CS:GO upsampler could not be run.** The module was built,
+  loaded 51M parameters from the released checkpoint, and was called
+  from nowhere: a rollout stopped at 30x56 and the second diffusion
+  model was dead weight. `upsample_frame()` and `upsample()` reach it
+  now, so a rollout runs 30x56 -> 150x280 as the released configuration
+  intends. `noise_previous_obs` was inert for the same reason — the
+  embedding existed and nothing passed it a level; it now noises the
+  history during training and tells the network at what level.
+
 - `clip` and `relu6` disagreed with themselves at the bound: the gradient
   came out differently depending on whether it was asked for by
   `backward()` or by `autograd.grad(create_graph=True)`. The two ops want
