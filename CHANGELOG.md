@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- _Pending the next release._
+
+---
+
+## [3.10.0] — 2026-08-31
 
 ### Fixed
 
@@ -78,6 +84,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the sidebar dropped members and named the wrong model
 
+- the DIAMOND architecture followed the paper, which under-specifies it. The released checkpoints name four things the text does not — the reward model reads a transition rather than a frame, its downsamples sit between stages, its head emits five numbers without a bias, and the actor-critic's residual block is not the denoiser's — plus `sigma_offset_noise` and the middle blocks' attention. Building from the text alone left the parameter count twenty percent short with no way to close it.
+
+- the DIAMOND CS:GO decoder held one width per resolution. Each resolution's last block steps down to the next one's, and holding the width builds a network 43M larger that trains perfectly well and is not the published one. The same port fixed a U-Net that assumed clean halving — 30 rounds up to 15 then 8, so the decoder has to resize to each skip, which a square 64 never reveals.
+
 ### Performance
 
 - batch the two guidance passes
@@ -94,6 +104,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - add MeanFlow, the flow that stops integrating
 - add DiT, the diffusion model without a U-Net
 - port the two published DiT-XL/2 checkpoints
+- **DIAMOND**, the world model that predicts frames instead of latents (Alonso et al., NeurIPS 2024). A conditional diffusion model over pixels, in EDM's parameterisation so three denoising steps suffice where DDPM's drifts within a hundred. Three factories — `diamond`, `diamond_world_model`, `diamond_csgo` — and the paper's four conditioning-free design decisions asserted rather than assumed.
+- **DIAMOND's released agents**, ported: 26 Atari 100k agents and the CS:GO world model, re-hosted under `lucid-dl/diamond`. Parameter counts match the release exactly — 13,536,584 per Atari agent, 381,642,502 for CS:GO. The tag is a game name because Atari's minimal action set differs per game, and it carries that number so the caller need not.
+
+### Tooling
+
+- `tools/convert_weights/diamond.py`, and the DIAMOND recipe registered with the conversion CLI.
+
 
 ---
 
@@ -3531,7 +3548,8 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.9.0...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.10.0...HEAD
+[3.10.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.0
 [3.9.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.9.0
 [3.8.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.8.0
 [3.7.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.7.1

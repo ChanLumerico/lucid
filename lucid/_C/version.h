@@ -57,7 +57,7 @@
 // Increments when new public symbols are added but existing ones keep
 // the same signature and semantics; clients built against an older
 // minor revision continue to work without recompilation.
-#define LUCID_VERSION_MINOR 9
+#define LUCID_VERSION_MINOR 10
 
 // Patch component of the engine SemVer; bumped on bug fixes that
 // preserve both the public API and the ABI.
@@ -107,7 +107,7 @@
 // classes, new enumerators appended to the end of an enum) still
 // require a bump because their absence in an older library breaks
 // the new extension module.
-#define LUCID_ABI_VERSION 8
+#define LUCID_ABI_VERSION 9
 
 namespace lucid {
 
