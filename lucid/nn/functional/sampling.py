@@ -2,6 +2,7 @@
 nn.functional sampling / interpolation / padding operations.
 """
 
+import math
 from typing import TYPE_CHECKING
 
 import lucid as _lucid
@@ -11,6 +12,102 @@ from lucid.nn.functional.sparse import check_embedding_indices
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+
+
+_BICUBIC_A = -0.75
+
+
+def _cubic_coefficients(t: float) -> tuple[float, float, float, float]:
+    """Weights of the four taps a bicubic sample reads, at offset ``t``.
+
+    The cubic convolution kernel with :math:`A = -0.75`, which is the
+    coefficient the reference implementations use.  The weights are not
+    normalised — bicubic is allowed to overshoot, and clipping it here
+    would make it a different filter.
+
+    Parameters
+    ----------
+    t : float
+        Fractional distance from the second of the four taps, in ``[0, 1)``.
+
+    Returns
+    -------
+    tuple of four float
+        Weights for taps at ``-1, 0, +1, +2`` relative to ``floor``.
+    """
+    a = _BICUBIC_A
+
+    def near(x: float) -> float:
+        return ((a + 2.0) * x - (a + 3.0)) * x * x + 1.0
+
+    def far(x: float) -> float:
+        return ((a * x - 5.0 * a) * x + 8.0 * a) * x - 4.0 * a
+
+    other = 1.0 - t
+    return far(t + 1.0), near(t), near(other), far(other + 1.0)
+
+
+def _bicubic_axis(
+    x: "Tensor", axis: int, out_size: int, align_corners: bool
+) -> "Tensor":
+    """Resample one axis with the cubic kernel.
+
+    Bicubic is separable, so the 2-D filter is this applied twice; doing
+    it as two passes of four taps costs 8 gathers rather than 16.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input.
+    axis : int
+        Axis to resample.
+    out_size : int
+        Length of that axis afterwards.
+    align_corners : bool
+        Corner convention, as documented on :func:`interpolate`.
+
+    Returns
+    -------
+    Tensor
+        ``x`` with ``axis`` resampled.
+    """
+    in_size = int(x.shape[axis])
+    if in_size == out_size:
+        return x
+
+    if align_corners:
+        scale = (in_size - 1) / (out_size - 1) if out_size > 1 else 0.0
+        centres = [index * scale for index in range(out_size)]
+    else:
+        scale = in_size / out_size
+        centres = [(index + 0.5) * scale - 0.5 for index in range(out_size)]
+
+    floors = [math.floor(c) for c in centres]
+    fracs = [c - f for c, f in zip(centres, floors)]
+    device = x.device.type
+
+    shape = [1] * x.ndim
+    shape[axis] = out_size
+    total: "Tensor" | None = None
+    for tap in range(4):
+        # Out-of-range taps clamp to the border, which is what makes the
+        # filter well defined at the first and last output pixel.
+        taken = x.index_select(
+            axis,
+            _lucid.tensor(
+                [min(max(f + tap - 1, 0), in_size - 1) for f in floors],
+                dtype=_lucid.int64,
+                device=device,
+            ),
+        )
+        weight = _lucid.tensor(
+            [_cubic_coefficients(t)[tap] for t in fracs],
+            dtype=x.dtype,
+            device=device,
+        ).reshape(tuple(shape))
+        total = taken * weight if total is None else total + taken * weight
+    assert total is not None
+    return total
 
 
 def interpolate(
@@ -135,6 +232,20 @@ def interpolate(
             ow = int(x.shape[4] * sf[2])
         ac = align_corners if align_corners is not None else False
         return _wrap(_C_engine.nn.interpolate_trilinear(_unwrap(x), od, oh, ow, ac))
+    if mode == "bicubic":
+        if size is not None:
+            oh, ow = (size, size) if isinstance(size, int) else size
+        else:
+            assert scale_factor is not None
+            sf = (
+                (scale_factor, scale_factor)
+                if isinstance(scale_factor, (int, float))
+                else scale_factor
+            )
+            oh = int(x.shape[2] * sf[0])
+            ow = int(x.shape[3] * sf[1])
+        ac = align_corners if align_corners is not None else False
+        return _bicubic_axis(_bicubic_axis(x, 2, oh, ac), 3, ow, ac)
     raise ValueError(f"Unsupported interpolation mode: {mode!r}")
 
 

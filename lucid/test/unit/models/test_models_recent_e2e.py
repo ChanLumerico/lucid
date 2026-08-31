@@ -533,12 +533,44 @@ class TestDIAMONDCSGO:
         _assert_finite(full, (1, 3, 150, 280))
 
     def test_the_upsampler_trains(self) -> None:
+        """Through ``upsample``, because the sampler quantises.
+
+        ``upsample_frame`` puts its result back on the 8-bit grid, as
+        the released sampler does, and a quantiser has no gradient — so
+        the trainable path is the single step with ``quantize=False``,
+        not the sampling loop wrapped around it.
+        """
         model = models.diamond_csgo(**self.CONFIG)  # type: ignore[arg-type]
         low = lucid.randn((1, 3, 30, 56))
+        previous = lucid.randn((1, 3, 150, 280))
+        noised = lucid.randn((1, 3, 150, 280))
         target = lucid.randn((1, 3, 150, 280))
-        loss = (model.upsample_frame(low, steps=1) - target).square().mean()
-        loss.backward()
+
+        out = model.upsample(noised, lucid.tensor([1.0]), low, previous, quantize=False)
+        (out - target).square().mean().backward()
         _assert_trained(model.upsampler)
+
+    def test_a_sampled_frame_lands_on_the_8_bit_grid(self) -> None:
+        """Every frame fed back into the rollout has been through a byte.
+
+        A rollout is autoregressive: a denoised frame becomes the next
+        one's conditioning, and the network was only ever conditioned on
+        frames that came out of a byte.  Without the quantiser the
+        estimate keeps its full float range — measured at
+        ``[-1.392, 1.369]`` — and the model is handed inputs it never
+        saw in training.
+        """
+        model = models.diamond_csgo(**self.CONFIG).eval()  # type: ignore[arg-type]
+        frames = lucid.randn((1, 4, 3, 30, 56))
+        actions = lucid.zeros((1, 4), dtype=lucid.int64)
+        with lucid.no_grad():
+            frame = model.denoise(
+                lucid.randn((1, 3, 30, 56)), lucid.tensor([1.0]), frames, actions
+            )
+        assert float(frame.min().item()) >= -1.0
+        assert float(frame.max().item()) <= 1.0
+        steps = (frame + 1.0) / 2.0 * 255.0
+        assert float((steps - lucid.round(steps)).abs().max().item()) < 1e-4
 
     def test_a_compositional_action_reaches_the_model(self) -> None:
         """CS:GO's action is 51 components combined, not one of 51.

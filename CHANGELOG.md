@@ -20,6 +20,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.10.2] — 2026-09-01
+
+### Fixed
+
+- **DIAMOND's self-attention took its residual from the wrong tensor.**
+  The released block reassigns `x = norm(x)` before using it, so the
+  residual leaves the *normalised* stream; `out_proj` is zero-init, which
+  makes an attention block exactly its group norm at initialisation. Adding
+  to the raw input instead left the world model blind to its image input —
+  the network output pinned at a constant for every sigma and the rollout
+  emitted black frames. Denoise-identity PSNR at sigma=1.0: 6.62 dB → 29.92 dB.
+
+- **`conv_in` was fed its inputs in the wrong order and at the wrong scale.**
+  The conditioning images come first — the history oldest to newest for the
+  denoiser, the previous full-resolution frame then the upscaled low-resolution
+  one for the upsampler — each divided by `sigma_data`, and the noised frame
+  last, scaled by `c_in`. The checkpoint settles it: `conv_in`'s
+  per-input-channel weight norms run 0.436, 0.437, 0.520, 0.676 across the four
+  history frames and 2.365 for the noised one. The upsampler was returning pure
+  colour noise: 14.40 dB against 21.52 dB for plain nearest upscaling, and
+  24.96 dB once corrected.
+
+- **Sampled frames escaped the 8-bit grid.** A rollout is autoregressive, so a
+  denoised frame becomes the next one's conditioning — and the network was only
+  ever conditioned on frames that came out of a byte. `denoise` and `upsample`
+  clamp to `[-1, 1]` and truncate to 8 bits, as the released `wrap_model_output`
+  does. Output range was `[-1.392, 1.369]`; it is `[-0.984, 0.977]` now.
+  Training passes `quantize=False`: a quantiser has no gradient, and the
+  released loss is computed on the unwrapped estimate too.
+
+- **`sigma_offset_noise` was never folded into sigma.** The released code takes
+  `sqrt(sigma^2 + sigma_offset^2)` first and hands that to every
+  preconditioner, `c_noise` included. A CS:GO step at `2e-3` was being told it
+  was at `2e-3` when the frames it was trained on carry `0.1`.
+
+- **The U-Net resized onto its skips instead of padding.** The release pads its
+  input up to a multiple of the total stride and crops the result back, so every
+  resolution halves and doubles exactly — 30 becomes 32 here. Resizing each
+  decoder stage onto its skip gets the shape right and puts the features on a
+  pixel grid the network never produced in training. `Upsample` is a plain
+  factor of two again, as it is in the release.
+
+- **The sampler started at `sigma_max` variance rather than unit variance**, and
+  scaled the `noise` argument on the way in, which made it unusable for
+  reproducing a rollout. Both now match the released sampler.
+
+- **`bicubic` was documented on `nn.functional.interpolate` and not
+  implemented.** Anyone who asked for it got `ValueError: Unsupported
+  interpolation mode`. It is implemented now — the cubic convolution kernel at
+  `A = -0.75`, separable, differentiable, and agreeing with the reference
+  implementation to 1.6e-05 worst case over the shapes tested. DIAMOND's
+  upsampler uses it for its low-resolution conditioning image, which is how the
+  training pairs were built.
+
+- **DIAMOND's initialisation did not match the release.** `out_proj`, each
+  residual block's second convolution and `conv_out` are zero-init, and
+  `Downsample` is orthogonal-init. None of this affects loading a checkpoint;
+  all of it affects training from scratch.
+
+### Added
+
+- `imagine_frame(cond_sigma=...)` exposes the level the history is noised at.
+  The released CS:GO sampler uses `0.005`; Lucid always passed zero, which tells
+  the network the history is at sigma 1.
+
+### Changed
+
+- `safetensors` is a runtime dependency rather than an extra. Every pretrained
+  weight in the zoo is a safetensors blob, so `pretrained=True` — the advertised
+  path — died with `ModuleNotFoundError` on a clean install.
+
 ## [3.10.1] — 2026-09-01
 
 ### Fixed

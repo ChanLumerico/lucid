@@ -240,6 +240,83 @@ class TestFractionalPool:
         assert tuple(x.grad.shape) == (1, 1, 4, 4, 4)
 
 
+class TestBicubicInterpolate:
+    """``mode="bicubic"`` was documented on :func:`interpolate` and absent.
+
+    Anyone who asked for it got ``ValueError: Unsupported interpolation
+    mode``, and the model that needed it — DIAMOND's CS:GO upsampler,
+    whose training pairs are built with bicubic — silently used nearest
+    instead, feeding the network a blockier conditioning image than it
+    was ever trained on.
+    """
+
+    def test_it_reproduces_a_hand_computed_kernel(self) -> None:
+        """The cubic convolution kernel at A = -0.75, checked by hand.
+
+        Upsampling a constant field must return that constant: the four
+        taps of the kernel sum to one at every offset.  This is the one
+        property that fails loudly if the coefficients are transcribed
+        wrong, and it needs no reference implementation to state.
+        """
+        flat = lucid.ones((1, 1, 5, 7)) * 3.25
+        out = F.interpolate(flat, size=(11, 13), mode="bicubic")
+        assert out.shape == (1, 1, 11, 13)
+        assert float((out - 3.25).abs().max().item()) < 1e-5
+
+    def test_it_passes_through_the_samples_it_lands_on(self) -> None:
+        """Bicubic interpolates: it does not merely approximate.
+
+        The kernel is 1 at zero offset and 0 at every other integer, so
+        an output pixel that falls exactly on an input pixel must carry
+        that value unchanged.  With ``align_corners=True`` a 5 -> 9
+        resample puts every even output on an input, which pins the tap
+        alignment: an off-by-one in the index arithmetic moves the whole
+        stencil and this stops holding.
+        """
+        x = lucid.tensor([[[[0.0, 5.0, -2.0, 7.0, 1.0]]]])
+        up = F.interpolate(x, size=(1, 9), mode="bicubic", align_corners=True)
+        row = up.reshape(-1)
+        for source, target in enumerate(range(0, 9, 2)):
+            assert (
+                abs(float(row[target].item()) - float(x.reshape(-1)[source].item()))
+                < 1e-5
+            )
+
+    def test_it_overshoots_where_nearest_clamps(self) -> None:
+        """Bicubic is allowed to leave the input's range — that is the filter.
+
+        Normalising or clipping the weights would make it a different
+        kernel, and one the reference weights were not trained against.
+        A step edge is where it shows.
+        """
+        step = lucid.tensor([[[[0.0, 0.0, 0.0, 1.0, 1.0, 1.0]]]])
+        out = F.interpolate(step, size=(1, 24), mode="bicubic")
+        assert float(out.min().item()) < -1e-3 or float(out.max().item()) > 1.001
+
+    def test_the_kernel_is_the_A_minus_three_quarters_one(self) -> None:
+        """Which cubic, not merely "a cubic".
+
+        Both ``A = -0.75`` (what the reference vision stacks use) and
+        ``A = -0.5`` (Keys' original) sum their taps to one, so a
+        constant field and the interpolating property hold for either.
+        They differ in how far they undershoot at an edge, which is the
+        only thing that separates them — and the trained weights were
+        fitted against the first.
+        """
+        impulse = lucid.tensor([[[[0.0, 1.0, 0.0, 0.0]]]])
+        out = F.interpolate(impulse, size=(1, 8), mode="bicubic")
+        row = out.reshape(-1)
+        # A = -0.75 undershoots to -0.105469 here; A = -0.5 to -0.070312.
+        assert abs(float(row[0].item()) - (-0.10546875)) < 1e-6
+        assert abs(float(row[2].item()) - 0.87890625) < 1e-6
+
+    def test_the_gradient_reaches_the_input(self) -> None:
+        x = lucid.randn((1, 2, 4, 5), requires_grad=True)
+        F.interpolate(x, size=(9, 11), mode="bicubic").sum().backward()
+        assert x.grad is not None
+        assert tuple(x.grad.shape) == (1, 2, 4, 5)
+
+
 class TestGridSample:
     """Regression guard — the Python wrapper once dropped mode/padding_mode
     and passed align_corners into the mode slot, silently turning every

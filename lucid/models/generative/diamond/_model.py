@@ -28,6 +28,7 @@ from typing import Callable, ClassVar, cast, override
 
 import lucid
 import lucid.nn as nn
+import lucid.nn.init as init
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
@@ -148,13 +149,28 @@ class _SelfAttention2d(nn.Module):
         self.norm = _GroupNorm(channels)
         self.qkv_proj = nn.Conv2d(channels, channels * 3, 1)
         self.out_proj = nn.Conv2d(channels, channels, 1)
+        # Zero-init, so an attention block starts as exactly its group
+        # norm and contributes nothing until it has learnt to.  It is
+        # also what makes the residual's source observable: at init the
+        # block must return norm(x), never x.
+        init.zeros_(self.out_proj.weight)
+        if self.out_proj.bias is not None:
+            init.zeros_(self.out_proj.bias)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """Attend over the spatial positions of ``(B, C, H, W)``."""
         batch, channels = int(x.shape[0]), int(x.shape[1])
         height, width = int(x.shape[2]), int(x.shape[3])
-        qkv = cast(Tensor, self.qkv_proj(cast(Tensor, self.norm(x))))
+        # The residual leaves from the *normalised* stream, not the raw
+        # input — the released block reassigns ``x = norm(x)`` before
+        # using it.  ``out_proj`` is zero-init, so at initialisation an
+        # attention block is exactly its group norm, and the trained
+        # weights are fitted to a stream that gets renormalised here.
+        # Adding to raw ``x`` instead leaves the denoiser blind to its
+        # image input: F_theta pins at a constant for every sigma.
+        normed = cast(Tensor, self.norm(x))
+        qkv = cast(Tensor, self.qkv_proj(normed))
         qkv = qkv.reshape(batch, 3, self.heads, channels // self.heads, height * width)
         query = qkv[:, 0].permute(0, 1, 3, 2)
         key = qkv[:, 1].permute(0, 1, 3, 2)
@@ -163,7 +179,33 @@ class _SelfAttention2d(nn.Module):
         scores = lucid.softmax(query @ key.permute(0, 1, 3, 2) * scale, dim=-1)
         out = (scores @ value).permute(0, 1, 3, 2)
         out = out.reshape(batch, channels, height, width)
-        return x + cast(Tensor, self.out_proj(out))
+        return normed + cast(Tensor, self.out_proj(out))
+
+
+def _quantize(x: Tensor) -> Tensor:
+    """Clamp to ``[-1, 1]`` and round-trip through 8 bits.
+
+    Every frame the released sampler feeds back into itself has been
+    through this.  A rollout is autoregressive, so a denoised frame
+    becomes conditioning for the next one — and the network was only
+    ever conditioned on frames that came out of a byte.  Letting the
+    estimate keep its full float range hands it inputs it never saw.
+
+    Truncation rather than rounding, which is what casting to a byte
+    does in the released code.
+
+    Parameters
+    ----------
+    x : Tensor
+        The denoised estimate.
+
+    Returns
+    -------
+    Tensor
+        The same shape, on the 256-value grid of ``[-1, 1]``.
+    """
+    clamped = lucid.clip(x, -1.0, 1.0)
+    return lucid.floor((clamped + 1.0) / 2.0 * 255.0) / 255.0 * 2.0 - 1.0
 
 
 class _ResBlock(nn.Module):
@@ -208,6 +250,9 @@ class _ResBlock(nn.Module):
         self.conv1 = nn.Conv2d(in_channels, out_channels, 3, stride=1, padding=1)
         self.norm2 = _AdaGroupNorm(out_channels, cond_dim)
         self.conv2 = nn.Conv2d(out_channels, out_channels, 3, stride=1, padding=1)
+        # The second convolution of a residual block starts at zero too,
+        # so the block is the identity on its skip at initialisation.
+        init.zeros_(self.conv2.weight)
         self.attn: nn.Module | None = (
             _SelfAttention2d(out_channels, head_dim) if attention else None
         )
@@ -264,6 +309,7 @@ class _Downsample(nn.Module):
         """
         super().__init__()
         self.conv = nn.Conv2d(channels, channels, 3, stride=2, padding=1)
+        init.orthogonal_(self.conv.weight)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -299,9 +345,16 @@ class _Upsample(nn.Module):
         self.conv = nn.Conv2d(channels, channels, 3, stride=1, padding=1)
 
     @override
-    def forward(self, x: Tensor, size: tuple[int, int]) -> Tensor:  # type: ignore[override]
-        """Resize ``(B, C, H, W)`` to ``size``, then convolve."""
-        up = F.interpolate(x, size=size, mode="nearest")
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        """Double ``(B, C, H, W)`` by nearest sampling, then convolve.
+
+        A plain factor of two, not a resize onto the skip's size: the
+        U-Net pads its input up to a multiple of the total stride, so
+        every resolution halves and doubles exactly and the two always
+        meet.  Resizing to the skip instead lands on pixel alignments
+        the network never saw in training.
+        """
+        up = F.interpolate(x, scale_factor=2.0, mode="nearest")
         return cast(Tensor, self.conv(up))
 
 
@@ -444,6 +497,17 @@ class _UNet(nn.Module):
         and they only do because each decoder resolution has one block
         more than its encoder counterpart.
         """
+        # Pad up to a multiple of the total stride so every resolution
+        # halves and doubles exactly, then crop back.  30 becomes 32
+        # here; without it a decoder stage has to resize onto its skip,
+        # which puts the features on a grid training never produced.
+        height, width = int(x.shape[2]), int(x.shape[3])
+        stride = 2 ** (len(self.d_blocks) - 1)
+        pad_h = -height % stride
+        pad_w = -width % stride
+        if pad_h or pad_w:
+            x = F.pad(x, (0, pad_w, 0, pad_h))
+
         skips: list[Tensor] = [x]
         for stage, blocks in enumerate(self.d_blocks):
             if stage > 0:
@@ -457,12 +521,12 @@ class _UNet(nn.Module):
 
         for index, blocks in enumerate(self.u_blocks):
             if index > 0:
-                target = skips[-1]
-                resize = cast(_UpsampleCall, self.upsamples[index])
-                x = resize(x, (int(target.shape[2]), int(target.shape[3])))
+                x = cast(Tensor, self.upsamples[index](x))
             for block in cast(_ResBlocks, blocks).each():
                 x = lucid.cat([x, skips.pop()], dim=1)
                 x = cast(Tensor, block(x, cond))
+        if pad_h or pad_w:
+            x = x[..., :height, :width]
         return x
 
 
@@ -524,6 +588,9 @@ class _Denoiser(nn.Module):
         self.conv_out = nn.Conv2d(
             config.unet_channels[0], config.out_channels, 3, padding=1
         )
+        # The output convolution starts at zero, so an untrained model
+        # predicts the skip exactly rather than noise.
+        init.zeros_(self.conv_out.weight)
 
     def conditioning(
         self, c_noise: Tensor, actions: Tensor, cond_noise: Tensor | None = None
@@ -937,11 +1004,10 @@ _ActorCriticCall = Callable[
     [Tensor, tuple[Tensor, Tensor] | None],
     tuple[Tensor, Tensor, tuple[Tensor, Tensor]],
 ]
+
+
 # The decoder's upsample takes a target size rather than a second tensor,
 # for the same reason: a stride-2 encoder does not halve cleanly.
-_UpsampleCall = Callable[[Tensor, tuple[int, int]], Tensor]
-
-
 def _side(config: DIAMONDConfig) -> int:
     """Frame side length, whichever way ``sample_size`` was written."""
     return (
@@ -1138,6 +1204,10 @@ class DIAMONDModel(PretrainedModel):
         Reference: Alonso et al., arXiv:2405.12399, Appendix C,
         equations 9-12, with :math:`\sigma_{\text{data}} = 0.5`.
         """
+        # The offset noise folds into sigma *before* anything else, so a
+        # step at sigma=2e-3 is really operating at 0.1 for CS:GO.  Every
+        # preconditioner, c_noise included, sees the folded level.
+        sigma = (sigma**2 + self.config.sigma_offset_noise**2).sqrt()
         data = self.config.sigma_data
         total = (sigma**2 + data**2).sqrt()
         c_in = (1.0 / total).reshape(-1, 1, 1, 1)
@@ -1153,6 +1223,8 @@ class DIAMONDModel(PretrainedModel):
         frames: Tensor,
         actions: Tensor,
         cond_sigma: Tensor | None = None,
+        *,
+        quantize: bool = True,
     ) -> Tensor:
         r"""Apply :math:`D_\theta` — the preconditioned denoiser.
 
@@ -1170,6 +1242,10 @@ class DIAMONDModel(PretrainedModel):
             ``(B,)`` level to noise the *history* at.  Only meaningful
             when the configuration asks for it; ``None`` leaves the
             history clean, which is what Atari does.
+        quantize : bool, default=True, keyword-only
+            Put the estimate back on the 8-bit grid, as the released
+            sampler does.  Training passes ``False``: the quantiser has
+            no gradient, and the loss belongs on the estimate anyway.
 
         Returns
         -------
@@ -1182,10 +1258,16 @@ class DIAMONDModel(PretrainedModel):
                 -1, 1, 1, 1, 1
             )
         history = frames.reshape(int(frames.shape[0]), -1, *frames.shape[3:])
-        stacked = lucid.cat([noised * c_in, history], dim=1)
+        # ``conv_in`` reads the history first, oldest to newest, and the
+        # noised frame last.  The checkpoint says so: its per-input-channel
+        # weight norms are 0.436, 0.437, 0.520, 0.676 across the four
+        # history frames and 2.365 for the noised one.  The history is
+        # rescaled by sigma_data, the noised frame by c_in.
+        stacked = lucid.cat([history / self.config.sigma_data, noised * c_in], dim=1)
         level = None if cond_sigma is None else lucid.log(cond_sigma) * 0.25
         cond = self.denoiser.conditioning(c_noise, actions, level)
-        return c_skip * noised + c_out * cast(Tensor, self.denoiser(stacked, cond))
+        out = c_skip * noised + c_out * cast(Tensor, self.denoiser(stacked, cond))
+        return _quantize(out) if quantize else out
 
     def sigma_schedule(self, steps: int, device: str) -> Tensor:
         r"""The noise levels an Euler sampler walks down.
@@ -1227,6 +1309,8 @@ class DIAMONDModel(PretrainedModel):
         sigma: Tensor,
         low_res: Tensor,
         previous: Tensor,
+        *,
+        quantize: bool = True,
     ) -> Tensor:
         r"""Apply the upsampler's :math:`D_\theta`.
 
@@ -1260,10 +1344,20 @@ class DIAMONDModel(PretrainedModel):
             )
         c_in, c_out, c_skip, c_noise = self.preconditioners(sigma)
         size = (int(noised.shape[2]), int(noised.shape[3]))
-        scaled = F.interpolate(low_res, size=size, mode="nearest")
-        stacked = lucid.cat([noised * c_in, scaled, previous], dim=1)
+        # Bicubic, because that is how the training pairs were built:
+        # the released loss upscales the low-resolution frame with
+        # ``mode="bicubic"`` before handing it to the upsampler.  Nearest
+        # gives the network a blockier conditioning image than it ever saw.
+        scaled = F.interpolate(low_res, size=size, mode="bicubic")
+        # Same order as the denoiser: conditioning images first — the
+        # previous full-resolution frame, then the low-resolution one
+        # scaled up — each divided by sigma_data, and the noised frame
+        # last, scaled by c_in.
+        data = self.config.sigma_data
+        stacked = lucid.cat([previous / data, scaled / data, noised * c_in], dim=1)
         cond = self.upsampler.conditioning(c_noise)
-        return c_skip * noised + c_out * cast(Tensor, self.upsampler(stacked, cond))
+        out = c_skip * noised + c_out * cast(Tensor, self.upsampler(stacked, cond))
+        return _quantize(out) if quantize else out
 
     def upsample_frame(
         self,
@@ -1339,15 +1433,14 @@ class DIAMONDModel(PretrainedModel):
             # The first frame has no predecessor; its own upscaling is the
             # closest thing to one, and is what the conditioning expects
             # rather than a zero field the model never saw in training.
-            previous = F.interpolate(low_res, size=size, mode="nearest")
+            previous = F.interpolate(low_res, size=size, mode="bicubic")
 
         schedule = self.sigma_schedule(steps, device)
-        first = float(schedule[0].item())
         x = (
             lucid.randn((batch, self.config.in_channels, *size), device=device)
             if noise is None
             else noise
-        ) * first
+        )
         for index in range(steps):
             sigma = schedule[index]
             level = sigma + lucid.zeros((batch,), device=device)
@@ -1362,6 +1455,7 @@ class DIAMONDModel(PretrainedModel):
         *,
         steps: int | None = None,
         noise: Tensor | None = None,
+        cond_sigma: float | None = None,
     ) -> Tensor:
         r"""Sample the next frame with Euler's method.
 
@@ -1373,6 +1467,10 @@ class DIAMONDModel(PretrainedModel):
             ``(B, L)`` indices, or ``(B, L, num_actions)`` multi-hot.
         steps : int or None, optional
             Denoising steps; defaults to the configured 3.
+        cond_sigma : float or None, optional, keyword-only
+            Noise the history at this level, and tell the network so.
+            The released CS:GO sampler uses ``0.005``; ``None`` leaves
+            the history clean, which is what Atari does.
         noise : Tensor or None, optional
             Starting sample, drawn when absent.
 
@@ -1394,19 +1492,24 @@ class DIAMONDModel(PretrainedModel):
         device = frames.device.type
         schedule = self.sigma_schedule(steps, device)
 
-        first = float(schedule[0].item())
+        # Unit variance, not sigma_max: the released sampler starts the
+        # walk at randn() and lets the first Euler step do the scaling.
+        # ``noise`` is therefore used as given, which is what makes it
+        # usable for reproducing a rollout.
         x = (
             lucid.randn(
                 (batch, self.config.in_channels, *frames.shape[3:]), device=device
             )
-            * first
             if noise is None
-            else noise * first
+            else noise
         )
+        level_cond = None
+        if cond_sigma is not None:
+            level_cond = cond_sigma + lucid.zeros((batch,), device=device)
         for index in range(steps):
             sigma = schedule[index]
             level = sigma + lucid.zeros((batch,), device=device)
-            denoised = self.denoise(x, level, frames, actions)
+            denoised = self.denoise(x, level, frames, actions, level_cond)
             derivative = (x - denoised) / sigma
             x = x + derivative * (schedule[index + 1] - sigma)
         return x
@@ -1478,7 +1581,11 @@ class DIAMONDModel(PretrainedModel):
                 lucid.randn((batch,), device=device) * self.config.p_std
                 + self.config.p_mean
             )
-        prediction = self.denoise(noised, sigma, frames, actions, cond_sigma)
+        # No quantiser on the training path: it has no gradient, and the
+        # released code computes its loss on the unwrapped estimate too.
+        prediction = self.denoise(
+            noised, sigma, frames, actions, cond_sigma, quantize=False
+        )
         loss = ((prediction - next_frame) ** 2).mean()
         return DIAMONDOutput(loss=loss, prediction=prediction, sigma=sigma)
 

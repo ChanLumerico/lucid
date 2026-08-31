@@ -13,11 +13,14 @@ import math
 import pytest
 
 import lucid
+import lucid.nn.init as init
+import lucid.nn as nn
 from lucid.models.generative.diamond import (
     DIAMONDConfig,
     DIAMONDForWorldModeling,
     DIAMONDModel,
 )
+from lucid.models.generative.diamond._model import _SelfAttention2d
 
 
 def _tiny(**overrides: object) -> DIAMONDConfig:
@@ -56,6 +59,124 @@ def _actions(batch: int = 2, config: DIAMONDConfig | None = None) -> lucid.Tenso
     ) + lucid.ones((batch, config.conditioning_frames), dtype=lucid.int64)
 
 
+def _wake(model: DIAMONDModel) -> DIAMONDModel:
+    """Give the zero-initialised output layers something to say.
+
+    The released model zero-inits ``conv_out`` and every residual
+    block's second convolution, so an untrained denoiser returns its
+    skip exactly and nothing downstream of the conditioning is
+    observable.  That is correct at initialisation and useless for
+    testing wiring, so these tests randomise the zeroed layers — which
+    is the state any trained checkpoint is in.
+    """
+    for name, param in model.named_parameters():
+        if name.endswith("conv_out.weight") or name.endswith("conv2.weight"):
+            init.normal_(param, 0.0, 0.1)
+    return model
+
+
+class TestReleaseGeometry:
+    """The three places a faithful port is easy to get wrong silently.
+
+    None of these change a shape, so a wrong one produces a model that
+    loads its checkpoint, runs, and emits plausible-looking garbage.
+    """
+
+    def test_attention_returns_its_normalised_input_at_init(self) -> None:
+        """The residual leaves from ``norm(x)``, not from ``x``.
+
+        The released block reassigns ``x = self.norm(x)`` before using
+        it, and zero-inits ``out_proj`` — so at initialisation an
+        attention block *is* its group norm.  Adding to the raw input
+        instead leaves the trained denoiser blind to its image input:
+        the network output pins at a constant for every sigma and the
+        world model emits black frames.
+        """
+        block = _SelfAttention2d(8).eval()
+        x = lucid.randn((2, 8, 6, 6))
+        with lucid.no_grad():
+            out = block(x)
+            normed = block.norm(x)
+        assert float((out - normed).abs().max().item()) < 1e-5
+        # And it is genuinely not the input, or the assertion above
+        # would pass for the wrong reason.
+        assert float((out - x).abs().max().item()) > 1e-3
+
+    def test_a_size_that_is_not_a_multiple_of_the_stride_survives(self) -> None:
+        """Four stages give a stride of eight, and 30 is not a multiple of it.
+
+        The released U-Net pads its input up to a multiple of the total
+        stride and crops the result back, so every resolution halves and
+        doubles exactly.  30 becomes 32 and returns as 30.  Resizing
+        each decoder stage onto its skip instead — which is what Lucid
+        did — gets the shape right and puts the features on a pixel grid
+        the network never produced in training.
+
+        The two-stage configs used elsewhere in this file cannot see
+        this: 30 and 56 are both already multiples of two.
+        """
+        config = _tiny(
+            sample_size=(30, 56),
+            unet_channels=(4, 4, 4, 4),
+            unet_layers=(1, 1, 1, 1),
+            attn_depths=(0, 0, 0, 0),
+        )
+        model = DIAMONDModel(config).eval()
+        frames = lucid.randn((1, config.conditioning_frames, 3, 30, 56))
+        actions = lucid.zeros((1, config.conditioning_frames), dtype=lucid.int64)
+        with lucid.no_grad():
+            out = model.denoise(
+                lucid.randn((1, 3, 30, 56)), lucid.tensor([1.0]), frames, actions
+            )
+        assert out.shape == (1, 3, 30, 56)
+        assert bool(out.isfinite().all().item())
+
+    def test_conv_in_reads_the_history_first_and_the_noised_frame_last(
+        self,
+    ) -> None:
+        """Channel order and the two different rescalings.
+
+        The checkpoint settles it: ``conv_in``'s per-input-channel weight
+        norms run 0.436, 0.437, 0.520, 0.676 across the four history
+        frames and 2.365 for the noised one.  History first, oldest to
+        newest, noised last and weighted most.  The history enters
+        divided by ``sigma_data`` and the noised frame scaled by
+        ``c_in`` — swap either and the upsampler returns colour noise.
+        """
+        config = _tiny()
+        model = DIAMONDModel(config).eval()
+        seen: list[lucid.Tensor] = []
+
+        class _Capture(nn.Module):
+            def conditioning(
+                self, c_noise: lucid.Tensor, *rest: object
+            ) -> lucid.Tensor:
+                return lucid.zeros((int(c_noise.shape[0]), config.cond_dim))
+
+            def forward(self, x: lucid.Tensor, cond: lucid.Tensor) -> lucid.Tensor:
+                seen.append(x)
+                return lucid.zeros((int(x.shape[0]), 3, 16, 16))
+
+        model.denoiser = _Capture()  # type: ignore[assignment]
+        frames = lucid.ones((2, config.conditioning_frames, 3, 16, 16)) * 0.4
+        noised = lucid.ones((2, 3, 16, 16)) * 0.9
+        sigma = lucid.tensor([1.0, 1.0])
+        with lucid.no_grad():
+            model.denoise(noised, sigma, frames, _actions(config=config))
+
+        stacked = seen[0]
+        history_width = config.conditioning_frames * 3
+        assert int(stacked.shape[1]) == history_width + 3
+
+        c_in, _out, _skip, _n = model.preconditioners(sigma)
+        expected_history = 0.4 / config.sigma_data
+        expected_noised = 0.9 * float(c_in.reshape(-1)[0].item())
+        head = stacked[:, :history_width]
+        tail = stacked[:, history_width:]
+        assert float((head - expected_history).abs().max().item()) < 1e-5
+        assert float((tail - expected_noised).abs().max().item()) < 1e-5
+
+
 class TestPreconditioning:
     def test_the_four_scalings_are_edm_s(self) -> None:
         r"""Appendix C, equations 9-12, at :math:`\sigma_{data} = 0.5`.
@@ -66,7 +187,10 @@ class TestPreconditioning:
         :math:`c_{out}`, leaves a model that still trains and still
         denoises, just not the paper's.
         """
-        model = DIAMONDModel(_tiny())
+        # sigma_offset_noise=0 isolates the EDM formulas; the released
+        # configurations fold a non-zero offset into sigma first, which
+        # the next test pins separately.
+        model = DIAMONDModel(_tiny(sigma_offset_noise=0.0))
         sigma = lucid.tensor([0.1, 1.0, 10.0])
         c_in, c_out, c_skip, c_noise = model.preconditioners(sigma)
         data = 0.5
@@ -91,7 +215,7 @@ class TestPreconditioning:
         for the clean frame (skip ~ 0).  A constant skip — DDPM's
         parameterisation — is the thing the paper shows drifting.
         """
-        model = DIAMONDModel(_tiny())
+        model = DIAMONDModel(_tiny(sigma_offset_noise=0.0))
         _in, _out, low, _n = model.preconditioners(lucid.tensor([1e-4]))
         _in, _out, high, _n = model.preconditioners(lucid.tensor([1e4]))
         assert float(low.reshape(-1)[0].item()) > 0.999
@@ -104,14 +228,44 @@ class TestPreconditioning:
         the wrapper rather than of training: if the skip and the network
         branch were combined the other way round, an untrained model
         would return noise here instead.
+
+        It needs ``sigma_offset_noise=0``.  With an offset the level
+        never reaches zero — that is the point of the next test — so the
+        identity is not the property being checked there.  Quantisation
+        is off for the same reason: it moves the output by up to one
+        step of 255, which would swamp the tolerance.
         """
-        config = _tiny()
+        config = _tiny(sigma_offset_noise=0.0)
         model = DIAMONDModel(config).eval()
         frames, actions = _history(config=config), _actions(config=config)
         clean = lucid.randn((2, 3, 16, 16))
         with lucid.no_grad():
-            out = model.denoise(clean, lucid.tensor([1e-8, 1e-8]), frames, actions)
+            out = model.denoise(
+                clean,
+                lucid.tensor([1e-8, 1e-8]),
+                frames,
+                actions,
+                quantize=False,
+            )
         assert float((out - clean).abs().max().item()) < 1e-3
+
+    def test_the_offset_noise_folds_into_sigma_before_anything_else(self) -> None:
+        r"""A step at :math:`\sigma \to 0` really runs at the offset level.
+
+        The released code takes
+        :math:`\sqrt{\sigma^2 + \sigma_{\text{offset}}^2}` first and
+        hands *that* to every preconditioner, ``c_noise`` included.  Skip
+        it and a CS:GO step at ``2e-3`` is told it is at ``2e-3`` when
+        the frames it was trained on carry ``0.1``.
+        """
+        offset = 0.1
+        model = DIAMONDModel(_tiny(sigma_offset_noise=offset))
+        _in, _out, skip, noise = model.preconditioners(lucid.tensor([1e-8]))
+
+        data = 0.5
+        expected_skip = data**2 / (data**2 + offset**2)
+        assert abs(float(skip.reshape(-1)[0].item()) - expected_skip) < 1e-6
+        assert abs(float(noise[0].item()) - 0.25 * math.log(offset)) < 1e-5
 
 
 class TestNoiseDistribution:
@@ -145,7 +299,7 @@ class TestConditioning:
         would be useless.
         """
         config = _tiny()
-        model = DIAMONDModel(config).eval()
+        model = _wake(DIAMONDModel(config).eval())
         actions = _actions(config=config)
         noised = lucid.randn((2, 3, 16, 16))
         sigma = lucid.tensor([1.0, 1.0])
@@ -163,7 +317,7 @@ class TestConditioning:
         noise.
         """
         config = _tiny()
-        model = DIAMONDModel(config).eval()
+        model = _wake(DIAMONDModel(config).eval())
         frames = _history(config=config)
         noised = lucid.randn((2, 3, 16, 16))
         sigma = lucid.tensor([1.0, 1.0])
@@ -177,7 +331,7 @@ class TestConditioning:
     def test_the_noise_level_reaches_the_prediction(self) -> None:
         """The diffusion time is conditioning too, through the same path."""
         config = _tiny()
-        model = DIAMONDModel(config).eval()
+        model = _wake(DIAMONDModel(config).eval())
         frames, actions = _history(config=config), _actions(config=config)
         noised = lucid.randn((2, 3, 16, 16))
         with lucid.no_grad():
