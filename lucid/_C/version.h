@@ -77,7 +77,7 @@
 // optional pre-release tag (``-dev``, ``-rc1`` …) marks unstable
 // builds; release tarballs strip the tag.  Returned verbatim by
 // :func:`version_string`.
-#define LUCID_VERSION_STRING "0.9.0-dev"
+#define LUCID_VERSION_STRING "0.10.0"
 
 // Monotonically increasing ABI generation counter.  Bump this whenever the
 // C++ binary interface changes in a way that makes old .so / .dylib objects

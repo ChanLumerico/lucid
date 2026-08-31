@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embedding existed and nothing passed it a level; it now noises the
   history during training and tells the network at what level.
 
+- **The engine reported the wrong version of itself.** `LUCID_VERSION_STRING`
+  still read `0.9.0-dev` after the release bumped `LUCID_VERSION_MINOR` from
+  9 to 10, so `lucid._C.engine.__version__` and the engine's own
+  `version_string()` contradicted the macros beside them. It reads `0.10.0`
+  now.
+
 - `clip` and `relu6` disagreed with themselves at the bound: the gradient
   came out differently depending on whether it was asked for by
   `backward()` or by `autograd.grad(create_graph=True)`. The two ops want
