@@ -1726,6 +1726,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.diamond._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.dit._model"
     },
     {
@@ -2312,6 +2316,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.diamond._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.dit._model"
     },
     {
@@ -2563,6 +2571,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond._pretrained"
     },
     {
       "kind": "module",
@@ -2971,6 +2983,86 @@
     {
       "kind": "module",
       "module": "lucid.models.weights"
+    }
+  ],
+  "lucid.models.generative.diamond": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.diamond._config.DIAMONDConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond._pretrained"
+    }
+  ],
+  "lucid.models.generative.diamond._model.DIAMONDBehaviorOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond"
+    }
+  ],
+  "lucid.models.generative.diamond._model.DIAMONDForWorldModeling": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond._pretrained"
+    }
+  ],
+  "lucid.models.generative.diamond._model.DIAMONDModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond._pretrained"
+    }
+  ],
+  "lucid.models.generative.diamond._model.DIAMONDOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond"
+    }
+  ],
+  "lucid.models.generative.diamond._pretrained.diamond": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond"
+    }
+  ],
+  "lucid.models.generative.diamond._pretrained.diamond_csgo": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond"
+    }
+  ],
+  "lucid.models.generative.diamond._pretrained.diamond_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond"
+    }
+  ],
+  "lucid.models.generative.diamond._weights.DIAMONDWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond._pretrained"
     }
   ],
   "lucid.models.generative.dit": [
@@ -10368,6 +10460,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.diamond._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.dit._model"
     },
     {
@@ -10791,6 +10887,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond._model"
     },
     {
       "kind": "module",
@@ -15676,6 +15776,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.diamond._weights"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.dit._weights"
     },
     {
@@ -16703,6 +16807,14 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.ddpm._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.diamond._weights"
     },
     {
       "kind": "module",

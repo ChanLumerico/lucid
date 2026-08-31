@@ -1,0 +1,3436 @@
+{
+  "slug": "lucid.models.generative.diamond",
+  "name": "diamond",
+  "path": "lucid.models.generative.diamond",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/__init__.py#L1",
+  "members": [
+    {
+      "name": "DIAMONDConfig",
+      "path": "lucid.models.generative.diamond._config.DIAMONDConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "GenerativeModelConfig"
+      ],
+      "labels": [],
+      "signature": "DIAMONDConfig(sample_size: int | tuple[int, int] = 64, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_actions: int = 18, conditioning_frames: int = 4, unet_channels: tuple[int, ...] = (64, 64, 64, 64), unet_layers: tuple[int, ...] = (2, 2, 2, 2), cond_dim: int = 256, attn_depths: tuple[int, ...] | None = None, with_agent: bool = True, noise_previous_obs: bool = False, upsampler_channels: tuple[int, ...] | None = None, upsampler_layers: tuple[int, ...] | None = None, upsampler_attn_depths: tuple[int, ...] | None = None, upsampling_factor: int = 1, sigma_data: float = 0.5, p_mean: float = -0.4, p_std: float = 1.2, sigma_offset_noise: float = 0.3, attention_head_dim: int = 8, denoise_steps: int = 3, reward_channels: tuple[int, ...] = (32, 32, 32, 32), reward_layers: tuple[int, ...] = (2, 2, 2, 2), reward_cond_dim: int = 128, reward_frames: int = 2, reward_lstm_dim: int = 512, actor_channels: tuple[int, ...] = (32, 32, 64, 64), actor_layers: tuple[int, ...] = (1, 1, 1, 1), actor_lstm_dim: int = 512, horizon: int = 15, gamma: float = 0.985, lambda_: float = 0.95, entropy_weight: float = 0.001, burn_in: int = 4)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_config.py#L27",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "frame_shape",
+          "path": "lucid.models.generative.diamond._config.DIAMONDConfig.frame_shape",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "frame_shape: tuple[int, int]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_config.py#L272",
+          "summary": "Frame height and width, whichever way `sample_size` was written.",
+          "extended": "Atari's frames are square and CS:GO's are not — 150 by 280 —\nso nothing downstream may assume one number.",
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[int, int]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "denoiser_in_channels",
+          "path": "lucid.models.generative.diamond._config.DIAMONDConfig.denoiser_in_channels",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "denoiser_in_channels: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_config.py#L283",
+          "summary": "Channels the denoiser's first convolution reads.",
+          "extended": "The noised next frame plus $L$ clean past frames, stacked.",
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.diamond._config.DIAMONDConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample_size: int | tuple[int, int] = 64, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_actions: int = 18, conditioning_frames: int = 4, unet_channels: tuple[int, ...] = (64, 64, 64, 64), unet_layers: tuple[int, ...] = (2, 2, 2, 2), cond_dim: int = 256, attn_depths: tuple[int, ...] | None = None, with_agent: bool = True, noise_previous_obs: bool = False, upsampler_channels: tuple[int, ...] | None = None, upsampler_layers: tuple[int, ...] | None = None, upsampler_attn_depths: tuple[int, ...] | None = None, upsampling_factor: int = 1, sigma_data: float = 0.5, p_mean: float = -0.4, p_std: float = 1.2, sigma_offset_noise: float = 0.3, attention_head_dim: int = 8, denoise_steps: int = 3, reward_channels: tuple[int, ...] = (32, 32, 32, 32), reward_layers: tuple[int, ...] = (2, 2, 2, 2), reward_cond_dim: int = 128, reward_frames: int = 2, reward_lstm_dim: int = 512, actor_channels: tuple[int, ...] = (32, 32, 64, 64), actor_layers: tuple[int, ...] = (1, 1, 1, 1), actor_lstm_dim: int = 512, horizon: int = 15, gamma: float = 0.985, lambda_: float = 0.95, entropy_weight: float = 0.001, burn_in: int = 4)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_config.py#L1",
+          "subcategory": "config",
+          "summary": "Initialise the layer.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "channels",
+              "annotation": "int",
+              "description": "Channels being normalised.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen configuration for the DIAMOND family.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "sample_size",
+          "annotation": "int or tuple of int",
+          "description": "Frame resolution the world model works at.  Atari observations\nare resized to `64x64` before anything else touches them.",
+          "default": "64"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Channels per frame.",
+          "default": "3"
+        },
+        {
+          "name": "out_channels",
+          "annotation": "int",
+          "description": "Channels the denoiser emits — one frame, so the same as\n`in_channels`.",
+          "default": "3"
+        },
+        {
+          "name": "act_fn",
+          "annotation": "GenerativeActivation",
+          "description": "Activation used inside the trunk.  Most modern image\ngenerators default to `\"silu\"`.",
+          "default": "'silu'",
+          "inherited_from": "GenerativeModelConfig"
+        },
+        {
+          "name": "num_actions",
+          "annotation": "int",
+          "description": "Size of the discrete action set.  Atari's full set is 18; a game\nexposing fewer simply leaves the tail unused.",
+          "default": "18"
+        },
+        {
+          "name": "conditioning_frames",
+          "annotation": "int",
+          "description": "$L$, how many past frames and actions the denoiser sees.\nThe 3D-environment experiments in the paper's appendix use 6.",
+          "default": "4"
+        },
+        {
+          "name": "unet_channels",
+          "annotation": "tuple of int",
+          "description": "Residual-block channels per U-Net resolution.",
+          "default": "(64, 64, 64, 64)"
+        },
+        {
+          "name": "unet_layers",
+          "annotation": "tuple of int",
+          "description": "Residual blocks per resolution.",
+          "default": "(2, 2, 2, 2)"
+        },
+        {
+          "name": "cond_dim",
+          "annotation": "int",
+          "description": "Width of the conditioning vector the adaptive group norms are\nregressed from.",
+          "default": "256"
+        },
+        {
+          "name": "attn_depths",
+          "annotation": "tuple of int or None",
+          "description": "Whether each U-Net resolution attends.  `None` means none of\nthem do, which is Atari's setting and the common case; it is\nexpanded to match `unet_channels` rather than written out, so\na narrower model does not have to restate it.  All zero for Atari, where\nonly the middle blocks do; the CS:GO world model turns it on at\nits two deepest resolutions, which is where a 3D scene needs to\nrelate parts of the frame that convolutions cannot reach.",
+          "default": "None"
+        },
+        {
+          "name": "with_agent",
+          "annotation": "bool",
+          "description": "Whether to build the reward/termination model and the\nactor-critic.  The released CS:GO configuration sets both to\n`null`: that experiment trains a world model on static data\nwith no reinforcement learning at all, so an agent would be\nparameters nothing ever updates.",
+          "default": "True"
+        },
+        {
+          "name": "noise_previous_obs",
+          "annotation": "bool",
+          "description": "Whether the conditioning frames are noised too.  ⚠️ Off for\nAtari, on for CS:GO — the released configs differ here and the\npaper mentions neither.  Noising the history is a form of\naugmentation against the compounding error a long autoregressive\nrollout accumulates.",
+          "default": "False"
+        },
+        {
+          "name": "upsampler_channels",
+          "annotation": "tuple of int or None",
+          "description": "When set, a second diffusion model is built that upsamples the\ndenoiser's output.  CS:GO generates at 30x56 and upsamples five\ntimes to 150x280, because diffusing at the full resolution\ndirectly costs far more for the same detail.",
+          "default": "None"
+        },
+        {
+          "name": "upsampler_layers",
+          "annotation": "tuple of int or None",
+          "description": "Blocks per resolution in that model.",
+          "default": "None"
+        },
+        {
+          "name": "upsampler_attn_depths",
+          "annotation": "tuple of int or None",
+          "description": "Which of its resolutions attend.",
+          "default": "None"
+        },
+        {
+          "name": "upsampling_factor",
+          "annotation": "int",
+          "description": "How much the upsampler magnifies.",
+          "default": "1"
+        },
+        {
+          "name": "sigma_data",
+          "annotation": "float",
+          "description": "$\\sigma_{\\text{data}}$, the data distribution's standard\ndeviation, which sets where the preconditioners hand over\nbetween predicting noise and predicting the frame.",
+          "default": "0.5"
+        },
+        {
+          "name": "p_mean",
+          "annotation": "float",
+          "description": "Mean of the log-normal the training noise level is drawn from.",
+          "default": "-0.4"
+        },
+        {
+          "name": "p_std",
+          "annotation": "float",
+          "description": "Standard deviation of that log-normal.",
+          "default": "1.2"
+        },
+        {
+          "name": "sigma_offset_noise",
+          "annotation": "float",
+          "description": "Standard deviation of a per-channel offset added to the target\nalongside the usual noise.  ⚠️ **Not in the paper** — it appears\nonly in the released `config/agent/default.yaml`.  Offset noise\nlets the model shift a frame's overall level, which plain\nisotropic noise cannot express at any single $\\sigma$.",
+          "default": "0.3"
+        },
+        {
+          "name": "attention_head_dim",
+          "annotation": "int",
+          "description": "Channels per self-attention head in the blocks that have\nattention.  ⚠️ Also absent from the paper; taken from the\nreleased implementation.",
+          "default": "8"
+        },
+        {
+          "name": "denoise_steps",
+          "annotation": "int",
+          "description": "Denoising steps per imagined frame.  The paper's ablation is\nexplicit that 1 is cheaper and worse on multi-modal games.",
+          "default": "3"
+        },
+        {
+          "name": "reward_channels",
+          "annotation": "tuple of int",
+          "description": "Residual-block channels in the reward/termination model.",
+          "default": "(32, 32, 32, 32)"
+        },
+        {
+          "name": "reward_layers",
+          "annotation": "tuple of int",
+          "description": "Residual blocks per resolution there.",
+          "default": "(2, 2, 2, 2)"
+        },
+        {
+          "name": "reward_cond_dim",
+          "annotation": "int",
+          "description": "Conditioning width for that model's adaptive group norms.",
+          "default": "128"
+        },
+        {
+          "name": "reward_frames",
+          "annotation": "int",
+          "description": "Frames the reward/termination model reads at once.  ⚠️ The paper\nsays \"a sequence of frames and actions\"; the released encoder\ntakes **two** — the observation and the one it led to — because\na reward is a property of the transition, not of a frame.",
+          "default": "2"
+        },
+        {
+          "name": "reward_lstm_dim",
+          "annotation": "int",
+          "description": "Hidden width of its LSTM cell.",
+          "default": "512"
+        },
+        {
+          "name": "actor_channels",
+          "annotation": "tuple of int",
+          "description": "Residual-block channels in the shared actor-critic trunk.",
+          "default": "(32, 32, 64, 64)"
+        },
+        {
+          "name": "actor_layers",
+          "annotation": "tuple of int",
+          "description": "Residual blocks per resolution there.",
+          "default": "(1, 1, 1, 1)"
+        },
+        {
+          "name": "actor_lstm_dim",
+          "annotation": "int",
+          "description": "Hidden width of the actor-critic's LSTM cell.",
+          "default": "512"
+        },
+        {
+          "name": "horizon",
+          "annotation": "int",
+          "description": "$H$, the imagination horizon the agent is trained over.",
+          "default": "15"
+        },
+        {
+          "name": "gamma",
+          "annotation": "float",
+          "description": "Discount factor.",
+          "default": "0.985"
+        },
+        {
+          "name": "lambda_",
+          "annotation": "float",
+          "description": "$\\lambda$ for the returns the value network regresses to.",
+          "default": "0.95"
+        },
+        {
+          "name": "entropy_weight",
+          "annotation": "float",
+          "description": "$\\eta$, the weight on the policy's entropy bonus.",
+          "default": "0.001"
+        },
+        {
+          "name": "burn_in",
+          "annotation": "int",
+          "description": "Steps of real experience replayed to initialise the LSTM states\nbefore imagination starts.  The paper sets this to $L$.",
+          "default": "4"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.diamond import DIAMONDConfig\n>>> config = DIAMONDConfig()\n>>> config.conditioning_frames, config.denoise_steps\n(4, 3)\nThe denoiser's first convolution has to take the noised frame *and*\nthe stack of past frames, which is what makes frame stacking cheap:\n>>> config.denoiser_in_channels\n15\nThree fields here have no counterpart in the paper — they come from\nthe released configuration, which is more specific than the text:\n>>> config.sigma_offset_noise, config.reward_frames\n(0.3, 2)"
+      ],
+      "notes": [
+        "Reference: Alonso et al., *\"Diffusion for World Modeling: Visual\nDetails Matter in Atari\"*, NeurIPS, 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)).\nArchitecture values are Table 2, training values Table 3, and the\npreconditioner constants Appendix C.\n\nThe base is `GenerativeModelConfig` rather than\n`WorldModelConfig`, even though this is a world model.  That\nbase describes a *latent* one — `stoch_size`, `deter_size`,\n`free_nats`, `kl_weight` — and DIAMOND has no posterior and no\nKL to free-bit.  Inheriting them would put six fields on the\ndocumentation page that nothing in this family reads."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DIAMONDBehaviorOutput",
+      "path": "lucid.models.generative.diamond._model.DIAMONDBehaviorOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "DIAMONDBehaviorOutput(policy_loss: Tensor, value_loss: Tensor, entropy: Tensor, returns: Tensor, frames: Tensor, history: Tensor, history_actions: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L971",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.diamond._model.DIAMONDBehaviorOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(policy_loss: Tensor, value_loss: Tensor, entropy: Tensor, returns: Tensor, frames: Tensor, history: Tensor, history_actions: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Initialise the layer.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "channels",
+              "annotation": "int",
+              "description": "Channels being normalised.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What a pass of imagination returns.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "policy_loss, value_loss",
+          "annotation": "Tensor",
+          "description": "REINFORCE with a baseline, and the squared error against\n$\\lambda$-returns.  Scalars."
+        },
+        {
+          "name": "entropy",
+          "annotation": "Tensor",
+          "description": "Mean policy entropy over the imagined trajectory, before the\nweight $\\eta$ is applied.  Scalar."
+        },
+        {
+          "name": "returns",
+          "annotation": "Tensor",
+          "description": "The $\\lambda$-returns the value head regressed to,\n`(B, H)`."
+        },
+        {
+          "name": "frames",
+          "annotation": "Tensor",
+          "description": "Every frame the denoiser imagined, `(B, H, C, H_img, W_img)`."
+        },
+        {
+          "name": "history",
+          "annotation": "Tensor",
+          "description": "The conditioning the rollout ended on, `(B, L, C, H_img, W_img)`\n— what a continuation would start from.  Once the horizon\nreaches $L$ this is entirely imagined, which is the\nclearest statement of what \"training in imagination\" means."
+        },
+        {
+          "name": "history_actions",
+          "annotation": "Tensor",
+          "description": "The actions beside it, `(B, L)`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DIAMONDForWorldModeling",
+      "path": "lucid.models.generative.diamond._model.DIAMONDForWorldModeling",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WorldModelingModel"
+      ],
+      "labels": [],
+      "signature": "DIAMONDForWorldModeling(config: DIAMONDConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1323",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.diamond._model.DIAMONDForWorldModeling.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: DIAMONDConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1369",
+          "subcategory": "model",
+          "summary": "Initialise the wrapper. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "act",
+          "path": "lucid.models.generative.diamond._model.DIAMONDForWorldModeling.act",
+          "kind": "function",
+          "labels": [],
+          "signature": "act(frame: Tensor, state: tuple[Tensor, Tensor] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1375",
+          "subcategory": "model",
+          "summary": "Sample an action from the policy.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "frame",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)`.",
+              "default": null
+            },
+            {
+              "name": "state",
+              "annotation": "tuple of Tensor or None",
+              "description": "Carried actor-critic LSTM state.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(B,)` action indices."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.diamond._model.DIAMONDForWorldModeling.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(frames: Tensor, actions: Tensor, horizon: int | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1395",
+          "subcategory": "model",
+          "summary": "Imagine a trajectory and score the policy on it.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "frames",
+              "annotation": "Tensor",
+              "description": "`(B, L, C, H, W)` real frames the rollout starts from.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "`(B, L)` the actions that produced them.",
+              "default": null
+            },
+            {
+              "name": "horizon",
+              "annotation": "(int or None, optional, keyword - only)",
+              "description": "Steps to imagine; defaults to the configured 15.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "DIAMONDBehaviorOutput",
+            "description": "The two losses, the policy's entropy, the\n$\\lambda$-returns and every imagined frame."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), equations 14-16.\nThe value target stops gradients, and the policy is REINFORCE\nagainst $\\Lambda_t - V(x_t)$ — an advantage estimate, but\none built from a *state-value* baseline rather than a critic."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "world_model_loss",
+          "path": "lucid.models.generative.diamond._model.DIAMONDForWorldModeling.world_model_loss",
+          "kind": "function",
+          "labels": [],
+          "signature": "world_model_loss(frames: Tensor, actions: Tensor, next_frame: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1526",
+          "subcategory": "model",
+          "summary": "Train the denoiser — `DIAMONDModel.forward` by another name.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "frames",
+              "annotation": "Tensor",
+              "description": "`(B, L, C, H, W)` clean history.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "`(B, L)` action indices.",
+              "default": null
+            },
+            {
+              "name": "next_frame",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)` target.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "DIAMONDOutput",
+            "description": "Loss, denoised frame, and the noise levels used."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "reward_end_loss",
+          "path": "lucid.models.generative.diamond._model.DIAMONDForWorldModeling.reward_end_loss",
+          "kind": "function",
+          "labels": [],
+          "signature": "reward_end_loss(frames: Tensor, actions: Tensor, rewards: Tensor, ends: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1547",
+          "subcategory": "model",
+          "summary": "Cross-entropy on the reward's *sign* and on termination.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "frames",
+              "annotation": "Tensor",
+              "description": "`(B, T, C, H, W)`.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "`(B, T)`.",
+              "default": null
+            },
+            {
+              "name": "rewards",
+              "annotation": "Tensor",
+              "description": "`(B, T)` real rewards.  Only their sign is predicted —\nAlgorithm 1 writes `CE(r_hat, sign(r))`, which is all the\nenvironment's clipping to $\\{-1, 0, 1\\}$ leaves.",
+              "default": null
+            },
+            {
+              "name": "ends",
+              "annotation": "Tensor",
+              "description": "`(B, T)` termination flags in `{0, 1}`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "Scalar, the two cross-entropies summed."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "DIAMOND posed as a world model: imagination and its objectives.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "DIAMONDConfig",
+          "description": "Frozen configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.diamond import (\n...     DIAMONDConfig, DIAMONDForWorldModeling)\n>>> config = DIAMONDConfig(\n...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),\n...     reward_channels=(8, 8), reward_layers=(1, 1),\n...     actor_channels=(8, 8), actor_layers=(1, 1),\n...     cond_dim=16, reward_cond_dim=8, reward_lstm_dim=16,\n...     actor_lstm_dim=16, num_actions=4, horizon=3)\n>>> model = DIAMONDForWorldModeling(config).eval()\n>>> frames = lucid.randn((2, 4, 3, 16, 16))\n>>> actions = lucid.tensor([[0, 1, 2, 3], [1, 1, 0, 2]], dtype=lucid.int64)\n>>> with lucid.no_grad():\n...     out = model(frames, actions)\n>>> out.frames.shape\n(2, 3, 3, 16, 16)"
+      ],
+      "notes": [
+        "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Appendix F and\nAlgorithm 1.\n\nThe imagined trajectory is autoregressive in the strong sense: the\nframe the denoiser produced and the action the policy chose from it\nboth become conditioning for the next step, so an error in either\ncompounds.  That is the whole reason the paper cares which diffusion\nparameterisation it uses."
+      ],
+      "attributes": [
+        {
+          "name": "diamond",
+          "annotation": "DIAMONDModel",
+          "description": "The three networks."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DIAMONDModel",
+      "path": "lucid.models.generative.diamond._model.DIAMONDModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "DIAMONDModel(config: DIAMONDConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1006",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.diamond._model.DIAMONDModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: DIAMONDConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1054",
+          "subcategory": "model",
+          "summary": "Initialise the agent. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step_reward_end",
+          "path": "lucid.models.generative.diamond._model.DIAMONDModel.step_reward_end",
+          "kind": "function",
+          "labels": [],
+          "signature": "step_reward_end(frame: Tensor, next_frame: Tensor, action: Tensor, state: tuple[Tensor, Tensor] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1068",
+          "subcategory": "model",
+          "summary": "One step of the reward/termination model, typed.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "frame",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)` each — the transition.  Both are needed\nbecause a reward is a property of the transition, and the\nreleased encoder reads them stacked.",
+              "default": null
+            },
+            {
+              "name": "next_frame",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)` each — the transition.  Both are needed\nbecause a reward is a property of the transition, and the\nreleased encoder reads them stacked.",
+              "default": null
+            },
+            {
+              "name": "action",
+              "annotation": "Tensor",
+              "description": "`(B,)` action indices taken from `frame`.",
+              "default": null
+            },
+            {
+              "name": "state",
+              "annotation": "tuple of Tensor or None",
+              "description": "Carried LSTM state.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "(Tensor, Tensor, tuple of Tensor)",
+            "description": "Reward class logits `(B, 3)`, termination class logits\n`(B, 2)`, and the new state."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "step_actor_critic",
+          "path": "lucid.models.generative.diamond._model.DIAMONDModel.step_actor_critic",
+          "kind": "function",
+          "labels": [],
+          "signature": "step_actor_critic(frame: Tensor, state: tuple[Tensor, Tensor] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1097",
+          "subcategory": "model",
+          "summary": "One step of the actor-critic, typed.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "frame",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)`.",
+              "default": null
+            },
+            {
+              "name": "state",
+              "annotation": "tuple of Tensor or None",
+              "description": "Carried LSTM state.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "(Tensor, Tensor, tuple of Tensor)",
+            "description": "Action logits, state value, and the new state."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "preconditioners",
+          "path": "lucid.models.generative.diamond._model.DIAMONDModel.preconditioners",
+          "kind": "function",
+          "labels": [],
+          "signature": "preconditioners(sigma: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1116",
+          "subcategory": "model",
+          "summary": "EDM's four scalings at a noise level.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "sigma",
+              "annotation": "Tensor",
+              "description": "`(B,)` noise levels.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "(Tensor, Tensor, Tensor, Tensor)",
+            "description": "`c_in`, `c_out`, `c_skip` — each `(B, 1, 1, 1)` so\nthey broadcast over a frame — and `c_noise` as `(B,)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Appendix C,\nequations 9-12, with $\\sigma_{\\text{data}} = 0.5$."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "denoise",
+          "path": "lucid.models.generative.diamond._model.DIAMONDModel.denoise",
+          "kind": "function",
+          "labels": [],
+          "signature": "denoise(noised: Tensor, sigma: Tensor, frames: Tensor, actions: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1143",
+          "subcategory": "model",
+          "summary": "Apply $D_\\theta$ — the preconditioned denoiser.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "noised",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)`, the next frame with noise added.",
+              "default": null
+            },
+            {
+              "name": "sigma",
+              "annotation": "Tensor",
+              "description": "`(B,)` noise levels.",
+              "default": null
+            },
+            {
+              "name": "frames",
+              "annotation": "Tensor",
+              "description": "`(B, L, C, H, W)` clean history.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "`(B, L)` action indices.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(B, C, H, W)` estimate of the clean next frame."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "sigma_schedule",
+          "path": "lucid.models.generative.diamond._model.DIAMONDModel.sigma_schedule",
+          "kind": "function",
+          "labels": [],
+          "signature": "sigma_schedule(steps: int, device: str)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1170",
+          "subcategory": "model",
+          "summary": "The noise levels an Euler sampler walks down.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "steps",
+              "annotation": "int",
+              "description": "Number of denoising steps.",
+              "default": null
+            },
+            {
+              "name": "device",
+              "annotation": "str",
+              "description": "Where to build the schedule.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(steps + 1,)` descending to exactly zero."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Karras et al.'s $\\rho$-schedule, which Algorithm 1 refers\nto as \"the default identity schedule from EDM\".  ⚠️ DIAMOND's\ntables give the sampler and the step count but **not**\n$\\sigma_{\\min}$, $\\sigma_{\\max}$ or $\\rho$, so\nthose come from EDM itself and are the one place here where a\nnumber is inherited rather than cited."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "imagine_frame",
+          "path": "lucid.models.generative.diamond._model.DIAMONDModel.imagine_frame",
+          "kind": "function",
+          "labels": [],
+          "signature": "imagine_frame(frames: Tensor, actions: Tensor, steps: int | None = None, noise: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1204",
+          "subcategory": "model",
+          "summary": "Sample the next frame with Euler's method.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "frames",
+              "annotation": "Tensor",
+              "description": "`(B, L, C, H, W)` clean history.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "`(B, L)` action indices.",
+              "default": null
+            },
+            {
+              "name": "steps",
+              "annotation": "int or None",
+              "description": "Denoising steps; defaults to the configured 3.",
+              "default": "None"
+            },
+            {
+              "name": "noise",
+              "annotation": "Tensor or None",
+              "description": "Starting sample, drawn when absent.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(B, C, H, W)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Each step moves along $\\mathrm{d}x/\\mathrm{d}\\sigma = (x - D_\\theta(x, \\sigma)) / \\sigma$, which is the probability-flow\nODE written in EDM's variables."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.diamond._model.DIAMONDModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(frames: Tensor, actions: Tensor, next_frame: Tensor, sigma: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1260",
+          "subcategory": "model",
+          "summary": "Train the denoiser on one transition.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "frames",
+              "annotation": "Tensor",
+              "description": "`(B, L, C, H, W)` clean history.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "`(B, L)` action indices.",
+              "default": null
+            },
+            {
+              "name": "next_frame",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)` the frame to predict.",
+              "default": null
+            },
+            {
+              "name": "sigma",
+              "annotation": "(Tensor or None, optional, keyword - only)",
+              "description": "`(B,)` noise levels.  Drawn from the paper's log-normal\nwhen absent; supplied by tests that need a fixed level.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "DIAMONDOutput",
+            "description": "Loss, denoised frame, and the noise levels used."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Algorithm 1 — sample\n$\\log \\sigma \\sim \\mathcal{N}(P_{\\text{mean}}, P_{\\text{std}}^2)$, noise the target, and take the squared error\nin *pixel* space.  The EDM weighting is already inside\n$D_\\theta$, so no extra loss weight appears here."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "The three networks that make up a DIAMOND agent.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "DIAMONDConfig",
+          "description": "Frozen configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.diamond import DIAMONDConfig, DIAMONDModel\n>>> config = DIAMONDConfig(\n...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),\n...     reward_channels=(8, 8), reward_layers=(1, 1),\n...     actor_channels=(8, 8), actor_layers=(1, 1),\n...     cond_dim=16, reward_cond_dim=8,\n...     reward_lstm_dim=16, actor_lstm_dim=16, num_actions=4)\n>>> model = DIAMONDModel(config).eval()\n>>> frames = lucid.randn((2, 4, 3, 16, 16))\n>>> actions = lucid.tensor([[0, 1, 2, 3], [1, 1, 0, 2]], dtype=lucid.int64)\n>>> with lucid.no_grad():\n...     nxt = model.imagine_frame(frames, actions)\n>>> nxt.shape\n(2, 3, 16, 16)"
+      ],
+      "notes": [
+        "Reference: Alonso, Eloi, et al., *\"Diffusion for World Modeling:\nVisual Details Matter in Atari\"*, NeurIPS, 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)).\n\nThe EDM preconditioners live on this class rather than inside the\nU-Net, because they are a property of the *diffusion*, not of the\nnetwork: the same U-Net under DDPM's parameterisation is the\ncomparison the paper's Section 5.1 runs, and it drifts."
+      ],
+      "attributes": [
+        {
+          "name": "denoiser",
+          "annotation": "_Denoiser",
+          "description": "The U-Net whose preconditioned wrapper predicts the next frame."
+        },
+        {
+          "name": "reward_end",
+          "annotation": "_RewardEndModel",
+          "description": "Reward class and termination, over a sequence."
+        },
+        {
+          "name": "actor_critic",
+          "annotation": "_ActorCritic",
+          "description": "The policy and its value baseline."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "DIAMONDOutput",
+      "path": "lucid.models.generative.diamond._model.DIAMONDOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "DIAMONDOutput(loss: Tensor, prediction: Tensor, sigma: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L948",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.diamond._model.DIAMONDOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(loss: Tensor, prediction: Tensor, sigma: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Initialise the layer.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "channels",
+              "annotation": "int",
+              "description": "Channels being normalised.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What the world model returns after denoising one step.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "loss",
+          "annotation": "Tensor",
+          "description": "The reconstruction loss of Algorithm 1, `||D(x_noised) - x||^2`.\nScalar."
+        },
+        {
+          "name": "prediction",
+          "annotation": "Tensor",
+          "description": "The denoised next frame, `(B, C, H, W)`."
+        },
+        {
+          "name": "sigma",
+          "annotation": "Tensor",
+          "description": "The noise level each element was trained at, `(B,)`.  Carried\nbecause the loss is an average over a *distribution* of noise\nlevels, and a run that only ever drew easy ones would report a\nfalling loss while learning nothing about the hard regime."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "diamond",
+      "path": "lucid.models.generative.diamond._pretrained.diamond",
+      "kind": "function",
+      "labels": [],
+      "signature": "diamond(pretrained: bool | str = False, weights: DIAMONDWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_pretrained.py#L143",
+      "subcategory": "pretrained",
+      "summary": "Construct the Atari agent — denoiser, reward/end model, actor-critic.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "Load a released agent.  `True` takes *Breakout*; pass a game\nname — `\"Pong\"`, `\"Freeway\"`, any of the benchmark's 26 — for\nthat one.  The tag also sets `num_actions`, since Atari's\nminimal action set differs per game.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(DIAMONDWeights or None, optional, keyword - only)",
+          "description": "An explicit tag, taking precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `DIAMONDConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "DIAMONDModel",
+        "description": "The three networks, untrained."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import diamond\n>>> config = diamond().config\n>>> config.conditioning_frames, config.denoise_steps, config.horizon\n(4, 3, 15)\nThe appendix's 3D-environment experiments condition on six frames\ninstead of four, which is a field rather than a second factory:\n>>> diamond(conditioning_frames=6).config.denoiser_in_channels\n21"
+      ],
+      "notes": [
+        "Reference: Alonso, Eloi, et al., *\"Diffusion for World Modeling:\nVisual Details Matter in Atari\"*, NeurIPS, 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)),\nTable 2 for the architecture and Table 3 for everything else."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "DIAMONDModel",
+        "type": "DIAMONDModel",
+        "params": 13546454,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "denoiser",
+            "type": "_Denoiser",
+            "params": 4406979,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "noise_emb",
+                "type": "_FourierFeatures",
+                "params": 128,
+                "own_params": 128,
+                "children": []
+              },
+              {
+                "name": "action_embed",
+                "type": "Embedding",
+                "params": 1152,
+                "own_params": 1152,
+                "children": []
+              },
+              {
+                "name": "cond_proj",
+                "type": "Sequential",
+                "params": 131584,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 65792,
+                    "own_params": 65792,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "conv_in",
+                "type": "Conv2d",
+                "params": 8704,
+                "own_params": 8704,
+                "children": []
+              },
+              {
+                "name": "unet",
+                "type": "_UNet",
+                "params": 4263552,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "d_blocks",
+                    "type": "ModuleList",
+                    "params": 1117184,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResBlocks",
+                        "params": 279296,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 279296,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 139648,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 32896,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 32896,
+                                        "own_params": 32896,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 36928,
+                                    "own_params": 36928,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 32896,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 32896,
+                                        "own_params": 32896,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 36928,
+                                    "own_params": 36928,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 4
+                      }
+                    ]
+                  },
+                  {
+                    "name": "downsamples",
+                    "type": "ModuleList",
+                    "params": 110784,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "_Downsample",
+                        "params": 36928,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 36928,
+                            "own_params": 36928,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  },
+                  {
+                    "name": "mid_blocks",
+                    "type": "_ResBlocks",
+                    "params": 312832,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "resblocks",
+                        "type": "ModuleList",
+                        "params": 312832,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ResBlock",
+                            "params": 156416,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm1",
+                                "type": "_AdaGroupNorm",
+                                "params": 32896,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "linear",
+                                    "type": "Linear",
+                                    "params": 32896,
+                                    "own_params": 32896,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "conv1",
+                                "type": "Conv2d",
+                                "params": 36928,
+                                "own_params": 36928,
+                                "children": []
+                              },
+                              {
+                                "name": "norm2",
+                                "type": "_AdaGroupNorm",
+                                "params": 32896,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "linear",
+                                    "type": "Linear",
+                                    "params": 32896,
+                                    "own_params": 32896,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "conv2",
+                                "type": "Conv2d",
+                                "params": 36928,
+                                "own_params": 36928,
+                                "children": []
+                              },
+                              {
+                                "name": "attn",
+                                "type": "_SelfAttention2d",
+                                "params": 16768,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "_GroupNorm",
+                                    "params": 128,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 128,
+                                        "own_params": 128,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "qkv_proj",
+                                    "type": "Conv2d",
+                                    "params": 12480,
+                                    "own_params": 12480,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "out_proj",
+                                    "type": "Conv2d",
+                                    "params": 4160,
+                                    "own_params": 4160,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "act",
+                                "type": "SiLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 2
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "u_blocks",
+                    "type": "ModuleList",
+                    "params": 2611968,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResBlocks",
+                        "params": 652992,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 652992,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 217664,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "proj",
+                                    "type": "Conv2d",
+                                    "params": 8256,
+                                    "own_params": 8256,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 65792,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 65792,
+                                        "own_params": 65792,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 73792,
+                                    "own_params": 73792,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 32896,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 32896,
+                                        "own_params": 32896,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 36928,
+                                    "own_params": 36928,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 3
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 4
+                      }
+                    ]
+                  },
+                  {
+                    "name": "upsamples",
+                    "type": "ModuleList",
+                    "params": 110784,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "_Upsample",
+                        "params": 36928,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "up",
+                            "type": "Upsample",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 36928,
+                            "own_params": 36928,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "norm_out",
+                "type": "_GroupNorm",
+                "params": 128,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm",
+                    "type": "GroupNorm",
+                    "params": 128,
+                    "own_params": 128,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "conv_out",
+                "type": "Conv2d",
+                "params": 1731,
+                "own_params": 1731,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "reward_end",
+            "type": "_RewardEndModel",
+            "params": 5902656,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "action_embed",
+                "type": "Embedding",
+                "params": 2304,
+                "own_params": 2304,
+                "children": []
+              },
+              {
+                "name": "encoder",
+                "type": "_Encoder",
+                "params": 388160,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "conv_in",
+                    "type": "Conv2d",
+                    "params": 1760,
+                    "own_params": 1760,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 358656,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_ResBlocks",
+                        "params": 70016,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 70016,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 35008,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 8256,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 8256,
+                                        "own_params": 8256,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 9248,
+                                    "own_params": 9248,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 8256,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 8256,
+                                        "own_params": 8256,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 9248,
+                                    "own_params": 9248,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 4
+                      },
+                      {
+                        "name": "4",
+                        "type": "_ResBlocks",
+                        "params": 78592,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 78592,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 39296,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 8256,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 8256,
+                                        "own_params": 8256,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 9248,
+                                    "own_params": 9248,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 8256,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 8256,
+                                        "own_params": 8256,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 9248,
+                                    "own_params": 9248,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 4288,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 64,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 64,
+                                            "own_params": 64,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 3168,
+                                        "own_params": 3168,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 1056,
+                                        "own_params": 1056,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "downsamples",
+                    "type": "ModuleList",
+                    "params": 27744,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Identity",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "_Downsample",
+                        "params": 9248,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "conv",
+                            "type": "Conv2d",
+                            "params": 9248,
+                            "own_params": 9248,
+                            "children": []
+                          }
+                        ],
+                        "repeat": 3
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "cell",
+                "type": "LSTMCell",
+                "params": 5246976,
+                "own_params": 5246976,
+                "children": []
+              },
+              {
+                "name": "head",
+                "type": "Sequential",
+                "params": 265216,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Linear",
+                    "params": 262656,
+                    "own_params": 262656,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "2",
+                    "type": "Linear",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "actor_critic",
+            "type": "_ActorCritic",
+            "params": 3236819,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "Sequential",
+                "params": 77248,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Conv2d",
+                    "params": 896,
+                    "own_params": 896,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "_SimpleResBlock",
+                    "params": 9312,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "f",
+                        "type": "Sequential",
+                        "params": 9312,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_GroupNorm",
+                            "params": 64,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm",
+                                "type": "GroupNorm",
+                                "params": 64,
+                                "own_params": 64,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "1",
+                            "type": "SiLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Conv2d",
+                            "params": 9248,
+                            "own_params": 9248,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "2",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "3",
+                    "type": "_SimpleResBlock",
+                    "params": 9312,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "f",
+                        "type": "Sequential",
+                        "params": 9312,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_GroupNorm",
+                            "params": 64,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm",
+                                "type": "GroupNorm",
+                                "params": 64,
+                                "own_params": 64,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "1",
+                            "type": "SiLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Conv2d",
+                            "params": 9248,
+                            "own_params": 9248,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "4",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "5",
+                    "type": "_SimpleResBlock",
+                    "params": 20672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "f",
+                        "type": "Sequential",
+                        "params": 18560,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_GroupNorm",
+                            "params": 64,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm",
+                                "type": "GroupNorm",
+                                "params": 64,
+                                "own_params": 64,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "1",
+                            "type": "SiLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Conv2d",
+                            "params": 18496,
+                            "own_params": 18496,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "skip_projection",
+                        "type": "Conv2d",
+                        "params": 2112,
+                        "own_params": 2112,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "6",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "7",
+                    "type": "_SimpleResBlock",
+                    "params": 37056,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "f",
+                        "type": "Sequential",
+                        "params": 37056,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_GroupNorm",
+                            "params": 128,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "norm",
+                                "type": "GroupNorm",
+                                "params": 128,
+                                "own_params": 128,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "1",
+                            "type": "SiLU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Conv2d",
+                            "params": 36928,
+                            "own_params": 36928,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "8",
+                    "type": "MaxPool2d",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "cell",
+                "type": "LSTMCell",
+                "params": 3149824,
+                "own_params": 3149824,
+                "children": []
+              },
+              {
+                "name": "actor_linear",
+                "type": "Linear",
+                "params": 9234,
+                "own_params": 9234,
+                "children": []
+              },
+              {
+                "name": "critic_linear",
+                "type": "Linear",
+                "params": 513,
+                "own_params": 513,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "diamond_csgo",
+      "path": "lucid.models.generative.diamond._pretrained.diamond_csgo",
+      "kind": "function",
+      "labels": [],
+      "signature": "diamond_csgo(pretrained: bool | str = False, weights: DIAMONDWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_pretrained.py#L277",
+      "subcategory": "pretrained",
+      "summary": "Construct the *Counter-Strike* world model.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "Load the released CS:GO world model.  `True` and `\"CSGO\"`\nboth select it; there is only the one.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(DIAMONDWeights or None, optional, keyword - only)",
+          "description": "An explicit tag, taking precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `DIAMONDConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "DIAMONDModel",
+        "description": "The world model and its upsampler.  `reward_end` and\n`actor_critic` are `None`: this experiment has no\nreinforcement learning, so there is no agent to build."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import diamond_csgo\n>>> config = diamond_csgo().config\n>>> config.frame_shape, config.num_actions, config.upsampling_factor\n((30, 56), 51, 5)\n>>> config.with_agent\nFalse"
+      ],
+      "notes": [
+        "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Section 6 and Appendix M,\nwith the architecture taken from the released\n`config/agent/csgo.yaml` — the paper reports parameter counts for\nthis model but no channel widths or depths.\n\nFrames are `30x56` here and `150x280` after the upsampler, which\nis what makes a 3D scene affordable: diffusing at the full resolution\nwould cost far more for detail a cheaper second network can add."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "diamond_world_model",
+      "path": "lucid.models.generative.diamond._pretrained.diamond_world_model",
+      "kind": "function",
+      "labels": [],
+      "signature": "diamond_world_model(pretrained: bool | str = False, weights: DIAMONDWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_pretrained.py#L205",
+      "subcategory": "pretrained",
+      "summary": "Construct DIAMOND with its objectives and imagination rollout.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "Load a released agent.  `True` takes *Breakout*; pass a game\nname — `\"Pong\"`, `\"Freeway\"`, any of the benchmark's 26 — for\nthat one.  The tag also sets `num_actions`, since Atari's\nminimal action set differs per game.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(DIAMONDWeights or None, optional, keyword - only)",
+          "description": "An explicit tag, taking precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `DIAMONDConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "DIAMONDForWorldModeling",
+        "description": "The agent, plus the losses that train it and the rollout that\ngenerates its experience."
+      },
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models import diamond_world_model\n>>> model = diamond_world_model(\n...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),\n...     reward_channels=(8, 8), reward_layers=(1, 1),\n...     actor_channels=(8, 8), actor_layers=(1, 1), cond_dim=16,\n...     reward_cond_dim=8, reward_lstm_dim=16, actor_lstm_dim=16,\n...     num_actions=4, horizon=3).eval()\n>>> frames = lucid.randn((1, 4, 3, 16, 16))\n>>> actions = lucid.tensor([[0, 1, 2, 3]], dtype=lucid.int64)\n>>> with lucid.no_grad():\n...     out = model(frames, actions)\n>>> out.frames.shape, out.returns.shape\n((1, 3, 3, 16, 16), (1, 3))"
+      ],
+      "notes": [
+        "Reference: Alonso et al., [arXiv:2405.12399](https://arxiv.org/abs/2405.12399), Appendix F for the two\nRL objectives and Algorithm 1 for the training loop they sit in.\n\nThe three losses are trained separately, in the order Algorithm 1\ngives: the denoiser on real transitions, the reward/termination model\non real sequences, and the actor-critic entirely on imagined ones."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "DIAMONDForWorldModeling",
+        "type": "DIAMONDForWorldModeling",
+        "params": 13546454,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "diamond",
+            "type": "DIAMONDModel",
+            "params": 13546454,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "denoiser",
+                "type": "_Denoiser",
+                "params": 4406979,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "noise_emb",
+                    "type": "_FourierFeatures",
+                    "params": 128,
+                    "own_params": 128,
+                    "children": []
+                  },
+                  {
+                    "name": "action_embed",
+                    "type": "Embedding",
+                    "params": 1152,
+                    "own_params": 1152,
+                    "children": []
+                  },
+                  {
+                    "name": "cond_proj",
+                    "type": "Sequential",
+                    "params": 131584,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 65792,
+                        "own_params": 65792,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 65792,
+                        "own_params": 65792,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "conv_in",
+                    "type": "Conv2d",
+                    "params": 8704,
+                    "own_params": 8704,
+                    "children": []
+                  },
+                  {
+                    "name": "unet",
+                    "type": "_UNet",
+                    "params": 4263552,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "d_blocks",
+                        "type": "ModuleList",
+                        "params": 1117184,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ResBlocks",
+                            "params": 279296,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "resblocks",
+                                "type": "ModuleList",
+                                "params": 279296,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResBlock",
+                                    "params": 139648,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm1",
+                                        "type": "_AdaGroupNorm",
+                                        "params": 32896,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 0,
+                                            "own_params": 0,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "linear",
+                                            "type": "Linear",
+                                            "params": 32896,
+                                            "own_params": 32896,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "conv1",
+                                        "type": "Conv2d",
+                                        "params": 36928,
+                                        "own_params": 36928,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "norm2",
+                                        "type": "_AdaGroupNorm",
+                                        "params": 32896,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 0,
+                                            "own_params": 0,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "linear",
+                                            "type": "Linear",
+                                            "params": 32896,
+                                            "own_params": 32896,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "conv2",
+                                        "type": "Conv2d",
+                                        "params": 36928,
+                                        "own_params": 36928,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "act",
+                                        "type": "SiLU",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      }
+                                    ],
+                                    "repeat": 2
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsamples",
+                        "type": "ModuleList",
+                        "params": 110784,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Identity",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_Downsample",
+                            "params": 36928,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "conv",
+                                "type": "Conv2d",
+                                "params": 36928,
+                                "own_params": 36928,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 3
+                          }
+                        ]
+                      },
+                      {
+                        "name": "mid_blocks",
+                        "type": "_ResBlocks",
+                        "params": 312832,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "resblocks",
+                            "type": "ModuleList",
+                            "params": 312832,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_ResBlock",
+                                "params": 156416,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm1",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 32896,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 32896,
+                                        "own_params": 32896,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv1",
+                                    "type": "Conv2d",
+                                    "params": 36928,
+                                    "own_params": 36928,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "norm2",
+                                    "type": "_AdaGroupNorm",
+                                    "params": 32896,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "GroupNorm",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "linear",
+                                        "type": "Linear",
+                                        "params": 32896,
+                                        "own_params": 32896,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "conv2",
+                                    "type": "Conv2d",
+                                    "params": 36928,
+                                    "own_params": 36928,
+                                    "children": []
+                                  },
+                                  {
+                                    "name": "attn",
+                                    "type": "_SelfAttention2d",
+                                    "params": 16768,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm",
+                                        "type": "_GroupNorm",
+                                        "params": 128,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 128,
+                                            "own_params": 128,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "qkv_proj",
+                                        "type": "Conv2d",
+                                        "params": 12480,
+                                        "own_params": 12480,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "out_proj",
+                                        "type": "Conv2d",
+                                        "params": 4160,
+                                        "own_params": 4160,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "act",
+                                    "type": "SiLU",
+                                    "params": 0,
+                                    "own_params": 0,
+                                    "children": []
+                                  }
+                                ],
+                                "repeat": 2
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "u_blocks",
+                        "type": "ModuleList",
+                        "params": 2611968,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ResBlocks",
+                            "params": 652992,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "resblocks",
+                                "type": "ModuleList",
+                                "params": 652992,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResBlock",
+                                    "params": 217664,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "proj",
+                                        "type": "Conv2d",
+                                        "params": 8256,
+                                        "own_params": 8256,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "norm1",
+                                        "type": "_AdaGroupNorm",
+                                        "params": 65792,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 0,
+                                            "own_params": 0,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "linear",
+                                            "type": "Linear",
+                                            "params": 65792,
+                                            "own_params": 65792,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "conv1",
+                                        "type": "Conv2d",
+                                        "params": 73792,
+                                        "own_params": 73792,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "norm2",
+                                        "type": "_AdaGroupNorm",
+                                        "params": 32896,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 0,
+                                            "own_params": 0,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "linear",
+                                            "type": "Linear",
+                                            "params": 32896,
+                                            "own_params": 32896,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "conv2",
+                                        "type": "Conv2d",
+                                        "params": 36928,
+                                        "own_params": 36928,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "act",
+                                        "type": "SiLU",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      }
+                                    ],
+                                    "repeat": 3
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "upsamples",
+                        "type": "ModuleList",
+                        "params": 110784,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Identity",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_Upsample",
+                            "params": 36928,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "up",
+                                "type": "Upsample",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "conv",
+                                "type": "Conv2d",
+                                "params": 36928,
+                                "own_params": 36928,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 3
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm_out",
+                    "type": "_GroupNorm",
+                    "params": 128,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm",
+                        "type": "GroupNorm",
+                        "params": 128,
+                        "own_params": 128,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "act",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "conv_out",
+                    "type": "Conv2d",
+                    "params": 1731,
+                    "own_params": 1731,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "reward_end",
+                "type": "_RewardEndModel",
+                "params": 5902656,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "action_embed",
+                    "type": "Embedding",
+                    "params": 2304,
+                    "own_params": 2304,
+                    "children": []
+                  },
+                  {
+                    "name": "encoder",
+                    "type": "_Encoder",
+                    "params": 388160,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "conv_in",
+                        "type": "Conv2d",
+                        "params": 1760,
+                        "own_params": 1760,
+                        "children": []
+                      },
+                      {
+                        "name": "blocks",
+                        "type": "ModuleList",
+                        "params": 358656,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "_ResBlocks",
+                            "params": 70016,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "resblocks",
+                                "type": "ModuleList",
+                                "params": 70016,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResBlock",
+                                    "params": 35008,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm1",
+                                        "type": "_AdaGroupNorm",
+                                        "params": 8256,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 0,
+                                            "own_params": 0,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "linear",
+                                            "type": "Linear",
+                                            "params": 8256,
+                                            "own_params": 8256,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "conv1",
+                                        "type": "Conv2d",
+                                        "params": 9248,
+                                        "own_params": 9248,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "norm2",
+                                        "type": "_AdaGroupNorm",
+                                        "params": 8256,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 0,
+                                            "own_params": 0,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "linear",
+                                            "type": "Linear",
+                                            "params": 8256,
+                                            "own_params": 8256,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "conv2",
+                                        "type": "Conv2d",
+                                        "params": 9248,
+                                        "own_params": 9248,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "act",
+                                        "type": "SiLU",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      }
+                                    ],
+                                    "repeat": 2
+                                  }
+                                ]
+                              }
+                            ],
+                            "repeat": 4
+                          },
+                          {
+                            "name": "4",
+                            "type": "_ResBlocks",
+                            "params": 78592,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "resblocks",
+                                "type": "ModuleList",
+                                "params": 78592,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "0",
+                                    "type": "_ResBlock",
+                                    "params": 39296,
+                                    "own_params": 0,
+                                    "children": [
+                                      {
+                                        "name": "norm1",
+                                        "type": "_AdaGroupNorm",
+                                        "params": 8256,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 0,
+                                            "own_params": 0,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "linear",
+                                            "type": "Linear",
+                                            "params": 8256,
+                                            "own_params": 8256,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "conv1",
+                                        "type": "Conv2d",
+                                        "params": 9248,
+                                        "own_params": 9248,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "norm2",
+                                        "type": "_AdaGroupNorm",
+                                        "params": 8256,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "GroupNorm",
+                                            "params": 0,
+                                            "own_params": 0,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "linear",
+                                            "type": "Linear",
+                                            "params": 8256,
+                                            "own_params": 8256,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "conv2",
+                                        "type": "Conv2d",
+                                        "params": 9248,
+                                        "own_params": 9248,
+                                        "children": []
+                                      },
+                                      {
+                                        "name": "attn",
+                                        "type": "_SelfAttention2d",
+                                        "params": 4288,
+                                        "own_params": 0,
+                                        "children": [
+                                          {
+                                            "name": "norm",
+                                            "type": "_GroupNorm",
+                                            "params": 64,
+                                            "own_params": 0,
+                                            "children": [
+                                              {
+                                                "name": "norm",
+                                                "type": "GroupNorm",
+                                                "params": 64,
+                                                "own_params": 64,
+                                                "children": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "name": "qkv_proj",
+                                            "type": "Conv2d",
+                                            "params": 3168,
+                                            "own_params": 3168,
+                                            "children": []
+                                          },
+                                          {
+                                            "name": "out_proj",
+                                            "type": "Conv2d",
+                                            "params": 1056,
+                                            "own_params": 1056,
+                                            "children": []
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "name": "act",
+                                        "type": "SiLU",
+                                        "params": 0,
+                                        "own_params": 0,
+                                        "children": []
+                                      }
+                                    ],
+                                    "repeat": 2
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "downsamples",
+                        "type": "ModuleList",
+                        "params": 27744,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Identity",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "_Downsample",
+                            "params": 9248,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "conv",
+                                "type": "Conv2d",
+                                "params": 9248,
+                                "own_params": 9248,
+                                "children": []
+                              }
+                            ],
+                            "repeat": 3
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cell",
+                    "type": "LSTMCell",
+                    "params": 5246976,
+                    "own_params": 5246976,
+                    "children": []
+                  },
+                  {
+                    "name": "head",
+                    "type": "Sequential",
+                    "params": 265216,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Linear",
+                        "params": 262656,
+                        "own_params": 262656,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "2",
+                        "type": "Linear",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "actor_critic",
+                "type": "_ActorCritic",
+                "params": 3236819,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "encoder",
+                    "type": "Sequential",
+                    "params": 77248,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Conv2d",
+                        "params": 896,
+                        "own_params": 896,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "_SimpleResBlock",
+                        "params": 9312,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "f",
+                            "type": "Sequential",
+                            "params": 9312,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_GroupNorm",
+                                "params": 64,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 64,
+                                    "own_params": 64,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "1",
+                                "type": "SiLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Conv2d",
+                                "params": 9248,
+                                "own_params": 9248,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "2",
+                        "type": "MaxPool2d",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "3",
+                        "type": "_SimpleResBlock",
+                        "params": 9312,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "f",
+                            "type": "Sequential",
+                            "params": 9312,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_GroupNorm",
+                                "params": 64,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 64,
+                                    "own_params": 64,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "1",
+                                "type": "SiLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Conv2d",
+                                "params": 9248,
+                                "own_params": 9248,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "4",
+                        "type": "MaxPool2d",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "5",
+                        "type": "_SimpleResBlock",
+                        "params": 20672,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "f",
+                            "type": "Sequential",
+                            "params": 18560,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_GroupNorm",
+                                "params": 64,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 64,
+                                    "own_params": 64,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "1",
+                                "type": "SiLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Conv2d",
+                                "params": 18496,
+                                "own_params": 18496,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "skip_projection",
+                            "type": "Conv2d",
+                            "params": 2112,
+                            "own_params": 2112,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "6",
+                        "type": "MaxPool2d",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "7",
+                        "type": "_SimpleResBlock",
+                        "params": 37056,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "f",
+                            "type": "Sequential",
+                            "params": 37056,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "_GroupNorm",
+                                "params": 128,
+                                "own_params": 0,
+                                "children": [
+                                  {
+                                    "name": "norm",
+                                    "type": "GroupNorm",
+                                    "params": 128,
+                                    "own_params": 128,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "name": "1",
+                                "type": "SiLU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Conv2d",
+                                "params": 36928,
+                                "own_params": 36928,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "name": "8",
+                        "type": "MaxPool2d",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "cell",
+                    "type": "LSTMCell",
+                    "params": 3149824,
+                    "own_params": 3149824,
+                    "children": []
+                  },
+                  {
+                    "name": "actor_linear",
+                    "type": "Linear",
+                    "params": 9234,
+                    "own_params": 9234,
+                    "children": []
+                  },
+                  {
+                    "name": "critic_linear",
+                    "type": "Linear",
+                    "params": 513,
+                    "own_params": 513,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "DIAMONDWeights",
+      "path": "lucid.models.generative.diamond._weights.DIAMONDWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "DIAMONDWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/e2ffd317a/lucid/models/generative/diamond/_weights.py#L38",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Pretrained agents for `lucid.models.diamond`.",
+      "extended": "One member per Atari 100k game.  `num_classes` is the game's action\ncount, not a label set — a world model has no classes, and this is\nthe number the policy head and both action embeddings are built to.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Reference: Alonso et al., NeurIPS 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)), Table 1\nfor the per-game scores these agents reach.\n\n`DEFAULT` is *Breakout*, which is the game the paper's own\nanalysis figures use.\n\n`CSGO` is the odd one out: a world model with no agent, at a\ndifferent resolution and nearly thirty times the size, from the\npaper's Section 6.  It loads into `lucid.models.diamond_csgo`\nrather than the Atari factories."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "DIAMOND — the world model that predicts frames, not latents.",
+  "extended": "Alonso et al., NeurIPS 2024 ([arXiv:2405.12399](https://arxiv.org/abs/2405.12399)).  A conditional diffusion\nmodel over pixels, an EDM parameterisation chosen so three denoising\nsteps suffice, and an agent trained entirely on what it imagines.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "DIAMOND",
+  "citation": "Alonso, Eloi, et al. \"Diffusion for World Modeling: Visual Details Matter in Atari.\" Advances in Neural Information Processing Systems, vol. 37, 2024.",
+  "theory": "A world model has to answer $p(x_{t+1} \\mid x_{\\leq t}, a_{\\leq t})$.  DIAMOND answers it with a conditional diffusion model\nover the *image*, dropping the discrete latent bottleneck its\npredecessors relied on.\n\n**The conditioning is the architecture.**  The last $L$ clean\nframes are concatenated to the noised next frame along the channel\naxis --- plain frame stacking, which keeps the network a standard\nU-Net 2D --- while the actions and the diffusion time enter through\nadaptive group normalisation inside the residual blocks.  Nothing\nabout the image path knows it is a world model.\n\n**EDM, not DDPM, and the difference is not cosmetic.**  The network\n$F_\\theta$ is wrapped in Karras et al.'s preconditioners:\n\n\n\n$$\nD_\\theta(x^\\tau_{t+1}, y^\\tau_t) = c_{\\text{skip}}^\\tau\\,\nx^\\tau_{t+1} + c_{\\text{out}}^\\tau\\, F_\\theta\\bigl(\nc_{\\text{in}}^\\tau x^\\tau_{t+1},\\, y^\\tau_t \\bigr),\n\\qquad\nc_{\\text{skip}}^\\tau = \\frac{\\sigma_{\\text{data}}^2}\n{\\sigma_{\\text{data}}^2 + \\sigma^2(\\tau)}\n$$\n\nso the training target adaptively mixes signal and noise with the\ndegradation level.  When $\\sigma \\gg \\sigma_{\\text{data}}$ the\nskip vanishes and the network is asked for the *clean frame*; when\n$\\sigma \\to 0$ it is asked for the added noise.  DDPM asks for\nthe noise at every level, which makes the high-noise regime an\nidentity map and leaves the score badly estimated exactly where\nsampling begins.  Autoregressed over a thousand imagined steps that\nerror compounds --- the paper shows DDPM drifting out of\ndistribution while the EDM model stays stable even at a **single**\ndenoising step.\n\n**Three steps, and the reason it is not one.**  A denoiser trained\nunder an $L_2$ loss predicts the *expectation* over possible\nreconstructions, so when the next frame is genuinely multi-modal ---\nan opponent whose move the agent cannot predict --- one step returns\na blur between the outcomes.  Iterating drives the sample onto a\nsingle mode.  Hence $n = 3$, everywhere in the paper.\n\n**What diffusion does not model.**  Rewards and episode ends are\nscalar predictions, not images, so they get their own CNN-LSTM; the\nactor-critic gets another.  The agent is trained entirely inside the\nimagined environment, reaching a mean human-normalised score of\n1.46 on Atari 100k with 13M parameters --- fewer than IRIS's 30M or\nDreamerV3's 18M.",
+  "tasks": [
+    "world-modeling"
+  ]
+}
