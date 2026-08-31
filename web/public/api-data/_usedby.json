@@ -12538,6 +12538,10 @@
   "lucid.nn.init": [
     {
       "kind": "module",
+      "module": "lucid.models.generative.diamond._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn"
     },
     {

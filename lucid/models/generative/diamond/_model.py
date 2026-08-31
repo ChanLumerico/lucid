@@ -1326,6 +1326,10 @@ class DIAMONDModel(PretrainedModel):
             ``(B, C, H*f, W*f)`` the previous full-resolution frame, so
             the sharpening is temporally consistent rather than
             independent per frame.
+        quantize : bool, default=True, keyword-only
+            Put the estimate back on the 8-bit grid, as the released
+            sampler does.  Pass ``False`` to keep a gradient — the
+            quantiser has none.
 
         Returns
         -------
