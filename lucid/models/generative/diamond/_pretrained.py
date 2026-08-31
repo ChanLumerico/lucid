@@ -83,7 +83,7 @@ def _tag(pretrained: bool | str) -> bool | str:
     return pretrained.upper() if isinstance(pretrained, str) else pretrained
 
 
-def csgo_tag(pretrained: bool | str) -> bool | str:
+def _csgo_tag(pretrained: bool | str) -> bool | str:
     """Resolve ``pretrained`` for the CS:GO factory.
 
     ``True`` means *this* factory's checkpoint.  The enum's ``DEFAULT``
@@ -328,7 +328,7 @@ def diamond_csgo(
     >>> config.with_agent
     False
     """
-    entry = weights_mod.resolve_weights(DIAMONDWeights, csgo_tag(pretrained), weights)
+    entry = weights_mod.resolve_weights(DIAMONDWeights, _csgo_tag(pretrained), weights)
     model = DIAMONDModel(_apply(_CFG_CSGO, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="diamond_csgo")

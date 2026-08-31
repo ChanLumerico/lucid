@@ -564,12 +564,12 @@ class TestCSGO:
         shared default tries to load a 13M agent into it and fails on a
         shape mismatch — which is exactly what happened the first time.
         """
-        from lucid.models.generative.diamond._pretrained import csgo_tag
+        from lucid.models.generative.diamond._pretrained import _csgo_tag
         from lucid.models.generative.diamond import DIAMONDWeights
 
-        assert csgo_tag(True) == "CSGO"
-        assert csgo_tag("csgo") == "CSGO"
-        assert csgo_tag(False) is False
+        assert _csgo_tag(True) == "CSGO"
+        assert _csgo_tag("csgo") == "CSGO"
+        assert _csgo_tag(False) is False
         # The hazard is real only because the two disagree on shape.
         assert DIAMONDWeights.DEFAULT.name == "BREAKOUT"
         assert DIAMONDWeights.CSGO.value.meta["num_actions"] == 51
