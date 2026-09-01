@@ -2907,20 +2907,6 @@
       "module": "lucid.models.generative.ddpm"
     }
   ],
-  "lucid.models.generative.ddpm._model.DDPMUNet": [
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.ddpm"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.ncsn._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.generative.score_sde._model"
-    }
-  ],
   "lucid.models.generative.ddpm._pretrained.ddpm_cifar": [
     {
       "kind": "module",
@@ -6807,16 +6793,6 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.efficientdet._model"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.efficientdet._pretrained"
-    }
-  ],
-  "lucid.models.vision.efficientdet._config.efficientdet_config": [
-    {
-      "kind": "module",
-      "module": "lucid.models.vision.efficientdet"
     },
     {
       "kind": "module",

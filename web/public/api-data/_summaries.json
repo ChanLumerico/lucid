@@ -38470,7 +38470,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 35746307,
         "own_params": 0,
         "children": [
@@ -39283,7 +39283,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 35746307,
         "own_params": 0,
         "children": [
@@ -40096,7 +40096,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 121063942,
         "own_params": 0,
         "children": [
@@ -41570,7 +41570,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 121063942,
         "own_params": 0,
         "children": [
@@ -43044,7 +43044,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 113673219,
         "own_params": 0,
         "children": [
@@ -44191,7 +44191,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 113673219,
         "own_params": 0,
         "children": [
@@ -205491,7 +205491,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 109733379,
         "own_params": 0,
         "children": [
@@ -206644,7 +206644,7 @@
         "children": [
           {
             "name": "unet",
-            "type": "DDPMUNet",
+            "type": "_DDPMUNet",
             "params": 109733379,
             "own_params": 0,
             "children": [
@@ -207793,7 +207793,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 35746307,
         "own_params": 0,
         "children": [
@@ -208612,7 +208612,7 @@
         "children": [
           {
             "name": "unet",
-            "type": "DDPMUNet",
+            "type": "_DDPMUNet",
             "params": 35746307,
             "own_params": 0,
             "children": [
@@ -281312,7 +281312,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 35746307,
         "own_params": 0,
         "children": [
@@ -282131,7 +282131,7 @@
         "children": [
           {
             "name": "unet",
-            "type": "DDPMUNet",
+            "type": "_DDPMUNet",
             "params": 35746307,
             "own_params": 0,
             "children": [
@@ -282946,7 +282946,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 35746307,
         "own_params": 0,
         "children": [
@@ -283765,7 +283765,7 @@
         "children": [
           {
             "name": "unet",
-            "type": "DDPMUNet",
+            "type": "_DDPMUNet",
             "params": 35746307,
             "own_params": 0,
             "children": [
@@ -284580,7 +284580,7 @@
     "children": [
       {
         "name": "unet",
-        "type": "DDPMUNet",
+        "type": "_DDPMUNet",
         "params": 35746307,
         "own_params": 0,
         "children": [
@@ -285399,7 +285399,7 @@
         "children": [
           {
             "name": "unet",
-            "type": "DDPMUNet",
+            "type": "_DDPMUNet",
             "params": 35746307,
             "own_params": 0,
             "children": [

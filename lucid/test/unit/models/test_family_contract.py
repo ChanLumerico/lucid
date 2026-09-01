@@ -120,12 +120,10 @@ def test_family_models_satisfy_protocol(domain: str, family: str) -> None:
         if not home.startswith(f"lucid.models.{domain}.{family}"):
             continue
         # The protocol governs the 5-slot family-canonical classes that
-        # take a Config object.  Internal backbone building blocks (e.g.
-        # ``DDPMUNet``, ``ViTEmbeddings``) are legitimately exported as
-        # composition primitives and don't carry the protocol surface;
-        # skip anything that lacks ``config_class`` (which the protocol
-        # itself requires).  This avoids the prior false-positive on
-        # ``DDPMUNet`` while still pinning the actual model classes.
+        # take a Config object.  A family may still export a composition
+        # primitive that carries no config (``ViTEmbeddings``); skip
+        # anything lacking ``config_class``, which the protocol itself
+        # requires, and pin the actual model classes.
         if not hasattr(obj, "config_class"):
             continue
         model_classes.append(obj)
@@ -254,8 +252,7 @@ def test_family_exports_no_internal_helpers(domain: str, family: str) -> None:
     spotted sitting next to the twelve DreamerV3 factories.
 
     Classes are exempt: they render in their own section, so a genuinely
-    public building block (``DDPMUNet``, the SDE hierarchy) is fine
-    there.
+    public building block (the SDE hierarchy) is fine there.
     """
     module = _import_family(domain, family)
     stray = _stray_exported_functions(module)

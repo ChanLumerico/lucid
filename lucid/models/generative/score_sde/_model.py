@@ -25,7 +25,7 @@ from lucid.models._base import PretrainedModel
 from lucid.models._tasks import ImageGenerationModel
 from lucid.models._output import GenerationOutput, ModelOutput
 from lucid.models.generative.ddpm._config import DDPMConfig
-from lucid.models.generative.ddpm._model import DDPMUNet
+from lucid.models.generative.ddpm._model import _DDPMUNet
 from lucid.models.generative.score_sde._config import ScoreSDEConfig
 from lucid.models.generative.score_sde._sde import SDE, VESDE, make_sde
 
@@ -126,7 +126,7 @@ class ScoreSDEModel(PretrainedModel):
             beta_min=config.beta_min,
             beta_max=config.beta_max,
         )
-        self.unet = DDPMUNet(
+        self.unet = _DDPMUNet(
             DDPMConfig(
                 sample_size=config.sample_size,
                 in_channels=config.in_channels,
@@ -149,7 +149,7 @@ class ScoreSDEModel(PretrainedModel):
 
         Notes
         -----
-        ``DDPMUNet`` conditions on an integer step, so ``t`` is scaled by
+        ``_DDPMUNet`` conditions on an integer step, so ``t`` is scaled by
         ``num_scales - 1``.  The reference implementation does the same
         for its continuous VP models; for VE it conditions on
         :math:`\\sigma(t)` instead, and that difference is preserved here

@@ -854,6 +854,9 @@ __all__ = [    # ── Infrastructure ─────────────�
     "dit_xlarge_2_gen",
     "dit_xlarge_4_gen",
     "dit_xlarge_8_gen",
+    # ── Generative (2024) DIAMOND ─────────────────────────────────────────────
+    "DIAMONDConfig", "DIAMONDModel", "DIAMONDForWorldModeling",
+    "diamond", "diamond_world_model", "diamond_csgo",
     # ── Generative (2025) MeanFlow ────────────────────────────────────────────
     "MeanFlowConfig", "MeanFlowModel", "MeanFlowForImageGeneration",
     "mean_flow_base_4", "mean_flow_base_2", "mean_flow_medium_2",

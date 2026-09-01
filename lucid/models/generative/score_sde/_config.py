@@ -95,7 +95,7 @@ class ScoreSDEConfig(GenerativeModelConfig):
         Langevin steps per predictor step.  ``0`` makes the sampler
         predictor-only.
     base_channels, channel_mult, num_res_blocks, attention_resolutions : ...
-        The U-Net, forwarded to :class:`~lucid.models.generative.ddpm.DDPMUNet`.
+        The U-Net, forwarded to the DDPM U-Net.
     num_heads, dropout, resnet_groups : ...
         As above.
 
@@ -115,7 +115,7 @@ class ScoreSDEConfig(GenerativeModelConfig):
     the objective are the paper's; the backbone is not.
 
     **Continuous time reaches the U-Net through the discrete embedding.**
-    ``DDPMUNet`` conditions on an integer timestep, so a continuous
+    The DDPM U-Net conditions on an integer timestep, so a continuous
     :math:`t \in [0, 1]` is scaled by ``num_scales - 1`` before it is
     handed over — which is what the reference implementation does for its
     continuous VP models.

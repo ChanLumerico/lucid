@@ -224,7 +224,7 @@ class _Upsample(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class DDPMUNet(nn.Module):
+class _DDPMUNet(nn.Module):
     r"""U-Net denoiser shared by every DDPM variant.
 
     Implements the architecture introduced by Ho, Jain, and Abbeel, 2020:
@@ -299,11 +299,11 @@ class DDPMUNet(nn.Module):
     --------
     >>> import lucid
     >>> from lucid.models.generative.ddpm import DDPMConfig
-    >>> from lucid.models.generative.ddpm._model import DDPMUNet
+    >>> from lucid.models.generative.ddpm._model import _DDPMUNet
     >>> cfg = DDPMConfig(sample_size=32, base_channels=32,
     ...                  channel_mult=(1, 2), num_res_blocks=1,
     ...                  attention_resolutions=(16,), resnet_groups=16)
-    >>> unet = DDPMUNet(cfg).eval()
+    >>> unet = _DDPMUNet(cfg).eval()
     >>> x = lucid.randn((1, 3, 32, 32))
     >>> t = lucid.tensor([42]).long()
     >>> out = unet(x, t)
@@ -548,8 +548,8 @@ class DDPMModel(PretrainedModel, DiffusionMixin):
 
     Attributes
     ----------
-    unet : DDPMUNet
-        Underlying U-Net denoiser (see :class:`DDPMUNet`).
+    unet : _DDPMUNet
+        Underlying U-Net denoiser (see :class:`_DDPMUNet`).
     config_class : type[DDPMConfig]
         Registry pointer for matching-config instantiation.
     base_model_prefix : str
@@ -597,7 +597,7 @@ class DDPMModel(PretrainedModel, DiffusionMixin):
 
     def __init__(self, config: DDPMConfig) -> None:
         super().__init__(config)
-        self.unet = DDPMUNet(config)
+        self.unet = _DDPMUNet(config)
 
     @override
     def forward(  # type: ignore[override]
@@ -667,7 +667,7 @@ def _x0_recovery_constants(betas: Tensor) -> tuple[Tensor, Tensor]:
 class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
     r"""DDPM with the noise-prediction training loss and Markov-chain sampler.
 
-    Wraps a :class:`DDPMUNet` denoiser, supplies the Ho 2020 §3.2
+    Wraps a :class:`_DDPMUNet` denoiser, supplies the Ho 2020 §3.2
     "simplified" training objective when ``target`` is provided, and inherits
     :meth:`DiffusionMixin.generate` for ancestral sampling over the configured
     noise schedule.  This is the standard entry point for training and
@@ -699,8 +699,8 @@ class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
 
     Attributes
     ----------
-    unet : DDPMUNet
-        Underlying U-Net denoiser (see :class:`DDPMUNet`).
+    unet : _DDPMUNet
+        Underlying U-Net denoiser (see :class:`_DDPMUNet`).
 
     Notes
     -----
@@ -743,7 +743,7 @@ class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
 
     def __init__(self, config: DDPMConfig) -> None:
         super().__init__(config)
-        self.unet = DDPMUNet(config)
+        self.unet = _DDPMUNet(config)
         self._in_channels = config.in_channels
         self._learn_sigma = config.learn_sigma
         self._prediction_type = config.prediction_type

@@ -1,6 +1,6 @@
 """NCSN model (Song & Ermon, 2019).
 
-Reuses :class:`DDPMUNet` for the score network (every NCSN variant from
+Reuses :class:`_DDPMUNet` for the score network (every NCSN variant from
 v1 onward converged on the same modern U-Net architecture as diffusion).
 The NCSN-specific pieces are:
 
@@ -27,7 +27,7 @@ from lucid.models._utils._generative import (
 )
 from lucid.models.generative.ddpm._config import DDPMConfig
 from lucid.models.generative.ncsn._refinenet import RefineNetScoreNet
-from lucid.models.generative.ddpm._model import DDPMUNet
+from lucid.models.generative.ddpm._model import _DDPMUNet
 from lucid.models.generative.ncsn._config import NCSNConfig
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ from lucid.models.generative.ncsn._config import NCSNConfig
 
 def _to_unet_config(cfg: NCSNConfig) -> DDPMConfig:
     """Build a :class:`DDPMConfig` shadow so we can instantiate the shared
-    ``DDPMUNet`` from an :class:`NCSNConfig` (the U-Net never sees the
+    ``_DDPMUNet`` from an :class:`NCSNConfig` (the U-Net never sees the
     sigma-schedule / Langevin knobs)."""
     return DDPMConfig(
         sample_size=cfg.sample_size,
@@ -71,7 +71,7 @@ class NCSNModel(PretrainedModel):
 
     Implements the noise-conditional score network of Song and Ermon, 2019
     (and the NCSNv2 / NCSN++ refinements of Song 2020, Song et al. 2021).
-    Reuses :class:`DDPMUNet` as the score backbone — modern NCSN variants
+    Reuses :class:`_DDPMUNet` as the score backbone — modern NCSN variants
     converged on the same U-Net architecture as diffusion — but feeds the
     integer noise-level index :math:`i \in [0, L)` rather than a raw
     :math:`\sigma` value through the timestep embedding.  Divergence,
@@ -82,7 +82,7 @@ class NCSNModel(PretrainedModel):
     and divides the output by :math:`\sigma`; NCSN++ conditions on
     *continuous* :math:`\sigma` via Fourier features of
     :math:`\log \sigma`.  Feeding the index through the timestep MLP
-    keeps :class:`DDPMUNet` reusable unchanged, which is what makes one
+    keeps :class:`_DDPMUNet` reusable unchanged, which is what makes one
     backbone serve both families here.  The geometric :math:`\sigma` table itself is
     held as a non-persistent buffer so it travels with ``.to(device=...)``.
 
@@ -97,7 +97,7 @@ class NCSNModel(PretrainedModel):
 
     Attributes
     ----------
-    unet : DDPMUNet
+    unet : _DDPMUNet
         Shared U-Net backbone instantiated from a derived
         :class:`DDPMConfig`.
     sigmas : Tensor
@@ -162,7 +162,7 @@ class NCSNModel(PretrainedModel):
                 channel_mult=tuple(config.channel_mult),
             )
         else:
-            self.unet = DDPMUNet(_to_unet_config(config))
+            self.unet = _DDPMUNet(_to_unet_config(config))
         sigmas = make_sigma_schedule(
             config.num_noise_levels,
             sigma_max=config.sigma_max,

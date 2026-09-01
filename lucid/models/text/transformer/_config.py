@@ -117,6 +117,13 @@ class TransformerConfig(LanguageModelConfig):
     # Classification fine-tuning head (encoder-only consumption).
     num_labels: int = 2
     classifier_dropout: float | None = None
+    # Build the encoder stack alone and leave the decoder out.  The
+    # classification heads are always encoder-only, and this is where
+    # that belongs: a direct model takes its config and nothing else, so
+    # a variation that changes what gets built is a config field rather
+    # than a constructor argument.  ``num_decoder_layers`` keeps its
+    # value — it simply goes unread.
+    encoder_only: bool = False
 
     @override
     def __post_init__(self) -> None:

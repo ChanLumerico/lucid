@@ -5,7 +5,6 @@ Paper: "EfficientDet: Scalable and Efficient Object Detection"
 
 from lucid.models.vision.efficientdet._config import (
     EfficientDetConfig,
-    efficientdet_config,
 )
 from lucid.models.vision.efficientdet._model import EfficientDetForObjectDetection
 from lucid.models.vision.efficientdet._pretrained import (
@@ -22,7 +21,6 @@ from lucid.models.vision.efficientdet._pretrained import (
 __all__ = [
     "EfficientDetConfig",
     "EfficientDetForObjectDetection",
-    "efficientdet_config",
     "efficientdet_d0",
     "efficientdet_d1",
     "efficientdet_d2",

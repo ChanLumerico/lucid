@@ -15,8 +15,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- _Pending the next release._
+### Removed
+
+- drop `DDPMUNet` and `efficientdet_config` from their family namespaces —
+  the last two exceptions to "a family exports its five contract slots and
+  nothing else". They are `_DDPMUNet` and `_efficientdet_config` now, in the
+  same modules as before. 3.9.0 already took `DDPMUNet` off `lucid.models`'s
+  top-level surface; this finishes the same move one level down. The U-Net is
+  still what NCSN and Score-SDE build their score network from, imported from
+  `lucid.models.generative.ddpm._model`. `efficientdet_config` was the only
+  public `*_config` builder in 65 families, and it rendered on the docs site
+  among EfficientDet's eight factories as though you could load weights with it
+
+### Changed
+
+- `TransformerModel.__init__` takes its config and nothing else. `encoder_only`
+  was a keyword-only constructor argument, which made `TransformerModel` the
+  only one of 38 direct models whose signature was not `(self, config)` — the
+  contract puts every variation in the config, and this one now lives there as
+  `TransformerConfig.encoder_only`. Nobody outside the family passed it; the
+  two classification heads that did now build from
+  `replace(config, encoder_only=True)`. Existing checkpoints load unchanged,
+  since the field defaults to `False`
+
+### Fixed
+
+- export DIAMOND's six contract symbols from `lucid.models`. `DIAMONDConfig`,
+  `DIAMONDModel`, `DIAMONDForWorldModeling` and the three factories were
+  imported into `lucid/models/__init__.py` and left out of `__all__`, so
+  `from lucid.models import *` did not bring them and anything reading
+  `__all__` could not see them. Every other family's Config, model and
+  factories are there — 73 configs, 38 models, 93 task wrappers — and DIAMOND
+  was the only gap
 
 ---
 
@@ -3669,7 +3699,9 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.10.0...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.10.2...HEAD
+[3.10.2]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.2
+[3.10.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.1
 [3.10.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.0
 [3.9.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.9.0
 [3.8.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.8.0

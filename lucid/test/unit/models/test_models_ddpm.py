@@ -28,7 +28,7 @@ from lucid.models import (
     is_model,
 )
 from lucid.models.generative import DDPMScheduler
-from lucid.models.generative.ddpm import DDPMUNet
+from lucid.models.generative.ddpm._model import _DDPMUNet
 
 
 def _tiny_cfg(**overrides: object) -> DDPMConfig:
@@ -108,7 +108,7 @@ class TestDDPMConfig:
 class TestDDPMUNet:
     def test_forward_shape(self) -> None:
         cfg = _tiny_cfg()
-        unet = DDPMUNet(cfg).eval()
+        unet = _DDPMUNet(cfg).eval()
         x = lucid.randn((2, 3, 16, 16))
         t = lucid.tensor([5, 15]).long()
         out = unet(x, t)
@@ -116,7 +116,7 @@ class TestDDPMUNet:
 
     def test_scalar_timestep_is_broadcast(self) -> None:
         cfg = _tiny_cfg()
-        unet = DDPMUNet(cfg).eval()
+        unet = _DDPMUNet(cfg).eval()
         x = lucid.randn((2, 3, 16, 16))
         # Scalar tensor (rank-0) — should expand to batch.
         t = lucid.tensor(5).long()
@@ -125,7 +125,7 @@ class TestDDPMUNet:
 
     def test_learn_sigma_doubles_channels(self) -> None:
         cfg = _tiny_cfg(learn_sigma=True)
-        unet = DDPMUNet(cfg).eval()
+        unet = _DDPMUNet(cfg).eval()
         x = lucid.randn((1, 3, 16, 16))
         out = unet(x, lucid.tensor([0]).long())
         assert tuple(out.shape) == (1, 6, 16, 16)
@@ -134,7 +134,7 @@ class TestDDPMUNet:
         """Counting attention blocks: only stages whose spatial size is in
         ``attention_resolutions`` should have non-Identity attention slots."""
         cfg = _tiny_cfg(attention_resolutions=(8,))  # only the 8×8 stage
-        unet = DDPMUNet(cfg).eval()
+        unet = _DDPMUNet(cfg).eval()
         # Encoder side: stage 0 (16×16) → no attn; stage 1 (8×8 after down) → attn
         non_id_down = sum(
             1 for blk in unet.down_attn if not isinstance(blk, lucid.nn.Identity)
@@ -145,7 +145,7 @@ class TestDDPMUNet:
 
     def test_different_sample_size(self) -> None:
         cfg = _tiny_cfg(sample_size=32)
-        unet = DDPMUNet(cfg).eval()
+        unet = _DDPMUNet(cfg).eval()
         x = lucid.randn((1, 3, 32, 32))
         out = unet(x, lucid.tensor([0]).long())
         assert tuple(out.shape) == (1, 3, 32, 32)

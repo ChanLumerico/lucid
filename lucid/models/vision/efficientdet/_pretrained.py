@@ -6,7 +6,7 @@ from typing import Any, cast
 from lucid.models._registry import register_model
 from lucid.models.vision.efficientdet._config import (
     EfficientDetConfig,
-    efficientdet_config,
+    _efficientdet_config,
 )
 from lucid.models.vision.efficientdet._model import EfficientDetForObjectDetection
 from lucid.models._utils._common import reject_unavailable_pretrained
@@ -25,7 +25,7 @@ def _det(
     family="efficientdet",
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
-    default_config=efficientdet_config(phi=0),
+    default_config=_efficientdet_config(phi=0),
     params=3900000,
     summary="auto",
 )
@@ -72,7 +72,7 @@ def efficientdet_d0(
     """
     if pretrained:
         reject_unavailable_pretrained("efficientdet_d0")
-    return _det(efficientdet_config(phi=0), overrides)
+    return _det(_efficientdet_config(phi=0), overrides)
 
 
 @register_model(
@@ -80,7 +80,7 @@ def efficientdet_d0(
     family="efficientdet",
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
-    default_config=efficientdet_config(phi=1),
+    default_config=_efficientdet_config(phi=1),
     params=6600000,
     summary="auto",
 )
@@ -122,7 +122,7 @@ def efficientdet_d1(
     """
     if pretrained:
         reject_unavailable_pretrained("efficientdet_d1")
-    return _det(efficientdet_config(phi=1), overrides)
+    return _det(_efficientdet_config(phi=1), overrides)
 
 
 @register_model(
@@ -130,7 +130,7 @@ def efficientdet_d1(
     family="efficientdet",
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
-    default_config=efficientdet_config(phi=2),
+    default_config=_efficientdet_config(phi=2),
     params=8100000,
     summary="auto",
 )
@@ -172,7 +172,7 @@ def efficientdet_d2(
     """
     if pretrained:
         reject_unavailable_pretrained("efficientdet_d2")
-    return _det(efficientdet_config(phi=2), overrides)
+    return _det(_efficientdet_config(phi=2), overrides)
 
 
 @register_model(
@@ -180,7 +180,7 @@ def efficientdet_d2(
     family="efficientdet",
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
-    default_config=efficientdet_config(phi=3),
+    default_config=_efficientdet_config(phi=3),
     params=12000000,
     summary="auto",
 )
@@ -222,7 +222,7 @@ def efficientdet_d3(
     """
     if pretrained:
         reject_unavailable_pretrained("efficientdet_d3")
-    return _det(efficientdet_config(phi=3), overrides)
+    return _det(_efficientdet_config(phi=3), overrides)
 
 
 @register_model(
@@ -230,7 +230,7 @@ def efficientdet_d3(
     family="efficientdet",
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
-    default_config=efficientdet_config(phi=4),
+    default_config=_efficientdet_config(phi=4),
     params=20700000,
     summary="auto",
 )
@@ -272,7 +272,7 @@ def efficientdet_d4(
     """
     if pretrained:
         reject_unavailable_pretrained("efficientdet_d4")
-    return _det(efficientdet_config(phi=4), overrides)
+    return _det(_efficientdet_config(phi=4), overrides)
 
 
 @register_model(
@@ -280,7 +280,7 @@ def efficientdet_d4(
     family="efficientdet",
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
-    default_config=efficientdet_config(phi=5),
+    default_config=_efficientdet_config(phi=5),
     params=33700000,
     summary="auto",
 )
@@ -322,7 +322,7 @@ def efficientdet_d5(
     """
     if pretrained:
         reject_unavailable_pretrained("efficientdet_d5")
-    return _det(efficientdet_config(phi=5), overrides)
+    return _det(_efficientdet_config(phi=5), overrides)
 
 
 @register_model(
@@ -330,7 +330,7 @@ def efficientdet_d5(
     family="efficientdet",
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
-    default_config=efficientdet_config(phi=6),
+    default_config=_efficientdet_config(phi=6),
     params=51900000,
     summary="auto",
 )
@@ -372,7 +372,7 @@ def efficientdet_d6(
     """
     if pretrained:
         reject_unavailable_pretrained("efficientdet_d6")
-    return _det(efficientdet_config(phi=6), overrides)
+    return _det(_efficientdet_config(phi=6), overrides)
 
 
 @register_model(
@@ -380,7 +380,7 @@ def efficientdet_d6(
     family="efficientdet",
     model_type="efficientdet",
     model_class=EfficientDetForObjectDetection,
-    default_config=efficientdet_config(phi=7),
+    default_config=_efficientdet_config(phi=7),
     params=51900000,
     summary="auto",
 )
@@ -425,4 +425,4 @@ def efficientdet_d7(
     """
     if pretrained:
         reject_unavailable_pretrained("efficientdet_d7")
-    return _det(efficientdet_config(phi=7), overrides)
+    return _det(_efficientdet_config(phi=7), overrides)

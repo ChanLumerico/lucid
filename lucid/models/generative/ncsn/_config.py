@@ -5,7 +5,7 @@ Score-based generative model: learns ``s_θ(x̃, σ) ≈ ∇_x̃ log p_σ(x̃)``
 schedule of noise levels ``σ_1 > σ_2 > … > σ_L``, then samples via annealed
 Langevin dynamics across that schedule.
 
-Architecture-wise we reuse :class:`DDPMUNet` (NCSNv2 / NCSN++ converged on
+Architecture-wise we reuse :class:`_DDPMUNet` (NCSNv2 / NCSN++ converged on
 the same modern U-Net as diffusion).  The differences live in:
 
     * Noise schedule: geometric ``σ`` levels instead of diffusion ``β``.

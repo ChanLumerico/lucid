@@ -22,7 +22,7 @@ local implementation.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import ClassVar, cast, override
 
 import lucid
@@ -185,13 +185,11 @@ class TransformerModel(PretrainedModel):
     config_class: ClassVar[type[TransformerConfig]] = TransformerConfig
     base_model_prefix: ClassVar[str] = "transformer"
 
-    def __init__(
-        self, config: TransformerConfig, *, encoder_only: bool = False
-    ) -> None:
+    def __init__(self, config: TransformerConfig) -> None:
         super().__init__(config)
         self._max_pos = config.max_position_embeddings
         self._d_model = config.hidden_size
-        self._encoder_only = encoder_only
+        self._encoder_only = config.encoder_only
         tgt_vocab = config.effective_decoder_vocab_size
 
         # Token embeddings.  When ``share_embeddings`` is True the two tables
@@ -200,7 +198,7 @@ class TransformerModel(PretrainedModel):
         # the target side either, so they alias it rather than allocating a
         # second table nothing will read.
         self.src_tok_emb = nn.Embedding(config.vocab_size, config.hidden_size)
-        if config.share_embeddings or encoder_only:
+        if config.share_embeddings or config.encoder_only:
             self.tgt_tok_emb = self.src_tok_emb
         else:
             self.tgt_tok_emb = nn.Embedding(tgt_vocab, config.hidden_size)
@@ -221,7 +219,9 @@ class TransformerModel(PretrainedModel):
             # A classification head consumes ``encode()`` only, so building
             # the decoder stack allocates -- and checkpoints, and moves to
             # device -- roughly half the model as permanently dead weight.
-            num_decoder_layers=0 if encoder_only else config.num_decoder_layers,
+            num_decoder_layers=(
+                0 if config.encoder_only else config.num_decoder_layers
+            ),
             dim_feedforward=config.intermediate_size,
             dropout=config.hidden_dropout,
             # Declared and set to 0.3 by _CFG_LARGE, but nn.Transformer used
@@ -314,7 +314,8 @@ class TransformerModel(PretrainedModel):
         if self._encoder_only:
             raise RuntimeError(
                 "This TransformerModel was built encoder-only; it has no decoder "
-                "stack to run.  Construct it without encoder_only=True for seq2seq use."
+                "stack to run.  Build it from a config with "
+                "encoder_only=False for seq2seq use."
             )
         T = int(tgt_ids.shape[1])
         dev = tgt_ids.device.type
@@ -668,7 +669,7 @@ class TransformerForSequenceClassification(SequenceClassificationModel):
 
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__(config)
-        self.transformer = TransformerModel(config, encoder_only=True)
+        self.transformer = TransformerModel(replace(config, encoder_only=True))
         drop = (
             config.classifier_dropout
             if config.classifier_dropout is not None
@@ -756,7 +757,7 @@ class TransformerForTokenClassification(TokenClassificationModel, MaskedLMMixin)
 
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__(config)
-        self.transformer = TransformerModel(config, encoder_only=True)
+        self.transformer = TransformerModel(replace(config, encoder_only=True))
         drop = (
             config.classifier_dropout
             if config.classifier_dropout is not None

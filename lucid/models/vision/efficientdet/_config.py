@@ -211,7 +211,7 @@ _COMPOUND_PARAMS: dict[
 }
 
 
-def efficientdet_config(phi: int = 0, num_classes: int = 80) -> EfficientDetConfig:
+def _efficientdet_config(phi: int = 0, num_classes: int = 80) -> EfficientDetConfig:
     """Build the canonical EfficientDet-D{phi} config from the compound table.
 
     EfficientDet's compound scaling (Tan et al., 2020) maps a single

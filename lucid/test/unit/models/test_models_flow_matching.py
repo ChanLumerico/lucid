@@ -355,14 +355,14 @@ class TestVelocityField:
         wrong and still give a network that trains happily and reports a
         plausible loss; shapes do not catch it.
 
-        ``DDPMUNet`` loads converted official checkpoints, so its wiring is
+        ``_DDPMUNet`` loads converted official checkpoints, so its wiring is
         validated against published weights.  Configured equivalently, this
         field must *be* that function — same parameter names, same shapes,
         bit-identical output — which transfers that validation here and
         fails loudly if either drifts.
         """
         from lucid.models.generative.ddpm import DDPMConfig
-        from lucid.models.generative.ddpm._model import DDPMUNet
+        from lucid.models.generative.ddpm._model import _DDPMUNet
 
         common: dict[str, object] = {
             "sample_size": 16,
@@ -375,7 +375,7 @@ class TestVelocityField:
             "dropout": 0.0,
             "resnet_groups": 8,
         }
-        reference = DDPMUNet(DDPMConfig(**common, num_heads=1)).eval()  # type: ignore[arg-type]
+        reference = _DDPMUNet(DDPMConfig(**common, num_heads=1)).eval()  # type: ignore[arg-type]
         # More head channels than any stage is wide reproduces the
         # reference's fixed single head.
         field = _VelocityField(

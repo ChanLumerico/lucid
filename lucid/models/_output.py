@@ -527,13 +527,13 @@ class DiffusionModelOutput(ModelOutput):
 
     Notes
     -----
-    Returned by ``DDPMUNet.forward`` and other diffusion noise predictors.
+    Returned by ``_DDPMUNet.forward`` and other diffusion noise predictors.
     The sampling loop in :class:`DiffusionMixin` reads ``sample`` and
     passes it to the scheduler's ``step`` method.
 
     Examples
     --------
-    >>> unet = DDPMUNet(cfg)
+    >>> unet = _DDPMUNet(cfg)
     >>> out = unet(x_noisy, t)
     >>> out.sample.shape == x_noisy.shape
     True

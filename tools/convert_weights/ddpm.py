@@ -1,6 +1,6 @@
 """HF diffusers ``UNet2DModel`` (google/ddpm-*) → Lucid ``ddpm_*`` weights.
 
-Lucid's ``DDPMUNet`` is structurally identical to the diffusers ``UNet2DModel``
+Lucid's ``_DDPMUNet`` is structurally identical to the diffusers ``UNet2DModel``
 (both implement Ho 2020), but lays its modules out differently:
 
 * diffusers groups blocks by stage — ``down_blocks[i].resnets[j]``,
