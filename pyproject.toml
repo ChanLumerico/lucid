@@ -101,6 +101,11 @@ dev = [
 ]
 test = [
     "pytest>=7",
+    # Oracle for the Core ML writer, never a runtime dependency: the
+    # schema-drift test reads Apple's protobuf descriptors through it, the
+    # same opt-in standing ``ref_framework`` has for parity tests.  Pinned
+    # at a pre-release because 9.0 ships no cp314 wheel and Lucid is 3.14.
+    "coremltools>=9.1.dev1",
     "pytest-benchmark>=4",
     "numpy>=1.24",
     # Used by models serialization round-trip tests.

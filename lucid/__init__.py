@@ -225,6 +225,7 @@ __all__ = [
     # ── subpackages ───────────────────────────────────────────────────────
     "nn", "optim", "autograd", "func", "linalg", "fft", "signal", "special",
     "diffeq", "utils", "amp", "profiler", "einops", "compile", "quantization",
+    "coreml",
     "metal", "backends", "test", "weights",
     # ── public type aliases ───────────────────────────────────────────────
     "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
@@ -315,7 +316,7 @@ _SUBPKG_NAMES: frozenset[str] = frozenset([
     # ── numerical sub-packages ────────────────────────────────────────────
     "linalg", "fft", "signal", "special", "distributions", "diffeq",
     # ── inference / deployment ────────────────────────────────────────────
-    "quantization",
+    "quantization", "coreml",
     # ── infra / tooling ───────────────────────────────────────────────────
     "utils", "amp", "profiler", "einops", "compile",
     "metal", "backends", "test", "weights",

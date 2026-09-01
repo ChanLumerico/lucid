@@ -242,6 +242,16 @@ lucid_object_library(lucid_backend_init backend/BackendInit.cpp)
 # the Obj-C types it touches are already erased to void* by MpsBridge.
 lucid_object_library(lucid_interop interop/Dlpack.cpp)
 
+# Core ML model-package writer.  Plain C++: the protobuf/blob/bundle
+# formats are byte layout, and only the runtime half needs Obj-C.
+lucid_object_library(
+    lucid_coreml
+    coreml/BlobWriter.cpp
+    coreml/ModelPackage.cpp
+    coreml/MilProgram.cpp
+    coreml/CoreMLRuntime.mm)
+set_source_files_properties(coreml/CoreMLRuntime.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+
 lucid_object_library(
     lucid_autograd
     autograd/Node.cpp
@@ -512,6 +522,7 @@ lucid_object_library(
     bindings/bind_complex.cpp
     bindings/bind_compile.cpp        # 3.5 Phase 1.1: lucid.compile() bindings
     bindings/bind_interop.cpp        # kDLMetal DLPack producer + consumer
+    bindings/bind_coreml.cpp         # Core ML package writer
     bindings/bind_tokenizer.cpp      # 3.5+ tokenizer surface (utils.tokenizer)
     bindings/bind.cpp)
 
@@ -527,6 +538,7 @@ add_library(
     $<TARGET_OBJECTS:lucid_optim>
     $<TARGET_OBJECTS:lucid_compile>     # 3.5 Phase 1.1: graph-capture tracer
     $<TARGET_OBJECTS:lucid_interop>     # kDLMetal DLPack bridge
+    $<TARGET_OBJECTS:lucid_coreml>      # Core ML writer
     $<TARGET_OBJECTS:lucid_utils_tokenizer>  # 3.5+ BPE / WordPiece / ...
     $<TARGET_OBJECTS:lucid_bindings>)
 
@@ -539,7 +551,8 @@ target_link_libraries(
         "-framework Metal"                          # Phase 9.1: MetalAllocator
         "-framework Foundation"                     # required by Metal on macOS
         "-framework MetalPerformanceShaders"        # 3.4 Phase 1: MPSGraph deps
-        "-framework MetalPerformanceShadersGraph") # 3.4 Phase 1: graph kernels
+        "-framework MetalPerformanceShadersGraph"  # 3.4 Phase 1: graph kernels
+        "-framework CoreML")                       # lucid.coreml: ANE execution
 if(APPLE)
     target_link_options(lucid_engine PRIVATE -undefined dynamic_lookup)
 endif()

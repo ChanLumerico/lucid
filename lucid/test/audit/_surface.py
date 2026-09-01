@@ -55,6 +55,7 @@ SUBSYSTEMS: dict[str, tuple[str, str]] = {
     "amp": ("lucid.amp", "util"),
     "quantization": ("lucid.quantization", "quant"),
     "compile": ("lucid.compile", "compiled"),
+    "coreml": ("lucid.coreml", "compiled"),
     "profiler": ("lucid.profiler", "util"),
     "metal": ("lucid.metal", "util"),
     "backends": ("lucid.backends", "util"),
@@ -127,6 +128,7 @@ STATEFUL_EXACT: frozenset[str] = frozenset(
         "load_weight_entry",
         # tracing and timing, which install hooks of their own
         "compile",
+        "coreml",
         "profile",
         "record_function",
         # the device
