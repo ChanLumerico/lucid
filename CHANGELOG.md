@@ -53,7 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Lucid and MLX stop copying tensors between them
-- export Lucid models to Core ML, and reach the Neural Engine
 
 ---
 

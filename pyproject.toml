@@ -89,16 +89,6 @@ numpy = ["numpy>=1.24"]
 # Everything needed to load pretrained weights / the ``.safetensors`` format
 # (numpy is already in the base deps).  ``pip install lucid-dl[models]``.
 models = ["safetensors>=0.4"]
-# Core ML export (``tools/export_coreml``) — the only public route to the
-# Neural Engine, and how a Lucid model gets into an Apple app.  Developer
-# tooling: it lives outside ``lucid/`` and nothing in the package imports it.
-#
-# Pinned at a pre-release because that is the first coremltools with a
-# cp314 wheel, and Lucid is Python 3.14 only.  The 9.0 release stops at
-# cp313; installing it under 3.14 silently falls back to the sdist, which
-# builds no native extension and fails at save time with "BlobWriter not
-# loaded".  Revisit when 9.1 is final.
-coreml = ["coremltools>=9.1.dev1"]
 dev = [
     "pytest>=7",
     "ruff>=0.4",
