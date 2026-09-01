@@ -23,7 +23,7 @@ import lucid.compile as _compile
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid.coreml import _spec
-from lucid.coreml._emit import EMITTERS, emit_cast
+from lucid.coreml._emit import EMITTERS, MultiOutput, emit_cast
 from lucid.coreml._spec import Precision
 
 if TYPE_CHECKING:
@@ -187,6 +187,37 @@ class Builder:
         self._program.add_string_const(name, value)
         return name
 
+    def emit(self, mil_type: str, bindings: list, shape: list[int]) -> str:
+        """Append an intermediate operation and return its value name.
+
+        Some Lucid ops are several MIL ops — scaled dot-product attention
+        is a matmul, a scale, a softmax and another matmul — so an emitter
+        needs to place the ones before the last itself. The driver names
+        and types the final one from the trace.
+
+        Parameters
+        ----------
+        mil_type : str
+            MIL operator name.
+        bindings : list
+            ``(parameter, value name)`` pairs, as an emitter returns.
+        shape : list[int]
+            Result shape. The dtype is the program body's.
+
+        Returns
+        -------
+        str
+            Name of the value this operation produces.
+        """
+        name = self._next(mil_type)
+        normalised = [
+            (param, [value] if isinstance(value, str) else list(value))
+            for param, value in bindings
+        ]
+        self._program.add_op(mil_type, normalised, name, (self._body_mil, list(shape)))
+        self.shapes[name] = list(shape)
+        return name
+
     def const_bool(self, value: bool) -> str:
         name = self._next("bool")
         self._program.add_bool_const(name, bool(value))
@@ -286,20 +317,26 @@ def build_package(
         if emitter is None:
             raise UnsupportedOp(op.name)
         operands = [names[i] for i in op.inputs]
-        mil_type, bindings = emitter(builder, op, operands)
+        result = emitter(builder, op, operands)
+        multi = isinstance(result, MultiOutput)
+        mil_type, raw_bindings = (result.mil_type, result.bindings) if multi else result
         # Emitters may bind a parameter to one name or several (``concat``);
         # the engine wants a list either way.
         bindings = [
             (param, [value] if isinstance(value, str) else list(value))
-            for param, value in bindings
+            for param, value in raw_bindings
         ]
-        out = op.outputs[0]
-        out_name = f"_v{out.id}_{op.name}"
-        program.add_op(
-            mil_type, bindings, out_name, (body_mil, [int(d) for d in out.shape])
-        )
-        names[out.id] = out_name
-        builder.shapes[out_name] = [int(d) for d in out.shape]
+        outputs = [
+            (f"_v{o.id}_{op.name}", (body_mil, [int(d) for d in o.shape]))
+            for o in (op.outputs if multi else op.outputs[:1])
+        ]
+        if multi:
+            program.add_op_multi(mil_type, bindings, outputs)
+        else:
+            program.add_op(mil_type, bindings, outputs[0][0], outputs[0][1])
+        for (out_name, (_dt, shape)), o in zip(outputs, op.outputs):
+            names[o.id] = out_name
+            builder.shapes[out_name] = shape
 
     blob.finalize()
 

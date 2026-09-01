@@ -21,12 +21,24 @@ correct output ranks, and wrong values everywhere — nothing about it
 fails loudly.
 """
 
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, NamedTuple
 
 if TYPE_CHECKING:
     from lucid.coreml._build import Builder
 
-__all__ = ["EMITTERS", "MIL_OPS"]
+__all__ = ["EMITTERS", "MIL_OPS", "MultiOutput"]
+
+
+class MultiOutput(NamedTuple):
+    """One MIL operation that produces every one of a Lucid op's outputs.
+
+    ``split`` is the case: the trace records one op with several
+    results, and ``Operation.outputs`` is repeated to match.
+    """
+
+    mil_type: str
+    bindings: list
+
 
 # Lucid op name -> emitter.
 EMITTERS: dict[str, Callable[..., tuple[str, list[tuple[str, str]]]]] = {}
@@ -340,6 +352,114 @@ def _layer_norm(
     return "layer_norm", bindings
 
 
+@_emitter("mean")
+def _mean(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    attrs = op.attrs  # type: ignore[attr-defined]
+    axes = [int(d) for d in attrs["dims"]]
+    return "reduce_mean", [
+        ("x", ins[0]),
+        ("axes", b.const_ints(axes)),
+        ("keep_dims", b.const_bool(bool(attrs.get("keepdim", False)))),
+    ]
+
+
+@_emitter("stack")
+def _stack(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    axis = int(op.attrs.get("axis", 0))  # type: ignore[attr-defined]
+    return "stack", [("values", list(ins)), ("axis", b.const_int(axis))]
+
+
+@_emitter("split_at")
+def _split_at(b: "Builder", op: object, ins: list[str]) -> MultiOutput:
+    """One MIL ``split`` producing every section the trace recorded.
+
+    Lucid records the cut points; MIL wants the section sizes, which the
+    output shapes already give — and taking them from the outputs keeps
+    the two descriptions from disagreeing.
+    """
+    axis = int(op.attrs["axis"])  # type: ignore[attr-defined]
+    sizes = [int(o.shape[axis]) for o in op.outputs]  # type: ignore[attr-defined]
+    return MultiOutput(
+        "split",
+        [
+            ("x", ins[0]),
+            ("split_sizes", b.const_ints(sizes)),
+            ("axis", b.const_int(axis)),
+        ],
+    )
+
+
+@_emitter("broadcast_to")
+def _broadcast_to(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    """Expressed as ``tile``, which MIL has, since ``broadcast_to`` it does not.
+
+    A broadcast repeats each size-1 axis; the repetition counts come from
+    dividing the result shape by the operand's. Ranks are matched first by
+    reshaping with leading ones, the way broadcasting aligns them.
+    """
+    src = b.shape_of(ins[0])
+    out = _out_shape(op)
+    value = ins[0]
+    if len(src) < len(out):
+        src = [1] * (len(out) - len(src)) + src
+        value = b.emit("reshape", [("x", ins[0]), ("shape", b.const_ints(src))], src)
+    reps = [o // s if s else 1 for s, o in zip(src, out)]
+    return "tile", [("x", value), ("reps", b.const_ints(reps))]
+
+
+@_emitter("scaled_dot_product_attention")
+def _sdpa(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    """Decomposed rather than mapped to ``ios18.scaled_dot_product_attention``.
+
+    The fused operation exists only in a newer opset than the one this
+    writer emits, and the decomposition is what Core ML's own converter
+    produces for older targets: scores, scale, softmax, weighted sum.
+    """
+    attrs = op.attrs  # type: ignore[attr-defined]
+    if attrs.get("has_mask") or attrs.get("is_causal"):
+        raise NotImplementedError(
+            "lucid.coreml: masked or causal scaled_dot_product_attention is not "
+            "translated yet — the mask operand has no emitter"
+        )
+    query, key, value = ins[0], ins[1], ins[2]
+    q_shape = b.shape_of(query)
+    k_shape = b.shape_of(key)
+    scores_shape = q_shape[:-1] + [k_shape[-2]]
+
+    scores = b.emit(
+        "matmul",
+        [
+            ("x", query),
+            ("y", key),
+            ("transpose_x", b.const_bool(False)),
+            ("transpose_y", b.const_bool(True)),
+        ],
+        scores_shape,
+    )
+    scaled = b.emit(
+        "mul",
+        [("x", scores), ("y", b.const_float(float(attrs["scale"])))],
+        scores_shape,
+    )
+    weights = b.emit(
+        "softmax", [("x", scaled), ("axis", b.const_int(-1))], scores_shape
+    )
+    return "matmul", [
+        ("x", weights),
+        ("y", value),
+        ("transpose_x", b.const_bool(False)),
+        ("transpose_y", b.const_bool(False)),
+    ]
+
+
 def emit_cast(
     b: "Builder", value: str, out_dtype: str
 ) -> tuple[str, list[tuple[str, str]]]:
@@ -383,7 +503,11 @@ MIL_OPS = (
     "layer_norm",
     "leaky_relu",
     "matmul",
+    "reduce_mean",
     "silu",
+    "split",
+    "stack",
+    "tile",
     "softmax",
     "transpose",
     "avg_pool",

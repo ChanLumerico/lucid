@@ -76,6 +76,13 @@ public:
                 const std::string& output_name,
                 const MilTensorType& output_type);
 
+    // Multi-output form.  ``Operation.outputs`` is repeated in the schema
+    // and some operations use it — ``split`` produces one value per
+    // section — so a one-output-per-op writer cannot express them.
+    void add_op_multi(const std::string& op_type,
+                      const MilInputs& inputs,
+                      const std::vector<std::pair<std::string, MilTensorType>>& outputs);
+
     // The value the model returns.  Must name an existing operation output.
     void set_output(const std::string& name, const MilTensorType& type);
 
@@ -96,6 +103,8 @@ private:
         MilInputs inputs;
         std::string output_name;
         MilTensorType output_type;
+        // Additional outputs beyond the first, for multi-output ops.
+        std::vector<std::pair<std::string, MilTensorType>> extra_outputs;
         // ``const`` payload, unused for other op types.
         bool is_const = false;
         bool blob = false;

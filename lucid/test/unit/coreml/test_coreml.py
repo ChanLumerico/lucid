@@ -186,6 +186,55 @@ class TestTheAcceleratorIsActuallyUsed:
         cm.close()
 
 
+class TestVerificationCannotBeVacuous:
+    def test_an_all_zero_reference_is_refused(self, tmp_path: object) -> None:
+        """Comparing against zeros would score a broken exporter perfectly.
+
+        Not theoretical: several zoo models zero-initialise their head, so
+        an untrained factory returns exactly zero and every difference is
+        zero with it. ViT is one, which is how this was found.
+        """
+
+        class ZeroHead(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.fc = nn.Linear(4, 3)
+                with lucid.no_grad():
+                    state = self.state_dict()
+                    state["fc.weight"] = lucid.zeros(*state["fc.weight"].shape)
+                    state["fc.bias"] = lucid.zeros(*state["fc.bias"].shape)
+                    self.load_state_dict(state)
+
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return self.fc(x)
+
+        model = ZeroHead().eval()
+        x = lucid.randn(1, 4)
+        cm = cml.export(model, x, str(tmp_path / "zero.mlpackage"))
+
+        with pytest.raises(ValueError, match="all zeros"):
+            cm.verify(model, x)
+        cm.close()
+
+    def test_a_transformer_matches(self, tmp_path: object) -> None:
+        # Attention, split and broadcast all at once.  The zero-initialised
+        # parameters are perturbed first, or the comparison would be the
+        # vacuous one above.
+        model = M.create_model("vit_base_16_cls", num_classes=10).eval()
+        state = model.state_dict()
+        for key, value in list(state.items()):
+            if "running" not in key and float(value.abs().max().item()) == 0.0:
+                state[key] = lucid.randn(*value.shape) * 0.02
+        model.load_state_dict(state)
+        x = lucid.randn(1, 3, 224, 224)
+        scale = float(model(x).logits.abs().max().item())
+
+        cm = cml.export(model, x, str(tmp_path / "vit.mlpackage"))
+
+        assert cm.verify(model, x) / scale < 1e-4
+        cm.close()
+
+
 class TestRoundTrip:
     def test_a_written_package_can_be_loaded_back(self, tmp_path: object) -> None:
         model, x = _tiny()

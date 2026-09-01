@@ -114,6 +114,19 @@ void register_coreml(py::module_& m) {
             py::arg("op_type"), py::arg("inputs"), py::arg("output_name"), py::arg("output_type"),
             "Append an operation. ``inputs`` is a list of (parameter, value-name) pairs.")
         .def(
+            "add_op_multi",
+            [](lucid::coreml::MilProgram& self, const std::string& op_type,
+               const lucid::coreml::MilInputs& inputs,
+               const std::vector<std::pair<std::string, TypeSpec>>& outputs) {
+                std::vector<std::pair<std::string, lucid::coreml::MilTensorType>> converted;
+                converted.reserve(outputs.size());
+                for (const auto& [name, spec] : outputs)
+                    converted.emplace_back(name, to_type(spec));
+                self.add_op_multi(op_type, inputs, converted);
+            },
+            py::arg("op_type"), py::arg("inputs"), py::arg("outputs"),
+            "Append an operation with more than one output, e.g. ``split``.")
+        .def(
             "set_output",
             [](lucid::coreml::MilProgram& self, const std::string& name, const TypeSpec& type) {
                 self.set_output(name, to_type(type));

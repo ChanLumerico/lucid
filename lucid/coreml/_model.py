@@ -134,6 +134,18 @@ class CoreMLModel:
         reference = model(x)
         if not isinstance(reference, lucid.Tensor):
             reference = reference.logits
+        scale = float(reference.abs().max().item())
+        if scale == 0.0:
+            # Comparing against an all-zero reference proves nothing: an
+            # exporter that dropped every layer would also return zeros
+            # and score perfectly.  Several zoo models zero-initialise
+            # their head, so this is reachable with an untrained factory
+            # rather than being a theoretical case.
+            raise ValueError(
+                "lucid.coreml: the eager model returned all zeros, so this "
+                "comparison cannot detect anything — load weights, or perturb "
+                "the zero-initialised parameters, before verifying"
+            )
         return float((self.predict(x) - reference).abs().max().item())
 
     def compute_plan(self) -> PlacementSummary:

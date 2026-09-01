@@ -149,6 +149,20 @@ void MilProgram::add_op(const std::string& op_type,
     ops_.push_back(std::move(op));
 }
 
+void MilProgram::add_op_multi(const std::string& op_type,
+                              const MilInputs& inputs,
+                              const std::vector<std::pair<std::string, MilTensorType>>& outputs) {
+    if (outputs.empty())
+        throw std::invalid_argument("MilProgram::add_op_multi: an operation needs an output");
+    Op op;
+    op.type = op_type;
+    op.inputs = inputs;
+    op.output_name = outputs.front().first;
+    op.output_type = outputs.front().second;
+    op.extra_outputs.assign(outputs.begin() + 1, outputs.end());
+    ops_.push_back(std::move(op));
+}
+
 void MilProgram::set_output(const std::string& name, const MilTensorType& type) {
     output_name_ = name;
     output_type_ = type;
@@ -171,6 +185,9 @@ std::string MilProgram::serialize() const {
             operation.write_map_entry(pb::Operation::kInputs, param, make_argument(value_names));
         operation.write_message(pb::Operation::kOutputs,
                                 make_named_value_type(op.output_name, op.output_type));
+        for (const auto& [extra_name, extra_type] : op.extra_outputs)
+            operation.write_message(pb::Operation::kOutputs,
+                                    make_named_value_type(extra_name, extra_type));
 
         if (op.is_const) {
             ProtoWriter value;
