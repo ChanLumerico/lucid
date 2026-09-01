@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - a saved graph could not be loaded back, and said so by crashing
 - the classifier heads return what their task bases promise
 
+### Added
+
+- Lucid and MLX stop copying tensors between them
+
 ---
 
 ## [3.10.2] — 2026-09-01

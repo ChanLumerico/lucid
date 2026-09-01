@@ -589,17 +589,43 @@ def from_numpy(arr: np.ndarray) -> Tensor:
 # ``pip install lucid[numpy]`` when numpy is absent.
 
 
+# DLPack device type for Metal, as MLX tags its capsules and as
+# ``Tensor.__dlpack_device__`` reports for a GPU-resident tensor.
+_DLPACK_METAL = 8
+
+
 def from_dlpack(ext_tensor: object) -> Tensor:
     """Construct a Lucid tensor from any object exposing the DLPack
     protocol (``__dlpack__``) or from a raw PyCapsule.
 
-    Memory is shared with ``ext_tensor`` where possible (CPU only).  The
-    result lives on CPU regardless of the producer's device — Metal
-    consumers should ``.to(device='metal')`` after the import.
+    Two dialects, picked by what the producer says it is:
 
-    Requires numpy as the canonical DLPack bridge — install via
-    ``pip install lucid[numpy]`` if missing.
+    * **Metal** (``__dlpack_device__() == (8, 0)``) — adopted natively.
+      The producer's ``MTLBuffer`` becomes this tensor's storage with no
+      copy at all, which is what makes an ``mlx.core.array`` and a Lucid
+      Metal tensor two views of one allocation. NumPy cannot read a
+      capsule of this device type, so this path bypasses it entirely.
+    * **Everything else** — through NumPy, which shares host memory
+      where it can. The result lives on the CPU regardless of the
+      producer's device; call ``.to("metal")`` after importing.
+
+    Requires numpy for the host dialect — install via
+    ``pip install lucid[numpy]`` if missing. The Metal dialect needs
+    nothing.
     """
+    device = getattr(ext_tensor, "__dlpack_device__", None)
+    if callable(device):
+        try:
+            kind, _index = device()
+        except Exception:  # noqa: BLE001 - a broken producer falls to numpy
+            kind = None
+        if kind == _DLPACK_METAL:
+            from lucid._C import engine as _C_engine
+            from lucid._dispatch import _wrap
+
+            capsule = ext_tensor.__dlpack__()  # type: ignore[attr-defined]
+            return _wrap(_C_engine.from_dlpack_metal(capsule))
+
     np = _require_numpy("lucid.from_dlpack")
     arr = np.from_dlpack(ext_tensor)  # type: ignore[attr-defined]
     return tensor(arr)
@@ -608,12 +634,15 @@ def from_dlpack(ext_tensor: object) -> Tensor:
 def to_dlpack(t: Tensor) -> object:
     """Export ``t`` as a DLPack PyCapsule.
 
-    Always materialises through NumPy, so GPU tensors take a CPU
-    round-trip.  The capsule can be consumed exactly once — pass it
-    directly to ``np.from_dlpack`` / a reference-framework consumer / etc.
+    A Metal tensor exports natively — the capsule carries its
+    ``MTLBuffer``, so an MLX consumer reads the same pages rather than a
+    downloaded copy. A CPU tensor materialises through NumPy. Either
+    capsule can be consumed exactly once.
 
-    Requires numpy as the canonical DLPack bridge — install via
+    Requires numpy for the host dialect — install via
     ``pip install lucid[numpy]`` if missing.
     """
+    if t.is_metal:
+        return t.__dlpack__()
     _require_numpy("lucid.to_dlpack")
     return t.numpy().__dlpack__()

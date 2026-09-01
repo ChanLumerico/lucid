@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Callable, ClassVar, Self, Iterator, final, ove
 
 if TYPE_CHECKING:
     import numpy as np
-    from numpy.typing import DTypeLike
+    from numpy.typing import DTypeLike as NpDTypeLike
 
 from lucid._C import engine as _C_engine
 from lucid._dtype import (
@@ -33,6 +33,11 @@ from lucid._factories.converters import tensor as _tensor_fn, _to_impl
 
 if TYPE_CHECKING:
     from lucid.autograd._hooks import RemovableHandle as _RemovableHandle
+
+
+# DLPack device type for Metal — what a GPU-resident tensor reports and
+# what MLX tags its own capsules with.
+_DLPACK_METAL = 8
 
 
 class Tensor:
@@ -1502,7 +1507,7 @@ class Tensor:
         return np.asarray(raw)
 
     def __array__(
-        self, dtype: DTypeLike | None = None, *, copy: bool | None = None
+        self, dtype: NpDTypeLike | None = None, *, copy: bool | None = None
     ) -> np.ndarray:
         r"""NumPy's array-conversion hook — makes ``np.asarray(t)`` give real numbers.
 
@@ -1546,6 +1551,7 @@ class Tensor:
 
         Examples
         --------
+        >>> import lucid
         >>> import numpy as np
         >>> np.asarray(lucid.ones(2, 2)).dtype
         dtype('float32')
@@ -1573,7 +1579,14 @@ class Tensor:
     # does that).  A native engine-side DLPack export is filed as
     # future work.
 
-    def __dlpack__(self, stream: object | None = None) -> object:
+    def __dlpack__(
+        self,
+        stream: object | None = None,
+        *,
+        max_version: tuple[int, int] | None = None,
+        dl_device: tuple[int, int] | None = None,
+        copy: bool | None = None,
+    ) -> object:
         r"""Export this tensor as a DLPack ``PyCapsule`` for zero-copy interop.
 
         DLPack is the open cross-framework tensor exchange specification —
@@ -1581,17 +1594,41 @@ class Tensor:
         JAX, CuPy, TVM, and many others) can ingest a Lucid tensor without
         a Python-level data copy by calling ``their_framework.from_dlpack(t)``.
 
-        The current implementation routes through :meth:`numpy`, so the
-        export always lands on host memory (DLPack device ``kDLCPU``).
-        Metal tensors silently round-trip through CPU; a future native
-        engine-side DLPack export will avoid the trip.
+        Two dialects, picked by where the tensor lives and what the
+        consumer asks for:
+
+        * **Metal** — the capsule carries the tensor's ``MTLBuffer``
+          (device ``kDLMetal``). An MLX consumer reads the very pages
+          Lucid computed into; no download happens. NumPy cannot read a
+          capsule of this device type at all.
+        * **Host** — a CPU tensor, or a Metal one whose consumer named
+          the host in ``dl_device``, exports through :meth:`numpy`.
+
+        A host consumer therefore has to say so — ``np.from_dlpack(t)``
+        on a Metal tensor raises, while ``np.from_dlpack(t, device="cpu")``
+        downloads and works. That is the same bargain every framework's
+        GPU tensors make, and the reason :meth:`__dlpack_device__` can now
+        answer truthfully.
 
         Parameters
         ----------
         stream : object, optional
             Stream / queue handle for synchronisation, per the DLPack v0.8+
-            protocol. Forwarded to NumPy's ``__dlpack__``. ``None`` means
-            no explicit synchronisation is required (the default on CPU).
+            protocol. Forwarded to NumPy's ``__dlpack__`` on the host path.
+            Ignored on the Metal path, which blocks until the producing
+            command buffer completes before it hands over the handle.
+        max_version : tuple[int, int] or None, optional, keyword-only, default=None
+            Highest DLPack version the consumer supports. Accepted for
+            protocol compatibility; this exporter emits the unversioned
+            ``DLManagedTensor`` both dialects agree on.
+        dl_device : tuple[int, int] or None, optional, keyword-only, default=None
+            Device the consumer wants the data on. ``None`` means the
+            tensor's own device. Naming the host (``(1, 0)``) forces the
+            NumPy path even for a Metal tensor.
+        copy : bool or None, optional, keyword-only, default=None
+            ``False`` demands a view. Refused when it would require
+            moving a Metal tensor to the host, since that cannot be done
+            without copying.
 
         Returns
         -------
@@ -1621,6 +1658,26 @@ class Tensor:
         >>> arr.shape
         (2, 2)
         """
+        wants_host = dl_device is not None and dl_device[0] != _DLPACK_METAL
+        if self.is_metal and not wants_host:
+            # Metal tensors export natively: the capsule points at the
+            # MTLBuffer MLX is already holding, so a consumer on the same
+            # unified memory reads the very pages Lucid computed into.
+            # ``stream`` has no meaning here — the exporter blocks until
+            # the producing command buffer completes before handing the
+            # handle over.
+            from lucid._C import engine as _C_engine
+
+            return _C_engine.to_dlpack_metal(self._impl)
+        # A consumer that asked for the host (``dl_device``) gets the
+        # NumPy dialect, download and all.  ``copy=False`` cannot be
+        # honoured across that download, so it is refused rather than
+        # quietly ignored.
+        if wants_host and self.is_metal and copy is False:
+            raise BufferError(
+                "Tensor.__dlpack__: a Metal tensor cannot be exported to the "
+                "host without a copy; pass copy=None or import it on Metal"
+            )
         return (
             self.numpy().__dlpack__(stream=stream)
             if stream is not None
@@ -1637,22 +1694,22 @@ class Tensor:
         Returns
         -------
         tuple[int, int]
-            ``(device_type, device_id)``. Always reports ``(1, 0)``, where
-            ``1 == kDLCPU`` in the DLPack device-type enum, because the
-            export currently goes through NumPy (host memory). The
-            ``device_id`` of ``0`` is conventional for non-indexed devices.
+            ``(device_type, device_id)``: ``(8, 0)`` for a Metal tensor
+            (``8 == kDLMetal``) and ``(1, 0)`` for a host one, where
+            ``1 == kDLCPU``. The ``device_id`` of ``0`` is conventional
+            for non-indexed devices.
 
         Notes
         -----
         DLPack device types of interest:
 
-        * ``1`` — ``kDLCPU`` (this implementation)
+        * ``1`` — ``kDLCPU``
         * ``8`` — ``kDLMetal``
 
-        A future native Metal-side export will return ``(8, 0)`` when the
-        tensor resides on the GPU, avoiding the CPU round-trip. The
-        device tag is therefore the constant pair
-        :math:`(\texttt{kDLCPU}, 0) = (1, 0)` for all current tensors.
+        This used to answer ``(1, 0)`` for every tensor, Metal ones
+        included, because the export went through NumPy and downloaded to
+        make that true. A consumer had no way to learn that the data was
+        already on the GPU it was about to upload it back to.
 
         Examples
         --------
@@ -1660,7 +1717,7 @@ class Tensor:
         >>> lucid.zeros(3).__dlpack_device__()
         (1, 0)
         """
-        return (1, 0)
+        return (8, 0) if self.is_metal else (1, 0)
 
     def tolist(self) -> list[object] | int | float | bool:
         r"""Return the tensor contents as a nested Python list (or scalar).

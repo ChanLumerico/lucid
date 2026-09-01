@@ -76,11 +76,12 @@ class TestArrayProtocol:
 
 
 class TestDLPackProtocol:
-    def test_dlpack_device_is_cpu(self) -> None:
-        # ``__dlpack_device__`` always reports CPU because the export
-        # routes through numpy.  ``(1, 0)`` is the kDLCPU device id.
-        t = lucid.tensor([1.0, 2.0])
-        assert t.__dlpack_device__() == (1, 0)
+    def test_dlpack_device_reports_where_the_tensor_lives(self) -> None:
+        # A host tensor is kDLCPU (1, 0).  A Metal one used to claim the
+        # same, because the export went through numpy and downloaded —
+        # it now says kDLMetal (8, 0), which is both true and what lets
+        # MLX take the pages instead of a copy.
+        assert lucid.tensor([1.0, 2.0]).__dlpack_device__() == (1, 0)
 
     def test_dlpack_returns_capsule(self) -> None:
         t = lucid.tensor([1.0, 2.0])
@@ -104,9 +105,31 @@ class TestDLPackProtocol:
         t = lucid.from_dlpack(arr)
         np.testing.assert_array_equal(t.numpy(), [10.0, 20.0, 30.0])
 
-    def test_metal_export_via_cpu_bridge(self) -> None:
-        if not metal_available():
-            pytest.skip("Metal not available")
+    @pytest.mark.skipif(not metal_available(), reason="needs Metal")
+    def test_metal_tensor_reports_metal(self) -> None:
         g = lucid.tensor([1.0, 2.0], device="metal")
-        arr = np.from_dlpack(g)
-        np.testing.assert_array_equal(arr, [1.0, 2.0])
+        assert g.__dlpack_device__() == (8, 0)
+
+    @pytest.mark.skipif(not metal_available(), reason="needs Metal")
+    def test_a_host_consumer_has_to_ask_for_the_host(self) -> None:
+        """The default export is the tensor's own device, per the spec.
+
+        NumPy cannot read a Metal capsule at all, so the bare call now
+        raises where it used to silently download.  That download is
+        still available — the consumer names the device it wants, which
+        is how every other framework's GPU tensors behave, and how
+        ``__dlpack_device__`` stops being a lie.
+        """
+        g = lucid.tensor([1.0, 2.0], device="metal")
+
+        with pytest.raises(BufferError):
+            np.from_dlpack(g)
+
+        np.testing.assert_array_equal(np.from_dlpack(g, device="cpu"), [1.0, 2.0])
+
+    @pytest.mark.skipif(not metal_available(), reason="needs Metal")
+    def test_no_copy_export_to_the_host_is_refused(self) -> None:
+        g = lucid.tensor([1.0, 2.0], device="metal")
+
+        with pytest.raises(BufferError, match="without a copy"):
+            g.__dlpack__(dl_device=(1, 0), copy=False)

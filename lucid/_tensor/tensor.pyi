@@ -8,7 +8,7 @@ from typing import Iterator, Self, Sequence, overload, override
 import builtins
 
 import numpy as np
-from numpy.typing import DTypeLike
+from numpy.typing import DTypeLike as NpDTypeLike
 
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype as _dtype_cls
@@ -90,8 +90,17 @@ class Tensor:
     def item(self) -> float | int | bool: ...
     def numpy(self) -> np.ndarray: ...
     def __array__(
-        self, dtype: DTypeLike | None = None, *, copy: bool | None = None
+        self, dtype: NpDTypeLike | None = None, *, copy: bool | None = None
     ) -> np.ndarray: ...
+    def __dlpack__(
+        self,
+        stream: object | None = None,
+        *,
+        max_version: tuple[int, int] | None = None,
+        dl_device: tuple[int, int] | None = None,
+        copy: bool | None = None,
+    ) -> object: ...
+    def __dlpack_device__(self) -> tuple[int, int]: ...
     def tolist(self) -> list[object] | int | float | bool: ...
     def contiguous(self) -> Self: ...
     def unfold(self, dimension: int, size: int, step: int) -> Tensor: ...

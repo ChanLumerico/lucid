@@ -238,6 +238,10 @@ set_source_files_properties(
 
 lucid_object_library(lucid_backend_init backend/BackendInit.cpp)
 
+# Zero-copy DLPack in the Metal dialect — see interop/Dlpack.h.  Plain C++:
+# the Obj-C types it touches are already erased to void* by MpsBridge.
+lucid_object_library(lucid_interop interop/Dlpack.cpp)
+
 lucid_object_library(
     lucid_autograd
     autograd/Node.cpp
@@ -507,6 +511,7 @@ lucid_object_library(
     bindings/bind_quantized.cpp
     bindings/bind_complex.cpp
     bindings/bind_compile.cpp        # 3.5 Phase 1.1: lucid.compile() bindings
+    bindings/bind_interop.cpp        # kDLMetal DLPack producer + consumer
     bindings/bind_tokenizer.cpp      # 3.5+ tokenizer surface (utils.tokenizer)
     bindings/bind.cpp)
 
@@ -521,6 +526,7 @@ add_library(
     $<TARGET_OBJECTS:lucid_random>
     $<TARGET_OBJECTS:lucid_optim>
     $<TARGET_OBJECTS:lucid_compile>     # 3.5 Phase 1.1: graph-capture tracer
+    $<TARGET_OBJECTS:lucid_interop>     # kDLMetal DLPack bridge
     $<TARGET_OBJECTS:lucid_utils_tokenizer>  # 3.5+ BPE / WordPiece / ...
     $<TARGET_OBJECTS:lucid_bindings>)
 

@@ -30,6 +30,7 @@ namespace lucid::bindings {
 void register_errors(py::module_& m);
 void register_core(py::module_& m);
 void register_tensor_impl(py::module_& m);
+void register_interop(py::module_& m);
 void register_autograd(py::module_& m);
 void register_amp(py::module_& m);
 void register_profiler(py::module_& m);
@@ -73,6 +74,7 @@ PYBIND11_MODULE(engine, m) {
     lucid::bindings::register_errors(m);
     lucid::bindings::register_core(m);
     lucid::bindings::register_tensor_impl(m);
+    lucid::bindings::register_interop(m);
     lucid::bindings::register_amp(m);
     lucid::bindings::register_profiler(m);
     lucid::bindings::register_op_registry(m);
