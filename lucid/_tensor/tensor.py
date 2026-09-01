@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, Callable, ClassVar, Self, Iterator, final, ove
 
 if TYPE_CHECKING:
     import numpy as np
+    from numpy.typing import DTypeLike
 
 from lucid._C import engine as _C_engine
 from lucid._dtype import (
@@ -1499,6 +1500,67 @@ class Tensor:
         np = _require_numpy("Tensor.numpy()")
         raw = self._impl.data_as_python()
         return np.asarray(raw)
+
+    def __array__(
+        self, dtype: DTypeLike | None = None, *, copy: bool | None = None
+    ) -> np.ndarray:
+        r"""NumPy's array-conversion hook — makes ``np.asarray(t)`` give real numbers.
+
+        Without this method NumPy falls back to the sequence protocol and
+        walks the tensor element by element, producing an
+        ``dtype=object`` array whose entries are 0-d :class:`Tensor`
+        objects.  That fails no test and raises nothing; it just silently
+        stops being numeric, so every downstream ``mean`` / ``astype`` /
+        plot behaves differently from the same call on
+        :meth:`numpy`.  Routing the hook through :meth:`numpy` keeps the
+        three spellings — ``t.numpy()``, ``np.asarray(t)``,
+        ``np.from_dlpack(t)`` — on one code path.
+
+        Parameters
+        ----------
+        dtype : numpy.typing.DTypeLike or None, optional, default=None
+            Requested element type.  ``None`` keeps the tensor's own.
+        copy : bool or None, optional, keyword-only, default=None
+            NumPy 2 copy semantics.  ``None`` copies when needed, ``True``
+            always copies, and ``False`` demands a view.  A Lucid tensor
+            has to be read out through the host to become an
+            ``ndarray``, so ``copy=False`` is unsatisfiable and raises.
+
+        Returns
+        -------
+        numpy.ndarray
+            The tensor's values, on the host.
+
+        Raises
+        ------
+        ValueError
+            ``copy=False`` was requested — see above.
+        ImportError
+            NumPy is not installed (raised by :meth:`numpy`).
+
+        Notes
+        -----
+        Like :meth:`numpy`, a Metal tensor round-trips through the CPU.
+        This is one of the bridge boundaries where numpy is allowed
+        (project rule **H4**).
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> np.asarray(lucid.ones(2, 2)).dtype
+        dtype('float32')
+        """
+        if copy is False:
+            raise ValueError(
+                "Tensor.__array__: copy=False was requested, but converting a "
+                "Lucid tensor to a NumPy array always reads the values out "
+                "through the host, so no view is possible.  Use "
+                "np.asarray(t) / t.numpy() and accept the copy."
+            )
+        arr = self.numpy()
+        if dtype is not None:
+            arr = arr.astype(dtype, copy=False)
+        return arr
 
     # ── DLPack protocol ──────────────────────────────────────────────────
     #

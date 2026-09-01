@@ -40,6 +40,41 @@ class TestToNumpy:
         np.testing.assert_array_equal(arr, [1.0, 2.0, 3.0])
 
 
+class TestArrayProtocol:
+    """``np.asarray(t)`` has to produce numbers, not a box of Tensors.
+
+    Without ``__array__`` NumPy falls back to the sequence protocol and
+    builds an ``dtype=object`` array of 0-d Tensors.  Nothing raises —
+    the result just stops being numeric, so it is the one bridge failure
+    a smoke test would not notice.
+    """
+
+    def test_asarray_is_numeric(self) -> None:
+        arr = np.asarray(lucid.ones(2, 3))
+        assert arr.dtype == np.float32
+        assert arr.shape == (2, 3)
+        assert arr.sum() == 6.0
+
+    def test_asarray_matches_numpy_method(self) -> None:
+        t = lucid.linspace(0.0, 1.0, 6).reshape(2, 3)
+        assert np.array_equal(np.asarray(t), t.numpy())
+
+    def test_dtype_request_is_honoured(self) -> None:
+        assert np.asarray(lucid.ones(2), dtype=np.float64).dtype == np.float64
+
+    def test_copy_false_is_refused(self) -> None:
+        # A Lucid tensor has to be read out through the host, so the
+        # no-copy contract NumPy 2 defines cannot be met.
+        with pytest.raises(ValueError, match="copy=False"):
+            np.array(lucid.ones(2), copy=False)
+
+    @pytest.mark.skipif(not metal_available(), reason="needs Metal")
+    def test_metal_goes_through_the_cpu_bridge(self) -> None:
+        arr = np.asarray(lucid.ones(2, 3).to("metal"))
+        assert arr.dtype == np.float32
+        assert arr.sum() == 6.0
+
+
 class TestDLPackProtocol:
     def test_dlpack_device_is_cpu(self) -> None:
         # ``__dlpack_device__`` always reports CPU because the export

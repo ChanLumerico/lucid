@@ -100,6 +100,20 @@ def save_compiled(cm: object, path: str) -> bool:
     ``save_compiled`` produces by hand are loadable by either
     :func:`load_compiled` or the runtime cache machinery.
 
+    .. warning::
+
+       Saving always succeeds; **loading is what is restricted**.  A
+       reloaded MPSGraph package does not report the feed order it
+       expects, and that order only survives the round trip while every
+       feed shares one shape and dtype.  An executable whose feeds
+       differ — which includes every :class:`~lucid.nn.Module` with
+       parameters, since the weights and the activations rarely share a
+       shape — is refused by :func:`load_compiled` rather than bound
+       wrongly.  Until that is resolved, AOT export is usable for
+       traced *functions* over uniform inputs, not for saving a trained
+       model's forward pass.  Weights are not in the package either way:
+       use :func:`lucid.save` / ``save_pretrained`` for those.
+
     Parameters
     ----------
     cm : CompiledModule
@@ -118,12 +132,12 @@ def save_compiled(cm: object, path: str) -> bool:
 
     Examples
     --------
-    >>> import lucid, lucid.nn as nn
+    >>> import lucid
     >>> import lucid.compile as lc
-    >>> m = nn.Linear(8, 4).to("metal")
-    >>> cm = lc.compile(m)
-    >>> _ = cm(lucid.randn(2, 8).to("metal"))   # populate cache
-    >>> lc.save_compiled(cm, "/tmp/my_linear")   # writes .mpsgraphpackage + .meta
+    >>> cm = lc.compile(lambda a, b: a * b + 1.0)
+    >>> x = lucid.randn(2, 8).to("metal")
+    >>> _ = cm(x, x)                             # populate cache
+    >>> lc.save_compiled(cm, "/tmp/my_graph")    # writes .mpsgraphpackage + .meta
     True
 
     See Also
@@ -219,6 +233,8 @@ def load_compiled(path: str) -> object:
         num_inputs: int
         input_ids: list[int]
         output_ids: list[int]
+        input_shapes: list[list[int]]
+        input_dtypes: list[str]
 
     exe_raw = _C_engine.compile.load_executable(path)
     if exe_raw is None:
@@ -238,16 +254,25 @@ def load_compiled(path: str) -> object:
             self.num_inputs = exe.num_inputs
             self.input_ids = list(exe.input_ids)
             self.output_ids = list(exe.output_ids)
+            self.input_shapes = [list(sh) for sh in exe.input_shapes]
+            self.input_dtypes = list(exe.input_dtypes)
+
+        def feed_contract(self) -> str:
+            """One line per feed slot: what shape and dtype it expects."""
+            return "\n".join(
+                f"  slot {i}: shape {tuple(sh)} dtype {dt}"
+                for i, (sh, dt) in enumerate(zip(self.input_shapes, self.input_dtypes))
+            )
 
         def __call__(self, *args: object) -> object:
             if len(args) != self.num_inputs:
                 raise ValueError(
                     f"load_compiled wrapper: expected {self.num_inputs} feeds "
-                    f"in input_ids order (got {len(args)}).  The saved "
-                    f"executable was compiled with these feed ids: "
-                    f"{self.input_ids}.  Typical use: pass model.parameters() "
-                    f"followed by runtime inputs in the order they appeared "
-                    f"during the original trace."
+                    f"in trace order, got {len(args)}.  The executable wants:\n"
+                    f"{self.feed_contract()}\n"
+                    "Feeds are the trace's external tensors in the order they "
+                    "were first read — parameters and runtime inputs "
+                    "interleaved, not parameters-then-inputs."
                 )
             feeds = [_unwrap(cast(Tensor, a)) for a in args]
             outs = _C_engine.compile.run_executable(self._exe, feeds)

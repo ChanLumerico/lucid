@@ -99,6 +99,24 @@ public:
     std::vector<lucid::compile::TensorId> grad_output_ids() const {
         return lucid::compile::executable_grad_output_ids(exe_);
     }
+    std::vector<std::vector<std::int64_t>> input_shapes() const {
+        std::vector<std::vector<std::int64_t>> out;
+        for (const auto& s : lucid::compile::executable_input_shapes(exe_))
+            out.emplace_back(s.begin(), s.end());
+        return out;
+    }
+    std::vector<std::string> input_dtypes() const {
+        std::vector<std::string> out;
+        for (lucid::Dtype dt : lucid::compile::executable_input_dtypes(exe_))
+            out.emplace_back(lucid::dtype_name(dt));
+        return out;
+    }
+    std::vector<std::size_t> feed_order() const {
+        return lucid::compile::executable_feed_order(exe_);
+    }
+    std::vector<std::string> feed_names() const {
+        return lucid::compile::executable_feed_names(exe_);
+    }
 
 private:
     lucid::compile::CompiledExecutable* exe_;
@@ -204,7 +222,23 @@ void register_compile(py::module_& m) {
                                "Per-parameter gradient TensorId list (Phase 1.3 "
                                "backward path).  Empty for forward-only executables. "
                                "run_executable() returns one gradient tensor per "
-                               "id here, immediately after the forward outputs.");
+                               "id here, immediately after the forward outputs.")
+        .def_property_readonly("input_shapes", &PyCompiledExecutable::input_shapes,
+                               "Feed-order input shapes frozen at trace time.  Slot i "
+                               "of run_executable() must receive this shape (on a "
+                               "dynamic-batch executable, only the trailing axes of a "
+                               "non-parameter slot are binding).")
+        .def_property_readonly("input_dtypes", &PyCompiledExecutable::input_dtypes,
+                               "Feed-order input dtype names ('float32', 'int64', ...) "
+                               "— companion to input_shapes.")
+        .def_property_readonly("feed_order", &PyCompiledExecutable::feed_order,
+                               "Bind order against MPSGraph's feed array: inputsArray "
+                               "position k carries feed slot feed_order[k].  Empty when "
+                               "the two orders coincide (freshly compiled executables); "
+                               "populated after load_executable().")
+        .def_property_readonly("feed_names", &PyCompiledExecutable::feed_names,
+                               "Placeholder names MPSGraph reports for the feed tensors, "
+                               "in its own order.  Diagnostic.");
 
     // Compile a TraceGraph into an MPSGraph executable.
     // Returns None on any abort condition (unsupported op, mixed-device,

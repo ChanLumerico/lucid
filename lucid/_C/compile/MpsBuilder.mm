@@ -155,6 +155,14 @@ public:
     std::vector<TensorId> grad_output_ids;              // Phase 1.3
     bool dynamic_batch = false;                         // Phase 1.6
     std::unordered_set<std::size_t> static_feed_slots;  // Phase 1.6
+    // Bind order against ``executable.feedTensors``: position ``k`` of the
+    // ``inputsArray`` handed to MPSGraph carries Lucid feed slot
+    // ``feed_order[k]``.  Empty = the two orders coincide, which is the
+    // case for a freshly compiled executable.  A package round-trip does
+    // NOT preserve the order (the graph is compiled from an NSDictionary
+    // of feeds, so the order was never ours to choose), which is why
+    // ``load_executable`` re-derives this from the placeholder names.
+    std::vector<std::size_t> feed_order;
 
     ~CompiledExecutable() {
         // Mirror the destructor in CompiledExecutable.mm — release the

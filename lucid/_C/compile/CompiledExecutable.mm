@@ -9,9 +9,12 @@
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -79,6 +82,14 @@ public:
     // declared parameters and therefore keep their static shape even
     // in dynamic-batch mode.
     std::unordered_set<std::size_t> static_feed_slots;
+    // Bind order against ``executable.feedTensors``: position ``k`` of the
+    // ``inputsArray`` handed to MPSGraph carries Lucid feed slot
+    // ``feed_order[k]``.  Empty = the two orders coincide, which is the
+    // case for a freshly compiled executable.  A package round-trip does
+    // NOT preserve the order (the graph is compiled from an NSDictionary
+    // of feeds, so the order was never ours to choose), which is why
+    // ``load_executable`` re-derives this from the placeholder names.
+    std::vector<std::size_t> feed_order;
 
     ~CompiledExecutable() {
         // Release the variable-storage-owning MPSGraph if we retained
@@ -112,6 +123,18 @@ std::vector<TensorId> executable_output_ids(const CompiledExecutable* exe) {
 
 std::vector<TensorId> executable_grad_output_ids(const CompiledExecutable* exe) {
     return exe ? exe->grad_output_ids : std::vector<TensorId>{};
+}
+
+std::vector<Shape> executable_input_shapes(const CompiledExecutable* exe) {
+    return exe ? exe->input_shapes : std::vector<Shape>{};
+}
+
+std::vector<Dtype> executable_input_dtypes(const CompiledExecutable* exe) {
+    return exe ? exe->input_dtypes : std::vector<Dtype>{};
+}
+
+std::vector<std::size_t> executable_feed_order(const CompiledExecutable* exe) {
+    return exe ? exe->feed_order : std::vector<std::size_t>{};
 }
 
 void destroy_executable(CompiledExecutable* exe) {
@@ -162,7 +185,154 @@ inline std::size_t shape_nbytes(const Shape& shape, Dtype dt) {
     return n * itemsize;
 }
 
+inline std::string shape_str(const Shape& shape) {
+    std::string out = "(";
+    for (std::size_t i = 0; i < shape.size(); ++i) {
+        if (i != 0)
+            out += ", ";
+        out += std::to_string(shape[i]);
+    }
+    if (shape.size() == 1)
+        out += ",";
+    out += ")";
+    return out;
+}
+
+// Check one feed slot against the contract recorded at trace time and
+// return the shape it should be bound with.
+//
+// This has to happen while the feed is still a ``TensorImpl`` we can
+// reason about.  ``MPSGraphTensorData initWithMTLBuffer:shape:dataType:``
+// takes the recorded shape on faith, so a feed handed to the wrong slot
+// reaches MetalPerformanceShaders as a buffer too small for the shape it
+// was labelled with, and MPS *aborts the process* ("MPSNDArray ... buffer
+// is not large enough") or walks off the end of the allocation.  Neither
+// is catchable from Python, so every mismatch has to become an exception
+// here.
+inline Shape validate_feed(const CompiledExecutable* exe,
+                           std::size_t i,
+                           const TensorImplPtr& impl,
+                           const char* fn) {
+    const std::string at = std::string(fn) + ": feed slot " + std::to_string(i);
+    if (!impl)
+        throw std::invalid_argument(at + " is null");
+    if (impl->device() != Device::GPU)
+        throw std::invalid_argument(at + " must be on Device::GPU — every input feed of a "
+                                         "compiled executable lives on the GPU");
+    if (impl->dtype() != exe->input_dtypes[i])
+        throw std::invalid_argument(at + " expects dtype " +
+                                    std::string(dtype_name(exe->input_dtypes[i])) + ", got " +
+                                    std::string(dtype_name(impl->dtype())));
+
+    const Shape& want = exe->input_shapes[i];
+    const Shape& got = impl->shape();
+    const bool is_static_slot = exe->static_feed_slots.find(i) != exe->static_feed_slots.end();
+    const bool batch_varies = exe->dynamic_batch && !is_static_slot && !want.empty();
+
+    if (!batch_varies) {
+        if (got != want)
+            throw std::invalid_argument(at + " expects shape " + shape_str(want) + ", got " +
+                                        shape_str(got));
+        return want;
+    }
+    // Dynamic-batch, non-parameter slot: the leading axis is symbolic,
+    // every trailing axis was frozen at trace time.
+    if (got.size() != want.size())
+        throw std::invalid_argument(at + " expects rank " + std::to_string(want.size()) +
+                                    " (traced shape " + shape_str(want) +
+                                    ", leading axis free), got rank " + std::to_string(got.size()) +
+                                    " (shape " + shape_str(got) + ")");
+    for (std::size_t d = 1; d < want.size(); ++d) {
+        if (got[d] != want[d])
+            throw std::invalid_argument(at + " expects shape " + shape_str(want) +
+                                        " with only the leading axis free, got " + shape_str(got));
+    }
+    return got;
+}
+
+// Recover the mapping from MPSGraph's feed positions back to Lucid's
+// feed-slot order.
+//
+// ``runWithMTLCommandQueue:inputsArray:`` is positional against
+// ``executable.feedTensors``, and that order is not ours to pick: the
+// graph is compiled from an *NSDictionary* of feeds, and a
+// ``.mpsgraphpackage`` round-trip reorders it again.  For a freshly
+// compiled executable the two orders happen to agree, which is why the
+// in-process path has always worked; a reloaded one silently permutes,
+// and binding a feed under the wrong slot's shape aborts inside MPS.
+//
+// Every placeholder is named ``feed_<tid>`` by the builder, so the
+// permutation is recoverable exactly.  Returns ``feed_order[k]`` = the
+// Lucid slot belonging at MPS feed position ``k``, or an empty vector
+// when the names do not resolve (caller then falls back to positional
+// binding, i.e. the historical behaviour).
+inline std::vector<std::size_t> derive_feed_order(MPSGraphExecutable* exec,
+                                                  const std::vector<TensorId>& input_ids) {
+    std::vector<std::size_t> order;
+    if (exec == nil)
+        return order;
+    NSArray<MPSGraphTensor*>* feeds = exec.feedTensors;
+    if (feeds == nil || feeds.count != input_ids.size())
+        return order;
+
+    std::unordered_map<std::int64_t, std::size_t> slot_of;
+    slot_of.reserve(input_ids.size());
+    for (std::size_t i = 0; i < input_ids.size(); ++i)
+        slot_of.emplace(input_ids[i].v, i);
+
+    order.reserve(input_ids.size());
+    for (MPSGraphTensor* t in feeds) {
+        // The builder's ``name:`` argument names the placeholder
+        // *operation*; ``MPSGraphTensor`` itself carries no name.
+        MPSGraphOperation* op = t.operation;
+        NSString* nm = (op == nil) ? nil : op.name;
+        const char* c = (nm == nil) ? nullptr : nm.UTF8String;
+        if (c == nullptr)
+            return {};
+        // MPSGraph may decorate the name it was given, so look the
+        // marker up rather than requiring it at offset 0.
+        const char* marker = std::strstr(c, "feed_");
+        if (marker == nullptr)
+            return {};
+        char* endp = nullptr;
+        const long long tid = std::strtoll(marker + 5, &endp, 10);
+        if (endp == marker + 5)
+            return {};
+        const auto it = slot_of.find(static_cast<std::int64_t>(tid));
+        if (it == slot_of.end())
+            return {};
+        order.push_back(it->second);
+    }
+    return order;
+}
+
+// Names MPSGraph reports for the executable's feed tensors, in its own
+// order.  Diagnostic only — :func:`derive_feed_order` is what the run
+// path uses.
+inline std::vector<std::string> feed_tensor_names(MPSGraphExecutable* exec) {
+    std::vector<std::string> out;
+    if (exec == nil)
+        return out;
+    NSArray<MPSGraphTensor*>* feeds = exec.feedTensors;
+    if (feeds == nil)
+        return out;
+    for (MPSGraphTensor* t in feeds) {
+        MPSGraphOperation* op = t.operation;
+        NSString* nm = (op == nil) ? nil : op.name;
+        out.emplace_back((nm == nil) ? "<unnamed>" : nm.UTF8String);
+    }
+    return out;
+}
+
 }  // namespace detail
+
+std::vector<std::string> executable_feed_names(const CompiledExecutable* exe) {
+    if (exe == nullptr)
+        return {};
+    @autoreleasepool {
+        return detail::feed_tensor_names(exe->executable);
+    }
+}
 
 // Run a compiled executable.  Feed-order inputs and target-order
 // outputs are paired against the executable's recorded ordering.
@@ -216,13 +386,18 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
     @autoreleasepool {
         NSMutableArray<MPSGraphTensorData*>* feeds =
             [NSMutableArray arrayWithCapacity:input_feeds.size()];
-        for (std::size_t i = 0; i < input_feeds.size(); ++i) {
+        for (std::size_t k = 0; k < input_feeds.size(); ++k) {
+            // ``feeds[k]`` is matched positionally against
+            // ``executable.feedTensors[k]``, which is not necessarily
+            // our slot k — see ``detail::derive_feed_order``.
+            const std::size_t i = exe->feed_order.empty() ? k : exe->feed_order[k];
             const auto& impl = input_feeds[i];
-            if (!impl)
-                throw std::invalid_argument("run_executable: null input feed");
-            if (impl->device() != Device::GPU)
-                throw std::invalid_argument(
-                    "run_executable: every input feed must be on Device::GPU");
+            // Dtype / shape are checked before the buffer is labelled —
+            // see :func:`detail::validate_feed` for why a mismatch may
+            // not be allowed to reach MPSGraph.  The returned shape is
+            // the trace-time one, except on a dynamic-batch slot where
+            // the call-site leading axis wins.
+            const Shape feed_shape = detail::validate_feed(exe, i, impl, "run_executable");
 
             const auto& gs = std::get<GpuStorage>(impl->storage());
             if (!gs.arr)
@@ -230,17 +405,6 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
 
             lucid::gpu::mps::BufferView view = lucid::gpu::mps::array_to_buffer(*gs.arr);
             id<MTLBuffer> in_buf = (__bridge id<MTLBuffer>)view.mtl_buffer;
-            // Choose the shape: dynamic mode uses the actual input
-            // tensor's shape (so the leading BS axis matches the
-            // call-site data); static mode uses the trace-time shape.
-            Shape feed_shape;
-            const bool is_static_slot = exe->dynamic_batch && exe->static_feed_slots.find(i) !=
-                                                                  exe->static_feed_slots.end();
-            if (exe->dynamic_batch && !is_static_slot) {
-                feed_shape = impl->shape();
-            } else {
-                feed_shape = exe->input_shapes[i];
-            }
             NSArray<NSNumber*>* ns_shape = detail::shape_to_nsarray(feed_shape);
             MPSDataType ns_dt = detail::to_mps_dtype(exe->input_dtypes[i]);
             MPSGraphTensorData* td = [[MPSGraphTensorData alloc] initWithMTLBuffer:in_buf
@@ -450,34 +614,24 @@ LUCID_API void run_executable_inplace(CompiledExecutable* exe,
     @autoreleasepool {
         NSMutableArray<MPSGraphTensorData*>* feeds =
             [NSMutableArray arrayWithCapacity:input_feeds.size()];
-        for (std::size_t i = 0; i < input_feeds.size(); ++i) {
+        for (std::size_t k = 0; k < input_feeds.size(); ++k) {
+            const std::size_t i = exe->feed_order.empty() ? k : exe->feed_order[k];
             const auto& impl = input_feeds[i];
-            if (!impl)
-                throw std::invalid_argument("run_executable_inplace: null input feed");
-            if (impl->device() != Device::GPU)
-                throw std::invalid_argument("run_executable_inplace: input feed not on GPU");
             // Phase 1.6 follow-up: ``run_executable_inplace`` only
             // supports static-batch executables (caller must rebuild
             // when the per-call shape changes), so any feed whose
             // shape diverges from the trace-time shape would either
             // produce silently-truncated results or write past the
-            // output buffer.  Reject the call up front with a clear
-            // message instead.
-            if (impl->shape() != exe->input_shapes[i])
-                throw std::invalid_argument(
-                    "run_executable_inplace: input feed shape mismatch at "
-                    "slot " +
-                    std::to_string(i) +
-                    " (expected the trace-time shape; got a different shape "
-                    "— recompile the executable for the new shape, or use "
-                    "the dynamic forward path).");
+            // output buffer.  ``validate_feed`` rejects that — and the
+            // dtype mismatch this loop used to let through — up front.
+            const Shape feed_shape = detail::validate_feed(exe, i, impl, "run_executable_inplace");
             const auto& gs = std::get<GpuStorage>(impl->storage());
             if (!gs.arr)
                 throw std::runtime_error(
                     "run_executable_inplace: input GpuStorage has no MLX array");
             lucid::gpu::mps::BufferView view = lucid::gpu::mps::array_to_buffer(*gs.arr);
             id<MTLBuffer> in_buf = (__bridge id<MTLBuffer>)view.mtl_buffer;
-            NSArray<NSNumber*>* ns_shape = detail::shape_to_nsarray(exe->input_shapes[i]);
+            NSArray<NSNumber*>* ns_shape = detail::shape_to_nsarray(feed_shape);
             MPSDataType ns_dt = detail::to_mps_dtype(exe->input_dtypes[i]);
             MPSGraphTensorData* td = [[MPSGraphTensorData alloc] initWithMTLBuffer:in_buf
                                                                              shape:ns_shape
@@ -858,6 +1012,39 @@ CompiledExecutable* load_executable(const std::string& path, std::string* error_
             result->output_dtypes[i] = static_cast<Dtype>(output_dt_raw[i]);
         for (uint64_t s : static_slots)
             result->static_feed_slots.insert(static_cast<std::size_t>(s));
+        // Feed order after a package round-trip.
+        //
+        // ``executable.feedTensors`` is nil on a package-loaded
+        // executable (it is populated only for one compiled in this
+        // process), so the name-based recovery below yields nothing and
+        // there is no way to *ask* the artifact what order it wants.
+        // Measured behaviour: the order survives intact as long as every
+        // feed has the same shape and dtype, and is silently rearranged
+        // once they differ — at which point ``run_executable`` labels a
+        // buffer with another slot's shape and MetalPerformanceShaders
+        // aborts the process.
+        //
+        // Reproducing whatever ordering the package applies would mean
+        // guessing at an undocumented Apple internal, so this refuses the
+        // artifacts it cannot bind safely instead.  A refusal is a cache
+        // miss for the disk cache (recompile, correct but slower) and a
+        // clear error for ``load_compiled`` — never a crash.
+        result->feed_order = detail::derive_feed_order(exec, result->input_ids);
+        if (result->feed_order.empty() && result->input_ids.size() > 1) {
+            bool uniform = true;
+            for (std::size_t i = 1; i < result->input_ids.size() && uniform; ++i) {
+                uniform = (result->input_shapes[i] == result->input_shapes[0]) &&
+                          (result->input_dtypes[i] == result->input_dtypes[0]);
+            }
+            if (!uniform) {
+                delete result;
+                return fail("load_executable: this artifact has feeds of differing "
+                            "shape/dtype, and a reloaded MPSGraph package does not "
+                            "expose the feed order it expects — binding it would "
+                            "abort inside MetalPerformanceShaders.  Recompile from "
+                            "the source trace instead of loading this artifact.");
+            }
+        }
         return result;
     }
 }

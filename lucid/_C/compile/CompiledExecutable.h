@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include "../api.h"
@@ -55,6 +56,27 @@ LUCID_API std::vector<TensorId> executable_output_ids(const CompiledExecutable* 
 // executables.  The grad ids are minted by the builder so they do not
 // overlap with anything in the trace's own id space.
 LUCID_API std::vector<TensorId> executable_grad_output_ids(const CompiledExecutable* exe);
+
+// Feed-order input shapes, as frozen at trace time.  Slot ``i`` of
+// :func:`run_executable` must be handed a tensor of this shape — except
+// on a dynamic-batch executable, where a non-parameter slot's leading
+// axis is symbolic and only the trailing axes are binding.  Empty when
+// ``exe`` is ``nullptr``.
+LUCID_API std::vector<Shape> executable_input_shapes(const CompiledExecutable* exe);
+
+// Feed-order input dtypes — companion to :func:`executable_input_shapes`.
+// Empty when ``exe`` is ``nullptr``.
+LUCID_API std::vector<Dtype> executable_input_dtypes(const CompiledExecutable* exe);
+
+// Bind order against MPSGraph's own feed array: position ``k`` of the
+// ``inputsArray`` carries feed slot ``feed_order[k]``.  Empty means the
+// two orders coincide.  Populated by :func:`load_executable`, since a
+// package round-trip does not preserve the compile-time order.
+LUCID_API std::vector<std::size_t> executable_feed_order(const CompiledExecutable* exe);
+
+// Names MPSGraph reports for the feed tensors, in its own order
+// (``feed_<tid>`` as minted by the builder).  Diagnostic only.
+LUCID_API std::vector<std::string> executable_feed_names(const CompiledExecutable* exe);
 
 // Release a previously-built executable.  Safe to call with
 // ``nullptr``.  Defined in :file:`CompiledExecutable.mm`; releases the

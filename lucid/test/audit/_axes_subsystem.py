@@ -1475,6 +1475,64 @@ class CompiledAxis(Axis):
                 Status.FAIL,
                 "the reloaded artefact computes something else",
             )
+        return self._parameterised_artefact(symbol)
+
+    def _parameterised_artefact(self, symbol: Symbol) -> Finding:
+        """The half of save/load a parameterless probe cannot reach.
+
+        ``_eager`` closes over nothing, so it traces to a single feed and
+        every ordering of one feed is the right one.  A module carries its
+        weights as feeds too, of shapes the activations do not share, and
+        that is the case a reloaded package mis-binds — for a long time by
+        aborting the process inside MetalPerformanceShaders, which no
+        probe over a one-feed function could ever have surfaced.  The
+        contract now is: round-trip exactly, or refuse in Python.  Silence
+        followed by different numbers is the failure.
+        """
+        if not _probe.metal_available():
+            return self._finding(symbol, Status.SKIP, "needs Metal")
+        model = lucid.nn.Linear(8, 4).to("metal")
+        compiled = lucid.compile.compile(model)
+        x = _probe.as_f32(_probe.sample("moderate", (2, 8)), "metal")
+        want = _probe.to_numpy(compiled(x))
+        with tempfile.TemporaryDirectory() as folder:
+            path = str(Path(folder) / "module.lcc")
+            if not lucid.compile.save_compiled(compiled, path):
+                return self._finding(
+                    symbol,
+                    Status.UNSUPPORTED,
+                    "a module's artefact declined to be saved",
+                )
+            try:
+                restored = lucid.compile.load_compiled(path)
+            except RuntimeError, ValueError:
+                # Refused rather than mis-bound — the honest outcome while
+                # the feed order of a reloaded package is unrecoverable.
+                return self._finding(
+                    symbol,
+                    Status.PASS,
+                    "round trip for a function, refusal for a module",
+                )
+            if restored is None:
+                return self._finding(
+                    symbol, Status.PASS, "round trip for a function, miss for a module"
+                )
+            try:
+                got = _probe.to_numpy(restored(x, *model.parameters()))
+            except RuntimeError, ValueError:
+                return self._finding(
+                    symbol,
+                    Status.PASS,
+                    "round trip for a function, refusal for a module",
+                )
+        if got is None or want is None:
+            return self._finding(symbol, Status.SKIP, "no comparable output")
+        if not np.allclose(got.astype(float), want.astype(float), rtol=1e-5, atol=1e-7):
+            return self._finding(
+                symbol,
+                Status.FAIL,
+                "a module's reloaded artefact loaded, and computes something else",
+            )
         return self._finding(symbol, Status.PASS, "the artefact survives a round trip")
 
     def _diagnose(self, symbol: "Symbol", obj: Any, x: Any) -> Finding:

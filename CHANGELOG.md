@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `__all__` could not see them. Every other family's Config, model and
   factories are there — 73 configs, 38 models, 93 task wrappers — and DIAMOND
   was the only gap
+- a saved graph could not be loaded back, and said so by crashing
 
 ---
 
