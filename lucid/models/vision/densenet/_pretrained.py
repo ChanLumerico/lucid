@@ -21,9 +21,10 @@ _CFG_121 = DenseNetConfig(
 # DenseNet-161: k=48 with a 96-channel stem.  NOT from the paper — Table 1
 # lists exactly four ImageNet architectures (121/169/201/264) and states
 # "Growth rate k=32 for all networks"; the strings "161" and "k=48" appear
-# nowhere in it.  The provenance is the authors' own released Torch models
-# (liuzhuang13/DenseNet: "DenseNet-161 (k=48) | 22.2"), which the reference
-# vision library mirrors and which the shipped checkpoint comes from.
+# nowhere in it.  The provenance is the authors' own released
+# reference-framework models (liuzhuang13/DenseNet: "DenseNet-161 (k=48) |
+# 22.2"), which the reference vision library mirrors and which the shipped
+# checkpoint comes from.
 _CFG_161 = DenseNetConfig(
     block_config=(6, 12, 36, 24), growth_rate=48, num_init_features=96
 )
@@ -504,8 +505,8 @@ def densenet_161(pretrained: bool = False, **overrides: object) -> DenseNet:
 
     This variant is *not* in Huang et al., CVPR 2017 — that paper's
     Table 1 lists 121/169/201/264 at :math:`k = 32` only.  It comes from
-    the authors' own released Torch models, which the reference vision
-    library mirrors.
+    the authors' own released reference-framework models, which the
+    reference vision library mirrors.
 
     Parameters
     ----------
@@ -569,7 +570,7 @@ def densenet_161_cls(
 
     The topology is *not* in Huang et al., CVPR 2017 (Table 1 lists
     121/169/201/264 at :math:`k = 32`); it comes from the authors' own
-    released Torch models.
+    released reference-framework models.
 
     Parameters
     ----------

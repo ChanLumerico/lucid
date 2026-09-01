@@ -66,10 +66,10 @@ class _DenseLayer(nn.Module):
         # Section 3 reads literally: "we add a dropout layer after each
         # convolutional layer (except the first one)" — which would put
         # dropout after the 1x1 bottleneck conv and inside the transition
-        # layers too, as the authors' original Torch code does.  Only the
-        # post-3x3 site is built here, matching the reference the shipped
-        # checkpoints come from.  Training-time only, so inference is
-        # unaffected either way.
+        # layers too, as the authors' original reference-framework code
+        # does.  Only the post-3x3 site is built here, matching the
+        # reference the shipped checkpoints come from.  Training-time
+        # only, so inference is unaffected either way.
         self.drop = nn.Dropout(p=dropout_rate) if dropout_rate > 0.0 else None
 
     @override
