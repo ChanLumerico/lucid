@@ -13,11 +13,14 @@ import pytest
 
 import lucid
 from lucid.models import (
+    MaskedLMOutput,
     RoFormerConfig,
     RoFormerForMaskedLM,
     RoFormerForSequenceClassification,
     RoFormerForTokenClassification,
     RoFormerModel,
+    SequenceClassificationOutput,
+    TokenClassificationOutput,
     create_model,
     is_model,
 )
@@ -159,6 +162,32 @@ class TestRoFormerClassifiers:
         ids = lucid.tensor([[1, 2, 3, 4]]).long()
         out = m(ids)
         assert tuple(out.logits.shape) == (1, 4, cfg.num_labels)
+
+    def test_each_head_returns_its_own_output_type(self) -> None:
+        """The output type is the discriminator, so shape alone is not enough.
+
+        All four text output dataclasses carry the same fields today, so a
+        head returning a neighbour's type passes every shape assertion —
+        which is how both of these shipped as ``MaskedLMOutput``.  Pin the
+        type, and pin that it is *not* the one they were copied from.
+        """
+        cfg = _tiny_config()
+        ids = lucid.tensor([[1, 2, 3, 4]]).long()
+
+        seq_out = RoFormerForSequenceClassification(cfg).eval()(ids)
+        tok_out = RoFormerForTokenClassification(cfg).eval()(ids)
+
+        assert isinstance(seq_out, SequenceClassificationOutput)
+        assert isinstance(tok_out, TokenClassificationOutput)
+        assert not isinstance(seq_out, MaskedLMOutput)
+        assert not isinstance(tok_out, MaskedLMOutput)
+
+    def test_the_masked_lm_head_still_returns_masked_lm_output(self) -> None:
+        # The type the other two were wrongly borrowing is correct here.
+        cfg = _tiny_config()
+        out = RoFormerForMaskedLM(cfg).eval()(lucid.tensor([[1, 2, 3, 4]]).long())
+
+        assert isinstance(out, MaskedLMOutput)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

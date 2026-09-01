@@ -30,6 +30,7 @@ from lucid.models._output import (
     MaskedLMOutput,
     QuestionAnsweringOutput,
     SequenceClassificationOutput,
+    TokenClassificationOutput,
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
 from lucid.nn.functional import apply_rotary_emb
@@ -695,7 +696,7 @@ class RoFormerForSequenceClassification(SequenceClassificationModel):
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> SequenceClassificationOutput:
         outputs = cast(
             BaseModelOutputWithPooling,
             self.roformer(
@@ -714,7 +715,7 @@ class RoFormerForSequenceClassification(SequenceClassificationModel):
         if labels is not None:
             loss = F.cross_entropy(logits, labels.long())
 
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return SequenceClassificationOutput(logits=logits, loss=loss)
 
 
 class RoFormerForTokenClassification(TokenClassificationModel, MaskedLMMixin):
@@ -795,7 +796,7 @@ class RoFormerForTokenClassification(TokenClassificationModel, MaskedLMMixin):
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
-    ) -> MaskedLMOutput:
+    ) -> TokenClassificationOutput:
         outputs = cast(
             BaseModelOutputWithPooling,
             self.roformer(
@@ -811,7 +812,7 @@ class RoFormerForTokenClassification(TokenClassificationModel, MaskedLMMixin):
         if labels is not None:
             loss = self.compute_lm_loss(logits, labels)
 
-        return MaskedLMOutput(logits=logits, loss=loss)
+        return TokenClassificationOutput(logits=logits, loss=loss)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
