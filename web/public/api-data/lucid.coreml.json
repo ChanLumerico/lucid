@@ -1,0 +1,505 @@
+{
+  "slug": "lucid.coreml",
+  "name": "coreml",
+  "path": "lucid.coreml",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/__init__.py#L1",
+  "members": [
+    {
+      "name": "UnsupportedOp",
+      "path": "lucid.coreml._build.UnsupportedOp",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "NotImplementedError"
+      ],
+      "labels": [],
+      "signature": "UnsupportedOp(op_name: str)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_build.py#L36",
+      "subcategory": "build",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.coreml._build.UnsupportedOp.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(op_name: str)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_build.py#L44",
+          "subcategory": "build",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "A traced op has no MIL translation.",
+      "extended": "Named rather than generic because the alternative failure — emitting\na package that quietly lacks a layer — produces a model that loads\nand returns plausible numbers.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "CoreMLModel",
+      "path": "lucid.coreml._model.CoreMLModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "CoreMLModel(path: str, input_name: str, output_name: str, compute_units: ComputeUnits = ComputeUnits.ALL, precision: str = 'FLOAT32')",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L78",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.coreml._model.CoreMLModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(path: str, input_name: str, output_name: str, compute_units: ComputeUnits = ComputeUnits.ALL, precision: str = 'FLOAT32')",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L87",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "predict",
+          "path": "lucid.coreml._model.CoreMLModel.predict",
+          "kind": "function",
+          "labels": [],
+          "signature": "predict(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L103",
+          "subcategory": "model",
+          "summary": "Run the model on `x`.",
+          "extended": "The input must be a host tensor: Core ML reads host memory, and\nmoving a Metal tensor here would hide a copy the caller did not\nask for. Move it explicitly with `.to(\"cpu\")`.",
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "verify",
+          "path": "lucid.coreml._model.CoreMLModel.verify",
+          "kind": "function",
+          "labels": [],
+          "signature": "verify(model: Module, x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L114",
+          "subcategory": "model",
+          "summary": "Largest absolute difference against the eager model.",
+          "extended": "Shapes agreeing is not evidence: a package missing a layer has\nthe right shape and returns plausible numbers. This runs both and\ncompares values.",
+          "parameters": [
+            {
+              "name": "model",
+              "annotation": "nn.Module",
+              "description": "The eager model this package was exported from.",
+              "default": null
+            },
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "Input to run through both. A host tensor.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "float",
+            "description": "`max|coreml - eager|`. Expect ~1e-7 for a float32 export\nand ~1e-3 relative for float16."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "compute_plan",
+          "path": "lucid.coreml._model.CoreMLModel.compute_plan",
+          "kind": "function",
+          "labels": [],
+          "signature": "compute_plan()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L151",
+          "subcategory": "model",
+          "summary": "Which device Core ML assigns each operation to.",
+          "extended": "Requires macOS 14.4+; an empty plan there means *unknown*, not\n*unaccelerated*.",
+          "parameters": [],
+          "returns": {
+            "annotation": "PlacementSummary",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "close",
+          "path": "lucid.coreml._model.CoreMLModel.close",
+          "kind": "function",
+          "labels": [],
+          "signature": "close()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L162",
+          "subcategory": "model",
+          "summary": "Release the compiled model and the artifacts Core ML cached.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__repr__",
+          "path": "lucid.coreml._model.CoreMLModel.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L166",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "A Core ML package written by Lucid, loaded and ready to run.",
+      "extended": "Holds the `.mlpackage` on disk plus the compiled model Core ML\nproduced from it. Compilation happens once, when the handle is\ncreated, because it is the expensive step — hundreds of milliseconds\nfor a real network — and every prediction afterwards reuses it.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "PlacementSummary",
+      "path": "lucid.coreml._model.PlacementSummary",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [],
+      "labels": [],
+      "signature": "PlacementSummary(placements: list[tuple[str, str]])",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L36",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.coreml._model.PlacementSummary.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(placements: list[tuple[str, str]])",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L45",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "total_compute",
+          "path": "lucid.coreml._model.PlacementSummary.total_compute",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "total_compute: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L56",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "ane_fraction",
+          "path": "lucid.coreml._model.PlacementSummary.ane_fraction",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "ane_fraction: float",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L60",
+          "summary": "Share of computation the Neural Engine takes, 0.0 to 1.0.",
+          "extended": "`0.0` on a model asked to use the ANE is the signal that the\nrequest did not take — most often because the program is float32,\nwhich the Neural Engine does not run.",
+          "parameters": [],
+          "returns": {
+            "annotation": "float",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__repr__",
+          "path": "lucid.coreml._model.PlacementSummary.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_model.py#L70",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Where a model's operations are scheduled.",
+      "extended": "`const` operations carry no device assignment — they are data, not\ncomputation — so they are counted separately and kept out of the\nfraction. Reporting 21% ANE for a model whose every computation runs\non the ANE would be true of the raw operation list and useless.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ComputeUnits",
+      "path": "lucid.coreml._spec.ComputeUnits",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Enum"
+      ],
+      "labels": [],
+      "signature": "ComputeUnits()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_spec.py#L22",
+      "subcategory": "spec",
+      "methods": [],
+      "summary": "Processors Core ML may schedule the model on.",
+      "extended": "`CPU_AND_NE` is the reason this package exists: it is the only way\nto reach the Neural Engine, which neither of Lucid's own backends\n(Accelerate, MLX) targets.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "Precision",
+      "path": "lucid.coreml._spec.Precision",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Enum"
+      ],
+      "labels": [],
+      "signature": "Precision()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/_spec.py#L36",
+      "subcategory": "spec",
+      "methods": [],
+      "summary": "Weight and activation precision of the exported program.",
+      "extended": "`FLOAT32` is the default because an export should agree with the\nmodel it came from; Core ML's own default is `FLOAT16`, which the\nNeural Engine wants and which costs roughly 1e-4 against the eager\nmodel.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "export",
+      "path": "lucid.coreml.export",
+      "kind": "function",
+      "labels": [],
+      "signature": "export(model: Module, example: Tensor, path: str, precision: Precision = Precision.FLOAT32, compute_units: ComputeUnits = ComputeUnits.ALL, output_field: str | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/__init__.py#L67",
+      "subcategory": null,
+      "summary": "Trace `model`, write a `.mlpackage` at `path`, and load it.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Must be in `eval()` mode: an exported graph is an inference\ngraph, and a training-mode dropout is refused rather than\nsilently turned into an identity.",
+          "default": null
+        },
+        {
+          "name": "example",
+          "annotation": "Tensor",
+          "description": "Supplies the input shape and dtype; its values are irrelevant.\nThe exported model's input shape is fixed to it.",
+          "default": null
+        },
+        {
+          "name": "path",
+          "annotation": "str",
+          "description": "Destination `.mlpackage`. Replaced if it exists.",
+          "default": null
+        },
+        {
+          "name": "precision",
+          "annotation": "(Precision, optional, keyword - only)",
+          "description": "Precision of the program body. `FLOAT32` keeps the export\nfaithful to the model it came from; `FLOAT16` is what the\nNeural Engine runs. Inputs and outputs stay float32 either way.",
+          "default": "FLOAT32"
+        },
+        {
+          "name": "compute_units",
+          "annotation": "(ComputeUnits, optional, keyword - only)",
+          "description": "Which processors Core ML may schedule on.",
+          "default": "ALL"
+        },
+        {
+          "name": "output_field",
+          "annotation": "(str or None, optional, keyword - only)",
+          "description": "Attribute to export when the model returns an output dataclass.\n`None` takes `logits`, which the zoo's output types carry.",
+          "default": "None"
+        }
+      ],
+      "returns": {
+        "annotation": "CoreMLModel",
+        "description": "Loaded and ready to `CoreMLModel.predict`."
+      },
+      "raises": [
+        {
+          "annotation": "ValueError",
+          "description": "The model is in training mode."
+        },
+        {
+          "annotation": "UnsupportedOp",
+          "description": "The trace contains an operation with no MIL translation."
+        }
+      ],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "load",
+      "path": "lucid.coreml.load",
+      "kind": "function",
+      "labels": [],
+      "signature": "load(path: str, compute_units: ComputeUnits = ComputeUnits.ALL)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/b4ced0f/lucid/coreml/__init__.py#L128",
+      "subcategory": null,
+      "summary": "Load an existing `.mlpackage`.",
+      "extended": "Feature names are read from the package, so this works on packages\nLucid did not write.",
+      "parameters": [
+        {
+          "name": "path",
+          "annotation": "str",
+          "description": "Package to load.",
+          "default": null
+        },
+        {
+          "name": "compute_units",
+          "annotation": "(ComputeUnits, optional, keyword - only)",
+          "description": "Which processors Core ML may schedule on. Reaching the Neural\nEngine also needs the package to be float16 — check with\n`CoreMLModel.compute_plan`.",
+          "default": "ALL"
+        }
+      ],
+      "returns": {
+        "annotation": "CoreMLModel",
+        "description": "Loaded and ready to predict."
+      },
+      "raises": [
+        {
+          "annotation": "RuntimeError",
+          "description": "Core ML could not compile or load the package; its own message\nnames the offending layer."
+        }
+      ],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "`lucid.coreml` — export Lucid models to Core ML, and run them on the ANE.",
+  "extended": "Lucid computes on Accelerate (CPU) and MLX (Metal).  Neither targets the\nNeural Engine, so a whole processor on every machine Lucid supports was\nunreachable; the same gap meant a model trained here could not ship inside\nan iOS or macOS app.  Core ML is the only public route to either.\n\n**No third-party dependency.**  The package format is written by\n`lucid._C.coreml` — the MIL protobuf, the weight blob, the bundle —\nand executed through Apple's own CoreML.framework, which stands beside\nAccelerate and Metal rather than beside a pip package.  Nothing under\n`lucid/` imports anything external (H4).\n\n**Two things worth knowing before trusting an export.**\n\n*The Neural Engine only runs float16.*  A float32 program asked for with\n`ComputeUnits.CPU_AND_NE` does not warn, does not error, and runs at CPU\nspeed — measured: zero of its operations are scheduled on the ANE.  Pass\n`Precision.FLOAT16` to actually reach it, and expect the ~1e-4 that\nhalf precision costs.  `CoreMLModel.compute_plan` reports where the\noperations really landed, so this is checkable rather than inferred from a\nstopwatch.\n\n*Coverage is narrow and loud.*  The mapped operations are the ones real\nmodels were measured to emit; anything else raises\n`UnsupportedOp` naming the gap, because a package quietly missing a\nlayer still loads and still returns plausible numbers.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [
+    "\n\n    import lucid, lucid.coreml as cml\n\n    model = lucid.models.create_model(\"resnet_18_cls\").eval()\n    x = lucid.zeros(1, 3, 224, 224)\n\n    cm = cml.export(model, x, \"/tmp/r18.mlpackage\",\n                    precision=cml.Precision.FLOAT16,\n                    compute_units=cml.ComputeUnits.CPU_AND_NE)\n    cm.verify(model, x)        # max|coreml - eager|\n    cm.compute_plan()          # PlacementSummary(ANE=69, CPU=2, ane=97%)\n    y = cm.predict(x)"
+  ],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": []
+}

@@ -162,6 +162,22 @@
     },
     {
       "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._spec"
+    },
+    {
+      "kind": "module",
       "module": "lucid.diffeq._fused"
     },
     {
@@ -715,6 +731,10 @@
     {
       "kind": "module",
       "module": "lucid.compile._optim.compiler"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
     }
   ],
   "lucid.compile._debug.diagnose.DiagnosisReport": [
@@ -771,6 +791,60 @@
     {
       "kind": "module",
       "module": "lucid.compile._entry.fused_step"
+    }
+  ],
+  "lucid.coreml": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml.__main__"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    }
+  ],
+  "lucid.coreml._build.UnsupportedOp": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    }
+  ],
+  "lucid.coreml._model.CoreMLModel": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    }
+  ],
+  "lucid.coreml._model.PlacementSummary": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    }
+  ],
+  "lucid.coreml._spec.ComputeUnits": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._model"
+    }
+  ],
+  "lucid.coreml._spec.Precision": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    }
+  ],
+  "lucid.coreml.export": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml.__main__"
     }
   ],
   "lucid.diffeq": [
@@ -1435,6 +1509,12 @@
     {
       "kind": "module",
       "module": "lucid.distributions.matrix"
+    }
+  ],
+  "lucid.models": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml.__main__"
     }
   ],
   "lucid.models._auto.AutoConfig": [
@@ -2511,6 +2591,10 @@
     {
       "kind": "module",
       "module": "lucid.models.text.bert._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.text.roformer._model"
     }
   ],
   "lucid.models._output.VAEOutput": [
@@ -12611,6 +12695,18 @@
     {
       "kind": "module",
       "module": "lucid.compile._entry.step"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._model"
     },
     {
       "kind": "module",
