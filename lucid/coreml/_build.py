@@ -262,6 +262,30 @@ class Builder:
         self._program.add_int_const(name, [int(v) for v in values], False)
         return name
 
+    def const_ints_shaped(self, values: list[int], shape: list[int]) -> str:
+        """An integer constant of arbitrary shape, carried inline.
+
+        ``const_from_tensor`` is the blob path and the blob holds float
+        payloads only, so an integer tensor — a gather's indices, say —
+        cannot go through it without changing dtype.
+
+        Parameters
+        ----------
+        values : list[int]
+            Flattened values, in row-major order.
+        shape : list[int]
+            Shape to declare.
+
+        Returns
+        -------
+        str
+            Name of the constant.
+        """
+        name = self._next("intsn")
+        self._program.add_int_const_shaped(name, [int(v) for v in values], shape)
+        self.shapes[name] = list(shape)
+        return name
+
     def const_int(self, value: int) -> str:
         name = self._next("int")
         self._program.add_int_const(name, [int(value)], True)

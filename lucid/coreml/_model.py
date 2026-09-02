@@ -95,12 +95,17 @@ class CoreMLModel:
         *,
         compute_units: ComputeUnits = ComputeUnits.ALL,
         precision: str = "FLOAT32",
+        output_shape: tuple[int, ...] | None = None,
     ) -> None:
         self.path = path
         self.input_name = input_name
         self.output_name = output_name
         self.compute_units = compute_units
         self.precision = precision
+        # Core ML's multi-array has no rank-0 form, so a model whose output
+        # is a scalar comes back shaped (1,).  Keeping the traced shape lets
+        # ``predict`` hand back what the eager model would.
+        self.output_shape = output_shape
         self._handle = _C_engine.coreml.load_model(path, _UNITS[compute_units])
 
     def predict(self, x: Tensor) -> Tensor:
@@ -116,7 +121,10 @@ class CoreMLModel:
             # ids and masks are nowhere near the range where that loses
             # anything.
             x = x if x.dtype == lucid.int32 else x.to(lucid.int32)
-        return _wrap(self._handle.predict(self.input_name, x._impl, self.output_name))
+        out = _wrap(self._handle.predict(self.input_name, x._impl, self.output_name))
+        if self.output_shape is not None and out.shape != self.output_shape:
+            out = out.reshape(*self.output_shape)
+        return out
 
     def verify(self, model: Module, x: Tensor) -> float:
         """Largest absolute difference against the eager model.

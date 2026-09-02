@@ -86,8 +86,31 @@ _ACTIVATION = [
     ("log_softmax", lambda x: F.log_softmax(x, dim=1)),
 ]
 
+_ACTIVATION += [
+    ("hard_sigmoid", F.hardsigmoid),
+    ("hard_swish", F.hardswish),
+]
+
+_SPATIAL = [
+    ("conv1d", nn.Conv1d(4, 2, 3).eval(), (1, 4, 10)),
+    ("conv2d", nn.Conv2d(4, 2, 3).eval(), (1, 4, 6, 6)),
+    ("conv3d", nn.Conv3d(4, 2, 3).eval(), (1, 4, 6, 6, 6)),
+    ("max_pool1d", lambda x: F.max_pool1d(x, 2), (1, 4, 10)),
+    ("max_pool2d", lambda x: F.max_pool2d(x, 2), (1, 4, 6, 6)),
+    ("max_pool3d", lambda x: F.max_pool3d(x, 2), (1, 4, 6, 6, 6)),
+    ("avg_pool1d", lambda x: F.avg_pool1d(x, 2), (1, 4, 10)),
+    ("avg_pool2d", lambda x: F.avg_pool2d(x, 2), (1, 4, 6, 6)),
+    ("avg_pool3d", lambda x: F.avg_pool3d(x, 2), (1, 4, 6, 6, 6)),
+    ("group_norm", lambda x: F.group_norm(x, 2), (1, 4, 6, 6)),
+    ("rms_norm", lambda x: F.rms_norm(x, (6,)), (1, 4, 6, 6)),
+]
+
 _OTHER = [
     ("clip", lambda x: lucid.clip(x, -0.5, 0.5), False),
+    ("diagonal", lucid.diagonal, False),
+    ("norm", lambda x: lucid.linalg.norm(x), False),
+    ("repeat", lambda x: lucid.repeat(x, 2, dim=1), False),
+    ("split", lambda x: lucid.split(x, 2, dim=1)[0], False),
     ("flip", lambda x: lucid.flip(x, dims=1), False),
     ("masked_fill", lambda x: lucid.masked_fill(x, x > 0, 0.0), False),
     ("maximum", lambda x: lucid.maximum(x, x * 2), False),
@@ -156,3 +179,77 @@ class TestTheOutputBufferIsReadCorrectly:
             assert float((got - reference).abs().max().item()) == 0.0
         finally:
             exported.close()
+
+
+@pytest.mark.parametrize(
+    ("name", "fn", "shape"), _SPATIAL, ids=[c[0] for c in _SPATIAL]
+)
+def test_a_spatial_op_matches(
+    name: str, fn: object, shape: tuple[int, ...], tmp_path: object
+) -> None:
+    _check(fn, lucid.randn(*shape), tmp_path)
+
+
+class TestTheGapAgainstCompileIsAccountedFor:
+    """Every op `lucid.compile` runs either exports, or is listed here.
+
+    The two backends read the same trace, so an op the MPSGraph builder
+    accepts is one an export can meet. Leaving that difference unwritten
+    is how a model becomes unexportable without anyone noticing which op
+    did it; naming each absence makes adding a compile emitter without an
+    export emitter a failing test rather than a surprise months later.
+    """
+
+    #: Core ML's program dialect has no equivalent and no decomposition.
+    IMPOSSIBLE = {
+        # No complex dtype.
+        "complex", "conj", "imag", "real",
+        # No linear-algebra solver.
+        "det", "inv", "solve",
+    }
+
+    #: Only reachable from a model in training mode, which export refuses.
+    TRAINING_ONLY = {
+        "alpha_dropout", "bce_loss", "bce_with_logits", "cross_entropy_loss",
+        "drop_block", "drop_path", "dropoutnd", "huber_loss", "mse_loss",
+        "nll_loss",
+    }
+
+    #: In the registry, but decomposed into mapped ops before tracing.
+    NEVER_TRACED = {
+        "batch_norm", "batch_norm1d", "batch_norm3d", "cube", "cube_root",
+        "pow_scalar", "rpow_scalar", "norm",
+    }
+
+    #: Expressible, not yet written. Each needs more than a name.
+    NOT_YET = {
+        "affine_grid", "bilinear_layer", "embedding_bag", "erfinv", "fold",
+        "global_response_norm", "grid_sample", "interpolate_nearest_3d",
+        "interpolate_trilinear", "lp_normalize", "meshgrid",
+        "rotary_pos_embedding", "unfold",
+    }
+
+    def test_no_unaccounted_gap(self) -> None:
+        from lucid.coreml._emit import EMITTERS
+
+        registry = {s.name for s in _C_engine.op_registry_all() if not s.internal}
+        compiled = {
+            name
+            for name in registry | set(EMITTERS)
+            if _C_engine.compile.emitter_registered(name)
+        }
+        accounted = (
+            self.IMPOSSIBLE | self.TRAINING_ONLY | self.NEVER_TRACED | self.NOT_YET
+        )
+        unaccounted = compiled - set(EMITTERS) - accounted
+        assert not unaccounted, (
+            f"lucid.compile runs {sorted(unaccounted)} and lucid.coreml does not. "
+            "Add an emitter, or add the op to one of the sets above with the "
+            "reason it cannot have one."
+        )
+
+    def test_nothing_listed_is_already_supported(self) -> None:
+        from lucid.coreml._emit import EMITTERS
+
+        stale = (self.IMPOSSIBLE | self.NOT_YET) & set(EMITTERS)
+        assert not stale, f"{sorted(stale)} are mapped now — take them off the list"

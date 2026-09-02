@@ -1192,3 +1192,80 @@ def _repeat(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     final = list(shape)
     final[axis] = shape[axis] * repeats
     return "reshape", [("x", tiled), ("shape", b.const_ints(final))]
+
+
+@_emitter("invert")
+def _invert(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return "logical_not", [("x", ins[0])]
+
+
+@_emitter("hard_sigmoid")
+def _hard_sigmoid(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``clip((x + 3) / 6, 0, 1)``, which MIL parameterises as alpha and beta."""
+    return "sigmoid_hard", [
+        ("x", ins[0]),
+        ("alpha", b.const_float(1.0 / 6.0)),
+        ("beta", b.const_float(0.5)),
+    ]
+
+
+@_emitter("hard_swish")
+def _hard_swish(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``x * hard_sigmoid(x)`` — there is no ``hard_swish`` in the opset."""
+    gate = b.emit(
+        "sigmoid_hard",
+        [
+            ("x", ins[0]),
+            ("alpha", b.const_float(1.0 / 6.0)),
+            ("beta", b.const_float(0.5)),
+        ],
+        b.shape_of(ins[0]),
+    )
+    return "mul", [("x", ins[0]), ("y", gate)]
+
+
+@_emitter("diagonal")
+def _diagonal(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """The diagonal as a gather along one of the two axes it spans.
+
+    MIL has no ``diagonal``. Taking ``x[..., i, i + offset]`` is a gather
+    along the second axis with the index equal to the position on the
+    first, so the index tensor is a constant the trace already determines.
+    """
+    shape = b.shape_of(ins[0])
+    rank = len(shape)
+    axis1 = _as_int(_attr(op, "axis1"))
+    axis2 = _as_int(_attr(op, "axis2"))
+    offset = _as_int(_attr(op, "offset"))
+    axis1 = axis1 if axis1 >= 0 else axis1 + rank
+    axis2 = axis2 if axis2 >= 0 else axis2 + rank
+    if axis2 != axis1 + 1 or axis2 != rank - 1:
+        # Imported here: ``_build`` imports this module, so naming the
+        # exception at module scope would close the cycle.
+        from lucid.coreml._build import UnsupportedOp
+
+        # Only the trailing pair is expressible this way; any other pair
+        # would need a transpose the trace did not ask for.
+        raise UnsupportedOp("diagonal")
+
+    length = int(_out_shape(op)[-1])
+    # MIL wants the index tensor the same shape as the result, not a
+    # broadcastable stand-in, so the leading axes are written out.
+    leading = 1
+    for dim in shape[:axis1]:
+        leading *= dim
+    picked = [i + offset for _ in range(leading) for i in range(length)]
+    index_shape = list(shape[:axis1]) + [length, 1]
+    indices = b.const_ints_shaped(picked, index_shape)
+    gathered = list(shape[:axis1]) + [length, 1]
+    taken = b.emit(
+        "gather_along_axis",
+        [
+            ("x", ins[0]),
+            ("indices", indices),
+            ("axis", b.const_int(axis2)),
+            ("validate_indices", b.const_bool(False)),
+        ],
+        gathered,
+    )
+    return "reshape", [("x", taken), ("shape", b.const_ints(_out_shape(op)))]

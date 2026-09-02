@@ -65,6 +65,13 @@ __all__ = [
 ]
 
 
+def _shape_of(value: object) -> tuple[int, ...]:
+    """The traced output shape as ``build_package`` reports it."""
+    if not isinstance(value, tuple):
+        raise TypeError(f"lucid.coreml: expected a shape, got {type(value).__name__}")
+    return tuple(int(d) for d in value)
+
+
 def export(
     model: Module,
     example: Tensor,
@@ -123,6 +130,7 @@ def export(
         str(info["output"]),
         compute_units=compute_units,
         precision=precision.value,
+        output_shape=_shape_of(info["output_shape"]),
     )
 
 
