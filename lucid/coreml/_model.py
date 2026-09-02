@@ -24,7 +24,7 @@ from lucid.coreml._build import (
     _named_examples,
     _select_outputs,
 )
-from lucid.coreml._spec import ComputeUnits, ImageInput
+from lucid.coreml._spec import Classifier, ComputeUnits, ImageInput
 
 if TYPE_CHECKING:
     from lucid._C.engine import TensorImpl
@@ -103,6 +103,7 @@ class CoreMLModel:
         precision: str = "FLOAT32",
         output_shapes: dict[str, tuple[int, ...]] | None = None,
         image_input: ImageInput | None = None,
+        classifier: Classifier | None = None,
     ) -> None:
         self.path = path
         self.input_names = input_names
@@ -118,6 +119,9 @@ class CoreMLModel:
         # and the normalisation now lives inside the package, so a
         # comparison against the eager model has to apply it on that side.
         self.image_input = image_input
+        # A classifier returns a string and a dictionary, not arrays, so
+        # it is read through ``classify`` rather than ``predict``.
+        self.classifier = classifier
         self._handle = _C_engine.coreml.load_model(path, _UNITS[compute_units])
 
     def _feed(self, x: object) -> list[tuple[str, TensorImpl]]:
@@ -162,6 +166,42 @@ class CoreMLModel:
             fed.append((name, tensor._impl))
         return fed
 
+    def _images(self) -> list[tuple[str, int]]:
+        if self.image_input is None:
+            return []
+        return [(self.input_names[0], _spec.color_space(self.image_input.color))]
+
+    def classify(self, x: object) -> tuple[str, dict[str, float]]:
+        """Run a classifier package and read back what it names.
+
+        Parameters
+        ----------
+        x : Tensor or tuple of Tensor or dict of str to Tensor
+            Input, in the same shapes :meth:`predict` accepts.
+
+        Returns
+        -------
+        tuple[str, dict[str, float]]
+            The winning label, and every label with its probability.
+
+        Raises
+        ------
+        TypeError
+            The package was not exported with a classifier.
+        """
+        if self.classifier is None:
+            raise TypeError(
+                "lucid.coreml: this package returns scores, not labels — export it "
+                "with classifier=Classifier(labels=...) to get labels"
+            )
+        label, scores = self._handle.classify(
+            self._feed(x),
+            self._images(),
+            self.classifier.label_name,
+            self.classifier.probabilities_name,
+        )
+        return label, {name: float(value) for name, value in scores}
+
     def predict(self, x: object) -> Tensor | dict[str, Tensor]:
         """Run the model.
 
@@ -181,12 +221,12 @@ class CoreMLModel:
             The output for a single-output package; otherwise every
             output, keyed by the field the model declared it as.
         """
-        images = (
-            [(self.input_names[0], _spec.color_space(self.image_input.color))]
-            if self.image_input is not None
-            else []
-        )
-        raw = self._handle.predict(self._feed(x), self.output_names, images)
+        if self.classifier is not None:
+            raise TypeError(
+                "lucid.coreml: this package returns a label and a probability map, "
+                "not arrays — use classify()"
+            )
+        raw = self._handle.predict(self._feed(x), self.output_names, self._images())
         produced: dict[str, Tensor] = {}
         for name, impl in zip(self.output_names, raw):
             out = _wrap(impl)
@@ -228,6 +268,11 @@ class CoreMLModel:
         1e-8 for the same model. Feed integral values to compare the
         network rather than the rounding.
         """
+        if self.classifier is not None:
+            raise TypeError(
+                "lucid.coreml: a classifier's output is a label and a probability "
+                "map; compare them with classify() rather than verify()"
+            )
         examples, by_keyword = _named_examples(x)
         if self.image_input is not None:
             # The package normalises the pixels itself, so the eager model

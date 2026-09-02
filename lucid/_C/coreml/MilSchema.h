@@ -207,6 +207,28 @@ constexpr int kFileName = 1;
 constexpr int kOffset = 2;
 }  // namespace BlobFileValue
 
+namespace ListType {
+constexpr int kType = 1;
+constexpr int kLength = 2;
+}  // namespace ListType
+
+namespace ListValue {
+constexpr int kValues = 1;
+}  // namespace ListValue
+
+namespace DictionaryType {
+constexpr int kKeyType = 1;
+constexpr int kValueType = 2;
+}  // namespace DictionaryType
+
+namespace DictionaryFeatureType {
+constexpr int kInt64KeyType = 1;
+constexpr int kStringKeyType = 2;
+}  // namespace DictionaryFeatureType
+
+namespace StringFeatureType {
+}  // namespace StringFeatureType
+
 namespace ArrayFeatureType_ArrayDataType {
 constexpr int kINVALID_ARRAY_DATA_TYPE = 0;
 constexpr int kFLOAT32 = 65568;

@@ -133,6 +133,17 @@ void register_coreml(py::module_& m) {
             py::arg("name"), py::arg("width"), py::arg("height"), py::arg("color_space"),
             "Present this input as an image in the model description.")
         .def(
+            "set_classifier",
+            [](lucid::coreml::MilProgram& self, const std::string& scores_value,
+               const std::vector<std::string>& labels, const std::string& label_name,
+               const std::string& probabilities_name) {
+                self.set_classifier(scores_value, labels, label_name, probabilities_name);
+            },
+            py::arg("scores_value"), py::arg("labels"), py::arg("label_name"),
+            py::arg("probabilities_name"),
+            "Turn the model into a Core ML classifier: a winning label and a "
+            "label-to-probability map in place of the raw scores.")
+        .def(
             "set_metadata",
             [](lucid::coreml::MilProgram& self, const std::string& short_description,
                const std::string& author, const std::string& license,
@@ -268,6 +279,19 @@ void register_coreml(py::module_& m) {
             "Run one prediction. ``inputs`` pairs each feature name with a "
             "contiguous CPU float32 or int32 tensor; the results come back in "
             "the order ``output_names`` asks for.")
+        .def(
+            "classify",
+            [](const PyCoreMLModel& self,
+               const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
+               const std::vector<std::pair<std::string, int>>& images,
+               const std::string& label_name, const std::string& probabilities_name) {
+                return lucid::coreml::classify(self.raw(), inputs, images, label_name,
+                                               probabilities_name);
+            },
+            py::arg("inputs"), py::arg("images"), py::arg("label_name"),
+            py::arg("probabilities_name"),
+            "Run a classifier and read back the winning label and every "
+            "label's probability.")
         .def("close", &PyCoreMLModel::close,
              "Release the compiled model and its cached artifacts.");
 

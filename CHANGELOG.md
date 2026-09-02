@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - a detector's boxes are part of the detector
 - int8 weights, and the benchmark that was lying about them
 - a package an app can open, not only numbers that agree
+- labels, so Vision has something to return
 
 ---
 

@@ -93,6 +93,51 @@ ProtoWriter make_int_value(std::int64_t number) {
     return value;
 }
 
+// ``ValueType`` for a list of strings of a known length — how MIL types
+// a classifier's label set.
+ProtoWriter make_string_list_type(std::size_t length) {
+    ProtoWriter element;
+    ProtoWriter element_tensor;
+    element_tensor.write_enum(pb::TensorType::kDataType,
+                              static_cast<int>(MilDataType::String));
+    element.write_message(pb::ValueType::kTensorType, element_tensor);
+
+    ProtoWriter constant;
+    constant.write_int(pb::ConstantDimension::kSize, static_cast<std::int64_t>(length));
+    ProtoWriter dimension;
+    dimension.write_message(pb::Dimension::kConstant, constant);
+
+    ProtoWriter list;
+    list.write_message(pb::ListType::kType, element);
+    list.write_message(pb::ListType::kLength, dimension);
+
+    ProtoWriter value_type;
+    value_type.write_message(pb::ValueType::kListType, list);
+    return value_type;
+}
+
+// ``ValueType`` for ``dict<string, double>`` — a classifier's second
+// result, which Core ML hands back as label to probability.
+ProtoWriter make_string_double_dict_type() {
+    ProtoWriter key_tensor;
+    key_tensor.write_enum(pb::TensorType::kDataType, static_cast<int>(MilDataType::String));
+    ProtoWriter key;
+    key.write_message(pb::ValueType::kTensorType, key_tensor);
+
+    ProtoWriter value_tensor;
+    value_tensor.write_enum(pb::TensorType::kDataType, pb::DataType::kFLOAT64);
+    ProtoWriter value;
+    value.write_message(pb::ValueType::kTensorType, value_tensor);
+
+    ProtoWriter dictionary;
+    dictionary.write_message(pb::DictionaryType::kKeyType, key);
+    dictionary.write_message(pb::DictionaryType::kValueType, value);
+
+    ProtoWriter value_type;
+    value_type.write_message(pb::ValueType::kDictionaryType, dictionary);
+    return value_type;
+}
+
 // An operand binding: references to other values by name.  More than one
 // when the parameter is variadic (``concat``'s ``values``).
 ProtoWriter make_argument(const std::vector<std::string>& value_names) {
@@ -261,23 +306,101 @@ void MilProgram::set_image_input(const std::string& name, const MilImageSpec& sp
 
 void MilProgram::set_metadata(const MilMetadata& metadata) { metadata_ = metadata; }
 
+void MilProgram::set_classifier(const std::string& scores_value,
+                                const std::vector<std::string>& labels,
+                                const std::string& label_name,
+                                const std::string& probabilities_name) {
+    Op op;
+    op.type = "classify";
+    op.is_classify = true;
+    op.inputs = {{"probabilities", {scores_value}}};
+    op.labels = labels;
+    op.output_name = label_name;
+    op.second_output_name = probabilities_name;
+    ops_.push_back(std::move(op));
+
+    classifier_.present = true;
+    classifier_.label_name = label_name;
+    classifier_.probabilities_name = probabilities_name;
+}
+
 void MilProgram::add_output(const std::string& name, const MilTensorType& type) {
     outputs_.emplace_back(name, type);
 }
 
 std::string MilProgram::serialize() const {
-    if (outputs_.empty())
+    if (outputs_.empty() && !classifier_.present)
         throw std::logic_error(
             "MilProgram::serialize: no output was added — Core ML would reject the "
             "package with an error far from this cause");
 
     // ── operations ───────────────────────────────────────────────────
     ProtoWriter block;
-    for (const auto& [name, type] : outputs_)
-        block.write_string(pb::Block::kOutputs, name);
+    if (classifier_.present) {
+        block.write_string(pb::Block::kOutputs, classifier_.label_name);
+        block.write_string(pb::Block::kOutputs, classifier_.probabilities_name);
+    } else {
+        for (const auto& [name, type] : outputs_)
+            block.write_string(pb::Block::kOutputs, name);
+    }
     for (const Op& op : ops_) {
         ProtoWriter operation;
         operation.write_string(pb::Operation::kType, op.type);
+        if (op.is_classify) {
+            // ``classes`` is bound to an inline list rather than to a
+            // const: MIL types it ``list<string>``, which a rank-1 string
+            // tensor is not.
+            ProtoWriter list;
+            for (const std::string& label : op.labels) {
+                ProtoWriter repeated;
+                repeated.write_string(1, label);  // RepeatedStrings.values
+                ProtoWriter tensor_value;
+                tensor_value.write_message(pb::TensorValue::kStrings, repeated);
+                ProtoWriter immediate;
+                immediate.write_message(pb::ImmediateValue::kTensor, tensor_value);
+                ProtoWriter entry;
+                entry.write_message(pb::Value::kType,
+                                    make_value_type({MilDataType::String, {}}));
+                entry.write_message(pb::Value::kImmediateValue, immediate);
+                list.write_message(pb::ListValue::kValues, entry);
+            }
+            ProtoWriter list_immediate;
+            list_immediate.write_message(pb::ImmediateValue::kList, list);
+            ProtoWriter classes;
+            classes.write_message(pb::Value::kType, make_string_list_type(op.labels.size()));
+            classes.write_message(pb::Value::kImmediateValue, list_immediate);
+
+            ProtoWriter binding;
+            binding.write_message(pb::Binding::kValue, classes);
+            ProtoWriter argument;
+            argument.write_message(pb::Argument::kArguments, binding);
+            operation.write_map_entry(pb::Operation::kInputs, "classes", argument);
+
+            for (const auto& [param, value_names] : op.inputs)
+                operation.write_map_entry(pb::Operation::kInputs, param,
+                                          make_argument(value_names));
+
+            ProtoWriter label;
+            label.write_string(pb::NamedValueType::kName, op.output_name);
+            ProtoWriter label_type;
+            ProtoWriter label_tensor;
+            label_tensor.write_enum(pb::TensorType::kDataType,
+                                    static_cast<int>(MilDataType::String));
+            label_type.write_message(pb::ValueType::kTensorType, label_tensor);
+            label.write_message(pb::NamedValueType::kType, label_type);
+            operation.write_message(pb::Operation::kOutputs, label);
+
+            ProtoWriter probabilities;
+            probabilities.write_string(pb::NamedValueType::kName, op.second_output_name);
+            probabilities.write_message(pb::NamedValueType::kType,
+                                        make_string_double_dict_type());
+            operation.write_message(pb::Operation::kOutputs, probabilities);
+
+            operation.write_map_entry(pb::Operation::kAttributes, "name",
+                                      make_string_value(op.output_name));
+            block.write_message(pb::Block::kOperations, operation);
+            continue;
+        }
         for (const auto& [param, value_names] : op.inputs)
             operation.write_map_entry(pb::Operation::kInputs, param, make_argument(value_names));
         operation.write_message(pb::Operation::kOutputs,
@@ -403,8 +526,37 @@ std::string MilProgram::serialize() const {
     ProtoWriter description;
     for (const auto& [name, type] : inputs_)
         description.write_message(pb::ModelDescription::kInput, feature(name, type));
-    for (const auto& [name, type] : outputs_)
-        description.write_message(pb::ModelDescription::kOutput, feature(name, type));
+    if (classifier_.present) {
+        ProtoWriter string_type;
+        ProtoWriter label_feature_type;
+        label_feature_type.write_message(pb::FeatureType::kStringType, string_type);
+        ProtoWriter label_description;
+        label_description.write_string(pb::FeatureDescription::kName,
+                                       classifier_.label_name);
+        label_description.write_message(pb::FeatureDescription::kType, label_feature_type);
+        description.write_message(pb::ModelDescription::kOutput, label_description);
+
+        ProtoWriter string_key;
+        ProtoWriter dictionary;
+        dictionary.write_message(pb::DictionaryFeatureType::kStringKeyType, string_key);
+        ProtoWriter probabilities_feature_type;
+        probabilities_feature_type.write_message(pb::FeatureType::kDictionaryType,
+                                                 dictionary);
+        ProtoWriter probabilities_description;
+        probabilities_description.write_string(pb::FeatureDescription::kName,
+                                               classifier_.probabilities_name);
+        probabilities_description.write_message(pb::FeatureDescription::kType,
+                                                probabilities_feature_type);
+        description.write_message(pb::ModelDescription::kOutput, probabilities_description);
+
+        description.write_string(pb::ModelDescription::kPredictedFeatureName,
+                                 classifier_.label_name);
+        description.write_string(pb::ModelDescription::kPredictedProbabilitiesName,
+                                 classifier_.probabilities_name);
+    } else {
+        for (const auto& [name, type] : outputs_)
+            description.write_message(pb::ModelDescription::kOutput, feature(name, type));
+    }
 
     if (!metadata_.short_description.empty() || !metadata_.author.empty() ||
         !metadata_.license.empty() || !metadata_.version.empty()) {

@@ -59,6 +59,11 @@ MESSAGES = (
     "ImmediateValue",
     "TensorValue",
     "BlobFileValue",
+    "ListType",
+    "ListValue",
+    "DictionaryType",
+    "DictionaryFeatureType",
+    "StringFeatureType",
 )
 
 # Enums whose values end up in the emitted bytes.

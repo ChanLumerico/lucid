@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING
 from lucid.coreml._build import UnsupportedOp, UnsupportedRank, build_package
 from lucid.coreml._model import CoreMLModel, PlacementSummary
 from lucid.coreml._spec import (
+    Classifier,
     ColorSpace,
     ComputeUnits,
     ImageInput,
@@ -61,6 +62,7 @@ if TYPE_CHECKING:
     from lucid.nn.module import Module
 
 __all__ = [
+    "Classifier",
     "ColorSpace",
     "ComputeUnits",
     "ImageInput",
@@ -93,6 +95,7 @@ def export(
     precision: Precision = Precision.FLOAT32,
     weights: WeightPrecision = WeightPrecision.FLOAT,
     image_input: ImageInput | None = None,
+    classifier: Classifier | None = None,
     metadata: Metadata | None = None,
     compute_units: ComputeUnits = ComputeUnits.ALL,
     output_field: str | None = None,
@@ -125,6 +128,11 @@ def export(
         Present the sole input as an image, with the normalisation it
         expects, so an app can hand over a pixel buffer instead of
         converting pixels itself.
+    classifier : Classifier or None, optional, keyword-only, default=None
+        Declare the model a classifier over these labels, so Core ML —
+        and Vision through it — returns the winning label and a
+        label-to-probability map instead of a score array. Read with
+        :meth:`~CoreMLModel.classify`.
     metadata : Metadata or None, optional, keyword-only, default=None
         Description, author, licence and version to record in the package.
     compute_units : ComputeUnits, optional, keyword-only, default=ALL
@@ -158,6 +166,7 @@ def export(
         precision=precision,
         weights=weights,
         image_input=image_input,
+        classifier=classifier,
         metadata=metadata,
         output_field=output_field,
     )
@@ -170,6 +179,7 @@ def export(
         precision=precision.value,
         output_shapes=dict(outputs),
         image_input=image_input,
+        classifier=classifier,
     )
 
 

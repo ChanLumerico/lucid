@@ -154,6 +154,19 @@ public:
     // What the package says about itself, for the tooling that reads it.
     void set_metadata(const MilMetadata& metadata);
 
+    // Turn the model into a Core ML classifier.
+    //
+    // Without this a package returns a score array and the app does its
+    // own argmax and label lookup; Vision's ``VNCoreMLRequest``, which
+    // reads ``predictedFeatureName``, returns nothing at all.  Declaring
+    // it appends a ``classify`` operation and makes its two results —
+    // the winning label and the label-to-probability map — the model's
+    // outputs, in place of the raw scores.
+    void set_classifier(const std::string& scores_value,
+                        const std::vector<std::string>& labels,
+                        const std::string& label_name,
+                        const std::string& probabilities_name);
+
     // A value the model returns.  Must name an existing operation output.
     // Called once per output, in the order the caller wants them.
     void add_output(const std::string& name, const MilTensorType& type);
@@ -186,6 +199,11 @@ private:
         MilDataType scale_dtype = MilDataType::Float16;
         std::int64_t channels = 0;
         std::int64_t axis = 0;
+        // ``classify`` payload: the labels travel inline and the two
+        // results have different type kinds, so this op is written by hand.
+        bool is_classify = false;
+        std::vector<std::string> labels;
+        std::string second_output_name;
         bool blob = false;
         std::uint64_t blob_offset = 0;
         std::vector<std::int64_t> ints;
@@ -199,6 +217,11 @@ private:
     MilNamedTypes inputs_;
     std::vector<std::pair<std::string, MilImageSpec>> images_;
     MilMetadata metadata_;
+    struct Classifier {
+        bool present = false;
+        std::string label_name;
+        std::string probabilities_name;
+    } classifier_;
     std::string opset_;
     MilNamedTypes outputs_;
     std::vector<Op> ops_;

@@ -79,6 +79,23 @@ predict(CoreMLModel* model,
         const std::vector<std::string>& output_names,
         const std::vector<std::pair<std::string, int>>& images);
 
+// Run a classifier and read back what it declares.
+//
+// A classifier's outputs are a string and a dictionary, not arrays, so
+// ``predict`` cannot read them — the feature types are different, and
+// asking for a multi-array gets nothing.
+//
+// Returns
+// -------
+// std::pair<std::string, std::vector<std::pair<std::string, double>>>
+//     The winning label, and every label with its probability.
+LUCID_API std::pair<std::string, std::vector<std::pair<std::string, double>>>
+classify(CoreMLModel* model,
+         const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
+         const std::vector<std::pair<std::string, int>>& images,
+         const std::string& label_name,
+         const std::string& probabilities_name);
+
 // One operation's device assignment, as Core ML planned it.
 struct OpPlacement {
     std::string op_type;  // MIL operator name, e.g. "conv"

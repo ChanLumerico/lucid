@@ -361,16 +361,17 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
 
 }  // namespace
 
-std::vector<TensorImplPtr> predict(CoreMLModel* model,
-                                   const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
-                                   const std::vector<std::string>& output_names,
-                                   const std::vector<std::pair<std::string, int>>& images) {
+namespace {
+
+// Everything both entry points do before the prediction itself.
+id<MLFeatureProvider>
+run(CoreMLModel* model,
+    const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
+    const std::vector<std::pair<std::string, int>>& images) {
     if (model == nullptr || model->model == nil)
         throw std::invalid_argument("lucid.coreml: null model handle");
     if (inputs.empty())
         throw std::invalid_argument("lucid.coreml: no inputs given");
-    if (output_names.empty())
-        throw std::invalid_argument("lucid.coreml: no outputs requested");
 
     for (const auto& [name, tensor] : inputs) {
         if (!tensor)
@@ -386,69 +387,105 @@ std::vector<TensorImplPtr> predict(CoreMLModel* model,
                 " must be float32 or int32 — Core ML's multi-array has no int64, "
                 "so token ids are narrowed by the caller");
         if (!std::get<CpuStorage>(tensor->storage()).ptr)
-            throw std::runtime_error("lucid.coreml: input " + name +
-                                     " has no host storage");
+            throw std::runtime_error("lucid.coreml: input " + name + " has no host storage");
     }
 
-    @autoreleasepool {
-        NSMutableDictionary<NSString*, MLFeatureValue*>* feature_map =
-            [NSMutableDictionary dictionaryWithCapacity:inputs.size()];
-        NSError* error = nil;
+    NSMutableDictionary<NSString*, MLFeatureValue*>* feature_map =
+        [NSMutableDictionary dictionaryWithCapacity:inputs.size()];
+    NSError* error = nil;
 
-        for (const auto& [name, tensor] : inputs) {
-            NSString* key = [NSString stringWithUTF8String:name.c_str()];
-            const auto image = std::find_if(images.begin(), images.end(),
-                                            [&](const auto& entry) { return entry.first == name; });
-            if (image != images.end()) {
-                feature_map[key] =
-                    make_image_feature(model->model, key, tensor, image->second);
-                continue;
-            }
-            const auto& storage = std::get<CpuStorage>(tensor->storage());
-            const Shape& shape = tensor->shape();
-            NSMutableArray<NSNumber*>* ns_shape =
-                [NSMutableArray arrayWithCapacity:shape.size()];
-            for (std::int64_t dim : shape)
-                [ns_shape addObject:@(dim)];
-
-            // Row-major strides, in elements, as MLMultiArray counts them.
-            std::vector<std::int64_t> strides(shape.size(), 1);
-            for (std::size_t i = shape.size(); i-- > 1;)
-                strides[i - 1] = strides[i] * shape[i];
-            NSMutableArray<NSNumber*>* ns_strides =
-                [NSMutableArray arrayWithCapacity:strides.size()];
-            for (std::int64_t stride : strides)
-                [ns_strides addObject:@(stride)];
-
-            // The array borrows Lucid's buffer; ``deallocator:nil`` says
-            // Core ML must not free it.  The tensor outlives this scope
-            // because the caller holds it.
-            const MLMultiArrayDataType in_type = tensor->dtype() == Dtype::I32
-                                                     ? MLMultiArrayDataTypeInt32
-                                                     : MLMultiArrayDataTypeFloat32;
-            MLMultiArray* array =
-                [[MLMultiArray alloc] initWithDataPointer:static_cast<void*>(storage.ptr.get())
-                                                    shape:ns_shape
-                                                 dataType:in_type
-                                                  strides:ns_strides
-                                              deallocator:nil
-                                                    error:&error];
-            if (array == nil)
-                throw std::runtime_error("lucid.coreml: cannot wrap the input " + name +
-                                         ": " + describe(error));
-            feature_map[key] = [MLFeatureValue featureValueWithMultiArray:array];
+    for (const auto& [name, tensor] : inputs) {
+        NSString* key = [NSString stringWithUTF8String:name.c_str()];
+        const auto image = std::find_if(images.begin(), images.end(),
+                                        [&](const auto& entry) { return entry.first == name; });
+        if (image != images.end()) {
+            feature_map[key] = make_image_feature(model->model, key, tensor, image->second);
+            continue;
         }
+        const auto& storage = std::get<CpuStorage>(tensor->storage());
+        const Shape& shape = tensor->shape();
+        NSMutableArray<NSNumber*>* ns_shape = [NSMutableArray arrayWithCapacity:shape.size()];
+        for (std::int64_t dim : shape)
+            [ns_shape addObject:@(dim)];
 
-        MLDictionaryFeatureProvider* features =
-            [[MLDictionaryFeatureProvider alloc] initWithDictionary:feature_map error:&error];
-        if (features == nil)
-            throw std::runtime_error("lucid.coreml: cannot build the input features: " +
+        std::vector<std::int64_t> strides(shape.size(), 1);
+        for (std::size_t i = shape.size(); i-- > 1;)
+            strides[i - 1] = strides[i] * shape[i];
+        NSMutableArray<NSNumber*>* ns_strides = [NSMutableArray arrayWithCapacity:strides.size()];
+        for (std::int64_t stride : strides)
+            [ns_strides addObject:@(stride)];
+
+        const MLMultiArrayDataType in_type = tensor->dtype() == Dtype::I32
+                                                 ? MLMultiArrayDataTypeInt32
+                                                 : MLMultiArrayDataTypeFloat32;
+        MLMultiArray* array =
+            [[MLMultiArray alloc] initWithDataPointer:static_cast<void*>(storage.ptr.get())
+                                                shape:ns_shape
+                                             dataType:in_type
+                                              strides:ns_strides
+                                          deallocator:nil
+                                                error:&error];
+        if (array == nil)
+            throw std::runtime_error("lucid.coreml: cannot wrap the input " + name + ": " +
                                      describe(error));
+        feature_map[key] = [MLFeatureValue featureValueWithMultiArray:array];
+    }
 
-        id<MLFeatureProvider> result = [model->model predictionFromFeatures:features error:&error];
-        if (result == nil)
-            throw std::runtime_error("lucid.coreml: prediction failed: " + describe(error));
+    MLDictionaryFeatureProvider* features =
+        [[MLDictionaryFeatureProvider alloc] initWithDictionary:feature_map error:&error];
+    if (features == nil)
+        throw std::runtime_error("lucid.coreml: cannot build the input features: " +
+                                 describe(error));
 
+    id<MLFeatureProvider> result = [model->model predictionFromFeatures:features error:&error];
+    if (result == nil)
+        throw std::runtime_error("lucid.coreml: prediction failed: " + describe(error));
+    return result;
+}
+
+}  // namespace
+
+std::pair<std::string, std::vector<std::pair<std::string, double>>>
+classify(CoreMLModel* model,
+         const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
+         const std::vector<std::pair<std::string, int>>& images,
+         const std::string& label_name,
+         const std::string& probabilities_name) {
+    @autoreleasepool {
+        id<MLFeatureProvider> result = run(model, inputs, images);
+
+        MLFeatureValue* label =
+            [result featureValueForName:[NSString stringWithUTF8String:label_name.c_str()]];
+        if (label == nil)
+            throw std::runtime_error("lucid.coreml: the model produced no label named " +
+                                     label_name);
+
+        MLFeatureValue* probabilities = [result
+            featureValueForName:[NSString stringWithUTF8String:probabilities_name.c_str()]];
+        if (probabilities == nil || probabilities.dictionaryValue == nil)
+            throw std::runtime_error("lucid.coreml: the model produced no probabilities "
+                                     "named " +
+                                     probabilities_name);
+
+        std::vector<std::pair<std::string, double>> scores;
+        NSDictionary<id, NSNumber*>* mapping = probabilities.dictionaryValue;
+        scores.reserve(mapping.count);
+        for (id key in mapping) {
+            NSString* text = [key description];
+            scores.emplace_back([text UTF8String], [mapping[key] doubleValue]);
+        }
+        return {std::string([label.stringValue UTF8String]), scores};
+    }
+}
+
+std::vector<TensorImplPtr> predict(CoreMLModel* model,
+                                   const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
+                                   const std::vector<std::string>& output_names,
+                                   const std::vector<std::pair<std::string, int>>& images) {
+    if (output_names.empty())
+        throw std::invalid_argument("lucid.coreml: no outputs requested");
+    @autoreleasepool {
+        id<MLFeatureProvider> result = run(model, inputs, images);
         std::vector<TensorImplPtr> produced;
         produced.reserve(output_names.size());
         for (const std::string& output_name : output_names)

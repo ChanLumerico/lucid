@@ -17,7 +17,15 @@ from lucid._C import engine as _C_engine
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
-__all__ = ["ColorSpace", "ComputeUnits", "ImageInput", "Metadata", "Precision", "WeightPrecision"]
+__all__ = [
+    "Classifier",
+    "ColorSpace",
+    "ComputeUnits",
+    "ImageInput",
+    "Metadata",
+    "Precision",
+    "WeightPrecision",
+]
 
 
 class ComputeUnits(enum.Enum):
@@ -109,6 +117,39 @@ class ImageInput:
     scale: float = 1.0
     bias: tuple[float, ...] = ()
     color: ColorSpace = ColorSpace.RGB
+
+
+@dataclasses.dataclass(frozen=True)
+class Classifier:
+    """Turn the exported scores into labels Core ML knows how to name.
+
+    Without this a package returns a score array and the app does its own
+    argmax and label lookup. Vision's ``VNCoreMLRequest`` does not even
+    get that far: it reads the package's ``predictedFeatureName``, and an
+    unset one means it returns nothing.
+
+    The two feature names default to what the reference tooling emits,
+    because that is what Xcode's preview and most sample code look for.
+
+    ``classify`` does **not** normalise: whatever the model produces is
+    what the map contains, so a network ending in a linear layer yields
+    raw scores under a name that says "probabilities". Add a softmax to
+    the model if the values need to be probabilities — Core ML will not
+    do it, and the name will not tell you it did not.
+
+    Attributes
+    ----------
+    labels : tuple[str, ...]
+        One label per score, in the order the model produces them.
+    label_name : str
+        Feature the winning label is returned under.
+    probabilities_name : str
+        Feature the label-to-probability map is returned under.
+    """
+
+    labels: tuple[str, ...]
+    label_name: str = "classLabel"
+    probabilities_name: str = "classLabel_probs"
 
 
 @dataclasses.dataclass(frozen=True)

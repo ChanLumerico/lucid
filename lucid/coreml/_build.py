@@ -36,6 +36,7 @@ from lucid.coreml._emit import (
     emit_cast,
 )
 from lucid.coreml._spec import (
+    Classifier,
     ColorSpace,
     ImageInput,
     Metadata,
@@ -768,6 +769,7 @@ def build_package(
     precision: Precision = Precision.FLOAT32,
     weights: WeightPrecision = WeightPrecision.FLOAT,
     image_input: ImageInput | None = None,
+    classifier: Classifier | None = None,
     metadata: Metadata | None = None,
     output_field: str | None = None,
 ) -> dict[str, object]:
@@ -793,6 +795,9 @@ def build_package(
         Present the sole input as an image, with the normalisation it
         expects. Refused when the model takes more than one input, since
         which of them is the image would be a guess.
+    classifier : Classifier or None, optional, keyword-only, default=None
+        Declare the model a classifier over these labels. Needs a single
+        output shaped ``(1, len(labels))``.
     metadata : Metadata or None, optional, keyword-only, default=None
         What the package says about itself.
     output_field : str or None, optional, keyword-only, default=None
@@ -962,6 +967,25 @@ def build_package(
 
     blob.finalize()
 
+    if classifier is not None:
+        if len(outputs) != 1:
+            raise ValueError(
+                f"lucid.coreml: a classifier needs one output and this model "
+                f"returns {len(outputs)} ({[name for name, _t, _x in outputs]})"
+            )
+        scores = outputs[0][2]
+        score_shape = tuple(int(d) for d in scores.shape)
+        if len(score_shape) != 2 or score_shape[0] != 1:
+            raise ValueError(
+                f"lucid.coreml: a classifier's output must be (1, classes) and this "
+                f"one is {score_shape}"
+            )
+        if score_shape[1] != len(classifier.labels):
+            raise ValueError(
+                f"lucid.coreml: {len(classifier.labels)} labels for "
+                f"{score_shape[1]} scores"
+            )
+
     declared: list[tuple[str, tuple[int, ...]]] = []
     for field, tid, tensor in outputs:
         value = names[tid]
@@ -973,6 +997,18 @@ def build_package(
             # Reachable only if the producing op was shared between two
             # declared outputs, which the naming pass cannot satisfy twice.
             program.add_op("identity", [("x", [value])], field, _spec.type_spec(tensor))
+        if classifier is not None:
+            # The scores stop being the model's output; the label and the
+            # probability map take their place.
+            program.set_classifier(
+                value,
+                list(classifier.labels),
+                classifier.label_name,
+                classifier.probabilities_name,
+            )
+            declared.append((classifier.label_name, ()))
+            declared.append((classifier.probabilities_name, ()))
+            continue
         program.add_output(field, _spec.type_spec(tensor))
         declared.append((field, tuple(int(d) for d in tensor.shape)))
     if metadata is not None:
@@ -989,6 +1025,7 @@ def build_package(
         "ops": int(program.op_count),
         "precision": precision.value,
         "weights": weights.value,
+        "classifier": classifier is not None,
         "quantized_weights": quantized_count,
         "path": paths.root,
     }
