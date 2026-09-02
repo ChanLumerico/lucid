@@ -49,9 +49,7 @@ class TestFlexibleBatch:
         finally:
             exported.close()
 
-    def test_a_shape_that_was_not_enumerated_is_refused(
-        self, tmp_path: object
-    ) -> None:
+    def test_a_shape_that_was_not_enumerated_is_refused(self, tmp_path: object) -> None:
         """Enumerated means enumerated; Core ML does not interpolate."""
         model = M.create_model("resnet_18_cls", num_classes=10).eval()
         exported = cml.export(

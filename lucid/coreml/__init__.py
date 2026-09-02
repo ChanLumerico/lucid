@@ -1,4 +1,4 @@
-"""``lucid.coreml`` — export Lucid models to Core ML, and run them on the ANE.
+"""``lucid.coreml`` — export Lucid models to Core ML, and run them on the ANE.rmfj
 
 Lucid computes on Accelerate (CPU) and MLX (Metal).  Neither targets the
 Neural Engine, so a whole processor on every machine Lucid supports was

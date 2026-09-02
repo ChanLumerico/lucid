@@ -231,24 +231,31 @@ class TestTheGapAgainstCompileIsAccountedFor:
         "pow_scalar",
         "rpow_scalar",
         "norm",
+        # No Python caller anywhere in ``lucid/``: an engine op with no
+        # way to reach it from a model.
+        "global_response_norm",
+        # ``F.apply_rotary_emb`` decomposes into mapped ops; the engine
+        # op it is named after never appears in a trace.
+        "rotary_pos_embedding",
     }
 
-    #: Expressible, not yet written. Each needs more than a name.
-    NOT_YET = {
-        "affine_grid",
-        "bilinear_layer",
-        "embedding_bag",
-        "erfinv",
-        "fold",
-        "global_response_norm",
-        "grid_sample",
-        "interpolate_nearest_3d",
-        "interpolate_trilinear",
-        "lp_normalize",
+    #: The trace does not carry enough to translate them.
+    TRACER_GAP = {
+        # Variadic operands the tracer does not all wire, measured
+        # 2026-09-03. Translating from what is recorded would put the
+        # wrong values in the result, so each emitter refuses by name
+        # rather than guessing at the rest.
+        #   meshgrid       two 1-D inputs, only the last recorded
+        #   grid_sample    neither operand recorded, nor the result
+        #   embedding_bag  the weight recorded, the indices not
         "meshgrid",
-        "rotary_pos_embedding",
-        "unfold",
+        "grid_sample",
+        "embedding_bag",
     }
+
+    #: Expressible and not written. Empty: every operation
+    #: ``lucid.compile`` runs and a trace can carry now exports.
+    NOT_YET: set[str] = set()
 
     def test_no_unaccounted_gap(self) -> None:
         from lucid.coreml._emit import EMITTERS
@@ -260,7 +267,11 @@ class TestTheGapAgainstCompileIsAccountedFor:
             if _C_engine.compile.emitter_registered(name)
         }
         accounted = (
-            self.IMPOSSIBLE | self.TRAINING_ONLY | self.NEVER_TRACED | self.NOT_YET
+            self.IMPOSSIBLE
+            | self.TRAINING_ONLY
+            | self.NEVER_TRACED
+            | self.TRACER_GAP
+            | self.NOT_YET
         )
         unaccounted = compiled - set(EMITTERS) - accounted
         assert not unaccounted, (
@@ -274,3 +285,101 @@ class TestTheGapAgainstCompileIsAccountedFor:
 
         stale = (self.IMPOSSIBLE | self.NOT_YET) & set(EMITTERS)
         assert not stale, f"{sorted(stale)} are mapped now — take them off the list"
+
+
+class TestTheOperationsMilDoesNotHave:
+    """Each of these is several MIL operations standing in for one.
+
+    A decomposition is where a translation goes quietly wrong — the shape
+    survives and the values do not — so every one is compared against the
+    eager result rather than merely exported.
+    """
+
+    def test_unfold_matches_exactly(self, tmp_path: object) -> None:
+        for kernel, stride, padding in ((2, 1, 0), (3, 2, 1)):
+            _check(
+                lambda x, k=kernel, s=stride, p=padding: F.unfold(
+                    x, k, stride=s, padding=p
+                ),
+                lucid.randn(1, 3, 8, 8),
+                tmp_path,
+            )
+
+    def test_fold_matches_exactly(self, tmp_path: object) -> None:
+        """``fold`` adds where blocks overlap, which is the hard half."""
+        for kernel, stride, padding, side in ((2, 1, 0, 6), (2, 2, 0, 6), (3, 1, 1, 8)):
+            _check(
+                lambda x, k=kernel, s=stride, p=padding, n=side: F.fold(
+                    F.unfold(x, k, stride=s, padding=p), (n, n), k, stride=s, padding=p
+                ),
+                lucid.randn(1, 2, side, side),
+                tmp_path,
+            )
+
+    def test_affine_grid_matches(self, tmp_path: object) -> None:
+        for corners in (False, True):
+            _check(
+                lambda x, c=corners: F.affine_grid(
+                    x.reshape(1, 2, 3), (1, 4, 6, 6), align_corners=c
+                ),
+                lucid.randn(1, 6),
+                tmp_path,
+            )
+
+    def test_bilinear_and_lp_normalize_match(self, tmp_path: object) -> None:
+        weight = lucid.randn(3, 4, 4)
+        _check(lambda x: F.bilinear(x, x, weight), lucid.randn(1, 4), tmp_path)
+        for order in (1, 2):
+            _check(
+                lambda x, p=order: F.normalize(x, p=p, dim=1),
+                lucid.randn(1, 4, 6, 6),
+                tmp_path,
+            )
+
+    def test_three_dimensional_resampling_matches(self, tmp_path: object) -> None:
+        for mode in ("nearest", "trilinear"):
+            _check(
+                lambda x, m=mode: F.interpolate(x, scale_factor=2, mode=m),
+                lucid.randn(1, 2, 4, 4, 4),
+                tmp_path,
+            )
+
+    def test_erfinv_is_an_approximation_and_says_how_close(
+        self, tmp_path: object
+    ) -> None:
+        """MIL has no inverse error function; this one is a polynomial.
+
+        Looser than the other ops on purpose, and measured rather than
+        hoped: the central region agrees to ~3e-7 and the tails to ~5e-6,
+        which is the order of a float32 export's other error.
+        """
+        _check(
+            lambda x: lucid.erfinv(lucid.tanh(x) * 0.9),
+            lucid.randn(1, 4, 16, 16),
+            tmp_path,
+            tol=1e-5,
+        )
+
+
+class TestOperationsTheTraceCannotCarry:
+    """Refused by name, because the trace does not hold their operands.
+
+    Not a Core ML limit: `lucid.compile` reads the same trace. Emitting
+    from what is recorded would produce a package that runs and answers
+    with the wrong values.
+    """
+
+    def test_meshgrid_names_itself(self, tmp_path: object) -> None:
+        import lucid.nn as nn
+
+        class UsesMeshgrid(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return lucid.meshgrid(x.reshape(-1)[:3], x.reshape(-1)[:4])[0]
+
+        with pytest.raises(cml.UnsupportedOp) as excinfo:
+            cml.export(
+                UsesMeshgrid().eval(),
+                lucid.randn(1, 12),
+                f"{tmp_path}/meshgrid.mlpackage",
+            )
+        assert excinfo.value.op_name == "meshgrid"

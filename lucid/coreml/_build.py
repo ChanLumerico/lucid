@@ -30,6 +30,7 @@ from lucid.coreml import _spec
 from lucid.coreml._emit import (
     EMITTERS,
     Bindings,
+    Bound,
     Constant,
     MultiOutput,
     TracedOp,
@@ -610,7 +611,13 @@ class Builder:
         self.shapes[name] = shape
         return name
 
-    def emit(self, mil_type: str, bindings: Bindings, shape: list[int]) -> str:
+    def emit(
+        self,
+        mil_type: str,
+        bindings: Bindings,
+        shape: list[int],
+        dtype: int | None = None,
+    ) -> str:
         """Append an intermediate operation and return its value name.
 
         Some Lucid ops are several MIL ops — scaled dot-product attention
@@ -625,7 +632,12 @@ class Builder:
         bindings : list
             ``(parameter, value name)`` pairs, as an emitter returns.
         shape : list[int]
-            Result shape. The dtype is the program body's.
+            Result shape.
+        dtype : int or None, optional, default=None
+            MIL element type of the result. ``None`` is the program
+            body's, which is right for arithmetic; a comparison has to
+            say ``BOOL`` or Core ML rejects the operation for producing
+            the wrong type.
 
         Returns
         -------
@@ -634,7 +646,12 @@ class Builder:
         """
         name = self._next(mil_type)
         normalised = _operands(bindings)
-        self._program.add_op(mil_type, normalised, name, (self._body_mil, list(shape)))
+        self._program.add_op(
+            mil_type,
+            normalised,
+            name,
+            (self._body_mil if dtype is None else dtype, list(shape)),
+        )
         self.shapes[name] = list(shape)
         return name
 
@@ -873,9 +890,7 @@ def _varying_axes(
                 "<graph>", "the traced operations themselves differ between shapes"
             )
         if other_ids != ids[0]:
-            raise ShapeNotFlexible(
-                "<graph>", "the traced values differ between shapes"
-            )
+            raise ShapeNotFlexible("<graph>", "the traced values differ between shapes")
         for (name, attrs, _shape), (_n, other_attrs, _s) in zip(base, other):
             if attrs != other_attrs:
                 changed = sorted(
@@ -978,9 +993,7 @@ def _declare_image(
         source = scaled
     if spec.bias:
         biased = "_image_biased"
-        offsets = builder.const_float32_shaped(
-            list(spec.bias), [1, channels, 1, 1]
-        )
+        offsets = builder.const_float32_shaped(list(spec.bias), [1, channels, 1, 1])
         program.add_op(
             "add", _operands([("x", source), ("y", offsets)]), biased, interface
         )
@@ -1116,8 +1129,7 @@ def build_package(
                     f"outside the range ({low}, {high}) it is meant to sit in"
                 )
         bounds = [
-            shape_range.get(axis, (size, size))
-            for axis, size in enumerate(default)
+            shape_range.get(axis, (size, size)) for axis, size in enumerate(default)
         ]
         # Trace at both ends as well as the default: within a range the
         # graph has to be the same at every size, and the ends are where a
@@ -1221,9 +1233,7 @@ def build_package(
         program.set_default_shape(inputs[0][0], list(ordered[0]))
     if shape_range is not None:
         program.set_shape_range(inputs[0][0], bounds)
-        program.set_default_shape(
-            inputs[0][0], [int(d) for d in inputs[0][2].shape]
-        )
+        program.set_default_shape(inputs[0][0], [int(d) for d in inputs[0][2].shape])
     names: dict[int, str] = {tid: name for name, tid, _t in inputs}
     builder_shapes_state: dict[str, list[int]] = {}
     input_ids = {tid for _n, tid, _t in inputs}
@@ -1251,7 +1261,6 @@ def build_package(
         program.read_state(name, held, carried_type)
         names[tid] = held
         builder_shapes_state[held] = [int(d) for d in tensor.shape]
-
 
     # Parameters and buffers become blob-backed constants.  The blob has
     # to be finalized before the protobuf that carries offsets into it is
@@ -1336,9 +1345,7 @@ def build_package(
         builder.shapes[name] = shape
         source = name
         if image_input is not None:
-            source = _declare_image(
-                program, builder, name, shape, image_input
-            )
+            source = _declare_image(program, builder, name, shape, image_input)
             names[tid] = source
         # Only a float interface needs bracketing.  An integer input —
         # token ids — must reach its lookup as an integer; casting it to
@@ -1372,6 +1379,12 @@ def build_package(
         if isinstance(result, Constant):
             # The value is the constant; there is nothing to append.
             names[op.outputs[0].id] = result.name
+            continue
+        if isinstance(result, Bound):
+            # The emitter already appended whatever it needed; these are
+            # the values its results are.
+            for out, bound in zip(op.outputs, result.names):
+                names[out.id] = bound
             continue
         multi = isinstance(result, MultiOutput)
         if isinstance(result, MultiOutput):

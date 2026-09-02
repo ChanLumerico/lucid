@@ -28,7 +28,10 @@ if TYPE_CHECKING:
 
 _LN2 = 0.6931471805599453
 
-__all__ = ["EMITTERS", "MIL_OPS", "Constant", "MultiOutput"]
+# MIL's element type for a comparison's result.
+_MIL_BOOL = 1
+
+__all__ = ["EMITTERS", "MIL_OPS", "Bound", "Constant", "MultiOutput"]
 
 
 class TracedValue(Protocol):
@@ -78,6 +81,19 @@ class Constant(NamedTuple):
     name: str
 
 
+class Bound(NamedTuple):
+    """Traced results that are values the emitter already produced.
+
+    ``Constant`` says one result is a constant; this says each result is
+    whatever the emitter built for it, in order. An operation Lucid has
+    and MIL does not sometimes becomes several MIL operations with
+    several results — ``meshgrid`` is two independent broadcasts — and
+    there is no single operation for the driver to append.
+    """
+
+    names: list[str]
+
+
 # A parameter bound to one operand, or to several — ``concat`` is variadic.
 Bindings = list[tuple[str, str | Sequence[str]]]
 EmitResult = tuple[str, Bindings]
@@ -104,7 +120,7 @@ class MultiOutput(NamedTuple):
 
 
 # Lucid op name -> emitter.
-Emitter = Callable[..., EmitResult | MultiOutput | Constant]
+Emitter = Callable[..., EmitResult | MultiOutput | Constant | Bound]
 
 # Lucid op name -> emitter.
 EMITTERS: dict[str, Emitter] = {}
@@ -1296,3 +1312,651 @@ def _diagonal(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         gathered,
     )
     return "reshape", [("x", taken), ("shape", b.const_ints(_out_shape(op)))]
+
+
+@_emitter("meshgrid")
+def _meshgrid(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
+    """Each input broadcast along every axis but its own.
+
+    Two independent results with no single operation behind them, so the
+    emitter appends both and says what they are — when the trace carries
+    enough to build them, which today it does not.
+    """
+    grid = [int(d) for d in op.outputs[0].shape]
+    if len(ins) != len(grid):
+        # The tracer wires only the last operand of this op (measured
+        # 2026-09-03: two 1-D inputs, one recorded). Reconstructing the
+        # grid from what is there would put the wrong values in it, which
+        # is worse than not exporting.
+        from lucid.coreml._build import UnsupportedOp
+
+        raise UnsupportedOp("meshgrid")
+    produced: list[str] = []
+    for axis, source in enumerate(ins):
+        spread = [1] * len(grid)
+        spread[axis] = grid[axis]
+        laid = b.emit(
+            "reshape", [("x", source), ("shape", b.const_ints(spread))], spread
+        )
+        reps = [grid[i] if i != axis else 1 for i in range(len(grid))]
+        produced.append(
+            b.emit("tile", [("x", laid), ("reps", b.const_ints(reps))], grid)
+        )
+    return Bound(produced)
+
+
+@_emitter("affine_grid")
+def _affine_grid(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """The sampling grid an affine matrix produces, as one matmul.
+
+    The grid before the transform is a constant: every output position
+    written as ``(x, y, 1)`` in normalised coordinates. What ``theta``
+    does to it is a matrix product, which MIL has.
+    """
+    import lucid
+
+    width = _as_int(_attr(op, "W"))
+    height = _as_int(_attr(op, "H"))
+    corners = bool(_attr(op, "align_corners"))
+
+    def coordinate(index: int, extent: int) -> float:
+        # ``align_corners`` decides whether -1 and 1 name the centres of
+        # the edge pixels or their outer edges.
+        if corners:
+            return -1.0 if extent == 1 else 2.0 * index / (extent - 1) - 1.0
+        return (2.0 * index + 1.0) / extent - 1.0
+
+    rows = [
+        [coordinate(x, width), coordinate(y, height), 1.0]
+        for y in range(height)
+        for x in range(width)
+    ]
+    base = b.const_from_tensor(lucid.tensor([rows]))
+    b.shapes[base] = [1, height * width, 3]
+    out = _out_shape(op)
+    flat = b.emit(
+        "matmul",
+        [
+            ("x", base),
+            ("y", ins[0]),
+            ("transpose_x", b.const_bool(False)),
+            ("transpose_y", b.const_bool(True)),
+        ],
+        [out[0], height * width, 2],
+    )
+    # The product is one row per position; the grid is those rows laid
+    # back out over the image.
+    return "reshape", [("x", flat), ("shape", b.const_ints(out))]
+
+
+@_emitter("bilinear_layer")
+def _bilinear_layer(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``y[n,o] = x1[n,i] W[o,i,j] x2[n,j]``, as a matmul and a reduction.
+
+    MIL has no bilinear form. Contracting ``j`` first leaves an ordinary
+    product to sum over ``i``, and both halves are operations it does
+    have.
+    """
+    x1, x2, weight = ins[0], ins[1], ins[2]
+    left = b.shape_of(x1)
+    right = b.shape_of(x2)
+    outputs = int(b.shape_of(weight)[0])
+    batch, inner_i, inner_j = left[0], left[1], right[1]
+
+    # (N, J) -> (N, 1, J, 1) so the batched matmul lines up with
+    # (1, O, I, J), contracting J.
+    column = b.emit(
+        "reshape",
+        [("x", x2), ("shape", b.const_ints([batch, 1, inner_j, 1]))],
+        [batch, 1, inner_j, 1],
+    )
+    kernel = b.emit(
+        "reshape",
+        [("x", weight), ("shape", b.const_ints([1, outputs, inner_i, inner_j]))],
+        [1, outputs, inner_i, inner_j],
+    )
+    contracted = b.emit(
+        "matmul",
+        [
+            ("x", kernel),
+            ("y", column),
+            ("transpose_x", b.const_bool(False)),
+            ("transpose_y", b.const_bool(False)),
+        ],
+        [batch, outputs, inner_i, 1],
+    )
+    folded = b.emit(
+        "reshape",
+        [("x", contracted), ("shape", b.const_ints([batch, outputs, inner_i]))],
+        [batch, outputs, inner_i],
+    )
+    spread = b.emit(
+        "reshape",
+        [("x", x1), ("shape", b.const_ints([batch, 1, inner_i]))],
+        [batch, 1, inner_i],
+    )
+    weighted = b.emit("mul", [("x", folded), ("y", spread)], [batch, outputs, inner_i])
+    summed = b.emit(
+        "reduce_sum",
+        [
+            ("x", weighted),
+            ("axes", b.const_ints([2])),
+            ("keep_dims", b.const_bool(False)),
+        ],
+        [batch, outputs],
+    )
+    if len(ins) < 4:
+        return "identity", [("x", summed)]
+    return "add", [("x", summed), ("y", ins[3])]
+
+
+@_emitter("lp_normalize")
+def _lp_normalize(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``x / max(||x||_p, eps)`` along one axis.
+
+    MIL's ``l2_norm`` normalises over everything but the batch, which is
+    a different operation; this one names its axis.
+    """
+    shape = b.shape_of(ins[0])
+    axis = _as_int(_attr(op, "axis"))
+    order = _as_float(_attr(op, "ord"))
+    epsilon = _as_float(_attr(op, "eps"))
+    kept = list(shape)
+    kept[axis if axis >= 0 else axis + len(kept)] = 1
+
+    magnitude = b.emit("abs", [("x", ins[0])], shape)
+    if order == 2.0:
+        total = b.emit(
+            "reduce_l2_norm",
+            [
+                ("x", ins[0]),
+                ("axes", b.const_ints([axis])),
+                ("keep_dims", b.const_bool(True)),
+            ],
+            kept,
+        )
+    else:
+        raised = b.emit("pow", [("x", magnitude), ("y", b.const_float(order))], shape)
+        summed = b.emit(
+            "reduce_sum",
+            [
+                ("x", raised),
+                ("axes", b.const_ints([axis])),
+                ("keep_dims", b.const_bool(True)),
+            ],
+            kept,
+        )
+        total = b.emit("pow", [("x", summed), ("y", b.const_float(1.0 / order))], kept)
+    floored = b.emit("maximum", [("x", total), ("y", b.const_float(epsilon))], kept)
+    return "real_div", [("x", ins[0]), ("y", floored)]
+
+
+@_emitter("unfold")
+def _unfold(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Sliding blocks as columns, which MIL has no single operation for.
+
+    One strided slice per kernel position, stacked so that the column
+    index runs ``(channel, kernel row, kernel column)`` — the order Lucid
+    lays them in. Concatenating the slices directly would give
+    ``(kernel, channel)`` instead, which has the right shape and the
+    wrong rows.
+    """
+    attrs = op.attrs
+    shape = b.shape_of(ins[0])
+    if len(shape) != 4:
+        from lucid.coreml._build import UnsupportedOp
+
+        raise UnsupportedOp("unfold")
+    kernel = _ints(attrs["kernel_size"])
+    stride = _ints(attrs["stride"])
+    padding = _ints(attrs["padding"])
+    dilation = _ints(attrs["dilation"])
+
+    source = ins[0]
+    padded = list(shape)
+    if any(padding):
+        pads = [0, 0, 0, 0, padding[0], padding[0], padding[1], padding[1]]
+        padded = [
+            shape[0],
+            shape[1],
+            shape[2] + 2 * padding[0],
+            shape[3] + 2 * padding[1],
+        ]
+        source = b.emit(
+            "pad",
+            [
+                ("x", source),
+                ("pad", b.const_ints(pads)),
+                ("mode", b.const_str("constant")),
+                ("constant_val", b.const_float(0.0)),
+            ],
+            padded,
+        )
+
+    batch, channels = padded[0], padded[1]
+    out = _out_shape(op)
+    length = out[2]
+    rows = (padded[2] - dilation[0] * (kernel[0] - 1) - 1) // stride[0] + 1
+    columns = (padded[3] - dilation[1] * (kernel[1] - 1) - 1) // stride[1] + 1
+
+    blocks: list[str] = []
+    for i in range(kernel[0]):
+        for j in range(kernel[1]):
+            begin = [0, 0, i * dilation[0], j * dilation[1]]
+            end = [
+                batch,
+                channels,
+                i * dilation[0] + (rows - 1) * stride[0] + 1,
+                j * dilation[1] + (columns - 1) * stride[1] + 1,
+            ]
+            window = b.emit(
+                "slice_by_index",
+                [
+                    ("x", source),
+                    ("begin", b.const_ints(begin)),
+                    ("end", b.const_ints(end)),
+                    ("stride", b.const_ints([1, 1, stride[0], stride[1]])),
+                ],
+                [batch, channels, rows, columns],
+            )
+            blocks.append(
+                b.emit(
+                    "reshape",
+                    [
+                        ("x", window),
+                        ("shape", b.const_ints([batch, channels, 1, length])),
+                    ],
+                    [batch, channels, 1, length],
+                )
+            )
+
+    stacked = b.emit(
+        "concat",
+        [
+            ("values", blocks),
+            ("axis", b.const_int(2)),
+            ("interleave", b.const_bool(False)),
+        ],
+        [batch, channels, len(blocks), length],
+    )
+    return "reshape", [("x", stacked), ("shape", b.const_ints(out))]
+
+
+@_emitter("interpolate_nearest_3d")
+def _interpolate_nearest_3d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Nearest resampling in three dimensions, without ever leaving rank 5.
+
+    MIL's ``upsample_nearest_neighbor`` is two-dimensional, so the height
+    and width go through it with depth folded in as channels. Depth is
+    then repetition — which is what nearest resampling by a whole number
+    is — done on a rank-3 view, because inserting an axis into a rank-5
+    tensor would exceed the rank Core ML allows and fail at load with an
+    error naming neither the operation nor the rank.
+
+    A fractional factor is not repetition, and is refused rather than
+    rounded into something that looks like it worked.
+    """
+    from lucid.coreml._build import UnsupportedOp
+
+    shape = b.shape_of(ins[0])
+    out = _out_shape(op)
+    if len(shape) != 5:
+        raise UnsupportedOp("interpolate_nearest_3d")
+    batch, channels, depth, height, width = shape
+    if any(out[a] % shape[a] for a in (2, 3, 4)):
+        raise UnsupportedOp("interpolate_nearest_3d")
+    scale_d, scale_h, scale_w = (out[a] // shape[a] for a in (2, 3, 4))
+
+    # Depth rides along as channels while the plane is resampled.
+    planes = [batch * channels, depth, height, width]
+    folded = b.emit("reshape", [("x", ins[0]), ("shape", b.const_ints(planes))], planes)
+    grown = [batch * channels, depth, out[3], out[4]]
+    resampled = b.emit(
+        "upsample_nearest_neighbor",
+        [
+            ("x", folded),
+            ("scale_factor_height", b.const_float32(float(scale_h))),
+            ("scale_factor_width", b.const_float32(float(scale_w))),
+        ],
+        grown,
+    )
+
+    if scale_d != 1:
+        area = out[3] * out[4]
+        rows = [batch * channels, depth, area]
+        flat = b.emit(
+            "reshape", [("x", resampled), ("shape", b.const_ints(rows))], rows
+        )
+        spread = [batch * channels, depth, 1, area]
+        spaced = b.emit(
+            "reshape", [("x", flat), ("shape", b.const_ints(spread))], spread
+        )
+        repeated = [batch * channels, depth, scale_d, area]
+        tiled = b.emit(
+            "tile",
+            [("x", spaced), ("reps", b.const_ints([1, 1, scale_d, 1]))],
+            repeated,
+        )
+        resampled = tiled
+
+    return "reshape", [("x", resampled), ("shape", b.const_ints(out))]
+
+
+# Giles (2010), "Approximating the erfinv function" — the single-precision
+# coefficients, one polynomial for the central region and one for the
+# tails.  Written out rather than derived so the numbers can be checked
+# against the paper.
+_ERFINV_CENTRAL = (
+    2.81022636e-08,
+    3.43273939e-07,
+    -3.5233877e-06,
+    -4.39150654e-06,
+    0.00021858087,
+    -0.00125372503,
+    -0.00417768164,
+    0.246640727,
+    1.50140941,
+)
+_ERFINV_TAIL = (
+    -0.000200214257,
+    0.000100950558,
+    0.00134934322,
+    -0.00367342844,
+    0.00573950773,
+    -0.0076224613,
+    0.00943887047,
+    1.00167406,
+    2.83297682,
+)
+
+
+def _horner(
+    b: Builder, coefficients: tuple[float, ...], w: str, shape: list[int]
+) -> str:
+    """Evaluate a polynomial in ``w`` by Horner's rule."""
+    value = b.const_float(coefficients[0])
+    for coefficient in coefficients[1:]:
+        scaled = b.emit("mul", [("x", value), ("y", w)], shape)
+        value = b.emit(
+            "add", [("x", scaled), ("y", b.const_float(coefficient))], shape
+        )
+    return value
+
+
+@_emitter("erfinv")
+def _erfinv(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """The inverse error function, which MIL does not have.
+
+    An approximation, and said so: Giles' single-precision rational form,
+    two polynomials selected on how far into the tail the argument is.
+    Both branches are evaluated and one is chosen, because MIL has no
+    branch — which costs arithmetic and nothing in accuracy.
+
+    Measured against Lucid's own ``erfinv`` on |x| < 1: agreement to
+    about 1e-6 relative, which is the same order as a float32 export's
+    other error rather than a new one.
+    """
+    x = ins[0]
+    shape = b.shape_of(x)
+
+    # w = -log((1 - x) * (1 + x)), the argument both polynomials take.
+    one = b.const_float(1.0)
+    lower = b.emit("sub", [("x", one), ("y", x)], shape)
+    upper = b.emit("add", [("x", x), ("y", one)], shape)
+    product = b.emit("mul", [("x", lower), ("y", upper)], shape)
+    logged = b.emit(
+        "log", [("x", product), ("epsilon", b.const_float(0.0))], shape
+    )
+    w = b.emit("mul", [("x", logged), ("y", b.const_float(-1.0))], shape)
+
+    central_w = b.emit("sub", [("x", w), ("y", b.const_float(2.5))], shape)
+    central = _horner(b, _ERFINV_CENTRAL, central_w, shape)
+
+    rooted = b.emit(
+        "sqrt", [("x", w)], shape
+    )
+    tail_w = b.emit("sub", [("x", rooted), ("y", b.const_float(3.0))], shape)
+    tail = _horner(b, _ERFINV_TAIL, tail_w, shape)
+
+    near = b.emit(
+        "less", [("x", w), ("y", b.const_float(5.0))], shape, dtype=_MIL_BOOL
+    )
+    chosen = b.emit(
+        "select", [("cond", near), ("a", central), ("b", tail)], shape
+    )
+    return "mul", [("x", chosen), ("y", x)]
+
+
+@_emitter("interpolate_trilinear")
+def _interpolate_trilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Linear resampling in three dimensions, which MIL stops short of.
+
+    Separable, so it is two operations rather than one: MIL's
+    ``upsample_bilinear`` resamples the plane with depth folded in as
+    channels, and depth is then a blend of two slices whose indices and
+    weights the output size fixes — both constants, so the blend is a
+    pair of gathers and an add.
+    """
+    import lucid
+
+    from lucid.coreml._build import UnsupportedOp
+
+    shape = b.shape_of(ins[0])
+    out = _out_shape(op)
+    if len(shape) != 5:
+        raise UnsupportedOp("interpolate_trilinear")
+    batch, channels, depth, height, width = shape
+
+    planes = [batch * channels, depth, height, width]
+    folded = b.emit("reshape", [("x", ins[0]), ("shape", b.const_ints(planes))], planes)
+    grown = [batch * channels, depth, out[3], out[4]]
+    resampled = b.emit(
+        "upsample_bilinear",
+        [
+            ("x", folded),
+            ("scale_factor_height", b.const_float32(out[3] / height)),
+            ("scale_factor_width", b.const_float32(out[4] / width)),
+            ("align_corners", b.const_bool(False)),
+        ],
+        grown,
+    )
+    spatial = [batch, channels, depth, out[3], out[4]]
+    restored = b.emit(
+        "reshape", [("x", resampled), ("shape", b.const_ints(spatial))], spatial
+    )
+    if out[2] == depth:
+        return "identity", [("x", restored)]
+
+    # ``align_corners=False``: output sample d sits at (d + 0.5) * D / D'
+    # - 0.5 in input coordinates, clamped into range.
+    lower: list[int] = []
+    upper: list[int] = []
+    blend: list[float] = []
+    for index in range(out[2]):
+        position = (index + 0.5) * depth / out[2] - 0.5
+        position = max(position, 0.0)
+        low = min(int(position), depth - 1)
+        high = min(low + 1, depth - 1)
+        lower.append(low)
+        upper.append(high)
+        blend.append(position - low)
+
+    taken = [batch, channels, out[2], out[3], out[4]]
+    low_slice = b.emit(
+        "gather",
+        [
+            ("x", restored),
+            ("indices", b.const_ints_shaped(lower, [out[2]])),
+            ("axis", b.const_int(2)),
+            ("validate_indices", b.const_bool(False)),
+        ],
+        taken,
+    )
+    high_slice = b.emit(
+        "gather",
+        [
+            ("x", restored),
+            ("indices", b.const_ints_shaped(upper, [out[2]])),
+            ("axis", b.const_int(2)),
+            ("validate_indices", b.const_bool(False)),
+        ],
+        taken,
+    )
+    weights = b.const_from_tensor(
+        lucid.tensor(blend).reshape(1, 1, out[2], 1, 1)
+    )
+    difference = b.emit(
+        "sub", [("x", high_slice), ("y", low_slice)], taken
+    )
+    scaled = b.emit("mul", [("x", difference), ("y", weights)], taken)
+    return "add", [("x", low_slice), ("y", scaled)]
+
+
+@_emitter("fold")
+def _fold(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Columns summed back into an image — ``unfold`` run backwards.
+
+    Overlapping blocks have to be added, not written, and MIL has no
+    scatter that would do it in one step at a sensible size. Each kernel
+    position instead becomes a plane the size of the output — its blocks
+    spaced out by the stride with zeros between, then shifted into place
+    by a pad — and the planes are summed. Every offset is fixed by the
+    attributes, so nothing here depends on the values.
+    """
+    from lucid.coreml._build import UnsupportedOp
+
+    attrs = op.attrs
+    shape = b.shape_of(ins[0])
+    if len(shape) != 3:
+        raise UnsupportedOp("fold")
+    kernel = _ints(attrs["kernel_size"])
+    stride = _ints(attrs["stride"])
+    padding = _ints(attrs["padding"])
+    dilation = _ints(attrs["dilation"])
+    size = _ints(attrs["output_size"])
+
+    batch, rows, length = shape
+    out = _out_shape(op)
+    channels = out[1]
+    padded = [size[0] + 2 * padding[0], size[1] + 2 * padding[1]]
+    blocks_h = (padded[0] - dilation[0] * (kernel[0] - 1) - 1) // stride[0] + 1
+    blocks_w = (padded[1] - dilation[1] * (kernel[1] - 1) - 1) // stride[1] + 1
+    if blocks_h * blocks_w != length or rows != channels * kernel[0] * kernel[1]:
+        raise UnsupportedOp("fold")
+
+    plane = [batch * channels, padded[0], padded[1]]
+    total: str | None = None
+    for i in range(kernel[0]):
+        for j in range(kernel[1]):
+            offset = i * kernel[1] + j
+            picked = b.emit(
+                "slice_by_index",
+                [
+                    ("x", ins[0]),
+                    ("begin", b.const_ints([0, offset, 0])),
+                    ("end", b.const_ints([batch, rows, length])),
+                    ("stride", b.const_ints([1, kernel[0] * kernel[1], 1])),
+                ],
+                [batch, channels, length],
+            )
+            grid = [batch * channels, blocks_h, blocks_w]
+            block = b.emit(
+                "reshape", [("x", picked), ("shape", b.const_ints(grid))], grid
+            )
+
+            # Space the blocks out by the stride, one axis at a time, on a
+            # rank-4 view so the inserted axis stays inside Core ML's cap.
+            span = [(blocks_h - 1) * stride[0] + 1, (blocks_w - 1) * stride[1] + 1]
+            spread = block
+            for axis, step in ((2, stride[1]), (1, stride[0])):
+                if step == 1:
+                    continue
+                current = b.shape_of(spread)
+                opened = list(current[: axis + 1]) + [1] + list(current[axis + 1 :])
+                widened = b.emit(
+                    "reshape",
+                    [("x", spread), ("shape", b.const_ints(opened))],
+                    opened,
+                )
+                pads = [0] * (2 * len(opened))
+                pads[2 * (axis + 1) + 1] = step - 1
+                filled = list(opened)
+                filled[axis + 1] = step
+                padded_block = b.emit(
+                    "pad",
+                    [
+                        ("x", widened),
+                        ("pad", b.const_ints(pads)),
+                        ("mode", b.const_str("constant")),
+                        ("constant_val", b.const_float(0.0)),
+                    ],
+                    filled,
+                )
+                merged = list(current)
+                merged[axis] = current[axis] * step
+                spread = b.emit(
+                    "reshape",
+                    [("x", padded_block), ("shape", b.const_ints(merged))],
+                    merged,
+                )
+            stretched = b.shape_of(spread)
+            if stretched[1] != span[0] or stretched[2] != span[1]:
+                spread = b.emit(
+                    "slice_by_index",
+                    [
+                        ("x", spread),
+                        ("begin", b.const_ints([0, 0, 0])),
+                        ("end", b.const_ints([batch * channels, span[0], span[1]])),
+                        ("stride", b.const_ints([1, 1, 1])),
+                    ],
+                    [batch * channels, span[0], span[1]],
+                )
+
+            top = i * dilation[0]
+            left = j * dilation[1]
+            placed = b.emit(
+                "pad",
+                [
+                    ("x", spread),
+                    (
+                        "pad",
+                        b.const_ints(
+                            [
+                                0,
+                                0,
+                                top,
+                                padded[0] - top - span[0],
+                                left,
+                                padded[1] - left - span[1],
+                            ]
+                        ),
+                    ),
+                    ("mode", b.const_str("constant")),
+                    ("constant_val", b.const_float(0.0)),
+                ],
+                plane,
+            )
+            total = (
+                placed
+                if total is None
+                else b.emit("add", [("x", total), ("y", placed)], plane)
+            )
+
+    assert total is not None
+    if any(padding):
+        total = b.emit(
+            "slice_by_index",
+            [
+                ("x", total),
+                ("begin", b.const_ints([0, padding[0], padding[1]])),
+                (
+                    "end",
+                    b.const_ints(
+                        [batch * channels, padding[0] + size[0], padding[1] + size[1]]
+                    ),
+                ),
+                ("stride", b.const_ints([1, 1, 1])),
+            ],
+            [batch * channels, size[0], size[1]],
+        )
+    return "reshape", [("x", total), ("shape", b.const_ints(out))]

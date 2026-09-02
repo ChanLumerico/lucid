@@ -72,9 +72,7 @@ class TestMultipleFunctions:
 
         assert _weight_bytes(together) == _weight_bytes(apart)
 
-    def test_the_default_is_what_a_caller_gets_unasked(
-        self, tmp_path: object
-    ) -> None:
+    def test_the_default_is_what_a_caller_gets_unasked(self, tmp_path: object) -> None:
         model = Shared().eval()
         package = str(tmp_path / "default.mlpackage")
         handles = cml.export_functions(
