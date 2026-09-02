@@ -1677,9 +1677,7 @@ def _horner(
     value = b.const_float(coefficients[0])
     for coefficient in coefficients[1:]:
         scaled = b.emit("mul", [("x", value), ("y", w)], shape)
-        value = b.emit(
-            "add", [("x", scaled), ("y", b.const_float(coefficient))], shape
-        )
+        value = b.emit("add", [("x", scaled), ("y", b.const_float(coefficient))], shape)
     return value
 
 
@@ -1704,26 +1702,18 @@ def _erfinv(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     lower = b.emit("sub", [("x", one), ("y", x)], shape)
     upper = b.emit("add", [("x", x), ("y", one)], shape)
     product = b.emit("mul", [("x", lower), ("y", upper)], shape)
-    logged = b.emit(
-        "log", [("x", product), ("epsilon", b.const_float(0.0))], shape
-    )
+    logged = b.emit("log", [("x", product), ("epsilon", b.const_float(0.0))], shape)
     w = b.emit("mul", [("x", logged), ("y", b.const_float(-1.0))], shape)
 
     central_w = b.emit("sub", [("x", w), ("y", b.const_float(2.5))], shape)
     central = _horner(b, _ERFINV_CENTRAL, central_w, shape)
 
-    rooted = b.emit(
-        "sqrt", [("x", w)], shape
-    )
+    rooted = b.emit("sqrt", [("x", w)], shape)
     tail_w = b.emit("sub", [("x", rooted), ("y", b.const_float(3.0))], shape)
     tail = _horner(b, _ERFINV_TAIL, tail_w, shape)
 
-    near = b.emit(
-        "less", [("x", w), ("y", b.const_float(5.0))], shape, dtype=_MIL_BOOL
-    )
-    chosen = b.emit(
-        "select", [("cond", near), ("a", central), ("b", tail)], shape
-    )
+    near = b.emit("less", [("x", w), ("y", b.const_float(5.0))], shape, dtype=_MIL_BOOL)
+    chosen = b.emit("select", [("cond", near), ("a", central), ("b", tail)], shape)
     return "mul", [("x", chosen), ("y", x)]
 
 
@@ -1802,12 +1792,8 @@ def _interpolate_trilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResu
         ],
         taken,
     )
-    weights = b.const_from_tensor(
-        lucid.tensor(blend).reshape(1, 1, out[2], 1, 1)
-    )
-    difference = b.emit(
-        "sub", [("x", high_slice), ("y", low_slice)], taken
-    )
+    weights = b.const_from_tensor(lucid.tensor(blend).reshape(1, 1, out[2], 1, 1))
+    difference = b.emit("sub", [("x", high_slice), ("y", low_slice)], taken)
     scaled = b.emit("mul", [("x", difference), ("y", weights)], taken)
     return "add", [("x", low_slice), ("y", scaled)]
 

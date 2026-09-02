@@ -26,6 +26,8 @@ Acceptance gate (Plan §1.4):
     remembered in :class:`EagerFallbackSet` so we don't re-attempt.
 """
 
+import os
+import sys
 import time
 from dataclasses import dataclass
 from typing import (
@@ -905,7 +907,16 @@ class CompiledModule[**P, R]:
             exe = _C_engine.compile.compile_or_cached(
                 graph, ext, use_dynamic, param_ids, explicit_outputs
             )
-        except RuntimeError:
+        except RuntimeError as why:
+            # The engine says why it could not build the graph — an
+            # emitter that declined the variant, an unresolved input, a
+            # mixed-device trace — and dropping that here is what makes a
+            # fallback silent. It stays silent by default, because a
+            # fallback is correct and a warning on every call would be
+            # noise; under ``LUCID_COMPILE_VERBOSE=1``, which already
+            # narrates the build, the caller gets the reason.
+            if os.environ.get("LUCID_COMPILE_VERBOSE") == "1":
+                print(f"[compile] eager fallback: {why}", file=sys.stderr)
             return None
         return cast(_ExecutableLike, exe) if exe is not None else None
 

@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - read a package's outputs at the type it declares
 
+- say why the graph was not built, instead of falling back mutely
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

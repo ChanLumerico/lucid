@@ -44,9 +44,7 @@ def _ranking(scores: lucid.Tensor, k: int = 5) -> list[int]:
 
 
 class TestTrainedAgreement:
-    def test_float16_predicts_what_the_model_predicts(
-        self, tmp_path: object
-    ) -> None:
+    def test_float16_predicts_what_the_model_predicts(self, tmp_path: object) -> None:
         """The claim the Neural Engine path rests on.
 
         float16 is the only precision the accelerator runs, so if it
@@ -103,9 +101,7 @@ class TestTrainedAgreement:
         finally:
             exported.close()
 
-    def test_a_trained_head_has_something_to_compare(
-        self, tmp_path: object
-    ) -> None:
+    def test_a_trained_head_has_something_to_compare(self, tmp_path: object) -> None:
         """Why this file exists at all.
 
         The untrained factory's logits are flat enough that any
