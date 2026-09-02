@@ -1,8 +1,8 @@
 {
   "lucid.amp": "d6ec2e5a2b1a14234c401d7060293efc5a7e0b4bd8aea56bd23e84fa25a41d43",
   "lucid.autograd": "f0a1da802122479c74eda06a990106a95ccf4cc28fd12f78995cb8959530f8ab",
-  "lucid.compile": "26e0a7ecb4848332b2e10ef492df2a34041db64cdfbed5b8eaa2091caa30b6b3",
-  "lucid.coreml": "466b781ae2b7bdbc641c4568c8fe81ca798f3b8f853602e89441b4ced32d0211",
+  "lucid.compile": "99675130a27639a363f63af1c3573ff5a8113dcd66b8478aa5cd439f6923affb",
+  "lucid.coreml": "fbb1a1d4d7f6012530fff94c84feea0f310f962f9a3d65ee5bc9fff638d3db26",
   "lucid.diffeq": "31d919e2ad4de56ccfda42cb940e6c2c1dfac4905c08b5f373657ca1bb81ccd6",
   "lucid.distributions": "d7a8ae83beea9418a04b0de63d9fd484ef29742e74f40437f588dc49d25c5263",
   "lucid.einops": "a4461124af61cad1ffc83bfb1c559e151ae72da660cd73dbf476b0e9ccf928df",
