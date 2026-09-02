@@ -174,32 +174,52 @@ private:
     std::string name_;
 };
 
-// ── diagonal — main diagonal (offset=0) of a 2-D tensor.
+// ── diagonal — main diagonal of the trailing two axes, at any rank.
+//
+// ``bandPart`` zeroes everything off the main diagonal of the last two
+// dimensions whatever the rank, so the leading axes come along for free:
+// reduce the shorter of the two away and what is left is the diagonal
+// per batch element.  Only the trailing pair, and only ``offset == 0`` —
+// an off-diagonal is not a band ``bandPart`` can select.
 class DiagonalEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "diagonal"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty() || node.outputs.empty()) return false;
-        std::int64_t offset = int_attr(node, "offset", 0);
-        if (offset != 0) return false;  // only the main diagonal
+        if (int_attr(node, "offset", 0) != 0) return false;  // only the main diagonal
         TensorId x_id = node.inputs[0];
         if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil) return false;
         NSArray<NSNumber*>* sh = x.shape;
-        if (sh.count != 2) return false;
-        std::int64_t N = sh[0].longLongValue;
-        std::int64_t M = sh[1].longLongValue;
-        std::int64_t K = N < M ? N : M;
-        MPSGraphTensor* band =
-            [g bandPartWithTensor:x numLower:0 numUpper:0 name:nil];
-        NSArray<NSNumber*>* reduce_axes = (N >= M) ? @[@0] : @[@1];
-        MPSGraphTensor* r =
-            [g reductionSumWithTensor:band axes:reduce_axes name:nil];
-        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:r
-                                       withShape:@[[NSNumber numberWithLongLong:K]]
-                                            name:@"diagonal"]));
+        const std::int64_t rank = static_cast<std::int64_t>(sh.count);
+        if (rank < 2) return false;
+
+        // Lucid names the pair it spans; anything but the trailing two
+        // would need a transpose this does not do.
+        const std::int64_t axis1 = int_attr(node, "axis1", rank - 2);
+        const std::int64_t axis2 = int_attr(node, "axis2", rank - 1);
+        const auto normalise = [rank](std::int64_t a) { return a < 0 ? a + rank : a; };
+        if (normalise(axis1) != rank - 2 || normalise(axis2) != rank - 1) return false;
+
+        const std::int64_t N = sh[rank - 2].longLongValue;
+        const std::int64_t M = sh[rank - 1].longLongValue;
+        const std::int64_t K = N < M ? N : M;
+
+        MPSGraphTensor* band = [g bandPartWithTensor:x numLower:0 numUpper:0 name:nil];
+        NSArray<NSNumber*>* reduce_axes =
+            (N >= M) ? @[ @(rank - 2) ] : @[ @(rank - 1) ];
+        MPSGraphTensor* r = [g reductionSumWithTensor:band axes:reduce_axes name:nil];
+
+        // The reduction keeps the axis at size 1; the result is the
+        // leading axes with the diagonal's length after them.
+        NSMutableArray<NSNumber*>* out_shape = [NSMutableArray arrayWithCapacity:rank - 1];
+        for (std::int64_t i = 0; i < rank - 2; ++i)
+            [out_shape addObject:sh[i]];
+        [out_shape addObject:[NSNumber numberWithLongLong:K]];
+        ctx.bind(node.outputs[0].id,
+                 (__bridge void*)([g reshapeTensor:r withShape:out_shape name:@"diagonal"]));
         return true;
     }
 };

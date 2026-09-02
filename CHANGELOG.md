@@ -58,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - say why the graph was not built, instead of falling back mutely
 
+- diagonal over the trailing axes, at any rank
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

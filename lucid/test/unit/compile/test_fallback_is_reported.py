@@ -33,8 +33,7 @@ def _metal_ok() -> bool:
 pytestmark = pytest.mark.skipif(not _metal_ok(), reason="Metal unavailable")
 
 
-PROGRAM = textwrap.dedent(
-    """
+PROGRAM = textwrap.dedent("""
     import lucid, lucid.nn as nn, lucid.nn.functional as F
     from lucid._C import engine as e
 
@@ -47,8 +46,7 @@ PROGRAM = textwrap.dedent(
     compiled = lucid.compile.compile(model)
     compiled(lucid.randn(1, 4, 6, 6, 6).to("metal"))
     print("CACHE", e.compile.session_cache_size())
-    """
-)
+    """)
 
 
 def _run(verbose: bool) -> subprocess.CompletedProcess:
