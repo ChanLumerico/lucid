@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - a package an app can open, not only numbers that agree
 - labels, so Vision has something to return
 - one package for several shapes, found by tracing twice
+- shape ranges, and the baked constant that aborted the compiler
 
 ---
 

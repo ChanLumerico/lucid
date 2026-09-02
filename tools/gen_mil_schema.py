@@ -65,6 +65,8 @@ MESSAGES = (
     "DictionaryFeatureType",
     "StringFeatureType",
     "EnumeratedShapes",
+    "ShapeRange",
+    "SizeRange",
     "Shape",
 )
 

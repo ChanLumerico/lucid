@@ -156,6 +156,13 @@ public:
     void set_enumerated_shapes(const std::string& name,
                                const std::vector<std::vector<std::int64_t>>& shapes);
 
+    // The bounds a flexible input accepts, one pair per axis.  An axis
+    // the program fixes gets the same number twice.  Unlike enumerated
+    // shapes this admits everything in between, which is what a variable
+    // sequence length or a camera's changing resolution needs.
+    void set_shape_range(const std::string& name,
+                         const std::vector<std::pair<std::int64_t, std::int64_t>>& bounds);
+
     // The concrete shape the description should state for a feature whose
     // program type leaves axes open.  A ``-1`` in a description is not
     // "flexible": Core ML reads it as a shape and rejects it.
@@ -233,6 +240,8 @@ private:
     std::vector<std::pair<std::string, MilImageSpec>> images_;
     std::vector<std::pair<std::string, std::vector<std::vector<std::int64_t>>>> enumerated_;
     std::vector<std::pair<std::string, std::vector<std::int64_t>>> defaults_;
+    std::vector<std::pair<std::string, std::vector<std::pair<std::int64_t, std::int64_t>>>>
+        ranges_;
     MilMetadata metadata_;
     struct Classifier {
         bool present = false;

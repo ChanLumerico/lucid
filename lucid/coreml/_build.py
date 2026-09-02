@@ -921,6 +921,7 @@ def build_package(
     precision: Precision = Precision.FLOAT32,
     weights: WeightPrecision = WeightPrecision.FLOAT,
     shapes: list[tuple[int, ...]] | None = None,
+    shape_range: dict[int, tuple[int, int]] | None = None,
     image_input: ImageInput | None = None,
     classifier: Classifier | None = None,
     metadata: Metadata | None = None,
@@ -953,6 +954,11 @@ def build_package(
         among them. Found by tracing at each and comparing, so an
         operation whose configuration came from the input size is
         refused by name rather than silently fixed to one of them.
+    shape_range : dict of int to tuple of int or None, optional, keyword-only, default=None
+        Axis to ``(lowest, highest)``, for an input whose size is not a
+        short list — a variable sequence length, a camera's resolution.
+        Axes left out keep the example's size. Mutually exclusive with
+        ``shapes``, which admits only what it lists.
     classifier : Classifier or None, optional, keyword-only, default=None
         Declare the model a classifier over these labels. Needs a single
         output shaped ``(1, len(labels))``.
@@ -979,6 +985,56 @@ def build_package(
 
     varying: dict[int, set[int]] = {}
     ordered: list[tuple[int, ...]] = []
+    bounds: list[tuple[int, int]] = []
+    if shapes is not None and shape_range is not None:
+        raise ValueError(
+            "lucid.coreml: shapes and shape_range say different things about the "
+            "same input — a list of allowed shapes, or a range that admits "
+            "everything between. Give one"
+        )
+    if shape_range is not None:
+        if len(inputs) != 1:
+            raise ValueError(
+                f"lucid.coreml: a shape range needs a single-input model, and this "
+                f"one takes {len(inputs)}"
+            )
+        default = tuple(int(d) for d in inputs[0][2].shape)
+        for axis, (low, high) in sorted(shape_range.items()):
+            if not 0 <= axis < len(default):
+                raise ValueError(
+                    f"lucid.coreml: axis {axis} is outside the input's rank "
+                    f"{len(default)}"
+                )
+            if low > high:
+                raise ValueError(
+                    f"lucid.coreml: axis {axis} has a range of ({low}, {high})"
+                )
+            if not low <= default[axis] <= high:
+                raise ValueError(
+                    f"lucid.coreml: the example's axis {axis} is {default[axis]}, "
+                    f"outside the range ({low}, {high}) it is meant to sit in"
+                )
+        bounds = [
+            shape_range.get(axis, (size, size))
+            for axis, size in enumerate(default)
+        ]
+        # Trace at both ends as well as the default: within a range the
+        # graph has to be the same at every size, and the ends are where a
+        # dependence on the size shows up.
+        corners = [
+            tuple(low for low, _high in bounds),
+            tuple(high for _low, high in bounds),
+        ]
+        probes = [default] + [c for c in corners if c != default]
+        if len(probes) < 2:
+            raise ValueError(
+                "lucid.coreml: the range admits only the example's own shape "
+                f"{default}"
+            )
+        varying = _varying_axes(model, inputs[0][2], probes, output_field)
+        ranged_axes = {axis for axis, (low, high) in enumerate(bounds) if low != high}
+        if ranged_axes:
+            varying[inputs[0][1]] = ranged_axes
     if shapes is not None:
         if len(inputs) != 1:
             raise ValueError(
@@ -1023,6 +1079,11 @@ def build_package(
     if shapes is not None:
         program.set_enumerated_shapes(inputs[0][0], [list(s) for s in ordered])
         program.set_default_shape(inputs[0][0], list(ordered[0]))
+    if shape_range is not None:
+        program.set_shape_range(inputs[0][0], bounds)
+        program.set_default_shape(
+            inputs[0][0], [int(d) for d in inputs[0][2].shape]
+        )
     names: dict[int, str] = {tid: name for name, tid, _t in inputs}
     input_ids = {tid for _n, tid, _t in inputs}
 
@@ -1235,5 +1296,6 @@ def build_package(
         "weights": weights.value,
         "classifier": classifier is not None,
         "quantized_weights": quantized_count,
+        "flexible": shapes is not None or shape_range is not None,
         "path": paths.root,
     }

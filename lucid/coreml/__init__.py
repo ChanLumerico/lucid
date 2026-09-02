@@ -101,6 +101,7 @@ def export(
     precision: Precision = Precision.FLOAT32,
     weights: WeightPrecision = WeightPrecision.FLOAT,
     shapes: list[tuple[int, ...]] | None = None,
+    shape_range: dict[int, tuple[int, int]] | None = None,
     image_input: ImageInput | None = None,
     classifier: Classifier | None = None,
     metadata: Metadata | None = None,
@@ -138,6 +139,11 @@ def export(
         whose configuration came from the input size (an adaptive pool
         bakes its kernel that way) is refused by name rather than fixed
         to one shape and wrong at the others.
+    shape_range : dict of int to tuple of int or None, optional, keyword-only, default=None
+        Axis to ``(lowest, highest)``, when the sizes are a range rather
+        than a short list — a variable sequence length, a camera whose
+        resolution changes. Axes left out keep the example's size.
+        Mutually exclusive with ``shapes``.
     image_input : ImageInput or None, optional, keyword-only, default=None
         Present the sole input as an image, with the normalisation it
         expects, so an app can hand over a pixel buffer instead of
@@ -180,6 +186,7 @@ def export(
         precision=precision,
         weights=weights,
         shapes=shapes,
+        shape_range=shape_range,
         image_input=image_input,
         classifier=classifier,
         metadata=metadata,
@@ -194,7 +201,7 @@ def export(
         precision=precision.value,
         # A flexible export's output shape follows the input, so the
         # traced one is not the shape to restore it to.
-        output_shapes=None if shapes is not None else dict(outputs),
+        output_shapes=None if info["flexible"] else dict(outputs),
         image_input=image_input,
         classifier=classifier,
     )

@@ -233,6 +233,15 @@ namespace EnumeratedShapes {
 constexpr int kShapes = 1;
 }  // namespace EnumeratedShapes
 
+namespace ShapeRange {
+constexpr int kSizeRanges = 1;
+}  // namespace ShapeRange
+
+namespace SizeRange {
+constexpr int kLowerBound = 1;
+constexpr int kUpperBound = 2;
+}  // namespace SizeRange
+
 namespace Shape {
 constexpr int kShape = 1;
 }  // namespace Shape

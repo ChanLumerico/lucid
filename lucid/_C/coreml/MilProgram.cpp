@@ -313,6 +313,18 @@ void MilProgram::set_enumerated_shapes(
     enumerated_.emplace_back(name, shapes);
 }
 
+void MilProgram::set_shape_range(
+    const std::string& name,
+    const std::vector<std::pair<std::int64_t, std::int64_t>>& bounds) {
+    for (auto& [existing, held] : ranges_) {
+        if (existing == name) {
+            held = bounds;
+            return;
+        }
+    }
+    ranges_.emplace_back(name, bounds);
+}
+
 void MilProgram::set_default_shape(const std::string& name,
                                    const std::vector<std::int64_t>& shape) {
     for (auto& [existing, held] : defaults_) {
@@ -559,6 +571,18 @@ std::string MilProgram::serialize() const {
             // narrows on the way in.
             array_dtype = pb::ArrayFeatureType_ArrayDataType::kINT32;
         array.write_enum(pb::ArrayFeatureType::kDataType, array_dtype);
+        for (const auto& [ranged_name, bounds] : ranges_) {
+            if (ranged_name != name)
+                continue;
+            ProtoWriter range;
+            for (const auto& [low, high] : bounds) {
+                ProtoWriter size;
+                size.write_int(pb::SizeRange::kLowerBound, low);
+                size.write_int(pb::SizeRange::kUpperBound, high);
+                range.write_message(pb::ShapeRange::kSizeRanges, size);
+            }
+            array.write_message(pb::ArrayFeatureType::kShapeRange, range);
+        }
         for (const auto& [flexible_name, shapes] : enumerated_) {
             if (flexible_name != name)
                 continue;

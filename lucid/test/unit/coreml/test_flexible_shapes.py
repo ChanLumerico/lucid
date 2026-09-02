@@ -162,3 +162,139 @@ class TestFlexibleRefusals:
                 str(tmp_path / "two.mlpackage"),
                 shapes=[(1, 4), (2, 4)],
             )
+
+
+class TestShapeRange:
+    """A range admits everything between, not a listed few.
+
+    Which is the point: a variable sequence length or a camera whose
+    resolution changes has no short list to enumerate.
+    """
+
+    def test_sizes_that_were_never_traced_still_run(self, tmp_path: object) -> None:
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        exported = cml.export(
+            model,
+            lucid.randn(1, 3, 224, 224),
+            str(tmp_path / "range.mlpackage"),
+            shape_range={0: (1, 8)},
+        )
+        try:
+            # 3 and 5 are inside the range and were never traced; an
+            # enumerated export would refuse them.
+            for n in (1, 3, 5, 8):
+                x = lucid.randn(n, 3, 224, 224)
+                reference = model(x).logits
+                got = exported.predict(x)
+                assert got.shape == reference.shape
+                scale = float(reference.abs().max().item())
+                assert float((got - reference).abs().max().item()) / scale < 1e-5
+        finally:
+            exported.close()
+
+    def test_a_size_outside_the_range_is_refused(self, tmp_path: object) -> None:
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        exported = cml.export(
+            model,
+            lucid.randn(1, 3, 224, 224),
+            str(tmp_path / "bounds.mlpackage"),
+            shape_range={0: (1, 4)},
+        )
+        try:
+            with pytest.raises(RuntimeError, match="not in allowed range"):
+                exported.predict(lucid.randn(9, 3, 224, 224))
+        finally:
+            exported.close()
+
+    def test_a_transposed_convolution_infers_its_own_output_size(
+        self, tmp_path: object
+    ) -> None:
+        """U-Net's decoder is the case that made this necessary.
+
+        A transposed convolution's `output_shape` disambiguates a result
+        that several inputs share. Baked from the trace, it fixes the
+        decoder to one resolution while the encoder follows the input, so
+        the skip connections stop lining up — which the Metal compiler
+        reports as a concat of mismatched tensors and an abort, nowhere
+        near the operation that caused it.
+        """
+        model = M.create_model("unet").eval()
+        exported = cml.export(
+            model,
+            lucid.randn(1, 1, 64, 64),
+            str(tmp_path / "decoder.mlpackage"),
+            shape_range={2: (32, 128), 3: (32, 128)},
+        )
+        try:
+            for side in (32, 64, 96, 128):
+                x = lucid.randn(1, 1, side, side)
+                reference = model(x).logits
+                got = exported.predict(x)
+                assert got.shape == reference.shape
+                scale = float(reference.abs().max().item())
+                assert float((got - reference).abs().max().item()) / scale < 1e-5
+        finally:
+            exported.close()
+
+    def test_a_range_keeps_the_neural_engine(self, tmp_path: object) -> None:
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        x = lucid.randn(1, 3, 224, 224)
+        fixed = cml.export(
+            model,
+            x,
+            str(tmp_path / "f.mlpackage"),
+            precision=cml.Precision.FLOAT16,
+            compute_units=cml.ComputeUnits.CPU_AND_NE,
+        )
+        ranged = cml.export(
+            model,
+            x,
+            str(tmp_path / "r.mlpackage"),
+            precision=cml.Precision.FLOAT16,
+            shape_range={0: (1, 8)},
+            compute_units=cml.ComputeUnits.CPU_AND_NE,
+        )
+        try:
+            one, many = fixed.compute_plan(), ranged.compute_plan()
+            if one.total_compute and many.total_compute:
+                assert many.ane_fraction >= one.ane_fraction - 0.05
+        finally:
+            fixed.close()
+            ranged.close()
+
+
+class TestShapeRangeRefusals:
+    def test_naming_both_kinds_of_flexibility_is_refused(
+        self, tmp_path: object
+    ) -> None:
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        with pytest.raises(ValueError, match="Give one"):
+            cml.export(
+                model,
+                lucid.randn(1, 3, 224, 224),
+                str(tmp_path / "both.mlpackage"),
+                shapes=[(1, 3, 224, 224), (2, 3, 224, 224)],
+                shape_range={0: (1, 8)},
+            )
+
+    def test_an_example_outside_its_own_range_is_refused(
+        self, tmp_path: object
+    ) -> None:
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        with pytest.raises(ValueError, match="outside the range"):
+            cml.export(
+                model,
+                lucid.randn(1, 3, 224, 224),
+                str(tmp_path / "outside.mlpackage"),
+                shape_range={0: (4, 8)},
+            )
+
+    def test_an_axis_beyond_the_rank_is_refused(self, tmp_path: object) -> None:
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        with pytest.raises(ValueError, match="outside the input's rank"):
+            cml.export(
+                model,
+                lucid.randn(1, 3, 224, 224),
+                str(tmp_path / "rank.mlpackage"),
+                shape_range={7: (1, 8)},
+            )

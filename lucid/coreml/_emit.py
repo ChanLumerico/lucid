@@ -784,7 +784,20 @@ def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         # an attribute that may not be there.
         ("dilations", b.const_ints(_ints(attrs.get("dilation", [1] * len(strides))))),
         ("groups", b.const_int(_as_int(attrs.get("groups", 1)))),
-        ("output_shape", b.const_ints(_out_shape(op))),
+        # ``output_shape`` disambiguates a transposed convolution's result
+        # — several inputs map to the same output, which is what
+        # ``output_padding`` exists for — and the trace recorded which one
+        # this is.  Under a flexible export that number is no longer
+        # knowable, so it is left out and MIL infers it from the input,
+        # stride and padding.  Baking the traced one instead gives a
+        # decoder whose skip connections stop lining up at every other
+        # size, which the compiler reports as a concat of mismatched
+        # tensors far from here.
+        *(
+            []
+            if -1 in b.result_shape(op)
+            else [("output_shape", b.const_ints(_out_shape(op)))]
+        ),
     ]
     return "conv_transpose", bindings
 

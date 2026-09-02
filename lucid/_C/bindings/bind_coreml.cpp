@@ -125,6 +125,14 @@ void register_coreml(py::module_& m) {
             py::arg("name"), py::arg("values"), py::arg("shape"),
             "Float32 constant of arbitrary shape, carried inline.")
         .def(
+            "set_shape_range",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const std::vector<std::pair<std::int64_t, std::int64_t>>& bounds) {
+                self.set_shape_range(name, bounds);
+            },
+            py::arg("name"), py::arg("bounds"),
+            "The bounds a flexible input accepts, one (low, high) pair per axis.")
+        .def(
             "set_default_shape",
             [](lucid::coreml::MilProgram& self, const std::string& name,
                const std::vector<std::int64_t>& shape) {
