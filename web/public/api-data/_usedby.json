@@ -801,9 +801,39 @@
     {
       "kind": "module",
       "module": "lucid.coreml._build"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._model"
+    }
+  ],
+  "lucid.coreml._build.ShapeNotFlexible": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._emit"
+    }
+  ],
+  "lucid.coreml._build.StatefulModel": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
     }
   ],
   "lucid.coreml._build.UnsupportedOp": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._emit"
+    }
+  ],
+  "lucid.coreml._build.UnsupportedRank": [
     {
       "kind": "module",
       "module": "lucid.coreml"
@@ -821,6 +851,30 @@
       "module": "lucid.coreml"
     }
   ],
+  "lucid.coreml._spec.Classifier": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._model"
+    }
+  ],
+  "lucid.coreml._spec.ColorSpace": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    }
+  ],
   "lucid.coreml._spec.ComputeUnits": [
     {
       "kind": "module",
@@ -831,7 +885,51 @@
       "module": "lucid.coreml._model"
     }
   ],
+  "lucid.coreml._spec.ImageInput": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._model"
+    }
+  ],
+  "lucid.coreml._spec.Metadata": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    }
+  ],
   "lucid.coreml._spec.Precision": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    }
+  ],
+  "lucid.coreml._spec.State": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
+    }
+  ],
+  "lucid.coreml._spec.WeightPrecision": [
     {
       "kind": "module",
       "module": "lucid.coreml"
@@ -14715,6 +14813,12 @@
     {
       "kind": "module",
       "module": "lucid.autograd.profiler"
+    }
+  ],
+  "lucid.quantization": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
     }
   ],
   "lucid.quantization._fake_quantize.FakeQuantize": [
