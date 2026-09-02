@@ -26,6 +26,8 @@ from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol, Sequence
 if TYPE_CHECKING:
     from lucid.coreml._build import Builder
 
+_LN2 = 0.6931471805599453
+
 __all__ = ["EMITTERS", "MIL_OPS", "MultiOutput"]
 
 
@@ -175,6 +177,89 @@ def _flag(value: object, default: bool = False) -> bool:
     return bool(value)
 
 
+# ── elementwise unary: Lucid name -> the MIL op that is exactly it ───────────
+#
+# A table, because these differ only by a name and writing thirty of them
+# out is thirty chances to pair the wrong two. Anything needing an
+# attribute, a decomposition, or more than one operand is a real emitter
+# below.
+_UNARY_MIL = {
+    "abs": "abs",
+    "arccos": "acos",
+    "arcsin": "asin",
+    "arctan": "atan",
+    "ceil": "ceil",
+    "contiguous": "identity",
+    "cos": "cos",
+    "cosh": "cosh",
+    "erf": "erf",
+    "exp": "exp",
+    "floor": "floor",
+    "identity": "identity",
+    "relu": "relu",
+    "relu6": "relu6",
+    "round": "round",
+    "sigmoid": "sigmoid",
+    "sign": "sign",
+    "silu": "silu",
+    "sin": "sin",
+    "sinh": "sinh",
+    "sqrt": "sqrt",
+    "square": "square",
+    "tan": "tan",
+    "tanh": "tanh",
+}
+
+
+def _register_unary(lucid_name: str, mil_name: str) -> None:
+    """Bind one Lucid unary op to the MIL op of the same meaning."""
+
+    def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+        return mil_name, [("x", ins[0])]
+
+    EMITTERS[lucid_name] = emit
+
+
+for _lucid_name, _mil_name in _UNARY_MIL.items():
+    _register_unary(_lucid_name, _mil_name)
+
+
+# MIL's ``log`` and ``rsqrt`` take a mandatory ``epsilon`` that they add to
+# the input; Lucid's do not. Passing zero keeps the two the same function
+# rather than quietly shifting every value by coremltools' default.
+_EPSILON_UNARY = {"log": "log", "rsqrt": "rsqrt", "reciprocal": "inverse"}
+
+
+def _register_epsilon_unary(lucid_name: str, mil_name: str) -> None:
+    """Bind a MIL unary that insists on an epsilon Lucid does not have."""
+
+    def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+        return mil_name, [("x", ins[0]), ("epsilon", b.const_float(0.0))]
+
+    EMITTERS[lucid_name] = emit
+
+
+for _lucid_name, _mil_name in _EPSILON_UNARY.items():
+    _register_epsilon_unary(_lucid_name, _mil_name)
+
+
+@_emitter("neg")
+def _neg(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    # MIL has no negation op; multiplying by -1 is the whole of it.
+    return "mul", [("x", ins[0]), ("y", b.const_float(-1.0))]
+
+
+@_emitter("log2")
+def _log2(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``log2(x)`` as ``log(x) * 1/ln 2`` — MIL carries no base-2 log."""
+    natural = b.emit(
+        "log",
+        [("x", ins[0]), ("epsilon", b.const_float(0.0))],
+        b.shape_of(ins[0]),
+    )
+    return "mul", [("x", natural), ("y", b.const_float(1.0 / _LN2))]
+
+
 @_emitter("conv2d")
 def _conv2d(
     b: Builder, op: TracedOp, ins: list[str]
@@ -218,52 +303,34 @@ def _batch_norm_eval(
     ]
 
 
-@_emitter("relu")
-def _relu(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
-    return "relu", [("x", ins[0])]
+# ── elementwise binary: same table, same reason as the unary one ─────────────
+_BINARY_MIL = {
+    "add": "add",
+    "div": "real_div",
+    "greater": "greater",
+    "greater_equal": "greater_equal",
+    "less": "less",
+    "less_equal": "less_equal",
+    "maximum": "maximum",
+    "minimum": "minimum",
+    "mul": "mul",
+    "not_equal": "not_equal",
+    "pow": "pow",
+    "sub": "sub",
+}
 
 
-@_emitter("relu6")
-def _relu6(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
-    return "relu6", [("x", ins[0])]
+def _register_binary(lucid_name: str, mil_name: str) -> None:
+    """Bind one Lucid binary op to the MIL op of the same meaning."""
+
+    def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+        return mil_name, [("x", ins[0]), ("y", ins[1])]
+
+    EMITTERS[lucid_name] = emit
 
 
-@_emitter("sigmoid")
-def _sigmoid(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
-    return "sigmoid", [("x", ins[0])]
-
-
-@_emitter("tanh")
-def _tanh(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
-    return "tanh", [("x", ins[0])]
-
-
-@_emitter("add")
-def _add(b: Builder, op: TracedOp, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
-    return "add", [("x", ins[0]), ("y", ins[1])]
-
-
-@_emitter("sub")
-def _sub(b: Builder, op: TracedOp, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
-    return "sub", [("x", ins[0]), ("y", ins[1])]
-
-
-@_emitter("mul")
-def _mul(b: Builder, op: TracedOp, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
-    return "mul", [("x", ins[0]), ("y", ins[1])]
-
-
-@_emitter("div")
-def _div(b: Builder, op: TracedOp, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
-    return "real_div", [("x", ins[0]), ("y", ins[1])]
+for _lucid_name, _mil_name in _BINARY_MIL.items():
+    _register_binary(_lucid_name, _mil_name)
 
 
 @_emitter("reshape")
@@ -337,38 +404,23 @@ def _out_shape(op: TracedOp) -> list[int]:
 
 
 @_emitter("squeeze")
-def _squeeze(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _squeeze(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op)))]
 
 
 @_emitter("unsqueeze")
-def _unsqueeze(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _unsqueeze(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op)))]
 
 
-@_emitter("contiguous")
-def _contiguous(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
-    return "identity", [("x", ins[0])]
-
-
 @_emitter("permute")
-def _permute(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _permute(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     perm = [_as_int(a) for a in _as_seq(op.attrs["permutation"])]
     return "transpose", [("x", ins[0]), ("perm", b.const_ints(perm))]
 
 
 @_emitter("concatenate")
-def _concatenate(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _concatenate(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     axis = _as_int(_attr(op, "dim"))
     # ``values`` is variadic: one parameter bound to every input.
     return "concat", [
@@ -381,49 +433,27 @@ def _concatenate(
 # ── activations and arithmetic ───────────────────────────────────────
 
 
-@_emitter("silu")
-def _silu(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
-    return "silu", [("x", ins[0])]
-
-
 @_emitter("gelu_exact")
-def _gelu_exact(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _gelu_exact(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # Lucid's exact GELU is the erf form, which MIL calls EXACT; MIL's
     # default is the tanh approximation, a different function.
     return "gelu", [("x", ins[0]), ("mode", b.const_str("EXACT"))]
 
 
 @_emitter("leaky_relu")
-def _leaky_relu(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _leaky_relu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     alpha = _as_float(_attr(op, "slope"))
     return "leaky_relu", [("x", ins[0]), ("alpha", b.const_float(alpha))]
 
 
 @_emitter("softmax")
-def _softmax(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _softmax(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     axis = _as_int(_attr(op, "dim"))
     return "softmax", [("x", ins[0]), ("axis", b.const_int(axis))]
 
 
-@_emitter("exp")
-def _exp(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
-    return "exp", [("x", ins[0])]
-
-
 @_emitter("matmul")
-def _matmul(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _matmul(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "matmul", [
         ("x", ins[0]),
         ("y", ins[1]),
@@ -433,9 +463,7 @@ def _matmul(
 
 
 @_emitter("layer_norm")
-def _layer_norm(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _layer_norm(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """Normalised over the trailing axes the weight covers.
 
     Lucid's trace does not record which axes were normalised, but the
@@ -457,9 +485,7 @@ def _layer_norm(
 
 
 @_emitter("mean")
-def _mean(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _mean(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     attrs = op.attrs
     axes = [_as_int(d) for d in _as_seq(attrs["dims"])]
     return "reduce_mean", [
@@ -470,9 +496,7 @@ def _mean(
 
 
 @_emitter("stack")
-def _stack(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _stack(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     axis = _as_int(_attr(op, "axis"))
     return "stack", [("values", list(ins)), ("axis", b.const_int(axis))]
 
@@ -498,9 +522,7 @@ def _split_at(b: Builder, op: TracedOp, ins: list[str]) -> MultiOutput:
 
 
 @_emitter("broadcast_to")
-def _broadcast_to(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _broadcast_to(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """Expressed as ``tile``, which MIL has, since ``broadcast_to`` it does not.
 
     A broadcast repeats each size-1 axis; the repetition counts come from
@@ -518,9 +540,7 @@ def _broadcast_to(
 
 
 @_emitter("scaled_dot_product_attention")
-def _sdpa(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _sdpa(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """Decomposed rather than mapped to ``ios18.scaled_dot_product_attention``.
 
     The fused operation exists only in a newer opset than the one this
@@ -594,18 +614,14 @@ def _sdpa(
 
 
 @_emitter("zeros")
-def _zeros(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _zeros(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     import lucid
 
     return "identity", [("x", b.const_from_tensor(lucid.zeros(*_out_shape(op))))]
 
 
 @_emitter("full")
-def _full(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _full(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     import lucid
 
     value = _as_float(_attr(op, "fill_value"))
@@ -615,9 +631,7 @@ def _full(
 
 
 @_emitter("arange")
-def _arange(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _arange(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     import lucid
 
     attrs = op.attrs
@@ -632,9 +646,7 @@ def _arange(
 
 
 @_emitter("embedding")
-def _embedding(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _embedding(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """A row lookup, which MIL spells ``gather`` along the table's first axis.
 
     ``padding_idx`` is not honoured here: it only matters to the backward
@@ -652,9 +664,7 @@ def _embedding(
 
 
 @_emitter("astype")
-def _astype(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _astype(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     name = str(op.outputs[0].dtype).split(".")[-1]
     target = _CAST_TARGETS.get(name)
     if target is None:
@@ -663,22 +673,16 @@ def _astype(
 
 
 @_emitter("max")
-def _max(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _max(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return _reduce(b, op, ins, "reduce_max")
 
 
 @_emitter("min")
-def _min(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _min(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return _reduce(b, op, ins, "reduce_min")
 
 
-def _reduce(
-    b: Builder, op: TracedOp, ins: list[str], mil_type: str
-) -> EmitResult:
+def _reduce(b: Builder, op: TracedOp, ins: list[str], mil_type: str) -> EmitResult:
     attrs = op.attrs
     return mil_type, [
         ("x", ins[0]),
@@ -688,9 +692,7 @@ def _reduce(
 
 
 @_emitter("gelu")
-def _gelu(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _gelu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # Lucid's plain ``gelu`` is the tanh approximation; ``gelu_exact`` is
     # the erf form and maps to MIL's EXACT mode.
     return "gelu", [("x", ins[0]), ("mode", b.const_str("TANH_APPROXIMATION"))]
@@ -706,9 +708,7 @@ def _scales(op: TracedOp, b: Builder, value: str) -> tuple[float, float]:
 
 
 @_emitter("interpolate_nearest_2d")
-def _interp_nearest(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _interp_nearest(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     h, w = _scales(op, b, ins[0])
     return "upsample_nearest_neighbor", [
         ("x", ins[0]),
@@ -718,9 +718,7 @@ def _interp_nearest(
 
 
 @_emitter("interpolate_bilinear")
-def _interp_bilinear(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _interp_bilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     h, w = _scales(op, b, ins[0])
     return "upsample_bilinear", [
         ("x", ins[0]),
@@ -731,9 +729,7 @@ def _interp_bilinear(
 
 
 @_emitter("conv_transpose2d")
-def _conv_transpose2d(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """The output shape is passed explicitly rather than derived.
 
     A transposed convolution's result size is ambiguous — ``output_padding``
@@ -759,9 +755,7 @@ def _conv_transpose2d(
 
 
 @_emitter("gather")
-def _gather(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _gather(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # The result has the *indices'* shape, not the source's, which is the
     # along-axis form rather than the row-lookup ``gather`` uses.
     return "gather_along_axis", [
@@ -772,9 +766,7 @@ def _gather(
 
 
 @_emitter("scatter_add")
-def _scatter_add(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _scatter_add(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "scatter_along_axis", [
         ("data", ins[0]),
         ("indices", ins[1]),
@@ -784,24 +776,13 @@ def _scatter_add(
     ]
 
 
-@_emitter("not_equal")
-def _not_equal(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
-    return "not_equal", [("x", ins[0]), ("y", ins[1])]
-
-
 @_emitter("where")
-def _where(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _where(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "select", [("cond", ins[0]), ("a", ins[1]), ("b", ins[2])]
 
 
 @_emitter("roll")
-def _roll(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _roll(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """Cut and swap, once per axis — MIL has no ``roll``.
 
     ``roll(x, s)[i] == x[(i - s) mod n]``, so the tail of length ``s``
@@ -869,13 +850,6 @@ def emit_cast(
     return "cast", [("x", value), ("dtype", b.const_str(out_dtype))]
 
 
-@_emitter("identity")
-def _identity(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
-    return "identity", [("x", ins[0])]
-
-
 # Names of the MIL ops this package can produce, for diagnostics.
 MIL_OPS = (
     "add",
@@ -917,3 +891,140 @@ MIL_OPS = (
     "sub",
     "tanh",
 )
+
+
+# ── activations MIL spells differently, or not at all ────────────────────────
+#
+# The SELU constants are the paper's (Klambauer 2017): the fixed point of
+# the variance map, not anything Core ML can be asked for.
+_SELU_ALPHA = 1.6732632423543772
+_SELU_SCALE = 1.0507009873554805
+
+
+@_emitter("elu")
+def _elu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return "elu", [("x", ins[0]), ("alpha", b.const_float(_as_float(_attr(op, "alpha"))))]
+
+
+@_emitter("selu")
+def _selu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """MIL's ``elu`` scaled — there is no ``selu`` in the opset."""
+    shaped = b.emit(
+        "elu",
+        [("x", ins[0]), ("alpha", b.const_float(_SELU_ALPHA))],
+        b.shape_of(ins[0]),
+    )
+    return "mul", [("x", shaped), ("y", b.const_float(_SELU_SCALE))]
+
+
+@_emitter("softplus")
+def _softplus(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return "softplus", [("x", ins[0])]
+
+
+@_emitter("mish")
+def _mish(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``x * tanh(softplus(x))`` — there is no ``mish`` in the opset."""
+    shape = b.shape_of(ins[0])
+    softened = b.emit("softplus", [("x", ins[0])], shape)
+    gate = b.emit("tanh", [("x", softened)], shape)
+    return "mul", [("x", ins[0]), ("y", gate)]
+
+
+@_emitter("log_softmax")
+def _log_softmax(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``x - logsumexp(x)`` — there is no ``log_softmax`` in the opset.
+
+    Not ``log(softmax(x))``: that underflows to ``-inf`` wherever a
+    probability is small enough to round to zero, which is exactly where
+    a log-softmax is being asked for.
+    """
+    axis = _as_int(_attr(op, "dim"))
+    shape = b.shape_of(ins[0])
+    kept = list(shape)
+    kept[axis if axis >= 0 else axis + len(kept)] = 1
+    total = b.emit(
+        "reduce_log_sum_exp",
+        [
+            ("x", ins[0]),
+            ("axes", b.const_ints([axis])),
+            ("keep_dims", b.const_bool(True)),
+        ],
+        kept,
+    )
+    return "sub", [("x", ins[0]), ("y", total)]
+
+
+@_emitter("clip")
+def _clip(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return "clip", [
+        ("x", ins[0]),
+        ("alpha", b.const_float(_as_float(_attr(op, "min")))),
+        ("beta", b.const_float(_as_float(_attr(op, "max")))),
+    ]
+
+
+@_emitter("ones")
+def _ones(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    import lucid
+
+    return "identity", [("x", b.const_from_tensor(lucid.ones(*_out_shape(op))))]
+
+
+# ── reductions ───────────────────────────────────────────────────────────────
+
+
+def _register_reduce(lucid_name: str, mil_name: str) -> None:
+    """Bind a Lucid reduction; ``dims``/``keepdim`` are MIL's ``axes``/``keep_dims``."""
+
+    def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+        dims = [_as_int(d) for d in _as_seq(_attr(op, "dims"))]
+        return mil_name, [
+            ("x", ins[0]),
+            ("axes", b.const_ints(dims)),
+            ("keep_dims", b.const_bool(bool(_attr(op, "keepdim")))),
+        ]
+
+    EMITTERS[lucid_name] = emit
+
+
+for _lucid_name, _mil_name in {"sum": "reduce_sum", "prod": "reduce_prod"}.items():
+    _register_reduce(_lucid_name, _mil_name)
+
+
+# ── shape ────────────────────────────────────────────────────────────────────
+
+
+@_emitter("tile")
+def _tile(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    reps = [_as_int(r) for r in _as_seq(_attr(op, "reps"))]
+    return "tile", [("x", ins[0]), ("reps", b.const_ints(reps))]
+
+
+@_emitter("flip")
+def _flip(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    dims = [_as_int(d) for d in _as_seq(_attr(op, "dims"))]
+    return "reverse", [("x", ins[0]), ("axes", b.const_ints(dims))]
+
+
+@_emitter("pad")
+def _pad(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Constant padding; Lucid's ``pads`` is already MIL's per-axis pair list."""
+    pads = [_as_int(v) for v in _as_seq(_attr(op, "pads"))]
+    return "pad", [
+        ("x", ins[0]),
+        ("pad", b.const_ints(pads)),
+        ("mode", b.const_str("constant")),
+        ("constant_val", b.const_float(_as_float(_attr(op, "constant")))),
+    ]
+
+
+@_emitter("masked_fill")
+def _masked_fill(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``select(mask, fill, x)`` — the mask is the second operand."""
+    import lucid
+
+    shape = b.shape_of(ins[0])
+    value = _as_float(_attr(op, "fill_value"))
+    fill = b.const_from_tensor(lucid.zeros(*shape) + value)
+    return "select", [("cond", ins[1]), ("a", fill), ("b", ins[0])]

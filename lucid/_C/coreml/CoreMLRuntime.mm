@@ -259,15 +259,63 @@ TensorImplPtr predict(CoreMLModel* model,
         const std::size_t nbytes = count * sizeof(float);
         auto bytes = std::shared_ptr<std::byte[]>(new std::byte[nbytes]);
 
-        // ``getBytesWithHandler`` is the supported way to read the
-        // backing store: the array may be strided or held on another
-        // device, and this hands over a contiguous view either way.
+        // The strides the array actually has, against the packed ones its
+        // shape implies.  ``getBytesWithHandler`` hands over the backing
+        // store, not a normalised view of it: Core ML pads the innermost
+        // dimension for alignment on some paths, and copying that buffer
+        // as if it were packed interleaves padding with data — the output
+        // has the right shape and the wrong values, which is the failure
+        // this whole package exists to make impossible.  The size check
+        // does not catch it either, since a padded buffer is larger.
+        std::vector<std::int64_t> out_strides;
+        out_strides.reserve(out.strides.count);
+        for (NSNumber* stride in out.strides)
+            out_strides.push_back(static_cast<std::int64_t>([stride longLongValue]));
+
+        std::vector<std::int64_t> packed(out_shape.size(), 1);
+        for (std::size_t i = out_shape.size(); i-- > 1;)
+            packed[i - 1] = packed[i] * out_shape[i];
+
+        const bool contiguous = out_strides == packed;
+
+        // Largest element offset the strides can reach, so the strided
+        // path can check the buffer before reading past it.
+        std::int64_t span = 1;
+        for (std::size_t d = 0; d < out_shape.size(); ++d)
+            span += (out_shape[d] - 1) * (d < out_strides.size() ? out_strides[d] : 0);
+
         __block bool copied = false;
         [out getBytesWithHandler:^(const void* raw, NSInteger size) {
-          if (raw != nullptr && static_cast<std::size_t>(size) >= nbytes) {
-              std::memcpy(bytes.get(), raw, nbytes);
+          if (raw == nullptr)
+              return;
+          const float* src = static_cast<const float*>(raw);
+          float* dst = reinterpret_cast<float*>(bytes.get());
+          const auto available = static_cast<std::size_t>(size) / sizeof(float);
+
+          if (contiguous) {
+              if (available < count)
+                  return;
+              std::memcpy(dst, src, nbytes);
               copied = true;
+              return;
           }
+          if (available < static_cast<std::size_t>(span))
+              return;
+          // Walk the logical index space rather than the buffer.
+          std::vector<std::int64_t> index(out_shape.size(), 0);
+          for (std::size_t linear = 0; linear < count; ++linear) {
+              std::int64_t offset = 0;
+              for (std::size_t d = 0; d < index.size(); ++d)
+                  offset += index[d] * out_strides[d];
+              dst[linear] = src[offset];
+              for (std::size_t d = index.size(); d-- > 0;) {
+                  ++index[d];
+                  if (index[d] < out_shape[d])
+                      break;
+                  index[d] = 0;
+              }
+          }
+          copied = true;
         }];
         if (!copied)
             throw std::runtime_error("lucid.coreml: could not read the output buffer");

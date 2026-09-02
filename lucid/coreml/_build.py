@@ -100,9 +100,7 @@ def _select_output(output: object, field: str | None) -> Tensor:
     )
 
 
-def trace(
-    model: Module, example: Tensor, *, output_field: str | None = None
-) -> Any:
+def trace(model: Module, example: Tensor, *, output_field: str | None = None) -> Any:
     """Run one traced forward pass.
 
     Parameters

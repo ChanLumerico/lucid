@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the package was untyped, and mypy had been saying so
 
+- a padded output was being read as a packed one
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

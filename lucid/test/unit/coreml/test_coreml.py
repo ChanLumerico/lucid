@@ -371,18 +371,21 @@ class TestRefusals:
     """Each of these would otherwise be a quietly wrong model."""
 
     def test_an_unmapped_op_names_itself(self, tmp_path: object) -> None:
+        # A matrix inverse, because Core ML's program dialect carries no
+        # linear-algebra solver and so this one stays unmapped however far
+        # the emitter table grows.
         class UsesAnUnmappedOp(nn.Module):
             def forward(self, x: lucid.Tensor) -> lucid.Tensor:
-                return lucid.sin(x)
+                return lucid.linalg.inv(x)
 
         with pytest.raises(cml.UnsupportedOp) as excinfo:
             cml.export(
                 UsesAnUnmappedOp().eval(),
-                lucid.randn(1, 4),
+                lucid.eye(4).reshape(1, 4, 4) * 4.0,
                 str(tmp_path / "no.mlpackage"),
             )
 
-        assert excinfo.value.op_name == "sin"
+        assert excinfo.value.op_name == "inv"
 
     def test_a_training_mode_model_is_refused(self, tmp_path: object) -> None:
         with pytest.raises(ValueError, match="training mode"):
