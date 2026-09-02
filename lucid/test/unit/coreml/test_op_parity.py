@@ -123,9 +123,7 @@ _OTHER = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("name", "fn", "positive"), _UNARY, ids=[c[0] for c in _UNARY]
-)
+@pytest.mark.parametrize(("name", "fn", "positive"), _UNARY, ids=[c[0] for c in _UNARY])
 def test_a_unary_op_matches(
     name: str, fn: object, positive: bool, tmp_path: object
 ) -> None:
@@ -133,16 +131,12 @@ def test_a_unary_op_matches(
     _check(fn, x, tmp_path)
 
 
-@pytest.mark.parametrize(
-    ("name", "fn"), _ACTIVATION, ids=[c[0] for c in _ACTIVATION]
-)
+@pytest.mark.parametrize(("name", "fn"), _ACTIVATION, ids=[c[0] for c in _ACTIVATION])
 def test_an_activation_matches(name: str, fn: object, tmp_path: object) -> None:
     _check(fn, lucid.randn(1, 4, 6, 6), tmp_path)
 
 
-@pytest.mark.parametrize(
-    ("name", "fn", "positive"), _OTHER, ids=[c[0] for c in _OTHER]
-)
+@pytest.mark.parametrize(("name", "fn", "positive"), _OTHER, ids=[c[0] for c in _OTHER])
 def test_a_structural_op_matches(
     name: str, fn: object, positive: bool, tmp_path: object
 ) -> None:
@@ -203,30 +197,57 @@ class TestTheGapAgainstCompileIsAccountedFor:
     #: Core ML's program dialect has no equivalent and no decomposition.
     IMPOSSIBLE = {
         # No complex dtype.
-        "complex", "conj", "imag", "real",
+        "complex",
+        "conj",
+        "imag",
+        "real",
         # No linear-algebra solver.
-        "det", "inv", "solve",
+        "det",
+        "inv",
+        "solve",
     }
 
     #: Only reachable from a model in training mode, which export refuses.
     TRAINING_ONLY = {
-        "alpha_dropout", "bce_loss", "bce_with_logits", "cross_entropy_loss",
-        "drop_block", "drop_path", "dropoutnd", "huber_loss", "mse_loss",
+        "alpha_dropout",
+        "bce_loss",
+        "bce_with_logits",
+        "cross_entropy_loss",
+        "drop_block",
+        "drop_path",
+        "dropoutnd",
+        "huber_loss",
+        "mse_loss",
         "nll_loss",
     }
 
     #: In the registry, but decomposed into mapped ops before tracing.
     NEVER_TRACED = {
-        "batch_norm", "batch_norm1d", "batch_norm3d", "cube", "cube_root",
-        "pow_scalar", "rpow_scalar", "norm",
+        "batch_norm",
+        "batch_norm1d",
+        "batch_norm3d",
+        "cube",
+        "cube_root",
+        "pow_scalar",
+        "rpow_scalar",
+        "norm",
     }
 
     #: Expressible, not yet written. Each needs more than a name.
     NOT_YET = {
-        "affine_grid", "bilinear_layer", "embedding_bag", "erfinv", "fold",
-        "global_response_norm", "grid_sample", "interpolate_nearest_3d",
-        "interpolate_trilinear", "lp_normalize", "meshgrid",
-        "rotary_pos_embedding", "unfold",
+        "affine_grid",
+        "bilinear_layer",
+        "embedding_bag",
+        "erfinv",
+        "fold",
+        "global_response_norm",
+        "grid_sample",
+        "interpolate_nearest_3d",
+        "interpolate_trilinear",
+        "lp_normalize",
+        "meshgrid",
+        "rotary_pos_embedding",
+        "unfold",
     }
 
     def test_no_unaccounted_gap(self) -> None:

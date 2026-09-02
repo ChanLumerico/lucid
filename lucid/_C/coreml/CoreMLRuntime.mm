@@ -6,6 +6,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <algorithm>
 #include <vector>
 
 #include "CoreMLRuntime.h"
@@ -37,11 +38,19 @@ MLComputeUnits to_mlcompute(ComputeUnits units) {
     }
 }
 
-// First declared feature name of a description, or empty when absent.
-std::string first_name(NSDictionary<NSString*, MLFeatureDescription*>* features) {
+// Every feature name a description declares, sorted.
+//
+// Core ML hands these back in a dictionary, so the order the package
+// declared them in is not recoverable here.  Sorted is at least stable;
+// a caller that needs the declared order keeps it from the export, which
+// is what the Python layer does.
+std::vector<std::string> all_names(NSDictionary<NSString*, MLFeatureDescription*>* features) {
+    std::vector<std::string> names;
+    names.reserve(features.count);
     for (NSString* key in features)
-        return std::string([key UTF8String]);
-    return {};
+        names.emplace_back([key UTF8String]);
+    std::sort(names.begin(), names.end());
+    return names;
 }
 
 }  // namespace
@@ -54,8 +63,8 @@ class CoreMLModel {
 public:
     MLModel* model = nil;  // ARC strong
     NSURL* compiled_url = nil;
-    std::string input_name;
-    std::string output_name;
+    std::vector<std::string> input_names;
+    std::vector<std::string> output_names;
 
     ~CoreMLModel() {
         if (compiled_url != nil) {
@@ -93,8 +102,8 @@ CoreMLModel* load_model(const std::string& path, ComputeUnits units) {
         auto* handle = new CoreMLModel();
         handle->model = model;
         handle->compiled_url = compiled;
-        handle->input_name = first_name(model.modelDescription.inputDescriptionsByName);
-        handle->output_name = first_name(model.modelDescription.outputDescriptionsByName);
+        handle->input_names = all_names(model.modelDescription.inputDescriptionsByName);
+        handle->output_names = all_names(model.modelDescription.outputDescriptionsByName);
         return handle;
     }
 }
@@ -168,70 +177,181 @@ std::vector<OpPlacement> compute_plan(const std::string& path, ComputeUnits unit
     return placements;
 }
 
-std::string input_feature_name(const CoreMLModel* model) {
-    return model == nullptr ? std::string{} : model->input_name;
+std::vector<std::string> input_feature_names(const CoreMLModel* model) {
+    return model == nullptr ? std::vector<std::string>{} : model->input_names;
 }
 
-std::string output_feature_name(const CoreMLModel* model) {
-    return model == nullptr ? std::string{} : model->output_name;
+std::vector<std::string> output_feature_names(const CoreMLModel* model) {
+    return model == nullptr ? std::vector<std::string>{} : model->output_names;
 }
 
-TensorImplPtr predict(CoreMLModel* model,
-                      const std::string& input_name,
-                      const TensorImplPtr& input,
-                      const std::string& output_name) {
+namespace {
+
+// Copy one named output into a fresh CPU tensor.
+//
+// ``getBytesWithHandler`` hands over the array's backing store, not a
+// normalised view of it: Core ML pads the innermost dimension for
+// alignment on the paths that permit the Neural Engine, and copying that
+// buffer as if it were packed interleaves padding with data — the output
+// has the right shape and the wrong values, which is the failure this
+// whole package exists to make impossible.  The size check does not catch
+// it either, since a padded buffer is larger.
+TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& output_name) {
+    NSString* out_key = [NSString stringWithUTF8String:output_name.c_str()];
+    MLFeatureValue* value = [result featureValueForName:out_key];
+    if (value == nil || value.multiArrayValue == nil)
+        throw std::runtime_error("lucid.coreml: the model produced no output named " +
+                                 output_name);
+    MLMultiArray* out = value.multiArrayValue;
+
+    Shape out_shape;
+    out_shape.reserve(out.shape.count);
+    std::size_t count = 1;
+    for (NSNumber* dim in out.shape) {
+        const auto d = static_cast<std::int64_t>([dim longLongValue]);
+        out_shape.push_back(d);
+        count *= static_cast<std::size_t>(d);
+    }
+
+    const std::size_t nbytes = count * sizeof(float);
+    auto bytes = std::shared_ptr<std::byte[]>(new std::byte[nbytes]);
+
+    std::vector<std::int64_t> out_strides;
+    out_strides.reserve(out.strides.count);
+    for (NSNumber* stride in out.strides)
+        out_strides.push_back(static_cast<std::int64_t>([stride longLongValue]));
+
+    std::vector<std::int64_t> packed(out_shape.size(), 1);
+    for (std::size_t i = out_shape.size(); i-- > 1;)
+        packed[i - 1] = packed[i] * out_shape[i];
+
+    const bool contiguous = out_strides == packed;
+
+    // Largest element offset the strides can reach, so the strided path
+    // can check the buffer before reading past it.
+    std::int64_t span = 1;
+    for (std::size_t d = 0; d < out_shape.size(); ++d)
+        span += (out_shape[d] - 1) * (d < out_strides.size() ? out_strides[d] : 0);
+
+    __block bool copied = false;
+    [out getBytesWithHandler:^(const void* raw, NSInteger size) {
+      if (raw == nullptr)
+          return;
+      const float* src = static_cast<const float*>(raw);
+      float* dst = reinterpret_cast<float*>(bytes.get());
+      const auto available = static_cast<std::size_t>(size) / sizeof(float);
+
+      if (contiguous) {
+          if (available < count)
+              return;
+          std::memcpy(dst, src, nbytes);
+          copied = true;
+          return;
+      }
+      if (available < static_cast<std::size_t>(span))
+          return;
+      // Walk the logical index space rather than the buffer.
+      std::vector<std::int64_t> index(out_shape.size(), 0);
+      for (std::size_t linear = 0; linear < count; ++linear) {
+          std::int64_t offset = 0;
+          for (std::size_t d = 0; d < index.size(); ++d)
+              offset += index[d] * out_strides[d];
+          dst[linear] = src[offset];
+          for (std::size_t d = index.size(); d-- > 0;) {
+              ++index[d];
+              if (index[d] < out_shape[d])
+                  break;
+              index[d] = 0;
+          }
+      }
+      copied = true;
+    }];
+    if (!copied)
+        throw std::runtime_error("lucid.coreml: could not read the output buffer for " +
+                                 output_name);
+
+    CpuStorage cpu;
+    cpu.ptr = std::move(bytes);
+    cpu.nbytes = nbytes;
+    cpu.dtype = Dtype::F32;
+    return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, out_shape, Dtype::F32,
+                                        Device::CPU, false);
+}
+
+}  // namespace
+
+std::vector<TensorImplPtr> predict(CoreMLModel* model,
+                                   const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
+                                   const std::vector<std::string>& output_names) {
     if (model == nullptr || model->model == nil)
         throw std::invalid_argument("lucid.coreml: null model handle");
-    if (!input)
-        throw std::invalid_argument("lucid.coreml: null input tensor");
-    if (input->device() != Device::CPU)
-        throw std::invalid_argument(
-            "lucid.coreml: the input must be a CPU tensor — Core ML reads host "
-            "memory, and moving it here would hide a copy the caller did not ask for");
-    if (input->dtype() != Dtype::F32 && input->dtype() != Dtype::I32)
-        throw std::invalid_argument(
-            "lucid.coreml: inputs must be float32 or int32 — Core ML's multi-array "
-            "has no int64, so token ids are narrowed by the caller");
+    if (inputs.empty())
+        throw std::invalid_argument("lucid.coreml: no inputs given");
+    if (output_names.empty())
+        throw std::invalid_argument("lucid.coreml: no outputs requested");
 
-    const auto& storage = std::get<CpuStorage>(input->storage());
-    if (!storage.ptr)
-        throw std::runtime_error("lucid.coreml: the input tensor has no host storage");
+    for (const auto& [name, tensor] : inputs) {
+        if (!tensor)
+            throw std::invalid_argument("lucid.coreml: null input tensor for " + name);
+        if (tensor->device() != Device::CPU)
+            throw std::invalid_argument(
+                "lucid.coreml: input " + name +
+                " must be a CPU tensor — Core ML reads host memory, and moving it "
+                "here would hide a copy the caller did not ask for");
+        if (tensor->dtype() != Dtype::F32 && tensor->dtype() != Dtype::I32)
+            throw std::invalid_argument(
+                "lucid.coreml: input " + name +
+                " must be float32 or int32 — Core ML's multi-array has no int64, "
+                "so token ids are narrowed by the caller");
+        if (!std::get<CpuStorage>(tensor->storage()).ptr)
+            throw std::runtime_error("lucid.coreml: input " + name +
+                                     " has no host storage");
+    }
 
     @autoreleasepool {
-        const Shape& shape = input->shape();
-        NSMutableArray<NSNumber*>* ns_shape = [NSMutableArray arrayWithCapacity:shape.size()];
-        for (std::int64_t dim : shape)
-            [ns_shape addObject:@(dim)];
-
-        // Row-major strides, in elements, as MLMultiArray counts them.
-        std::vector<std::int64_t> strides(shape.size(), 1);
-        for (std::size_t i = shape.size(); i-- > 1;)
-            strides[i - 1] = strides[i] * shape[i];
-        NSMutableArray<NSNumber*>* ns_strides = [NSMutableArray arrayWithCapacity:strides.size()];
-        for (std::int64_t stride : strides)
-            [ns_strides addObject:@(stride)];
-
+        NSMutableDictionary<NSString*, MLFeatureValue*>* feature_map =
+            [NSMutableDictionary dictionaryWithCapacity:inputs.size()];
         NSError* error = nil;
-        // The array borrows Lucid's buffer; ``deallocator:nil`` says Core
-        // ML must not free it.  The tensor outlives this scope because
-        // the caller holds it.
-        const MLMultiArrayDataType in_type = input->dtype() == Dtype::I32
-                                                ? MLMultiArrayDataTypeInt32
-                                                : MLMultiArrayDataTypeFloat32;
-        MLMultiArray* array =
-            [[MLMultiArray alloc] initWithDataPointer:static_cast<void*>(storage.ptr.get())
-                                                shape:ns_shape
-                                             dataType:in_type
-                                              strides:ns_strides
-                                          deallocator:nil
-                                                error:&error];
-        if (array == nil)
-            throw std::runtime_error("lucid.coreml: cannot wrap the input: " + describe(error));
 
-        NSString* in_key = [NSString stringWithUTF8String:input_name.c_str()];
-        MLDictionaryFeatureProvider* features = [[MLDictionaryFeatureProvider alloc]
-            initWithDictionary:@{in_key : [MLFeatureValue featureValueWithMultiArray:array]}
-                         error:&error];
+        for (const auto& [name, tensor] : inputs) {
+            const auto& storage = std::get<CpuStorage>(tensor->storage());
+            const Shape& shape = tensor->shape();
+            NSMutableArray<NSNumber*>* ns_shape =
+                [NSMutableArray arrayWithCapacity:shape.size()];
+            for (std::int64_t dim : shape)
+                [ns_shape addObject:@(dim)];
+
+            // Row-major strides, in elements, as MLMultiArray counts them.
+            std::vector<std::int64_t> strides(shape.size(), 1);
+            for (std::size_t i = shape.size(); i-- > 1;)
+                strides[i - 1] = strides[i] * shape[i];
+            NSMutableArray<NSNumber*>* ns_strides =
+                [NSMutableArray arrayWithCapacity:strides.size()];
+            for (std::int64_t stride : strides)
+                [ns_strides addObject:@(stride)];
+
+            // The array borrows Lucid's buffer; ``deallocator:nil`` says
+            // Core ML must not free it.  The tensor outlives this scope
+            // because the caller holds it.
+            const MLMultiArrayDataType in_type = tensor->dtype() == Dtype::I32
+                                                     ? MLMultiArrayDataTypeInt32
+                                                     : MLMultiArrayDataTypeFloat32;
+            MLMultiArray* array =
+                [[MLMultiArray alloc] initWithDataPointer:static_cast<void*>(storage.ptr.get())
+                                                    shape:ns_shape
+                                                 dataType:in_type
+                                                  strides:ns_strides
+                                              deallocator:nil
+                                                    error:&error];
+            if (array == nil)
+                throw std::runtime_error("lucid.coreml: cannot wrap the input " + name +
+                                         ": " + describe(error));
+            feature_map[[NSString stringWithUTF8String:name.c_str()]] =
+                [MLFeatureValue featureValueWithMultiArray:array];
+        }
+
+        MLDictionaryFeatureProvider* features =
+            [[MLDictionaryFeatureProvider alloc] initWithDictionary:feature_map error:&error];
         if (features == nil)
             throw std::runtime_error("lucid.coreml: cannot build the input features: " +
                                      describe(error));
@@ -240,92 +360,11 @@ TensorImplPtr predict(CoreMLModel* model,
         if (result == nil)
             throw std::runtime_error("lucid.coreml: prediction failed: " + describe(error));
 
-        NSString* out_key = [NSString stringWithUTF8String:output_name.c_str()];
-        MLFeatureValue* value = [result featureValueForName:out_key];
-        if (value == nil || value.multiArrayValue == nil)
-            throw std::runtime_error("lucid.coreml: the model produced no output named " +
-                                     output_name);
-        MLMultiArray* out = value.multiArrayValue;
-
-        Shape out_shape;
-        out_shape.reserve(out.shape.count);
-        std::size_t count = 1;
-        for (NSNumber* dim in out.shape) {
-            const auto d = static_cast<std::int64_t>([dim longLongValue]);
-            out_shape.push_back(d);
-            count *= static_cast<std::size_t>(d);
-        }
-
-        const std::size_t nbytes = count * sizeof(float);
-        auto bytes = std::shared_ptr<std::byte[]>(new std::byte[nbytes]);
-
-        // The strides the array actually has, against the packed ones its
-        // shape implies.  ``getBytesWithHandler`` hands over the backing
-        // store, not a normalised view of it: Core ML pads the innermost
-        // dimension for alignment on some paths, and copying that buffer
-        // as if it were packed interleaves padding with data — the output
-        // has the right shape and the wrong values, which is the failure
-        // this whole package exists to make impossible.  The size check
-        // does not catch it either, since a padded buffer is larger.
-        std::vector<std::int64_t> out_strides;
-        out_strides.reserve(out.strides.count);
-        for (NSNumber* stride in out.strides)
-            out_strides.push_back(static_cast<std::int64_t>([stride longLongValue]));
-
-        std::vector<std::int64_t> packed(out_shape.size(), 1);
-        for (std::size_t i = out_shape.size(); i-- > 1;)
-            packed[i - 1] = packed[i] * out_shape[i];
-
-        const bool contiguous = out_strides == packed;
-
-        // Largest element offset the strides can reach, so the strided
-        // path can check the buffer before reading past it.
-        std::int64_t span = 1;
-        for (std::size_t d = 0; d < out_shape.size(); ++d)
-            span += (out_shape[d] - 1) * (d < out_strides.size() ? out_strides[d] : 0);
-
-        __block bool copied = false;
-        [out getBytesWithHandler:^(const void* raw, NSInteger size) {
-          if (raw == nullptr)
-              return;
-          const float* src = static_cast<const float*>(raw);
-          float* dst = reinterpret_cast<float*>(bytes.get());
-          const auto available = static_cast<std::size_t>(size) / sizeof(float);
-
-          if (contiguous) {
-              if (available < count)
-                  return;
-              std::memcpy(dst, src, nbytes);
-              copied = true;
-              return;
-          }
-          if (available < static_cast<std::size_t>(span))
-              return;
-          // Walk the logical index space rather than the buffer.
-          std::vector<std::int64_t> index(out_shape.size(), 0);
-          for (std::size_t linear = 0; linear < count; ++linear) {
-              std::int64_t offset = 0;
-              for (std::size_t d = 0; d < index.size(); ++d)
-                  offset += index[d] * out_strides[d];
-              dst[linear] = src[offset];
-              for (std::size_t d = index.size(); d-- > 0;) {
-                  ++index[d];
-                  if (index[d] < out_shape[d])
-                      break;
-                  index[d] = 0;
-              }
-          }
-          copied = true;
-        }];
-        if (!copied)
-            throw std::runtime_error("lucid.coreml: could not read the output buffer");
-
-        CpuStorage cpu;
-        cpu.ptr = std::move(bytes);
-        cpu.nbytes = nbytes;
-        cpu.dtype = Dtype::F32;
-        return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, out_shape, Dtype::F32,
-                                            Device::CPU, false);
+        std::vector<TensorImplPtr> produced;
+        produced.reserve(output_names.size());
+        for (const std::string& output_name : output_names)
+            produced.push_back(read_output(result, output_name));
+        return produced;
     }
 }
 

@@ -76,12 +76,16 @@ void register_coreml(py::module_& m) {
         "coreml", "Core ML model-package writer: MIL protobuf, weight blob, bundle.");
 
     py::class_<lucid::coreml::MilProgram>(cm, "MilProgram")
-        .def(py::init([](const std::string& input_name, const TypeSpec& input_type,
+        .def(py::init([](const std::vector<std::pair<std::string, TypeSpec>>& inputs,
                          const std::string& opset) {
-                 return std::make_unique<lucid::coreml::MilProgram>(input_name, to_type(input_type),
-                                                                    opset);
+                 lucid::coreml::MilNamedTypes converted;
+                 converted.reserve(inputs.size());
+                 for (const auto& [name, spec] : inputs)
+                     converted.emplace_back(name, to_type(spec));
+                 return std::make_unique<lucid::coreml::MilProgram>(std::move(converted), opset);
              }),
-             py::arg("input_name"), py::arg("input_type"), py::arg("opset") = "CoreML7")
+             py::arg("inputs"), py::arg("opset") = "CoreML7",
+             "``inputs`` is a list of (feature name, (dtype, shape)) pairs.")
         .def(
             "add_blob_const",
             [](lucid::coreml::MilProgram& self, const std::string& name, const TypeSpec& type,
@@ -139,11 +143,12 @@ void register_coreml(py::module_& m) {
             py::arg("op_type"), py::arg("inputs"), py::arg("outputs"),
             "Append an operation with more than one output, e.g. ``split``.")
         .def(
-            "set_output",
+            "add_output",
             [](lucid::coreml::MilProgram& self, const std::string& name, const TypeSpec& type) {
-                self.set_output(name, to_type(type));
+                self.add_output(name, to_type(type));
             },
-            py::arg("name"), py::arg("type"))
+            py::arg("name"), py::arg("type"),
+            "Append one of the model's outputs, in the order the caller wants them.")
         .def(
             "serialize",
             [](const lucid::coreml::MilProgram& self) { return py::bytes(self.serialize()); },
@@ -200,21 +205,25 @@ void register_coreml(py::module_& m) {
         .value("CPU_AND_NE", lucid::coreml::ComputeUnits::CpuAndNeuralEngine);
 
     py::class_<PyCoreMLModel, std::shared_ptr<PyCoreMLModel>>(cm, "CoreMLModel")
-        .def_property_readonly(
-            "input_name",
-            [](const PyCoreMLModel& self) { return lucid::coreml::input_feature_name(self.raw()); })
-        .def_property_readonly("output_name",
+        .def_property_readonly("input_names",
                                [](const PyCoreMLModel& self) {
-                                   return lucid::coreml::output_feature_name(self.raw());
+                                   return lucid::coreml::input_feature_names(self.raw());
+                               })
+        .def_property_readonly("output_names",
+                               [](const PyCoreMLModel& self) {
+                                   return lucid::coreml::output_feature_names(self.raw());
                                })
         .def(
             "predict",
-            [](const PyCoreMLModel& self, const std::string& input_name, const TensorImplPtr& input,
-               const std::string& output_name) {
-                return lucid::coreml::predict(self.raw(), input_name, input, output_name);
+            [](const PyCoreMLModel& self,
+               const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
+               const std::vector<std::string>& output_names) {
+                return lucid::coreml::predict(self.raw(), inputs, output_names);
             },
-            py::arg("input_name"), py::arg("input"), py::arg("output_name"),
-            "Run one prediction; the input must be a contiguous CPU float32 tensor.")
+            py::arg("inputs"), py::arg("output_names"),
+            "Run one prediction. ``inputs`` pairs each feature name with a "
+            "contiguous CPU float32 or int32 tensor; the results come back in "
+            "the order ``output_names`` asks for.")
         .def("close", &PyCoreMLModel::close,
              "Release the compiled model and its cached artifacts.");
 

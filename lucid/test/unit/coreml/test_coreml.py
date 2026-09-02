@@ -73,9 +73,9 @@ class TestPackageFormat:
         # translation.
         engine = _C_engine.coreml
         f32 = engine.DTYPE_FLOAT32
-        program = engine.MilProgram("x", (f32, [1, 4]))
+        program = engine.MilProgram([("x", (f32, [1, 4]))])
         program.add_op("relu", [("x", ["x"])], "y", (f32, [1, 4]))
-        program.set_output("y", (f32, [1, 4]))
+        program.add_output("y", (f32, [1, 4]))
 
         paths = engine.prepare_package(str(tmp_path / "relu.mlpackage"))
         blob = engine.BlobWriter(paths.weight_bin)
@@ -84,7 +84,7 @@ class TestPackageFormat:
 
         handle = engine.load_model(paths.root, engine.ComputeUnits.CPU_ONLY)
         out = lucid.Tensor(
-            handle.predict("x", lucid.tensor([[-1.0, 2.0, -3.0, 4.0]])._impl, "y")
+            handle.predict([("x", lucid.tensor([[-1.0, 2.0, -3.0, 4.0]])._impl)], ["y"])[0]
         )
 
         assert out.numpy().ravel().tolist() == [0.0, 2.0, 0.0, 4.0]
@@ -286,14 +286,40 @@ class TestTextModels:
             assert plan.ane_fraction > 0.9
         cm.close()
 
-    def test_an_output_dataclass_without_logits_names_its_field(
+    def test_an_output_dataclass_exports_every_field_it_declares(
         self, tmp_path: object
     ) -> None:
-        model = M.create_model("bert_base").eval()
-        ids = lucid.tensor([[101, 102]]).long()
+        """A model's outputs are all of them, named as the model names them.
 
-        with pytest.raises(TypeError, match="logits"):
-            cml.export(model, ids, str(tmp_path / "nofield.mlpackage"))
+        Taking one field and calling the package the model is the same
+        failure as dropping a layer, a level up: it loads, it runs, and it
+        answers for a part of the network.
+        """
+        model = M.create_model("bert_base").eval()
+        ids = lucid.tensor([[101, 7592, 2088, 102]]).long()
+        reference = model(ids)
+
+        cm = cml.export(model, ids, str(tmp_path / "fields.mlpackage"))
+        got = cm.predict(ids)
+
+        assert cm.output_names == ["last_hidden_state", "pooler_output"]
+        for field in cm.output_names:
+            wanted = getattr(reference, field)
+            scale = float(wanted.abs().max().item())
+            assert float((got[field] - wanted).abs().max().item()) / scale < 1e-4
+        cm.close()
+
+    def test_a_model_returning_no_tensor_says_so(self, tmp_path: object) -> None:
+        class ReturnsNothingUseful(nn.Module):
+            def forward(self, x: lucid.Tensor) -> object:
+                return {"not": "a tensor", "x": x}
+
+        with pytest.raises(TypeError, match="no tensor to export"):
+            cml.export(
+                ReturnsNothingUseful().eval(),
+                lucid.randn(1, 4),
+                str(tmp_path / "none.mlpackage"),
+            )
 
 
 class TestSegmentationAndDetection:
@@ -317,21 +343,30 @@ class TestSegmentationAndDetection:
         assert float((cm.predict(x) - reference).abs().max().item()) / scale < 1e-5
         cm.close()
 
-    def test_a_detector_matches(self, tmp_path: object) -> None:
+    def test_a_detector_exports_all_three_of_its_heads(
+        self, tmp_path: object
+    ) -> None:
+        """A detector is boxes and objectness, not only class scores.
+
+        Exporting one field of a several-field output produces a package
+        that loads, runs, and returns plausible numbers for a third of
+        the model. Nothing about it looks wrong from the outside.
+        """
         model = M.create_model("yolo_v3").eval()
         x = lucid.randn(1, 3, 416, 416)
         reference = model(x)
-        reference = (
-            reference if isinstance(reference, lucid.Tensor) else reference.logits
-        )
-        scale = float(reference.abs().max().item())
 
         cm = cml.export(model, x, str(tmp_path / "yolo.mlpackage"))
+        got = cm.predict(x)
 
-        # Tight on purpose. A leaky-ReLU slope read from the wrong
-        # attribute name put this at 1.8e-03 while everything still ran;
-        # a loose bound would have called that a pass.
-        assert float((cm.predict(x) - reference).abs().max().item()) / scale < 1e-6
+        assert set(cm.output_names) == {"logits", "pred_boxes", "objectness"}
+        for field in cm.output_names:
+            wanted = getattr(reference, field)
+            scale = float(wanted.abs().max().item())
+            # Tight on purpose. A leaky-ReLU slope read from the wrong
+            # attribute name put this at 1.8e-03 while everything still
+            # ran; a loose bound would have called that a pass.
+            assert float((got[field] - wanted).abs().max().item()) / scale < 1e-6
         cm.close()
 
 

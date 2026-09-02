@@ -65,16 +65,18 @@ __all__ = [
 ]
 
 
-def _shape_of(value: object) -> tuple[int, ...]:
-    """The traced output shape as ``build_package`` reports it."""
-    if not isinstance(value, tuple):
-        raise TypeError(f"lucid.coreml: expected a shape, got {type(value).__name__}")
-    return tuple(int(d) for d in value)
+def _features(value: object) -> list[tuple[str, tuple[int, ...]]]:
+    """The feature names and shapes as ``build_package`` reports them."""
+    if not isinstance(value, list):
+        raise TypeError(
+            f"lucid.coreml: expected a feature list, got {type(value).__name__}"
+        )
+    return [(str(name), tuple(int(d) for d in shape)) for name, shape in value]
 
 
 def export(
     model: Module,
-    example: Tensor,
+    example: object,
     path: str,
     *,
     precision: Precision = Precision.FLOAT32,
@@ -89,9 +91,10 @@ def export(
         Must be in ``eval()`` mode: an exported graph is an inference
         graph, and a training-mode dropout is refused rather than
         silently turned into an identity.
-    example : Tensor
-        Supplies the input shape and dtype; its values are irrelevant.
-        The exported model's input shape is fixed to it.
+    example : Tensor or tuple of Tensor or dict of str to Tensor
+        Supplies each input's shape and dtype; the values are irrelevant.
+        A tuple is passed to the model positionally, a mapping by
+        keyword. The exported model's input shapes are fixed to these.
     path : str
         Destination ``.mlpackage``. Replaced if it exists.
     precision : Precision, optional, keyword-only, default=FLOAT32
@@ -101,8 +104,9 @@ def export(
     compute_units : ComputeUnits, optional, keyword-only, default=ALL
         Which processors Core ML may schedule on.
     output_field : str or None, optional, keyword-only, default=None
-        Attribute to export when the model returns an output dataclass.
-        ``None`` takes ``logits``, which the zoo's output types carry.
+        Single attribute to export when the model returns an output
+        dataclass. ``None`` exports every tensor field it declares —
+        a detector's boxes and objectness as well as its class scores.
 
     Returns
     -------
@@ -124,13 +128,14 @@ def export(
     info = build_package(
         model, example, path, precision=precision, output_field=output_field
     )
+    outputs = _features(info["outputs"])
     return CoreMLModel(
         str(info["path"]),
-        str(info["input"]),
-        str(info["output"]),
+        [name for name, _shape in _features(info["inputs"])],
+        [name for name, _shape in outputs],
         compute_units=compute_units,
         precision=precision.value,
-        output_shape=_shape_of(info["output_shape"]),
+        output_shapes=dict(outputs),
     )
 
 
@@ -169,6 +174,8 @@ def load(
     from lucid.coreml._model import _UNITS
 
     handle = _C_engine.coreml.load_model(path, _UNITS[compute_units])
-    input_name, output_name = handle.input_name, handle.output_name
+    input_names, output_names = handle.input_names, handle.output_names
     handle.close()
-    return CoreMLModel(path, input_name, output_name, compute_units=compute_units)
+    return CoreMLModel(
+        path, list(input_names), list(output_names), compute_units=compute_units
+    )

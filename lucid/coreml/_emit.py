@@ -340,9 +340,7 @@ for _name in ("avg_pool1d", "avg_pool2d", "avg_pool3d"):
 
 
 @_emitter("linear")
-def _linear(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _linear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     bindings: Bindings = [("x", ins[0]), ("weight", ins[1])]
     if len(ins) > 2:
         bindings.append(("bias", ins[2]))
@@ -350,9 +348,7 @@ def _linear(
 
 
 @_emitter("batch_norm_eval")
-def _batch_norm_eval(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _batch_norm_eval(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     x, mean, variance, gamma, beta = ins[0], ins[1], ins[2], ins[3], ins[4]
     return "batch_norm", [
         ("x", x),
@@ -395,18 +391,14 @@ for _lucid_name, _mil_name in _BINARY_MIL.items():
 
 
 @_emitter("reshape")
-def _reshape(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _reshape(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # Lucid keeps the target shape on the result, not in the attributes.
     shape = [int(d) for d in op.outputs[0].shape]
     return "reshape", [("x", ins[0]), ("shape", b.const_ints(shape))]
 
 
 @_emitter("dropout")
-def _dropout(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> EmitResult:
+def _dropout(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # An exported graph is an inference graph.  Lucid still records the op
     # under ``eval()``; a training-mode one is refused rather than
     # silently turned into an identity the caller did not ask for.
@@ -786,7 +778,6 @@ def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "conv_transpose", bindings
 
 
-
 # ── gather / scatter along an axis, comparison, selection ────────────
 
 
@@ -859,9 +850,7 @@ def _roll(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "identity", [("x", value)]
 
 
-def emit_cast(
-    b: Builder, value: str, out_dtype: str
-) -> EmitResult:
+def emit_cast(b: Builder, value: str, out_dtype: str) -> EmitResult:
     """A ``cast`` the driver inserts, not one a Lucid op asks for.
 
     An fp16 program still presents fp32 inputs and outputs, so the body is
@@ -939,7 +928,10 @@ _SELU_SCALE = 1.0507009873554805
 
 @_emitter("elu")
 def _elu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    return "elu", [("x", ins[0]), ("alpha", b.const_float(_as_float(_attr(op, "alpha"))))]
+    return "elu", [
+        ("x", ins[0]),
+        ("alpha", b.const_float(_as_float(_attr(op, "alpha")))),
+    ]
 
 
 @_emitter("selu")
@@ -1156,9 +1148,7 @@ def _rms_norm(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     shifted = b.emit(
         "add", [("x", mean), ("y", b.const_float(_as_float(_attr(op, "eps"))))], kept
     )
-    scale = b.emit(
-        "rsqrt", [("x", shifted), ("epsilon", b.const_float(0.0))], kept
-    )
+    scale = b.emit("rsqrt", [("x", shifted), ("epsilon", b.const_float(0.0))], kept)
     normalised = b.emit("mul", [("x", ins[0]), ("y", scale)], shape)
     if len(ins) < 2:
         return "identity", [("x", normalised)]
@@ -1186,9 +1176,7 @@ def _repeat(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     reps[axis + 1] = repeats
     tiled_shape = list(spread)
     tiled_shape[axis + 1] = repeats
-    tiled = b.emit(
-        "tile", [("x", expanded), ("reps", b.const_ints(reps))], tiled_shape
-    )
+    tiled = b.emit("tile", [("x", expanded), ("reps", b.const_ints(reps))], tiled_shape)
     final = list(shape)
     final[axis] = shape[axis] * repeats
     return "reshape", [("x", tiled), ("shape", b.const_ints(final))]

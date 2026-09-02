@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - detection and segmentation export, and two silent defaults die
 - every rank of conv and pool, the norms, and dead ops dropped
 - name every operation the gap against compile still holds
+- a detector's boxes are part of the detector
 
 ---
 

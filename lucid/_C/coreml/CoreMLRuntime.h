@@ -16,6 +16,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../api.h"
@@ -55,21 +56,23 @@ LUCID_API void destroy_model(CoreMLModel* model);
 // ----------
 // model : CoreMLModel*
 //     From :func:`load_model`.
-// input_name / output_name : const std::string&
-//     Feature names as the exported description declares them.
-// input : const TensorImplPtr&
-//     Must be a contiguous CPU float32 tensor. A Metal tensor is
-//     rejected rather than downloaded behind the caller's back — the
-//     Python layer decides whether that copy is acceptable and says so.
+// inputs : const std::vector<std::pair<std::string, TensorImplPtr>>&
+//     Each feature name as the exported description declares it, with
+//     its tensor. Every tensor must be a contiguous CPU float32 or int32
+//     one. A Metal tensor is rejected rather than downloaded behind the
+//     caller's back — the Python layer decides whether that copy is
+//     acceptable and says so.
+// output_names : const std::vector<std::string>&
+//     Outputs to read back, in the order the caller wants them.
 //
 // Returns
 // -------
-// TensorImplPtr
-//     Freshly allocated CPU float32 tensor holding the output.
-LUCID_API TensorImplPtr predict(CoreMLModel* model,
-                                const std::string& input_name,
-                                const TensorImplPtr& input,
-                                const std::string& output_name);
+// std::vector<TensorImplPtr>
+//     Freshly allocated CPU float32 tensors, one per requested output.
+LUCID_API std::vector<TensorImplPtr>
+predict(CoreMLModel* model,
+        const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
+        const std::vector<std::string>& output_names);
 
 // One operation's device assignment, as Core ML planned it.
 struct OpPlacement {
@@ -93,7 +96,7 @@ LUCID_API std::vector<OpPlacement> compute_plan(const std::string& path, Compute
 
 // Feature names the loaded model declares, for diagnostics and for the
 // Python layer to check a package it did not write itself.
-LUCID_API std::string input_feature_name(const CoreMLModel* model);
-LUCID_API std::string output_feature_name(const CoreMLModel* model);
+LUCID_API std::vector<std::string> input_feature_names(const CoreMLModel* model);
+LUCID_API std::vector<std::string> output_feature_names(const CoreMLModel* model);
 
 }  // namespace lucid::coreml

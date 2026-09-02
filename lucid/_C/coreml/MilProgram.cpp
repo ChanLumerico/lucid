@@ -75,10 +75,8 @@ ProtoWriter make_argument(const std::vector<std::string>& value_names) {
 
 }  // namespace
 
-MilProgram::MilProgram(std::string input_name, MilTensorType input_type, std::string opset)
-    : input_name_(std::move(input_name)),
-      input_type_(std::move(input_type)),
-      opset_(std::move(opset)) {}
+MilProgram::MilProgram(MilNamedTypes inputs, std::string opset)
+    : inputs_(std::move(inputs)), opset_(std::move(opset)) {}
 
 void MilProgram::push_const(Op op) {
     op.is_const = true;
@@ -183,21 +181,20 @@ void MilProgram::add_op_multi(const std::string& op_type,
     ops_.push_back(std::move(op));
 }
 
-void MilProgram::set_output(const std::string& name, const MilTensorType& type) {
-    output_name_ = name;
-    output_type_ = type;
-    has_output_ = true;
+void MilProgram::add_output(const std::string& name, const MilTensorType& type) {
+    outputs_.emplace_back(name, type);
 }
 
 std::string MilProgram::serialize() const {
-    if (!has_output_)
+    if (outputs_.empty())
         throw std::logic_error(
-            "MilProgram::serialize: no output was set — Core ML would reject the "
+            "MilProgram::serialize: no output was added — Core ML would reject the "
             "package with an error far from this cause");
 
     // ── operations ───────────────────────────────────────────────────
     ProtoWriter block;
-    block.write_string(pb::Block::kOutputs, output_name_);
+    for (const auto& [name, type] : outputs_)
+        block.write_string(pb::Block::kOutputs, name);
     for (const Op& op : ops_) {
         ProtoWriter operation;
         operation.write_string(pb::Operation::kType, op.type);
@@ -257,7 +254,8 @@ std::string MilProgram::serialize() const {
 
     // ── function / program ───────────────────────────────────────────
     ProtoWriter function;
-    function.write_message(pb::Function::kInputs, make_named_value_type(input_name_, input_type_));
+    for (const auto& [name, type] : inputs_)
+        function.write_message(pb::Function::kInputs, make_named_value_type(name, type));
     function.write_string(pb::Function::kOpset, opset_);
     function.write_map_entry(pb::Function::kBlockSpecializations, opset_, block);
 
@@ -287,8 +285,10 @@ std::string MilProgram::serialize() const {
     };
 
     ProtoWriter description;
-    description.write_message(pb::ModelDescription::kInput, feature(input_name_, input_type_));
-    description.write_message(pb::ModelDescription::kOutput, feature(output_name_, output_type_));
+    for (const auto& [name, type] : inputs_)
+        description.write_message(pb::ModelDescription::kInput, feature(name, type));
+    for (const auto& [name, type] : outputs_)
+        description.write_message(pb::ModelDescription::kOutput, feature(name, type));
 
     ProtoWriter model;
     model.write_int(pb::Model::kSpecificationVersion, kSpecificationVersion);

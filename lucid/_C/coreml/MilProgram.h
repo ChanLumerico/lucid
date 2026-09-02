@@ -51,11 +51,18 @@ struct MilTensorType {
 // parameters are just a one-element list.
 using MilInputs = std::vector<std::pair<std::string, std::vector<std::string>>>;
 
+// ``name -> type`` for a model's inputs or its outputs.  Both are plural:
+// a detector returns boxes as well as scores, and a transformer takes an
+// attention mask as well as token ids.  Exporting one of them and calling
+// it the model is the failure this writer exists to prevent, one level up
+// from the operations.
+using MilNamedTypes = std::vector<std::pair<std::string, MilTensorType>>;
+
 class LUCID_API MilProgram {
 public:
     // ``opset`` names both the function's opset and the single block
     // specialisation keyed by it.
-    MilProgram(std::string input_name, MilTensorType input_type, std::string opset = "CoreML7");
+    MilProgram(MilNamedTypes inputs, std::string opset = "CoreML7");
 
     // ── constants ────────────────────────────────────────────────────
     //
@@ -95,15 +102,16 @@ public:
                       const MilInputs& inputs,
                       const std::vector<std::pair<std::string, MilTensorType>>& outputs);
 
-    // The value the model returns.  Must name an existing operation output.
-    void set_output(const std::string& name, const MilTensorType& type);
+    // A value the model returns.  Must name an existing operation output.
+    // Called once per output, in the order the caller wants them.
+    void add_output(const std::string& name, const MilTensorType& type);
 
     // Serialise to ``Model`` protobuf bytes.
     //
     // Raises
     // ------
     // std::logic_error
-    //     No output was set — a program with no result would still
+    //     No output was added — a program with no result would still
     //     serialise, and Core ML would reject it far from the cause.
     std::string serialize() const;
 
@@ -129,12 +137,9 @@ private:
 
     void push_const(Op op);
 
-    std::string input_name_;
-    MilTensorType input_type_;
+    MilNamedTypes inputs_;
     std::string opset_;
-    std::string output_name_;
-    MilTensorType output_type_;
-    bool has_output_ = false;
+    MilNamedTypes outputs_;
     std::vector<Op> ops_;
 };
 

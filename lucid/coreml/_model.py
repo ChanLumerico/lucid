@@ -18,10 +18,11 @@ from typing import TYPE_CHECKING, override
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
-from lucid.coreml._build import _select_output
+from lucid.coreml._build import _named_examples, _select_outputs
 from lucid.coreml._spec import ComputeUnits
 
 if TYPE_CHECKING:
+    from lucid._C.engine import TensorImpl
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
 
@@ -90,76 +91,151 @@ class CoreMLModel:
     def __init__(
         self,
         path: str,
-        input_name: str,
-        output_name: str,
+        input_names: list[str],
+        output_names: list[str],
         *,
         compute_units: ComputeUnits = ComputeUnits.ALL,
         precision: str = "FLOAT32",
-        output_shape: tuple[int, ...] | None = None,
+        output_shapes: dict[str, tuple[int, ...]] | None = None,
     ) -> None:
         self.path = path
-        self.input_name = input_name
-        self.output_name = output_name
+        self.input_names = input_names
+        self.output_names = output_names
         self.compute_units = compute_units
         self.precision = precision
         # Core ML's multi-array has no rank-0 form, so a model whose output
-        # is a scalar comes back shaped (1,).  Keeping the traced shape lets
-        # ``predict`` hand back what the eager model would.
-        self.output_shape = output_shape
+        # is a scalar comes back shaped (1,).  Keeping the traced shapes
+        # lets ``predict`` hand back what the eager model would.
+        self.output_shapes = output_shapes or {}
         self._handle = _C_engine.coreml.load_model(path, _UNITS[compute_units])
 
-    def predict(self, x: Tensor) -> Tensor:
-        """Run the model on ``x``.
+    def _feed(self, x: object) -> list[tuple[str, TensorImpl]]:
+        """Pair each input feature with its tensor.
 
-        The input must be a host tensor: Core ML reads host memory, and
-        moving a Metal tensor here would hide a copy the caller did not
-        ask for. Move it explicitly with ``.to("cpu")``.
+        Accepts the same three shapes ``export`` did — a lone tensor, a
+        tuple in the model's argument order, or a mapping — so a caller
+        drives the package the way they built it.
         """
-        if x.dtype in (lucid.int64, lucid.int32):
-            # Core ML's multi-array has int32 and no int64, so an integer
-            # input is narrowed here rather than at every call site. Token
-            # ids and masks are nowhere near the range where that loses
-            # anything.
-            x = x if x.dtype == lucid.int32 else x.to(lucid.int32)
-        out = _wrap(self._handle.predict(self.input_name, x._impl, self.output_name))
-        if self.output_shape is not None and out.shape != self.output_shape:
-            out = out.reshape(*self.output_shape)
-        return out
+        if isinstance(x, lucid.Tensor):
+            given: list[tuple[str, Tensor]] = [(self.input_names[0], x)]
+        elif isinstance(x, dict):
+            given = list(x.items())
+        elif isinstance(x, (tuple, list)):
+            given = list(zip(self.input_names, x))
+        else:
+            raise TypeError(
+                f"lucid.coreml: expected a Tensor, a tuple, or a mapping — got "
+                f"{type(x).__name__}"
+            )
+        if len(given) != len(self.input_names):
+            raise ValueError(
+                f"lucid.coreml: this package takes {len(self.input_names)} input(s) "
+                f"{self.input_names}, and {len(given)} were given"
+            )
 
-    def verify(self, model: Module, x: Tensor) -> float:
-        """Largest absolute difference against the eager model.
+        fed: list[tuple[str, TensorImpl]] = []
+        for name, tensor in given:
+            if name not in self.input_names:
+                raise KeyError(
+                    f"lucid.coreml: {name!r} is not an input of this package "
+                    f"{self.input_names}"
+                )
+            if tensor.dtype in (lucid.int64, lucid.int32):
+                # Core ML's multi-array has int32 and no int64, so an
+                # integer input is narrowed here rather than at every call
+                # site. Token ids and masks are nowhere near the range
+                # where that loses anything.
+                tensor = tensor if tensor.dtype == lucid.int32 else tensor.to(lucid.int32)
+            fed.append((name, tensor._impl))
+        return fed
+
+    def predict(self, x: object) -> Tensor | dict[str, Tensor]:
+        """Run the model.
+
+        Inputs must be host tensors: Core ML reads host memory, and moving
+        a Metal tensor here would hide a copy the caller did not ask for.
+        Move it explicitly with ``.to("cpu")``.
+
+        Parameters
+        ----------
+        x : Tensor or tuple of Tensor or dict of str to Tensor
+            One tensor for a single-input package; otherwise a tuple in
+            the package's input order, or a mapping by feature name.
+
+        Returns
+        -------
+        Tensor or dict[str, Tensor]
+            The output for a single-output package; otherwise every
+            output, keyed by the field the model declared it as.
+        """
+        raw = self._handle.predict(self._feed(x), self.output_names)
+        produced: dict[str, Tensor] = {}
+        for name, impl in zip(self.output_names, raw):
+            out = _wrap(impl)
+            declared = self.output_shapes.get(name)
+            if declared is not None and out.shape != declared:
+                out = out.reshape(*declared)
+            produced[name] = out
+        if len(self.output_names) == 1:
+            return produced[self.output_names[0]]
+        return produced
+
+    def verify(self, model: Module, x: object) -> float:
+        """Largest relative difference against the eager model.
 
         Shapes agreeing is not evidence: a package missing a layer has
         the right shape and returns plausible numbers. This runs both and
-        compares values.
+        compares values — every output, not just the first, since a
+        detector that exported its class scores and dropped its boxes
+        would otherwise pass.
 
         Parameters
         ----------
         model : nn.Module
             The eager model this package was exported from.
-        x : Tensor
-            Input to run through both. A host tensor.
+        x : Tensor or tuple of Tensor or dict of str to Tensor
+            Input to run through both. Host tensors.
 
         Returns
         -------
         float
-            ``max|coreml - eager|``. Expect ~1e-7 for a float32 export
-            and ~1e-3 relative for float16.
+            The worst ``max|coreml - eager|`` across the outputs. Expect
+            ~1e-7 for a float32 export and ~1e-3 relative for float16.
         """
-        reference = _select_output(model(x), None)
-        scale = float(reference.abs().max().item())
-        if scale == 0.0:
-            # Comparing against an all-zero reference proves nothing: an
-            # exporter that dropped every layer would also return zeros
-            # and score perfectly.  Several zoo models zero-initialise
-            # their head, so this is reachable with an untrained factory
-            # rather than being a theoretical case.
-            raise ValueError(
-                "lucid.coreml: the eager model returned all zeros, so this "
-                "comparison cannot detect anything — load weights, or perturb "
-                "the zero-initialised parameters, before verifying"
+        examples, by_keyword = _named_examples(x)
+        if by_keyword:
+            reference = model(**dict(examples))
+        else:
+            reference = model(*(tensor for _, tensor in examples))
+        expected = dict(_select_outputs(reference, None))
+
+        got = self.predict(x)
+        produced = got if isinstance(got, dict) else {self.output_names[0]: got}
+
+        worst = 0.0
+        for name in self.output_names:
+            wanted = expected.get(name)
+            if wanted is None:
+                raise KeyError(
+                    f"lucid.coreml: the eager model no longer returns {name!r}, "
+                    "which this package exports"
+                )
+            scale = float(wanted.abs().max().item())
+            if scale == 0.0:
+                # Comparing against an all-zero reference proves nothing:
+                # an exporter that dropped every layer would also return
+                # zeros and score perfectly.  Several zoo models
+                # zero-initialise their head, so this is reachable with an
+                # untrained factory rather than being a theoretical case.
+                raise ValueError(
+                    f"lucid.coreml: the eager model's {name!r} is all zeros, so "
+                    "this comparison cannot detect anything — load weights, or "
+                    "perturb the zero-initialised parameters, before verifying"
+                )
+            worst = max(
+                worst, float((produced[name] - wanted).abs().max().item())
             )
-        return float((self.predict(x) - reference).abs().max().item())
+        return worst
 
     def compute_plan(self) -> PlacementSummary:
         """Which device Core ML assigns each operation to.

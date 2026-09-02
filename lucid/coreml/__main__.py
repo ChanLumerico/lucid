@@ -89,8 +89,11 @@ def main(argv: list[str] | None = None) -> int:
             "[plan]   unavailable (needs macOS 14.4+) — this is unknown, not unaccelerated"
         )
 
+    print(f"[export] inputs {exported.input_names} -> outputs {exported.output_names}")
+
     if args.verify:
-        print(f"[verify] max|lucid - coreml| = {exported.verify(model, example):.3e}")
+        worst = exported.verify(model, example)
+        print(f"[verify] worst max|lucid - coreml| over the outputs = {worst:.3e}")
 
     exported.close()
     return 0

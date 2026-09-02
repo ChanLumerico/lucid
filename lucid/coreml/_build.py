@@ -18,6 +18,8 @@ Two things the trace hands over that the driver has to sort out:
 
 from typing import TYPE_CHECKING, Any
 
+import dataclasses
+
 import lucid
 import lucid.compile as _compile
 from lucid._C import engine as _C_engine
@@ -81,63 +83,133 @@ class UnsupportedOp(NotImplementedError):
         self.op_name = op_name
 
 
-def _select_output(output: object, field: str | None) -> Tensor:
-    """Reduce a model's return value to the single tensor to export."""
+def _select_outputs(output: object, field: str | None) -> list[tuple[str, Tensor]]:
+    """Every tensor the model returns, named, in the order it declares them.
+
+    Exporting one field of a several-field output and calling the result
+    the model is the same failure as dropping a layer, one level up: a
+    detector reduced to its class scores loads, runs, and returns
+    plausible numbers with no boxes in them. So the default is all of
+    them, and ``field`` is how a caller asks for less.
+    """
     if isinstance(output, lucid.Tensor):
-        return output
-    name = field if field is not None else "logits"
-    picked = getattr(output, name, None)
-    if isinstance(picked, lucid.Tensor):
-        return picked
+        return [("output", output)]
     if field is not None:
-        raise TypeError(
-            f"lucid.coreml: {type(output).__name__}.{field} is "
-            f"{type(picked).__name__}, not a Tensor"
-        )
+        picked = getattr(output, field, None)
+        if not isinstance(picked, lucid.Tensor):
+            raise TypeError(
+                f"lucid.coreml: {type(output).__name__}.{field} is "
+                f"{type(picked).__name__}, not a Tensor"
+            )
+        return [(field, picked)]
+
+    named: list[tuple[str, Tensor]] = []
+    if dataclasses.is_dataclass(output) and not isinstance(output, type):
+        for spec in dataclasses.fields(output):
+            value = getattr(output, spec.name)
+            if isinstance(value, lucid.Tensor):
+                named.append((spec.name, value))
+    if named:
+        return named
     raise TypeError(
-        f"lucid.coreml: the model returned {type(output).__name__}, which has no "
-        "``logits``. Name the field with output_field=..., or return a Tensor."
+        f"lucid.coreml: the model returned {type(output).__name__}, which carries "
+        "no tensor to export. Name the field with output_field=..., or return a "
+        "Tensor."
     )
 
 
-def trace(model: Module, example: Tensor, *, output_field: str | None = None) -> Any:
+def _named_examples(example: object) -> tuple[list[tuple[str, Tensor]], bool]:
+    """The example input(s), named, and whether they are passed by keyword.
+
+    A model with more than one input is the common case, not the exotic
+    one — a transformer takes an attention mask, an encoder-decoder takes
+    both halves — so a tuple is passed positionally and a mapping by
+    keyword, which is how the model would be called anyway.
+    """
+    if isinstance(example, lucid.Tensor):
+        return [("input", example)], False
+    if isinstance(example, dict):
+        for name, value in example.items():
+            if not isinstance(value, lucid.Tensor):
+                raise TypeError(
+                    f"lucid.coreml: example {name!r} is {type(value).__name__}, "
+                    "not a Tensor"
+                )
+        return list(example.items()), True
+    if isinstance(example, (tuple, list)):
+        named: list[tuple[str, Tensor]] = []
+        for position, value in enumerate(example):
+            if not isinstance(value, lucid.Tensor):
+                raise TypeError(
+                    f"lucid.coreml: example {position} is {type(value).__name__}, "
+                    "not a Tensor"
+                )
+            named.append((f"input_{position}", value))
+        if not named:
+            raise ValueError("lucid.coreml: no example inputs given")
+        return named, False
+    raise TypeError(
+        f"lucid.coreml: example must be a Tensor, a tuple of Tensors, or a "
+        f"mapping of name to Tensor — got {type(example).__name__}"
+    )
+
+
+def trace(model: Module, example: object, *, output_field: str | None = None) -> Any:
     """Run one traced forward pass.
 
     Parameters
     ----------
     model : nn.Module
         Model to trace. Should already be in ``eval()`` mode.
-    example : Tensor
-        Input to trace with; its identity is how the driver tells the
-        argument apart from the parameters, which are external feeds too.
+    example : Tensor or tuple of Tensor or dict of str to Tensor
+        Input(s) to trace with; their identity is how the driver tells the
+        arguments apart from the parameters, which are external feeds too.
+        A tuple is passed positionally, a mapping by keyword.
     output_field : str or None, optional, keyword-only, default=None
-        Attribute to take when the model returns an output dataclass.
-        ``None`` takes ``logits``.
+        Single attribute to take when the model returns an output
+        dataclass. ``None`` takes every tensor field it declares.
 
     Returns
     -------
     tuple
-        ``(graph, external_feeds, input_id, output_id, output_tensor)``.
+        ``(graph, external_feeds, inputs, outputs)``, where ``inputs`` is
+        a list of ``(feature name, value id, tensor)`` and ``outputs`` a
+        list of ``(feature name, value id, tensor)``.
 
     Raises
     ------
     ValueError
-        The input never reached an op, or the output is not in the trace.
+        An input never reached an op, or an output is not in the trace.
     TypeError
-        The return value is neither a Tensor nor carries the named field.
+        The return value carries no tensor, or lacks the named field.
     """
+    examples, by_keyword = _named_examples(example)
     with _compile._tracing() as tracer:
-        result = _select_output(model(example), output_field)
-    input_id = tracer.lookup_id(_unwrap(example))
-    output_id = tracer.lookup_id(_unwrap(result))
-    if input_id is None:
-        raise ValueError(
-            "lucid.coreml: the example input never reached an op — the model "
-            "ignored it, or copied it before use"
-        )
-    if output_id is None:
-        raise ValueError("lucid.coreml: the model's output is not part of the trace")
-    return tracer.graph, tracer.external_feeds, input_id, output_id, result
+        if by_keyword:
+            result = model(**dict(examples))
+        else:
+            result = model(*(tensor for _, tensor in examples))
+        selected = _select_outputs(result, output_field)
+
+    inputs: list[tuple[str, int, Tensor]] = []
+    for name, tensor in examples:
+        value_id = tracer.lookup_id(_unwrap(tensor))
+        if value_id is None:
+            raise ValueError(
+                f"lucid.coreml: example input {name!r} never reached an op — the "
+                "model ignored it, or copied it before use"
+            )
+        inputs.append((name, value_id, tensor))
+
+    outputs: list[tuple[str, int, Tensor]] = []
+    for name, tensor in selected:
+        value_id = tracer.lookup_id(_unwrap(tensor))
+        if value_id is None:
+            raise ValueError(
+                f"lucid.coreml: output {name!r} is not part of the trace"
+            )
+        outputs.append((name, value_id, tensor))
+    return tracer.graph, tracer.external_feeds, inputs, outputs
 
 
 def _flatten_ints(tensor: Tensor) -> list[int]:
@@ -437,7 +509,7 @@ class Builder:
         return name
 
 
-def _reachable_ops(graph: Any, output_id: int) -> list[Any]:
+def _reachable_ops(graph: Any, output_ids: list[int]) -> list[Any]:
     """The traced ops the output actually depends on, in trace order.
 
     A trace can carry operations nothing consumes. Lucid's ``norm``
@@ -451,8 +523,8 @@ def _reachable_ops(graph: Any, output_id: int) -> list[Any]:
     ----------
     graph : trace graph
         Graph to walk.
-    output_id : int
-        Value the package returns.
+    output_ids : list[int]
+        Values the package returns.
 
     Returns
     -------
@@ -460,8 +532,8 @@ def _reachable_ops(graph: Any, output_id: int) -> list[Any]:
         Ops in their original order, minus the unreachable ones.
     """
     producer = {out.id: op for op in graph.ops for out in op.outputs}
-    wanted = {output_id}
-    pending = [output_id]
+    wanted = set(output_ids)
+    pending = list(output_ids)
     while pending:
         op = producer.get(pending.pop())
         if op is None:
@@ -475,7 +547,7 @@ def _reachable_ops(graph: Any, output_id: int) -> list[Any]:
 
 def build_package(
     model: Module,
-    example: Tensor,
+    example: object,
     path: str,
     *,
     precision: Precision = Precision.FLOAT32,
@@ -487,39 +559,43 @@ def build_package(
     ----------
     model : nn.Module
         Model to export, in ``eval()`` mode.
-    example : Tensor
-        Supplies the input shape and dtype; values are irrelevant.
+    example : Tensor or tuple of Tensor or dict of str to Tensor
+        Supplies each input's shape and dtype; values are irrelevant.
+        A tuple is passed positionally, a mapping by keyword.
     path : str
         Destination package. Replaced if it already exists.
     precision : Precision, optional, keyword-only, default=FLOAT32
         Body precision. ``FLOAT16`` is what the Neural Engine runs;
         inputs and outputs stay float32 either way, bracketed by casts.
     output_field : str or None, optional, keyword-only, default=None
-        Attribute to export from an output dataclass. ``None`` takes
-        ``logits``.
+        Single attribute to export from an output dataclass. ``None``
+        takes every tensor field it declares.
 
     Returns
     -------
     dict
-        ``input`` / ``output`` feature names, ``input_shape`` /
-        ``output_shape``, ``ops``, ``precision`` and ``path`` — what a
-        caller needs to drive predictions without re-reading the package.
+        ``inputs`` and ``outputs`` — each a list of ``(feature name,
+        shape)`` in declared order — plus ``ops``, ``precision`` and
+        ``path``: what a caller needs to drive predictions without
+        re-reading the package.
 
     Raises
     ------
     UnsupportedOp
         The trace contains an op with no MIL translation.
     """
-    graph, feeds, input_id, output_id, output_tensor = trace(
+    graph, feeds, inputs, outputs = trace(
         model, example, output_field=output_field
     )
 
     cm = _C_engine.coreml
     paths = cm.prepare_package(path)
 
-    input_name = "input"
-    program = cm.MilProgram(input_name, _spec.type_spec(example))
-    names: dict[int, str] = {input_id: input_name}
+    program = cm.MilProgram(
+        [(name, _spec.type_spec(tensor)) for name, _tid, tensor in inputs]
+    )
+    names: dict[int, str] = {tid: name for name, tid, _t in inputs}
+    input_ids = {tid for _n, tid, _t in inputs}
 
     # The body's precision, which is not necessarily the interface's.  The
     # Neural Engine only runs float16, so an fp32 program silently lands
@@ -537,7 +613,7 @@ def build_package(
     blob = cm.BlobWriter(paths.weight_bin)
     weight_shapes: dict[str, list[int]] = {}
     for tid, impl in feeds.items():
-        if tid == input_id:
+        if tid in input_ids:
             continue
         tensor = _wrap(impl)
         is_float = tensor.dtype in (lucid.float32, lucid.float16)
@@ -574,20 +650,28 @@ def build_package(
 
     builder = Builder(program, blob, body_mil, body_blob, half)
     builder.shapes.update(weight_shapes)
-    builder.shapes[input_name] = [int(d) for d in example.shape]
-    # Only a float interface needs bracketing.  An integer input — token
-    # ids — must reach its lookup as an integer; casting it to half would
-    # turn indices into approximations of themselves.
-    float_input = example.dtype in (lucid.float32, lucid.float16)
-    if half and float_input:
-        cast_name = "_cast_in"
-        mil_type, raw = emit_cast(builder, input_name, "fp16")
-        bindings = _operands(raw)
-        program.add_op(
-            mil_type, bindings, cast_name, (body_mil, [int(d) for d in example.shape])
-        )
-        names[input_id] = cast_name
-    for op in _reachable_ops(graph, output_id):
+    for name, tid, tensor in inputs:
+        shape = [int(d) for d in tensor.shape]
+        builder.shapes[name] = shape
+        # Only a float interface needs bracketing.  An integer input —
+        # token ids — must reach its lookup as an integer; casting it to
+        # half would turn indices into approximations of themselves.
+        if half and tensor.dtype in (lucid.float32, lucid.float16):
+            cast_name = f"_cast_in_{name}"
+            mil_type, raw = emit_cast(builder, name, "fp16")
+            program.add_op(mil_type, _operands(raw), cast_name, (body_mil, shape))
+            builder.shapes[cast_name] = shape
+            names[tid] = cast_name
+    # An output's value is named after the model's own field, so a caller
+    # reading the package knows which head it is looking at.  Done when the
+    # producing op is emitted rather than by appending an identity to
+    # rename it — an extra operation would land on the CPU and show up in
+    # every compute plan.  Under fp16 the cast that follows takes the name
+    # instead, since it is what the interface actually returns.
+    wanted_name: dict[int, str] = (
+        {} if half else {tid: field for field, tid, _t in outputs}
+    )
+    for op in _reachable_ops(graph, [tid for _n, tid, _t in outputs]):
         emitter = EMITTERS.get(op.name)
         if emitter is None:
             raise UnsupportedOp(op.name)
@@ -601,9 +685,9 @@ def build_package(
         # Emitters may bind a parameter to one name or several (``concat``);
         # the engine wants a list either way.
         bindings = _operands(raw_bindings)
-        outputs = [
+        produced = [
             (
-                f"_v{o.id}_{op.name}",
+                wanted_name.get(o.id, f"_v{o.id}_{op.name}"),
                 (
                     _spec.trace_dtype(str(o.dtype).split(".")[-1], body_mil),
                     [int(d) for d in o.shape],
@@ -612,30 +696,37 @@ def build_package(
             for o in (op.outputs if multi else op.outputs[:1])
         ]
         if multi:
-            program.add_op_multi(mil_type, bindings, outputs)
+            program.add_op_multi(mil_type, bindings, produced)
         else:
-            program.add_op(mil_type, bindings, outputs[0][0], outputs[0][1])
-        for (out_name, (_dt, shape)), o in zip(outputs, op.outputs):
+            program.add_op(mil_type, bindings, produced[0][0], produced[0][1])
+        for (out_name, (_dt, shape)), o in zip(produced, op.outputs):
             names[o.id] = out_name
             builder.shapes[out_name] = shape
 
     blob.finalize()
 
-    output_name = names[output_id]
-    if half:
-        cast_out = "_cast_out"
-        mil_type, raw = emit_cast(builder, output_name, "fp32")
-        bindings = _operands(raw)
-        program.add_op(mil_type, bindings, cast_out, _spec.type_spec(output_tensor))
-        output_name = cast_out
-    program.set_output(output_name, _spec.type_spec(output_tensor))
+    declared: list[tuple[str, tuple[int, ...]]] = []
+    for field, tid, tensor in outputs:
+        value = names[tid]
+        if half:
+            mil_type, raw = emit_cast(builder, value, "fp32")
+            program.add_op(mil_type, _operands(raw), field, _spec.type_spec(tensor))
+            value = field
+        if value != field:
+            # Reachable only if the producing op was shared between two
+            # declared outputs, which the naming pass cannot satisfy twice.
+            program.add_op(
+                "identity", [("x", [value])], field, _spec.type_spec(tensor)
+            )
+        program.add_output(field, _spec.type_spec(tensor))
+        declared.append((field, tuple(int(d) for d in tensor.shape)))
     cm.finish_package(paths, program.serialize())
 
     return {
-        "input": input_name,
-        "output": output_name,
-        "input_shape": tuple(int(d) for d in example.shape),
-        "output_shape": tuple(int(d) for d in output_tensor.shape),
+        "inputs": [
+            (name, tuple(int(d) for d in tensor.shape)) for name, _tid, tensor in inputs
+        ],
+        "outputs": declared,
         "ops": int(program.op_count),
         "precision": precision.value,
         "path": paths.root,
