@@ -33,6 +33,30 @@ if TYPE_CHECKING:
 __all__ = ["Builder", "UnsupportedOp", "build_package", "trace"]
 
 
+# Core ML's ML Program dialect refuses tensors above this rank.
+_MAX_RANK = 5
+
+
+class UnsupportedRank(NotImplementedError):
+    """A tensor exceeds the rank Core ML's program dialect allows.
+
+    Not something the writer can work around: the limit is the format's.
+    Window-attention models hit it — Swin partitions into
+    ``(B, H/w, w, W/w, w, C)``, which is rank six — and the honest answer
+    is to say which operation and which shape rather than to reshape
+    around it and hope the semantics survive.
+    """
+
+    def __init__(self, op_name: str, shape: tuple[int, ...]) -> None:
+        super().__init__(
+            f"lucid.coreml: op {op_name!r} produces a rank-{len(shape)} tensor "
+            f"{shape}, and Core ML's program dialect allows at most rank "
+            f"{_MAX_RANK}. This is a format limit, not a missing emitter."
+        )
+        self.op_name = op_name
+        self.shape = shape
+
+
 class UnsupportedOp(NotImplementedError):
     """A traced op has no MIL translation.
 
@@ -211,6 +235,30 @@ class Builder:
         self._program.add_blob_const(name, (self._body_mil, []), offset)
         return name
 
+    def const_float32(self, value: float) -> str:
+        """A float scalar that stays float32 whatever the body's precision.
+
+        Not every float parameter is data. ``epsilon`` is added to the
+        activations and must share their dtype — MIL rejects a float32
+        epsilon beside float16 statistics. A resampling ``scale_factor``
+        is the opposite: it configures the operator, and MIL accepts only
+        int32 or float32 there, rejecting the float16 that following the
+        body would produce.
+
+        Parameters
+        ----------
+        value : float
+            Scalar value.
+
+        Returns
+        -------
+        str
+            Name of the constant.
+        """
+        name = self._next("f32")
+        self._program.add_float_const(name, [float(value)], True)
+        return name
+
     def const_str(self, value: str) -> str:
         name = self._next("str")
         self._program.add_string_const(name, value)
@@ -273,6 +321,44 @@ class Builder:
         self._program.add_op(mil_type, normalised, name, (self._body_mil, list(shape)))
         self.shapes[name] = list(shape)
         return name
+
+    def emit_multi(
+        self, mil_type: str, bindings: list, shapes: list[list[int]]
+    ) -> list[str]:
+        """Append an intermediate operation with several results.
+
+        ``split`` is the one that needs it — decomposing a ``roll`` into a
+        split and a swapped concat keeps the translation on operations
+        that are already verified, instead of reaching for a slice whose
+        masks would be a second thing to get right.
+
+        Parameters
+        ----------
+        mil_type : str
+            MIL operator name.
+        bindings : list
+            ``(parameter, value name)`` pairs.
+        shapes : list[list[int]]
+            One shape per result.
+
+        Returns
+        -------
+        list[str]
+            Names of the values produced, in order.
+        """
+        normalised = [
+            (param, [value] if isinstance(value, str) else list(value))
+            for param, value in bindings
+        ]
+        names = [self._next(f"{mil_type}{i}") for i in range(len(shapes))]
+        self._program.add_op_multi(
+            mil_type,
+            normalised,
+            [(n, (self._body_mil, list(sh))) for n, sh in zip(names, shapes)],
+        )
+        for n, sh in zip(names, shapes):
+            self.shapes[n] = list(sh)
+        return names
 
     def const_bool(self, value: bool) -> str:
         name = self._next("bool")
@@ -364,6 +450,15 @@ def build_package(
             program.add_int_const_shaped(name, _flatten_ints(tensor), shape)
         names[tid] = name
         weight_shapes[name] = shape
+
+    # Core ML's program dialect caps tensors at rank 5.  Catching it here
+    # names the constraint and the offending shape; letting it through
+    # produces an opaque parse failure from the compiler instead, several
+    # steps away from the operation that built the tensor.
+    for op in graph.ops:
+        for out in op.outputs:
+            if len(out.shape) > _MAX_RANK:
+                raise UnsupportedRank(op.name, tuple(int(d) for d in out.shape))
 
     builder = Builder(program, blob, body_mil, body_blob, half)
     builder.shapes.update(weight_shapes)

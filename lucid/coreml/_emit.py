@@ -61,6 +61,43 @@ def _emitter(name: str) -> Callable[..., object]:
     return register
 
 
+def _attr(op: object, name: str) -> object:
+    """An attribute the translation depends on, with no default.
+
+    Defaults are how two of these went wrong silently: Lucid spells the
+    leaky-ReLU slope ``slope`` and this read ``negative_slope``, quietly
+    substituting 0.01 for 0.1 across every negative activation in YOLOv3;
+    softmax is ``dim``, not ``axis``, and only happened to be right because
+    the models seen so far normalise the last axis. A missing attribute is
+    now a failure, not a guess.
+
+    Parameters
+    ----------
+    op : trace operation
+        Operation to read from.
+    name : str
+        Attribute name as the tracer records it.
+
+    Returns
+    -------
+    object
+        The attribute's value.
+
+    Raises
+    ------
+    KeyError
+        The attribute is absent — the tracer renamed it, or this emitter
+        was written against a different operation.
+    """
+    attrs = op.attrs  # type: ignore[attr-defined]
+    if name not in attrs:
+        raise KeyError(
+            f"lucid.coreml: op {op.name!r} has no attribute {name!r} "  # type: ignore[attr-defined]
+            f"(it carries {sorted(attrs)}) — the emitter and the tracer disagree"
+        )
+    return attrs[name]
+
+
 def _pair(value: object) -> list[int]:
     return [int(value[0]), int(value[1])]  # type: ignore[index]
 
@@ -274,7 +311,7 @@ def _permute(
 def _concatenate(
     b: "Builder", op: object, ins: list[str]
 ) -> tuple[str, list[tuple[str, object]]]:
-    axis = int(op.attrs.get("dim", 0))  # type: ignore[attr-defined]
+    axis = int(_attr(op, "dim"))
     # ``values`` is variadic: one parameter bound to every input.
     return "concat", [
         ("values", list(ins)),
@@ -306,7 +343,7 @@ def _gelu_exact(
 def _leaky_relu(
     b: "Builder", op: object, ins: list[str]
 ) -> tuple[str, list[tuple[str, object]]]:
-    alpha = float(op.attrs.get("negative_slope", 0.01))  # type: ignore[attr-defined]
+    alpha = float(_attr(op, "slope"))
     return "leaky_relu", [("x", ins[0]), ("alpha", b.const_float(alpha))]
 
 
@@ -314,7 +351,7 @@ def _leaky_relu(
 def _softmax(
     b: "Builder", op: object, ins: list[str]
 ) -> tuple[str, list[tuple[str, object]]]:
-    axis = int(op.attrs.get("axis", -1))  # type: ignore[attr-defined]
+    axis = int(_attr(op, "dim"))
     return "softmax", [("x", ins[0]), ("axis", b.const_int(axis))]
 
 
@@ -378,7 +415,7 @@ def _mean(
 def _stack(
     b: "Builder", op: object, ins: list[str]
 ) -> tuple[str, list[tuple[str, object]]]:
-    axis = int(op.attrs.get("axis", 0))  # type: ignore[attr-defined]
+    axis = int(_attr(op, "axis"))
     return "stack", [("values", list(ins)), ("axis", b.const_int(axis))]
 
 
@@ -513,7 +550,7 @@ def _full(
 ) -> tuple[str, list[tuple[str, object]]]:
     import lucid
 
-    value = float(op.attrs.get("fill_value", 0.0))  # type: ignore[attr-defined]
+    value = float(_attr(op, "fill_value"))
     shape = _out_shape(op)
     filled = lucid.zeros(*shape) + value if shape else lucid.tensor(value)
     return "identity", [("x", b.const_from_tensor(filled))]
@@ -601,6 +638,152 @@ def _gelu(
     return "gelu", [("x", ins[0]), ("mode", b.const_str("TANH_APPROXIMATION"))]
 
 
+# ── resampling and transposed convolution ────────────────────────────
+
+
+def _scales(op: object, b: "Builder", value: str) -> tuple[float, float]:
+    src = b.shape_of(value)
+    out = _out_shape(op)
+    return out[-2] / src[-2], out[-1] / src[-1]
+
+
+@_emitter("interpolate_nearest_2d")
+def _interp_nearest(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    h, w = _scales(op, b, ins[0])
+    return "upsample_nearest_neighbor", [
+        ("x", ins[0]),
+        ("scale_factor_height", b.const_float32(h)),
+        ("scale_factor_width", b.const_float32(w)),
+    ]
+
+
+@_emitter("interpolate_bilinear")
+def _interp_bilinear(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    h, w = _scales(op, b, ins[0])
+    return "upsample_bilinear", [
+        ("x", ins[0]),
+        ("scale_factor_height", b.const_float32(h)),
+        ("scale_factor_width", b.const_float32(w)),
+        ("align_corners", b.const_bool(bool(op.attrs.get("align_corners", False)))),  # type: ignore[attr-defined]
+    ]
+
+
+@_emitter("conv_transpose2d")
+def _conv_transpose2d(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    """The output shape is passed explicitly rather than derived.
+
+    A transposed convolution's result size is ambiguous — ``output_padding``
+    exists precisely because several inputs map to the same output — and
+    the trace already recorded which one this is.
+    """
+    attrs = op.attrs  # type: ignore[attr-defined]
+    bindings: list[tuple[str, object]] = [("x", ins[0]), ("weight", ins[1])]
+    if len(ins) > 2:
+        bindings.append(("bias", ins[2]))
+    bindings += [
+        ("strides", b.const_ints(_pair(attrs["stride"]))),
+        ("pad_type", b.const_str("custom")),
+        ("pad", b.const_ints(_pad4(attrs["padding"]))),
+        ("dilations", b.const_ints(_pair(attrs.get("dilation", [1, 1])))),
+        ("groups", b.const_int(int(attrs.get("groups", 1)))),
+        ("output_shape", b.const_ints(_out_shape(op))),
+    ]
+    return "conv_transpose", bindings
+
+
+# ── gather / scatter along an axis, comparison, selection ────────────
+
+
+@_emitter("gather")
+def _gather(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    # The result has the *indices'* shape, not the source's, which is the
+    # along-axis form rather than the row-lookup ``gather`` uses.
+    return "gather_along_axis", [
+        ("x", ins[0]),
+        ("indices", ins[1]),
+        ("axis", b.const_int(int(_attr(op, "axis")))),
+    ]
+
+
+@_emitter("scatter_add")
+def _scatter_add(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    return "scatter_along_axis", [
+        ("data", ins[0]),
+        ("indices", ins[1]),
+        ("updates", ins[2]),
+        ("axis", b.const_int(int(_attr(op, "dim")))),
+        ("mode", b.const_str("add")),
+    ]
+
+
+@_emitter("not_equal")
+def _not_equal(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    return "not_equal", [("x", ins[0]), ("y", ins[1])]
+
+
+@_emitter("where")
+def _where(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    return "select", [("cond", ins[0]), ("a", ins[1]), ("b", ins[2])]
+
+
+@_emitter("roll")
+def _roll(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    """Cut and swap, once per axis — MIL has no ``roll``.
+
+    ``roll(x, s)[i] == x[(i - s) mod n]``, so the tail of length ``s``
+    moves to the front. Expressed as ``split`` plus a swapped ``concat``:
+    both are already verified here, where a ``slice_by_index`` would add
+    three mask vectors as new ways to be subtly wrong.
+    """
+    attrs = op.attrs  # type: ignore[attr-defined]
+    axes = [int(a) for a in attrs["axes"]]
+    shifts = [int(s) for s in attrs["shifts"]]
+    value = ins[0]
+    shape = list(b.shape_of(value))
+
+    for step, (axis, shift) in enumerate(zip(axes, shifts)):
+        size = shape[axis]
+        head = (size - shift % size) % size
+        if head == 0:
+            continue
+        first, second = list(shape), list(shape)
+        first[axis], second[axis] = head, size - head
+        pieces = b.emit_multi(
+            "split",
+            [
+                ("x", value),
+                ("split_sizes", b.const_ints([head, size - head])),
+                ("axis", b.const_int(axis)),
+            ],
+            [first, second],
+        )
+        bindings: list[tuple[str, object]] = [
+            ("values", [pieces[1], pieces[0]]),
+            ("axis", b.const_int(axis)),
+            ("interleave", b.const_bool(False)),
+        ]
+        if step == len(axes) - 1:
+            return "concat", bindings
+        value = b.emit("concat", bindings, shape)
+    return "identity", [("x", value)]
+
+
 def emit_cast(
     b: "Builder", value: str, out_dtype: str
 ) -> tuple[str, list[tuple[str, str]]]:
@@ -639,12 +822,16 @@ def _identity(
 MIL_OPS = (
     "add",
     "concat",
+    "conv_transpose",
+    "gather_along_axis",
     "exp",
     "cast",
     "gather",
     "gelu",
     "reduce_max",
     "reduce_min",
+    "scatter_along_axis",
+    "select",
     "layer_norm",
     "leaky_relu",
     "matmul",
@@ -653,6 +840,8 @@ MIL_OPS = (
     "split",
     "stack",
     "tile",
+    "upsample_bilinear",
+    "upsample_nearest_neighbor",
     "softmax",
     "transpose",
     "avg_pool",

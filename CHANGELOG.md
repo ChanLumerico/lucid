@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lucid writes Core ML packages itself, and reaches the ANE
 - the first transformer exports, and verification stops lying
 - language models export, and integers stop being floats
+- detection and segmentation export, and two silent defaults die
 
 ---
 

@@ -296,6 +296,63 @@ class TestTextModels:
             cml.export(model, ids, str(tmp_path / "nofield.mlpackage"))
 
 
+class TestSegmentationAndDetection:
+    @pytest.mark.parametrize("factory,channels", [("unet", 1), ("attention_unet", 1)])
+    def test_a_segmentation_model_matches(
+        self, factory: str, channels: int, tmp_path: object
+    ) -> None:
+        # These default to one input channel — the medical-imaging
+        # convention — which is worth stating: feeding three produces a
+        # shape error that looks like a tracer bug and is not.
+        model = M.create_model(factory).eval()
+        x = lucid.randn(1, channels, 64, 64)
+        reference = model(x)
+        reference = (
+            reference if isinstance(reference, lucid.Tensor) else reference.logits
+        )
+        scale = float(reference.abs().max().item())
+
+        cm = cml.export(model, x, str(tmp_path / f"{factory}.mlpackage"))
+
+        assert float((cm.predict(x) - reference).abs().max().item()) / scale < 1e-5
+        cm.close()
+
+    def test_a_detector_matches(self, tmp_path: object) -> None:
+        model = M.create_model("yolo_v3").eval()
+        x = lucid.randn(1, 3, 416, 416)
+        reference = model(x)
+        reference = (
+            reference if isinstance(reference, lucid.Tensor) else reference.logits
+        )
+        scale = float(reference.abs().max().item())
+
+        cm = cml.export(model, x, str(tmp_path / "yolo.mlpackage"))
+
+        # Tight on purpose. A leaky-ReLU slope read from the wrong
+        # attribute name put this at 1.8e-03 while everything still ran;
+        # a loose bound would have called that a pass.
+        assert float((cm.predict(x) - reference).abs().max().item()) / scale < 1e-6
+        cm.close()
+
+
+class TestFormatLimits:
+    def test_rank_six_names_the_limit(self, tmp_path: object) -> None:
+        """Core ML caps tensors at rank five; window attention exceeds it.
+
+        Reported here rather than as the compiler's parse failure, which
+        arrives without the operation or the shape that caused it.
+        """
+        model = M.create_model("swin_tiny_cls").eval()
+
+        with pytest.raises(cml.UnsupportedRank) as excinfo:
+            cml.export(
+                model, lucid.randn(1, 3, 224, 224), str(tmp_path / "swin.mlpackage")
+            )
+
+        assert len(excinfo.value.shape) > 5
+        assert "rank" in str(excinfo.value)
+
+
 class TestRoundTrip:
     def test_a_written_package_can_be_loaded_back(self, tmp_path: object) -> None:
         model, x = _tiny()

@@ -45,7 +45,7 @@ Examples
 
 from typing import TYPE_CHECKING
 
-from lucid.coreml._build import UnsupportedOp, build_package
+from lucid.coreml._build import UnsupportedOp, UnsupportedRank, build_package
 from lucid.coreml._model import CoreMLModel, PlacementSummary
 from lucid.coreml._spec import ComputeUnits, Precision
 
@@ -59,6 +59,7 @@ __all__ = [
     "PlacementSummary",
     "Precision",
     "UnsupportedOp",
+    "UnsupportedRank",
     "export",
     "load",
 ]
