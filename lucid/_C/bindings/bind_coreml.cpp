@@ -125,6 +125,21 @@ void register_coreml(py::module_& m) {
             py::arg("name"), py::arg("values"), py::arg("shape"),
             "Float32 constant of arbitrary shape, carried inline.")
         .def(
+            "add_state",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const TypeSpec& type) { self.add_state(name, to_type(type)); },
+            py::arg("name"), py::arg("type"),
+            "Declare a value the model carries between predictions.")
+        .def(
+            "read_state",
+            [](lucid::coreml::MilProgram& self, const std::string& state_name,
+               const std::string& output_name, const TypeSpec& type) {
+                self.read_state(state_name, output_name, to_type(type));
+            },
+            py::arg("state_name"), py::arg("output_name"), py::arg("type"))
+        .def("write_state", &lucid::coreml::MilProgram::write_state,
+             py::arg("state_name"), py::arg("value_name"))
+        .def(
             "set_shape_range",
             [](lucid::coreml::MilProgram& self, const std::string& name,
                const std::vector<std::pair<std::int64_t, std::int64_t>>& bounds) {
@@ -317,6 +332,15 @@ void register_coreml(py::module_& m) {
             py::arg("probabilities_name"),
             "Run a classifier and read back the winning label and every "
             "label's probability.")
+        .def_property_readonly(
+            "carries_state",
+            [](const PyCoreMLModel& self) {
+                return lucid::coreml::carries_state(self.raw());
+            })
+        .def(
+            "reset_state",
+            [](const PyCoreMLModel& self) { lucid::coreml::reset_state(self.raw()); },
+            "Forget everything the model has accumulated.")
         .def("close", &PyCoreMLModel::close,
              "Release the compiled model and its cached artifacts.");
 

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 _LN2 = 0.6931471805599453
 
-__all__ = ["EMITTERS", "MIL_OPS", "MultiOutput"]
+__all__ = ["EMITTERS", "MIL_OPS", "Constant", "MultiOutput"]
 
 
 class TracedValue(Protocol):
@@ -63,6 +63,21 @@ class TracedOp(Protocol):
     outputs: list[TracedValue]
 
 
+class Constant(NamedTuple):
+    """A traced value that *is* a constant, with no operation to emit.
+
+    ``zeros``, ``full`` and friends produce a value out of nothing, and
+    the obvious translation is an ``identity`` reading a ``const``. Core
+    ML does not take that in a stateful program: an identity on a
+    constant, alongside a declared state, builds a package that compiles
+    and then fails to plan, with an error naming neither. Binding the
+    value straight to the constant avoids the operation entirely, and is
+    one operation fewer everywhere else too.
+    """
+
+    name: str
+
+
 # A parameter bound to one operand, or to several — ``concat`` is variadic.
 Bindings = list[tuple[str, str | Sequence[str]]]
 EmitResult = tuple[str, Bindings]
@@ -89,7 +104,7 @@ class MultiOutput(NamedTuple):
 
 
 # Lucid op name -> emitter.
-Emitter = Callable[..., EmitResult | MultiOutput]
+Emitter = Callable[..., EmitResult | MultiOutput | Constant]
 
 # Lucid op name -> emitter.
 EMITTERS: dict[str, Emitter] = {}
@@ -645,24 +660,24 @@ def _sdpa(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("zeros")
-def _zeros(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _zeros(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
     import lucid
 
-    return "identity", [("x", b.const_from_tensor(lucid.zeros(*_out_shape(op))))]
+    return Constant(b.const_from_tensor(lucid.zeros(*_out_shape(op))))
 
 
 @_emitter("full")
-def _full(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _full(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
     import lucid
 
     value = _as_float(_attr(op, "fill_value"))
     shape = _out_shape(op)
     filled = lucid.zeros(*shape) + value if shape else lucid.tensor(value)
-    return "identity", [("x", b.const_from_tensor(filled))]
+    return Constant(b.const_from_tensor(filled))
 
 
 @_emitter("arange")
-def _arange(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _arange(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
     import lucid
 
     attrs = op.attrs
@@ -670,7 +685,7 @@ def _arange(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     step = _as_float(attrs.get("step", 1.0))
     count = int(_out_shape(op)[0])
     values = lucid.tensor([start + step * i for i in range(count)])
-    return "identity", [("x", b.const_from_tensor(values))]
+    return Constant(b.const_from_tensor(values))
 
 
 # ── indexing, casting, reductions ────────────────────────────────────
@@ -1017,10 +1032,10 @@ def _clip(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("ones")
-def _ones(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _ones(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
     import lucid
 
-    return "identity", [("x", b.const_from_tensor(lucid.ones(*_out_shape(op))))]
+    return Constant(b.const_from_tensor(lucid.ones(*_out_shape(op))))
 
 
 # ── reductions ───────────────────────────────────────────────────────────────

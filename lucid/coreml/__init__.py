@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING
 
 from lucid.coreml._build import (
     ShapeNotFlexible,
+    StatefulModel,
     UnsupportedOp,
     UnsupportedRank,
     build_package,
@@ -54,6 +55,7 @@ from lucid.coreml._build import (
 from lucid.coreml._model import CoreMLModel, PlacementSummary
 from lucid.coreml._spec import (
     Classifier,
+    State,
     ColorSpace,
     ComputeUnits,
     ImageInput,
@@ -68,6 +70,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Classifier",
+    "State",
     "ColorSpace",
     "ComputeUnits",
     "ImageInput",
@@ -76,6 +79,7 @@ __all__ = [
     "CoreMLModel",
     "PlacementSummary",
     "ShapeNotFlexible",
+    "StatefulModel",
     "Precision",
     "UnsupportedOp",
     "UnsupportedRank",
@@ -102,6 +106,7 @@ def export(
     weights: WeightPrecision = WeightPrecision.FLOAT,
     shapes: list[tuple[int, ...]] | None = None,
     shape_range: dict[int, tuple[int, int]] | None = None,
+    state: list[State] | None = None,
     image_input: ImageInput | None = None,
     classifier: Classifier | None = None,
     metadata: Metadata | None = None,
@@ -144,6 +149,11 @@ def export(
         than a short list — a variable sequence length, a camera whose
         resolution changes. Axes left out keep the example's size.
         Mutually exclusive with ``shapes``.
+    state : list of State or None, optional, keyword-only, default=None
+        Input/output pairs Core ML should carry between predictions
+        rather than exchange with the caller — a decoder's key-value
+        cache. Needs iOS 18 / macOS 15, which a package asks for only
+        when it uses one. The state begins at zero.
     image_input : ImageInput or None, optional, keyword-only, default=None
         Present the sole input as an image, with the normalisation it
         expects, so an app can hand over a pixel buffer instead of
@@ -187,6 +197,7 @@ def export(
         weights=weights,
         shapes=shapes,
         shape_range=shape_range,
+        state=state,
         image_input=image_input,
         classifier=classifier,
         metadata=metadata,

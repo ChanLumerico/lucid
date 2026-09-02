@@ -116,6 +116,16 @@ struct OpPlacement {
 // rather than "not accelerated".
 LUCID_API std::vector<OpPlacement> compute_plan(const std::string& path, ComputeUnits units);
 
+// Forget everything a stateful model has accumulated.
+//
+// A state persists across predictions by design, so a caller that wants
+// to start a fresh sequence has to say so; there is no other way back to
+// the initial value.
+LUCID_API void reset_state(CoreMLModel* model);
+
+// Whether the loaded model declares any state.
+LUCID_API bool carries_state(const CoreMLModel* model);
+
 // Feature names the loaded model declares, for diagnostics and for the
 // Python layer to check a package it did not write itself.
 LUCID_API std::vector<std::string> input_feature_names(const CoreMLModel* model);

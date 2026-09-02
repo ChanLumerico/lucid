@@ -242,6 +242,14 @@ constexpr int kLowerBound = 1;
 constexpr int kUpperBound = 2;
 }  // namespace SizeRange
 
+namespace StateType {
+constexpr int kWrappedType = 1;
+}  // namespace StateType
+
+namespace StateFeatureType {
+constexpr int kArrayType = 1;
+}  // namespace StateFeatureType
+
 namespace Shape {
 constexpr int kShape = 1;
 }  // namespace Shape

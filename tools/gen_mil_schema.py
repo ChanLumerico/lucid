@@ -67,6 +67,8 @@ MESSAGES = (
     "EnumeratedShapes",
     "ShapeRange",
     "SizeRange",
+    "StateType",
+    "StateFeatureType",
     "Shape",
 )
 

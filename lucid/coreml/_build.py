@@ -30,6 +30,7 @@ from lucid.coreml import _spec
 from lucid.coreml._emit import (
     EMITTERS,
     Bindings,
+    Constant,
     MultiOutput,
     TracedOp,
     _as_float,
@@ -38,6 +39,7 @@ from lucid.coreml._emit import (
 )
 from lucid.coreml._spec import (
     Classifier,
+    State,
     ColorSpace,
     ImageInput,
     Metadata,
@@ -115,6 +117,21 @@ def _select_outputs(output: object, field: str | None) -> list[tuple[str, Tensor
         return [(field, picked)]
 
     named: list[tuple[str, Tensor]] = []
+    if isinstance(output, tuple):
+        # A named tuple brings its own names; a plain one is positional,
+        # and a state pair has to be able to refer to one of them.
+        labels = getattr(output, "_fields", None)
+        for position, value in enumerate(output):
+            if not isinstance(value, lucid.Tensor):
+                continue
+            named.append(
+                (
+                    labels[position] if labels is not None else f"output_{position}",
+                    value,
+                )
+            )
+        if named:
+            return named
     if dataclasses.is_dataclass(output) and not isinstance(output, type):
         for spec in dataclasses.fields(output):
             value = getattr(output, spec.name)
@@ -195,12 +212,20 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
         The return value carries no tensor, or lacks the named field.
     """
     examples, by_keyword = _named_examples(example)
+    before = _buffer_marks(model)
     with _compile._tracing() as tracer:
         if by_keyword:
             result = model(**dict(examples))
         else:
             result = model(*(tensor for _, tensor in examples))
         selected = _select_outputs(result, output_field)
+
+    after = _buffer_marks(model)
+    moved = sorted(
+        name for name, mark in after.items() if before.get(name, mark) != mark
+    )
+    if moved:
+        raise StatefulModel(moved)
 
     inputs: list[tuple[str, int, Tensor]] = []
     for name, tensor in examples:
@@ -735,6 +760,57 @@ class ShapeNotFlexible(NotImplementedError):
         self.op_name = op_name
 
 
+class StatefulModel(NotImplementedError):
+    """The model changed its own buffers while being traced.
+
+    An exported package is a pure function of its inputs: whatever the
+    buffers held is written into it as constants. A model that updates a
+    buffer as it runs — a counter, a cache, a running statistic — keeps
+    accumulating in eager and stops the moment it is exported.
+
+    The first call still agrees, because the constants were read after
+    the trace, which is what makes this worth refusing rather than
+    warning about: ``verify`` runs one prediction and passes.
+    """
+
+    def __init__(self, names: list[str]) -> None:
+        super().__init__(
+            f"lucid.coreml: tracing changed {', '.join(names)}, so this model is "
+            "not a pure function of its input and an exported package would stop "
+            "accumulating after the first call — while still agreeing on that "
+            "call. Express the state as an input the model reads and an output "
+            "it returns, and name the pair with state=..., or export a model "
+            "that does not write to its own buffers."
+        )
+        self.names = names
+
+
+def _buffer_marks(model: Module) -> dict[str, float]:
+    """A cheap fingerprint of every buffer, to notice one changing.
+
+    A sum rather than a copy: buffers are read once before the trace and
+    once after, and copying them all would double the memory an export
+    already spends on weights. A mutation that leaves the sum unchanged
+    would escape, which is a trade this check states rather than hides.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model whose buffers to fingerprint.
+
+    Returns
+    -------
+    dict[str, float]
+        Buffer name to the sum of its values.
+    """
+    marks: dict[str, float] = {}
+    for name, buffer in model.named_buffers():
+        if buffer is None:
+            continue
+        marks[name] = float(buffer.sum().item())
+    return marks
+
+
 def _varying_axes(
     model: Module,
     example: Tensor,
@@ -922,6 +998,7 @@ def build_package(
     weights: WeightPrecision = WeightPrecision.FLOAT,
     shapes: list[tuple[int, ...]] | None = None,
     shape_range: dict[int, tuple[int, int]] | None = None,
+    state: list[State] | None = None,
     image_input: ImageInput | None = None,
     classifier: Classifier | None = None,
     metadata: Metadata | None = None,
@@ -959,6 +1036,9 @@ def build_package(
         short list — a variable sequence length, a camera's resolution.
         Axes left out keep the example's size. Mutually exclusive with
         ``shapes``, which admits only what it lists.
+    state : list of State or None, optional, keyword-only, default=None
+        Input/output pairs the package should carry between predictions
+        instead of exchanging with the caller.
     classifier : Classifier or None, optional, keyword-only, default=None
         Declare the model a classifier over these labels. Needs a single
         output shaped ``(1, len(labels))``.
@@ -1061,6 +1141,45 @@ def build_package(
         if input_axes:
             varying[inputs[0][1]] = input_axes
 
+    carried = {spec.input: spec for spec in (state or [])}
+    if carried and precision is not Precision.FLOAT16:
+        raise ValueError(
+            "lucid.coreml: a carried state is stored as float16 — Core ML accepts "
+            "no other type for one — so the body has to be float16 too, or the "
+            "value written back would not be the value read. Pass "
+            "precision=Precision.FLOAT16"
+        )
+    if carried:
+        by_input = {name for name, _tid, _t in inputs}
+        by_output = {field for field, _tid, _t in outputs}
+        for spec in state or []:
+            if spec.input not in by_input:
+                raise ValueError(
+                    f"lucid.coreml: {spec.input!r} is not an input of this model "
+                    f"{sorted(by_input)}"
+                )
+            if spec.output not in by_output:
+                raise ValueError(
+                    f"lucid.coreml: {spec.output!r} is not an output of this model "
+                    f"{sorted(by_output)}"
+                )
+            held = next(t for n, _i, t in inputs if n == spec.input)
+            written = next(t for f, _i, t in outputs if f == spec.output)
+            if tuple(held.shape) != tuple(written.shape):
+                raise ValueError(
+                    f"lucid.coreml: state {spec.input!r} is shaped "
+                    f"{tuple(int(d) for d in held.shape)} and {spec.output!r} is "
+                    f"{tuple(int(d) for d in written.shape)}; what is written back "
+                    "has to be what was read"
+                )
+
+    plain_inputs = [entry for entry in inputs if entry[0] not in carried]
+    if not plain_inputs:
+        raise ValueError(
+            "lucid.coreml: every input was declared state, leaving nothing for the "
+            "caller to pass"
+        )
+
     cm = _C_engine.coreml
     paths = cm.prepare_package(path)
 
@@ -1073,7 +1192,7 @@ def build_package(
                     _flex([int(d) for d in tensor.shape], varying.get(tid)),
                 ),
             )
-            for name, tid, tensor in inputs
+            for name, tid, tensor in plain_inputs
         ]
     )
     if shapes is not None:
@@ -1085,6 +1204,7 @@ def build_package(
             inputs[0][0], [int(d) for d in inputs[0][2].shape]
         )
     names: dict[int, str] = {tid: name for name, tid, _t in inputs}
+    builder_shapes_state: dict[str, list[int]] = {}
     input_ids = {tid for _n, tid, _t in inputs}
 
     # The body's precision, which is not necessarily the interface's.  The
@@ -1095,6 +1215,22 @@ def build_package(
     # hand over half precision.
     body_mil, body_blob = _spec.body_dtypes(precision)
     half = precision is Precision.FLOAT16
+    for name, tid, tensor in inputs:
+        if name not in carried:
+            continue
+        # Declared, then read at the head so the graph that follows sees an
+        # ordinary value; the write-back is appended once the value it
+        # stores exists.
+        # The state lives at the body's precision, which Core ML requires
+        # to be float16; reading it therefore needs no cast, unlike an
+        # ordinary float input.
+        carried_type = (body_mil, [int(d) for d in tensor.shape])
+        program.add_state(name, carried_type)
+        held = f"_state_{name}"
+        program.read_state(name, held, carried_type)
+        names[tid] = held
+        builder_shapes_state[held] = [int(d) for d in tensor.shape]
+
 
     # Parameters and buffers become blob-backed constants.  The blob has
     # to be finalized before the protobuf that carries offsets into it is
@@ -1161,12 +1297,13 @@ def build_package(
     builder = Builder(program, blob, body_mil, body_blob, half)
     builder.varying = varying
     builder.shapes.update(weight_shapes)
+    builder.shapes.update(builder_shapes_state)
     if image_input is not None and len(inputs) != 1:
         raise ValueError(
             f"lucid.coreml: image_input needs a single-input model, and this one "
             f"takes {len(inputs)} — which of them is the image would be a guess"
         )
-    for name, tid, tensor in inputs:
+    for name, tid, tensor in plain_inputs:
         shape = [int(d) for d in tensor.shape]
         builder.shapes[name] = shape
         source = name
@@ -1204,6 +1341,10 @@ def build_package(
             raise UnsupportedOp(op.name)
         operands = [names[i] for i in op.inputs]
         result = emitter(builder, op, operands)
+        if isinstance(result, Constant):
+            # The value is the constant; there is nothing to append.
+            names[op.outputs[0].id] = result.name
+            continue
         multi = isinstance(result, MultiOutput)
         if isinstance(result, MultiOutput):
             mil_type, raw_bindings = result.mil_type, result.bindings
@@ -1251,8 +1392,13 @@ def build_package(
                 f"{score_shape[1]} scores"
             )
 
+    written = {spec.output: spec.input for spec in (state or [])}
     declared: list[tuple[str, tuple[int, ...]]] = []
     for field, tid, tensor in outputs:
+        if field in written:
+            # The caller does not receive it; Core ML keeps it.
+            program.write_state(written[field], names[tid])
+            continue
         value = names[tid]
         flexible_type = (
             _spec.mil_dtype(tensor.dtype),
@@ -1288,7 +1434,8 @@ def build_package(
 
     return {
         "inputs": [
-            (name, tuple(int(d) for d in tensor.shape)) for name, _tid, tensor in inputs
+            (name, tuple(int(d) for d in tensor.shape))
+            for name, _tid, tensor in plain_inputs
         ],
         "outputs": declared,
         "ops": int(program.op_count),
@@ -1297,5 +1444,6 @@ def build_package(
         "classifier": classifier is not None,
         "quantized_weights": quantized_count,
         "flexible": shapes is not None or shape_range is not None,
+        "state": [(spec.input, spec.output) for spec in (state or [])],
         "path": paths.root,
     }

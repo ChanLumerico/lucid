@@ -166,6 +166,25 @@ class CoreMLModel:
             fed.append((name, tensor._impl))
         return fed
 
+    @property
+    def carries_state(self) -> bool:
+        """Whether the package keeps values between predictions."""
+        return bool(self._handle.carries_state)
+
+    def reset_state(self) -> None:
+        """Forget everything the package has accumulated.
+
+        A state persists across predictions by design, so starting a fresh
+        sequence has to be asked for; there is no other way back to the
+        value it began at.
+
+        Raises
+        ------
+        ValueError
+            The package carries no state.
+        """
+        self._handle.reset_state()
+
     def _images(self) -> list[tuple[str, int]]:
         if self.image_input is None:
             return []
@@ -272,6 +291,13 @@ class CoreMLModel:
             raise TypeError(
                 "lucid.coreml: a classifier's output is a label and a probability "
                 "map; compare them with classify() rather than verify()"
+            )
+        if self.carries_state:
+            raise TypeError(
+                "lucid.coreml: this package carries state, so one prediction says "
+                "nothing about whether it agrees — the eager model would have to "
+                "be threaded through the same sequence. Run both over several "
+                "steps and compare, with reset_state() between runs"
             )
         examples, by_keyword = _named_examples(x)
         if self.image_input is not None:

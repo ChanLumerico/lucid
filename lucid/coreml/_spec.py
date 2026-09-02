@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Classifier",
+    "State",
     "ColorSpace",
     "ComputeUnits",
     "ImageInput",
@@ -150,6 +151,36 @@ class Classifier:
     labels: tuple[str, ...]
     label_name: str = "classLabel"
     probabilities_name: str = "classLabel_probs"
+
+
+@dataclasses.dataclass(frozen=True)
+class State:
+    """A value the package carries from one prediction to the next.
+
+    Core ML keeps it: the caller neither passes it in nor gets it back,
+    and each prediction sees what the last one wrote. A decoder's
+    key-value cache is the case this exists for.
+
+    Lucid's side has to be a pair — an input the model reads and an output
+    it returns — rather than a buffer it mutates. The tracer records a
+    pure graph, so an in-place buffer write does not appear in it at all;
+    a package built from that would agree on the first call and stop
+    accumulating on every one after, which ``export`` refuses.
+
+    The state begins at zero. Nothing carries the example's values into
+    it, so a model that needs a different starting point has to be given
+    one through an ordinary input.
+
+    Attributes
+    ----------
+    input : str
+        Feature name of the input the state replaces.
+    output : str
+        Output field whose value is written back into it.
+    """
+
+    input: str
+    output: str
 
 
 @dataclasses.dataclass(frozen=True)

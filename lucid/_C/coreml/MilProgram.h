@@ -156,6 +156,23 @@ public:
     void set_enumerated_shapes(const std::string& name,
                                const std::vector<std::vector<std::int64_t>>& shapes);
 
+    // Declare a value the model carries between predictions.
+    //
+    // Core ML keeps it: the caller does not pass it in and does not get it
+    // back, and every prediction sees what the last one wrote.  In the
+    // program the state is a function input of its own kind, read with
+    // ``read_state`` and written with ``write_state``.  Needs iOS 18 /
+    // macOS 15, which is why a package only asks for that when it uses
+    // one.
+    void add_state(const std::string& name, const MilTensorType& type);
+
+    // Read the current value of a declared state into an ordinary value.
+    void read_state(const std::string& state_name, const std::string& output_name,
+                    const MilTensorType& type);
+
+    // Store a value into a declared state.  Produces nothing.
+    void write_state(const std::string& state_name, const std::string& value_name);
+
     // The bounds a flexible input accepts, one pair per axis.  An axis
     // the program fixes gets the same number twice.  Unlike enumerated
     // shapes this admits everything in between, which is what a variable
@@ -224,6 +241,9 @@ private:
         // ``classify`` payload: the labels travel inline and the two
         // results have different type kinds, so this op is written by hand.
         bool is_classify = false;
+        // ``write_state`` has no result at all, which every other
+        // operation here does.
+        bool no_output = false;
         std::vector<std::string> labels;
         std::string second_output_name;
         bool blob = false;
@@ -238,6 +258,7 @@ private:
 
     MilNamedTypes inputs_;
     std::vector<std::pair<std::string, MilImageSpec>> images_;
+    MilNamedTypes states_;
     std::vector<std::pair<std::string, std::vector<std::vector<std::int64_t>>>> enumerated_;
     std::vector<std::pair<std::string, std::vector<std::int64_t>>> defaults_;
     std::vector<std::pair<std::string, std::vector<std::pair<std::int64_t, std::int64_t>>>>

@@ -143,6 +143,10 @@ std::vector<std::string> all_names(NSDictionary<NSString*, MLFeatureDescription*
 class CoreMLModel {
 public:
     MLModel* model = nil;  // ARC strong
+    // Core ML keeps a stateful model's carried values here, and every
+    // prediction reads and writes the same one — that is the whole point.
+    // It outlives the prediction, so the handle owns it.
+    MLState* state = nil;  // ARC strong, nil unless the model declares state
     NSURL* compiled_url = nil;
     std::vector<std::string> input_names;
     std::vector<std::string> output_names;
@@ -183,6 +187,8 @@ CoreMLModel* load_model(const std::string& path, ComputeUnits units) {
         auto* handle = new CoreMLModel();
         handle->model = model;
         handle->compiled_url = compiled;
+        if (model.modelDescription.stateDescriptionsByName.count > 0)
+            handle->state = [model newState];
         handle->input_names = all_names(model.modelDescription.inputDescriptionsByName);
         handle->output_names = all_names(model.modelDescription.outputDescriptionsByName);
         return handle;
@@ -256,6 +262,21 @@ std::vector<OpPlacement> compute_plan(const std::string& path, ComputeUnits unit
         }
     }
     return placements;
+}
+
+void reset_state(CoreMLModel* model) {
+    if (model == nullptr || model->model == nil)
+        throw std::invalid_argument("lucid.coreml: null model handle");
+    if (model->state == nil)
+        throw std::invalid_argument(
+            "lucid.coreml: this model carries no state, so there is nothing to reset");
+    @autoreleasepool {
+        model->state = [model->model newState];
+    }
+}
+
+bool carries_state(const CoreMLModel* model) {
+    return model != nullptr && model->state != nil;
 }
 
 std::vector<std::string> input_feature_names(const CoreMLModel* model) {
@@ -437,7 +458,10 @@ run(CoreMLModel* model,
         throw std::runtime_error("lucid.coreml: cannot build the input features: " +
                                  describe(error));
 
-    id<MLFeatureProvider> result = [model->model predictionFromFeatures:features error:&error];
+    id<MLFeatureProvider> result =
+        model->state != nil
+            ? [model->model predictionFromFeatures:features usingState:model->state error:&error]
+            : [model->model predictionFromFeatures:features error:&error];
     if (result == nil)
         throw std::runtime_error("lucid.coreml: prediction failed: " + describe(error));
     return result;

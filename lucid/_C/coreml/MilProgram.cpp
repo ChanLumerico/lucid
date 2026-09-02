@@ -16,7 +16,12 @@ namespace {
 
 // Core ML specification version that introduced the ML Program format
 // this writer emits, paired with the opset the reference package used.
+// Core ML 7 (iOS 17) is what everything here needs, except state, which
+// arrived in Core ML 8 (iOS 18).  A package asks for the later runtime
+// only when it actually uses one.
 constexpr int kSpecificationVersion = 8;
+constexpr int kSpecificationVersionState = 9;
+constexpr const char* kOpsetState = "CoreML8";
 constexpr int kProgramVersion = 1;
 
 ProtoWriter make_value_type(const MilTensorType& type) {
@@ -313,6 +318,28 @@ void MilProgram::set_enumerated_shapes(
     enumerated_.emplace_back(name, shapes);
 }
 
+void MilProgram::add_state(const std::string& name, const MilTensorType& type) {
+    states_.emplace_back(name, type);
+    if (opset_ == "CoreML7")
+        opset_ = kOpsetState;
+}
+
+void MilProgram::read_state(const std::string& state_name,
+                            const std::string& output_name,
+                            const MilTensorType& type) {
+    add_op("read_state", {{"input", {state_name}}}, output_name, type);
+}
+
+void MilProgram::write_state(const std::string& state_name,
+                             const std::string& value_name) {
+    Op op;
+    op.type = "write_state";
+    op.inputs = {{"input", {state_name}}, {"data", {value_name}}};
+    op.output_name = "_write_" + state_name;
+    op.no_output = true;
+    ops_.push_back(std::move(op));
+}
+
 void MilProgram::set_shape_range(
     const std::string& name,
     const std::vector<std::pair<std::int64_t, std::int64_t>>& bounds) {
@@ -445,8 +472,9 @@ std::string MilProgram::serialize() const {
         }
         for (const auto& [param, value_names] : op.inputs)
             operation.write_map_entry(pb::Operation::kInputs, param, make_argument(value_names));
-        operation.write_message(pb::Operation::kOutputs,
-                                make_named_value_type(op.output_name, op.output_type));
+        if (!op.no_output)
+            operation.write_message(pb::Operation::kOutputs,
+                                    make_named_value_type(op.output_name, op.output_type));
         for (const auto& [extra_name, extra_type] : op.extra_outputs)
             operation.write_message(pb::Operation::kOutputs,
                                     make_named_value_type(extra_name, extra_type));
@@ -522,6 +550,16 @@ std::string MilProgram::serialize() const {
     ProtoWriter function;
     for (const auto& [name, type] : inputs_)
         function.write_message(pb::Function::kInputs, make_named_value_type(name, type));
+    for (const auto& [name, type] : states_) {
+        ProtoWriter state;
+        state.write_message(pb::StateType::kWrappedType, make_value_type(type));
+        ProtoWriter value_type;
+        value_type.write_message(pb::ValueType::kStateType, state);
+        ProtoWriter named;
+        named.write_string(pb::NamedValueType::kName, name);
+        named.write_message(pb::NamedValueType::kType, value_type);
+        function.write_message(pb::Function::kInputs, named);
+    }
     function.write_string(pb::Function::kOpset, opset_);
     function.write_map_entry(pb::Function::kBlockSpecializations, opset_, block);
 
@@ -652,8 +690,26 @@ std::string MilProgram::serialize() const {
         description.write_message(pb::ModelDescription::kMetadata, metadata);
     }
 
+    for (const auto& [name, type] : states_) {
+        ProtoWriter array;
+        array.write_packed_ints(pb::ArrayFeatureType::kShape, type.shape);
+        int array_dtype = pb::ArrayFeatureType_ArrayDataType::kFLOAT32;
+        if (type.dtype == MilDataType::Float16)
+            array_dtype = pb::ArrayFeatureType_ArrayDataType::kFLOAT16;
+        array.write_enum(pb::ArrayFeatureType::kDataType, array_dtype);
+        ProtoWriter state_feature;
+        state_feature.write_message(pb::StateFeatureType::kArrayType, array);
+        ProtoWriter feature_type;
+        feature_type.write_message(pb::FeatureType::kStateType, state_feature);
+        ProtoWriter state_description;
+        state_description.write_string(pb::FeatureDescription::kName, name);
+        state_description.write_message(pb::FeatureDescription::kType, feature_type);
+        description.write_message(pb::ModelDescription::kState, state_description);
+    }
+
     ProtoWriter model;
-    model.write_int(pb::Model::kSpecificationVersion, kSpecificationVersion);
+    model.write_int(pb::Model::kSpecificationVersion,
+                    states_.empty() ? kSpecificationVersion : kSpecificationVersionState);
     model.write_message(pb::Model::kDescription, description);
     model.write_message(pb::Model::kMlProgram, program);
     return model.bytes();
