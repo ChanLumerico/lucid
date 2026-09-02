@@ -113,6 +113,9 @@ void register_coreml(py::module_& m) {
              py::arg("value"))
         .def("add_bool_const", &lucid::coreml::MilProgram::add_bool_const, py::arg("name"),
              py::arg("value"))
+        .def("add_bool_const_shaped", &lucid::coreml::MilProgram::add_bool_const_shaped,
+             py::arg("name"), py::arg("values"), py::arg("shape"),
+             "Boolean constant of arbitrary shape, carried inline.")
         .def(
             "add_op",
             [](lucid::coreml::MilProgram& self, const std::string& op_type,

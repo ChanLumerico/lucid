@@ -169,6 +169,54 @@ def _flatten_ints(tensor: Tensor) -> list[int]:
     return flat
 
 
+def _flatten_bools(tensor: Tensor) -> list[bool]:
+    """A boolean tensor's values, flattened, for an inline MIL constant.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Boolean tensor to flatten.
+
+    Returns
+    -------
+    list[bool]
+        Flattened values.
+    """
+    flat: list[bool] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, list):
+            for item in value:
+                walk(item)
+        else:
+            flat.append(bool(value))
+
+    walk(tensor.tolist())
+    return flat
+
+
+def _operands(bindings: Bindings) -> list[tuple[str, list[str]]]:
+    """Parameter bindings in the shape the engine takes.
+
+    An emitter may bind a parameter to one operand or to several —
+    ``concat`` is variadic — and the engine wants a list either way.
+
+    Parameters
+    ----------
+    bindings : Bindings
+        Pairs of parameter name and operand name, or names.
+
+    Returns
+    -------
+    list[tuple[str, list[str]]]
+        The same pairs, with every operand side a list.
+    """
+    return [
+        (param, [value] if isinstance(value, str) else list(value))
+        for param, value in bindings
+    ]
+
+
 class Builder:
     """Mints the constants MIL requires and appends operations.
 
@@ -319,10 +367,7 @@ class Builder:
             Name of the value this operation produces.
         """
         name = self._next(mil_type)
-        normalised = [
-            (param, [value] if isinstance(value, str) else list(value))
-            for param, value in bindings
-        ]
+        normalised = _operands(bindings)
         self._program.add_op(mil_type, normalised, name, (self._body_mil, list(shape)))
         self.shapes[name] = list(shape)
         return name
@@ -351,10 +396,7 @@ class Builder:
         list[str]
             Names of the values produced, in order.
         """
-        normalised = [
-            (param, [value] if isinstance(value, str) else list(value))
-            for param, value in bindings
-        ]
+        normalised = _operands(bindings)
         names = [self._next(f"{mil_type}{i}") for i in range(len(shapes))]
         self._program.add_op_multi(
             mil_type,
@@ -369,6 +411,42 @@ class Builder:
         name = self._next("bool")
         self._program.add_bool_const(name, bool(value))
         return name
+
+
+def _reachable_ops(graph: Any, output_id: int) -> list[Any]:
+    """The traced ops the output actually depends on, in trace order.
+
+    A trace can carry operations nothing consumes. Lucid's ``norm``
+    computes a guard against a zero scale eagerly, so the comparison
+    collapses to a constant feed and the ``bitwise_and`` that would have
+    combined it is left behind with no operands and no consumer. Emitting
+    such an op means asking an emitter for something the graph never
+    computed; refusing to emit it is both correct and smaller.
+
+    Parameters
+    ----------
+    graph : trace graph
+        Graph to walk.
+    output_id : int
+        Value the package returns.
+
+    Returns
+    -------
+    list
+        Ops in their original order, minus the unreachable ones.
+    """
+    producer = {out.id: op for op in graph.ops for out in op.outputs}
+    wanted = {output_id}
+    pending = [output_id]
+    while pending:
+        op = producer.get(pending.pop())
+        if op is None:
+            continue
+        for value in op.inputs:
+            if value not in wanted:
+                wanted.add(value)
+                pending.append(value)
+    return [op for op in graph.ops if any(out.id in wanted for out in op.outputs)]
 
 
 def build_package(
@@ -448,6 +526,11 @@ def build_package(
         if is_float:
             offset = blob.append_tensor(_unwrap(tensor), body_blob)
             program.add_blob_const(name, (body_mil, shape), offset)
+        elif tensor.dtype == lucid.bool_:
+            # A boolean buffer is a mask, not a count that happens to be 0
+            # or 1, and MIL types the two apart — an int32 constant would
+            # be rejected wherever a condition is wanted.
+            program.add_bool_const_shaped(name, _flatten_bools(tensor), shape)
         else:
             # Integer buffers (position ids, token-type ids) go inline: the
             # blob carries float payloads only, and MIL has an integer
@@ -475,12 +558,12 @@ def build_package(
     if half and float_input:
         cast_name = "_cast_in"
         mil_type, raw = emit_cast(builder, input_name, "fp16")
-        bindings = [(p_, [v]) for p_, v in raw]
+        bindings = _operands(raw)
         program.add_op(
             mil_type, bindings, cast_name, (body_mil, [int(d) for d in example.shape])
         )
         names[input_id] = cast_name
-    for op in graph.ops:
+    for op in _reachable_ops(graph, output_id):
         emitter = EMITTERS.get(op.name)
         if emitter is None:
             raise UnsupportedOp(op.name)
@@ -493,10 +576,7 @@ def build_package(
             mil_type, raw_bindings = result
         # Emitters may bind a parameter to one name or several (``concat``);
         # the engine wants a list either way.
-        bindings = [
-            (param, [value] if isinstance(value, str) else list(value))
-            for param, value in raw_bindings
-        ]
+        bindings = _operands(raw_bindings)
         outputs = [
             (
                 f"_v{o.id}_{op.name}",
@@ -521,7 +601,7 @@ def build_package(
     if half:
         cast_out = "_cast_out"
         mil_type, raw = emit_cast(builder, output_name, "fp32")
-        bindings = [(p_, [v]) for p_, v in raw]
+        bindings = _operands(raw)
         program.add_op(mil_type, bindings, cast_out, _spec.type_spec(output_tensor))
         output_name = cast_out
     program.set_output(output_name, _spec.type_spec(output_tensor))

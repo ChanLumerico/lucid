@@ -147,6 +147,16 @@ void MilProgram::add_bool_const(const std::string& name, bool value) {
     push_const(std::move(op));
 }
 
+void MilProgram::add_bool_const_shaped(const std::string& name,
+                                       const std::vector<bool>& values,
+                                       const std::vector<std::int64_t>& shape) {
+    Op op;
+    op.output_name = name;
+    op.output_type = {MilDataType::Bool, shape};
+    op.bools = values;
+    push_const(std::move(op));
+}
+
 void MilProgram::add_op(const std::string& op_type,
                         const MilInputs& inputs,
                         const std::string& output_name,

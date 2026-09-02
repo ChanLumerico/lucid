@@ -76,6 +76,12 @@ public:
     void add_string_const(const std::string& name, const std::string& value);
     void add_bool_const(const std::string& name, bool value);
 
+    // Boolean constant of arbitrary shape, carried inline.  A traced mask
+    // is a real tensor of booleans, not a count that happens to be 0 or 1,
+    // and MIL types the two apart.
+    void add_bool_const_shaped(const std::string& name, const std::vector<bool>& values,
+                               const std::vector<std::int64_t>& shape);
+
     // ── operations ───────────────────────────────────────────────────
     void add_op(const std::string& op_type,
                 const MilInputs& inputs,

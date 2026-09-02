@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the first transformer exports, and verification stops lying
 - language models export, and integers stop being floats
 - detection and segmentation export, and two silent defaults die
+- every rank of conv and pool, the norms, and dead ops dropped
 
 ---
 

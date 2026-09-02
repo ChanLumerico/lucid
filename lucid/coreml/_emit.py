@@ -87,12 +87,31 @@ class MultiOutput(NamedTuple):
 
 
 # Lucid op name -> emitter.
-EMITTERS: dict[str, Callable[..., EmitResult | MultiOutput]] = {}
+Emitter = Callable[..., EmitResult | MultiOutput]
+
+# Lucid op name -> emitter.
+EMITTERS: dict[str, Emitter] = {}
 
 
-def _emitter(name: str) -> Callable[..., object]:
-    def register(fn: object) -> object:
-        EMITTERS[name] = fn  # type: ignore[assignment]
+def _emitter(name: str) -> Callable[[Emitter], Emitter]:
+    """Register one emitter under a Lucid op name.
+
+    Stackable: an op that translates exactly like another shares the
+    function rather than a second copy of it.
+
+    Parameters
+    ----------
+    name : str
+        Lucid op name as the tracer records it.
+
+    Returns
+    -------
+    Callable
+        Decorator returning the emitter unchanged.
+    """
+
+    def register(fn: Emitter) -> Emitter:
+        EMITTERS[name] = fn
         return fn
 
     return register
@@ -154,18 +173,6 @@ def _as_seq(value: object) -> Sequence[object]:
     if isinstance(value, (list, tuple)):
         return value
     raise TypeError(f"lucid.coreml: expected a sequence, got {type(value).__name__}")
-
-
-def _pair(value: object) -> list[int]:
-    items = _as_seq(value)
-    return [_as_int(items[0]), _as_int(items[1])]
-
-
-def _pad4(padding: object) -> list[int]:
-    """Lucid's ``[pad_h, pad_w]`` as MIL's ``[top, bottom, left, right]``."""
-    items = _as_seq(padding)
-    ph, pw = _as_int(items[0]), _as_int(items[1])
-    return [ph, ph, pw, pw]
 
 
 def _flag(value: object, default: bool = False) -> bool:
@@ -260,29 +267,83 @@ def _log2(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "mul", [("x", natural), ("y", b.const_float(1.0 / _LN2))]
 
 
-@_emitter("conv2d")
-def _conv2d(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
-    attrs = op.attrs
-    bindings = [("x", ins[0]), ("weight", ins[1])]
-    if len(ins) > 2:
-        bindings.append(("bias", ins[2]))
-    bindings += [
-        ("strides", b.const_ints(_pair(attrs["stride"]))),
-        ("pad_type", b.const_str("custom")),
-        ("pad", b.const_ints(_pad4(attrs["padding"]))),
-        ("dilations", b.const_ints(_pair(attrs["dilation"]))),
-        ("groups", b.const_int(_as_int(attrs["groups"]))),
-    ]
-    return "conv", bindings
+# ── convolution and pooling, at every rank Lucid offers ──────────────────────
+#
+# MIL's ``conv``, ``max_pool`` and ``avg_pool`` are rank-agnostic: the
+# length of the attribute lists is what says 1-D from 3-D. Lucid spells
+# them apart, so the mapping is a family rather than three emitters that
+# would differ only in how many elements they read.
+
+
+def _ints(value: object) -> list[int]:
+    """A trace attribute holding a per-spatial-axis list."""
+    return [_as_int(v) for v in _as_seq(value)]
+
+
+def _pad_pairs(padding: object) -> list[int]:
+    """Lucid's one pad per axis as MIL's ``[before, after]`` per axis."""
+    pairs: list[int] = []
+    for pad in _ints(padding):
+        pairs += [pad, pad]
+    return pairs
+
+
+def _register_conv(lucid_name: str) -> None:
+    def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+        attrs = op.attrs
+        bindings: Bindings = [("x", ins[0]), ("weight", ins[1])]
+        if len(ins) > 2:
+            bindings.append(("bias", ins[2]))
+        bindings += [
+            ("strides", b.const_ints(_ints(attrs["stride"]))),
+            ("pad_type", b.const_str("custom")),
+            ("pad", b.const_ints(_pad_pairs(attrs["padding"]))),
+            ("dilations", b.const_ints(_ints(attrs["dilation"]))),
+            ("groups", b.const_int(_as_int(attrs["groups"]))),
+        ]
+        return "conv", bindings
+
+    EMITTERS[lucid_name] = emit
+
+
+for _name in ("conv1d", "conv2d", "conv3d"):
+    _register_conv(_name)
+
+
+def _register_pool(lucid_name: str, mil_name: str, counts_pad: bool) -> None:
+    def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+        attrs = op.attrs
+        bindings: Bindings = [
+            ("x", ins[0]),
+            ("kernel_sizes", b.const_ints(_ints(attrs["kernel_size"]))),
+            ("strides", b.const_ints(_ints(attrs["stride"]))),
+            ("pad_type", b.const_str("custom")),
+            ("pad", b.const_ints(_pad_pairs(attrs["padding"]))),
+            ("ceil_mode", b.const_bool(_flag(attrs.get("ceil_mode")))),
+        ]
+        if counts_pad:
+            bindings.append(
+                (
+                    "exclude_padding_from_average",
+                    b.const_bool(not _flag(attrs.get("count_include_pad"), True)),
+                )
+            )
+        return mil_name, bindings
+
+    EMITTERS[lucid_name] = emit
+
+
+for _name in ("max_pool1d", "max_pool2d", "max_pool3d"):
+    _register_pool(_name, "max_pool", False)
+for _name in ("avg_pool1d", "avg_pool2d", "avg_pool3d"):
+    _register_pool(_name, "avg_pool", True)
 
 
 @_emitter("linear")
 def _linear(
     b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
-    bindings = [("x", ins[0]), ("weight", ins[1])]
+) -> EmitResult:
+    bindings: Bindings = [("x", ins[0]), ("weight", ins[1])]
     if len(ins) > 2:
         bindings.append(("bias", ins[2]))
     return "linear", bindings
@@ -291,7 +352,7 @@ def _linear(
 @_emitter("batch_norm_eval")
 def _batch_norm_eval(
     b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
+) -> EmitResult:
     x, mean, variance, gamma, beta = ins[0], ins[1], ins[2], ins[3], ins[4]
     return "batch_norm", [
         ("x", x),
@@ -336,50 +397,16 @@ for _lucid_name, _mil_name in _BINARY_MIL.items():
 @_emitter("reshape")
 def _reshape(
     b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
+) -> EmitResult:
     # Lucid keeps the target shape on the result, not in the attributes.
     shape = [int(d) for d in op.outputs[0].shape]
     return "reshape", [("x", ins[0]), ("shape", b.const_ints(shape))]
 
 
-@_emitter("max_pool2d")
-def _max_pool2d(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
-    attrs = op.attrs
-    return "max_pool", [
-        ("x", ins[0]),
-        ("kernel_sizes", b.const_ints(_pair(attrs["kernel_size"]))),
-        ("strides", b.const_ints(_pair(attrs["stride"]))),
-        ("pad_type", b.const_str("custom")),
-        ("pad", b.const_ints(_pad4(attrs["padding"]))),
-        ("ceil_mode", b.const_bool(_flag(attrs.get("ceil_mode")))),
-    ]
-
-
-@_emitter("avg_pool2d")
-def _avg_pool2d(
-    b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
-    attrs = op.attrs
-    return "avg_pool", [
-        ("x", ins[0]),
-        ("kernel_sizes", b.const_ints(_pair(attrs["kernel_size"]))),
-        ("strides", b.const_ints(_pair(attrs["stride"]))),
-        ("pad_type", b.const_str("custom")),
-        ("pad", b.const_ints(_pad4(attrs["padding"]))),
-        (
-            "exclude_padding_from_average",
-            b.const_bool(not _flag(attrs.get("count_include_pad"), default=True)),
-        ),
-        ("ceil_mode", b.const_bool(_flag(attrs.get("ceil_mode")))),
-    ]
-
-
 @_emitter("dropout")
 def _dropout(
     b: Builder, op: TracedOp, ins: list[str]
-) -> tuple[str, list[tuple[str, str]]]:
+) -> EmitResult:
     # An exported graph is an inference graph.  Lucid still records the op
     # under ``eval()``; a training-mode one is refused rather than
     # silently turned into an identity the caller did not ask for.
@@ -501,6 +528,7 @@ def _stack(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "stack", [("values", list(ins)), ("axis", b.const_int(axis))]
 
 
+@_emitter("split")
 @_emitter("split_at")
 def _split_at(b: Builder, op: TracedOp, ins: list[str]) -> MultiOutput:
     """One MIL ``split`` producing every section the trace recorded.
@@ -728,6 +756,9 @@ def _interp_bilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     ]
 
 
+# Same rank-agnostic story as ``conv``: every rank reaches one MIL op.
+@_emitter("conv_transpose3d")
+@_emitter("conv_transpose1d")
 @_emitter("conv_transpose2d")
 def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """The output shape is passed explicitly rather than derived.
@@ -737,18 +768,23 @@ def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     the trace already recorded which one this is.
     """
     attrs = op.attrs
+    strides = _ints(attrs["stride"])
     bindings: Bindings = [("x", ins[0]), ("weight", ins[1])]
     if len(ins) > 2:
         bindings.append(("bias", ins[2]))
     bindings += [
-        ("strides", b.const_ints(_pair(attrs["stride"]))),
+        ("strides", b.const_ints(strides)),
         ("pad_type", b.const_str("custom")),
-        ("pad", b.const_ints(_pad4(attrs["padding"]))),
-        ("dilations", b.const_ints(_pair(attrs.get("dilation", [1, 1])))),
+        ("pad", b.const_ints(_pad_pairs(attrs["padding"]))),
+        # A transposed convolution traces without ``dilation`` when it is
+        # the default, so the rank comes from ``stride`` rather than from
+        # an attribute that may not be there.
+        ("dilations", b.const_ints(_ints(attrs.get("dilation", [1] * len(strides))))),
         ("groups", b.const_int(_as_int(attrs.get("groups", 1)))),
         ("output_shape", b.const_ints(_out_shape(op))),
     ]
     return "conv_transpose", bindings
+
 
 
 # ── gather / scatter along an axis, comparison, selection ────────────
@@ -825,7 +861,7 @@ def _roll(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 def emit_cast(
     b: Builder, value: str, out_dtype: str
-) -> tuple[str, list[tuple[str, str]]]:
+) -> EmitResult:
     """A ``cast`` the driver inserts, not one a Lucid op asks for.
 
     An fp16 program still presents fp32 inputs and outputs, so the body is
@@ -1028,3 +1064,131 @@ def _masked_fill(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     value = _as_float(_attr(op, "fill_value"))
     fill = b.const_from_tensor(lucid.zeros(*shape) + value)
     return "select", [("cond", ins[1]), ("a", fill), ("b", ins[0])]
+
+
+# ── the rest of what a traced graph reaches ──────────────────────────────────
+
+
+@_emitter("isfinite")
+def _isfinite(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``x - x == 0`` — MIL has no ``isfinite``.
+
+    Infinity minus itself is NaN and NaN compares false, so the one
+    expression covers both non-finite cases.
+    """
+    shape = b.shape_of(ins[0])
+    zeroed = b.emit("sub", [("x", ins[0]), ("y", ins[0])], shape)
+    return "equal", [("x", zeroed), ("y", b.const_float(0.0))]
+
+
+@_emitter("bitwise_and")
+def _bitwise_and(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return "logical_and", [("x", ins[0]), ("y", ins[1])]
+
+
+@_emitter("group_norm")
+def _group_norm(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Normalise per group, then scale per channel.
+
+    MIL has ``layer_norm`` but no ``group_norm``. Folding the groups into
+    the batch axis turns one into the other: reshape ``(N, C, ...)`` to
+    ``(N * G, C/G, ...)``, normalise over everything but the leading axis,
+    and reshape back. The affine weights stay per channel, so they are
+    applied after the reshape rather than through ``layer_norm``.
+    """
+    shape = b.shape_of(ins[0])
+    groups = _as_int(_attr(op, "num_groups"))
+    batch, channels = shape[0], shape[1]
+    trailing = shape[2:]
+
+    grouped = [batch * groups, channels // groups] + list(trailing)
+    folded = b.emit(
+        "reshape", [("x", ins[0]), ("shape", b.const_ints(grouped))], grouped
+    )
+    normalised = b.emit(
+        "layer_norm",
+        [
+            ("x", folded),
+            ("axes", b.const_ints(list(range(1, len(grouped))))),
+            ("epsilon", b.const_float(_as_float(_attr(op, "eps")))),
+        ],
+        grouped,
+    )
+    restored = b.emit(
+        "reshape", [("x", normalised), ("shape", b.const_ints(list(shape)))], shape
+    )
+    if len(ins) < 3:
+        return "identity", [("x", restored)]
+
+    # ``gamma``/``beta`` are per channel; broadcasting needs them shaped
+    # (C, 1, ...) against the trailing axes.
+    affine = [channels] + [1] * len(trailing)
+    gamma = b.emit("reshape", [("x", ins[1]), ("shape", b.const_ints(affine))], affine)
+    beta = b.emit("reshape", [("x", ins[2]), ("shape", b.const_ints(affine))], affine)
+    scaled = b.emit("mul", [("x", restored), ("y", gamma)], shape)
+    return "add", [("x", scaled), ("y", beta)]
+
+
+@_emitter("rms_norm")
+def _rms_norm(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``x * rsqrt(mean(x^2) + eps) * weight`` — MIL has no ``rms_norm``.
+
+    Unlike ``layer_norm`` this does not centre, so it cannot be borrowed
+    from that op: subtracting the mean is the whole difference.
+    """
+    shape = b.shape_of(ins[0])
+    weight_shape = b.shape_of(ins[1]) if len(ins) > 1 else []
+    axes = list(range(len(shape) - len(weight_shape), len(shape)))
+    kept = list(shape)
+    for axis in axes:
+        kept[axis] = 1
+
+    squared = b.emit("mul", [("x", ins[0]), ("y", ins[0])], shape)
+    mean = b.emit(
+        "reduce_mean",
+        [
+            ("x", squared),
+            ("axes", b.const_ints(axes)),
+            ("keep_dims", b.const_bool(True)),
+        ],
+        kept,
+    )
+    shifted = b.emit(
+        "add", [("x", mean), ("y", b.const_float(_as_float(_attr(op, "eps"))))], kept
+    )
+    scale = b.emit(
+        "rsqrt", [("x", shifted), ("epsilon", b.const_float(0.0))], kept
+    )
+    normalised = b.emit("mul", [("x", ins[0]), ("y", scale)], shape)
+    if len(ins) < 2:
+        return "identity", [("x", normalised)]
+    return "mul", [("x", normalised), ("y", ins[1])]
+
+
+@_emitter("repeat")
+def _repeat(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Repeat each element along one axis, which ``tile`` does not do.
+
+    ``tile`` lays the whole tensor down again; this interleaves. Adding a
+    length-1 axis after the target, tiling that, and folding it back is
+    the standard way to say it with the ops MIL has.
+    """
+    shape = b.shape_of(ins[0])
+    repeats = _as_int(_attr(op, "repeats"))
+    axis = _as_int(_attr(op, "axis"))
+    axis = axis if axis >= 0 else axis + len(shape)
+
+    spread = list(shape[: axis + 1]) + [1] + list(shape[axis + 1 :])
+    expanded = b.emit(
+        "reshape", [("x", ins[0]), ("shape", b.const_ints(spread))], spread
+    )
+    reps = [1] * len(spread)
+    reps[axis + 1] = repeats
+    tiled_shape = list(spread)
+    tiled_shape[axis + 1] = repeats
+    tiled = b.emit(
+        "tile", [("x", expanded), ("reps", b.const_ints(reps))], tiled_shape
+    )
+    final = list(shape)
+    final[axis] = shape[axis] * repeats
+    return "reshape", [("x", tiled), ("shape", b.const_ints(final))]
