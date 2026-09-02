@@ -45,7 +45,11 @@ enum class ComputeUnits : int {
 //     Compilation or load failed; the message carries Core ML's own
 //     description, which names the offending layer for a malformed
 //     program.
-LUCID_API CoreMLModel* load_model(const std::string& path, ComputeUnits units);
+// ``function_name`` selects one entry point of a package that has
+// several; empty takes the default the package names.
+LUCID_API CoreMLModel* load_model(const std::string& path,
+                                  ComputeUnits units,
+                                  const std::string& function_name = "");
 
 // Release a handle.  Safe with ``nullptr``.
 LUCID_API void destroy_model(CoreMLModel* model);

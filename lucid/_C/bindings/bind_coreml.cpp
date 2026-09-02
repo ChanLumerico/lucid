@@ -345,6 +345,15 @@ void register_coreml(py::module_& m) {
              "Release the compiled model and its cached artifacts.");
 
     cm.def(
+        "serialize_functions",
+        [](const std::vector<std::pair<std::string, lucid::coreml::MilProgram*>>& functions,
+           const std::string& default_name) {
+            return py::bytes(lucid::coreml::serialize_functions(functions, default_name));
+        },
+        py::arg("functions"), py::arg("default_name"),
+        "Serialise several programs into one package; they share the weight blob.");
+
+    cm.def(
         "compute_plan",
         [](const std::string& path, lucid::coreml::ComputeUnits units) {
             std::vector<std::pair<std::string, std::string>> out;
@@ -358,10 +367,13 @@ void register_coreml(py::module_& m) {
 
     cm.def(
         "load_model",
-        [](const std::string& path, lucid::coreml::ComputeUnits units) {
-            return std::make_shared<PyCoreMLModel>(lucid::coreml::load_model(path, units));
+        [](const std::string& path, lucid::coreml::ComputeUnits units,
+           const std::string& function_name) {
+            return std::make_shared<PyCoreMLModel>(
+                lucid::coreml::load_model(path, units, function_name));
         },
         py::arg("path"), py::arg("units") = lucid::coreml::ComputeUnits::All,
+        py::arg("function_name") = "",
         "Compile and load a .mlpackage. Compilation is the expensive step and is "
         "done once per handle.");
 

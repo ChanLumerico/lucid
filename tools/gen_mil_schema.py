@@ -69,6 +69,7 @@ MESSAGES = (
     "SizeRange",
     "StateType",
     "StateFeatureType",
+    "FunctionDescription",
     "Shape",
 )
 

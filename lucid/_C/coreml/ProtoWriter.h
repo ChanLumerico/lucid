@@ -79,6 +79,16 @@ public:
         buf_.append(static_cast<const char*>(data), size);
     }
 
+    // Concatenate another writer's fields into this one.
+    //
+    // Protobuf has no field order, so two writers describing the same
+    // message can simply be joined — which is how a message assembled in
+    // pieces (a function's name here, its inputs and outputs there) comes
+    // back together without re-encoding either half.
+    void append_raw(const ProtoWriter& other) {
+        buf_.append(other.buf_.data(), other.buf_.size());
+    }
+
     // Embed an already-built submessage.
     void write_message(int field, const ProtoWriter& sub) {
         write_bytes(field, sub.buf_.data(), sub.buf_.size());

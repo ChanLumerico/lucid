@@ -989,6 +989,21 @@ def _declare_image(
     return source
 
 
+@dataclasses.dataclass
+class _Shared:
+    """A package and blob several functions are being written into.
+
+    ``offsets`` maps a parameter's identity to where its bytes already
+    are. Two entry points over the same module hold the same tensors, so
+    keying on identity is what makes one copy serve both — which is the
+    only reason to put them in one package rather than two.
+    """
+
+    paths: Any
+    blob: Any
+    offsets: dict[int, int] = dataclasses.field(default_factory=dict)
+
+
 def build_package(
     model: Module,
     example: object,
@@ -1003,6 +1018,7 @@ def build_package(
     classifier: Classifier | None = None,
     metadata: Metadata | None = None,
     output_field: str | None = None,
+    into: _Shared | None = None,
 ) -> dict[str, object]:
     """Trace ``model`` and write a complete ``.mlpackage`` at ``path``.
 
@@ -1047,6 +1063,11 @@ def build_package(
     output_field : str or None, optional, keyword-only, default=None
         Single attribute to export from an output dataclass. ``None``
         takes every tensor field it declares.
+    into : _Shared or None, optional, keyword-only, default=None
+        A package and weight blob already open, for building one function
+        of several. The blob is neither finalised nor written out here;
+        the caller does that once every function is in it, which is what
+        lets them share the weights.
 
     Returns
     -------
@@ -1181,7 +1202,7 @@ def build_package(
         )
 
     cm = _C_engine.coreml
-    paths = cm.prepare_package(path)
+    paths = into.paths if into is not None else cm.prepare_package(path)
 
     program = cm.MilProgram(
         [
@@ -1236,7 +1257,7 @@ def build_package(
     # to be finalized before the protobuf that carries offsets into it is
     # written, which is why it is opened and closed here rather than by
     # the caller.
-    blob = cm.BlobWriter(paths.weight_bin)
+    blob = into.blob if into is not None else cm.BlobWriter(paths.weight_bin)
     weight_shapes: dict[str, list[int]] = {}
     quantized_count = 0
     for tid, impl in feeds.items():
@@ -1270,7 +1291,14 @@ def build_package(
             )
             quantized_count += 1
         elif is_float:
-            offset = blob.append_tensor(_unwrap(tensor), body_blob)
+            # Keyed by the parameter's identity, so a weight two
+            # functions share is written once and pointed at twice.
+            key = id(impl)
+            offset = into.offsets.get(key) if into is not None else None
+            if offset is None:
+                offset = blob.append_tensor(_unwrap(tensor), body_blob)
+                if into is not None:
+                    into.offsets[key] = offset
             program.add_blob_const(name, (body_mil, shape), offset)
         elif tensor.dtype == lucid.bool_:
             # A boolean buffer is a mask, not a count that happens to be 0
@@ -1371,7 +1399,8 @@ def build_package(
             names[o.id] = out_name
             builder.shapes[out_name] = shape
 
-    blob.finalize()
+    if into is None:
+        blob.finalize()
 
     if classifier is not None:
         if len(outputs) != 1:
@@ -1430,7 +1459,8 @@ def build_package(
         program.set_metadata(
             metadata.description, metadata.author, metadata.license, metadata.version
         )
-    cm.finish_package(paths, program.serialize())
+    if into is None:
+        cm.finish_package(paths, program.serialize())
 
     return {
         "inputs": [
@@ -1445,5 +1475,6 @@ def build_package(
         "quantized_weights": quantized_count,
         "flexible": shapes is not None or shape_range is not None,
         "state": [(spec.input, spec.output) for spec in (state or [])],
+        "program": program,
         "path": paths.root,
     }

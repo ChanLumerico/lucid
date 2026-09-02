@@ -397,7 +397,9 @@ void MilProgram::add_output(const std::string& name, const MilTensorType& type) 
     outputs_.emplace_back(name, type);
 }
 
-std::string MilProgram::serialize() const {
+void MilProgram::set_opset(const std::string& opset) { opset_ = opset; }
+
+ProtoWriter MilProgram::build_function() const {
     if (outputs_.empty() && !classifier_.present)
         throw std::logic_error(
             "MilProgram::serialize: no output was added — Core ML would reject the "
@@ -563,10 +565,10 @@ std::string MilProgram::serialize() const {
     function.write_string(pb::Function::kOpset, opset_);
     function.write_map_entry(pb::Function::kBlockSpecializations, opset_, block);
 
-    ProtoWriter program;
-    program.write_int(pb::Program::kVersion, kProgramVersion);
-    program.write_map_entry(pb::Program::kFunctions, "main", function);
+    return function;
+}
 
+ProtoWriter MilProgram::build_description(const MilDescriptionFields& fields) const {
     // ── model description ────────────────────────────────────────────
     auto feature = [this](const std::string& name, const MilTensorType& type) {
         for (const auto& [image_name, spec] : images_) {
@@ -642,7 +644,7 @@ std::string MilProgram::serialize() const {
 
     ProtoWriter description;
     for (const auto& [name, type] : inputs_)
-        description.write_message(pb::ModelDescription::kInput, feature(name, type));
+        description.write_message(fields.input, feature(name, type));
     if (classifier_.present) {
         ProtoWriter string_type;
         ProtoWriter label_feature_type;
@@ -651,7 +653,7 @@ std::string MilProgram::serialize() const {
         label_description.write_string(pb::FeatureDescription::kName,
                                        classifier_.label_name);
         label_description.write_message(pb::FeatureDescription::kType, label_feature_type);
-        description.write_message(pb::ModelDescription::kOutput, label_description);
+        description.write_message(fields.output, label_description);
 
         ProtoWriter string_key;
         ProtoWriter dictionary;
@@ -664,31 +666,17 @@ std::string MilProgram::serialize() const {
                                                classifier_.probabilities_name);
         probabilities_description.write_message(pb::FeatureDescription::kType,
                                                 probabilities_feature_type);
-        description.write_message(pb::ModelDescription::kOutput, probabilities_description);
+        description.write_message(fields.output, probabilities_description);
 
-        description.write_string(pb::ModelDescription::kPredictedFeatureName,
+        description.write_string(fields.predicted_feature,
                                  classifier_.label_name);
-        description.write_string(pb::ModelDescription::kPredictedProbabilitiesName,
+        description.write_string(fields.predicted_probabilities,
                                  classifier_.probabilities_name);
     } else {
         for (const auto& [name, type] : outputs_)
-            description.write_message(pb::ModelDescription::kOutput, feature(name, type));
+            description.write_message(fields.output, feature(name, type));
     }
 
-    if (!metadata_.short_description.empty() || !metadata_.author.empty() ||
-        !metadata_.license.empty() || !metadata_.version.empty()) {
-        ProtoWriter metadata;
-        if (!metadata_.short_description.empty())
-            metadata.write_string(pb::Metadata::kShortDescription,
-                                  metadata_.short_description);
-        if (!metadata_.version.empty())
-            metadata.write_string(pb::Metadata::kVersionString, metadata_.version);
-        if (!metadata_.author.empty())
-            metadata.write_string(pb::Metadata::kAuthor, metadata_.author);
-        if (!metadata_.license.empty())
-            metadata.write_string(pb::Metadata::kLicense, metadata_.license);
-        description.write_message(pb::ModelDescription::kMetadata, metadata);
-    }
 
     for (const auto& [name, type] : states_) {
         ProtoWriter array;
@@ -704,14 +692,94 @@ std::string MilProgram::serialize() const {
         ProtoWriter state_description;
         state_description.write_string(pb::FeatureDescription::kName, name);
         state_description.write_message(pb::FeatureDescription::kType, feature_type);
-        description.write_message(pb::ModelDescription::kState, state_description);
+        description.write_message(fields.state, state_description);
     }
+
+    return description;
+}
+
+void MilProgram::write_metadata(ProtoWriter& description) const {
+    if (!metadata_.short_description.empty() || !metadata_.author.empty() ||
+        !metadata_.license.empty() || !metadata_.version.empty()) {
+        ProtoWriter metadata;
+        if (!metadata_.short_description.empty())
+            metadata.write_string(pb::Metadata::kShortDescription,
+                                  metadata_.short_description);
+        if (!metadata_.version.empty())
+            metadata.write_string(pb::Metadata::kVersionString, metadata_.version);
+        if (!metadata_.author.empty())
+            metadata.write_string(pb::Metadata::kAuthor, metadata_.author);
+        if (!metadata_.license.empty())
+            metadata.write_string(pb::Metadata::kLicense, metadata_.license);
+        description.write_message(pb::ModelDescription::kMetadata, metadata);
+    }
+}
+
+std::string MilProgram::serialize() const {
+    ProtoWriter function = build_function();
+
+    ProtoWriter program;
+    program.write_int(pb::Program::kVersion, kProgramVersion);
+    program.write_map_entry(pb::Program::kFunctions, "main", function);
+
+    ProtoWriter description = build_description(
+        {pb::ModelDescription::kInput, pb::ModelDescription::kOutput,
+         pb::ModelDescription::kState, pb::ModelDescription::kPredictedFeatureName,
+         pb::ModelDescription::kPredictedProbabilitiesName});
+
+    write_metadata(description);
 
     ProtoWriter model;
     model.write_int(pb::Model::kSpecificationVersion,
                     states_.empty() ? kSpecificationVersion : kSpecificationVersionState);
     model.write_message(pb::Model::kDescription, description);
     model.write_message(pb::Model::kMlProgram, program);
+    return model.bytes();
+}
+
+std::string
+serialize_functions(const std::vector<std::pair<std::string, MilProgram*>>& functions,
+                    const std::string& default_name) {
+    if (functions.empty())
+        throw std::logic_error("serialize_functions: a package needs at least one function");
+
+    bool named = false;
+    for (const auto& [name, program] : functions) {
+        if (program == nullptr)
+            throw std::logic_error("serialize_functions: null program for " + name);
+        // Several entry points is a Core ML 8 feature whatever the
+        // operations inside need.
+        program->set_opset(kOpsetState);
+        named = named || name == default_name;
+    }
+    if (!named)
+        throw std::logic_error("serialize_functions: the default function " +
+                               default_name + " is not one of the functions");
+
+    ProtoWriter program_message;
+    program_message.write_int(pb::Program::kVersion, kProgramVersion);
+    ProtoWriter description;
+    for (const auto& [name, program] : functions) {
+        program_message.write_map_entry(pb::Program::kFunctions, name,
+                                        program->build_function());
+        ProtoWriter one = program->build_description(
+            {pb::FunctionDescription::kInput, pb::FunctionDescription::kOutput,
+             pb::FunctionDescription::kState,
+             pb::FunctionDescription::kPredictedFeatureName,
+             pb::FunctionDescription::kPredictedProbabilitiesName});
+        ProtoWriter entry;
+        entry.write_string(pb::FunctionDescription::kName, name);
+        entry.append_raw(one);
+        description.write_message(pb::ModelDescription::kFunctions, entry);
+    }
+    description.write_string(pb::ModelDescription::kDefaultFunctionName, default_name);
+    // One package, one set of metadata: the first function's.
+    functions.front().second->write_metadata(description);
+
+    ProtoWriter model;
+    model.write_int(pb::Model::kSpecificationVersion, kSpecificationVersionState);
+    model.write_message(pb::Model::kDescription, description);
+    model.write_message(pb::Model::kMlProgram, program_message);
     return model.bytes();
 }
 

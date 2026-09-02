@@ -161,7 +161,8 @@ public:
     }
 };
 
-CoreMLModel* load_model(const std::string& path, ComputeUnits units) {
+CoreMLModel* load_model(const std::string& path, ComputeUnits units,
+                        const std::string& function_name) {
     @autoreleasepool {
         NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]];
         NSError* error = nil;
@@ -174,6 +175,8 @@ CoreMLModel* load_model(const std::string& path, ComputeUnits units) {
 
         MLModelConfiguration* config = [[MLModelConfiguration alloc] init];
         config.computeUnits = to_mlcompute(units);
+        if (!function_name.empty())
+            config.functionName = [NSString stringWithUTF8String:function_name.c_str()];
 
         MLModel* model = [MLModel modelWithContentsOfURL:compiled
                                            configuration:config

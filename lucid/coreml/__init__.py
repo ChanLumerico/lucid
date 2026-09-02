@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING
 
 from lucid.coreml._build import (
     ShapeNotFlexible,
+    _Shared,
     StatefulModel,
     UnsupportedOp,
     UnsupportedRank,
@@ -84,6 +85,7 @@ __all__ = [
     "UnsupportedOp",
     "UnsupportedRank",
     "export",
+    "export_functions",
     "load",
 ]
 
@@ -216,6 +218,100 @@ def export(
         image_input=image_input,
         classifier=classifier,
     )
+
+
+def export_functions(
+    functions: dict[str, tuple[Module, object]],
+    path: str,
+    *,
+    default: str | None = None,
+    precision: Precision = Precision.FLOAT32,
+    weights: WeightPrecision = WeightPrecision.FLOAT,
+    metadata: Metadata | None = None,
+    compute_units: ComputeUnits = ComputeUnits.ALL,
+) -> dict[str, CoreMLModel]:
+    """Write several entry points into one package, sharing its weights.
+
+    A decoder wants two: one that reads a whole prompt and one that reads
+    a single token. They are the same network, and shipping them as two
+    packages ships the weights twice. Here a parameter is written once and
+    every function that uses it points at the same bytes.
+
+    Needs iOS 18 / macOS 15, which is what several entry points costs.
+
+    Parameters
+    ----------
+    functions : dict[str, tuple[nn.Module, object]]
+        Name to the model and the example input to trace it with. The
+        models may be the same object; that is the case worth having.
+    path : str
+        Destination ``.mlpackage``. Replaced if it exists.
+    default : str or None, optional, keyword-only, default=None
+        Entry point a caller gets without asking. The first, if unnamed.
+    precision : Precision, optional, keyword-only, default=FLOAT32
+        Body precision, for every function.
+    weights : WeightPrecision, optional, keyword-only, default=FLOAT
+        Weight storage, for every function.
+    metadata : Metadata or None, optional, keyword-only, default=None
+        What the package says about itself. One package, one set.
+    compute_units : ComputeUnits, optional, keyword-only, default=ALL
+        Which processors Core ML may schedule on.
+
+    Returns
+    -------
+    dict[str, CoreMLModel]
+        One handle per function, each pinned to its own entry point.
+
+    Raises
+    ------
+    ValueError
+        No functions, or ``default`` names one that is not there.
+    """
+    if not functions:
+        raise ValueError("lucid.coreml: a package needs at least one function")
+    chosen = default if default is not None else next(iter(functions))
+    if chosen not in functions:
+        raise ValueError(
+            f"lucid.coreml: the default function {chosen!r} is not one of "
+            f"{sorted(functions)}"
+        )
+
+    from lucid._C import engine as _C_engine
+
+    cm = _C_engine.coreml
+    paths = cm.prepare_package(path)
+    shared = _Shared(paths=paths, blob=cm.BlobWriter(paths.weight_bin))
+
+    built: dict[str, dict[str, object]] = {}
+    programs: list[tuple[str, object]] = []
+    for name, (model, example) in functions.items():
+        info = build_package(
+            model,
+            example,
+            path,
+            precision=precision,
+            weights=weights,
+            metadata=metadata if name == chosen else None,
+            into=shared,
+        )
+        built[name] = info
+        programs.append((name, info["program"]))
+    shared.blob.finalize()
+    cm.finish_package(paths, cm.serialize_functions(programs, chosen))
+
+    handles: dict[str, CoreMLModel] = {}
+    for name, info in built.items():
+        outputs = _features(info["outputs"])
+        handles[name] = CoreMLModel(
+            str(paths.root),
+            [feature for feature, _shape in _features(info["inputs"])],
+            [feature for feature, _shape in outputs],
+            compute_units=compute_units,
+            precision=precision.value,
+            output_shapes=dict(outputs),
+            function_name=name,
+        )
+    return handles
 
 
 def load(

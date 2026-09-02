@@ -250,6 +250,15 @@ namespace StateFeatureType {
 constexpr int kArrayType = 1;
 }  // namespace StateFeatureType
 
+namespace FunctionDescription {
+constexpr int kName = 1;
+constexpr int kInput = 2;
+constexpr int kOutput = 3;
+constexpr int kState = 6;
+constexpr int kPredictedFeatureName = 4;
+constexpr int kPredictedProbabilitiesName = 5;
+}  // namespace FunctionDescription
+
 namespace Shape {
 constexpr int kShape = 1;
 }  // namespace Shape

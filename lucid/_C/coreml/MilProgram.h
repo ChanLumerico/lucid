@@ -20,6 +20,8 @@
 #pragma once
 
 #include <cstdint>
+
+#include "ProtoWriter.h"
 #include <string>
 #include <utility>
 #include <vector>
@@ -37,6 +39,17 @@ enum class MilDataType : int {
     Float32 = 11,
     Int8 = 21,
     Int32 = 23,
+};
+
+// Where a description's fields live.  ``ModelDescription`` and
+// ``FunctionDescription`` carry the same things under different numbers,
+// so the writer takes them rather than hard-coding one.
+struct MilDescriptionFields {
+    int input;
+    int output;
+    int state;
+    int predicted_feature;
+    int predicted_probabilities;
 };
 
 // A tensor type.  An empty ``shape`` means a scalar (rank 0), and a
@@ -210,6 +223,26 @@ public:
     // Called once per output, in the order the caller wants them.
     void add_output(const std::string& name, const MilTensorType& type);
 
+    // Opset the function declares, and the key its block is filed under.
+    // A package with several entry points is Core ML 8 whatever its
+    // operations need.
+    void set_opset(const std::string& opset);
+
+    // The ``Function`` message for this program, on its own — what a
+    // multi-function package files under one of several names.
+    ProtoWriter build_function() const;
+
+    // This program's half of a description: inputs, outputs, state, and a
+    // classifier's predicted-feature names, under the given field numbers.
+    ProtoWriter build_description(const MilDescriptionFields& fields) const;
+
+    // Append this program's metadata, if it was given any.
+    void write_metadata(ProtoWriter& description) const;
+
+    // Whether this program declares any state, which decides the
+    // specification version a package containing it has to ask for.
+    bool has_state() const { return !states_.empty(); }
+
     // Serialise to ``Model`` protobuf bytes.
     //
     // Raises
@@ -277,5 +310,16 @@ private:
 // Blob file reference emitted into every blob-backed constant.  Core ML
 // resolves ``@model_path`` against the package directory.
 LUCID_API extern const char* const kWeightFileRef;
+
+// Serialise several programs into one package, each filed under its own
+// name.  They share the weight blob: a constant written once is referred
+// to from every function that uses it, which is the point of putting them
+// in one package rather than several.
+//
+// Metadata comes from the first program; the rest of each program's
+// description becomes its own ``FunctionDescription``.
+LUCID_API std::string
+serialize_functions(const std::vector<std::pair<std::string, MilProgram*>>& functions,
+                    const std::string& default_name);
 
 }  // namespace lucid::coreml

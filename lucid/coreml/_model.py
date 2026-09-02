@@ -104,6 +104,7 @@ class CoreMLModel:
         output_shapes: dict[str, tuple[int, ...]] | None = None,
         image_input: ImageInput | None = None,
         classifier: Classifier | None = None,
+        function_name: str = "",
     ) -> None:
         self.path = path
         self.input_names = input_names
@@ -122,7 +123,11 @@ class CoreMLModel:
         # A classifier returns a string and a dictionary, not arrays, so
         # it is read through ``classify`` rather than ``predict``.
         self.classifier = classifier
-        self._handle = _C_engine.coreml.load_model(path, _UNITS[compute_units])
+        # Empty takes whichever entry point the package names as default.
+        self.function_name = function_name
+        self._handle = _C_engine.coreml.load_model(
+            path, _UNITS[compute_units], function_name
+        )
 
     def _feed(self, x: object) -> list[tuple[str, TensorImpl]]:
         """Pair each input feature with its tensor.

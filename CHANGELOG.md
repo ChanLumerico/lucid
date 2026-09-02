@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - one package for several shapes, found by tracing twice
 - shape ranges, and the baked constant that aborted the compiler
 - state that persists, and the buffer write that never did
+- several entry points over one copy of the weights
 
 ---
 
