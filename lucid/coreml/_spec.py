@@ -175,7 +175,7 @@ def trace_dtype(name: str, body_mil: int) -> int:
     raise TypeError(f"lucid.coreml: no Core ML element type for a {name} intermediate")
 
 
-def type_spec(tensor: "Tensor") -> tuple[int, list[int]]:
+def type_spec(tensor: Tensor) -> tuple[int, list[int]]:
     """Describe a tensor the way the engine binding expects.
 
     Parameters

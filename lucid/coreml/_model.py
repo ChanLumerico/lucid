@@ -13,10 +13,12 @@ subsystem fails rather than what it does:
   operations, runs at CPU speed, and warns about nothing.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import lucid
 from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap
+from lucid.coreml._build import _select_output
 from lucid.coreml._spec import ComputeUnits
 
 if TYPE_CHECKING:
@@ -67,6 +69,7 @@ class PlacementSummary:
         total = self.total_compute
         return 0.0 if total == 0 else self.compute.get("ANE", 0) / total
 
+    @override
     def __repr__(self) -> str:
         parts = ", ".join(f"{d}={n}" for d, n in sorted(self.compute.items()))
         return (
@@ -100,7 +103,7 @@ class CoreMLModel:
         self.precision = precision
         self._handle = _C_engine.coreml.load_model(path, _UNITS[compute_units])
 
-    def predict(self, x: "Tensor") -> "Tensor":
+    def predict(self, x: Tensor) -> Tensor:
         """Run the model on ``x``.
 
         The input must be a host tensor: Core ML reads host memory, and
@@ -112,12 +115,10 @@ class CoreMLModel:
             # input is narrowed here rather than at every call site. Token
             # ids and masks are nowhere near the range where that loses
             # anything.
-            x = x.to(lucid.int32) if x.dtype is lucid.int64 else x
-        return lucid.Tensor(
-            self._handle.predict(self.input_name, x._impl, self.output_name)
-        )
+            x = x if x.dtype == lucid.int32 else x.to(lucid.int32)
+        return _wrap(self._handle.predict(self.input_name, x._impl, self.output_name))
 
-    def verify(self, model: "Module", x: "Tensor") -> float:
+    def verify(self, model: Module, x: Tensor) -> float:
         """Largest absolute difference against the eager model.
 
         Shapes agreeing is not evidence: a package missing a layer has
@@ -137,9 +138,7 @@ class CoreMLModel:
             ``max|coreml - eager|``. Expect ~1e-7 for a float32 export
             and ~1e-3 relative for float16.
         """
-        reference = model(x)
-        if not isinstance(reference, lucid.Tensor):
-            reference = reference.logits
+        reference = _select_output(model(x), None)
         scale = float(reference.abs().max().item())
         if scale == 0.0:
             # Comparing against an all-zero reference proves nothing: an
@@ -169,6 +168,7 @@ class CoreMLModel:
         """Release the compiled model and the artifacts Core ML cached."""
         self._handle.close()
 
+    @override
     def __repr__(self) -> str:
         return (
             f"CoreMLModel({self.path!r}, precision={self.precision}, "

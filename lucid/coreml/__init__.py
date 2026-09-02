@@ -66,8 +66,8 @@ __all__ = [
 
 
 def export(
-    model: "Module",
-    example: "Tensor",
+    model: Module,
+    example: Tensor,
     path: str,
     *,
     precision: Precision = Precision.FLOAT32,

@@ -21,12 +21,47 @@ correct output ranks, and wrong values everywhere — nothing about it
 fails loudly.
 """
 
-from typing import TYPE_CHECKING, Callable, NamedTuple
+from typing import TYPE_CHECKING, Callable, NamedTuple, Protocol, Sequence
 
 if TYPE_CHECKING:
     from lucid.coreml._build import Builder
 
 __all__ = ["EMITTERS", "MIL_OPS", "MultiOutput"]
+
+
+class TracedValue(Protocol):
+    """One result of a traced operation, as an emitter sees it.
+
+    Only two fields, because only two are ever read. ``reshape`` carries
+    its target in the output's shape rather than in an attribute, and
+    ``astype`` names its cast target by the output's dtype — everything
+    else an emitter needs is an attribute or an operand.
+
+    ``dtype`` is ``object`` rather than a Lucid dtype: the emitter turns
+    it into MIL's spelling through its ``str``, so nothing here depends
+    on which dtype class the tracer happens to hand over.
+    """
+
+    shape: tuple[int, ...]
+    dtype: object
+
+
+class TracedOp(Protocol):
+    """What an emitter is allowed to read off a traced operation.
+
+    Stated as a protocol rather than taken as ``object`` so that reading
+    a field the tracer does not carry is a type error here instead of an
+    ``AttributeError`` halfway through an export.
+    """
+
+    name: str
+    attrs: dict[str, object]
+    outputs: list[TracedValue]
+
+
+# A parameter bound to one operand, or to several — ``concat`` is variadic.
+Bindings = list[tuple[str, str | Sequence[str]]]
+EmitResult = tuple[str, Bindings]
 
 # Lucid dtype name -> the spelling MIL's ``cast`` expects.
 _CAST_TARGETS = {
@@ -46,11 +81,11 @@ class MultiOutput(NamedTuple):
     """
 
     mil_type: str
-    bindings: list
+    bindings: Bindings
 
 
 # Lucid op name -> emitter.
-EMITTERS: dict[str, Callable[..., tuple[str, list[tuple[str, str]]]]] = {}
+EMITTERS: dict[str, Callable[..., EmitResult | MultiOutput]] = {}
 
 
 def _emitter(name: str) -> Callable[..., object]:
@@ -61,7 +96,7 @@ def _emitter(name: str) -> Callable[..., object]:
     return register
 
 
-def _attr(op: object, name: str) -> object:
+def _attr(op: TracedOp, name: str) -> object:
     """An attribute the translation depends on, with no default.
 
     Defaults are how two of these went wrong silently: Lucid spells the
@@ -89,22 +124,45 @@ def _attr(op: object, name: str) -> object:
         The attribute is absent — the tracer renamed it, or this emitter
         was written against a different operation.
     """
-    attrs = op.attrs  # type: ignore[attr-defined]
+    attrs = op.attrs
     if name not in attrs:
         raise KeyError(
-            f"lucid.coreml: op {op.name!r} has no attribute {name!r} "  # type: ignore[attr-defined]
+            f"lucid.coreml: op {op.name!r} has no attribute {name!r} "
             f"(it carries {sorted(attrs)}) — the emitter and the tracer disagree"
         )
     return attrs[name]
 
 
+def _as_int(value: object) -> int:
+    """A trace attribute read as an integer, or a named failure."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return int(value)
+    raise TypeError(f"lucid.coreml: expected a number, got {type(value).__name__}")
+
+
+def _as_float(value: object) -> float:
+    """A trace attribute read as a float, or a named failure."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    raise TypeError(f"lucid.coreml: expected a number, got {type(value).__name__}")
+
+
+def _as_seq(value: object) -> Sequence[object]:
+    """A trace attribute read as a sequence, or a named failure."""
+    if isinstance(value, (list, tuple)):
+        return value
+    raise TypeError(f"lucid.coreml: expected a sequence, got {type(value).__name__}")
+
+
 def _pair(value: object) -> list[int]:
-    return [int(value[0]), int(value[1])]  # type: ignore[index]
+    items = _as_seq(value)
+    return [_as_int(items[0]), _as_int(items[1])]
 
 
 def _pad4(padding: object) -> list[int]:
     """Lucid's ``[pad_h, pad_w]`` as MIL's ``[top, bottom, left, right]``."""
-    ph, pw = int(padding[0]), int(padding[1])  # type: ignore[index]
+    items = _as_seq(padding)
+    ph, pw = _as_int(items[0]), _as_int(items[1])
     return [ph, ph, pw, pw]
 
 
@@ -119,9 +177,9 @@ def _flag(value: object, default: bool = False) -> bool:
 
 @_emitter("conv2d")
 def _conv2d(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
-    attrs = op.attrs  # type: ignore[attr-defined]
+    attrs = op.attrs
     bindings = [("x", ins[0]), ("weight", ins[1])]
     if len(ins) > 2:
         bindings.append(("bias", ins[2]))
@@ -130,14 +188,14 @@ def _conv2d(
         ("pad_type", b.const_str("custom")),
         ("pad", b.const_ints(_pad4(attrs["padding"]))),
         ("dilations", b.const_ints(_pair(attrs["dilation"]))),
-        ("groups", b.const_int(int(attrs["groups"]))),
+        ("groups", b.const_int(_as_int(attrs["groups"]))),
     ]
     return "conv", bindings
 
 
 @_emitter("linear")
 def _linear(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
     bindings = [("x", ins[0]), ("weight", ins[1])]
     if len(ins) > 2:
@@ -147,7 +205,7 @@ def _linear(
 
 @_emitter("batch_norm_eval")
 def _batch_norm_eval(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
     x, mean, variance, gamma, beta = ins[0], ins[1], ins[2], ins[3], ins[4]
     return "batch_norm", [
@@ -156,72 +214,72 @@ def _batch_norm_eval(
         ("variance", variance),
         ("gamma", gamma),
         ("beta", beta),
-        ("epsilon", b.const_float(float(op.attrs["eps"]))),  # type: ignore[attr-defined]
+        ("epsilon", b.const_float(_as_float(op.attrs["eps"]))),
     ]
 
 
 @_emitter("relu")
 def _relu(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
     return "relu", [("x", ins[0])]
 
 
 @_emitter("relu6")
 def _relu6(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
     return "relu6", [("x", ins[0])]
 
 
 @_emitter("sigmoid")
 def _sigmoid(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
     return "sigmoid", [("x", ins[0])]
 
 
 @_emitter("tanh")
 def _tanh(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
     return "tanh", [("x", ins[0])]
 
 
 @_emitter("add")
-def _add(b: "Builder", op: object, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
+def _add(b: Builder, op: TracedOp, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
     return "add", [("x", ins[0]), ("y", ins[1])]
 
 
 @_emitter("sub")
-def _sub(b: "Builder", op: object, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
+def _sub(b: Builder, op: TracedOp, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
     return "sub", [("x", ins[0]), ("y", ins[1])]
 
 
 @_emitter("mul")
-def _mul(b: "Builder", op: object, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
+def _mul(b: Builder, op: TracedOp, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
     return "mul", [("x", ins[0]), ("y", ins[1])]
 
 
 @_emitter("div")
-def _div(b: "Builder", op: object, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
+def _div(b: Builder, op: TracedOp, ins: list[str]) -> tuple[str, list[tuple[str, str]]]:
     return "real_div", [("x", ins[0]), ("y", ins[1])]
 
 
 @_emitter("reshape")
 def _reshape(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
     # Lucid keeps the target shape on the result, not in the attributes.
-    shape = [int(d) for d in op.outputs[0].shape]  # type: ignore[attr-defined]
+    shape = [int(d) for d in op.outputs[0].shape]
     return "reshape", [("x", ins[0]), ("shape", b.const_ints(shape))]
 
 
 @_emitter("max_pool2d")
 def _max_pool2d(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
-    attrs = op.attrs  # type: ignore[attr-defined]
+    attrs = op.attrs
     return "max_pool", [
         ("x", ins[0]),
         ("kernel_sizes", b.const_ints(_pair(attrs["kernel_size"]))),
@@ -234,9 +292,9 @@ def _max_pool2d(
 
 @_emitter("avg_pool2d")
 def _avg_pool2d(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
-    attrs = op.attrs  # type: ignore[attr-defined]
+    attrs = op.attrs
     return "avg_pool", [
         ("x", ins[0]),
         ("kernel_sizes", b.const_ints(_pair(attrs["kernel_size"]))),
@@ -253,12 +311,12 @@ def _avg_pool2d(
 
 @_emitter("dropout")
 def _dropout(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
     # An exported graph is an inference graph.  Lucid still records the op
     # under ``eval()``; a training-mode one is refused rather than
     # silently turned into an identity the caller did not ask for.
-    if op.attrs.get("training"):  # type: ignore[attr-defined]
+    if op.attrs.get("training"):
         raise NotImplementedError(
             "lucid.coreml: dropout was traced in training mode — call model.eval() "
             "before exporting, or the exported graph would differ from the traced one"
@@ -266,8 +324,8 @@ def _dropout(
     return "identity", [("x", ins[0])]
 
 
-def _out_shape(op: object) -> list[int]:
-    return [int(d) for d in op.outputs[0].shape]  # type: ignore[attr-defined]
+def _out_shape(op: TracedOp) -> list[int]:
+    return [int(d) for d in op.outputs[0].shape]
 
 
 # ── shape ops ────────────────────────────────────────────────────────
@@ -280,38 +338,38 @@ def _out_shape(op: object) -> list[int]:
 
 @_emitter("squeeze")
 def _squeeze(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op)))]
 
 
 @_emitter("unsqueeze")
 def _unsqueeze(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op)))]
 
 
 @_emitter("contiguous")
 def _contiguous(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return "identity", [("x", ins[0])]
 
 
 @_emitter("permute")
 def _permute(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
-    perm = [int(a) for a in op.attrs["permutation"]]  # type: ignore[attr-defined]
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
+    perm = [_as_int(a) for a in _as_seq(op.attrs["permutation"])]
     return "transpose", [("x", ins[0]), ("perm", b.const_ints(perm))]
 
 
 @_emitter("concatenate")
 def _concatenate(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
-    axis = int(_attr(op, "dim"))
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
+    axis = _as_int(_attr(op, "dim"))
     # ``values`` is variadic: one parameter bound to every input.
     return "concat", [
         ("values", list(ins)),
@@ -325,15 +383,15 @@ def _concatenate(
 
 @_emitter("silu")
 def _silu(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return "silu", [("x", ins[0])]
 
 
 @_emitter("gelu_exact")
 def _gelu_exact(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     # Lucid's exact GELU is the erf form, which MIL calls EXACT; MIL's
     # default is the tanh approximation, a different function.
     return "gelu", [("x", ins[0]), ("mode", b.const_str("EXACT"))]
@@ -341,31 +399,31 @@ def _gelu_exact(
 
 @_emitter("leaky_relu")
 def _leaky_relu(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
-    alpha = float(_attr(op, "slope"))
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
+    alpha = _as_float(_attr(op, "slope"))
     return "leaky_relu", [("x", ins[0]), ("alpha", b.const_float(alpha))]
 
 
 @_emitter("softmax")
 def _softmax(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
-    axis = int(_attr(op, "dim"))
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
+    axis = _as_int(_attr(op, "dim"))
     return "softmax", [("x", ins[0]), ("axis", b.const_int(axis))]
 
 
 @_emitter("exp")
 def _exp(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return "exp", [("x", ins[0])]
 
 
 @_emitter("matmul")
 def _matmul(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return "matmul", [
         ("x", ins[0]),
         ("y", ins[1]),
@@ -376,8 +434,8 @@ def _matmul(
 
 @_emitter("layer_norm")
 def _layer_norm(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     """Normalised over the trailing axes the weight covers.
 
     Lucid's trace does not record which axes were normalised, but the
@@ -387,23 +445,23 @@ def _layer_norm(
     x, weight = ins[0], ins[1]
     rank = len(b.shape_of(weight))
     axes = list(range(-rank, 0))
-    bindings: list[tuple[str, object]] = [
+    bindings: Bindings = [
         ("x", x),
         ("axes", b.const_ints(axes)),
         ("gamma", weight),
     ]
     if len(ins) > 2:
         bindings.append(("beta", ins[2]))
-    bindings.append(("epsilon", b.const_float(float(op.attrs["eps"]))))  # type: ignore[attr-defined]
+    bindings.append(("epsilon", b.const_float(_as_float(op.attrs["eps"]))))
     return "layer_norm", bindings
 
 
 @_emitter("mean")
 def _mean(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
-    attrs = op.attrs  # type: ignore[attr-defined]
-    axes = [int(d) for d in attrs["dims"]]
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
+    attrs = op.attrs
+    axes = [_as_int(d) for d in _as_seq(attrs["dims"])]
     return "reduce_mean", [
         ("x", ins[0]),
         ("axes", b.const_ints(axes)),
@@ -413,22 +471,22 @@ def _mean(
 
 @_emitter("stack")
 def _stack(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
-    axis = int(_attr(op, "axis"))
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
+    axis = _as_int(_attr(op, "axis"))
     return "stack", [("values", list(ins)), ("axis", b.const_int(axis))]
 
 
 @_emitter("split_at")
-def _split_at(b: "Builder", op: object, ins: list[str]) -> MultiOutput:
+def _split_at(b: Builder, op: TracedOp, ins: list[str]) -> MultiOutput:
     """One MIL ``split`` producing every section the trace recorded.
 
     Lucid records the cut points; MIL wants the section sizes, which the
     output shapes already give — and taking them from the outputs keeps
     the two descriptions from disagreeing.
     """
-    axis = int(op.attrs["axis"])  # type: ignore[attr-defined]
-    sizes = [int(o.shape[axis]) for o in op.outputs]  # type: ignore[attr-defined]
+    axis = _as_int(op.attrs["axis"])
+    sizes = [int(o.shape[axis]) for o in op.outputs]
     return MultiOutput(
         "split",
         [
@@ -441,8 +499,8 @@ def _split_at(b: "Builder", op: object, ins: list[str]) -> MultiOutput:
 
 @_emitter("broadcast_to")
 def _broadcast_to(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     """Expressed as ``tile``, which MIL has, since ``broadcast_to`` it does not.
 
     A broadcast repeats each size-1 axis; the repetition counts come from
@@ -461,15 +519,15 @@ def _broadcast_to(
 
 @_emitter("scaled_dot_product_attention")
 def _sdpa(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     """Decomposed rather than mapped to ``ios18.scaled_dot_product_attention``.
 
     The fused operation exists only in a newer opset than the one this
     writer emits, and the decomposition is what Core ML's own converter
     produces for older targets: scores, scale, softmax, weighted sum.
     """
-    attrs = op.attrs  # type: ignore[attr-defined]
+    attrs = op.attrs
     if attrs.get("has_mask") and len(ins) < 4:
         raise NotImplementedError(
             "lucid.coreml: scaled_dot_product_attention declares a mask but the "
@@ -492,7 +550,7 @@ def _sdpa(
     )
     scaled = b.emit(
         "mul",
-        [("x", scores), ("y", b.const_float(float(attrs["scale"])))],
+        [("x", scores), ("y", b.const_float(_as_float(attrs["scale"])))],
         scores_shape,
     )
     if attrs.get("has_mask"):
@@ -537,8 +595,8 @@ def _sdpa(
 
 @_emitter("zeros")
 def _zeros(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     import lucid
 
     return "identity", [("x", b.const_from_tensor(lucid.zeros(*_out_shape(op))))]
@@ -546,11 +604,11 @@ def _zeros(
 
 @_emitter("full")
 def _full(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     import lucid
 
-    value = float(_attr(op, "fill_value"))
+    value = _as_float(_attr(op, "fill_value"))
     shape = _out_shape(op)
     filled = lucid.zeros(*shape) + value if shape else lucid.tensor(value)
     return "identity", [("x", b.const_from_tensor(filled))]
@@ -558,13 +616,13 @@ def _full(
 
 @_emitter("arange")
 def _arange(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     import lucid
 
-    attrs = op.attrs  # type: ignore[attr-defined]
-    start = float(attrs.get("start", 0.0))
-    step = float(attrs.get("step", 1.0))
+    attrs = op.attrs
+    start = _as_float(attrs.get("start", 0.0))
+    step = _as_float(attrs.get("step", 1.0))
     count = int(_out_shape(op)[0])
     values = lucid.tensor([start + step * i for i in range(count)])
     return "identity", [("x", b.const_from_tensor(values))]
@@ -575,8 +633,8 @@ def _arange(
 
 @_emitter("embedding")
 def _embedding(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     """A row lookup, which MIL spells ``gather`` along the table's first axis.
 
     ``padding_idx`` is not honoured here: it only matters to the backward
@@ -595,9 +653,9 @@ def _embedding(
 
 @_emitter("astype")
 def _astype(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
-    name = str(op.outputs[0].dtype).split(".")[-1]  # type: ignore[attr-defined]
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
+    name = str(op.outputs[0].dtype).split(".")[-1]
     target = _CAST_TARGETS.get(name)
     if target is None:
         raise NotImplementedError(f"lucid.coreml: no Core ML cast target for {name}")
@@ -606,33 +664,33 @@ def _astype(
 
 @_emitter("max")
 def _max(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return _reduce(b, op, ins, "reduce_max")
 
 
 @_emitter("min")
 def _min(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return _reduce(b, op, ins, "reduce_min")
 
 
 def _reduce(
-    b: "Builder", op: object, ins: list[str], mil_type: str
-) -> tuple[str, list[tuple[str, object]]]:
-    attrs = op.attrs  # type: ignore[attr-defined]
+    b: Builder, op: TracedOp, ins: list[str], mil_type: str
+) -> EmitResult:
+    attrs = op.attrs
     return mil_type, [
         ("x", ins[0]),
-        ("axes", b.const_ints([int(d) for d in attrs["dims"]])),
+        ("axes", b.const_ints([_as_int(d) for d in _as_seq(attrs["dims"])])),
         ("keep_dims", b.const_bool(bool(attrs.get("keepdim", False)))),
     ]
 
 
 @_emitter("gelu")
 def _gelu(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     # Lucid's plain ``gelu`` is the tanh approximation; ``gelu_exact`` is
     # the erf form and maps to MIL's EXACT mode.
     return "gelu", [("x", ins[0]), ("mode", b.const_str("TANH_APPROXIMATION"))]
@@ -641,7 +699,7 @@ def _gelu(
 # ── resampling and transposed convolution ────────────────────────────
 
 
-def _scales(op: object, b: "Builder", value: str) -> tuple[float, float]:
+def _scales(op: TracedOp, b: Builder, value: str) -> tuple[float, float]:
     src = b.shape_of(value)
     out = _out_shape(op)
     return out[-2] / src[-2], out[-1] / src[-1]
@@ -649,8 +707,8 @@ def _scales(op: object, b: "Builder", value: str) -> tuple[float, float]:
 
 @_emitter("interpolate_nearest_2d")
 def _interp_nearest(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     h, w = _scales(op, b, ins[0])
     return "upsample_nearest_neighbor", [
         ("x", ins[0]),
@@ -661,29 +719,29 @@ def _interp_nearest(
 
 @_emitter("interpolate_bilinear")
 def _interp_bilinear(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     h, w = _scales(op, b, ins[0])
     return "upsample_bilinear", [
         ("x", ins[0]),
         ("scale_factor_height", b.const_float32(h)),
         ("scale_factor_width", b.const_float32(w)),
-        ("align_corners", b.const_bool(bool(op.attrs.get("align_corners", False)))),  # type: ignore[attr-defined]
+        ("align_corners", b.const_bool(bool(op.attrs.get("align_corners", False)))),
     ]
 
 
 @_emitter("conv_transpose2d")
 def _conv_transpose2d(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     """The output shape is passed explicitly rather than derived.
 
     A transposed convolution's result size is ambiguous — ``output_padding``
     exists precisely because several inputs map to the same output — and
     the trace already recorded which one this is.
     """
-    attrs = op.attrs  # type: ignore[attr-defined]
-    bindings: list[tuple[str, object]] = [("x", ins[0]), ("weight", ins[1])]
+    attrs = op.attrs
+    bindings: Bindings = [("x", ins[0]), ("weight", ins[1])]
     if len(ins) > 2:
         bindings.append(("bias", ins[2]))
     bindings += [
@@ -691,7 +749,7 @@ def _conv_transpose2d(
         ("pad_type", b.const_str("custom")),
         ("pad", b.const_ints(_pad4(attrs["padding"]))),
         ("dilations", b.const_ints(_pair(attrs.get("dilation", [1, 1])))),
-        ("groups", b.const_int(int(attrs.get("groups", 1)))),
+        ("groups", b.const_int(_as_int(attrs.get("groups", 1)))),
         ("output_shape", b.const_ints(_out_shape(op))),
     ]
     return "conv_transpose", bindings
@@ -702,48 +760,48 @@ def _conv_transpose2d(
 
 @_emitter("gather")
 def _gather(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     # The result has the *indices'* shape, not the source's, which is the
     # along-axis form rather than the row-lookup ``gather`` uses.
     return "gather_along_axis", [
         ("x", ins[0]),
         ("indices", ins[1]),
-        ("axis", b.const_int(int(_attr(op, "axis")))),
+        ("axis", b.const_int(_as_int(_attr(op, "axis")))),
     ]
 
 
 @_emitter("scatter_add")
 def _scatter_add(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return "scatter_along_axis", [
         ("data", ins[0]),
         ("indices", ins[1]),
         ("updates", ins[2]),
-        ("axis", b.const_int(int(_attr(op, "dim")))),
+        ("axis", b.const_int(_as_int(_attr(op, "dim")))),
         ("mode", b.const_str("add")),
     ]
 
 
 @_emitter("not_equal")
 def _not_equal(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return "not_equal", [("x", ins[0]), ("y", ins[1])]
 
 
 @_emitter("where")
 def _where(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     return "select", [("cond", ins[0]), ("a", ins[1]), ("b", ins[2])]
 
 
 @_emitter("roll")
 def _roll(
-    b: "Builder", op: object, ins: list[str]
-) -> tuple[str, list[tuple[str, object]]]:
+    b: Builder, op: TracedOp, ins: list[str]
+) -> EmitResult:
     """Cut and swap, once per axis — MIL has no ``roll``.
 
     ``roll(x, s)[i] == x[(i - s) mod n]``, so the tail of length ``s``
@@ -751,9 +809,9 @@ def _roll(
     both are already verified here, where a ``slice_by_index`` would add
     three mask vectors as new ways to be subtly wrong.
     """
-    attrs = op.attrs  # type: ignore[attr-defined]
-    axes = [int(a) for a in attrs["axes"]]
-    shifts = [int(s) for s in attrs["shifts"]]
+    attrs = op.attrs
+    axes = [_as_int(a) for a in _as_seq(attrs["axes"])]
+    shifts = [_as_int(s) for s in _as_seq(attrs["shifts"])]
     value = ins[0]
     shape = list(b.shape_of(value))
 
@@ -773,7 +831,7 @@ def _roll(
             ],
             [first, second],
         )
-        bindings: list[tuple[str, object]] = [
+        bindings: Bindings = [
             ("values", [pieces[1], pieces[0]]),
             ("axis", b.const_int(axis)),
             ("interleave", b.const_bool(False)),
@@ -785,7 +843,7 @@ def _roll(
 
 
 def emit_cast(
-    b: "Builder", value: str, out_dtype: str
+    b: Builder, value: str, out_dtype: str
 ) -> tuple[str, list[tuple[str, str]]]:
     """A ``cast`` the driver inserts, not one a Lucid op asks for.
 
@@ -813,7 +871,7 @@ def emit_cast(
 
 @_emitter("identity")
 def _identity(
-    b: "Builder", op: object, ins: list[str]
+    b: Builder, op: TracedOp, ins: list[str]
 ) -> tuple[str, list[tuple[str, str]]]:
     return "identity", [("x", ins[0])]
 

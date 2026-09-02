@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - a saved graph could not be loaded back, and said so by crashing
 - the classifier heads return what their task bases promise
 
+- the package was untyped, and mypy had been saying so
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

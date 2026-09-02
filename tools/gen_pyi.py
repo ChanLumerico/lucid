@@ -430,6 +430,94 @@ class _diffeq_namespace:
 
 diffeq: _diffeq_namespace
 
+# ── _C_engine.coreml sub-namespace ───────────────────────────────────────────
+# Mirrors lucid/_C/bindings/bind_coreml.cpp.  A tensor type crosses the
+# boundary as a ``(MIL dtype, shape)`` pair rather than a bound struct —
+# see lucid/coreml/_spec.py::type_spec.  ``MilInputs`` is a list of
+# (parameter name, operand names) pairs, plural because ``concat`` and
+# friends take a variadic operand.
+
+_MilType = tuple[int, Sequence[int]]
+_MilInputs = Sequence[tuple[str, Sequence[str]]]
+
+class MilProgram:
+    \"\"\"Builder for one MIL program — the ``mlProgram`` of a Core ML model.\"\"\"
+    def __init__(self, input_name: str, input_type: _MilType, opset: str = ...) -> None: ...
+    def add_blob_const(self, name: str, type: _MilType, offset: int) -> None: ...
+    def add_int_const(self, name: str, values: Sequence[int], scalar: bool = ...) -> None: ...
+    def add_float_const(self, name: str, values: Sequence[SupportsFloat], scalar: bool = ...) -> None: ...
+    def add_int_const_shaped(self, name: str, values: Sequence[int], shape: Sequence[int]) -> None: ...
+    def add_string_const(self, name: str, value: str) -> None: ...
+    def add_bool_const(self, name: str, value: bool) -> None: ...
+    def add_op(self, op_type: str, inputs: _MilInputs, output_name: str, output_type: _MilType) -> None: ...
+    def add_op_multi(self, op_type: str, inputs: _MilInputs, outputs: Sequence[tuple[str, _MilType]]) -> None: ...
+    def set_output(self, name: str, type: _MilType) -> None: ...
+    def serialize(self) -> bytes: ...
+    @property
+    def op_count(self) -> int: ...
+
+class BlobWriter:
+    \"\"\"Appender for ``weights/weight.bin``; ``append_tensor`` returns the offset.\"\"\"
+    def __init__(self, path: str) -> None: ...
+    def append_tensor(self, tensor: TensorImpl, dtype: int) -> int: ...
+    def finalize(self) -> None: ...
+    @property
+    def count(self) -> int: ...
+
+class PackagePaths:
+    root: str
+    mlmodel: str
+    weights_dir: str
+    weight_bin: str
+
+class ComputeUnits:
+    ALL: ComputeUnits
+    CPU_ONLY: ComputeUnits
+    CPU_AND_GPU: ComputeUnits
+    CPU_AND_NE: ComputeUnits
+    @property
+    def name(self) -> str: ...
+    @property
+    def value(self) -> int: ...
+
+class CoreMLModel:
+    \"\"\"A compiled ``.mlpackage``; ``close`` releases it and its cached artifacts.\"\"\"
+    @property
+    def input_name(self) -> str: ...
+    @property
+    def output_name(self) -> str: ...
+    def predict(self, input_name: str, input: TensorImpl, output_name: str) -> TensorImpl: ...
+    def close(self) -> None: ...
+
+_PackagePathsT = PackagePaths
+_ComputeUnitsT = ComputeUnits
+_CoreMLModelT = CoreMLModel
+
+class _coreml_namespace:
+    \"\"\"Stub for ``_C_engine.coreml`` — see the classes above.\"\"\"
+    MilProgram = MilProgram
+    BlobWriter = BlobWriter
+    PackagePaths = PackagePaths
+    ComputeUnits = ComputeUnits
+    CoreMLModel = CoreMLModel
+    BLOB_FLOAT16: int
+    BLOB_FLOAT32: int
+    DTYPE_BOOL: int
+    DTYPE_STRING: int
+    DTYPE_FLOAT16: int
+    DTYPE_FLOAT32: int
+    DTYPE_INT32: int
+    @staticmethod
+    def prepare_package(root: str) -> _PackagePathsT: ...
+    @staticmethod
+    def finish_package(paths: _PackagePathsT, mlmodel_bytes: bytes) -> None: ...
+    @staticmethod
+    def compute_plan(path: str, units: _ComputeUnitsT = ...) -> list[tuple[str, str]]: ...
+    @staticmethod
+    def load_model(path: str, units: _ComputeUnitsT = ...) -> _CoreMLModelT: ...
+
+coreml: _coreml_namespace
+
 # ── _C_engine.utils.tokenizer sub-namespace ──────────────────────────────────
 # Mirrors lucid/_C/bindings/bind_tokenizer.cpp.  Every class here is wrapped
 # by the matching lucid.utils.tokenizer.*Tokenizer{Fast} Python class.

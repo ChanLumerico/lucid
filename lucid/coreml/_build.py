@@ -23,10 +23,17 @@ import lucid.compile as _compile
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid.coreml import _spec
-from lucid.coreml._emit import EMITTERS, MultiOutput, emit_cast
+from lucid.coreml._emit import (
+    EMITTERS,
+    Bindings,
+    MultiOutput,
+    _as_int,
+    emit_cast,
+)
 from lucid.coreml._spec import Precision
 
 if TYPE_CHECKING:
+    from lucid._C.engine import BlobWriter, MilProgram
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
 
@@ -74,7 +81,7 @@ class UnsupportedOp(NotImplementedError):
         self.op_name = op_name
 
 
-def _select_output(output: object, field: str | None) -> "Tensor":
+def _select_output(output: object, field: str | None) -> Tensor:
     """Reduce a model's return value to the single tensor to export."""
     if isinstance(output, lucid.Tensor):
         return output
@@ -94,7 +101,7 @@ def _select_output(output: object, field: str | None) -> "Tensor":
 
 
 def trace(
-    model: "Module", example: "Tensor", *, output_field: str | None = None
+    model: Module, example: Tensor, *, output_field: str | None = None
 ) -> Any:
     """Run one traced forward pass.
 
@@ -135,7 +142,7 @@ def trace(
     return tracer.graph, tracer.external_feeds, input_id, output_id, result
 
 
-def _flatten_ints(tensor: "Tensor") -> list[int]:
+def _flatten_ints(tensor: Tensor) -> list[int]:
     """Every element of an integer tensor, in row-major order.
 
     ``tolist`` is numpy-free, so reading a constant's values here keeps an
@@ -158,7 +165,7 @@ def _flatten_ints(tensor: "Tensor") -> list[int]:
             for item in value:
                 walk(item)
         else:
-            flat.append(int(value))  # type: ignore[arg-type]
+            flat.append(_as_int(value))
 
     walk(tensor.tolist())
     return flat
@@ -174,8 +181,8 @@ class Builder:
 
     def __init__(
         self,
-        program: object,
-        blob: object = None,
+        program: MilProgram,
+        blob: BlobWriter,
         body_mil: int = 0,
         body_blob: int = 0,
         half: bool = False,
@@ -264,7 +271,7 @@ class Builder:
         self._program.add_string_const(name, value)
         return name
 
-    def const_from_tensor(self, tensor: "Tensor") -> str:
+    def const_from_tensor(self, tensor: Tensor) -> str:
         """A constant of arbitrary shape, carried in the weight blob.
 
         The inline constant helpers make rank-1 values, which is enough for
@@ -291,7 +298,7 @@ class Builder:
         self.shapes[name] = shape
         return name
 
-    def emit(self, mil_type: str, bindings: list, shape: list[int]) -> str:
+    def emit(self, mil_type: str, bindings: Bindings, shape: list[int]) -> str:
         """Append an intermediate operation and return its value name.
 
         Some Lucid ops are several MIL ops — scaled dot-product attention
@@ -323,7 +330,7 @@ class Builder:
         return name
 
     def emit_multi(
-        self, mil_type: str, bindings: list, shapes: list[list[int]]
+        self, mil_type: str, bindings: Bindings, shapes: list[list[int]]
     ) -> list[str]:
         """Append an intermediate operation with several results.
 
@@ -367,8 +374,8 @@ class Builder:
 
 
 def build_package(
-    model: "Module",
-    example: "Tensor",
+    model: Module,
+    example: Tensor,
     path: str,
     *,
     precision: Precision = Precision.FLOAT32,
@@ -482,7 +489,10 @@ def build_package(
         operands = [names[i] for i in op.inputs]
         result = emitter(builder, op, operands)
         multi = isinstance(result, MultiOutput)
-        mil_type, raw_bindings = (result.mil_type, result.bindings) if multi else result
+        if isinstance(result, MultiOutput):
+            mil_type, raw_bindings = result.mil_type, result.bindings
+        else:
+            mil_type, raw_bindings = result
         # Emitters may bind a parameter to one name or several (``concat``);
         # the engine wants a list either way.
         bindings = [
