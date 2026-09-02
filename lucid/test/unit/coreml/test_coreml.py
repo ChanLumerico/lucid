@@ -513,3 +513,49 @@ class TestQuantizedWeights:
                 assert plan.ane_fraction > 0.9
         finally:
             exported.close()
+
+
+class TestReadingSomeoneElsesOutputs:
+    """A loaded package chooses its own element type; we do not.
+
+    Every package Lucid writes casts its outputs to float32, so this path
+    is only reachable through ``load`` — which is exactly why it went
+    unnoticed. A reference package returning float16 loaded, reported
+    itself correctly, and could not hand back its result.
+    """
+
+    def _package(self, tmp_path: object, name: str, dtype: int) -> str:
+        engine = _C_engine.coreml
+        program = engine.MilProgram([("x", (engine.DTYPE_FLOAT16, [1, 4]))])
+        program.add_string_const("target", "fp32")
+        if dtype == engine.DTYPE_FLOAT16:
+            program.add_op("relu", [("x", ["x"])], "y", (dtype, [1, 4]))
+        else:
+            program.add_op("relu", [("x", ["x"])], "h", (engine.DTYPE_FLOAT16, [1, 4]))
+            program.add_op(
+                "cast", [("x", ["h"]), ("dtype", ["target"])], "y", (dtype, [1, 4])
+            )
+        program.add_output("y", (dtype, [1, 4]))
+        paths = engine.prepare_package(f"{tmp_path}/{name}.mlpackage")
+        engine.BlobWriter(paths.weight_bin).finalize()
+        engine.finish_package(paths, program.serialize())
+        return str(paths.root)
+
+    @pytest.mark.parametrize("kind", ["float16", "float32"])
+    def test_an_output_is_read_at_the_type_it_declares(
+        self, kind: str, tmp_path: object
+    ) -> None:
+        engine = _C_engine.coreml
+        wanted = engine.DTYPE_FLOAT16 if kind == "float16" else engine.DTYPE_FLOAT32
+        handle = engine.load_model(
+            self._package(tmp_path, kind, wanted), engine.ComputeUnits.CPU_ONLY
+        )
+        try:
+            x = lucid.tensor([[-1.0, 2.0, -3.0, 4.0]]).half()
+            got = lucid.Tensor(
+                handle.predict([("x", x._impl)], list(handle.output_names), [])[0]
+            )
+            assert str(got.dtype).endswith(kind)
+            assert got.reshape(-1).tolist() == [0.0, 2.0, 0.0, 4.0]
+        finally:
+            handle.close()

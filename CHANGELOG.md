@@ -54,6 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a padded output was being read as a packed one
 
+- read a package's outputs at the type it declares
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

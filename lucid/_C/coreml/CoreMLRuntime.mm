@@ -12,6 +12,7 @@
 
 #include "CoreMLRuntime.h"
 #include "MilSchema.h"
+#include "../core/Dtype.h"
 
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
@@ -306,6 +307,31 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
                                  output_name);
     MLMultiArray* out = value.multiArrayValue;
 
+    // The output's element type is the package's to choose, not ours.  A
+    // package Lucid wrote casts its outputs to float32, but one written
+    // elsewhere need not: the reference stateful model returns float16,
+    // and reading that as float32 asks for twice the bytes it has.
+    Dtype dtype = Dtype::F32;
+    switch (out.dataType) {
+        case MLMultiArrayDataTypeFloat32:
+            dtype = Dtype::F32;
+            break;
+        case MLMultiArrayDataTypeFloat16:
+            dtype = Dtype::F16;
+            break;
+        case MLMultiArrayDataTypeDouble:
+            dtype = Dtype::F64;
+            break;
+        case MLMultiArrayDataTypeInt32:
+            dtype = Dtype::I32;
+            break;
+        default:
+            throw std::runtime_error(
+                "lucid.coreml: output " + output_name +
+                " has an element type Lucid has no equivalent for");
+    }
+    const std::size_t element = dtype_size(dtype);
+
     Shape out_shape;
     out_shape.reserve(out.shape.count);
     std::size_t count = 1;
@@ -315,9 +341,16 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
         count *= static_cast<std::size_t>(d);
     }
 
-    const std::size_t nbytes = count * sizeof(float);
+    const std::size_t nbytes = count * element;
     auto bytes = std::shared_ptr<std::byte[]>(new std::byte[nbytes]);
 
+    // ``getBytesWithHandler`` hands over the array's backing store, not a
+    // normalised view of it: Core ML pads the innermost dimension for
+    // alignment on the paths that permit the Neural Engine, and copying
+    // that buffer as if it were packed interleaves padding with data — the
+    // output has the right shape and the wrong values, which is the
+    // failure this whole package exists to make impossible.  The size
+    // check does not catch it either, since a padded buffer is larger.
     std::vector<std::int64_t> out_strides;
     out_strides.reserve(out.strides.count);
     for (NSNumber* stride in out.strides)
@@ -339,9 +372,9 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
     [out getBytesWithHandler:^(const void* raw, NSInteger size) {
       if (raw == nullptr)
           return;
-      const float* src = static_cast<const float*>(raw);
-      float* dst = reinterpret_cast<float*>(bytes.get());
-      const auto available = static_cast<std::size_t>(size) / sizeof(float);
+      const auto* src = static_cast<const std::byte*>(raw);
+      auto* dst = bytes.get();
+      const auto available = static_cast<std::size_t>(size) / element;
 
       if (contiguous) {
           if (available < count)
@@ -352,13 +385,15 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
       }
       if (available < static_cast<std::size_t>(span))
           return;
-      // Walk the logical index space rather than the buffer.
+      // Walk the logical index space rather than the buffer.  Byte-wise,
+      // so the same walk serves every element type.
       std::vector<std::int64_t> index(out_shape.size(), 0);
       for (std::size_t linear = 0; linear < count; ++linear) {
           std::int64_t offset = 0;
           for (std::size_t d = 0; d < index.size(); ++d)
               offset += index[d] * out_strides[d];
-          dst[linear] = src[offset];
+          std::memcpy(dst + linear * element,
+                      src + static_cast<std::size_t>(offset) * element, element);
           for (std::size_t d = index.size(); d-- > 0;) {
               ++index[d];
               if (index[d] < out_shape[d])
@@ -375,8 +410,8 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
     CpuStorage cpu;
     cpu.ptr = std::move(bytes);
     cpu.nbytes = nbytes;
-    cpu.dtype = Dtype::F32;
-    return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, out_shape, Dtype::F32,
+    cpu.dtype = dtype;
+    return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, out_shape, dtype,
                                         Device::CPU, false);
 }
 
@@ -402,11 +437,15 @@ run(CoreMLModel* model,
                 "lucid.coreml: input " + name +
                 " must be a CPU tensor — Core ML reads host memory, and moving it "
                 "here would hide a copy the caller did not ask for");
-        if (tensor->dtype() != Dtype::F32 && tensor->dtype() != Dtype::I32)
+        // The same three types the output side reads.  A package Lucid
+        // wrote takes float32 and casts inside, but one written elsewhere
+        // may ask for float16 directly.
+        if (tensor->dtype() != Dtype::F32 && tensor->dtype() != Dtype::F16 &&
+            tensor->dtype() != Dtype::I32)
             throw std::invalid_argument(
                 "lucid.coreml: input " + name +
-                " must be float32 or int32 — Core ML's multi-array has no int64, "
-                "so token ids are narrowed by the caller");
+                " must be float32, float16 or int32 — Core ML's multi-array has no "
+                "int64, so token ids are narrowed by the caller");
         if (!std::get<CpuStorage>(tensor->storage()).ptr)
             throw std::runtime_error("lucid.coreml: input " + name + " has no host storage");
     }
@@ -436,9 +475,11 @@ run(CoreMLModel* model,
         for (std::int64_t stride : strides)
             [ns_strides addObject:@(stride)];
 
-        const MLMultiArrayDataType in_type = tensor->dtype() == Dtype::I32
-                                                 ? MLMultiArrayDataTypeInt32
-                                                 : MLMultiArrayDataTypeFloat32;
+        MLMultiArrayDataType in_type = MLMultiArrayDataTypeFloat32;
+        if (tensor->dtype() == Dtype::I32)
+            in_type = MLMultiArrayDataTypeInt32;
+        else if (tensor->dtype() == Dtype::F16)
+            in_type = MLMultiArrayDataTypeFloat16;
         MLMultiArray* array =
             [[MLMultiArray alloc] initWithDataPointer:static_cast<void*>(storage.ptr.get())
                                                 shape:ns_shape
