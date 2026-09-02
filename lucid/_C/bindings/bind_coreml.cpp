@@ -26,9 +26,12 @@
 #include "../coreml/BlobWriter.h"
 #include "../coreml/CoreMLRuntime.h"
 #include "../coreml/MilProgram.h"
+#include "../coreml/MilSchema.h"
 #include "../coreml/ModelPackage.h"
 
 namespace py = pybind11;
+
+namespace pb = lucid::coreml::pb;
 
 namespace lucid::bindings {
 
@@ -113,6 +116,31 @@ void register_coreml(py::module_& m) {
             },
             py::arg("name"), py::arg("values"), py::arg("shape"),
             "Integer constant of arbitrary shape, carried inline.")
+        .def(
+            "add_float_const_shaped",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const std::vector<float>& values, const std::vector<std::int64_t>& shape) {
+                self.add_float_const_shaped(name, values, shape);
+            },
+            py::arg("name"), py::arg("values"), py::arg("shape"),
+            "Float32 constant of arbitrary shape, carried inline.")
+        .def(
+            "set_image_input",
+            [](lucid::coreml::MilProgram& self, const std::string& name, std::int64_t width,
+               std::int64_t height, int color_space) {
+                self.set_image_input(name, {width, height, color_space});
+            },
+            py::arg("name"), py::arg("width"), py::arg("height"), py::arg("color_space"),
+            "Present this input as an image in the model description.")
+        .def(
+            "set_metadata",
+            [](lucid::coreml::MilProgram& self, const std::string& short_description,
+               const std::string& author, const std::string& license,
+               const std::string& version) {
+                self.set_metadata({short_description, author, license, version});
+            },
+            py::arg("short_description"), py::arg("author"), py::arg("license"),
+            py::arg("version"), "What the package says about itself.")
         .def("add_string_const", &lucid::coreml::MilProgram::add_string_const, py::arg("name"),
              py::arg("value"))
         .def("add_bool_const", &lucid::coreml::MilProgram::add_bool_const, py::arg("name"),
@@ -231,10 +259,12 @@ void register_coreml(py::module_& m) {
             "predict",
             [](const PyCoreMLModel& self,
                const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
-               const std::vector<std::string>& output_names) {
-                return lucid::coreml::predict(self.raw(), inputs, output_names);
+               const std::vector<std::string>& output_names,
+               const std::vector<std::pair<std::string, int>>& images) {
+                return lucid::coreml::predict(self.raw(), inputs, output_names, images);
             },
             py::arg("inputs"), py::arg("output_names"),
+            py::arg("images") = std::vector<std::pair<std::string, int>>{},
             "Run one prediction. ``inputs`` pairs each feature name with a "
             "contiguous CPU float32 or int32 tensor; the results come back in "
             "the order ``output_names`` asks for.")
@@ -269,6 +299,9 @@ void register_coreml(py::module_& m) {
     cm.attr("DTYPE_STRING") = static_cast<int>(lucid::coreml::MilDataType::String);
     cm.attr("DTYPE_FLOAT16") = static_cast<int>(lucid::coreml::MilDataType::Float16);
     cm.attr("DTYPE_FLOAT32") = static_cast<int>(lucid::coreml::MilDataType::Float32);
+    cm.attr("COLOR_GRAYSCALE") = pb::ImageFeatureType_ColorSpace::kGRAYSCALE;
+    cm.attr("COLOR_RGB") = pb::ImageFeatureType_ColorSpace::kRGB;
+    cm.attr("COLOR_BGR") = pb::ImageFeatureType_ColorSpace::kBGR;
     cm.attr("DTYPE_INT8") = static_cast<int>(lucid::coreml::MilDataType::Int8);
     cm.attr("DTYPE_INT32") = static_cast<int>(lucid::coreml::MilDataType::Int32);
 }

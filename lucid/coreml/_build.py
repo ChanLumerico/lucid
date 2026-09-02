@@ -35,7 +35,13 @@ from lucid.coreml._emit import (
     _as_int,
     emit_cast,
 )
-from lucid.coreml._spec import Precision, WeightPrecision
+from lucid.coreml._spec import (
+    ColorSpace,
+    ImageInput,
+    Metadata,
+    Precision,
+    WeightPrecision,
+)
 
 if TYPE_CHECKING:
     from lucid._C.engine import BlobWriter, MilProgram
@@ -470,6 +476,31 @@ class Builder:
         self._program.add_blob_const(name, (self._body_mil, []), offset)
         return name
 
+    def const_float32_shaped(self, values: list[float], shape: list[int]) -> str:
+        """A float32 constant of arbitrary shape, carried inline.
+
+        Image preprocessing needs a per-channel bias shaped
+        ``(1, C, 1, 1)``, which neither the scalar nor the rank-1 helper
+        can express, and which must stay float32 because it is applied
+        before the body's cast.
+
+        Parameters
+        ----------
+        values : list[float]
+            Flattened values, row-major.
+        shape : list[int]
+            Shape to declare.
+
+        Returns
+        -------
+        str
+            Name of the constant.
+        """
+        name = self._next("f32n")
+        self._program.add_float_const_shaped(name, [float(v) for v in values], shape)
+        self.shapes[name] = list(shape)
+        return name
+
     def const_float32(self, value: float) -> str:
         """A float scalar that stays float32 whatever the body's precision.
 
@@ -631,6 +662,104 @@ def _reachable_ops(graph: Any, output_ids: list[int]) -> list[Any]:
     return [op for op in graph.ops if any(out.id in wanted for out in op.outputs)]
 
 
+def _apply_image_normalisation(tensor: Tensor, spec: ImageInput) -> Tensor:
+    """``pixel * scale + bias``, the way the exported package applies it.
+
+    Used to put the eager model on the same footing when verifying an
+    image export: the package normalises internally, so comparing it
+    against a model fed raw pixels would compare two different inputs.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Pixel values, shaped ``(1, C, H, W)``.
+    spec : ImageInput
+        The normalisation the package carries.
+
+    Returns
+    -------
+    Tensor
+        Normalised input.
+    """
+    out = tensor * spec.scale if spec.scale != 1.0 else tensor
+    if spec.bias:
+        offsets = lucid.tensor([[[[b]] for b in spec.bias]])
+        out = out + offsets
+    return out
+
+
+def _declare_image(
+    program: Any, builder: Builder, name: str, shape: list[int], spec: ImageInput
+) -> str:
+    """Mark an input as an image and prepend its normalisation.
+
+    Core ML puts the image *type* in the model description and the
+    normalisation in the program: ``pixel * scale + bias`` is an ordinary
+    ``mul`` and ``add`` at the head, before any cast to the body's
+    precision, which is where a reference package puts them too.
+
+    Parameters
+    ----------
+    program : MilProgram
+        Program being written.
+    builder : Builder
+        Builder minting the constants.
+    name : str
+        Input feature name.
+    shape : list[int]
+        Input shape, which must be ``(1, C, H, W)``.
+    spec : ImageInput
+        Colour layout and normalisation.
+
+    Returns
+    -------
+    str
+        Value name the rest of the program should read.
+    """
+    if len(shape) != 4 or shape[0] != 1:
+        raise ValueError(
+            f"lucid.coreml: an image input must be (1, C, H, W), and this one is "
+            f"{tuple(shape)}"
+        )
+    channels = shape[1]
+    wanted = 1 if spec.color is ColorSpace.GRAYSCALE else 3
+    if channels != wanted:
+        raise ValueError(
+            f"lucid.coreml: {spec.color.value} needs {wanted} channel(s) and the "
+            f"input has {channels}"
+        )
+    if spec.bias and len(spec.bias) != channels:
+        raise ValueError(
+            f"lucid.coreml: bias has {len(spec.bias)} entries for {channels} channels"
+        )
+
+    program.set_image_input(name, shape[3], shape[2], _spec.color_space(spec.color))
+
+    source = name
+    interface = (_spec.FLOAT32, shape)
+    if spec.scale != 1.0:
+        scaled = "_image_scaled"
+        program.add_op(
+            "mul",
+            _operands([("x", source), ("y", builder.const_float32(spec.scale))]),
+            scaled,
+            interface,
+        )
+        builder.shapes[scaled] = shape
+        source = scaled
+    if spec.bias:
+        biased = "_image_biased"
+        offsets = builder.const_float32_shaped(
+            list(spec.bias), [1, channels, 1, 1]
+        )
+        program.add_op(
+            "add", _operands([("x", source), ("y", offsets)]), biased, interface
+        )
+        builder.shapes[biased] = shape
+        source = biased
+    return source
+
+
 def build_package(
     model: Module,
     example: object,
@@ -638,6 +767,8 @@ def build_package(
     *,
     precision: Precision = Precision.FLOAT32,
     weights: WeightPrecision = WeightPrecision.FLOAT,
+    image_input: ImageInput | None = None,
+    metadata: Metadata | None = None,
     output_field: str | None = None,
 ) -> dict[str, object]:
     """Trace ``model`` and write a complete ``.mlpackage`` at ``path``.
@@ -658,6 +789,12 @@ def build_package(
         How weights are stored. ``INT8`` keeps eight bits per weight plus
         a per-channel scale, halving the package against float16; the
         body still computes at ``precision``.
+    image_input : ImageInput or None, optional, keyword-only, default=None
+        Present the sole input as an image, with the normalisation it
+        expects. Refused when the model takes more than one input, since
+        which of them is the image would be a guess.
+    metadata : Metadata or None, optional, keyword-only, default=None
+        What the package says about itself.
     output_field : str or None, optional, keyword-only, default=None
         Single attribute to export from an output dataclass. ``None``
         takes every tensor field it declares.
@@ -722,8 +859,14 @@ def build_package(
             codes, scale_bytes, zero_bytes, channels = quantized
             offset = blob.append_tensor(_unwrap(codes), _spec.BLOB_INT8)
             program.add_quantized_const(
-                name, (body_mil, shape), offset, scale_bytes, body_mil, zero_bytes,
-                channels, 0,
+                name,
+                (body_mil, shape),
+                offset,
+                scale_bytes,
+                body_mil,
+                zero_bytes,
+                channels,
+                0,
             )
             quantized_count += 1
         elif is_float:
@@ -753,15 +896,26 @@ def build_package(
 
     builder = Builder(program, blob, body_mil, body_blob, half)
     builder.shapes.update(weight_shapes)
+    if image_input is not None and len(inputs) != 1:
+        raise ValueError(
+            f"lucid.coreml: image_input needs a single-input model, and this one "
+            f"takes {len(inputs)} — which of them is the image would be a guess"
+        )
     for name, tid, tensor in inputs:
         shape = [int(d) for d in tensor.shape]
         builder.shapes[name] = shape
+        source = name
+        if image_input is not None:
+            source = _declare_image(
+                program, builder, name, shape, image_input
+            )
+            names[tid] = source
         # Only a float interface needs bracketing.  An integer input —
         # token ids — must reach its lookup as an integer; casting it to
         # half would turn indices into approximations of themselves.
         if half and tensor.dtype in (lucid.float32, lucid.float16):
             cast_name = f"_cast_in_{name}"
-            mil_type, raw = emit_cast(builder, name, "fp16")
+            mil_type, raw = emit_cast(builder, source, "fp16")
             program.add_op(mil_type, _operands(raw), cast_name, (body_mil, shape))
             builder.shapes[cast_name] = shape
             names[tid] = cast_name
@@ -821,6 +975,10 @@ def build_package(
             program.add_op("identity", [("x", [value])], field, _spec.type_spec(tensor))
         program.add_output(field, _spec.type_spec(tensor))
         declared.append((field, tuple(int(d) for d in tensor.shape)))
+    if metadata is not None:
+        program.set_metadata(
+            metadata.description, metadata.author, metadata.license, metadata.version
+        )
     cm.finish_package(paths, program.serialize())
 
     return {

@@ -42,6 +42,8 @@ MESSAGES = (
     "FeatureDescription",
     "FeatureType",
     "ArrayFeatureType",
+    "ImageFeatureType",
+    "Metadata",
     "Program",
     "Function",
     "Block",
@@ -62,6 +64,7 @@ MESSAGES = (
 # Enums whose values end up in the emitted bytes.
 ENUMS = (
     ("ArrayFeatureType", "ArrayDataType"),
+    ("ImageFeatureType", "ColorSpace"),
     ("DataType", None),
 )
 

@@ -47,14 +47,24 @@ from typing import TYPE_CHECKING
 
 from lucid.coreml._build import UnsupportedOp, UnsupportedRank, build_package
 from lucid.coreml._model import CoreMLModel, PlacementSummary
-from lucid.coreml._spec import ComputeUnits, Precision, WeightPrecision
+from lucid.coreml._spec import (
+    ColorSpace,
+    ComputeUnits,
+    ImageInput,
+    Metadata,
+    Precision,
+    WeightPrecision,
+)
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
 
 __all__ = [
+    "ColorSpace",
     "ComputeUnits",
+    "ImageInput",
+    "Metadata",
     "WeightPrecision",
     "CoreMLModel",
     "PlacementSummary",
@@ -82,6 +92,8 @@ def export(
     *,
     precision: Precision = Precision.FLOAT32,
     weights: WeightPrecision = WeightPrecision.FLOAT,
+    image_input: ImageInput | None = None,
+    metadata: Metadata | None = None,
     compute_units: ComputeUnits = ComputeUnits.ALL,
     output_field: str | None = None,
 ) -> CoreMLModel:
@@ -109,6 +121,12 @@ def export(
         way in — the package halves against float16 and the accelerator
         moves half as much memory, at a real cost in agreement that
         :meth:`~CoreMLModel.verify` will quantify.
+    image_input : ImageInput or None, optional, keyword-only, default=None
+        Present the sole input as an image, with the normalisation it
+        expects, so an app can hand over a pixel buffer instead of
+        converting pixels itself.
+    metadata : Metadata or None, optional, keyword-only, default=None
+        Description, author, licence and version to record in the package.
     compute_units : ComputeUnits, optional, keyword-only, default=ALL
         Which processors Core ML may schedule on.
     output_field : str or None, optional, keyword-only, default=None
@@ -139,6 +157,8 @@ def export(
         path,
         precision=precision,
         weights=weights,
+        image_input=image_input,
+        metadata=metadata,
         output_field=output_field,
     )
     outputs = _features(info["outputs"])
@@ -149,6 +169,7 @@ def export(
         compute_units=compute_units,
         precision=precision.value,
         output_shapes=dict(outputs),
+        image_input=image_input,
     )
 
 

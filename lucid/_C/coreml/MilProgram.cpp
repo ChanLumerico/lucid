@@ -161,6 +161,16 @@ void MilProgram::add_float_const(const std::string& name,
     push_const(std::move(op));
 }
 
+void MilProgram::add_float_const_shaped(const std::string& name,
+                                        const std::vector<float>& values,
+                                        const std::vector<std::int64_t>& shape) {
+    Op op;
+    op.output_name = name;
+    op.output_type = {MilDataType::Float32, shape};
+    op.floats = values;
+    push_const(std::move(op));
+}
+
 void MilProgram::add_string_const(const std::string& name, const std::string& value) {
     Op op;
     op.output_name = name;
@@ -238,6 +248,18 @@ void MilProgram::add_op_multi(const std::string& op_type,
     op.extra_outputs.assign(outputs.begin() + 1, outputs.end());
     ops_.push_back(std::move(op));
 }
+
+void MilProgram::set_image_input(const std::string& name, const MilImageSpec& spec) {
+    for (auto& [existing, held] : images_) {
+        if (existing == name) {
+            held = spec;
+            return;
+        }
+    }
+    images_.emplace_back(name, spec);
+}
+
+void MilProgram::set_metadata(const MilMetadata& metadata) { metadata_ = metadata; }
 
 void MilProgram::add_output(const std::string& name, const MilTensorType& type) {
     outputs_.emplace_back(name, type);
@@ -343,7 +365,22 @@ std::string MilProgram::serialize() const {
     program.write_map_entry(pb::Program::kFunctions, "main", function);
 
     // ── model description ────────────────────────────────────────────
-    auto feature = [](const std::string& name, const MilTensorType& type) {
+    auto feature = [this](const std::string& name, const MilTensorType& type) {
+        for (const auto& [image_name, spec] : images_) {
+            if (image_name != name)
+                continue;
+            ProtoWriter image;
+            image.write_int(pb::ImageFeatureType::kWidth, spec.width);
+            image.write_int(pb::ImageFeatureType::kHeight, spec.height);
+            image.write_enum(pb::ImageFeatureType::kColorSpace, spec.color_space);
+            ProtoWriter image_feature_type;
+            image_feature_type.write_message(pb::FeatureType::kImageType, image);
+            ProtoWriter image_description;
+            image_description.write_string(pb::FeatureDescription::kName, name);
+            image_description.write_message(pb::FeatureDescription::kType,
+                                            image_feature_type);
+            return image_description;
+        }
         ProtoWriter array;
         array.write_packed_ints(pb::ArrayFeatureType::kShape, type.shape);
         int array_dtype = pb::ArrayFeatureType_ArrayDataType::kFLOAT32;
@@ -368,6 +405,21 @@ std::string MilProgram::serialize() const {
         description.write_message(pb::ModelDescription::kInput, feature(name, type));
     for (const auto& [name, type] : outputs_)
         description.write_message(pb::ModelDescription::kOutput, feature(name, type));
+
+    if (!metadata_.short_description.empty() || !metadata_.author.empty() ||
+        !metadata_.license.empty() || !metadata_.version.empty()) {
+        ProtoWriter metadata;
+        if (!metadata_.short_description.empty())
+            metadata.write_string(pb::Metadata::kShortDescription,
+                                  metadata_.short_description);
+        if (!metadata_.version.empty())
+            metadata.write_string(pb::Metadata::kVersionString, metadata_.version);
+        if (!metadata_.author.empty())
+            metadata.write_string(pb::Metadata::kAuthor, metadata_.author);
+        if (!metadata_.license.empty())
+            metadata.write_string(pb::Metadata::kLicense, metadata_.license);
+        description.write_message(pb::ModelDescription::kMetadata, metadata);
+    }
 
     ProtoWriter model;
     model.write_int(pb::Model::kSpecificationVersion, kSpecificationVersion);

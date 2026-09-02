@@ -1,6 +1,7 @@
 // lucid/_C/coreml/CoreMLRuntime.mm — see CoreMLRuntime.h.
 
 #import <CoreML/CoreML.h>
+#import <CoreVideo/CoreVideo.h>
 #import <Foundation/Foundation.h>
 
 #include <memory>
@@ -10,9 +11,12 @@
 #include <vector>
 
 #include "CoreMLRuntime.h"
+#include "MilSchema.h"
 
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
+
+namespace pb = lucid::coreml::pb;
 
 namespace lucid::coreml {
 
@@ -36,6 +40,83 @@ MLComputeUnits to_mlcompute(ComputeUnits units) {
     default:
         return MLComputeUnitsAll;
     }
+}
+
+// Wrap a tensor as the pixel buffer an image input wants.
+//
+// Core ML refuses a multi-array for a feature declared as an image, so a
+// package exported with ``image_input`` could not be run — or verified —
+// from Lucid without this.  The tensor is ``(1, C, H, W)`` in the colour
+// space the package declared, holding pixel values, and the buffer is
+// whatever format the model's own constraint asks for.
+MLFeatureValue* make_image_feature(MLModel* model,
+                                   NSString* key,
+                                   const TensorImplPtr& tensor,
+                                   int color_space) {
+    MLFeatureDescription* described = model.modelDescription.inputDescriptionsByName[key];
+    MLImageConstraint* constraint = described.imageConstraint;
+    if (constraint == nil)
+        throw std::runtime_error("lucid.coreml: the model does not take an image for " +
+                                 std::string([key UTF8String]));
+
+    const Shape& shape = tensor->shape();
+    if (shape.size() != 4 || shape[0] != 1)
+        throw std::invalid_argument(
+            "lucid.coreml: an image input must be a (1, C, H, W) tensor");
+    const std::int64_t channels = shape[1];
+    const std::int64_t height = shape[2];
+    const std::int64_t width = shape[3];
+    if (width != static_cast<std::int64_t>(constraint.pixelsWide) ||
+        height != static_cast<std::int64_t>(constraint.pixelsHigh))
+        throw std::invalid_argument(
+            "lucid.coreml: the image is the wrong size for this model");
+
+    CVPixelBufferRef buffer = nullptr;
+    const CVReturn created =
+        CVPixelBufferCreate(kCFAllocatorDefault, constraint.pixelsWide, constraint.pixelsHigh,
+                            constraint.pixelFormatType, nullptr, &buffer);
+    if (created != kCVReturnSuccess || buffer == nullptr)
+        throw std::runtime_error("lucid.coreml: could not allocate a pixel buffer");
+
+    CVPixelBufferLockBaseAddress(buffer, 0);
+    auto* base = static_cast<std::uint8_t*>(CVPixelBufferGetBaseAddress(buffer));
+    const std::size_t stride = CVPixelBufferGetBytesPerRow(buffer);
+    const auto* source = reinterpret_cast<const float*>(
+        std::get<CpuStorage>(tensor->storage()).ptr.get());
+    const std::size_t plane = static_cast<std::size_t>(height * width);
+
+    // In a 32-bit buffer the bytes are B, G, R, A.  Which tensor channel
+    // is which depends on the colour space the package declared, so the
+    // mapping is chosen rather than assumed.
+    const bool bgra = channels == 3;
+    const int slot_for[3] = {
+        bgra && color_space == pb::ImageFeatureType_ColorSpace::kBGR ? 0 : 2,
+        1,
+        bgra && color_space == pb::ImageFeatureType_ColorSpace::kBGR ? 2 : 0,
+    };
+    for (std::int64_t y = 0; y < height; ++y) {
+        std::uint8_t* row = base + static_cast<std::size_t>(y) * stride;
+        for (std::int64_t x = 0; x < width; ++x) {
+            const std::size_t at = static_cast<std::size_t>(y * width + x);
+            if (channels == 1) {
+                const float v = source[at];
+                row[x] = static_cast<std::uint8_t>(std::clamp(v, 0.0f, 255.0f) + 0.5f);
+                continue;
+            }
+            std::uint8_t* pixel = row + static_cast<std::size_t>(x) * 4;
+            for (int c = 0; c < 3; ++c) {
+                const float v = source[static_cast<std::size_t>(c) * plane + at];
+                pixel[slot_for[c]] =
+                    static_cast<std::uint8_t>(std::clamp(v, 0.0f, 255.0f) + 0.5f);
+            }
+            pixel[3] = 255;
+        }
+    }
+    CVPixelBufferUnlockBaseAddress(buffer, 0);
+
+    MLFeatureValue* value = [MLFeatureValue featureValueWithPixelBuffer:buffer];
+    CVPixelBufferRelease(buffer);
+    return value;
 }
 
 // Every feature name a description declares, sorted.
@@ -282,7 +363,8 @@ TensorImplPtr read_output(id<MLFeatureProvider> result, const std::string& outpu
 
 std::vector<TensorImplPtr> predict(CoreMLModel* model,
                                    const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
-                                   const std::vector<std::string>& output_names) {
+                                   const std::vector<std::string>& output_names,
+                                   const std::vector<std::pair<std::string, int>>& images) {
     if (model == nullptr || model->model == nil)
         throw std::invalid_argument("lucid.coreml: null model handle");
     if (inputs.empty())
@@ -314,6 +396,14 @@ std::vector<TensorImplPtr> predict(CoreMLModel* model,
         NSError* error = nil;
 
         for (const auto& [name, tensor] : inputs) {
+            NSString* key = [NSString stringWithUTF8String:name.c_str()];
+            const auto image = std::find_if(images.begin(), images.end(),
+                                            [&](const auto& entry) { return entry.first == name; });
+            if (image != images.end()) {
+                feature_map[key] =
+                    make_image_feature(model->model, key, tensor, image->second);
+                continue;
+            }
             const auto& storage = std::get<CpuStorage>(tensor->storage());
             const Shape& shape = tensor->shape();
             NSMutableArray<NSNumber*>* ns_shape =
@@ -346,8 +436,7 @@ std::vector<TensorImplPtr> predict(CoreMLModel* model,
             if (array == nil)
                 throw std::runtime_error("lucid.coreml: cannot wrap the input " + name +
                                          ": " + describe(error));
-            feature_map[[NSString stringWithUTF8String:name.c_str()]] =
-                [MLFeatureValue featureValueWithMultiArray:array];
+            feature_map[key] = [MLFeatureValue featureValueWithMultiArray:array];
         }
 
         MLDictionaryFeatureProvider* features =

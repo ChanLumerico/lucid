@@ -7,6 +7,7 @@ generated schema header); what this module adds is the Lucid-facing names
 and the mapping from Lucid's own dtypes.
 """
 
+import dataclasses
 import enum
 from typing import TYPE_CHECKING
 
@@ -16,7 +17,7 @@ from lucid._C import engine as _C_engine
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
-__all__ = ["ComputeUnits", "Precision", "WeightPrecision"]
+__all__ = ["ColorSpace", "ComputeUnits", "ImageInput", "Metadata", "Precision", "WeightPrecision"]
 
 
 class ComputeUnits(enum.Enum):
@@ -63,6 +64,88 @@ class WeightPrecision(enum.Enum):
 
     FLOAT = "FLOAT"
     INT8 = "INT8"
+
+
+class ColorSpace(enum.Enum):
+    """Pixel layout Core ML should hand the model.
+
+    Names the order the model's own channel 0, 1, 2 mean, so that the
+    runtime writes a pixel buffer the right way round. Getting this wrong
+    is silent: the model runs and answers badly, which is the same
+    failure as feeding it an image with the red and blue channels
+    swapped, because that is exactly what it is.
+    """
+
+    GRAYSCALE = "GRAYSCALE"
+    RGB = "RGB"
+    BGR = "BGR"
+
+
+@dataclasses.dataclass(frozen=True)
+class ImageInput:
+    """Present an input as an image, with the normalisation it expects.
+
+    An app holding a ``CVPixelBuffer`` cannot feed a multi-array without
+    converting the pixels itself, and getting that conversion subtly wrong
+    — a missed scale, the wrong channel order — produces a model that runs
+    and answers badly. Declaring the input as an image moves both the
+    conversion and the normalisation into the package.
+
+    ``scale`` and ``bias`` are applied as ``pixel * scale + bias``, which
+    is where a mean-and-standard-deviation normalisation lands: a channel
+    normalised by ``(p/255 - m) / s`` has ``scale = 1/(255 * s)`` and
+    ``bias = -m / s``.
+
+    Attributes
+    ----------
+    scale : float
+        Multiplier applied to every pixel, before ``bias``.
+    bias : tuple[float, ...]
+        One offset per channel. Empty adds nothing.
+    color : ColorSpace
+        Pixel layout. ``GRAYSCALE`` expects one channel, the others three.
+    """
+
+    scale: float = 1.0
+    bias: tuple[float, ...] = ()
+    color: ColorSpace = ColorSpace.RGB
+
+
+@dataclasses.dataclass(frozen=True)
+class Metadata:
+    """What the package says about itself.
+
+    Empty fields are left out of the description rather than written
+    blank, so a package carries only what someone actually stated.
+    """
+
+    description: str = ""
+    author: str = ""
+    license: str = ""
+    version: str = ""
+
+
+_COLOR_SPACES: dict[ColorSpace, int] = {
+    ColorSpace.GRAYSCALE: _C_engine.coreml.COLOR_GRAYSCALE,
+    ColorSpace.RGB: _C_engine.coreml.COLOR_RGB,
+    ColorSpace.BGR: _C_engine.coreml.COLOR_BGR,
+}
+
+
+def color_space(color: ColorSpace) -> int:
+    """Engine constant for a colour space.
+
+    Parameters
+    ----------
+    color : ColorSpace
+        Layout to translate.
+
+    Returns
+    -------
+    int
+        The ``ImageFeatureType.ColorSpace`` value.
+    """
+    return _COLOR_SPACES[color]
 
 
 # Lucid dtype -> (MIL dtype, blob dtype).  The two numberings disagree —

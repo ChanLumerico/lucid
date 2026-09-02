@@ -64,6 +64,10 @@ LUCID_API void destroy_model(CoreMLModel* model);
 //     acceptable and says so.
 // output_names : const std::vector<std::string>&
 //     Outputs to read back, in the order the caller wants them.
+// images : const std::vector<std::pair<std::string, int>>&
+//     Inputs the package declared as images, with the colour space it
+//     declared them in. Core ML refuses a multi-array for those, so they
+//     are copied into a pixel buffer instead.
 //
 // Returns
 // -------
@@ -72,7 +76,8 @@ LUCID_API void destroy_model(CoreMLModel* model);
 LUCID_API std::vector<TensorImplPtr>
 predict(CoreMLModel* model,
         const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
-        const std::vector<std::string>& output_names);
+        const std::vector<std::string>& output_names,
+        const std::vector<std::pair<std::string, int>>& images);
 
 // One operation's device assignment, as Core ML planned it.
 struct OpPlacement {

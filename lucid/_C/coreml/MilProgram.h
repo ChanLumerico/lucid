@@ -59,6 +59,27 @@ using MilInputs = std::vector<std::pair<std::string, std::vector<std::string>>>;
 // from the operations.
 using MilNamedTypes = std::vector<std::pair<std::string, MilTensorType>>;
 
+// An input Core ML should present as an image rather than an array.
+//
+// The program still receives a float32 tensor — the difference is in the
+// model description, which lets a caller hand over a ``CVPixelBuffer``
+// instead of converting pixels by hand.  Scaling and mean subtraction are
+// ordinary ``mul`` and ``add`` operations at the head of the program, not
+// description metadata, which is where a reference package puts them.
+struct MilImageSpec {
+    std::int64_t width = 0;
+    std::int64_t height = 0;
+    int color_space = 0;  // pb::ImageFeatureType_ColorSpace
+};
+
+// What a package says about itself.  Empty fields are omitted.
+struct MilMetadata {
+    std::string short_description;
+    std::string author;
+    std::string license;
+    std::string version;
+};
+
 class LUCID_API MilProgram {
 public:
     // ``opset`` names both the function's opset and the single block
@@ -81,6 +102,11 @@ public:
     void add_int_const_shaped(const std::string& name, const std::vector<std::int64_t>& values,
                               const std::vector<std::int64_t>& shape);
     void add_float_const(const std::string& name, const std::vector<float>& values, bool scalar);
+    // Float constant of arbitrary shape, carried inline.  Image
+    // preprocessing needs a per-channel bias shaped ``(1, C, 1, 1)``, which
+    // neither the scalar nor the rank-1 form can express.
+    void add_float_const_shaped(const std::string& name, const std::vector<float>& values,
+                                const std::vector<std::int64_t>& shape);
     void add_string_const(const std::string& name, const std::string& value);
     void add_bool_const(const std::string& name, bool value);
 
@@ -120,6 +146,13 @@ public:
     void add_op_multi(const std::string& op_type,
                       const MilInputs& inputs,
                       const std::vector<std::pair<std::string, MilTensorType>>& outputs);
+
+    // Present an input as an image in the model description.  Must name
+    // one of the inputs the program was constructed with.
+    void set_image_input(const std::string& name, const MilImageSpec& spec);
+
+    // What the package says about itself, for the tooling that reads it.
+    void set_metadata(const MilMetadata& metadata);
 
     // A value the model returns.  Must name an existing operation output.
     // Called once per output, in the order the caller wants them.
@@ -164,6 +197,8 @@ private:
     void push_const(Op op);
 
     MilNamedTypes inputs_;
+    std::vector<std::pair<std::string, MilImageSpec>> images_;
+    MilMetadata metadata_;
     std::string opset_;
     MilNamedTypes outputs_;
     std::vector<Op> ops_;

@@ -18,8 +18,13 @@ from typing import TYPE_CHECKING, override
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
-from lucid.coreml._build import _named_examples, _select_outputs
-from lucid.coreml._spec import ComputeUnits
+from lucid.coreml import _spec
+from lucid.coreml._build import (
+    _apply_image_normalisation,
+    _named_examples,
+    _select_outputs,
+)
+from lucid.coreml._spec import ComputeUnits, ImageInput
 
 if TYPE_CHECKING:
     from lucid._C.engine import TensorImpl
@@ -97,6 +102,7 @@ class CoreMLModel:
         compute_units: ComputeUnits = ComputeUnits.ALL,
         precision: str = "FLOAT32",
         output_shapes: dict[str, tuple[int, ...]] | None = None,
+        image_input: ImageInput | None = None,
     ) -> None:
         self.path = path
         self.input_names = input_names
@@ -107,6 +113,11 @@ class CoreMLModel:
         # is a scalar comes back shaped (1,).  Keeping the traced shapes
         # lets ``predict`` hand back what the eager model would.
         self.output_shapes = output_shapes or {}
+        # An image input changes two things: Core ML refuses a multi-array
+        # for it, so the tensor has to reach the runtime as a pixel buffer;
+        # and the normalisation now lives inside the package, so a
+        # comparison against the eager model has to apply it on that side.
+        self.image_input = image_input
         self._handle = _C_engine.coreml.load_model(path, _UNITS[compute_units])
 
     def _feed(self, x: object) -> list[tuple[str, TensorImpl]]:
@@ -170,7 +181,12 @@ class CoreMLModel:
             The output for a single-output package; otherwise every
             output, keyed by the field the model declared it as.
         """
-        raw = self._handle.predict(self._feed(x), self.output_names)
+        images = (
+            [(self.input_names[0], _spec.color_space(self.image_input.color))]
+            if self.image_input is not None
+            else []
+        )
+        raw = self._handle.predict(self._feed(x), self.output_names, images)
         produced: dict[str, Tensor] = {}
         for name, impl in zip(self.output_names, raw):
             out = _wrap(impl)
@@ -203,8 +219,24 @@ class CoreMLModel:
         float
             The worst ``max|coreml - eager|`` across the outputs. Expect
             ~1e-7 for a float32 export and ~1e-3 relative for float16.
+
+        Notes
+        -----
+        For an image export the pixel buffer is eight bits per channel,
+        so a non-integral input is rounded on the way in and the two
+        sides see slightly different pixels — around 1e-5 rather than
+        1e-8 for the same model. Feed integral values to compare the
+        network rather than the rounding.
         """
         examples, by_keyword = _named_examples(x)
+        if self.image_input is not None:
+            # The package normalises the pixels itself, so the eager model
+            # has to be shown the same normalised values or the comparison
+            # is between two different inputs.
+            examples = [
+                (name, _apply_image_normalisation(tensor, self.image_input))
+                for name, tensor in examples
+            ]
         if by_keyword:
             reference = model(**dict(examples))
         else:

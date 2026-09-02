@@ -95,6 +95,22 @@ constexpr int kFloatDefaultValue = 51;
 constexpr int kDoubleDefaultValue = 61;
 }  // namespace ArrayFeatureType
 
+namespace ImageFeatureType {
+constexpr int kWidth = 1;
+constexpr int kHeight = 2;
+constexpr int kEnumeratedSizes = 21;
+constexpr int kImageSizeRange = 31;
+constexpr int kColorSpace = 3;
+}  // namespace ImageFeatureType
+
+namespace Metadata {
+constexpr int kShortDescription = 1;
+constexpr int kVersionString = 2;
+constexpr int kAuthor = 3;
+constexpr int kLicense = 4;
+constexpr int kUserDefined = 100;
+}  // namespace Metadata
+
 namespace Program {
 constexpr int kVersion = 1;
 constexpr int kFunctions = 2;
@@ -199,6 +215,14 @@ constexpr int kINT32 = 131104;
 constexpr int kINT8 = 131080;
 constexpr int kFLOAT16 = 65552;
 }  // namespace ArrayFeatureType_ArrayDataType
+
+namespace ImageFeatureType_ColorSpace {
+constexpr int kINVALID_COLOR_SPACE = 0;
+constexpr int kGRAYSCALE = 10;
+constexpr int kRGB = 20;
+constexpr int kBGR = 30;
+constexpr int kGRAYSCALE_FLOAT16 = 40;
+}  // namespace ImageFeatureType_ColorSpace
 
 namespace DataType {
 constexpr int kUNUSED_TYPE = 0;
