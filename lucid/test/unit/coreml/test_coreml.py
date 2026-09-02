@@ -235,6 +235,67 @@ class TestVerificationCannotBeVacuous:
         cm.close()
 
 
+class TestTextModels:
+    """Integer inputs, embeddings and attention — a different shape of graph.
+
+    Vision models are float end to end. A language model arrives as token
+    ids, which are integers, and Core ML's multi-array has int32 and no
+    int64. The interface narrows on the way in; what must *not* happen is
+    the float16 path casting those indices to half, which would turn them
+    into approximations of themselves.
+    """
+
+    @pytest.mark.parametrize("factory", ["bert_base", "gpt2_small"])
+    def test_a_language_model_matches(self, factory: str, tmp_path: object) -> None:
+        model = M.create_model(factory).eval()
+        ids = lucid.tensor([[101, 7592, 2088, 102]]).long()
+        reference = model(ids).last_hidden_state
+        scale = float(reference.abs().max().item())
+
+        cm = cml.export(
+            model,
+            ids,
+            str(tmp_path / f"{factory}.mlpackage"),
+            output_field="last_hidden_state",
+        )
+
+        got = cm.predict(ids)
+        assert float((got - reference).abs().max().item()) / scale < 1e-4
+        cm.close()
+
+    def test_token_ids_survive_the_float16_path(self, tmp_path: object) -> None:
+        model = M.create_model("bert_base").eval()
+        ids = lucid.tensor([[101, 7592, 2088, 102]]).long()
+        reference = model(ids).last_hidden_state
+        scale = float(reference.abs().max().item())
+
+        cm = cml.export(
+            model,
+            ids,
+            str(tmp_path / "bert16.mlpackage"),
+            output_field="last_hidden_state",
+            precision=cml.Precision.FLOAT16,
+            compute_units=cml.ComputeUnits.CPU_AND_NE,
+        )
+
+        # Indices cast to half would not merely lose precision, they would
+        # look up different rows; the error would be enormous, not ~1e-2.
+        assert float((cm.predict(ids) - reference).abs().max().item()) / scale < 0.05
+        plan = cm.compute_plan()
+        if plan.total_compute:
+            assert plan.ane_fraction > 0.9
+        cm.close()
+
+    def test_an_output_dataclass_without_logits_names_its_field(
+        self, tmp_path: object
+    ) -> None:
+        model = M.create_model("bert_base").eval()
+        ids = lucid.tensor([[101, 102]]).long()
+
+        with pytest.raises(TypeError, match="logits"):
+            cml.export(model, ids, str(tmp_path / "nofield.mlpackage"))
+
+
 class TestRoundTrip:
     def test_a_written_package_can_be_loaded_back(self, tmp_path: object) -> None:
         model, x = _tiny()

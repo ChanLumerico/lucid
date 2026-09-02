@@ -107,6 +107,12 @@ class CoreMLModel:
         moving a Metal tensor here would hide a copy the caller did not
         ask for. Move it explicitly with ``.to("cpu")``.
         """
+        if x.dtype in (lucid.int64, lucid.int32):
+            # Core ML's multi-array has int32 and no int64, so an integer
+            # input is narrowed here rather than at every call site. Token
+            # ids and masks are nowhere near the range where that loses
+            # anything.
+            x = x.to(lucid.int32) if x.dtype is lucid.int64 else x
         return lucid.Tensor(
             self._handle.predict(self.input_name, x._impl, self.output_name)
         )

@@ -66,6 +66,12 @@ public:
     add_blob_const(const std::string& name, const MilTensorType& type, std::uint64_t blob_offset);
     void
     add_int_const(const std::string& name, const std::vector<std::int64_t>& values, bool scalar);
+    // Integer constant of arbitrary shape.  The weight blob this writer
+    // emits carries float payloads only, and MIL already has an inline
+    // integer tensor, so integer buffers go inline rather than teaching
+    // the blob a dtype code that would have to be guessed.
+    void add_int_const_shaped(const std::string& name, const std::vector<std::int64_t>& values,
+                              const std::vector<std::int64_t>& shape);
     void add_float_const(const std::string& name, const std::vector<float>& values, bool scalar);
     void add_string_const(const std::string& name, const std::string& value);
     void add_bool_const(const std::string& name, bool value);

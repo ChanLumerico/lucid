@@ -188,8 +188,10 @@ TensorImplPtr predict(CoreMLModel* model,
         throw std::invalid_argument(
             "lucid.coreml: the input must be a CPU tensor — Core ML reads host "
             "memory, and moving it here would hide a copy the caller did not ask for");
-    if (input->dtype() != Dtype::F32)
-        throw std::invalid_argument("lucid.coreml: only float32 inputs are supported");
+    if (input->dtype() != Dtype::F32 && input->dtype() != Dtype::I32)
+        throw std::invalid_argument(
+            "lucid.coreml: inputs must be float32 or int32 — Core ML's multi-array "
+            "has no int64, so token ids are narrowed by the caller");
 
     const auto& storage = std::get<CpuStorage>(input->storage());
     if (!storage.ptr)
@@ -213,10 +215,13 @@ TensorImplPtr predict(CoreMLModel* model,
         // The array borrows Lucid's buffer; ``deallocator:nil`` says Core
         // ML must not free it.  The tensor outlives this scope because
         // the caller holds it.
+        const MLMultiArrayDataType in_type = input->dtype() == Dtype::I32
+                                                ? MLMultiArrayDataTypeInt32
+                                                : MLMultiArrayDataTypeFloat32;
         MLMultiArray* array =
             [[MLMultiArray alloc] initWithDataPointer:static_cast<void*>(storage.ptr.get())
                                                 shape:ns_shape
-                                             dataType:MLMultiArrayDataTypeFloat32
+                                             dataType:in_type
                                               strides:ns_strides
                                           deallocator:nil
                                                 error:&error];

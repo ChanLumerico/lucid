@@ -28,6 +28,15 @@ if TYPE_CHECKING:
 
 __all__ = ["EMITTERS", "MIL_OPS", "MultiOutput"]
 
+# Lucid dtype name -> the spelling MIL's ``cast`` expects.
+_CAST_TARGETS = {
+    "F32": "fp32",
+    "F16": "fp16",
+    "I64": "int32",
+    "I32": "int32",
+    "Bool": "bool",
+}
+
 
 class MultiOutput(NamedTuple):
     """One MIL operation that produces every one of a Lucid op's outputs.
@@ -424,10 +433,10 @@ def _sdpa(
     produces for older targets: scores, scale, softmax, weighted sum.
     """
     attrs = op.attrs  # type: ignore[attr-defined]
-    if attrs.get("has_mask") or attrs.get("is_causal"):
+    if attrs.get("has_mask") and len(ins) < 4:
         raise NotImplementedError(
-            "lucid.coreml: masked or causal scaled_dot_product_attention is not "
-            "translated yet — the mask operand has no emitter"
+            "lucid.coreml: scaled_dot_product_attention declares a mask but the "
+            "trace carries no mask operand"
         )
     query, key, value = ins[0], ins[1], ins[2]
     q_shape = b.shape_of(query)
@@ -449,6 +458,29 @@ def _sdpa(
         [("x", scores), ("y", b.const_float(float(attrs["scale"])))],
         scores_shape,
     )
+    if attrs.get("has_mask"):
+        # The mask is already an additive float tensor in the trace — it
+        # broadcasts over the head axis — so it goes straight onto the
+        # scores rather than being rebuilt here.
+        scaled = b.emit("add", [("x", scaled), ("y", ins[3])], scores_shape)
+    if attrs.get("is_causal"):
+        # A causal mask is a constant here: the trace fixed the sequence
+        # length, so the forbidden positions are known.  ``-1e4`` rather
+        # than ``-inf`` because the softmax may run in float16, where
+        # ``inf - inf`` is a NaN rather than a zero weight.
+        import lucid
+
+        rows, cols = scores_shape[-2], scores_shape[-1]
+        offset = cols - rows
+        mask = lucid.tensor(
+            [
+                [0.0 if j <= i + offset else -1.0e4 for j in range(cols)]
+                for i in range(rows)
+            ]
+        )
+        scaled = b.emit(
+            "add", [("x", scaled), ("y", b.const_from_tensor(mask))], scores_shape
+        )
     weights = b.emit(
         "softmax", [("x", scaled), ("axis", b.const_int(-1))], scores_shape
     )
@@ -458,6 +490,115 @@ def _sdpa(
         ("transpose_x", b.const_bool(False)),
         ("transpose_y", b.const_bool(False)),
     ]
+
+
+# ── values produced out of nothing ───────────────────────────────────
+#
+# These take no operands: the trace already fixed their contents, so each
+# becomes a constant that an ``identity`` names as the op's output.
+
+
+@_emitter("zeros")
+def _zeros(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    import lucid
+
+    return "identity", [("x", b.const_from_tensor(lucid.zeros(*_out_shape(op))))]
+
+
+@_emitter("full")
+def _full(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    import lucid
+
+    value = float(op.attrs.get("fill_value", 0.0))  # type: ignore[attr-defined]
+    shape = _out_shape(op)
+    filled = lucid.zeros(*shape) + value if shape else lucid.tensor(value)
+    return "identity", [("x", b.const_from_tensor(filled))]
+
+
+@_emitter("arange")
+def _arange(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    import lucid
+
+    attrs = op.attrs  # type: ignore[attr-defined]
+    start = float(attrs.get("start", 0.0))
+    step = float(attrs.get("step", 1.0))
+    count = int(_out_shape(op)[0])
+    values = lucid.tensor([start + step * i for i in range(count)])
+    return "identity", [("x", b.const_from_tensor(values))]
+
+
+# ── indexing, casting, reductions ────────────────────────────────────
+
+
+@_emitter("embedding")
+def _embedding(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    """A row lookup, which MIL spells ``gather`` along the table's first axis.
+
+    ``padding_idx`` is not honoured here: it only matters to the backward
+    pass, and an exported graph has none.
+    """
+    table, indices = ins[0], ins[1]
+    return "gather", [
+        ("x", table),
+        ("indices", indices),
+        ("axis", b.const_int(0)),
+        # Required by this opset.  False: the trace's indices are already
+        # in range, and checking them would cost a comparison per lookup.
+        ("validate_indices", b.const_bool(False)),
+    ]
+
+
+@_emitter("astype")
+def _astype(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    name = str(op.outputs[0].dtype).split(".")[-1]  # type: ignore[attr-defined]
+    target = _CAST_TARGETS.get(name)
+    if target is None:
+        raise NotImplementedError(f"lucid.coreml: no Core ML cast target for {name}")
+    return "cast", [("x", ins[0]), ("dtype", b.const_str(target))]
+
+
+@_emitter("max")
+def _max(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    return _reduce(b, op, ins, "reduce_max")
+
+
+@_emitter("min")
+def _min(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    return _reduce(b, op, ins, "reduce_min")
+
+
+def _reduce(
+    b: "Builder", op: object, ins: list[str], mil_type: str
+) -> tuple[str, list[tuple[str, object]]]:
+    attrs = op.attrs  # type: ignore[attr-defined]
+    return mil_type, [
+        ("x", ins[0]),
+        ("axes", b.const_ints([int(d) for d in attrs["dims"]])),
+        ("keep_dims", b.const_bool(bool(attrs.get("keepdim", False)))),
+    ]
+
+
+@_emitter("gelu")
+def _gelu(
+    b: "Builder", op: object, ins: list[str]
+) -> tuple[str, list[tuple[str, object]]]:
+    # Lucid's plain ``gelu`` is the tanh approximation; ``gelu_exact`` is
+    # the erf form and maps to MIL's EXACT mode.
+    return "gelu", [("x", ins[0]), ("mode", b.const_str("TANH_APPROXIMATION"))]
 
 
 def emit_cast(
@@ -499,7 +640,11 @@ MIL_OPS = (
     "add",
     "concat",
     "exp",
+    "cast",
+    "gather",
     "gelu",
+    "reduce_max",
+    "reduce_min",
     "layer_norm",
     "leaky_relu",
     "matmul",

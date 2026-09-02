@@ -109,6 +109,16 @@ void MilProgram::add_int_const(const std::string& name,
     push_const(std::move(op));
 }
 
+void MilProgram::add_int_const_shaped(const std::string& name,
+                                      const std::vector<std::int64_t>& values,
+                                      const std::vector<std::int64_t>& shape) {
+    Op op;
+    op.output_name = name;
+    op.output_type = {MilDataType::Int32, shape};
+    op.ints = values;
+    push_const(std::move(op));
+}
+
 void MilProgram::add_float_const(const std::string& name,
                                  const std::vector<float>& values,
                                  bool scalar) {
@@ -249,9 +259,14 @@ std::string MilProgram::serialize() const {
     auto feature = [](const std::string& name, const MilTensorType& type) {
         ProtoWriter array;
         array.write_packed_ints(pb::ArrayFeatureType::kShape, type.shape);
-        const int array_dtype = type.dtype == MilDataType::Float16
-                                    ? pb::ArrayFeatureType_ArrayDataType::kFLOAT16
-                                    : pb::ArrayFeatureType_ArrayDataType::kFLOAT32;
+        int array_dtype = pb::ArrayFeatureType_ArrayDataType::kFLOAT32;
+        if (type.dtype == MilDataType::Float16)
+            array_dtype = pb::ArrayFeatureType_ArrayDataType::kFLOAT16;
+        else if (type.dtype == MilDataType::Int32)
+            // Token ids and masks arrive as integers; Core ML's multi-array
+            // has an int32 type but no int64, which is why the Python layer
+            // narrows on the way in.
+            array_dtype = pb::ArrayFeatureType_ArrayDataType::kINT32;
         array.write_enum(pb::ArrayFeatureType::kDataType, array_dtype);
         ProtoWriter feature_type;
         feature_type.write_message(pb::FeatureType::kMultiArrayType, array);

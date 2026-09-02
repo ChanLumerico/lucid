@@ -52,6 +52,10 @@ class Precision(enum.Enum):
 _DTYPES: dict[object, tuple[int, int]] = {
     lucid.float32: (_C_engine.coreml.DTYPE_FLOAT32, _C_engine.coreml.BLOB_FLOAT32),
     lucid.float16: (_C_engine.coreml.DTYPE_FLOAT16, _C_engine.coreml.BLOB_FLOAT16),
+    # Integer inputs (token ids, masks) reach the interface but never the
+    # weight blob, so they have a MIL type and no blob type.
+    lucid.int64: (_C_engine.coreml.DTYPE_INT32, -1),
+    lucid.int32: (_C_engine.coreml.DTYPE_INT32, -1),
 }
 
 INT32 = _C_engine.coreml.DTYPE_INT32
@@ -133,6 +137,42 @@ def body_dtypes(precision: Precision) -> tuple[int, int]:
     if precision is Precision.FLOAT16:
         return FLOAT16, BLOB_FLOAT16
     return FLOAT32, BLOB_FLOAT32
+
+
+def trace_dtype(name: str, body_mil: int) -> int:
+    """MIL element type for a value the tracer produced.
+
+    Float results follow the program body — an fp16 export wants fp16
+    intermediates — but integer and boolean ones must not. Declaring an
+    index tensor as float is not a rounding difference; MIL rejects the
+    program, and where it does not the operation reads the wrong values.
+
+    Parameters
+    ----------
+    name : str
+        Lucid dtype name as the trace spells it (``"F32"``, ``"I64"``…).
+    body_mil : int
+        MIL dtype the body computes in, used for float results.
+
+    Returns
+    -------
+    int
+        MIL element-type number.
+
+    Raises
+    ------
+    TypeError
+        Core ML has no equivalent — ``float64`` is the reachable case.
+    """
+    if name in ("F32", "F16"):
+        return body_mil
+    if name in ("I64", "I32", "I16", "I8"):
+        # Core ML's program dialect works in int32; a vocabulary index
+        # never approaches its range.
+        return INT32
+    if name == "Bool":
+        return BOOL
+    raise TypeError(f"lucid.coreml: no Core ML element type for a {name} intermediate")
 
 
 def type_spec(tensor: "Tensor") -> tuple[int, list[int]]:

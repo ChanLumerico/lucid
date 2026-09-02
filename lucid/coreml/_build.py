@@ -111,6 +111,35 @@ def trace(
     return tracer.graph, tracer.external_feeds, input_id, output_id, result
 
 
+def _flatten_ints(tensor: "Tensor") -> list[int]:
+    """Every element of an integer tensor, in row-major order.
+
+    ``tolist`` is numpy-free, so reading a constant's values here keeps an
+    external import out of this package (H4).
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Integer tensor to read.
+
+    Returns
+    -------
+    list[int]
+        Flattened values.
+    """
+    flat: list[int] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, list):
+            for item in value:
+                walk(item)
+        else:
+            flat.append(int(value))  # type: ignore[arg-type]
+
+    walk(tensor.tolist())
+    return flat
+
+
 class Builder:
     """Mints the constants MIL requires and appends operations.
 
@@ -185,6 +214,33 @@ class Builder:
     def const_str(self, value: str) -> str:
         name = self._next("str")
         self._program.add_string_const(name, value)
+        return name
+
+    def const_from_tensor(self, tensor: "Tensor") -> str:
+        """A constant of arbitrary shape, carried in the weight blob.
+
+        The inline constant helpers make rank-1 values, which is enough for
+        the small integer lists MIL wants for axes and strides. An op that
+        *produces* a tensor out of nothing — ``zeros``, ``full``,
+        ``arange`` — needs its real shape, and the blob path already
+        handles shape and dtype for weights.
+
+        Parameters
+        ----------
+        tensor : Tensor
+            Host tensor holding the constant's value.
+
+        Returns
+        -------
+        str
+            Name of the constant.
+        """
+        payload = tensor.half() if self._half else tensor
+        name = self._next("blobconst")
+        offset = self._blob.append_tensor(_unwrap(payload), self._body_blob)
+        shape = [int(d) for d in tensor.shape]
+        self._program.add_blob_const(name, (self._body_mil, shape), offset)
+        self.shapes[name] = shape
         return name
 
     def emit(self, mil_type: str, bindings: list, shape: list[int]) -> str:
@@ -291,20 +347,32 @@ def build_package(
         if tid == input_id:
             continue
         tensor = _wrap(impl)
-        if half:
+        is_float = tensor.dtype in (lucid.float32, lucid.float16)
+        if half and is_float:
             tensor = tensor.half()
-        # Straight from the tensor's host storage — no numpy anywhere in
-        # this package (H4).
-        offset = blob.append_tensor(_unwrap(tensor), body_blob)
+        # Float payloads go straight from the tensor's host storage — no
+        # numpy anywhere in this package (H4).
+        shape = [int(d) for d in tensor.shape]
         name = f"_w{tid}"
-        program.add_blob_const(name, (body_mil, [int(d) for d in tensor.shape]), offset)
+        if is_float:
+            offset = blob.append_tensor(_unwrap(tensor), body_blob)
+            program.add_blob_const(name, (body_mil, shape), offset)
+        else:
+            # Integer buffers (position ids, token-type ids) go inline: the
+            # blob carries float payloads only, and MIL has an integer
+            # tensor value already, so nothing has to be guessed.
+            program.add_int_const_shaped(name, _flatten_ints(tensor), shape)
         names[tid] = name
-        weight_shapes[name] = [int(d) for d in tensor.shape]
+        weight_shapes[name] = shape
 
     builder = Builder(program, blob, body_mil, body_blob, half)
     builder.shapes.update(weight_shapes)
     builder.shapes[input_name] = [int(d) for d in example.shape]
-    if half:
+    # Only a float interface needs bracketing.  An integer input — token
+    # ids — must reach its lookup as an integer; casting it to half would
+    # turn indices into approximations of themselves.
+    float_input = example.dtype in (lucid.float32, lucid.float16)
+    if half and float_input:
         cast_name = "_cast_in"
         mil_type, raw = emit_cast(builder, input_name, "fp16")
         bindings = [(p_, [v]) for p_, v in raw]
@@ -327,7 +395,13 @@ def build_package(
             for param, value in raw_bindings
         ]
         outputs = [
-            (f"_v{o.id}_{op.name}", (body_mil, [int(d) for d in o.shape]))
+            (
+                f"_v{o.id}_{op.name}",
+                (
+                    _spec.trace_dtype(str(o.dtype).split(".")[-1], body_mil),
+                    [int(d) for d in o.shape],
+                ),
+            )
             for o in (op.outputs if multi else op.outputs[:1])
         ]
         if multi:

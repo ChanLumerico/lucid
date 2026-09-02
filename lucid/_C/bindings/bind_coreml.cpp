@@ -100,6 +100,15 @@ void register_coreml(py::module_& m) {
                const std::vector<float>& values,
                bool scalar) { self.add_float_const(name, values, scalar); },
             py::arg("name"), py::arg("values"), py::arg("scalar") = false)
+        .def(
+            "add_int_const_shaped",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const std::vector<std::int64_t>& values,
+               const std::vector<std::int64_t>& shape) {
+                self.add_int_const_shaped(name, values, shape);
+            },
+            py::arg("name"), py::arg("values"), py::arg("shape"),
+            "Integer constant of arbitrary shape, carried inline.")
         .def("add_string_const", &lucid::coreml::MilProgram::add_string_const, py::arg("name"),
              py::arg("value"))
         .def("add_bool_const", &lucid::coreml::MilProgram::add_bool_const, py::arg("name"),
