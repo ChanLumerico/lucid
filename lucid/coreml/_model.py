@@ -145,7 +145,9 @@ class CoreMLModel:
                 # integer input is narrowed here rather than at every call
                 # site. Token ids and masks are nowhere near the range
                 # where that loses anything.
-                tensor = tensor if tensor.dtype == lucid.int32 else tensor.to(lucid.int32)
+                tensor = (
+                    tensor if tensor.dtype == lucid.int32 else tensor.to(lucid.int32)
+                )
             fed.append((name, tensor._impl))
         return fed
 
@@ -232,9 +234,7 @@ class CoreMLModel:
                     "this comparison cannot detect anything — load weights, or "
                     "perturb the zero-initialised parameters, before verifying"
                 )
-            worst = max(
-                worst, float((produced[name] - wanted).abs().max().item())
-            )
+            worst = max(worst, float((produced[name] - wanted).abs().max().item()))
         return worst
 
     def compute_plan(self) -> PlacementSummary:

@@ -117,6 +117,20 @@ void register_coreml(py::module_& m) {
              py::arg("value"))
         .def("add_bool_const", &lucid::coreml::MilProgram::add_bool_const, py::arg("name"),
              py::arg("value"))
+        .def(
+            "add_quantized_const",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const TypeSpec& output_type, std::uint64_t offset, const py::bytes& scale,
+               int scale_dtype, const py::bytes& zero_point, std::int64_t channels,
+               std::int64_t axis) {
+                self.add_quantized_const(name, to_type(output_type), offset, scale,
+                                         static_cast<lucid::coreml::MilDataType>(scale_dtype),
+                                         zero_point, channels, axis);
+            },
+            py::arg("name"), py::arg("output_type"), py::arg("offset"), py::arg("scale"),
+            py::arg("scale_dtype"), py::arg("zero_point"), py::arg("channels"), py::arg("axis"),
+            "An int8 weight plus its per-channel scale, dequantized by Core ML on "
+            "the way into whatever consumes it.")
         .def("add_bool_const_shaped", &lucid::coreml::MilProgram::add_bool_const_shaped,
              py::arg("name"), py::arg("values"), py::arg("shape"),
              "Boolean constant of arbitrary shape, carried inline.")
@@ -248,12 +262,14 @@ void register_coreml(py::module_& m) {
         "Compile and load a .mlpackage. Compilation is the expensive step and is "
         "done once per handle.");
 
+    cm.attr("BLOB_INT8") = static_cast<int>(lucid::coreml::BlobDataType::Int8);
     cm.attr("BLOB_FLOAT16") = static_cast<int>(lucid::coreml::BlobDataType::Float16);
     cm.attr("BLOB_FLOAT32") = static_cast<int>(lucid::coreml::BlobDataType::Float32);
     cm.attr("DTYPE_BOOL") = static_cast<int>(lucid::coreml::MilDataType::Bool);
     cm.attr("DTYPE_STRING") = static_cast<int>(lucid::coreml::MilDataType::String);
     cm.attr("DTYPE_FLOAT16") = static_cast<int>(lucid::coreml::MilDataType::Float16);
     cm.attr("DTYPE_FLOAT32") = static_cast<int>(lucid::coreml::MilDataType::Float32);
+    cm.attr("DTYPE_INT8") = static_cast<int>(lucid::coreml::MilDataType::Int8);
     cm.attr("DTYPE_INT32") = static_cast<int>(lucid::coreml::MilDataType::Int32);
 }
 

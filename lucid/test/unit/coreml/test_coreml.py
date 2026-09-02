@@ -17,6 +17,8 @@ Three properties, each with its own failure mode:
   about nothing.  ``compute_plan`` turns that into an assertion.
 """
 
+import os
+
 import pytest
 
 import lucid
@@ -84,7 +86,9 @@ class TestPackageFormat:
 
         handle = engine.load_model(paths.root, engine.ComputeUnits.CPU_ONLY)
         out = lucid.Tensor(
-            handle.predict([("x", lucid.tensor([[-1.0, 2.0, -3.0, 4.0]])._impl)], ["y"])[0]
+            handle.predict(
+                [("x", lucid.tensor([[-1.0, 2.0, -3.0, 4.0]])._impl)], ["y"]
+            )[0]
         )
 
         assert out.numpy().ravel().tolist() == [0.0, 2.0, 0.0, 4.0]
@@ -343,9 +347,7 @@ class TestSegmentationAndDetection:
         assert float((cm.predict(x) - reference).abs().max().item()) / scale < 1e-5
         cm.close()
 
-    def test_a_detector_exports_all_three_of_its_heads(
-        self, tmp_path: object
-    ) -> None:
+    def test_a_detector_exports_all_three_of_its_heads(self, tmp_path: object) -> None:
         """A detector is boxes and objectness, not only class scores.
 
         Exporting one field of a several-field output produces a package
@@ -449,3 +451,65 @@ class TestRefusals:
         with pytest.raises(ValueError, match="CPU tensor"):
             cm.predict(x.to("metal"))
         cm.close()
+
+
+class TestQuantizedWeights:
+    """Eight bits per weight, and what that buys and costs.
+
+    Quantization is a storage decision: the codes are dequantized on the
+    way into each operation and the arithmetic still runs at the body's
+    precision. So the two things worth asserting are that the package
+    actually got smaller and that the numbers did not fall apart.
+    """
+
+    def _weight_bytes(self, package: str) -> int:
+        return os.path.getsize(f"{package}/Data/com.apple.CoreML/weights/weight.bin")
+
+    def test_int8_halves_the_weights_and_still_agrees(self, tmp_path: object) -> None:
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        x = lucid.randn(1, 3, 224, 224)
+        reference = model(x).logits
+        scale = float(reference.abs().max().item())
+
+        plain = str(tmp_path / "float.mlpackage")
+        packed = str(tmp_path / "int8.mlpackage")
+        a = cml.export(model, x, plain, precision=cml.Precision.FLOAT16)
+        b = cml.export(
+            model,
+            x,
+            packed,
+            precision=cml.Precision.FLOAT16,
+            weights=cml.WeightPrecision.INT8,
+        )
+        try:
+            # Halved, near enough: the per-channel scales and the weights
+            # below the threshold are still stored in full.
+            assert self._weight_bytes(packed) < self._weight_bytes(plain) * 0.6
+            error = float((b.predict(x) - reference).abs().max().item()) / scale
+            # Looser than float16 on purpose. Eight bits cannot hold what
+            # sixteen did, and pretending otherwise would make this test
+            # pass for a package that quantized nothing.
+            assert error < 0.2
+        finally:
+            a.close()
+            b.close()
+
+    def test_a_quantized_package_still_reaches_the_neural_engine(
+        self, tmp_path: object
+    ) -> None:
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        x = lucid.randn(1, 3, 224, 224)
+        exported = cml.export(
+            model,
+            x,
+            str(tmp_path / "q.mlpackage"),
+            precision=cml.Precision.FLOAT16,
+            weights=cml.WeightPrecision.INT8,
+            compute_units=cml.ComputeUnits.CPU_AND_NE,
+        )
+        try:
+            plan = exported.compute_plan()
+            if plan.total_compute:
+                assert plan.ane_fraction > 0.9
+        finally:
+            exported.close()

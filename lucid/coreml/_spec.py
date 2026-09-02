@@ -16,7 +16,7 @@ from lucid._C import engine as _C_engine
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
-__all__ = ["ComputeUnits", "Precision"]
+__all__ = ["ComputeUnits", "Precision", "WeightPrecision"]
 
 
 class ComputeUnits(enum.Enum):
@@ -46,6 +46,25 @@ class Precision(enum.Enum):
     FLOAT16 = "FLOAT16"
 
 
+class WeightPrecision(enum.Enum):
+    """How a weight is stored, as distinct from how the body computes.
+
+    ``INT8`` stores each weight as an integer code plus one scale per
+    output channel, and Core ML dequantizes it on the way into the
+    operation that uses it. The arithmetic still runs at the body's
+    precision — this is a storage decision, not a different network — so
+    the package halves in size against float16 and the Neural Engine
+    moves half as much memory to do the same work.
+
+    The cost is real and one-directional: eight bits per weight cannot
+    represent what sixteen did, so a quantized export is further from the
+    eager model than a float16 one. ``verify`` will say by how much.
+    """
+
+    FLOAT = "FLOAT"
+    INT8 = "INT8"
+
+
 # Lucid dtype -> (MIL dtype, blob dtype).  The two numberings disagree —
 # MIL calls float32 11, the blob calls it 2 — so both are carried rather
 # than derived from each other.
@@ -58,6 +77,8 @@ _DTYPES: dict[object, tuple[int, int]] = {
     lucid.int32: (_C_engine.coreml.DTYPE_INT32, -1),
 }
 
+INT8 = _C_engine.coreml.DTYPE_INT8
+BLOB_INT8 = _C_engine.coreml.BLOB_INT8
 INT32 = _C_engine.coreml.DTYPE_INT32
 BOOL = _C_engine.coreml.DTYPE_BOOL
 STRING = _C_engine.coreml.DTYPE_STRING

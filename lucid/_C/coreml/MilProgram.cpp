@@ -61,6 +61,38 @@ ProtoWriter make_string_value(const std::string& text) {
     return value;
 }
 
+// ``Value`` holding an inline byte payload.  MIL has no float16 or int8
+// immediate list; both travel as raw little-endian bytes under
+// ``TensorValue.bytes``, which is what a reference quantized package does.
+ProtoWriter make_bytes_value(const std::string& payload, const MilTensorType& type) {
+    ProtoWriter repeated;
+    repeated.write_bytes(1, payload.data(), payload.size());  // RepeatedBytes.values
+    ProtoWriter tensor_value;
+    tensor_value.write_message(pb::TensorValue::kBytes, repeated);
+    ProtoWriter immediate;
+    immediate.write_message(pb::ImmediateValue::kTensor, tensor_value);
+
+    ProtoWriter value;
+    value.write_message(pb::Value::kType, make_value_type(type));
+    value.write_message(pb::Value::kImmediateValue, immediate);
+    return value;
+}
+
+// ``Value`` holding one int32 scalar.
+ProtoWriter make_int_value(std::int64_t number) {
+    ProtoWriter repeated;
+    repeated.write_packed_ints(1, {number});  // RepeatedInts.values
+    ProtoWriter tensor_value;
+    tensor_value.write_message(pb::TensorValue::kInts, repeated);
+    ProtoWriter immediate;
+    immediate.write_message(pb::ImmediateValue::kTensor, tensor_value);
+
+    ProtoWriter value;
+    value.write_message(pb::Value::kType, make_value_type({MilDataType::Int32, {}}));
+    value.write_message(pb::Value::kImmediateValue, immediate);
+    return value;
+}
+
 // An operand binding: references to other values by name.  More than one
 // when the parameter is variadic (``concat``'s ``values``).
 ProtoWriter make_argument(const std::vector<std::string>& value_names) {
@@ -155,6 +187,32 @@ void MilProgram::add_bool_const_shaped(const std::string& name,
     push_const(std::move(op));
 }
 
+void MilProgram::add_quantized_const(const std::string& name,
+                                     const MilTensorType& output_type,
+                                     std::uint64_t blob_offset,
+                                     const std::string& scale_bytes,
+                                     MilDataType scale_dtype,
+                                     const std::string& zero_point_bytes,
+                                     std::int64_t channels,
+                                     std::int64_t axis) {
+    Op op;
+    op.type = "constexpr_affine_dequantize";
+    op.output_name = name;
+    op.output_type = output_type;
+    op.is_quantized = true;
+    op.blob = true;
+    op.blob_offset = blob_offset;
+    op.scale_bytes = scale_bytes;
+    op.zero_point_bytes = zero_point_bytes;
+    op.scale_dtype = scale_dtype;
+    op.channels = channels;
+    op.axis = axis;
+    // Not through ``push_const``: that stamps every entry as a ``const``,
+    // and this one is a ``constexpr_affine_dequantize`` whose payload
+    // lives in attributes of its own.
+    ops_.push_back(std::move(op));
+}
+
 void MilProgram::add_op(const std::string& op_type,
                         const MilInputs& inputs,
                         const std::string& output_name,
@@ -206,7 +264,28 @@ std::string MilProgram::serialize() const {
             operation.write_message(pb::Operation::kOutputs,
                                     make_named_value_type(extra_name, extra_type));
 
-        if (op.is_const) {
+        if (op.is_quantized) {
+            // The codes carry the weight's own shape; the scale and zero
+            // point carry one entry per channel along ``axis``.
+            ProtoWriter codes;
+            codes.write_message(pb::Value::kType,
+                                make_value_type({MilDataType::Int8, op.output_type.shape}));
+            ProtoWriter blob;
+            blob.write_string(pb::BlobFileValue::kFileName, kWeightFileRef);
+            blob.write_int(pb::BlobFileValue::kOffset, static_cast<std::int64_t>(op.blob_offset));
+            codes.write_message(pb::Value::kBlobFileValue, blob);
+            operation.write_map_entry(pb::Operation::kAttributes, "quantized_data", codes);
+
+            const std::vector<std::int64_t> per_channel{op.channels};
+            operation.write_map_entry(
+                pb::Operation::kAttributes, "scale",
+                make_bytes_value(op.scale_bytes, {op.scale_dtype, per_channel}));
+            operation.write_map_entry(
+                pb::Operation::kAttributes, "zero_point",
+                make_bytes_value(op.zero_point_bytes, {MilDataType::Int8, per_channel}));
+            operation.write_map_entry(pb::Operation::kAttributes, "axis",
+                                      make_int_value(op.axis));
+        } else if (op.is_const) {
             ProtoWriter value;
             value.write_message(pb::Value::kType, make_value_type(op.output_type));
             if (op.blob) {

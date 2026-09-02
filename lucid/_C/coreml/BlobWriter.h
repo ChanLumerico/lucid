@@ -37,6 +37,7 @@ namespace lucid::coreml {
 enum class BlobDataType : std::uint32_t {
     Float16 = 1,  // MIL FLOAT16 (10)
     Float32 = 2,  // MIL FLOAT32 (11)
+    Int8 = 4,     // MIL INT8 (21) — read off a reference quantized package
 };
 
 class LUCID_API BlobWriter {

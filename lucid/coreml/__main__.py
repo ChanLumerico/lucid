@@ -17,7 +17,7 @@ import sys
 
 import lucid
 import lucid.models as models
-from lucid.coreml import ComputeUnits, Precision, export
+from lucid.coreml import ComputeUnits, Precision, WeightPrecision, export
 
 __all__ = ["main"]
 
@@ -45,6 +45,13 @@ def main(argv: list[str] | None = None) -> int:
         "FLOAT16 is what the Neural Engine runs).",
     )
     parser.add_argument(
+        "--weights",
+        default="FLOAT",
+        choices=[w.value for w in WeightPrecision],
+        help="Weight storage (default: FLOAT). INT8 keeps eight bits per weight "
+        "plus a per-channel scale, halving the package against float16.",
+    )
+    parser.add_argument(
         "--units",
         default="ALL",
         choices=[u.value for u in ComputeUnits],
@@ -68,9 +75,13 @@ def main(argv: list[str] | None = None) -> int:
         example,
         args.out,
         precision=Precision(args.precision),
+        weights=WeightPrecision(args.weights),
         compute_units=ComputeUnits(args.units),
     )
-    print(f"[export] saved  precision={args.precision} units={args.units}")
+    print(
+        f"[export] saved  precision={args.precision} weights={args.weights} "
+        f"units={args.units}"
+    )
 
     plan = exported.compute_plan()
     if plan.total_compute:

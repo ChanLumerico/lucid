@@ -47,7 +47,7 @@ from typing import TYPE_CHECKING
 
 from lucid.coreml._build import UnsupportedOp, UnsupportedRank, build_package
 from lucid.coreml._model import CoreMLModel, PlacementSummary
-from lucid.coreml._spec import ComputeUnits, Precision
+from lucid.coreml._spec import ComputeUnits, Precision, WeightPrecision
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -55,6 +55,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "ComputeUnits",
+    "WeightPrecision",
     "CoreMLModel",
     "PlacementSummary",
     "Precision",
@@ -80,6 +81,7 @@ def export(
     path: str,
     *,
     precision: Precision = Precision.FLOAT32,
+    weights: WeightPrecision = WeightPrecision.FLOAT,
     compute_units: ComputeUnits = ComputeUnits.ALL,
     output_field: str | None = None,
 ) -> CoreMLModel:
@@ -101,6 +103,12 @@ def export(
         Precision of the program body. ``FLOAT32`` keeps the export
         faithful to the model it came from; ``FLOAT16`` is what the
         Neural Engine runs. Inputs and outputs stay float32 either way.
+    weights : WeightPrecision, optional, keyword-only, default=FLOAT
+        How weights are stored. ``INT8`` keeps eight bits per weight plus
+        one scale per output channel and lets Core ML dequantize on the
+        way in — the package halves against float16 and the accelerator
+        moves half as much memory, at a real cost in agreement that
+        :meth:`~CoreMLModel.verify` will quantify.
     compute_units : ComputeUnits, optional, keyword-only, default=ALL
         Which processors Core ML may schedule on.
     output_field : str or None, optional, keyword-only, default=None
@@ -126,7 +134,12 @@ def export(
         )
 
     info = build_package(
-        model, example, path, precision=precision, output_field=output_field
+        model,
+        example,
+        path,
+        precision=precision,
+        weights=weights,
+        output_field=output_field,
     )
     outputs = _features(info["outputs"])
     return CoreMLModel(

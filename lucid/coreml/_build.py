@@ -19,9 +19,11 @@ Two things the trace hands over that the driver has to sort out:
 from typing import TYPE_CHECKING, Any
 
 import dataclasses
+import struct
 
 import lucid
 import lucid.compile as _compile
+import lucid.quantization as _quant
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid.coreml import _spec
@@ -29,10 +31,11 @@ from lucid.coreml._emit import (
     EMITTERS,
     Bindings,
     MultiOutput,
+    _as_float,
     _as_int,
     emit_cast,
 )
-from lucid.coreml._spec import Precision
+from lucid.coreml._spec import Precision, WeightPrecision
 
 if TYPE_CHECKING:
     from lucid._C.engine import BlobWriter, MilProgram
@@ -205,9 +208,7 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     for name, tensor in selected:
         value_id = tracer.lookup_id(_unwrap(tensor))
         if value_id is None:
-            raise ValueError(
-                f"lucid.coreml: output {name!r} is not part of the trace"
-            )
+            raise ValueError(f"lucid.coreml: output {name!r} is not part of the trace")
         outputs.append((name, value_id, tensor))
     return tracer.graph, tracer.external_feeds, inputs, outputs
 
@@ -241,6 +242,32 @@ def _flatten_ints(tensor: Tensor) -> list[int]:
     return flat
 
 
+def _flatten_floats(tensor: Tensor) -> list[float]:
+    """A float tensor's values, flattened, for a packed inline payload.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Float tensor to flatten.
+
+    Returns
+    -------
+    list[float]
+        Flattened values.
+    """
+    flat: list[float] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, list):
+            for item in value:
+                walk(item)
+        else:
+            flat.append(_as_float(value))
+
+    walk(tensor.tolist())
+    return flat
+
+
 def _flatten_bools(tensor: Tensor) -> list[bool]:
     """A boolean tensor's values, flattened, for an inline MIL constant.
 
@@ -265,6 +292,65 @@ def _flatten_bools(tensor: Tensor) -> list[bool]:
 
     walk(tensor.tolist())
     return flat
+
+
+# Below this many elements a weight is not worth quantizing: the
+# per-channel scale is itself stored uncompressed, so a small tensor can
+# come out larger, and the error it adds buys nothing. The same threshold
+# the reference tooling uses, stated here rather than inherited.
+_QUANTIZE_MIN_ELEMENTS = 2048
+
+
+def _quantize_weight(
+    tensor: Tensor, scale_mil: int
+) -> tuple[Tensor, bytes, bytes, int] | None:
+    """A weight as int8 codes with one scale per output channel.
+
+    Returns ``None`` when the tensor should stay in floating point — a
+    bias, a norm's parameters, anything below the threshold, or a rank-1
+    value that has no channel axis to scale along.
+
+    Symmetric rather than affine: a symmetric grid puts zero exactly on a
+    lattice point, which matters because padding and masking write real
+    zeros that an affine grid would round to something else.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Float weight to quantize.
+    scale_mil : int
+        MIL dtype the scale is stored as — the body's precision, so the
+        dequantized value lands in the type the operation wants.
+
+    Returns
+    -------
+    tuple or None
+        ``(codes, scale bytes, zero-point bytes, channels)``.
+    """
+    if len(tensor.shape) < 2:
+        return None
+    count = 1
+    for dim in tensor.shape:
+        count *= int(dim)
+    if count < _QUANTIZE_MIN_ELEMENTS:
+        return None
+
+    channels = int(tensor.shape[0])
+    flat = tensor.reshape(channels, -1)
+    scale, zero_point = _quant.calculate_qparams(
+        flat.min(dim=1), flat.max(dim=1), _quant.per_channel_symmetric, _quant.qint8
+    )
+    codes = _quant.quantize(tensor, scale, zero_point, _quant.qint8, ch_axis=0)
+
+    # MIL has no float16 or int8 immediate list; both travel as raw
+    # little-endian bytes, so they are packed here rather than handed to
+    # the engine as numbers it would have to re-encode.
+    fmt = "<e" if scale_mil == _spec.FLOAT16 else "<f"
+    scale_bytes = b"".join(struct.pack(fmt, v) for v in _flatten_floats(scale))
+    zero_bytes = b"".join(
+        struct.pack("<b", int(v)) for v in _flatten_floats(zero_point)
+    )
+    return codes, scale_bytes, zero_bytes, channels
 
 
 def _operands(bindings: Bindings) -> list[tuple[str, list[str]]]:
@@ -551,6 +637,7 @@ def build_package(
     path: str,
     *,
     precision: Precision = Precision.FLOAT32,
+    weights: WeightPrecision = WeightPrecision.FLOAT,
     output_field: str | None = None,
 ) -> dict[str, object]:
     """Trace ``model`` and write a complete ``.mlpackage`` at ``path``.
@@ -567,6 +654,10 @@ def build_package(
     precision : Precision, optional, keyword-only, default=FLOAT32
         Body precision. ``FLOAT16`` is what the Neural Engine runs;
         inputs and outputs stay float32 either way, bracketed by casts.
+    weights : WeightPrecision, optional, keyword-only, default=FLOAT
+        How weights are stored. ``INT8`` keeps eight bits per weight plus
+        a per-channel scale, halving the package against float16; the
+        body still computes at ``precision``.
     output_field : str or None, optional, keyword-only, default=None
         Single attribute to export from an output dataclass. ``None``
         takes every tensor field it declares.
@@ -584,9 +675,7 @@ def build_package(
     UnsupportedOp
         The trace contains an op with no MIL translation.
     """
-    graph, feeds, inputs, outputs = trace(
-        model, example, output_field=output_field
-    )
+    graph, feeds, inputs, outputs = trace(model, example, output_field=output_field)
 
     cm = _C_engine.coreml
     paths = cm.prepare_package(path)
@@ -612,6 +701,7 @@ def build_package(
     # the caller.
     blob = cm.BlobWriter(paths.weight_bin)
     weight_shapes: dict[str, list[int]] = {}
+    quantized_count = 0
     for tid, impl in feeds.items():
         if tid in input_ids:
             continue
@@ -623,7 +713,20 @@ def build_package(
         # numpy anywhere in this package (H4).
         shape = [int(d) for d in tensor.shape]
         name = f"_w{tid}"
-        if is_float:
+        quantized = (
+            _quantize_weight(tensor, body_mil)
+            if is_float and weights is WeightPrecision.INT8
+            else None
+        )
+        if quantized is not None:
+            codes, scale_bytes, zero_bytes, channels = quantized
+            offset = blob.append_tensor(_unwrap(codes), _spec.BLOB_INT8)
+            program.add_quantized_const(
+                name, (body_mil, shape), offset, scale_bytes, body_mil, zero_bytes,
+                channels, 0,
+            )
+            quantized_count += 1
+        elif is_float:
             offset = blob.append_tensor(_unwrap(tensor), body_blob)
             program.add_blob_const(name, (body_mil, shape), offset)
         elif tensor.dtype == lucid.bool_:
@@ -715,9 +818,7 @@ def build_package(
         if value != field:
             # Reachable only if the producing op was shared between two
             # declared outputs, which the naming pass cannot satisfy twice.
-            program.add_op(
-                "identity", [("x", [value])], field, _spec.type_spec(tensor)
-            )
+            program.add_op("identity", [("x", [value])], field, _spec.type_spec(tensor))
         program.add_output(field, _spec.type_spec(tensor))
         declared.append((field, tuple(int(d) for d in tensor.shape)))
     cm.finish_package(paths, program.serialize())
@@ -729,5 +830,7 @@ def build_package(
         "outputs": declared,
         "ops": int(program.op_count),
         "precision": precision.value,
+        "weights": weights.value,
+        "quantized_weights": quantized_count,
         "path": paths.root,
     }

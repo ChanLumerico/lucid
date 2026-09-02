@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - every rank of conv and pool, the norms, and dead ops dropped
 - name every operation the gap against compile still holds
 - a detector's boxes are part of the detector
+- int8 weights, and the benchmark that was lying about them
 
 ---
 

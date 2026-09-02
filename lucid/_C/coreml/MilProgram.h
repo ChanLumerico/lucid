@@ -35,6 +35,7 @@ enum class MilDataType : int {
     String = 2,
     Float16 = 10,
     Float32 = 11,
+    Int8 = 21,
     Int32 = 23,
 };
 
@@ -89,6 +90,24 @@ public:
     void add_bool_const_shaped(const std::string& name, const std::vector<bool>& values,
                                const std::vector<std::int64_t>& shape);
 
+    // A weight stored as int8 codes plus a per-channel scale, dequantized
+    // on the way into whatever consumes it.
+    //
+    // Core ML spells this ``constexpr_affine_dequantize``, and it is not
+    // shaped like other operations: the codes, the scale, the zero point
+    // and the axis are *attributes*, not operands, so it cannot go through
+    // ``add_op``.  ``scale_bytes`` and ``zero_point_bytes`` are the raw
+    // little-endian payloads — the schema carries both as ``bytes``, which
+    // is how a float16 scale and an int8 zero point fit the same field.
+    void add_quantized_const(const std::string& name,
+                             const MilTensorType& output_type,
+                             std::uint64_t blob_offset,
+                             const std::string& scale_bytes,
+                             MilDataType scale_dtype,
+                             const std::string& zero_point_bytes,
+                             std::int64_t channels,
+                             std::int64_t axis);
+
     // ── operations ───────────────────────────────────────────────────
     void add_op(const std::string& op_type,
                 const MilInputs& inputs,
@@ -127,6 +146,13 @@ private:
         std::vector<std::pair<std::string, MilTensorType>> extra_outputs;
         // ``const`` payload, unused for other op types.
         bool is_const = false;
+        // ``constexpr_affine_dequantize`` payload, likewise.
+        bool is_quantized = false;
+        std::string scale_bytes;
+        std::string zero_point_bytes;
+        MilDataType scale_dtype = MilDataType::Float16;
+        std::int64_t channels = 0;
+        std::int64_t axis = 0;
         bool blob = false;
         std::uint64_t blob_offset = 0;
         std::vector<std::int64_t> ints;
