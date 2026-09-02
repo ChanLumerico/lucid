@@ -2,6 +2,7 @@
 
 #include "MilProgram.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 #include "MilSchema.h"
@@ -26,10 +27,17 @@ ProtoWriter make_value_type(const MilTensorType& type) {
         // writes scalars.
         tensor.write_int(pb::TensorType::kRank, static_cast<std::int64_t>(type.shape.size()));
         for (std::int64_t dim : type.shape) {
-            ProtoWriter constant;
-            constant.write_int(pb::ConstantDimension::kSize, dim);
             ProtoWriter dimension;
-            dimension.write_message(pb::Dimension::kConstant, constant);
+            if (dim == kUnknownDim) {
+                // An empty ``UnknownDimension``: not variadic, just not
+                // fixed by the program.  Core ML infers it per prediction.
+                ProtoWriter unknown;
+                dimension.write_message(pb::Dimension::kUnknown, unknown);
+            } else {
+                ProtoWriter constant;
+                constant.write_int(pb::ConstantDimension::kSize, dim);
+                dimension.write_message(pb::Dimension::kConstant, constant);
+            }
             tensor.write_message(pb::TensorType::kDimensions, dimension);
         }
     }
@@ -294,6 +302,28 @@ void MilProgram::add_op_multi(const std::string& op_type,
     ops_.push_back(std::move(op));
 }
 
+void MilProgram::set_enumerated_shapes(
+    const std::string& name, const std::vector<std::vector<std::int64_t>>& shapes) {
+    for (auto& [existing, held] : enumerated_) {
+        if (existing == name) {
+            held = shapes;
+            return;
+        }
+    }
+    enumerated_.emplace_back(name, shapes);
+}
+
+void MilProgram::set_default_shape(const std::string& name,
+                                   const std::vector<std::int64_t>& shape) {
+    for (auto& [existing, held] : defaults_) {
+        if (existing == name) {
+            held = shape;
+            return;
+        }
+    }
+    defaults_.emplace_back(name, shape);
+}
+
 void MilProgram::set_image_input(const std::string& name, const MilImageSpec& spec) {
     for (auto& [existing, held] : images_) {
         if (existing == name) {
@@ -505,7 +535,21 @@ std::string MilProgram::serialize() const {
             return image_description;
         }
         ProtoWriter array;
-        array.write_packed_ints(pb::ArrayFeatureType::kShape, type.shape);
+        // What the description states about the shape depends on whether
+        // the program fixed it.  An input with alternatives states the
+        // default one; an output whose shape follows the input states no
+        // shape at all, which is what a reference flexible package does.
+        // A ``-1`` is never right here: Core ML reads it as a size.
+        const std::vector<std::int64_t>* stated_shape = &type.shape;
+        for (const auto& [stated_name, stated] : defaults_) {
+            if (stated_name == name)
+                stated_shape = &stated;
+        }
+        const bool open =
+            std::find(stated_shape->begin(), stated_shape->end(), kUnknownDim) !=
+            stated_shape->end();
+        if (!open)
+            array.write_packed_ints(pb::ArrayFeatureType::kShape, *stated_shape);
         int array_dtype = pb::ArrayFeatureType_ArrayDataType::kFLOAT32;
         if (type.dtype == MilDataType::Float16)
             array_dtype = pb::ArrayFeatureType_ArrayDataType::kFLOAT16;
@@ -515,6 +559,17 @@ std::string MilProgram::serialize() const {
             // narrows on the way in.
             array_dtype = pb::ArrayFeatureType_ArrayDataType::kINT32;
         array.write_enum(pb::ArrayFeatureType::kDataType, array_dtype);
+        for (const auto& [flexible_name, shapes] : enumerated_) {
+            if (flexible_name != name)
+                continue;
+            ProtoWriter enumerated;
+            for (const std::vector<std::int64_t>& alternative : shapes) {
+                ProtoWriter one;
+                one.write_packed_ints(pb::Shape::kShape, alternative);
+                enumerated.write_message(pb::EnumeratedShapes::kShapes, one);
+            }
+            array.write_message(pb::ArrayFeatureType::kEnumeratedShapes, enumerated);
+        }
         ProtoWriter feature_type;
         feature_type.write_message(pb::FeatureType::kMultiArrayType, array);
         ProtoWriter description;

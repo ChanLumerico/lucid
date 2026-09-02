@@ -64,6 +64,8 @@ MESSAGES = (
     "DictionaryType",
     "DictionaryFeatureType",
     "StringFeatureType",
+    "EnumeratedShapes",
+    "Shape",
 )
 
 # Enums whose values end up in the emitted bytes.

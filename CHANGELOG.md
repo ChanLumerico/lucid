@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - int8 weights, and the benchmark that was lying about them
 - a package an app can open, not only numbers that agree
 - labels, so Vision has something to return
+- one package for several shapes, found by tracing twice
 
 ---
 

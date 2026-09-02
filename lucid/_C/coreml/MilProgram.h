@@ -39,7 +39,11 @@ enum class MilDataType : int {
     Int32 = 23,
 };
 
-// A tensor type.  An empty ``shape`` means a scalar (rank 0).
+// A tensor type.  An empty ``shape`` means a scalar (rank 0), and a
+// dimension of ``kUnknownDim`` is one the program does not fix — what a
+// flexible input needs, and what every shape downstream of one inherits.
+constexpr std::int64_t kUnknownDim = -1;
+
 struct MilTensorType {
     MilDataType dtype = MilDataType::Float32;
     std::vector<std::int64_t> shape;
@@ -147,6 +151,17 @@ public:
                       const MilInputs& inputs,
                       const std::vector<std::pair<std::string, MilTensorType>>& outputs);
 
+    // The shapes a flexible input accepts.  The first is the default,
+    // which the description also carries as the plain ``shape``.
+    void set_enumerated_shapes(const std::string& name,
+                               const std::vector<std::vector<std::int64_t>>& shapes);
+
+    // The concrete shape the description should state for a feature whose
+    // program type leaves axes open.  A ``-1`` in a description is not
+    // "flexible": Core ML reads it as a shape and rejects it.
+    void set_default_shape(const std::string& name,
+                           const std::vector<std::int64_t>& shape);
+
     // Present an input as an image in the model description.  Must name
     // one of the inputs the program was constructed with.
     void set_image_input(const std::string& name, const MilImageSpec& spec);
@@ -216,6 +231,8 @@ private:
 
     MilNamedTypes inputs_;
     std::vector<std::pair<std::string, MilImageSpec>> images_;
+    std::vector<std::pair<std::string, std::vector<std::vector<std::int64_t>>>> enumerated_;
+    std::vector<std::pair<std::string, std::vector<std::int64_t>>> defaults_;
     MilMetadata metadata_;
     struct Classifier {
         bool present = false;

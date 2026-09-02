@@ -125,6 +125,23 @@ void register_coreml(py::module_& m) {
             py::arg("name"), py::arg("values"), py::arg("shape"),
             "Float32 constant of arbitrary shape, carried inline.")
         .def(
+            "set_default_shape",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const std::vector<std::int64_t>& shape) {
+                self.set_default_shape(name, shape);
+            },
+            py::arg("name"), py::arg("shape"),
+            "The concrete shape the description states for a feature whose "
+            "program type leaves axes open.")
+        .def(
+            "set_enumerated_shapes",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const std::vector<std::vector<std::int64_t>>& shapes) {
+                self.set_enumerated_shapes(name, shapes);
+            },
+            py::arg("name"), py::arg("shapes"),
+            "The shapes a flexible input accepts; the first is the default.")
+        .def(
             "set_image_input",
             [](lucid::coreml::MilProgram& self, const std::string& name, std::int64_t width,
                std::int64_t height, int color_space) {

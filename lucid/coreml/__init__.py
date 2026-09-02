@@ -45,7 +45,12 @@ Examples
 
 from typing import TYPE_CHECKING
 
-from lucid.coreml._build import UnsupportedOp, UnsupportedRank, build_package
+from lucid.coreml._build import (
+    ShapeNotFlexible,
+    UnsupportedOp,
+    UnsupportedRank,
+    build_package,
+)
 from lucid.coreml._model import CoreMLModel, PlacementSummary
 from lucid.coreml._spec import (
     Classifier,
@@ -70,6 +75,7 @@ __all__ = [
     "WeightPrecision",
     "CoreMLModel",
     "PlacementSummary",
+    "ShapeNotFlexible",
     "Precision",
     "UnsupportedOp",
     "UnsupportedRank",
@@ -94,6 +100,7 @@ def export(
     *,
     precision: Precision = Precision.FLOAT32,
     weights: WeightPrecision = WeightPrecision.FLOAT,
+    shapes: list[tuple[int, ...]] | None = None,
     image_input: ImageInput | None = None,
     classifier: Classifier | None = None,
     metadata: Metadata | None = None,
@@ -124,6 +131,13 @@ def export(
         way in — the package halves against float16 and the accelerator
         moves half as much memory, at a real cost in agreement that
         :meth:`~CoreMLModel.verify` will quantify.
+    shapes : list of tuple of int or None, optional, keyword-only, default=None
+        Every input shape the package should accept — a range of batch
+        sizes, or of resolutions — with the example's own among them.
+        Found by tracing at each shape and comparing, so an operation
+        whose configuration came from the input size (an adaptive pool
+        bakes its kernel that way) is refused by name rather than fixed
+        to one shape and wrong at the others.
     image_input : ImageInput or None, optional, keyword-only, default=None
         Present the sole input as an image, with the normalisation it
         expects, so an app can hand over a pixel buffer instead of
@@ -165,6 +179,7 @@ def export(
         path,
         precision=precision,
         weights=weights,
+        shapes=shapes,
         image_input=image_input,
         classifier=classifier,
         metadata=metadata,
@@ -177,7 +192,9 @@ def export(
         [name for name, _shape in outputs],
         compute_units=compute_units,
         precision=precision.value,
-        output_shapes=dict(outputs),
+        # A flexible export's output shape follows the input, so the
+        # traced one is not the shape to restore it to.
+        output_shapes=None if shapes is not None else dict(outputs),
         image_input=image_input,
         classifier=classifier,
     )

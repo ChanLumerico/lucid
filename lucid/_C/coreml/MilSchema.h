@@ -229,6 +229,14 @@ constexpr int kStringKeyType = 2;
 namespace StringFeatureType {
 }  // namespace StringFeatureType
 
+namespace EnumeratedShapes {
+constexpr int kShapes = 1;
+}  // namespace EnumeratedShapes
+
+namespace Shape {
+constexpr int kShape = 1;
+}  // namespace Shape
+
 namespace ArrayFeatureType_ArrayDataType {
 constexpr int kINVALID_ARRAY_DATA_TYPE = 0;
 constexpr int kFLOAT32 = 65568;

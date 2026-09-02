@@ -34,7 +34,8 @@ __all__ = ["EMITTERS", "MIL_OPS", "MultiOutput"]
 class TracedValue(Protocol):
     """One result of a traced operation, as an emitter sees it.
 
-    Only two fields, because only two are ever read. ``reshape`` carries
+    Three fields, because only three are ever read: the identity a
+    flexible export keys its varying axes on, and two descriptions. ``reshape`` carries
     its target in the output's shape rather than in an attribute, and
     ``astype`` names its cast target by the output's dtype — everything
     else an emitter needs is an attribute or an operand.
@@ -44,6 +45,7 @@ class TracedValue(Protocol):
     on which dtype class the tracer happens to hand over.
     """
 
+    id: int
     shape: tuple[int, ...]
     dtype: object
 
@@ -393,7 +395,16 @@ for _lucid_name, _mil_name in _BINARY_MIL.items():
 @_emitter("reshape")
 def _reshape(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # Lucid keeps the target shape on the result, not in the attributes.
-    shape = [int(d) for d in op.outputs[0].shape]
+    # Asking the builder for it leaves a flexible export's varying axes at
+    # -1, which MIL reads as "infer this one"; baking the default here
+    # would give a package correct at only one of its shapes.
+    shape = b.result_shape(op)
+    if shape.count(-1) > 1:
+        from lucid.coreml._build import ShapeNotFlexible
+
+        raise ShapeNotFlexible(
+            "reshape", "MIL infers at most one axis of a reshape and this needs two"
+        )
     return "reshape", [("x", ins[0]), ("shape", b.const_ints(shape))]
 
 
