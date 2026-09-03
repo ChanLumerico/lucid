@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - state that persists, and the buffer write that never did
 - several entry points over one copy of the weights
 - the last operations, and why three of them cannot be written
+- erfinv leaves the stub list
 
 ---
 

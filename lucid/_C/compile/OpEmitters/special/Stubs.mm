@@ -63,7 +63,8 @@ struct StubsRegistrar {
                  "qr",
                  "solve",
                  "svd",
-                 "erfinv",
+                 // ``erfinv`` moved to real-emit (OpEmitters/elementwise/Math.mm)
+                 // via Giles' polynomial approximation.
                  // ── multi-output / dynamic shape ────────────────────
                  // ``split`` / ``split_at`` / ``topk`` moved to real-emit
                  // (OpEmitters/shape/Split.mm) via manual multi-output

@@ -247,6 +247,94 @@ public:
     }
 };
 
+// ``erfinv`` — the inverse error function, which MPSGraph does not have.
+//
+// Giles (2010), "Approximating the erfinv function": two polynomials in
+// ``w = -log((1 - x)(1 + x))``, one for the central region and one for
+// the tails, the single-precision coefficients.  Both branches are
+// evaluated and one is selected, because a graph has no branch — which
+// costs arithmetic and nothing in accuracy.
+//
+// Measured against Lucid's own on |x| < 1: ~3e-7 in the central region
+// and ~5e-6 in the tails, the order of the pipeline's other float32
+// error rather than a new kind of it.  The same approximation backs
+// ``lucid.coreml``'s emitter, so the two exports agree.
+namespace {
+
+constexpr double kErfinvCentral[] = {
+    2.81022636e-08,  3.43273939e-07, -3.5233877e-06, -4.39150654e-06, 0.00021858087,
+    -0.00125372503, -0.00417768164,  0.246640727,    1.50140941,
+};
+constexpr double kErfinvTail[] = {
+    -0.000200214257, 0.000100950558, 0.00134934322, -0.00367342844, 0.00573950773,
+    -0.0076224613,   0.00943887047,  1.00167406,    2.83297682,
+};
+
+template <std::size_t N>
+MPSGraphTensor* horner(MPSGraph* g,
+                       const double (&coefficients)[N],
+                       MPSGraphTensor* w,
+                       MPSDataType dt) {
+    MPSGraphTensor* value = [g constantWithScalar:coefficients[0] dataType:dt];
+    for (std::size_t i = 1; i < N; ++i) {
+        MPSGraphTensor* scaled =
+            [g multiplicationWithPrimaryTensor:value secondaryTensor:w name:nil];
+        value = [g additionWithPrimaryTensor:scaled
+                             secondaryTensor:[g constantWithScalar:coefficients[i]
+                                                          dataType:dt]
+                                        name:nil];
+    }
+    return value;
+}
+
+}  // namespace
+
+class ErfinvEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "erfinv"; }
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
+            const MPSDataType dt = x.dataType;
+            MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:dt];
+
+            // w = -log((1 - x) * (1 + x))
+            MPSGraphTensor* lower =
+                [g subtractionWithPrimaryTensor:one secondaryTensor:x name:nil];
+            MPSGraphTensor* upper =
+                [g additionWithPrimaryTensor:x secondaryTensor:one name:nil];
+            MPSGraphTensor* product =
+                [g multiplicationWithPrimaryTensor:lower secondaryTensor:upper name:nil];
+            MPSGraphTensor* w = [g negativeWithTensor:[g logarithmWithTensor:product name:nil]
+                                                 name:nil];
+
+            MPSGraphTensor* central = horner(
+                g, kErfinvCentral,
+                [g subtractionWithPrimaryTensor:w
+                                secondaryTensor:[g constantWithScalar:2.5 dataType:dt]
+                                           name:nil],
+                dt);
+            MPSGraphTensor* tail = horner(
+                g, kErfinvTail,
+                [g subtractionWithPrimaryTensor:[g squareRootWithTensor:w name:nil]
+                                secondaryTensor:[g constantWithScalar:3.0 dataType:dt]
+                                           name:nil],
+                dt);
+
+            MPSGraphTensor* near =
+                [g lessThanWithPrimaryTensor:w
+                             secondaryTensor:[g constantWithScalar:5.0 dataType:dt]
+                                        name:nil];
+            MPSGraphTensor* chosen = [g selectWithPredicateTensor:near
+                                             truePredicateTensor:central
+                                            falsePredicateTensor:tail
+                                                            name:nil];
+            return [g multiplicationWithPrimaryTensor:chosen
+                                      secondaryTensor:x
+                                                 name:@"erfinv"];
+        });
+    }
+};
+
 // ``clip(x, min, max)`` — Lucid records ``clip_min`` / ``clip_max``
 // double attrs on the OpScopeFull (the underlying op may pass either
 // or both bounds; missing bounds default to ±∞ via NaN/inf sentinels
@@ -329,6 +417,7 @@ struct UnaryMathEmitterRegistrar {
         register_emitter(std::make_unique<Log2Emitter>());
         register_emitter(std::make_unique<SignEmitter>());
         register_emitter(std::make_unique<ErfEmitter>());
+        register_emitter(std::make_unique<ErfinvEmitter>());
         register_emitter(std::make_unique<ClipEmitter>());
     }
 };
