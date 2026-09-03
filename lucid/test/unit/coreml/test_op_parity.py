@@ -95,6 +95,47 @@ _SPATIAL = [
     ("conv1d", nn.Conv1d(4, 2, 3).eval(), (1, 4, 10)),
     ("conv2d", nn.Conv2d(4, 2, 3).eval(), (1, 4, 6, 6)),
     ("conv3d", nn.Conv3d(4, 2, 3).eval(), (1, 4, 6, 6, 6)),
+    # MIL's ``conv_transpose`` takes the weight as (C_in, C_out / groups,
+    # *K) — the layout Lucid already stores — so grouping needs no
+    # relayout on this path.  The cases are here because nothing else
+    # would notice if that stopped being true.
+    ("conv_transpose1d", nn.ConvTranspose1d(4, 2, 3, stride=2).eval(), (1, 4, 10)),
+    ("conv_transpose2d", nn.ConvTranspose2d(4, 2, 3, stride=2).eval(), (1, 4, 6, 6)),
+    (
+        "conv_transpose3d",
+        nn.ConvTranspose3d(4, 2, 3, stride=2).eval(),
+        (1, 4, 6, 6, 6),
+    ),
+    (
+        "conv_transpose1d_grouped",
+        nn.ConvTranspose1d(4, 4, 3, stride=2, groups=2).eval(),
+        (1, 4, 10),
+    ),
+    (
+        "conv_transpose2d_grouped",
+        nn.ConvTranspose2d(4, 4, 3, stride=2, groups=2).eval(),
+        (1, 4, 6, 6),
+    ),
+    (
+        "conv_transpose2d_depthwise",
+        nn.ConvTranspose2d(4, 4, 3, stride=2, groups=4).eval(),
+        (1, 4, 6, 6),
+    ),
+    (
+        "conv_transpose3d_grouped",
+        nn.ConvTranspose3d(4, 4, 3, stride=2, groups=2).eval(),
+        (1, 4, 6, 6, 6),
+    ),
+    (
+        "conv_transpose1d_dilated",
+        nn.ConvTranspose1d(4, 2, 3, stride=2, dilation=2).eval(),
+        (1, 4, 10),
+    ),
+    (
+        "conv_transpose2d_dilated",
+        nn.ConvTranspose2d(4, 2, 3, stride=2, dilation=2).eval(),
+        (1, 4, 6, 6),
+    ),
     ("max_pool1d", lambda x: F.max_pool1d(x, 2), (1, 4, 10)),
     ("max_pool2d", lambda x: F.max_pool2d(x, 2), (1, 4, 6, 6)),
     ("max_pool3d", lambda x: F.max_pool3d(x, 2), (1, 4, 6, 6, 6)),

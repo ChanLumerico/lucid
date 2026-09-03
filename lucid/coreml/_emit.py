@@ -810,9 +810,11 @@ def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         ("strides", b.const_ints(strides)),
         ("pad_type", b.const_str("custom")),
         ("pad", b.const_ints(_pad_pairs(attrs["padding"]))),
-        # A transposed convolution traces without ``dilation`` when it is
-        # the default, so the rank comes from ``stride`` rather than from
-        # an attribute that may not be there.
+        # ``dilation`` and ``groups`` are recorded by the trace, but the
+        # defaults are kept: a graph captured before they were traced
+        # still loads, and MIL's weight layout for ``conv_transpose`` is
+        # ``(C_in, C_out / groups, *K)`` — the same one Lucid stores, so
+        # grouping needs no relayout here.
         ("dilations", b.const_ints(_ints(attrs.get("dilation", [1] * len(strides))))),
         ("groups", b.const_int(_as_int(attrs.get("groups", 1)))),
         # ``output_shape`` disambiguates a transposed convolution's result

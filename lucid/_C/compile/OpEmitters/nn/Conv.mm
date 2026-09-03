@@ -282,6 +282,9 @@ public:
         const auto* P = int_vec_attr(node, "padding");
         if (S == nullptr || P == nullptr) return false;
         if (S->size() != 2 || P->size() != 2) return false;
+        const auto* D = int_vec_attr(node, "dilation");
+        if (D == nullptr || D->size() != 2)
+            return false;
         const std::int64_t groups = int_attr(node, "groups", 1);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
@@ -295,19 +298,19 @@ public:
         // expects: it interprets
         // the weight as the *forward* conv's weight (OIHW where O is
         // the forward output = transpose input).  No permutation needed.
-        MPSGraphConvolution2DOpDescriptor* d =
-            [MPSGraphConvolution2DOpDescriptor descriptorWithStrideInX:(NSUInteger)(*S)[1]
-                                                              strideInY:(NSUInteger)(*S)[0]
-                                                        dilationRateInX:1
-                                                        dilationRateInY:1
-                                                                 groups:(NSUInteger)groups
-                                                            paddingLeft:(NSUInteger)(*P)[1]
-                                                           paddingRight:(NSUInteger)(*P)[1]
-                                                             paddingTop:(NSUInteger)(*P)[0]
-                                                          paddingBottom:(NSUInteger)(*P)[0]
-                                                           paddingStyle:MPSGraphPaddingStyleExplicit
-                                                             dataLayout:MPSGraphTensorNamedDataLayoutNCHW
-                                                          weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
+        MPSGraphConvolution2DOpDescriptor* d = [MPSGraphConvolution2DOpDescriptor
+            descriptorWithStrideInX:(NSUInteger)(*S)[1]
+                          strideInY:(NSUInteger)(*S)[0]
+                    dilationRateInX:(NSUInteger)(*D)[1]
+                    dilationRateInY:(NSUInteger)(*D)[0]
+                             groups:(NSUInteger)groups
+                        paddingLeft:(NSUInteger)(*P)[1]
+                       paddingRight:(NSUInteger)(*P)[1]
+                         paddingTop:(NSUInteger)(*P)[0]
+                      paddingBottom:(NSUInteger)(*P)[0]
+                       paddingStyle:MPSGraphPaddingStyleExplicit
+                         dataLayout:MPSGraphTensorNamedDataLayoutNCHW
+                      weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
         if (d == nil) return false;
         // Output shape comes from the trace's output meta.
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
@@ -347,6 +350,9 @@ public:
         const auto* P = int_vec_attr(node, "padding");
         if (S == nullptr || P == nullptr) return false;
         if (S->size() != 1 || P->size() != 1) return false;
+        const auto* D = int_vec_attr(node, "dilation");
+        if (D == nullptr || D->size() != 1)
+            return false;
         const std::int64_t groups = int_attr(node, "groups", 1);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
@@ -360,19 +366,19 @@ public:
         // (see ConvTranspose2dEmitter comment) — no permute needed.
         NSArray<NSNumber*>* w4 = @[W.shape[0], W.shape[1], @1, W.shape[2]];
         MPSGraphTensor* W_oihw = [g reshapeTensor:W withShape:w4 name:nil];
-        MPSGraphConvolution2DOpDescriptor* d =
-            [MPSGraphConvolution2DOpDescriptor descriptorWithStrideInX:(NSUInteger)(*S)[0]
-                                                              strideInY:1
-                                                        dilationRateInX:1
-                                                        dilationRateInY:1
-                                                                 groups:(NSUInteger)groups
-                                                            paddingLeft:(NSUInteger)(*P)[0]
-                                                           paddingRight:(NSUInteger)(*P)[0]
-                                                             paddingTop:0
-                                                          paddingBottom:0
-                                                           paddingStyle:MPSGraphPaddingStyleExplicit
-                                                             dataLayout:MPSGraphTensorNamedDataLayoutNCHW
-                                                          weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
+        MPSGraphConvolution2DOpDescriptor* d = [MPSGraphConvolution2DOpDescriptor
+            descriptorWithStrideInX:(NSUInteger)(*S)[0]
+                          strideInY:1
+                    dilationRateInX:(NSUInteger)(*D)[0]
+                    dilationRateInY:1
+                             groups:(NSUInteger)groups
+                        paddingLeft:(NSUInteger)(*P)[0]
+                       paddingRight:(NSUInteger)(*P)[0]
+                         paddingTop:0
+                      paddingBottom:0
+                       paddingStyle:MPSGraphPaddingStyleExplicit
+                         dataLayout:MPSGraphTensorNamedDataLayoutNCHW
+                      weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
         if (d == nil) return false;
         // Reshape trace output (B, Cout, Lout) → (B, Cout, 1, Lout) for the 2D call.
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
@@ -432,10 +438,14 @@ public:
             return false;
         if (S->size() != 3 || P->size() != 3)
             return false;
-        // ``conv_transpose`` records neither "groups" nor "dilation" —
-        // lucid/nn/functional/conv.py refuses anything but 1 for both,
-        // so the forward descriptor is built for that case only.  If the
-        // op ever gains them, this emitter must read them or decline.
+        const auto* D = int_vec_attr(node, "dilation");
+        if (D == nullptr || D->size() != 3)
+            return false;
+        // Both of these must reach the descriptor.  MPSGraph validates
+        // ``inputChannels == groups * inputWeightChannels`` and fails the
+        // whole module — an abort, not a catchable error — when a grouped
+        // weight arrives under ``groups:1``.
+        const std::int64_t groups = int_attr(node, "groups", 1);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* W = (__bridge MPSGraphTensor*)ctx.resolve(w_id);
@@ -448,10 +458,10 @@ public:
             descriptorWithStrideInX:(NSUInteger)(*S)[2]
                           strideInY:(NSUInteger)(*S)[1]
                           strideInZ:(NSUInteger)(*S)[0]
-                    dilationRateInX:1
-                    dilationRateInY:1
-                    dilationRateInZ:1
-                             groups:1
+                    dilationRateInX:(NSUInteger)(*D)[2]
+                    dilationRateInY:(NSUInteger)(*D)[1]
+                    dilationRateInZ:(NSUInteger)(*D)[0]
+                             groups:(NSUInteger)groups
                         paddingLeft:(NSUInteger)(*P)[2]
                        paddingRight:(NSUInteger)(*P)[2]
                          paddingTop:(NSUInteger)(*P)[1]

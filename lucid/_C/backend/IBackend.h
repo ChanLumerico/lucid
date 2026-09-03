@@ -1411,6 +1411,35 @@ public:
                                                bool is_causal,
                                                Dtype dt) = 0;
 
+    // Compact parameter bag for N-D transposed convolution.
+    //
+    // Mirrors :class:`ConvNdOpts` and adds ``opad``.  A transposed
+    // convolution *is* the data gradient of a forward convolution, so
+    // ``stride`` / ``pad`` / ``dilation`` / ``groups`` describe that
+    // forward convolution — the one whose input this op reconstructs —
+    // and ``opad`` picks one output extent out of the ``stride``
+    // candidates an integer-dividing stride leaves ambiguous.
+    //
+    // Attributes
+    // ----------
+    // N : int
+    //     Number of spatial dimensions (1, 2, or 3).
+    // groups : int
+    //     Channel grouping factor; ``1`` is the dense case and ``Cin``
+    //     is depthwise.  Unlike ``ConvNdOpts``, the divided axis of the
+    //     weight is the *second* one: ``(Cin, Cout / groups, K...)``.
+    // stride, pad, dilation, opad : int[3]
+    //     Per-spatial-dimension geometry (only the first ``N`` entries
+    //     are meaningful).
+    struct ConvTransposeNdOpts {
+        int N;       // number of spatial dimensions
+        int groups;  // channel grouping factor for grouped transposed convolution
+        int stride[3];
+        int pad[3];
+        int dilation[3];
+        int opad[3];
+    };
+
     virtual Storage conv_transpose_nd_forward(const Storage& x,
                                               const Storage& W,
                                               const Storage& b,
@@ -1420,10 +1449,7 @@ public:
                                               const int* S,
                                               const int* K,
                                               const int* O,
-                                              const int* stride,
-                                              const int* pad,
-                                              const int* opad,
-                                              int N,
+                                              const ConvTransposeNdOpts& opts,
                                               const Shape& out_shape,
                                               Dtype dt) = 0;
 
@@ -1436,9 +1462,7 @@ public:
                                                             const int* S,
                                                             const int* K,
                                                             const int* O,
-                                                            const int* stride,
-                                                            const int* pad,
-                                                            int N,
+                                                            const ConvTransposeNdOpts& opts,
                                                             Dtype dt) = 0;
 
     // Compact parameter bag for N-D standard convolution.

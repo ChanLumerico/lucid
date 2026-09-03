@@ -131,3 +131,79 @@ def test_manual_vjp_conv3d_parity() -> None:
             f"Conv3d VJP drift at step {k}: "
             f"eager={eager[k]:.6f}, compile={comp[k]:.6f}, diff={diff:.6f}"
         )
+
+
+# ── ConvTranspose2d with grouping / dilation ────────────────────────
+#
+# The VJP builds a descriptor for the *forward* convolution this op is
+# the data gradient of, so every geometry field has to come off the
+# trace.  ``dilation`` was pinned to 1 there, which produced a
+# well-formed gradient of a different convolution — the forward stayed
+# right, so only a training-loop comparison shows it.
+
+
+class _OptionNet(nn.Module):
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__()
+        self.up = nn.ConvTranspose2d(4, 4, kernel_size=2, stride=2, **kwargs)  # type: ignore[arg-type]
+        self.fc = nn.Linear(4, 1)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        h = self.up(x).relu()
+        h = h.mean(dim=(2, 3), keepdim=False)
+        return self.fc(h)
+
+
+def _step_and_compare(kwargs: dict[str, object], steps: int = 3) -> float:
+    """Largest parameter disagreement after each SGD step.
+
+    The loss is a poor probe for a wrong gradient — step 0 is identical
+    whatever the backward does, and later steps only feel the error
+    through a scalar.  Comparing the *parameters* reads the gradient
+    almost directly, which is what makes this fail when the VJP builds a
+    descriptor for a different convolution than the forward used.
+    """
+    lucid.manual_seed(0)
+    a = _OptionNet(**kwargs).to(COMPILE_DEVICE)
+    b = _OptionNet(**kwargs).to(COMPILE_DEVICE)
+    for (_, pa), (_, pb) in zip(a.named_parameters(), b.named_parameters()):
+        with lucid.no_grad():
+            pb.copy_(pa.detach().clone())
+
+    x = metal_tensor(2, 4, 3, 3)
+    t = metal_tensor(2, 1)
+
+    opt_eager = optim.SGD(list(a.parameters()), lr=1e-1)
+    opt_comp = optim.SGD(list(b.parameters()), lr=1e-1)
+    step = fused_step(b, _loss, opt_comp)
+
+    worst = 0.0
+    for _ in range(steps):
+        opt_eager.zero_grad()
+        _loss(a(x), t).backward()
+        opt_eager.step()
+        step(x, t)
+        for (_, pa), (_, pb) in zip(a.named_parameters(), b.named_parameters()):
+            scale = max(float(pa.abs().max().item()), 1e-3)
+            worst = max(worst, float((pa - pb).abs().max().item()) / scale)
+    return worst
+
+
+@pytest.mark.parametrize(
+    ("name", "kwargs"),
+    [
+        ("grouped", {"groups": 2}),
+        ("depthwise", {"groups": 4}),
+        ("dilated", {"dilation": 2}),
+        ("grouped and dilated", {"groups": 2, "dilation": 2}),
+    ],
+    ids=["grouped", "depthwise", "dilated", "grouped-dilated"],
+)
+def test_manual_vjp_conv_transpose2d_options_parity(
+    name: str, kwargs: dict[str, object]
+) -> None:
+    worst = _step_and_compare(kwargs)
+    assert worst < 1e-4, (
+        f"ConvTranspose2d ({name}) VJP disagrees with eager: "
+        f"parameters diverge by {worst:.2e} relative after an SGD step"
+    )

@@ -70,15 +70,19 @@ namespace lucid::bindings {
 // (negligible against the conv itself).
 //
 // ``cout_axis`` is 0 for ``conv*`` (weight: (C_out, C_in/g, K...))
-// and 1 for ``conv_transpose*`` (weight: (C_in, C_out, K...)).
-static TensorImplPtr conv_bias_or_zero(const TensorImplPtr& W, py::object bias_obj, int cout_axis) {
+// and 1 for ``conv_transpose*`` (weight: (C_in, C_out/g, K...)).  ``groups``
+// multiplies the axis back up: it is the transposed weight's *second* axis
+// that carries the division, so at ``groups > 1`` the axis alone is
+// ``C_out / groups`` and a bias sized from it would be short by that factor.
+static TensorImplPtr
+conv_bias_or_zero(const TensorImplPtr& W, py::object bias_obj, int cout_axis, int groups = 1) {
     if (!bias_obj.is_none()) {
         return bias_obj.cast<TensorImplPtr>();
     }
     if (!W) {
         throw std::invalid_argument("conv: weight must not be null");
     }
-    const std::int64_t cout = W->shape()[static_cast<std::size_t>(cout_axis)];
+    const std::int64_t cout = W->shape()[static_cast<std::size_t>(cout_axis)] * groups;
     Shape s{cout};
     auto& be = backend::Dispatcher::for_device(W->device());
     Storage zero_s = be.zeros(s, W->dtype());
@@ -254,34 +258,38 @@ void register_nn(py::module_& m) {
     // valid output sizes.
     m.def(
         "conv_transpose1d",
-        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sl, int pl, int opadl) {
-            return conv_transpose1d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1), sl, pl,
-                                       opadl);
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sl, int pl, int opadl, int dl,
+           int groups) {
+            return conv_transpose1d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1, groups), sl,
+                                       pl, opadl, dl, groups);
         },
         py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_l") = 1, py::arg("pad_l") = 0,
-        py::arg("opad_l") = 0,
-        "1D transposed convolution. x:(B,C_in,L), W:(C_in,C_out,KL), b:(C_out,) or None.");
+        py::arg("opad_l") = 0, py::arg("dilation_l") = 1, py::arg("groups") = 1,
+        "1D transposed convolution. x:(B,C_in,L), W:(C_in,C_out/g,KL), b:(C_out,) or None.");
     m.def(
         "conv_transpose2d",
         [](TensorImplPtr x, TensorImplPtr W, py::object b, int sh, int sw, int ph, int pw,
-           int opadh, int opadw) {
-            return conv_transpose2d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1), sh, sw, ph,
-                                       pw, opadh, opadw);
+           int opadh, int opadw, int dh, int dw, int groups) {
+            return conv_transpose2d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1, groups), sh,
+                                       sw, ph, pw, opadh, opadw, dh, dw, groups);
         },
         py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_h") = 1, py::arg("stride_w") = 1,
         py::arg("pad_h") = 0, py::arg("pad_w") = 0, py::arg("opad_h") = 0, py::arg("opad_w") = 0,
-        "2D transposed convolution. x:(B,C_in,H,W), W:(C_in,C_out,KH,KW), b:(C_out,) or None.");
+        py::arg("dilation_h") = 1, py::arg("dilation_w") = 1, py::arg("groups") = 1,
+        "2D transposed convolution. x:(B,C_in,H,W), W:(C_in,C_out/g,KH,KW), b:(C_out,) or None.");
     m.def(
         "conv_transpose3d",
         [](TensorImplPtr x, TensorImplPtr W, py::object b, int sd, int sh, int sw, int pd, int ph,
-           int pw, int opadd, int opadh, int opadw) {
-            return conv_transpose3d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1), sd, sh, sw,
-                                       pd, ph, pw, opadd, opadh, opadw);
+           int pw, int opadd, int opadh, int opadw, int dd, int dh, int dw, int groups) {
+            return conv_transpose3d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1, groups), sd,
+                                       sh, sw, pd, ph, pw, opadd, opadh, opadw, dd, dh, dw, groups);
         },
         py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_d") = 1, py::arg("stride_h") = 1,
         py::arg("stride_w") = 1, py::arg("pad_d") = 0, py::arg("pad_h") = 0, py::arg("pad_w") = 0,
         py::arg("opad_d") = 0, py::arg("opad_h") = 0, py::arg("opad_w") = 0,
-        "3D transposed convolution. x:(B,C_in,D,H,W), W:(C_in,C_out,KD,KH,KW), b:(C_out,) or "
+        py::arg("dilation_d") = 1, py::arg("dilation_h") = 1, py::arg("dilation_w") = 1,
+        py::arg("groups") = 1,
+        "3D transposed convolution. x:(B,C_in,D,H,W), W:(C_in,C_out/g,KD,KH,KW), b:(C_out,) or "
         "None.");
 
     // Adaptive pooling: output size is specified directly; the kernel and

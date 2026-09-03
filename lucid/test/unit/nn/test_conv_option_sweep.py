@@ -169,3 +169,44 @@ def test_repr_names_the_configuration(rank):
     )
     text = repr(layer)
     assert "3" in text and "4" in text
+
+
+# ── the same options on the other stream ──────────────────────────────────────
+
+
+def _metal_ok() -> bool:
+    try:
+        lucid.zeros((1,)).to("metal")
+        return True
+    except Exception:  # noqa: BLE001 — any failure means no Metal here
+        return False
+
+
+@pytest.mark.skipif(not _metal_ok(), reason="Metal unavailable")
+@pytest.mark.parametrize("rank", RANKS)
+@pytest.mark.parametrize("groups", [1, 2])
+def test_grouped_convolution_agrees_across_devices(rank, groups):
+    """MLX declines grouping above two spatial dimensions.
+
+    A grouped ``conv3d`` therefore used to run on the CPU stream and
+    raise ``Can only handle groups != 1 in 1D or 2D convolutions`` on
+    Metal — the same model working on one device and not the other. The
+    GPU path now falls back to one convolution per group, so this asserts
+    both that it runs and that the group blocks are paired correctly.
+    """
+    x = _input(rank, channels=4, size=5)
+    fn = {1: F.conv1d, 2: F.conv2d, 3: F.conv3d}[rank]
+    weight = lucid.tensor(
+        np.random.default_rng(rank + groups)
+        .standard_normal((4, 4 // groups) + (3,) * rank)
+        .astype(np.float32)
+    )
+    bias = lucid.tensor(np.zeros(4, dtype=np.float32))
+
+    cpu = fn(x, weight, bias, padding=1, groups=groups)
+    metal = fn(
+        x.to("metal"), weight.to("metal"), bias.to("metal"), padding=1, groups=groups
+    )
+    assert tuple(metal.shape) == tuple(cpu.shape)
+    scale = max(float(cpu.abs().max().item()), 1e-30)
+    assert float((cpu - metal.to("cpu")).abs().max().item()) / scale < 1e-5

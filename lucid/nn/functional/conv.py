@@ -5,7 +5,6 @@ nn.functional convolution operations.
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid._unsupported import unsupported_if
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -288,7 +287,8 @@ def conv_transpose1d(
         Extra one-sided trailing padding added to the output.  Used to
         disambiguate the output size when ``stride > 1``.
     groups : int, optional
-        Channel grouping (currently ``1``-only in the engine path).
+        Channel grouping.  ``C_in`` and ``C_out`` must both be
+        divisible by it; ``groups == C_in`` is the depthwise case.
     dilation : int or tuple of int, optional
         Spacing between kernel taps.
 
@@ -323,31 +323,21 @@ def conv_transpose1d(
     >>> y.shape
     (1, 2, 21)
     """
-    unsupported_if(
-        groups != 1,
-        "conv_transpose1d",
-        "groups",
-        groups,
-        detail="Only groups=1 is supported.",
-    )
-    unsupported_if(
-        dilation != 1,
-        "conv_transpose1d",
-        "dilation",
-        dilation,
-        detail="Only dilation=1 is supported.",
-    )
     s = _normalize_int_or_tuple(stride, 1)[0]
     p = _normalize_int_or_tuple(padding, 1)[0]
     op = _normalize_int_or_tuple(output_padding, 1)[0]
+    d = _normalize_int_or_tuple(dilation, 1)[0]
     wi = _unwrap(weight)
-    # engine requires explicit bias; create zeros(C_out) when caller passes None
+    # engine requires explicit bias; create zeros(C_out) when caller passes None.
+    # The transposed weight's second axis is C_out // groups, so it has to be
+    # multiplied back up — sizing the bias from the axis alone is short by
+    # exactly ``groups``.
     if bias is not None:
         b = _unwrap(bias)
     else:
-        c_out = int(wi.shape[1])
+        c_out = int(wi.shape[1]) * groups
         b = _C_engine.zeros([c_out], wi.dtype, wi.device)
-    return _wrap(_C_engine.nn.conv_transpose1d(_unwrap(x), wi, b, s, p, op))
+    return _wrap(_C_engine.nn.conv_transpose1d(_unwrap(x), wi, b, s, p, op, d, groups))
 
 
 def conv_transpose2d(
@@ -386,7 +376,8 @@ def conv_transpose2d(
         Additional one-sided trailing padding on the output, used to
         resolve the size ambiguity when ``stride > 1``.
     groups : int, optional
-        Channel grouping.
+        Channel grouping.  ``C_in`` and ``C_out`` must both be
+        divisible by it; ``groups == C_in`` is the depthwise case.
     dilation : int or (int, int), optional
         Spacing between kernel taps.
 
@@ -421,30 +412,19 @@ def conv_transpose2d(
     >>> y.shape
     (1, 8, 14, 14)
     """
-    unsupported_if(
-        groups != 1,
-        "conv_transpose2d",
-        "groups",
-        groups,
-        detail="Only groups=1 is supported.",
-    )
-    unsupported_if(
-        dilation != 1 and dilation != (1, 1),
-        "conv_transpose2d",
-        "dilation",
-        dilation,
-        detail="Only dilation=1 is supported.",
-    )
     sh, sw = _normalize_int_or_tuple(stride, 2)
     ph, pw = _normalize_int_or_tuple(padding, 2)
     oh, ow = _normalize_int_or_tuple(output_padding, 2)
+    dh, dw = _normalize_int_or_tuple(dilation, 2)
     wi = _unwrap(weight)
     if bias is not None:
         b = _unwrap(bias)
     else:
-        b = _C_engine.zeros([int(wi.shape[1])], wi.dtype, wi.device)
+        b = _C_engine.zeros([int(wi.shape[1]) * groups], wi.dtype, wi.device)
     return _wrap(
-        _C_engine.nn.conv_transpose2d(_unwrap(x), wi, b, sh, sw, ph, pw, oh, ow)
+        _C_engine.nn.conv_transpose2d(
+            _unwrap(x), wi, b, sh, sw, ph, pw, oh, ow, dh, dw, groups
+        )
     )
 
 
@@ -482,7 +462,8 @@ def conv_transpose3d(
     output_padding : int or (int, int, int), optional
         Trailing one-sided output padding.
     groups : int, optional
-        Channel grouping.
+        Channel grouping.  ``C_in`` and ``C_out`` must both be
+        divisible by it; ``groups == C_in`` is the depthwise case.
     dilation : int or (int, int, int), optional
         Spacing between kernel taps.
 
@@ -516,30 +497,17 @@ def conv_transpose3d(
     >>> y.shape
     (1, 4, 8, 16, 16)
     """
-    unsupported_if(
-        groups != 1,
-        "conv_transpose3d",
-        "groups",
-        groups,
-        detail="Only groups=1 is supported.",
-    )
-    unsupported_if(
-        dilation != 1 and dilation != (1, 1, 1),
-        "conv_transpose3d",
-        "dilation",
-        dilation,
-        detail="Only dilation=1 is supported.",
-    )
     sd, sh, sw = _normalize_int_or_tuple(stride, 3)
     pd, ph, pw = _normalize_int_or_tuple(padding, 3)
     od, oh, ow = _normalize_int_or_tuple(output_padding, 3)
+    dd, dh, dw = _normalize_int_or_tuple(dilation, 3)
     wi = _unwrap(weight)
     if bias is not None:
         b = _unwrap(bias)
     else:
-        b = _C_engine.zeros([int(wi.shape[1])], wi.dtype, wi.device)
+        b = _C_engine.zeros([int(wi.shape[1]) * groups], wi.dtype, wi.device)
     return _wrap(
         _C_engine.nn.conv_transpose3d(
-            _unwrap(x), wi, b, sd, sh, sw, pd, ph, pw, od, oh, ow
+            _unwrap(x), wi, b, sd, sh, sw, pd, ph, pw, od, oh, ow, dd, dh, dw, groups
         )
     )

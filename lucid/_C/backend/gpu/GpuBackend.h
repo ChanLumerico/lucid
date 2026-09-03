@@ -25,8 +25,10 @@
 //   MLX convolutions use NHWC (channels-last) order.  The convolution forward/
 //   backward methods permute NCHW inputs to NHWC before calling mlx::core::conv*
 //   and permute results back.  Helper functions gpu_nchw_to_nhwc_perm,
-//   gpu_nhwc_to_nchw_perm, and gpu_w_to_mlx_transpose_perm build the
-//   required permutation vectors for 1-D, 2-D, and 3-D cases.
+//   gpu_nhwc_to_nchw_perm, and gpu_w_to_transpose_perm build the required
+//   permutation vectors for 1-D, 2-D, and 3-D cases;
+//   gpu_w_to_mlx_conv_transpose additionally re-splits the grouped channel
+//   axis, which Lucid and MLX place on opposite sides of the weight.
 //
 // Self-registration:
 //   An anonymous-namespace GpuBackendRegistrar struct at the bottom of the
@@ -4176,35 +4178,35 @@ public:
     //
     // Notes
     // -----
-    // Same NHWC permutation strategy as :meth:`conv_nd_forward`.  MLX
-    // does not yet ship a fused conv-transpose kernel, so this expands
-    // to the equivalent dilated conv composition.
+    // Same NHWC permutation strategy as :meth:`conv_nd_forward`.  MLX's
+    // ``conv_transpose{1,2,3}d`` take ``dilation`` and ``groups``
+    // directly, so both are handed straight to it; only the weight has
+    // to be rearranged, since Lucid and MLX disagree about where the
+    // group-divided channel axis lives.
     Storage conv_transpose_nd_forward(const Storage& x,
                                       const Storage& W,
                                       const Storage& b,
                                       int,
-                                      int,
+                                      int Cin,
                                       int Cout,
                                       const int*,
                                       const int*,
                                       const int*,
-                                      const int* stride,
-                                      const int* pad,
-                                      const int* opad,
-                                      int N,
+                                      const IBackend::ConvTransposeNdOpts& opts,
                                       const Shape&,
                                       Dtype dt) override {
         const auto& gx = std::get<GpuStorage>(x);
         const auto& gW = std::get<GpuStorage>(W);
         const auto& gb = std::get<GpuStorage>(b);
+        const int N = opts.N;
 
         // PERF: contiguous before conv_transpose — same rationale as forward
         // conv path. See conv_nd_forward for the microbench data.
         auto x_nhwc =
             ::mlx::core::contiguous(::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N)));
-        auto W_nhwc = ::mlx::core::contiguous(
-            ::mlx::core::transpose(*gW.arr, gpu_w_to_mlx_transpose_perm(N)));
-        auto y_nhwc = gpu_mlx_conv_transpose(x_nhwc, W_nhwc, stride, pad, opad, N);
+        auto W_nhwc = gpu_w_to_mlx_conv_transpose(*gW.arr, Cin, Cout, opts.groups, N);
+        auto y_nhwc = gpu_mlx_conv_transpose(x_nhwc, W_nhwc, opts.stride, opts.pad, opts.dilation,
+                                             opts.opad, opts.groups, N);
 
         ::mlx::core::Shape b_brd(N + 2, 1);
         b_brd[N + 1] = static_cast<::mlx::core::ShapeElem>(Cout);
@@ -4222,19 +4224,25 @@ public:
     std::vector<Storage> conv_transpose_nd_backward(const Storage& grad_out,
                                                     const Storage& x,
                                                     const Storage& W,
-                                                    int,
+                                                    int B,
                                                     int Cin,
                                                     int Cout,
                                                     const int* S,
                                                     const int* K,
-                                                    const int*,
-                                                    const int* stride,
-                                                    const int* pad,
-                                                    int N,
+                                                    const int* O,
+                                                    const IBackend::ConvTransposeNdOpts& opts,
                                                     Dtype dt) override {
         const auto& gx = std::get<GpuStorage>(x);
         const auto& gW = std::get<GpuStorage>(W);
         const auto& gG = std::get<GpuStorage>(grad_out);
+        const int N = opts.N;
+        const int G = opts.groups;
+        const int Cin_g = Cin / G;
+        const int Cout_g = Cout / G;
+        std::vector<int> sv(opts.stride, opts.stride + N);
+        std::vector<int> pv(opts.pad, opts.pad + N);
+        std::vector<int> dv(opts.dilation, opts.dilation + N);
+        std::vector<int> ones_n(N, 1);
 
         std::vector<int> db_axes;
         db_axes.reserve(N + 1);
@@ -4243,6 +4251,12 @@ public:
             db_axes.push_back(2 + i);
         auto db = ::mlx::core::sum(*gG.arr, db_axes, false);
 
+        // dx — the adjoint of a transposed convolution is the plain forward
+        // convolution it is the data gradient of, with the same geometry.
+        // No channel rearrangement is needed for grouping either: MLX wants
+        // ``(O, K..., I / G)`` and permuting Lucid's ``(Cin, Cout/G, K...)``
+        // gives exactly ``(Cin, K..., Cout/G)``, with group ``j`` of the
+        // output already paired with group ``j`` of the input.
         std::vector<int> w_dx_perm;
         w_dx_perm.push_back(0);
         for (int i = 0; i < N; ++i)
@@ -4252,7 +4266,7 @@ public:
         auto grad_nhwc =
             ::mlx::core::contiguous(::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N)));
         auto W_dx_nhwc = ::mlx::core::contiguous(::mlx::core::transpose(*gW.arr, w_dx_perm));
-        auto dx_nhwc = gpu_mlx_conv(grad_nhwc, W_dx_nhwc, stride, pad, N);
+        auto dx_nhwc = gpu_mlx_conv_grouped(grad_nhwc, W_dx_nhwc, sv, pv, dv, G, N);
         // PERF: see conv_transpose_nd_forward — strided view returned, MLX
         // ops handle strides natively. Materialization is deferred to the
         // final mx.eval() or to ops that genuinely need contiguous memory.
@@ -4263,35 +4277,77 @@ public:
         for (int i = 0; i < N; ++i)
             perm_axes.push_back(2 + i);
         perm_axes.push_back(0);
-        // PERF: contiguous before dW conv_general (see conv_nd_forward bench).
-        auto g_perm = ::mlx::core::contiguous(::mlx::core::transpose(*gG.arr, perm_axes));
-        auto x_perm = ::mlx::core::contiguous(::mlx::core::transpose(*gx.arr, perm_axes));
-        std::vector<int> conv_stride(N, 1);
-        std::vector<int> conv_pad(N), conv_kdil(N), conv_idil(N, 1);
-        for (int i = 0; i < N; ++i) {
-            conv_pad[i] = pad[i];
-            conv_kdil[i] = stride[i];
-        }
-        auto dW_perm = ::mlx::core::conv_general(g_perm, x_perm, conv_stride, conv_pad, conv_pad,
-                                                 conv_kdil, conv_idil);
 
-        using SE = ::mlx::core::ShapeElem;
-        ::mlx::core::Shape crop_lo(N + 2, 0);
-        ::mlx::core::Shape crop_hi;
-        crop_hi.push_back(static_cast<SE>(Cout));
-        for (int i = 0; i < N; ++i)
-            crop_hi.push_back(static_cast<SE>(K[i]));
-        crop_hi.push_back(static_cast<SE>(Cin));
-        dW_perm = ::mlx::core::slice(dW_perm, crop_lo, crop_hi);
+        // dW — expressed as a convolution of grad_out by x with the batch
+        // axis moved into the channel slot.  That rearrangement puts the
+        // group structure on the axes MLX calls batch and out-channels,
+        // which its ``groups`` argument cannot reach, so grouping is a
+        // slice-and-concatenate loop here (as in conv_nd_backward).
+        //
+        // dW[k] = sum_s grad[s * stride + k * dilation - pad] * x[s], so the
+        // OUTPUT index k steps by the transposed conv's dilation (conv
+        // stride = dv) while consecutive x taps sit stride apart in grad
+        // (kernel_dilation = sv).  The conv stride was previously pinned to
+        // 1, which coincides with the correct mapping only at dilation == 1.
+        const auto compute_dW = [&](const ::mlx::core::array& x_arr,
+                                    const ::mlx::core::array& g_arr, int local_Cin_g,
+                                    int local_Cout_g) -> ::mlx::core::array {
+            // PERF: contiguous before dW conv_general (see conv_nd_forward bench).
+            auto g_perm = ::mlx::core::contiguous(::mlx::core::transpose(g_arr, perm_axes));
+            auto x_perm = ::mlx::core::contiguous(::mlx::core::transpose(x_arr, perm_axes));
+            auto raw = ::mlx::core::conv_general(g_perm, x_perm, dv, pv, pv, sv, ones_n,
+                                                 /*groups=*/1, /*flip=*/false);
+            using SE = ::mlx::core::ShapeElem;
+            ::mlx::core::Shape crop_lo(N + 2, 0);
+            ::mlx::core::Shape crop_hi;
+            crop_hi.push_back(static_cast<SE>(local_Cout_g));
+            for (int i = 0; i < N; ++i)
+                crop_hi.push_back(static_cast<SE>(K[i]));
+            crop_hi.push_back(static_cast<SE>(local_Cin_g));
+            return ::mlx::core::slice(raw, crop_lo, crop_hi);
+        };
+
+        // (Cout_g, K..., Cin_g) -> (Cin_g, Cout_g, K...), Lucid's layout.
         std::vector<int> dW_back;
         dW_back.push_back(N + 1);
         dW_back.push_back(0);
         for (int i = 0; i < N; ++i)
             dW_back.push_back(1 + i);
+
+        ::mlx::core::array dW = ::mlx::core::array(0);
+        if (G == 1) {
+            dW = ::mlx::core::transpose(compute_dW(*gx.arr, *gG.arr, Cin_g, Cout_g), dW_back);
+        } else {
+            using SE = ::mlx::core::ShapeElem;
+            std::vector<::mlx::core::array> dW_groups;
+            dW_groups.reserve(G);
+            for (int g = 0; g < G; ++g) {
+                ::mlx::core::Shape x_lo(2 + N, 0), x_hi;
+                x_hi.push_back(static_cast<SE>(B));
+                x_hi.push_back(static_cast<SE>((g + 1) * Cin_g));
+                for (int i = 0; i < N; ++i)
+                    x_hi.push_back(static_cast<SE>(S[i]));
+                x_lo[1] = static_cast<SE>(g * Cin_g);
+                auto x_g = ::mlx::core::slice(*gx.arr, x_lo, x_hi);
+
+                ::mlx::core::Shape gr_lo(2 + N, 0), gr_hi;
+                gr_hi.push_back(static_cast<SE>(B));
+                gr_hi.push_back(static_cast<SE>((g + 1) * Cout_g));
+                for (int i = 0; i < N; ++i)
+                    gr_hi.push_back(static_cast<SE>(O[i]));
+                gr_lo[1] = static_cast<SE>(g * Cout_g);
+                auto grad_g = ::mlx::core::slice(*gG.arr, gr_lo, gr_hi);
+
+                dW_groups.push_back(
+                    ::mlx::core::transpose(compute_dW(x_g, grad_g, Cin_g, Cout_g), dW_back));
+            }
+            // Group j owns Cin rows [j * Cin_g, ...) of the weight, so the
+            // per-group blocks stack along the leading axis.
+            dW = ::mlx::core::concatenate(std::move(dW_groups), /*axis=*/0);
+        }
+
         // 3.4+ Step 3.2 perf sweep: see conv_nd_backward — drop trailing
         // contiguous on dW so the optimizer's update can fuse with it.
-        auto dW = ::mlx::core::transpose(dW_perm, dW_back);
-
         return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(dW), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
@@ -4971,7 +5027,6 @@ public:
         std::vector<int> sv(opts.stride, opts.stride + N);
         std::vector<int> pv(opts.pad, opts.pad + N);
         std::vector<int> dv(opts.dilation, opts.dilation + N);
-        std::vector<int> idv(N, 1);
 
         // 1x1 POINTWISE fast-path: a stride-1, pad-0, dilation-1, groups-1, K=1
         // conv is exactly a per-position channel matmul. MLX conv_general is
@@ -5009,8 +5064,10 @@ public:
             ::mlx::core::contiguous(::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N)));
         auto W_nhwc =
             ::mlx::core::contiguous(::mlx::core::transpose(*gW.arr, gpu_nchw_to_nhwc_perm(N)));
-        auto y_nhwc =
-            ::mlx::core::conv_general(x_nhwc, W_nhwc, sv, pv, pv, dv, idv, opts.groups, false);
+        // Grouped rank-5 goes through the per-group fallback: MLX refuses
+        // groups above two spatial dimensions, so a grouped conv3d used to
+        // run on CPU and raise on Metal for the same model.
+        auto y_nhwc = gpu_mlx_conv_grouped(x_nhwc, W_nhwc, sv, pv, dv, opts.groups, N);
         int Cout_local = static_cast<int>(out_shape[1]);
         ::mlx::core::Shape b_brd(N + 2, 1);
         b_brd[N + 1] = Cout_local;
@@ -5447,15 +5504,6 @@ private:
         return p;
     }
 
-    static std::vector<int> gpu_w_to_mlx_transpose_perm(int N) {
-        std::vector<int> p;
-        p.push_back(1);
-        for (int i = 0; i < N; ++i)
-            p.push_back(2 + i);
-        p.push_back(0);
-        return p;
-    }
-
     static std::vector<int> gpu_w_to_transpose_perm(int N) {
         std::vector<int> p;
         p.push_back(1);
@@ -5465,38 +5513,120 @@ private:
         return p;
     }
 
+    // Lucid stores the transposed weight as ``(Cin, Cout / G, K...)``; MLX
+    // wants ``(Cout, K..., Cin / G)``.  Both disagree about which channel
+    // axis the grouping divides, so the leading axis is split into
+    // ``(G, Cin / G)``, the group moved next to ``Cout``, and folded back
+    // in.  Measured against a per-group reference: MLX pairs Cout-major
+    // blocks with the matching Cin block, which is the same convention
+    // Lucid uses, so no group reordering is needed — only the relayout.
+    //
+    // At ``G == 1`` this is exactly the old ``(1, 2..N+1, 0)`` permutation.
+    static ::mlx::core::array
+    gpu_w_to_mlx_conv_transpose(const ::mlx::core::array& W, int Cin, int Cout, int G, int N) {
+        using SE = ::mlx::core::ShapeElem;
+        ::mlx::core::Shape split;
+        split.push_back(static_cast<SE>(G));
+        split.push_back(static_cast<SE>(Cin / G));
+        split.push_back(static_cast<SE>(Cout / G));
+        for (int i = 0; i < N; ++i)
+            split.push_back(W.shape(2 + i));
+
+        std::vector<int> perm;
+        perm.reserve(N + 3);
+        perm.push_back(0);
+        perm.push_back(2);
+        for (int i = 0; i < N; ++i)
+            perm.push_back(3 + i);
+        perm.push_back(1);
+
+        ::mlx::core::Shape merged;
+        merged.push_back(static_cast<SE>(Cout));
+        for (int i = 0; i < N; ++i)
+            merged.push_back(W.shape(2 + i));
+        merged.push_back(static_cast<SE>(Cin / G));
+
+        // PERF: contiguous before the conv kernel — see conv_nd_forward.
+        return ::mlx::core::reshape(
+            ::mlx::core::contiguous(::mlx::core::transpose(::mlx::core::reshape(W, split), perm)),
+            merged);
+    }
+
+    // Slice one group's block out of ``axis``.
+    static ::mlx::core::array
+    gpu_slice_axis(const ::mlx::core::array& a, int axis, int lo, int hi) {
+        using SE = ::mlx::core::ShapeElem;
+        ::mlx::core::Shape start(a.ndim(), 0);
+        ::mlx::core::Shape stop = a.shape();
+        start[axis] = static_cast<SE>(lo);
+        stop[axis] = static_cast<SE>(hi);
+        return ::mlx::core::slice(a, start, stop);
+    }
+
+    // Forward convolution, with the same rank-5 group fallback as
+    // ``gpu_mlx_conv_transpose`` below.  ``x_nhwc`` is channels-last and
+    // ``W_nhwc`` is ``(out, K..., in / groups)``.
+    static ::mlx::core::array gpu_mlx_conv_grouped(const ::mlx::core::array& x_nhwc,
+                                                   const ::mlx::core::array& W_nhwc,
+                                                   const std::vector<int>& stride,
+                                                   const std::vector<int>& pad,
+                                                   const std::vector<int>& dil,
+                                                   int groups,
+                                                   int N) {
+        const std::vector<int> ones_n(N, 1);
+        if (groups > 1 && N == 3) {
+            const int in_g = static_cast<int>(x_nhwc.shape(N + 1)) / groups;
+            const int out_g = static_cast<int>(W_nhwc.shape(0)) / groups;
+            std::vector<::mlx::core::array> parts;
+            parts.reserve(static_cast<std::size_t>(groups));
+            for (int j = 0; j < groups; ++j)
+                parts.push_back(::mlx::core::conv_general(
+                    gpu_slice_axis(x_nhwc, N + 1, j * in_g, (j + 1) * in_g),
+                    gpu_slice_axis(W_nhwc, 0, j * out_g, (j + 1) * out_g), stride, pad, pad, dil,
+                    ones_n, /*groups=*/1, /*flip=*/false));
+            return ::mlx::core::concatenate(std::move(parts), /*axis=*/N + 1);
+        }
+        return ::mlx::core::conv_general(x_nhwc, W_nhwc, stride, pad, pad, dil, ones_n, groups,
+                                         /*flip=*/false);
+    }
+
     static ::mlx::core::array gpu_mlx_conv_transpose(const ::mlx::core::array& x_nhwc,
                                                      const ::mlx::core::array& W_nhwc,
                                                      const int* stride,
                                                      const int* pad,
+                                                     const int* dil,
                                                      const int* opad,
+                                                     int groups,
                                                      int N) {
+        // MLX refuses grouping above two spatial dimensions ("Can only
+        // handle groups != 1 in 1D or 2D convolutions"), so the rank-5
+        // grouped case runs one ungrouped convolution per group over
+        // channel slices.  Identical result, ``groups`` kernel launches.
+        if (groups > 1 && N == 3) {
+            const int in_g = static_cast<int>(x_nhwc.shape(N + 1)) / groups;
+            const int out_g = static_cast<int>(W_nhwc.shape(0)) / groups;
+            std::vector<::mlx::core::array> parts;
+            parts.reserve(static_cast<std::size_t>(groups));
+            for (int j = 0; j < groups; ++j)
+                parts.push_back(gpu_mlx_conv_transpose(
+                    gpu_slice_axis(x_nhwc, N + 1, j * in_g, (j + 1) * in_g),
+                    gpu_slice_axis(W_nhwc, 0, j * out_g, (j + 1) * out_g), stride, pad, dil, opad,
+                    /*groups=*/1, N));
+            return ::mlx::core::concatenate(std::move(parts), /*axis=*/N + 1);
+        }
         if (N == 1)
-            return ::mlx::core::conv_transpose1d(x_nhwc, W_nhwc, stride[0], pad[0], 1, opad[0]);
+            return ::mlx::core::conv_transpose1d(x_nhwc, W_nhwc, stride[0], pad[0], dil[0], opad[0],
+                                                 groups);
         if (N == 2)
             return ::mlx::core::conv_transpose2d(
                 x_nhwc, W_nhwc, std::pair<int, int>{stride[0], stride[1]},
-                std::pair<int, int>{pad[0], pad[1]}, std::pair<int, int>{1, 1},
-                std::pair<int, int>{opad[0], opad[1]});
+                std::pair<int, int>{pad[0], pad[1]}, std::pair<int, int>{dil[0], dil[1]},
+                std::pair<int, int>{opad[0], opad[1]}, groups);
         return ::mlx::core::conv_transpose3d(
             x_nhwc, W_nhwc, std::tuple<int, int, int>{stride[0], stride[1], stride[2]},
-            std::tuple<int, int, int>{pad[0], pad[1], pad[2]}, std::tuple<int, int, int>{1, 1, 1},
-            std::tuple<int, int, int>{opad[0], opad[1], opad[2]});
-    }
-
-    static ::mlx::core::array gpu_mlx_conv(const ::mlx::core::array& x_nhwc,
-                                           const ::mlx::core::array& W_nhwc,
-                                           const int* stride,
-                                           const int* pad,
-                                           int N) {
-        if (N == 1)
-            return ::mlx::core::conv1d(x_nhwc, W_nhwc, stride[0], pad[0]);
-        if (N == 2)
-            return ::mlx::core::conv2d(x_nhwc, W_nhwc, std::pair<int, int>{stride[0], stride[1]},
-                                       std::pair<int, int>{pad[0], pad[1]});
-        return ::mlx::core::conv3d(x_nhwc, W_nhwc,
-                                   std::tuple<int, int, int>{stride[0], stride[1], stride[2]},
-                                   std::tuple<int, int, int>{pad[0], pad[1], pad[2]});
+            std::tuple<int, int, int>{pad[0], pad[1], pad[2]},
+            std::tuple<int, int, int>{dil[0], dil[1], dil[2]},
+            std::tuple<int, int, int>{opad[0], opad[1], opad[2]}, groups);
     }
 
     // Divide a summed pool by the per-output-position window span.

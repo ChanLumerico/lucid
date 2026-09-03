@@ -487,6 +487,13 @@ public:
         const auto* P = iv_attr(node, "padding");
         if (S == nullptr || P == nullptr) return false;
         if (S->size() != 2 || P->size() != 2) return false;
+        // The descriptor describes the forward convolution this op is the
+        // data gradient of, so every geometry field has to come from the
+        // trace.  Pinning dilation to 1 here produced correct-looking
+        // gradients of the wrong convolution.
+        const auto* D = iv_attr(node, "dilation");
+        if (D == nullptr || D->size() != 2)
+            return false;
         const std::int64_t groups = i_attr(node, "groups", 1);
 
         MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
@@ -501,7 +508,7 @@ public:
         w = cast_if_needed(g, w, chain_dt);
 
         MPSGraphConvolution2DOpDescriptor* desc =
-            make_conv2d_desc((*S)[1], (*S)[0], 1, 1, (*P)[1], (*P)[0], groups);
+            make_conv2d_desc((*S)[1], (*S)[0], (*D)[1], (*D)[0], (*P)[1], (*P)[0], groups);
         if (desc == nil) return false;
 
         // dX = conv2d_forward(grad, w, desc).  The transpose-conv's
@@ -567,6 +574,9 @@ public:
         const auto* P = iv_attr(node, "padding");
         if (S == nullptr || P == nullptr) return false;
         if (S->size() != 1 || P->size() != 1) return false;
+        const auto* D = iv_attr(node, "dilation");
+        if (D == nullptr || D->size() != 1)
+            return false;
         const std::int64_t groups = i_attr(node, "groups", 1);
 
         MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
@@ -600,7 +610,7 @@ public:
             [g reshapeTensor:grad withShape:shape_to_ns(g_2d_shape) name:nil];
 
         MPSGraphConvolution2DOpDescriptor* desc =
-            make_conv2d_desc((*S)[0], 1, 1, 1, (*P)[0], 0, groups);
+            make_conv2d_desc((*S)[0], 1, (*D)[0], 1, (*P)[0], 0, groups);
         if (desc == nil) return false;
 
         // dX = forward conv2d(grad, w).

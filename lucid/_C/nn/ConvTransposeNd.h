@@ -18,7 +18,7 @@
 // where ``output_padding`` ($p^\text{out}$) disambiguates the otherwise
 // many-to-one mapping from input size to output size induced by stride > 1.
 //
-// Weight layout is ``(C_in, C_out, K_0, ..., K_{N-1})`` — note the **leading
+// Weight layout is ``(C_in, C_out / groups, K_0, ..., K_{N-1})`` — note the **leading
 // channel axis is ``C_in``**, the reverse of regular convolution.
 //
 // CPU backend uses col2im + GEMM; GPU backend uses the MLX transposed-conv
@@ -59,14 +59,21 @@ namespace lucid {
 //     Per-axis output padding added to one side of the output to
 //     disambiguate the inverse-stride shape.  Must be less than
 //     ``stride`` along each axis.
+// dilation_ : int[N]
+//     Per-axis spacing between kernel taps.
+// groups_ : int
+//     Channel grouping factor.  ``groups_ == C_in`` is the depthwise
+//     case used by efficient decoder heads.
 template <int N>
 
 class LUCID_API ConvTransposeNdBackward : public FuncOp<ConvTransposeNdBackward<N>, 3> {
 public:
     static const OpSchema schema_v1;
-    int stride_[N];  // Upsampling stride per axis.
-    int pad_[N];     // Input padding removed from output per axis.
-    int opad_[N];    // Output padding added to disambiguate output size.
+    int stride_[N];    // Upsampling stride per axis.
+    int pad_[N];       // Input padding removed from output per axis.
+    int opad_[N];      // Output padding added to disambiguate output size.
+    int dilation_[N];  // Spacing between kernel taps per axis.
+    int groups_;       // Channel grouping factor; C_in for depthwise.
 
     // Run the forward transposed convolution and attach the backward
     // node.
@@ -76,7 +83,7 @@ public:
     // x : TensorImplPtr
     //     Input batch of shape ``(B, C_in, S_0, ..., S_{N-1})``.
     // W : TensorImplPtr
-    //     Filter bank of shape ``(C_in, C_out, K_0, ..., K_{N-1})``.
+    //     Filter bank of shape ``(C_in, C_out / groups, K_0, ..., K_{N-1})``.
     //     The leading axis is ``C_in`` — this is the transposed layout
     //     relative to ``ConvNdBackward``.
     // b : TensorImplPtr
@@ -89,23 +96,27 @@ public:
     // opad : array<int, N>
     //     Per-axis output padding added to one side.  Must satisfy
     //     ``opad[i] < stride[i]``.
+    // dilation : array<int, N>
+    //     Per-axis spacing between kernel taps.
+    // groups : int
+    //     Channel grouping factor.  ``C_in`` and ``C_out`` must both be
+    //     divisible by it, and ``W``'s second axis is ``C_out / groups``.
     //
     // Returns
     // -------
     // TensorImplPtr
     //     Output of shape ``(B, C_out, O_0, ..., O_{N-1})`` where each
     //     extent is
-    //     $O_i = (S_i - 1)\, s_i - 2 p_i + K_i + p^\text{out}_i$
-    //     (or with dilation $d_i$ included as $d_i (K_i - 1)$ instead
-    //     of $K_i - 1$).
+    //     $O_i = (S_i - 1)\, s_i - 2 p_i + d_i (K_i - 1) + 1 +
+    //     p^\text{out}_i$.
     //
     // Raises
     // ------
     // ShapeMismatch
     //     If the input rank disagrees with ``N + 2``, if ``W``'s
-    //     leading axis does not match ``C_in``, if ``b`` is not 1-D of
-    //     length ``C_out``, or if a computed output extent is
-    //     non-positive.
+    //     leading axis does not match ``C_in``, if ``C_in`` is not
+    //     divisible by ``groups``, if ``b`` is not 1-D of length
+    //     ``C_out``, or if a computed output extent is non-positive.
     // DeviceMismatch
     //     If ``x``, ``W``, ``b`` do not all live on the same device.
     static TensorImplPtr forward(const TensorImplPtr& x,
@@ -113,7 +124,9 @@ public:
                                  const TensorImplPtr& b,
                                  const int (&stride)[N],
                                  const int (&pad)[N],
-                                 const int (&opad)[N]);
+                                 const int (&opad)[N],
+                                 const int (&dilation)[N],
+                                 int groups);
 
     // Backward — compute ``[dx, dW, db]`` for the three saved inputs.
     //
@@ -150,7 +163,7 @@ using ConvTranspose3dBackward = ConvTransposeNdBackward<3>;
 // x : TensorImplPtr
 //     Input of shape ``(B, C_in, L)``.
 // W : TensorImplPtr
-//     Filters of shape ``(C_in, C_out, KL)``.
+//     Filters of shape ``(C_in, C_out / groups, KL)``.
 // b : TensorImplPtr
 //     Bias of shape ``(C_out,)`` or empty.
 // stride_l : int, optional
@@ -167,12 +180,18 @@ using ConvTranspose3dBackward = ConvTransposeNdBackward<3>;
 // TensorImplPtr
 //     Output of shape ``(B, C_out, L_out)`` where
 //     $L_\text{out} = (L - 1)\, s - 2 p + KL + p^\text{out}$.
+// dilation_l : int, optional
+//     Length-axis spacing between kernel taps.  Default: ``1``.
+// groups : int, optional
+//     Channel grouping factor.  Default: ``1``.
 LUCID_API TensorImplPtr conv_transpose1d_op(const TensorImplPtr& x,
                                             const TensorImplPtr& W,
                                             const TensorImplPtr& b,
                                             int stride_l = 1,
                                             int pad_l = 0,
-                                            int opad_l = 0);
+                                            int opad_l = 0,
+                                            int dilation_l = 1,
+                                            int groups = 1);
 
 // Two-dimensional transposed convolution (fractionally-strided conv).
 //
@@ -185,7 +204,7 @@ LUCID_API TensorImplPtr conv_transpose1d_op(const TensorImplPtr& x,
 // x : TensorImplPtr
 //     Input of shape ``(B, C_in, H, W)``.
 // W : TensorImplPtr
-//     Filters of shape ``(C_in, C_out, KH, KW)``.
+//     Filters of shape ``(C_in, C_out / groups, KH, KW)``.
 // b : TensorImplPtr
 //     Bias of shape ``(C_out,)`` or empty.
 // stride_h, stride_w : int, optional
@@ -210,6 +229,10 @@ LUCID_API TensorImplPtr conv_transpose1d_op(const TensorImplPtr& x,
 // artefacts.  A common mitigation is to choose
 // ``kernel_size = stride * n`` or to substitute bilinear upsampling
 // followed by a regular convolution.
+// dilation_h, dilation_w : int, optional
+//     Per-axis spacing between kernel taps.  Default: ``1``.
+// groups : int, optional
+//     Channel grouping factor.  Default: ``1``.
 LUCID_API TensorImplPtr conv_transpose2d_op(const TensorImplPtr& x,
                                             const TensorImplPtr& W,
                                             const TensorImplPtr& b,
@@ -218,7 +241,10 @@ LUCID_API TensorImplPtr conv_transpose2d_op(const TensorImplPtr& x,
                                             int pad_h = 0,
                                             int pad_w = 0,
                                             int opad_h = 0,
-                                            int opad_w = 0);
+                                            int opad_w = 0,
+                                            int dilation_h = 1,
+                                            int dilation_w = 1,
+                                            int groups = 1);
 
 // Three-dimensional transposed convolution.
 //
@@ -231,7 +257,7 @@ LUCID_API TensorImplPtr conv_transpose2d_op(const TensorImplPtr& x,
 // x : TensorImplPtr
 //     Input of shape ``(B, C_in, D, H, W)``.
 // W : TensorImplPtr
-//     Filters of shape ``(C_in, C_out, KD, KH, KW)``.
+//     Filters of shape ``(C_in, C_out / groups, KD, KH, KW)``.
 // b : TensorImplPtr
 //     Bias of shape ``(C_out,)`` or empty.
 // stride_d, stride_h, stride_w : int, optional
@@ -249,6 +275,10 @@ LUCID_API TensorImplPtr conv_transpose2d_op(const TensorImplPtr& x,
 //     output extent following
 //     $X_\text{out} = (X - 1) s_x - 2 p_x + K_X + p^\text{out}_x$
 //     for $X \in \{D, H, W\}$.
+// dilation_d, dilation_h, dilation_w : int, optional
+//     Per-axis spacing between kernel taps.  Default: ``1``.
+// groups : int, optional
+//     Channel grouping factor.  Default: ``1``.
 LUCID_API TensorImplPtr conv_transpose3d_op(const TensorImplPtr& x,
                                             const TensorImplPtr& W,
                                             const TensorImplPtr& b,
@@ -260,6 +290,10 @@ LUCID_API TensorImplPtr conv_transpose3d_op(const TensorImplPtr& x,
                                             int pad_w = 0,
                                             int opad_d = 0,
                                             int opad_h = 0,
-                                            int opad_w = 0);
+                                            int opad_w = 0,
+                                            int dilation_d = 1,
+                                            int dilation_h = 1,
+                                            int dilation_w = 1,
+                                            int groups = 1);
 
 }  // namespace lucid
