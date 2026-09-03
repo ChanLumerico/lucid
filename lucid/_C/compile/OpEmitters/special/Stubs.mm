@@ -14,20 +14,20 @@
 //                              doesn't expose
 //   - multi-output / dynamic : :class:`OpNode` IR currently models
 //                              one output per node
-//   - FFT                    : no MPSGraph FFT primitive
+//   - FFT                    : MPSGraph *does* expose FFT
+//                              (``fastFourierTransformWithTensor:`` and
+//                              the Hermitean pair).  What is missing is
+//                              a complex dtype on this path at all:
+//                              ``MpsBuilder``'s ``to_mps_dtype`` has no
+//                              C64 / C128 case and throws
 //   - histogram              : no native histogram primitive
-//   - rotate                 : per-pixel bilinear gather.  ``grid_sample``
-//                              used to be filed here on the same grounds
-//                              and is now emitted (OpEmitters/nn/
-//                              Spatial.mm): flattening the spatial axes
-//                              turns the sample coordinates into one
-//                              index per output position, which
-//                              ``gatherAlongAxis`` does take
-//                              in one step
 //   - embedding_bag          : dynamic per-bag offsets need a
 //                              segment-reduce
-//   - complex                : 2-storage backing path the real-input
-//                              pipeline doesn't model
+//   - complex                : no complex dtype on the compile path —
+//                              complex is one interleaved storage, not
+//                              two, so the blocker is the missing
+//                              ``to_mps_dtype`` case rather than the
+//                              backing layout
 //   - factory header rows    : ``arange`` / ``eye`` / etc. — the
 //                              builder already factory-skips empty
 //                              inputs, but registering keeps
@@ -98,6 +98,10 @@ struct StubsRegistrar {
                  // would blend across the folded channels, which a 2-D
                  // resize does not do.
                  // ── spatial sampling / segment-reduce (dyn. gather) ─
+                 // ``rotate`` is emittable — nearest sampling on a grid
+                 // the angle and centre fix at build time — but nothing
+                 // in ``lucid/`` calls ``engine.nn.rotate``, so it stays
+                 // here rather than becoming an emitter no trace reaches.
                  "rotate",
                  "embedding_bag",
                  // ── complex / 2-storage path ────────────────────────

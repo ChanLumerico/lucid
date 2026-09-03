@@ -14,7 +14,11 @@
 //   - ``grid_sample``            — four-corner gather over flattened
 //                                  spatial axes, then a blend
 //
-// ``rotate`` stays in :file:`../special/Stubs.mm`.
+// ``rotate`` stays in :file:`../special/Stubs.mm` — not because it
+// cannot be emitted (it is nearest with a compile-time constant
+// grid, so it is a baked gather table) but because no Python caller
+// anywhere in ``lucid/`` reaches ``engine.nn.rotate``, so an emitter
+// for it could never run or be tested.
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
