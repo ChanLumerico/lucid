@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - trilinear resampling reads the grid the model asked for
 
+- grid_sample reaches the trace, and Core ML has always had it
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

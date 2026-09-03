@@ -133,6 +133,14 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input0,
     Shape out_shape{static_cast<std::int64_t>(N), static_cast<std::int64_t>(C),
                     static_cast<std::int64_t>(H_out), static_cast<std::int64_t>(W_out)};
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
+    // None of these is recoverable from the shapes, and each one changes
+    // the answer rather than the layout: ``mode`` picks the filter,
+    // ``padding_mode`` decides what lies outside the image, and
+    // ``align_corners`` moves every sample.  An emitter that assumed a
+    // value would return a plausible image sampled on the wrong grid.
+    scope.set_attr("mode", static_cast<std::int64_t>(mode));
+    scope.set_attr("padding_mode", static_cast<std::int64_t>(padding_mode));
+    scope.set_attr("align_corners", align_corners);
 
     auto& be = backend::Dispatcher::for_device(input->device());
     Storage out_storage =
@@ -141,6 +149,14 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input0,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                             input->device(), false);
+    // Same as ``affine_grid`` above: ``wire_autograd`` records on_op_io,
+    // but the early return below skips it whenever no gradient is
+    // wanted — which is every inference pass, and tracing is one.  The
+    // node then reached the emitters with no operands at all, so both
+    // backends listed this op as one the trace could not carry.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({input, grid}, out);
+    }
 
     if (!GradMode::is_enabled() || !(input->requires_grad() || grid->requires_grad()))
         return out;

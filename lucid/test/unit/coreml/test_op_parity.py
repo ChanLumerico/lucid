@@ -282,15 +282,28 @@ class TestTheGapAgainstCompileIsAccountedFor:
 
     #: The trace does not carry enough to translate them.
     TRACER_GAP = {
-        # Variadic operands the tracer does not all wire, measured
-        # 2026-09-03. Translating from what is recorded would put the
-        # wrong values in the result, so each emitter refuses by name
-        # rather than guessing at the rest.
-        #   meshgrid       two 1-D inputs, only the last recorded
-        #   grid_sample    neither operand recorded, nor the result
-        #   embedding_bag  the weight recorded, the indices not
+        # Operands the tracer does not all wire, re-measured 2026-09-04.
+        # Translating from what is recorded would put the wrong values in
+        # the result, so each emitter refuses by name rather than
+        # guessing at the rest.
+        #
+        #   meshgrid       one node, N outputs. ``OpScopeFull`` mints a
+        #                  single output with an empty shape and each of
+        #                  the N ``wire_autograd`` calls overwrites the
+        #                  same node, so only the last input survives.
+        #                  Carrying it needs a multi-output IR, not a
+        #                  wiring fix.
+        #   embedding_bag  the weight is recorded, the indices and
+        #                  offsets are not. ``embedding`` right above it
+        #                  patches this up by calling ``on_op_io``
+        #                  explicitly; this one does not, and its
+        #                  segments are data-dependent besides.
+        #
+        # ``grid_sample`` was here until its operands reached the trace.
+        # It was never a Core ML limit — MIL has had ``resample`` all
+        # along; the op returned before ``wire_autograd`` whenever no
+        # gradient was wanted, which is every inference pass.
         "meshgrid",
-        "grid_sample",
         "embedding_bag",
     }
 
@@ -459,5 +472,60 @@ class TestTheSamplingGridIsTheOneTheModelAsked:
         _check(
             lambda x: F.interpolate(x, size=size, mode=mode, align_corners=align_corners),
             lucid.randn(*shape),
+            tmp_path,
+        )
+
+
+class TestGridSampleReachesTheExport:
+    """It was listed as untranslatable, and the reason was in the tracer.
+
+    ``grid_sample`` returned before ``wire_autograd`` whenever no
+    gradient was wanted. Every inference pass takes that path, and an
+    export traces one, so the node arrived with no operands at all —
+    which reads as "Core ML cannot do this" and was never about Core ML.
+    MIL has ``resample``: same operands, same ``(x, y)`` order, same
+    normalised range.
+
+    ``mode``, ``padding_mode`` and ``align_corners`` each change the
+    answer rather than the layout, so all of them are checked.
+    """
+
+    @pytest.mark.parametrize("align_corners", [False, True], ids=["edges", "corners"])
+    @pytest.mark.parametrize("padding_mode", ["zeros", "border"])
+    @pytest.mark.parametrize("mode", ["bilinear", "nearest"])
+    def test_every_setting_exports_to_what_it_means(
+        self, mode: str, padding_mode: str, align_corners: bool, tmp_path: object
+    ) -> None:
+        lucid.manual_seed(1)
+        # Coordinates spread past +-1 so the padding mode is actually
+        # exercised rather than only the interior.
+        grid = lucid.rand(1, 4, 4, 2) * 2.6 - 1.3
+
+        _check(
+            lambda x: F.grid_sample(
+                x,
+                grid,
+                mode=mode,
+                padding_mode=padding_mode,
+                align_corners=align_corners,
+            ),
+            lucid.randn(1, 3, 5, 5),
+            tmp_path,
+        )
+
+    def test_reflection_follows_the_engine_and_not_core_ml(
+        self, tmp_path: object
+    ) -> None:
+        """The engine has no true reflection; it clamps, so the export must.
+
+        Emitting Core ML's real reflection would make the package
+        disagree with the model it was built from — right by Core ML's
+        definition and wrong as a translation.
+        """
+        lucid.manual_seed(2)
+        grid = lucid.rand(1, 4, 4, 2) * 3.0 - 1.5
+        _check(
+            lambda x: F.grid_sample(x, grid, padding_mode="reflection"),
+            lucid.randn(1, 3, 5, 5),
             tmp_path,
         )
