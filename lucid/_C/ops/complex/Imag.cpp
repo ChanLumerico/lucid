@@ -20,7 +20,9 @@ namespace lucid {
 TensorImplPtr imag_op(const TensorImplPtr& a) {
     Validator::input(a, "imag.a").non_null();
     complex_detail::require_complex(a->dtype(), "imag");
-    OpScopeFull scope{"imag", a->device(), a->dtype(), a->shape()};
+    // The scope's dtype is the output's: this strips a lane, so it is
+    // the real one, not the complex input's.
+    OpScopeFull scope{"imag", a->device(), real_lane_of(a->dtype()), a->shape()};
 
     Storage out =
         backend::Dispatcher::for_device(a->device()).complex_imag(a->storage(), a->shape());

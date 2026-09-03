@@ -104,8 +104,6 @@ struct StubsRegistrar {
                  // here rather than becoming an emitter no trace reaches.
                  "rotate",
                  "embedding_bag",
-                 // ── complex / 2-storage path ────────────────────────
-                 "complex",
                  // ── host-precomputed factory headers ────────────────
                  // (already factory-skipped by the builder when inputs
                  // are empty; stubbed for find_emitter completeness).

@@ -164,6 +164,21 @@ inline MPSDataType to_mps_dtype(Dtype dt) {
         return MPSDataTypeInt8;
     case Dtype::Bool:
         return MPSDataTypeBool;
+    // Lucid stores complex interleaved — C64 is a pair of float32 lanes
+    // in one storage, eight bytes per element — which is exactly what
+    // MPSGraph means by ``MPSDataTypeComplexFloat32``.  The buffer needs
+    // no repacking; only this line was missing.
+    case Dtype::C64:
+        return MPSDataTypeComplexFloat32;
+    // C128 has no counterpart: MPSGraph's complex types are 32- and
+    // 16-bit lanes only.  In practice the tensor never gets this far —
+    // moving it to Metal already refuses, because MLX has no
+    // complex128 either — but the case says which dtype and why rather
+    // than falling into the generic message below.
+    case Dtype::C128:
+        throw std::runtime_error(
+            "lucid::compile: complex128 has no MPSGraph type (complex is float32 / "
+            "float16 lanes only) — cast to complex64 to compile this graph");
     default:
         throw std::runtime_error(
             "lucid::compile: dtype not supported on the MPSGraph compile path");
@@ -181,8 +196,12 @@ inline std::size_t shape_nbytes(const Shape& shape, Dtype dt) {
     std::size_t n = 1;
     for (std::int64_t d : shape)
         n *= static_cast<std::size_t>(d);
-    std::size_t itemsize = (dt == Dtype::F16) ? 2 : 4;
-    return n * itemsize;
+    // ``dtype_size`` rather than a two-case guess.  The guess was "2 for
+    // F16, else 4", which under-allocates every eight-byte dtype: an
+    // ``argmax`` output (I64) or a complex one got half the buffer it
+    // needed, and MPSGraph answers that with a failed assertion inside
+    // MPSNDArray — a process abort, not an exception anything can catch.
+    return n * dtype_size(dt);
 }
 
 inline std::string shape_str(const Shape& shape) {

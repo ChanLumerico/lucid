@@ -50,6 +50,21 @@ inline MPSDataType to_mps_dtype(Dtype dt) {
         return MPSDataTypeInt8;
     case Dtype::Bool:
         return MPSDataTypeBool;
+    // Lucid stores complex interleaved — C64 is a pair of float32 lanes
+    // in one storage, eight bytes per element — which is exactly what
+    // MPSGraph means by ``MPSDataTypeComplexFloat32``.  The buffer needs
+    // no repacking; only this line was missing.
+    case Dtype::C64:
+        return MPSDataTypeComplexFloat32;
+    // C128 has no counterpart: MPSGraph's complex types are 32- and
+    // 16-bit lanes only.  In practice the tensor never gets this far —
+    // moving it to Metal already refuses, because MLX has no
+    // complex128 either — but the case says which dtype and why rather
+    // than falling into the generic message below.
+    case Dtype::C128:
+        throw std::runtime_error(
+            "lucid::compile: complex128 has no MPSGraph type (complex is float32 / "
+            "float16 lanes only) — cast to complex64 to compile this graph");
     default:
         throw std::runtime_error(
             "lucid::compile: dtype not supported on the MPSGraph compile path");
@@ -1939,12 +1954,13 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
                 id<MTLBuffer> src_buf = (__bridge id<MTLBuffer>)v.mtl_buffer;
                 // Inline shape_nbytes — same formula as
                 // CompiledExecutable.mm's detail::shape_nbytes (anon
-                // namespace there is unreachable from this TU).
+                // namespace there is unreachable from this TU).  Both
+                // ask ``dtype_size``; the two-case guess they used to
+                // share read every eight-byte dtype as four.
                 std::size_t nelem = 1;
                 for (std::int64_t d : feed_shape)
                     nelem *= static_cast<std::size_t>(d);
-                const std::size_t itemsize = (feed_dtype == Dtype::F16) ? 2 : 4;
-                const std::size_t nbytes = nelem * itemsize;
+                const std::size_t nbytes = nelem * dtype_size(feed_dtype);
                 NSData* init_data = [NSData dataWithBytes:[src_buf contents] length:nbytes];
                 MPSGraphTensor* var = [graph_obj
                     variableWithData:init_data

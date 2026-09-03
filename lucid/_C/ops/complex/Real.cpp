@@ -21,7 +21,9 @@ namespace lucid {
 TensorImplPtr real_op(const TensorImplPtr& a) {
     Validator::input(a, "real.a").non_null();
     complex_detail::require_complex(a->dtype(), "real");
-    OpScopeFull scope{"real", a->device(), a->dtype(), a->shape()};
+    // The scope's dtype is the output's: this strips a lane, so it is
+    // the real one, not the complex input's.
+    OpScopeFull scope{"real", a->device(), real_lane_of(a->dtype()), a->shape()};
 
     Storage out =
         backend::Dispatcher::for_device(a->device()).complex_real(a->storage(), a->shape());

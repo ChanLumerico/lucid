@@ -140,6 +140,30 @@ buffer_to_array(void* mtl_buffer, std::vector<int> shape, Dtype dt, std::size_t 
     case Dtype::I64:
         mlx_dt = ::mlx::core::int64;
         break;
+    // MLX's ``complex64`` is a pair of float32 lanes, the same bytes
+    // Lucid's C64 and MPSGraph's ``MPSDataTypeComplexFloat32`` hold, so
+    // the buffer crosses unchanged.
+    case Dtype::C64:
+        mlx_dt = ::mlx::core::complex64;
+        break;
+    // The rest of the table.  These were absent rather than excluded:
+    // ``to_mps_dtype`` already builds graphs that produce them, so a
+    // compiled model returning a comparison — ``x > 0`` — reached this
+    // switch and raised at call time instead of answering.
+    case Dtype::Bool:
+        mlx_dt = ::mlx::core::bool_;
+        break;
+    case Dtype::I8:
+        mlx_dt = ::mlx::core::int8;
+        break;
+    case Dtype::I16:
+        mlx_dt = ::mlx::core::int16;
+        break;
+    case Dtype::BF16:
+        mlx_dt = ::mlx::core::bfloat16;
+        break;
+    // C128 stops here on purpose: neither MPSGraph nor MLX has a
+    // double-precision complex, so there is nothing to map it onto.
     default:
         throw std::runtime_error(
             "lucid::gpu::mps::buffer_to_array: unsupported Dtype for MPSGraph");

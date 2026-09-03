@@ -87,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - conv_transpose3d, through the convolution's data gradient
 - conv_transpose honours groups and dilation on every backend
 - grid_sample, once the spatial axes are flattened
+- complex tensors, and the buffer sizes they exposed
 
 ---
 

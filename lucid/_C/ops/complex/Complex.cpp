@@ -43,8 +43,6 @@ TensorImplPtr complex_op(const TensorImplPtr& re_in, const TensorImplPtr& im_in)
         ErrorBuilder("complex").device_mismatch(re->device(), im->device(),
                                                 "real and imag must live on the same device");
 
-    OpScopeFull scope{"complex", re->device(), re->dtype(), re->shape()};
-
     // There is no half-precision complex, so the half formats widen here
     // rather than in the backend — which used to read their bytes as
     // float32 and assemble a number out of the wrong halves.
@@ -54,6 +52,13 @@ TensorImplPtr complex_op(const TensorImplPtr& re_in, const TensorImplPtr& im_in)
         im = astype_op(im, Dtype::F32);
     if (re->dtype() != im->dtype())
         ErrorBuilder("complex").fail("real and imag must have the same dtype");
+
+    // Opened after the widening, for two reasons: the scope's dtype is
+    // the *output's*, so it has to be the complex type this actually
+    // produces; and ``astype_op`` traces a node of its own, which would
+    // otherwise be pushed after this one and take the I/O that
+    // ``wire_autograd`` records below.
+    OpScopeFull scope{"complex", re->device(), complex_for(re->dtype()), re->shape()};
 
     Storage out = backend::Dispatcher::for_device(re->device())
                       .complex_combine(re->storage(), im->storage(), re->shape());
