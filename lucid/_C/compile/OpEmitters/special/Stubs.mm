@@ -16,10 +16,6 @@
 //                              one output per node
 //   - FFT                    : no MPSGraph FFT primitive
 //   - histogram              : no native histogram primitive
-//   - 3D interpolate         : ``resize`` is 2-D only, and the depth
-//                              axis cannot be folded away the way
-//                              pooling's can (resize would blend
-//                              across the folded channels)
 //   - rotate / grid_sample   : per-pixel bilinear gather; MPSGraph's
 //                              ``gatherAlongAxis`` can't express it
 //                              in one step
@@ -89,10 +85,13 @@ struct StubsRegistrar {
                  // to real-emit (OpEmitters/nn/Conv.mm): the SDK ships
                  // no ``convolutionTranspose3D``, but a transposed
                  // convolution is the data gradient of a convolution,
-                 // and ``convolution3DDataGradient`` is exposed.
-                 // ── 3D interpolate (resize is 2-D only) ─────────────
-                 "interpolate_nearest_3d",
-                 "interpolate_trilinear",
+                 // and ``convolution3DDataGradient`` is exposed.  The
+                 // 3-D resamplers moved too (OpEmitters/nn/Spatial.mm):
+                 // resampling is separable, so depth rides along as
+                 // channels through the 2-D ``resizeTensor`` and is then
+                 // its own gather — the reason filed here said ``resize``
+                 // would blend across the folded channels, which a 2-D
+                 // resize does not do.
                  // ── spatial sampling / segment-reduce (dyn. gather) ─
                  "grid_sample",
                  "rotate",

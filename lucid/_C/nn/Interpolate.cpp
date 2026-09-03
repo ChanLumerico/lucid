@@ -119,6 +119,15 @@ TensorImplPtr InterpolateTrilinearBackward::forward(
     const int C = static_cast<int>(input->shape()[1]);
     Shape out_shape{N, C, D_out, H_out, W_out};
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
+    // The compile / Core ML emitters need the same geometry the 2-D
+    // resamplers report.  ``align_corners`` in particular is not
+    // recoverable from the shapes: it changes which source coordinate
+    // each output sample reads, so an emitter that assumes a value
+    // produces a plausible image computed from the wrong grid.
+    scope.set_attr("D_out", static_cast<std::int64_t>(D_out));
+    scope.set_attr("H_out", static_cast<std::int64_t>(H_out));
+    scope.set_attr("W_out", static_cast<std::int64_t>(W_out));
+    scope.set_attr("align_corners", align_corners);
 
     auto& be = backend::Dispatcher::for_device(input->device());
     Storage out_storage = be.interpolate_trilinear_forward(
@@ -238,6 +247,11 @@ TensorImplPtr InterpolateNearestBackward3D::forward(const TensorImplPtr& input0,
     const int C = static_cast<int>(input->shape()[1]);
     Shape out_shape{N, C, D_out, H_out, W_out};
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
+    // Reported for symmetry with the other resamplers; nearest has no
+    // ``align_corners`` to carry.
+    scope.set_attr("D_out", static_cast<std::int64_t>(D_out));
+    scope.set_attr("H_out", static_cast<std::int64_t>(H_out));
+    scope.set_attr("W_out", static_cast<std::int64_t>(W_out));
 
     auto& be = backend::Dispatcher::for_device(input->device());
     Storage out_storage = be.interpolate_nearest_3d_forward(input->storage(), input->shape(), D_out,

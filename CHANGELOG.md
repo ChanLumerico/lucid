@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - diagonal over the trailing axes, at any rank
 
+- trilinear resampling reads the grid the model asked for
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

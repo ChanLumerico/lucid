@@ -424,3 +424,40 @@ class TestOperationsTheTraceCannotCarry:
                 f"{tmp_path}/meshgrid.mlpackage",
             )
         assert excinfo.value.op_name == "meshgrid"
+
+
+class TestTheSamplingGridIsTheOneTheModelAsked:
+    """``align_corners`` decides which source coordinate each sample reads.
+
+    It reaches the exported package only if the trace carries it. It did
+    not for the three-dimensional resamplers, so a model built with
+    ``align_corners=True`` exported as its ``False`` counterpart: a
+    package that loads, runs, and returns a plausible volume whose values
+    are 23% off. Both settings are checked here, in both ranks, because
+    agreeing on the default proves nothing about the flag.
+    """
+
+    @pytest.mark.parametrize("align_corners", [False, True], ids=["centres", "corners"])
+    @pytest.mark.parametrize(
+        ("size", "shape", "mode"),
+        [
+            ((8, 8), (1, 2, 4, 4), "bilinear"),
+            ((6, 8, 8), (1, 2, 3, 4, 4), "trilinear"),
+            ((5, 7, 6), (1, 2, 3, 4, 4), "trilinear"),
+            ((3, 8, 8), (1, 2, 3, 4, 4), "trilinear"),
+        ],
+        ids=["bilinear", "trilinear-grown", "trilinear-fractional", "trilinear-same-depth"],
+    )
+    def test_both_settings_export_to_what_they_mean(
+        self,
+        size: tuple[int, ...],
+        shape: tuple[int, ...],
+        mode: str,
+        align_corners: bool,
+        tmp_path: object,
+    ) -> None:
+        _check(
+            lambda x: F.interpolate(x, size=size, mode=mode, align_corners=align_corners),
+            lucid.randn(*shape),
+            tmp_path,
+        )

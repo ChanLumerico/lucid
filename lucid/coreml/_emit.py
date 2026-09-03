@@ -1728,6 +1728,12 @@ def _interpolate_trilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResu
     channels, and depth is then a blend of two slices whose indices and
     weights the output size fixes — both constants, so the blend is a
     pair of gathers and an add.
+
+    ``align_corners`` decides which source coordinate each output sample
+    reads, and it has to reach both halves.  It used to reach neither:
+    the trace did not record it, so an ``align_corners=True`` model
+    exported as its ``False`` counterpart — a well-formed package, a
+    plausible volume, and values off by 23%.
     """
     import lucid
 
@@ -1738,6 +1744,7 @@ def _interpolate_trilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResu
     if len(shape) != 5:
         raise UnsupportedOp("interpolate_trilinear")
     batch, channels, depth, height, width = shape
+    align = bool(op.attrs.get("align_corners", False))
 
     planes = [batch * channels, depth, height, width]
     folded = b.emit("reshape", [("x", ins[0]), ("shape", b.const_ints(planes))], planes)
@@ -1748,7 +1755,7 @@ def _interpolate_trilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResu
             ("x", folded),
             ("scale_factor_height", b.const_float32(out[3] / height)),
             ("scale_factor_width", b.const_float32(out[4] / width)),
-            ("align_corners", b.const_bool(False)),
+            ("align_corners", b.const_bool(align)),
         ],
         grown,
     )
@@ -1759,14 +1766,20 @@ def _interpolate_trilinear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResu
     if out[2] == depth:
         return "identity", [("x", restored)]
 
-    # ``align_corners=False``: output sample d sits at (d + 0.5) * D / D'
-    # - 0.5 in input coordinates, clamped into range.
+    # Where output sample d reads from, in input coordinates.  The two
+    # conventions are the engine's own (see the ``src_coord_fn`` in
+    # ``CpuBackend::interpolate_trilinear_forward``): with corners aligned
+    # the endpoints are pinned to the endpoints, otherwise sample centres
+    # map to sample centres.
     lower: list[int] = []
     upper: list[int] = []
     blend: list[float] = []
     for index in range(out[2]):
-        position = (index + 0.5) * depth / out[2] - 0.5
-        position = max(position, 0.0)
+        if align:
+            position = 0.0 if out[2] <= 1 else index * (depth - 1) / (out[2] - 1)
+        else:
+            position = (index + 0.5) * depth / out[2] - 0.5
+        position = min(max(position, 0.0), float(depth - 1))
         low = min(int(position), depth - 1)
         high = min(low + 1, depth - 1)
         lower.append(low)
