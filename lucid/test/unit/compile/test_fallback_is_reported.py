@@ -37,14 +37,14 @@ PROGRAM = textwrap.dedent("""
     import lucid, lucid.nn as nn, lucid.nn.functional as F
     from lucid._C import engine as e
 
-    class Pool(nn.Module):
+    class Resample(nn.Module):
         def forward(self, x):
-            return F.max_pool3d(x, 2)
+            return F.interpolate(x, scale_factor=2, mode="trilinear")
 
-    model = Pool().eval().to("metal")
+    model = Resample().eval().to("metal")
     e.compile.session_cache_clear()
     compiled = lucid.compile.compile(model)
-    compiled(lucid.randn(1, 4, 6, 6, 6).to("metal"))
+    compiled(lucid.randn(1, 2, 4, 4, 4).to("metal"))
     print("CACHE", e.compile.session_cache_size())
     """)
 
@@ -74,7 +74,7 @@ class TestFallbackIsReported:
         # pass for a run that compiled and said nothing.
         assert "CACHE 0" in done.stdout
         assert "eager fallback" in done.stderr
-        assert "max_pool3d" in done.stderr
+        assert "interpolate_trilinear" in done.stderr
 
     def test_it_stays_quiet_by_default(self) -> None:
         """A fallback is correct, so it is not a warning on every call."""
@@ -91,17 +91,17 @@ class TestRegistrationIsNotCompilation:
         refuse the variant it is handed, which is how six operations
         report as supported and run eagerly.
         """
-        assert _C_engine.compile.emitter_registered("max_pool3d")
+        assert _C_engine.compile.emitter_registered("interpolate_trilinear")
 
         import lucid.nn as nn
         import lucid.nn.functional as F
 
-        class Pool(nn.Module):
+        class Resample(nn.Module):
             def forward(self, x: lucid.Tensor) -> lucid.Tensor:
-                return F.max_pool3d(x, 2)
+                return F.interpolate(x, scale_factor=2, mode="trilinear")
 
-        model = Pool().eval().to("metal")
+        model = Resample().eval().to("metal")
         _C_engine.compile.session_cache_clear()
         compiled = lucid.compile.compile(model)
-        compiled(lucid.randn(1, 4, 6, 6, 6).to("metal"))
+        compiled(lucid.randn(1, 2, 4, 4, 4).to("metal"))
         assert _C_engine.compile.session_cache_size() == 0

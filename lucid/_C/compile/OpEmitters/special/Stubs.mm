@@ -83,8 +83,10 @@ struct StubsRegistrar {
                  "histogramdd",
                  // ── 3D pool / conv-transpose (SDK 2-D only) ─────────
                  "conv_transpose3d",
-                 "max_pool3d",
-                 "avg_pool3d",
+                 // ``max_pool3d`` / ``avg_pool3d`` moved to real-emit
+                 // (OpEmitters/nn/Pool.mm): the SDK's 4-D pooling takes
+                 // the rank-5 volume once a length-1 spatial axis is
+                 // reshaped in front of it.
                  // ── 3D interpolate (resize is 2-D only) ─────────────
                  "interpolate_nearest_3d",
                  "interpolate_trilinear",
