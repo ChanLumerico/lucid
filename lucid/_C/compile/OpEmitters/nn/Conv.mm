@@ -400,6 +400,92 @@ public:
     }
 };
 
+// ── ConvTranspose3d — MPSGraph has no ``convolutionTranspose3D``, but a
+// transposed convolution *is* the data gradient of a convolution, and
+// ``convolution3DDataGradient`` is exposed (macOS 13.2+).
+//
+// Read the forward convolution this is the gradient of: it consumes our
+// output (B, Cout, D', H', W') and produces our input (B, Cin, D, H, W).
+// So its weight is OIDHW with O = Cin — which is exactly how Lucid
+// stores the transposed weight, ``(Cin, Cout/g, kD, kH, kW)``.  No
+// permutation, same descriptor fields as ``conv3d``.
+//
+// ``output_padding`` is not passed: the trace already folded it into
+// ``outputs[0].shape``, and the gradient places its contributions by
+// stride, leaving the padded tail zero — which is what the padding
+// means.
+class ConvTranspose3dEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "conv_transpose3d"; }
+
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 3)
+            return false;
+        TensorId x_id = node.inputs[0];
+        TensorId w_id = node.inputs[1];
+        TensorId b_id = node.inputs[2];
+        if (x_id < 0 || w_id < 0)
+            return false;
+        const auto* S = int_vec_attr(node, "stride");
+        const auto* P = int_vec_attr(node, "padding");
+        if (S == nullptr || P == nullptr)
+            return false;
+        if (S->size() != 3 || P->size() != 3)
+            return false;
+        // ``conv_transpose`` records neither "groups" nor "dilation" —
+        // lucid/nn/functional/conv.py refuses anything but 1 for both,
+        // so the forward descriptor is built for that case only.  If the
+        // op ever gains them, this emitter must read them or decline.
+        MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
+        MPSGraphTensor* W = (__bridge MPSGraphTensor*)ctx.resolve(w_id);
+        MPSGraphTensor* b = (b_id >= 0) ? (__bridge MPSGraphTensor*)ctx.resolve(b_id) : nil;
+        if (g == nil || x == nil || W == nil)
+            return false;
+        if (W.shape.count != 5)
+            return false;
+        MPSGraphConvolution3DOpDescriptor* d = [MPSGraphConvolution3DOpDescriptor
+            descriptorWithStrideInX:(NSUInteger)(*S)[2]
+                          strideInY:(NSUInteger)(*S)[1]
+                          strideInZ:(NSUInteger)(*S)[0]
+                    dilationRateInX:1
+                    dilationRateInY:1
+                    dilationRateInZ:1
+                             groups:1
+                        paddingLeft:(NSUInteger)(*P)[2]
+                       paddingRight:(NSUInteger)(*P)[2]
+                         paddingTop:(NSUInteger)(*P)[1]
+                      paddingBottom:(NSUInteger)(*P)[1]
+                       paddingFront:(NSUInteger)(*P)[0]
+                        paddingBack:(NSUInteger)(*P)[0]
+                       paddingStyle:MPSGraphPaddingStyleExplicit
+                         dataLayout:MPSGraphTensorNamedDataLayoutNCDHW
+                      weightsLayout:MPSGraphTensorNamedDataLayoutOIDHW];
+        if (d == nil)
+            return false;
+        NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
+        for (auto v : node.outputs[0].shape)
+            [out_sh addObject:[NSNumber numberWithLongLong:v]];
+        if (out_sh.count != 5)
+            return false;
+        MPSGraphTensor* y =
+            [g convolution3DDataGradientWithIncomingGradientTensor:x
+                                                     weightsTensor:W
+                                                       outputShape:out_sh
+                                      forwardConvolutionDescriptor:d
+                                                              name:@"conv_transpose3d"];
+        if (y == nil)
+            return false;
+        if (b != nil && b.shape.count == 1 && b.shape[0].longLongValue == out_sh[1].longLongValue) {
+            NSArray<NSNumber*>* b_sh = @[ @1, b.shape[0], @1, @1, @1 ];
+            MPSGraphTensor* b_r = [g reshapeTensor:b withShape:b_sh name:nil];
+            y = [g additionWithPrimaryTensor:y secondaryTensor:b_r name:nil];
+        }
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
+    }
+};
+
 // ── Unfold (im2col) — MPSGraph imToCol (macOS 14+), 2D variant.
 // Lucid output layout: (B, C * kH * kW, L_out).  MPSGraph imToCol
 // docs are vague about layout; testing confirms it matches the
@@ -504,6 +590,7 @@ struct ConvEmitterRegistrar {
         register_emitter(std::make_unique<Conv3dEmitter>());
         register_emitter(std::make_unique<ConvTranspose2dEmitter>());
         register_emitter(std::make_unique<ConvTranspose1dEmitter>());
+        register_emitter(std::make_unique<ConvTranspose3dEmitter>());
         register_emitter(std::make_unique<UnfoldEmitter>());
         register_emitter(std::make_unique<FoldEmitter>());
     }

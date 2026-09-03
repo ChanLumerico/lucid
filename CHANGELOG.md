@@ -80,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the last operations, and why three of them cannot be written
 - erfinv leaves the stub list
 - 3-D pooling, through the SDK's 4-D operation
+- conv_transpose3d, through the convolution's data gradient
 
 ---
 
