@@ -16,8 +16,13 @@
 //                              one output per node
 //   - FFT                    : no MPSGraph FFT primitive
 //   - histogram              : no native histogram primitive
-//   - rotate / grid_sample   : per-pixel bilinear gather; MPSGraph's
-//                              ``gatherAlongAxis`` can't express it
+//   - rotate                 : per-pixel bilinear gather.  ``grid_sample``
+//                              used to be filed here on the same grounds
+//                              and is now emitted (OpEmitters/nn/
+//                              Spatial.mm): flattening the spatial axes
+//                              turns the sample coordinates into one
+//                              index per output position, which
+//                              ``gatherAlongAxis`` does take
 //                              in one step
 //   - embedding_bag          : dynamic per-bag offsets need a
 //                              segment-reduce
@@ -93,7 +98,6 @@ struct StubsRegistrar {
                  // would blend across the folded channels, which a 2-D
                  // resize does not do.
                  // ── spatial sampling / segment-reduce (dyn. gather) ─
-                 "grid_sample",
                  "rotate",
                  "embedding_bag",
                  // ── complex / 2-storage path ────────────────────────
