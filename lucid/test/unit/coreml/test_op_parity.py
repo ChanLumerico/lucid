@@ -648,3 +648,27 @@ class TestTheWindowPartitionGetsPastTheRankCap:
             cml.export(
                 Tall().eval(), lucid.randn(1, 8, 8, 3), f"{tmp_path}/tall.mlpackage"
             )
+
+
+class TestAHostComputedResultSaysSo:
+    """A model that reads values computes on the host, not in the graph.
+
+    ``lucid.histogram`` is a Python composite over ``.item()``: it reads
+    every element while it runs, so the result is a constant by the time
+    the trace ends and nothing in the graph depends on the input. The
+    compile path used to bake that in and answer every later input with
+    the first one's result; export refuses instead, which is the safe
+    direction — but "output is not part of the trace" did not say why.
+    """
+
+    def test_the_refusal_names_the_cause(self, tmp_path: object) -> None:
+        class ReadsValues(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return lucid.histogram(x, bins=4)[0]
+
+        with pytest.raises(ValueError, match="host"):
+            cml.export(
+                ReadsValues().eval(),
+                lucid.randn(16),
+                f"{tmp_path}/host.mlpackage",
+            )

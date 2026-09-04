@@ -243,7 +243,16 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     for name, tensor in selected:
         value_id = tracer.lookup_id(_unwrap(tensor))
         if value_id is None:
-            raise ValueError(f"lucid.coreml: output {name!r} is not part of the trace")
+            raise ValueError(
+                f"lucid.coreml: output {name!r} did not come out of the traced "
+                "graph — no operation recorded it as a result. A model that "
+                "reads tensor values while it runs computes that part on the "
+                "host, where an exported graph cannot follow: ``.item()``, a "
+                "Python ``if`` on a comparison, or an index computed from the "
+                "data. ``lucid.histogram`` is one such composite. Whatever "
+                "reads values has to become tensor operations before this "
+                "model can be exported."
+            )
         outputs.append((name, value_id, tensor))
     return tracer.graph, tracer.external_feeds, inputs, outputs
 

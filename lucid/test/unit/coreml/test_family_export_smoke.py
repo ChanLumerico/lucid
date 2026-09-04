@@ -72,6 +72,9 @@ FAMILIES = [
 #: Families whose input is token indices rather than pixels.
 TOKEN_FAMILIES = [
     ("gpt", (1, 16)),
+    # Two heads, so ``predict`` answers with a dict keyed by field name
+    # rather than one tensor — the comparison goes through ``verify``.
+    ("bert_tiny", (1, 16)),
 ]
 
 #: Families this file does not reach, and why. Listed rather than
@@ -125,9 +128,6 @@ NOT_SINGLE_IMAGE = {
     # refusing the graph, not a translation gap, and the runtime now
     # says so by name rather than reporting "Error in building plan".
     "roformer",
-    # Returns a dict; the exporter takes a tensor or an output
-    # dataclass, and which key is the head would be a guess.
-    "bert",
 }
 
 
@@ -175,9 +175,10 @@ def test_a_token_model_exports_and_matches(factory, shape, tmp_path):
 
     exported = cml.export(model, x, str(tmp_path / f"{factory}.mlpackage"))
     try:
-        got = exported.predict(x)
-        assert tuple(got.shape) == tuple(reference.shape)
-        assert float((got - reference).abs().max().item()) / scale < 1e-4
+        # ``verify`` rather than ``predict``: a model with two heads
+        # answers with a dict, and the comparison should not depend on
+        # how many the factory happens to have.
+        assert exported.verify(model, x) / scale < 1e-4
     finally:
         exported.close()
 
