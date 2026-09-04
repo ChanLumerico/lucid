@@ -459,7 +459,12 @@ class TestTheSamplingGridIsTheOneTheModelAsked:
             ((5, 7, 6), (1, 2, 3, 4, 4), "trilinear"),
             ((3, 8, 8), (1, 2, 3, 4, 4), "trilinear"),
         ],
-        ids=["bilinear", "trilinear-grown", "trilinear-fractional", "trilinear-same-depth"],
+        ids=[
+            "bilinear",
+            "trilinear-grown",
+            "trilinear-fractional",
+            "trilinear-same-depth",
+        ],
     )
     def test_both_settings_export_to_what_they_mean(
         self,
@@ -470,7 +475,9 @@ class TestTheSamplingGridIsTheOneTheModelAsked:
         tmp_path: object,
     ) -> None:
         _check(
-            lambda x: F.interpolate(x, size=size, mode=mode, align_corners=align_corners),
+            lambda x: F.interpolate(
+                x, size=size, mode=mode, align_corners=align_corners
+            ),
             lucid.randn(*shape),
             tmp_path,
         )

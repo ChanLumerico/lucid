@@ -113,9 +113,7 @@ class TestComplexCrossesTheGraphBoundary:
     def test_a_complex_input_goes_in(self):
         lucid.manual_seed(0)
         z = lucid.complex(lucid.randn(2, 4), lucid.randn(2, 4))
-        reference, got, compiled = _run(
-            lambda t: lucid.real(t) + lucid.imag(t), z
-        )
+        reference, got, compiled = _run(lambda t: lucid.real(t) + lucid.imag(t), z)
         assert compiled
         assert _lane_error(reference, got) == 0.0
 

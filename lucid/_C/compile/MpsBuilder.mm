@@ -71,6 +71,34 @@ inline MPSDataType to_mps_dtype(Dtype dt) {
     }
 }
 
+// Ops whose result is fixed by their arguments rather than by any
+// tensor, so binding the trace-time buffer is the right answer.
+//
+// This list exists to keep a much more dangerous case out.  An op that
+// never records its trace I/O leaves its node with no inputs and an
+// unclaimed output; the builder then sees a node nothing consumes and
+// drops it, while the *consumer* meets the result as a fresh external
+// feed bound once, at trace time.  The compiled model reports success
+// and answers every later input with the first one's result.  Eight ops
+// were doing exactly that until 2026-09-04.
+//
+// A genuinely discarded op is distinguishable and does not belong here:
+// it recorded its inputs, and its output is dead because nothing reads
+// it — so nothing can be frozen.  Only the zero-input case is
+// ambiguous, and that is what this answers.
+//
+// Adding a name here asserts that the op's output cannot depend on a
+// tensor.  Getting that wrong reintroduces the silent freeze, so the
+// default for an unknown name is to refuse the build (eager fallback),
+// which is the recoverable direction.
+inline bool result_is_a_host_constant(std::string_view name) {
+    return name == "arange" || name == "empty" || name == "eye" || name == "full" ||
+           name == "linspace" || name == "logspace" || name == "ones" || name == "zeros" ||
+           name == "einops_rearrange" || name == "einops_reduce" || name == "einops_repeat" ||
+           name == "einsum" || name == "meshgrid" || name == "tri" || name == "tril" ||
+           name == "triu";
+}
+
 inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
     NSMutableArray<NSNumber*>* out = [NSMutableArray arrayWithCapacity:shape.size()];
     for (std::int64_t d : shape)
@@ -265,8 +293,11 @@ CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
                             "' has an unresolved input slot (pending/eager-only)");
         }
         if (find_emitter(op.name) == nullptr) {
-            if (op.inputs.empty())
-                continue;  // dead-code factory header — skip below too
+            // Only a host constant may be skipped here; anything else
+            // with no recorded inputs would have its trace-time value
+            // frozen into the graph as a feed.
+            if (op.inputs.empty() && result_is_a_host_constant(op.name))
+                continue;  // host constant — skipped below too
             return fail("compile_trace: no emitter registered for op '" + op.name + "'");
         }
     }
@@ -401,6 +432,16 @@ CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
                         break;
                     }
                 if (!any_live) {
+                    // Recorded inputs ⇒ the op traced normally and its
+                    // result is genuinely unread, so dropping it frees a
+                    // kernel and changes nothing.  No inputs ⇒ either a
+                    // host constant, or an op that never recorded its
+                    // I/O and whose value is about to be frozen into the
+                    // graph as a feed.  Refuse the second.
+                    if (node.inputs.empty() && !result_is_a_host_constant(node.name))
+                        return fail("compile_trace: op '" + node.name +
+                                    "' did not record its trace I/O — its result would be "
+                                    "frozen into the graph at trace time");
                     ++op_idx;
                     continue;
                 }
@@ -645,8 +686,8 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
                             "' has an unresolved input slot");
         }
         if (find_emitter(op.name) == nullptr) {
-            if (op.inputs.empty())
-                continue;  // dead-code host-precomputed factory header
+            if (op.inputs.empty() && result_is_a_host_constant(op.name))
+                continue;  // host constant — see compile_trace
             return fail("compile_trace_with_backward: no emitter for op '" + op.name + "'");
         }
     }
@@ -790,8 +831,8 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
         for (const auto& node : graph.ops) {
             OpEmitter* emitter = find_emitter(node.name);
             if (emitter == nullptr) {
-                if (node.inputs.empty())
-                    continue;  // dead-code host-factory header
+                if (node.inputs.empty() && result_is_a_host_constant(node.name))
+                    continue;  // host constant — see compile_trace
                 return fail("compile_trace_with_backward: emitter vanished for op '" + node.name +
                             "'");
             }
@@ -1687,8 +1728,8 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
 
             OpEmitter* emitter = find_emitter(node.name);
             if (emitter == nullptr) {
-                if (node.inputs.empty())
-                    continue;  // dead-code factory
+                if (node.inputs.empty() && result_is_a_host_constant(node.name))
+                    continue;  // host constant — see compile_trace
                 return fail("compile_generic_fused_step: emitter vanished "
                             "for op '" +
                             node.name + "'");

@@ -66,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a compiled model must answer its input, not the traced one
 
+- drop a node only when dropping it is safe
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them
