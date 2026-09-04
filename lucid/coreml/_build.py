@@ -1512,9 +1512,7 @@ def build_package(
             continue
         plan = rewrites.get(head)
         if plan is not None:
-            names[plan.out_id] = _stage_permutation(
-                builder, names[op.inputs[0]], plan
-            )
+            names[plan.out_id] = _stage_permutation(builder, names[op.inputs[0]], plan)
             continue
         emitter = EMITTERS.get(op.name)
         if emitter is None:

@@ -70,9 +70,7 @@ PRODUCERS = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("name", "fn"), PRODUCERS, ids=[c[0] for c in PRODUCERS]
-)
+@pytest.mark.parametrize(("name", "fn"), PRODUCERS, ids=[c[0] for c in PRODUCERS])
 def test_a_host_constant_producer_still_compiles(name, fn):
     lucid.manual_seed(0)
     model = _Apply(fn).eval()

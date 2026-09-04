@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - complex tensors, and the buffer sizes they exposed
 - stage the window partition under Core ML's rank cap
 - translate unfold_dim and pow_scalar
+- say which half failed when Core ML will not plan a model
 
 ---
 

@@ -570,3 +570,54 @@ class TestReadingSomeoneElsesOutputs:
             assert got.reshape(-1).tolist() == [0.0, 2.0, 0.0, 4.0]
         finally:
             handle.close()
+
+
+class TestAPlanningFailureSaysWhichHalfFailed:
+    """"Error in building plan" does not say what to do about it.
+
+    A package can be well formed and still be refused by Core ML's
+    accelerator planner — ``roformer`` is, on the GPU and the Neural
+    Engine, while loading fine on the CPU. Malformed bytes and a planner
+    that will not take the graph need opposite responses from the
+    caller, so the runtime asks the one question that separates them
+    (does it load on the CPU?) and answers it in the message.
+    """
+
+    def test_the_message_names_the_working_configuration(
+        self, tmp_path: object
+    ) -> None:
+        lucid.manual_seed(0)
+        model = M.create_model("roformer").eval()
+        ids = lucid.zeros(1, 16).to(lucid.int64)
+
+        with pytest.raises(RuntimeError) as excinfo:
+            cml.export(
+                model,
+                ids,
+                str(tmp_path / "roformer.mlpackage"),
+                compute_units=cml.ComputeUnits.ALL,
+            )
+
+        message = str(excinfo.value)
+        assert "well-formed" in message
+        assert "CPU_ONLY" in message
+
+    def test_and_that_configuration_actually_works(self, tmp_path: object) -> None:
+        """The advice is checked, not offered."""
+        lucid.manual_seed(0)
+        model = M.create_model("roformer").eval()
+        ids = lucid.zeros(1, 16).to(lucid.int64)
+        raw = model(ids)
+        reference = raw if isinstance(raw, lucid.Tensor) else raw.last_hidden_state
+        scale = max(float(reference.abs().max().item()), 1e-6)
+
+        exported = cml.export(
+            model,
+            ids,
+            str(tmp_path / "roformer_cpu.mlpackage"),
+            compute_units=cml.ComputeUnits.CPU_ONLY,
+        )
+        try:
+            assert exported.verify(model, ids) / scale < 1e-4
+        finally:
+            exported.close()

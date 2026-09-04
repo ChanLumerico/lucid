@@ -31,8 +31,9 @@ pytestmark = pytest.mark.skipif(
     reason="the engine was built without the Core ML writer",
 )
 
-#: One factory per family, with the input it takes. Small on purpose:
-#: this is checking that the translation holds, not how fast it runs.
+#: One factory per family, with the input it takes: ``img`` for pixels
+#: and ``ids`` for token indices. Small on purpose — this is checking
+#: that the translation holds, not how fast it runs.
 FAMILIES = [
     ("alexnet", (1, 3, 224, 224)),
     ("convnext_tiny", (1, 3, 224, 224)),
@@ -48,6 +49,10 @@ FAMILIES = [
     ("googlenet", (1, 3, 224, 224)),
     ("inception_v3", (1, 3, 224, 224)),
     ("lenet_5", (1, 1, 32, 32)),
+    # Segmentation: one channel in, a map out.
+    ("unet", (1, 1, 64, 64)),
+    ("res_unet_2d", (1, 1, 64, 64)),
+    ("attention_unet", (1, 1, 64, 64)),
     ("maxvit_tiny", (1, 3, 224, 224)),
     ("mobilenet", (1, 3, 224, 224)),
     ("pvt_v2_b0", (1, 3, 224, 224)),
@@ -62,6 +67,11 @@ FAMILIES = [
     ("wide_resnet_50", (1, 3, 224, 224)),
     ("xception", (1, 3, 224, 224)),
     ("zfnet", (1, 3, 224, 224)),
+]
+
+#: Families whose input is token indices rather than pixels.
+TOKEN_FAMILIES = [
+    ("gpt", (1, 16)),
 ]
 
 #: Families this file does not reach, and why. Listed rather than
@@ -85,7 +95,6 @@ NOT_SINGLE_IMAGE = {
     "rcnn",
     # Token ids, not pixels.
     "bert",
-    "gpt",
     "roformer",
     "transformer",
     "clip",
@@ -109,10 +118,16 @@ NOT_SINGLE_IMAGE = {
     "vae",
     "vqvae",
     # Segmentation shapes that are not 224-square.
-    "attention",
     "fcn",
-    "res",
-    "unet",
+    # ``roformer`` exports and is a well-formed package, but Core ML
+    # will not build an execution plan for it on the GPU or the Neural
+    # Engine — it loads with CPU_ONLY.  That is the accelerator planner
+    # refusing the graph, not a translation gap, and the runtime now
+    # says so by name rather than reporting "Error in building plan".
+    "roformer",
+    # Returns a dict; the exporter takes a tensor or an output
+    # dataclass, and which key is the head would be a guess.
+    "bert",
 }
 
 
@@ -130,13 +145,31 @@ def _tensor_of(result: object) -> lucid.Tensor:
     raise AssertionError(f"no tensor in {type(result).__name__}")
 
 
-@pytest.mark.parametrize(
-    ("factory", "shape"), FAMILIES, ids=[f for f, _s in FAMILIES]
-)
+@pytest.mark.parametrize(("factory", "shape"), FAMILIES, ids=[f for f, _s in FAMILIES])
 def test_a_family_representative_exports_and_matches(factory, shape, tmp_path):
     lucid.manual_seed(0)
     model = M.create_model(factory).eval()
     x = lucid.randn(*shape)
+    reference = _tensor_of(model(x))
+    scale = max(float(reference.abs().max().item()), 1e-6)
+
+    exported = cml.export(model, x, str(tmp_path / f"{factory}.mlpackage"))
+    try:
+        got = exported.predict(x)
+        assert tuple(got.shape) == tuple(reference.shape)
+        assert float((got - reference).abs().max().item()) / scale < 1e-4
+    finally:
+        exported.close()
+
+
+@pytest.mark.parametrize(
+    ("factory", "shape"), TOKEN_FAMILIES, ids=[f for f, _s in TOKEN_FAMILIES]
+)
+def test_a_token_model_exports_and_matches(factory, shape, tmp_path):
+    """Indices in, not pixels — a different feed dtype end to end."""
+    lucid.manual_seed(0)
+    model = M.create_model(factory).eval()
+    x = lucid.zeros(*shape).to(lucid.int64)
     reference = _tensor_of(model(x))
     scale = max(float(reference.abs().max().item()), 1e-6)
 
@@ -158,7 +191,9 @@ def test_every_family_is_either_covered_or_named():
     """
     import re
 
-    covered = {re.split(r"[_\d]", f)[0] for f, _s in FAMILIES}
+    covered = {
+        re.split(r"[_\d]", f)[0] for f, _s in (*FAMILIES, *TOKEN_FAMILIES)
+    }
     families = {re.split(r"[_\d]", n)[0] for n in M.list_models()}
     missing = families - covered - NOT_SINGLE_IMAGE
     assert not missing, (

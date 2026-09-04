@@ -182,10 +182,37 @@ CoreMLModel* load_model(const std::string& path, ComputeUnits units,
                                            configuration:config
                                                    error:&error];
         if (model == nil) {
+            const std::string detail = describe(error);
+            // Core ML answers a planning failure with "Error in building
+            // plan", which says nothing about whether the package is
+            // malformed or the accelerator simply could not take this
+            // graph.  Those need opposite responses from the caller, so
+            // ask: does it load on the CPU?  If it does, the bytes are
+            // fine and what failed is the planner.
+            bool cpu_only_loads = false;
+            if (units != ComputeUnits::CpuOnly) {
+                MLModelConfiguration* probe = [[MLModelConfiguration alloc] init];
+                probe.computeUnits = MLComputeUnitsCPUOnly;
+                if (!function_name.empty())
+                    probe.functionName = [NSString stringWithUTF8String:function_name.c_str()];
+                NSError* probe_error = nil;
+                MLModel* on_cpu = [MLModel modelWithContentsOfURL:compiled
+                                                    configuration:probe
+                                                            error:&probe_error];
+                cpu_only_loads = (on_cpu != nil);
+            }
             NSError* cleanup = nil;
             [[NSFileManager defaultManager] removeItemAtURL:compiled error:&cleanup];
-            throw std::runtime_error("lucid.coreml: failed to load " + path + ": " +
-                                     describe(error));
+            if (cpu_only_loads)
+                throw std::runtime_error(
+                    "lucid.coreml: " + path +
+                    " is a well-formed package that Core ML will not plan for the requested "
+                    "compute units (" +
+                    detail +
+                    "). It loads with ComputeUnits.CPU_ONLY, so the graph is translatable and "
+                    "the accelerator planner is what refused it — export again with "
+                    "CPU_ONLY to run it, at CPU speed.");
+            throw std::runtime_error("lucid.coreml: failed to load " + path + ": " + detail);
         }
 
         auto* handle = new CoreMLModel();
