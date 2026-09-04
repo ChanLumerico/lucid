@@ -68,6 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - drop a node only when dropping it is safe
 
+- emit gather_along_axis for the opset the writer declares
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

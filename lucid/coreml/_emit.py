@@ -876,6 +876,13 @@ def _gather(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         ("x", ins[0]),
         ("indices", ins[1]),
         ("axis", b.const_int(_as_int(_attr(op, "axis")))),
+        # Added to this operation in iOS17, which is the opset the writer
+        # declares.  Emitting the iOS15 shape of the payload produced a
+        # package that failed to parse — "Required param
+        # 'validate_indices' is missing" — and took every model with a
+        # gather down with it.  False for the same reason ``embedding``
+        # gives: the trace's indices are already in range.
+        ("validate_indices", b.const_bool(False)),
     ]
 
 

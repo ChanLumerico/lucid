@@ -536,3 +536,32 @@ class TestGridSampleReachesTheExport:
             lucid.randn(1, 3, 5, 5),
             tmp_path,
         )
+
+
+class TestTheOpsetTheWriterDeclares:
+    """A payload shaped for an older opset than the one declared.
+
+    ``gather_along_axis`` gained ``validate_indices`` in iOS17, which is
+    the opset this writer says it is emitting. Leaving the parameter out
+    produced a package that failed to *parse* — "Required param
+    'validate_indices' is missing" — so nothing in it ran, and every
+    model with a gather went down together. ``coatnet`` was one.
+
+    Rank-1 indices along an axis is the shape that reaches
+    ``gather_along_axis`` rather than the row-lookup ``gather``.
+    """
+
+    def test_gather_along_an_axis_parses_and_matches(self, tmp_path: object) -> None:
+        lucid.manual_seed(0)
+        index = lucid.tensor([[2, 0, 1, 3], [1, 1, 0, 2]]).to(lucid.int64)
+        _check(lambda x: lucid.gather(x, index, dim=1), lucid.randn(2, 4), tmp_path)
+
+    def test_a_row_lookup_still_parses(self, tmp_path: object) -> None:
+        """``embedding`` takes the other branch and already had it."""
+        lucid.manual_seed(0)
+        table = nn.Embedding(4, 8).eval()
+        _check(
+            lambda ids: table(ids),
+            lucid.tensor([[0, 2, 1]]).to(lucid.int64),
+            tmp_path,
+        )
