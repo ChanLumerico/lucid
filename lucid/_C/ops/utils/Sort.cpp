@@ -213,12 +213,23 @@ TensorImplPtr nonzero_op(const TensorImplPtr& a) {
                          .nonzero_forward(Storage{cpu}, a->shape(), a->dtype(), count);
 
     Shape out_shape{static_cast<std::int64_t>(count), static_cast<std::int64_t>(ndim)};
+    TensorImplPtr result;
     if (a->device() != Device::CPU) {
         Storage up =
             backend::Dispatcher::for_device(a->device()).from_cpu(std::move(out), out_shape);
-        return fresh(std::move(up), std::move(out_shape), Dtype::I64, a->device());
+        result = fresh(std::move(up), std::move(out_shape), Dtype::I64, a->device());
+    } else {
+        result = fresh(Storage{std::move(out)}, std::move(out_shape), Dtype::I64, Device::CPU);
     }
-    return fresh(Storage{std::move(out)}, std::move(out_shape), Dtype::I64, Device::CPU);
+    // Record the trace I/O explicitly.  The output length is data-dependent
+    // so this can never be emitted — the point is to keep the node in the
+    // trace at all.  An unrecorded node is dropped as dead and its result
+    // reaches the consumer as a fresh external feed, bound once at trace
+    // time: the compiled model then returns the trace-time indices for
+    // every later input, reporting success the whole way.
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a}, result);
+    return result;
 }
 
 // Sort and deduplicate all elements of `a`, returning them as a 1-D tensor of
@@ -267,12 +278,20 @@ TensorImplPtr unique_op(const TensorImplPtr& a) {
         wrap(run(reinterpret_cast<const std::int64_t*>(cpu.ptr.get())));
     else
         ErrorBuilder("unique").not_implemented("dtype not supported");
+    TensorImplPtr result;
     if (a->device() != Device::CPU) {
         Storage up =
             backend::Dispatcher::for_device(a->device()).from_cpu(std::move(out_cpu), out_shape);
-        return fresh(std::move(up), std::move(out_shape), dt, a->device());
+        result = fresh(std::move(up), std::move(out_shape), dt, a->device());
+    } else {
+        result = fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, Device::CPU);
     }
-    return fresh(Storage{std::move(out_cpu)}, std::move(out_shape), dt, Device::CPU);
+    // See ``nonzero_op``: recorded so the node survives the trace and the
+    // stub emitter can decline, rather than the result being frozen into
+    // the graph as a feed.
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a}, result);
+    return result;
 }
 
 // Return the k largest values and their original positions along `axis`.

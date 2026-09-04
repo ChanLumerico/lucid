@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - grid_sample reaches the trace, and Core ML has always had it
 
+- a compiled model must answer its input, not the traced one
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

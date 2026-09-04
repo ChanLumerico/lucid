@@ -6,6 +6,7 @@
 
 #include <variant>
 
+#include "../../compile/Tracer.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -41,7 +42,16 @@ TensorImplPtr irfftn_op(const TensorImplPtr& a,
 
     Storage out =
         fft_detail::finalise_result(std::move(out_arr), out_dtype, out_shape, a->device());
-    return fft_detail::fresh(std::move(out), out_shape, out_dtype, a->device());
+    auto result = fft_detail::fresh(std::move(out), out_shape, out_dtype, a->device());
+    // Record the trace I/O explicitly.  Without it the node keeps the
+    // empty input list ``on_op_enter`` seeded and its result never
+    // becomes a traced tensor, so the builder drops the node as dead and
+    // the *consumer* sees the result as a fresh external feed — bound
+    // once, at trace time.  The compiled model then reported success and
+    // returned that first answer for every later input.
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a}, result);
+    return result;
 }
 
 }  // namespace lucid

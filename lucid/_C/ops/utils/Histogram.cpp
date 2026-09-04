@@ -18,6 +18,7 @@
 
 #include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -119,6 +120,14 @@ histogram_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bo
         to_device_storage(std::move(storage_cpu(counts_storage)), out_dev, counts_shape);
     auto counts_t =
         fresh(std::move(final_counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
+    // Recorded here, immediately after ``counts_t`` exists and *before*
+    // the edges are built.  ``on_op_io`` writes to the most recently
+    // entered node, and ``build_edges`` traces ops of its own — calling
+    // this after it would hand the histogram's I/O to the edge builder
+    // and leave this node empty, which is what froze the result into
+    // the compiled graph as a trace-time feed.
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a}, counts_t);
     auto edges = build_edges(lo, hi, bins);
 
     // If the output device is GPU (and dtype is not F64) transfer the edge
@@ -197,6 +206,11 @@ std::vector<TensorImplPtr> histogram2d_op(const TensorImplPtr& a,
     Device out_dev = pick_out_device(a->device(), Dtype::F64);
     auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
     auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
+    // See ``histogram_op``: recorded before the edges are built, because
+    // ``on_op_io`` writes to the most recently entered node and
+    // ``build_edges`` traces ops of its own.
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a, b}, counts_t);
 
     // Build independent edge arrays for each axis, then pack them into a
     // single concatenated 1-D edge tensor to match the declared return layout.
@@ -293,6 +307,11 @@ std::vector<TensorImplPtr> histogramdd_op(const TensorImplPtr& a,
     Device out_dev = pick_out_device(a->device(), Dtype::F64);
     auto counts_storage = to_device_storage(std::move(counts), out_dev, counts_shape);
     auto counts_t = fresh(std::move(counts_storage), std::move(counts_shape), Dtype::F64, out_dev);
+    // See ``histogram_op``: recorded before the edges are built, because
+    // ``on_op_io`` writes to the most recently entered node and
+    // ``build_edges`` traces ops of its own.
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a}, counts_t);
 
     // Concatenate all per-dimension edge arrays into a single 1-D tensor.
     // The total length is sum(bins[d]+1) for d in [0, D).
