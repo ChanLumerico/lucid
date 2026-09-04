@@ -709,3 +709,46 @@ class TestWeightQuantizationInEitherBody:
         finally:
             plain.close()
             quantized.close()
+
+
+class TestVerifyingAnImageExport:
+    """``verify`` on an image package used to report the pixel rounding.
+
+    A pixel buffer is eight bits per channel. Handed ``randn`` values —
+    what any test reaches for — Core ML quantises them on the way in, the
+    two sides see different pixels, and the comparison came back at
+    3e-1. That number reads as a broken exporter and is nothing of the
+    sort, so the call now refuses rather than answering it, the way it
+    already refuses for a classifier and for a stateful package.
+    """
+
+    @staticmethod
+    def _image_model(tmp_path: object, name: str) -> tuple[object, object, object]:
+        lucid.manual_seed(0)
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        pixels = (lucid.rand(1, 3, 64, 64) * 255).round()
+        exported = cml.export(
+            model,
+            pixels,
+            str(tmp_path / name),
+            image_input=cml.ImageInput(color=cml.ColorSpace.RGB),
+        )
+        return model, pixels, exported
+
+    def test_pixel_input_compares_cleanly(self, tmp_path: object) -> None:
+        model, pixels, exported = self._image_model(tmp_path, "pixels.mlpackage")
+        try:
+            scale = max(float(model(pixels).logits.abs().max().item()), 1e-6)
+            assert exported.verify(model, pixels) / scale < 1e-5
+        finally:
+            exported.close()
+
+    def test_non_pixel_input_is_refused_with_the_reason(
+        self, tmp_path: object
+    ) -> None:
+        model, _pixels, exported = self._image_model(tmp_path, "noise.mlpackage")
+        try:
+            with pytest.raises(TypeError, match="pixel data"):
+                exported.verify(model, lucid.randn(1, 3, 64, 64))
+        finally:
+            exported.close()

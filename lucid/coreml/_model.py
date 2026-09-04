@@ -287,10 +287,12 @@ class CoreMLModel:
         Notes
         -----
         For an image export the pixel buffer is eight bits per channel,
-        so a non-integral input is rounded on the way in and the two
-        sides see slightly different pixels — around 1e-5 rather than
-        1e-8 for the same model. Feed integral values to compare the
-        network rather than the rounding.
+        so anything but whole numbers in ``[0, 255]`` is rounded on the
+        way in and the two sides see different pixels. That is refused
+        rather than reported: for ``randn`` values the rounding is most
+        of the signal and the answer would be around 3e-1, which reads
+        as a broken export. Feed pixels and the comparison is the usual
+        one.
         """
         if self.classifier is not None:
             raise TypeError(
@@ -306,6 +308,26 @@ class CoreMLModel:
             )
         examples, by_keyword = _named_examples(x)
         if self.image_input is not None:
+            # A pixel buffer is eight bits per channel, so an input that
+            # is not already whole numbers in [0, 255] is rounded on the
+            # way in and the two sides genuinely see different pixels.
+            # For ``randn`` values that is most of the signal, and the
+            # number this would return — around 3e-1 — reads as a broken
+            # export rather than as the round-trip it measures.
+            for name, tensor in examples:
+                low = float(tensor.min().item())
+                high = float(tensor.max().item())
+                integral = bool(((tensor - tensor.round()).abs().max() < 1e-6).item())
+                if low < 0.0 or high > 255.0 or not integral:
+                    raise TypeError(
+                        f"lucid.coreml: {name!r} is not pixel data (range "
+                        f"[{low:.3g}, {high:.3g}], "
+                        f"{'non-integral' if not integral else 'integral'}), and this "
+                        "package takes an image. Core ML would quantise it to eight "
+                        "bits per channel, so the comparison would measure that "
+                        "rounding rather than the network. Feed whole numbers in "
+                        "[0, 255] to compare the two models."
+                    )
             # The package normalises the pixels itself, so the eager model
             # has to be shown the same normalised values or the comparison
             # is between two different inputs.

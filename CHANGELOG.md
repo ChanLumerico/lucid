@@ -74,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - int8 weights in a float32 body
 
+- refuse to verify an image export against non-pixel input
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them
