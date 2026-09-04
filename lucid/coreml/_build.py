@@ -16,9 +16,10 @@ Two things the trace hands over that the driver has to sort out:
   bare ``isinstance`` check would reject every model in the zoo.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import dataclasses
+import math
 import struct
 
 import lucid
@@ -696,6 +697,127 @@ class Builder:
         return name
 
 
+class _WindowRewrite(NamedTuple):
+    """A ``reshape → permute → reshape`` whose middle exceeds the rank cap.
+
+    Keyed and cross-referenced by value id rather than by op identity:
+    ``graph.ops`` hands out fresh Python wrappers on each access, so
+    ``id(op)`` is stable only by accident and silently stops matching on
+    a graph large enough to matter.
+
+    ``absorbs`` are the two follow-on ops the rewrite consumes, so the
+    emit loop knows to skip them; ``out_id`` is the value the rewritten
+    chain has to bind, which is the final reshape's.
+    """
+
+    mid_shape: list[int]
+    perm: list[int]
+    out_shape: list[int]
+    out_id: int
+    absorbs: tuple[int, ...]
+
+
+def _window_rewrites(graph: Any) -> dict[int, _WindowRewrite]:
+    """Find the high-rank triples that can be staged under the cap.
+
+    A reshape that lifts a tensor past rank 5 is representable only if
+    the rank comes straight back down, which in practice means a permute
+    and a reshape follow it and nothing else reads the tall value. That
+    is the window partition (and its inverse, the merge); the pattern is
+    matched rather than the model, so a grid partition or any other
+    factorised permutation is the same code path.
+    """
+    producer: dict[int, Any] = {}
+    readers: dict[int, list[Any]] = {}
+    for op in graph.ops:
+        for out in op.outputs:
+            producer[out.id] = op
+        for iid in op.inputs:
+            readers.setdefault(iid, []).append(op)
+
+    found: dict[int, _WindowRewrite] = {}
+    for op in graph.ops:
+        if op.name != "reshape" or len(op.outputs) != 1:
+            continue
+        tall = op.outputs[0]
+        if len(tall.shape) <= _MAX_RANK:
+            continue
+        # Exactly one reader, and it has to be the permute — a second
+        # reader would need the tall tensor to exist for real.
+        mid_readers = readers.get(tall.id, [])
+        if len(mid_readers) != 1:
+            continue
+        perm_op = mid_readers[0]
+        if perm_op.name != "permute" or len(perm_op.outputs) != 1:
+            continue
+        turned = perm_op.outputs[0]
+        down_readers = readers.get(turned.id, [])
+        if len(down_readers) != 1:
+            continue
+        down = down_readers[0]
+        if down.name != "reshape" or len(down.outputs) != 1:
+            continue
+        if len(down.outputs[0].shape) > _MAX_RANK:
+            continue
+        raw = perm_op.attrs["permutation"]
+        perm = [int(a) for a in (raw if isinstance(raw, (list, tuple)) else [raw])]
+        if sorted(perm) != list(range(len(tall.shape))):
+            continue
+        found[tall.id] = _WindowRewrite(
+            mid_shape=[int(d) for d in tall.shape],
+            perm=perm,
+            out_shape=[int(d) for d in down.outputs[0].shape],
+            out_id=down.outputs[0].id,
+            absorbs=(turned.id, down.outputs[0].id),
+        )
+    return found
+
+
+def _stage_permutation(builder: Any, source: str, plan: _WindowRewrite) -> str:
+    """Realise ``plan`` without ever materialising the tall tensor.
+
+    A reshape is a reinterpretation of a contiguous buffer, so any run of
+    adjacent axes may be grouped into one. Each stage therefore views the
+    value as ``(left, a, b, right)`` — rank 4, whatever the logical rank
+    is — swaps the middle pair, and leaves the result contiguous in the
+    new order for the next stage to regroup. Sorting the axis order into
+    the wanted one by adjacent swaps then costs one stage per inversion,
+    and the tall shape stays a bookkeeping detail.
+    """
+    shape = list(plan.mid_shape)
+    order = list(range(len(shape)))
+    name = source
+
+    for slot, axis in enumerate(plan.perm):
+        at = order.index(axis)
+        while at > slot:
+            i = at - 1
+            left = math.prod(shape[:i]) if i else 1
+            right = math.prod(shape[i + 2 :]) if i + 2 < len(shape) else 1
+            grouped = [left, shape[i], shape[i + 1], right]
+            viewed = builder.emit(
+                "reshape",
+                [("x", name), ("shape", builder.const_ints(grouped))],
+                grouped,
+            )
+            swapped = [left, shape[i + 1], shape[i], right]
+            name = builder.emit(
+                "transpose",
+                [("x", viewed), ("perm", builder.const_ints([0, 2, 1, 3]))],
+                swapped,
+            )
+            shape[i], shape[i + 1] = shape[i + 1], shape[i]
+            order[i], order[i + 1] = order[i + 1], order[i]
+            at = i
+
+    staged: str = builder.emit(
+        "reshape",
+        [("x", name), ("shape", builder.const_ints(plan.out_shape))],
+        plan.out_shape,
+    )
+    return staged
+
+
 def _reachable_ops(graph: Any, output_ids: list[int]) -> list[Any]:
     """The traced ops the output actually depends on, in trace order.
 
@@ -1322,11 +1444,24 @@ def build_package(
         names[tid] = name
         weight_shapes[name] = shape
 
-    # Core ML's program dialect caps tensors at rank 5.  Catching it here
-    # names the constraint and the offending shape; letting it through
-    # produces an opaque parse failure from the compiler instead, several
-    # steps away from the operation that built the tensor.
+    # Core ML's program dialect caps tensors at rank 5.  One shape reaches
+    # past it for a living: the window partition every windowed-attention
+    # transformer performs, which splits two spatial axes and permutes the
+    # halves — ``(B, H, W, C)`` becomes ``(B, H/w, w, W/w, w, C)``, rank 6,
+    # for exactly two operations before collapsing back.  Swin and MaxViT
+    # are built out of it.
+    #
+    # That triple is rewritten rather than refused, so the rank-6 tensor is
+    # never asked for; see ``_window_rewrites``.  Anything else that
+    # exceeds the cap is still refused by name, because letting it through
+    # produces an opaque parse failure from the compiler several steps away
+    # from the operation that built the tensor.
+    rewrites = _window_rewrites(graph)
+    absorbed = {oid for r in rewrites.values() for oid in r.absorbs}
     for op in graph.ops:
+        head = int(op.outputs[0].id) if op.outputs else -1
+        if head in rewrites or head in absorbed:
+            continue
         for out in op.outputs:
             if len(out.shape) > _MAX_RANK:
                 raise UnsupportedRank(op.name, tuple(int(d) for d in out.shape))
@@ -1371,6 +1506,16 @@ def build_package(
         {} if half else {tid: field for field, tid, _t in outputs}
     )
     for op in _reachable_ops(graph, [tid for _n, tid, _t in outputs]):
+        head = int(op.outputs[0].id) if op.outputs else -1
+        if head in absorbed:
+            # Emitted already, as part of the window rewrite below.
+            continue
+        plan = rewrites.get(head)
+        if plan is not None:
+            names[plan.out_id] = _stage_permutation(
+                builder, names[op.inputs[0]], plan
+            )
+            continue
         emitter = EMITTERS.get(op.name)
         if emitter is None:
             raise UnsupportedOp(op.name)

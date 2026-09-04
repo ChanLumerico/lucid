@@ -373,21 +373,32 @@ class TestSegmentationAndDetection:
 
 
 class TestFormatLimits:
-    def test_rank_six_names_the_limit(self, tmp_path: object) -> None:
-        """Core ML caps tensors at rank five; window attention exceeds it.
+    def test_window_attention_exports_despite_the_rank_cap(
+        self, tmp_path: object
+    ) -> None:
+        """Core ML caps tensors at rank five; window attention wants six.
 
-        Reported here rather than as the compiler's parse failure, which
-        arrives without the operation or the shape that caused it.
+        This used to assert the refusal, because a window partition lifts
+        ``(B, H, W, C)`` to ``(B, H/w, w, W/w, w, C)`` for the two
+        operations it takes to permute and collapse again. The tall shape
+        is transient, so it is now staged under the cap instead — the
+        rank-6 tensor is never asked for — and Swin exports.
+
+        The cap itself has not moved: a tall value that something else
+        reads is still refused by name, which
+        ``test_op_parity.py::TestTheWindowPartitionGetsPastTheRankCap``
+        covers alongside the staging.
         """
+        lucid.manual_seed(0)
         model = M.create_model("swin_tiny_cls").eval()
+        x = lucid.randn(1, 3, 224, 224)
+        scale = max(float(model(x).logits.abs().max().item()), 1e-6)
 
-        with pytest.raises(cml.UnsupportedRank) as excinfo:
-            cml.export(
-                model, lucid.randn(1, 3, 224, 224), str(tmp_path / "swin.mlpackage")
-            )
-
-        assert len(excinfo.value.shape) > 5
-        assert "rank" in str(excinfo.value)
+        exported = cml.export(model, x, str(tmp_path / "swin.mlpackage"))
+        try:
+            assert exported.verify(model, x) / scale < 1e-4
+        finally:
+            exported.close()
 
 
 class TestRoundTrip:

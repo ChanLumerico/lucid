@@ -565,3 +565,74 @@ class TestTheOpsetTheWriterDeclares:
             lucid.tensor([[0, 2, 1]]).to(lucid.int64),
             tmp_path,
         )
+
+
+class TestTheWindowPartitionGetsPastTheRankCap:
+    """Core ML caps tensors at rank 5; window partition wants six.
+
+    ``(B, H, W, C)`` becomes ``(B, H/w, w, W/w, w, C)``, is permuted, and
+    collapses back — the tall shape exists for exactly two operations.
+    Every windowed-attention transformer is built from it, so refusing
+    the rank took Swin and MaxViT (22 of the zoo's factories) with it.
+
+    The triple is now staged instead: a reshape is a reinterpretation of
+    a contiguous buffer, so a run of adjacent axes can be grouped into
+    one, and each stage views the value as ``(left, a, b, right)`` — rank
+    four whatever the logical rank is — and swaps the middle pair. The
+    tall shape stays bookkeeping and is never asked for.
+    """
+
+    def test_a_window_partition_exports(self, tmp_path: object) -> None:
+        def partition(x: lucid.Tensor) -> lucid.Tensor:
+            y = x.reshape(1, 4, 2, 4, 2, 3)
+            y = lucid.permute(y, (0, 1, 3, 2, 4, 5))
+            return y.reshape(16, 2, 2, 3)
+
+        lucid.manual_seed(0)
+        _check(partition, lucid.randn(1, 8, 8, 3), tmp_path)
+
+    def test_the_merge_back_exports(self, tmp_path: object) -> None:
+        def merge(x: lucid.Tensor) -> lucid.Tensor:
+            y = x.reshape(1, 4, 4, 2, 2, 3)
+            y = lucid.permute(y, (0, 1, 3, 2, 4, 5))
+            return y.reshape(1, 8, 8, 3)
+
+        lucid.manual_seed(0)
+        _check(merge, lucid.randn(16, 2, 2, 3), tmp_path)
+
+    def test_a_permutation_that_is_not_one_adjacent_swap(
+        self, tmp_path: object
+    ) -> None:
+        """MaxViT's grid partition moves three axes, not two.
+
+        Staging by adjacent swaps covers it without special-casing —
+        one stage per inversion — which is why the rewrite matches the
+        pattern rather than the model.
+        """
+
+        def grid(x: lucid.Tensor) -> lucid.Tensor:
+            y = x.reshape(1, 2, 4, 2, 4, 3)
+            y = lucid.permute(y, (0, 2, 4, 1, 3, 5))
+            return y.reshape(16, 2, 2, 3)
+
+        lucid.manual_seed(0)
+        _check(grid, lucid.randn(1, 8, 8, 3), tmp_path)
+
+    def test_a_tall_tensor_that_does_not_collapse_is_still_refused(
+        self, tmp_path: object
+    ) -> None:
+        """The cap is real; only the transient case can be staged.
+
+        A rank-6 value that something other than the triple reads has to
+        exist, and Core ML has no way to hold it. Saying so by name beats
+        the compiler's parse failure several steps downstream.
+        """
+
+        class Tall(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return x.reshape(1, 4, 2, 4, 2, 3).sum(dim=5)
+
+        with pytest.raises(cml.UnsupportedRank):
+            cml.export(
+                Tall().eval(), lucid.randn(1, 8, 8, 3), f"{tmp_path}/tall.mlpackage"
+            )

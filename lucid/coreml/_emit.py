@@ -894,6 +894,10 @@ def _scatter_add(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         ("updates", ins[2]),
         ("axis", b.const_int(_as_int(_attr(op, "dim")))),
         ("mode", b.const_str("add")),
+        # Same iOS17 requirement the gathers carry: the whole
+        # scatter / gather family gained this parameter, and leaving it
+        # out makes the package fail to parse rather than to run.
+        ("validate_indices", b.const_bool(False)),
     ]
 
 
