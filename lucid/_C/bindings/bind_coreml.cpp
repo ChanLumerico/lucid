@@ -210,6 +210,33 @@ void register_coreml(py::module_& m) {
             py::arg("scale_dtype"), py::arg("zero_point"), py::arg("channels"), py::arg("axis"),
             "An int8 weight plus its per-channel scale, dequantized by Core ML on "
             "the way into whatever consumes it.")
+        .def(
+            "add_grouped_lut_const",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const TypeSpec& output_type, std::uint64_t indices_offset, int indices_dtype,
+               std::uint64_t lut_offset, int lut_dtype,
+               const std::vector<std::int64_t>& lut_shape) {
+                self.add_grouped_lut_const(
+                    name, to_type(output_type), indices_offset,
+                    static_cast<lucid::coreml::MilDataType>(indices_dtype), lut_offset,
+                    static_cast<lucid::coreml::MilDataType>(lut_dtype), lut_shape);
+            },
+            py::arg("name"), py::arg("output_type"), py::arg("indices_offset"),
+            py::arg("indices_dtype"), py::arg("lut_offset"), py::arg("lut_dtype"),
+            py::arg("lut_shape"),
+            "A weight stored as packed sub-byte keys into one palette per channel group.")
+        .def(
+            "add_sparse_const",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const TypeSpec& output_type, std::uint64_t nonzero_offset,
+               std::int64_t nonzero_count, std::uint64_t mask_offset,
+               std::int64_t mask_bytes) {
+                self.add_sparse_const(name, to_type(output_type), nonzero_offset, nonzero_count,
+                                      mask_offset, mask_bytes);
+            },
+            py::arg("name"), py::arg("output_type"), py::arg("nonzero_offset"),
+            py::arg("nonzero_count"), py::arg("mask_offset"), py::arg("mask_bytes"),
+            "A weight stored as its non-zero values plus a one-bit-per-element mask.")
         .def("add_bool_const_shaped", &lucid::coreml::MilProgram::add_bool_const_shaped,
              py::arg("name"), py::arg("values"), py::arg("shape"),
              "Boolean constant of arbitrary shape, carried inline.")
@@ -248,11 +275,71 @@ void register_coreml(py::module_& m) {
             "Serialised Core ML ``Model`` protobuf.")
         .def_property_readonly("op_count", &lucid::coreml::MilProgram::op_count);
 
+    cm.def(
+        "pack_bits",
+        [](const TensorImplPtr& keys, int bits) {
+            if (!keys)
+                throw std::invalid_argument("coreml.pack_bits: null tensor");
+            if (bits < 1 || bits > 8)
+                throw std::invalid_argument("coreml.pack_bits: width must be 1..8 bits");
+            const auto& storage = std::get<lucid::CpuStorage>(keys->storage());
+            if (storage.ptr == nullptr)
+                throw std::invalid_argument("coreml.pack_bits: keys must be on the CPU");
+            const std::size_t count = static_cast<std::size_t>(keys->numel());
+            const auto read = [&](std::size_t i) -> std::uint32_t {
+                switch (keys->dtype()) {
+                case lucid::Dtype::I64:
+                    return static_cast<std::uint32_t>(
+                        reinterpret_cast<const std::int64_t*>(storage.ptr.get())[i]);
+                case lucid::Dtype::I32:
+                    return static_cast<std::uint32_t>(
+                        reinterpret_cast<const std::int32_t*>(storage.ptr.get())[i]);
+                case lucid::Dtype::Bool:
+                    return reinterpret_cast<const std::uint8_t*>(storage.ptr.get())[i] ? 1u : 0u;
+                default:
+                    throw std::invalid_argument(
+                        "coreml.pack_bits: keys must be int32, int64 or bool");
+                }
+            };
+            std::string out;
+            out.reserve((count * static_cast<std::size_t>(bits) + 7) / 8);
+            std::uint32_t accumulator = 0;
+            int filled = 0;
+            const std::uint32_t mask = (bits == 32) ? ~0u : ((1u << bits) - 1u);
+            for (std::size_t i = 0; i < count; ++i) {
+                accumulator |= (read(i) & mask) << filled;
+                filled += bits;
+                while (filled >= 8) {
+                    out.push_back(static_cast<char>(accumulator & 0xFF));
+                    accumulator >>= 8;
+                    filled -= 8;
+                }
+            }
+            if (filled > 0)
+                out.push_back(static_cast<char>(accumulator & 0xFF));
+            return py::bytes(out);
+        },
+        py::arg("keys"), py::arg("bits"),
+        "Pack unsigned keys into a little-endian bit stream, least significant "
+        "bit first — the layout Core ML reads palettization indices and sparsity "
+        "masks from.  In the engine because a weight has tens of millions of "
+        "them and a Python loop over that is minutes, not milliseconds.");
+
     py::class_<lucid::coreml::BlobWriter>(cm, "BlobWriter")
         .def(py::init([](const std::string& path) {
                  return std::make_unique<lucid::coreml::BlobWriter>(path);
              }),
              py::arg("path"))
+        .def(
+            "append_bytes",
+            [](lucid::coreml::BlobWriter& self, const py::bytes& payload, int dtype) {
+                const std::string data = payload;
+                return self.append(data.data(), data.size(),
+                                   static_cast<lucid::coreml::BlobDataType>(dtype));
+            },
+            py::arg("payload"), py::arg("dtype"),
+            "Append an already-packed payload — palettization keys and sparsity "
+            "masks are bit streams, not tensors.")
         .def(
             "append_tensor",
             [](lucid::coreml::BlobWriter& self, const TensorImplPtr& tensor, int dtype) {
@@ -378,8 +465,25 @@ void register_coreml(py::module_& m) {
         "done once per handle.");
 
     cm.attr("BLOB_INT8") = static_cast<int>(lucid::coreml::BlobDataType::Int8);
+    cm.attr("BLOB_UINT8") = static_cast<int>(lucid::coreml::BlobDataType::UInt8);
     cm.attr("BLOB_FLOAT16") = static_cast<int>(lucid::coreml::BlobDataType::Float16);
     cm.attr("BLOB_FLOAT32") = static_cast<int>(lucid::coreml::BlobDataType::Float32);
+    // Sub-byte palettization keys, paired so a caller picks both tags
+    // from one width rather than matching two tables by hand.
+    cm.attr("BLOB_SUBBYTE") = py::dict(
+        py::arg("1") = static_cast<int>(lucid::coreml::BlobDataType::UInt1),
+        py::arg("2") = static_cast<int>(lucid::coreml::BlobDataType::UInt2),
+        py::arg("3") = static_cast<int>(lucid::coreml::BlobDataType::UInt3),
+        py::arg("4") = static_cast<int>(lucid::coreml::BlobDataType::UInt4),
+        py::arg("6") = static_cast<int>(lucid::coreml::BlobDataType::UInt6),
+        py::arg("8") = static_cast<int>(lucid::coreml::BlobDataType::UInt8));
+    cm.attr("MIL_SUBBYTE") = py::dict(
+        py::arg("1") = static_cast<int>(lucid::coreml::MilDataType::UInt1),
+        py::arg("2") = static_cast<int>(lucid::coreml::MilDataType::UInt2),
+        py::arg("3") = static_cast<int>(lucid::coreml::MilDataType::UInt3),
+        py::arg("4") = static_cast<int>(lucid::coreml::MilDataType::UInt4),
+        py::arg("6") = static_cast<int>(lucid::coreml::MilDataType::UInt6),
+        py::arg("8") = static_cast<int>(lucid::coreml::MilDataType::UInt8));
     cm.attr("DTYPE_BOOL") = static_cast<int>(lucid::coreml::MilDataType::Bool);
     cm.attr("DTYPE_STRING") = static_cast<int>(lucid::coreml::MilDataType::String);
     cm.attr("DTYPE_FLOAT16") = static_cast<int>(lucid::coreml::MilDataType::Float16);

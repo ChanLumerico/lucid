@@ -192,9 +192,7 @@ def test_every_family_is_either_covered_or_named():
     """
     import re
 
-    covered = {
-        re.split(r"[_\d]", f)[0] for f, _s in (*FAMILIES, *TOKEN_FAMILIES)
-    }
+    covered = {re.split(r"[_\d]", f)[0] for f, _s in (*FAMILIES, *TOKEN_FAMILIES)}
     families = {re.split(r"[_\d]", n)[0] for n in M.list_models()}
     missing = families - covered - NOT_SINGLE_IMAGE
     assert not missing, (

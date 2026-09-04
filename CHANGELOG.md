@@ -104,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - translate unfold_dim and pow_scalar
 - say which half failed when Core ML will not plan a model
 - say when a result was computed on the host, and export bert
+- palettization and sparsity, and the compute unit they need
 
 ---
 

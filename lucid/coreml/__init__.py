@@ -55,6 +55,8 @@ from lucid.coreml._build import (
 )
 from lucid.coreml._model import CoreMLModel, PlacementSummary
 from lucid.coreml._spec import (
+    Palettize,
+    Sparsify,
     Classifier,
     State,
     ColorSpace,
@@ -92,6 +94,8 @@ __all__ = [
     "ImageInput",
     "Metadata",
     "WeightPrecision",
+    "Palettize",
+    "Sparsify",
     "CoreMLModel",
     "PlacementSummary",
     "ShapeNotFlexible",
@@ -120,7 +124,7 @@ def export(
     path: str,
     *,
     precision: Precision = Precision.FLOAT32,
-    weights: WeightPrecision = WeightPrecision.FLOAT,
+    weights: WeightPrecision | Palettize | Sparsify = WeightPrecision.FLOAT,
     shapes: list[tuple[int, ...]] | None = None,
     shape_range: dict[int, tuple[int, int]] | None = None,
     state: list[State] | None = None,
@@ -241,7 +245,7 @@ def export_functions(
     *,
     default: str | None = None,
     precision: Precision = Precision.FLOAT32,
-    weights: WeightPrecision = WeightPrecision.FLOAT,
+    weights: WeightPrecision | Palettize | Sparsify = WeightPrecision.FLOAT,
     metadata: Metadata | None = None,
     compute_units: ComputeUnits = ComputeUnits.ALL,
 ) -> dict[str, CoreMLModel]:

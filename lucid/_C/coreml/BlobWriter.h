@@ -34,10 +34,23 @@ namespace lucid::coreml {
 // Element types the blob format tags payloads with.  These are *not* the
 // MIL ``DataType`` numbers — the two enums disagree (MIL FLOAT32 is 11,
 // the blob calls it 2), which is why both appear explicitly.
+// Tags as they appear in a blob entry's metadata header.  Every one of
+// these was read off a package Apple's own tooling wrote — the numbering
+// is neither the MIL dtype's nor consecutive, and the sub-byte tags in
+// particular are not in width order.
 enum class BlobDataType : std::uint32_t {
     Float16 = 1,  // MIL FLOAT16 (10)
     Float32 = 2,  // MIL FLOAT32 (11)
+    UInt8 = 3,    // MIL UINT8 (31) — palettization keys, sparsity masks
     Int8 = 4,     // MIL INT8 (21) — read off a reference quantized package
+    // Sub-byte palettization keys.  The payload is a dense little-endian
+    // bit stream with no padding between elements or rows, so a 3-bit
+    // key straddles a byte boundary and the declared size is in bytes.
+    UInt1 = 9,   // MIL UINT1 (37)
+    UInt2 = 10,  // MIL UINT2 (36)
+    UInt4 = 11,  // MIL UINT4 (35)
+    UInt3 = 12,  // MIL UINT3 (39)
+    UInt6 = 13,  // MIL UINT6 (38)
 };
 
 class LUCID_API BlobWriter {

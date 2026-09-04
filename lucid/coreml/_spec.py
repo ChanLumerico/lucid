@@ -75,6 +75,77 @@ class WeightPrecision(enum.Enum):
     INT8 = "INT8"
 
 
+@dataclasses.dataclass(frozen=True)
+class Palettize:
+    """Store each weight as an index into a small table of values.
+
+    A layer's weights are clustered into ``2 ** bits`` representative
+    values; the package keeps the table and one key per weight, and Core
+    ML expands it on the way into the operation that uses it. At four
+    bits that is a quarter of the space float16 takes and an eighth of
+    float32, for weights that were never using their full range to begin
+    with.
+
+    Unlike ``WeightPrecision.INT8``, which spaces its levels evenly and
+    spends them wherever the range happens to be, the table is fitted to
+    the weights — so a layer whose values crowd around zero keeps its
+    resolution there. The cost is the same in kind: fewer distinct values
+    than the model was trained with, and ``verify`` will say how much.
+
+    Attributes
+    ----------
+    bits : int
+        One of ``1, 2, 3, 4, 6, 8`` — palette sizes ``2, 4, 8, 16, 64,
+        256``. Anything else is refused rather than rounded, since the
+        choice is a size/accuracy trade the caller is making
+        deliberately.
+
+        At eight bits, ``WeightPrecision.INT8`` is usually the better
+        instrument: it stores the same byte per weight but carries a
+        scale per output channel, and on a trained ResNet-50 it measured
+        both smaller and closer to the model.
+    """
+
+    bits: int = 4
+
+    def __post_init__(self) -> None:
+        if self.bits not in (1, 2, 3, 4, 6, 8):
+            raise ValueError(
+                f"lucid.coreml: palettization takes 1, 2, 3, 4, 6 or 8 bits "
+                f"(palette sizes 2, 4, 8, 16, 64, 256); got {self.bits}"
+            )
+
+
+@dataclasses.dataclass(frozen=True)
+class Sparsify:
+    """Keep only the largest weights, and a bit saying where they were.
+
+    The smallest ``ratio`` of each weight tensor by magnitude is set to
+    zero, and the package stores the survivors plus one bit per element.
+    Below about half sparsity that costs more than it saves — the mask is
+    an eighth of a byte per weight whether the weight survives or not —
+    so the useful settings start around ``0.5`` and the saving grows from
+    there.
+
+    This is magnitude pruning applied at export, not training: the model
+    is not fine-tuned afterwards, so accuracy falls faster than it would
+    for a network pruned and then retrained. ``verify`` measures it.
+
+    Attributes
+    ----------
+    ratio : float
+        Fraction of each weight set to zero, in ``[0, 1)``.
+    """
+
+    ratio: float = 0.5
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.ratio < 1.0:
+            raise ValueError(
+                f"lucid.coreml: sparsity is a fraction in [0, 1); got {self.ratio}"
+            )
+
+
 class ColorSpace(enum.Enum):
     """Pixel layout Core ML should hand the model.
 
@@ -234,6 +305,7 @@ _DTYPES: dict[object, tuple[int, int]] = {
 
 INT8 = _C_engine.coreml.DTYPE_INT8
 BLOB_INT8 = _C_engine.coreml.BLOB_INT8
+BLOB_UINT8 = _C_engine.coreml.BLOB_UINT8
 INT32 = _C_engine.coreml.DTYPE_INT32
 BOOL = _C_engine.coreml.DTYPE_BOOL
 STRING = _C_engine.coreml.DTYPE_STRING

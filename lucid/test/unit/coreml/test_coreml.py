@@ -573,7 +573,7 @@ class TestReadingSomeoneElsesOutputs:
 
 
 class TestAPlanningFailureSaysWhichHalfFailed:
-    """"Error in building plan" does not say what to do about it.
+    """ "Error in building plan" does not say what to do about it.
 
     A package can be well formed and still be refused by Core ML's
     accelerator planner — ``roformer`` is, on the GPU and the Neural
@@ -638,9 +638,7 @@ class TestThePublicSurfaceCanBeIntrospected:
     that silently omits it.
     """
 
-    @pytest.mark.parametrize(
-        "name", ["export", "export_functions", "load"]
-    )
+    @pytest.mark.parametrize("name", ["export", "export_functions", "load"])
     def test_a_public_entry_point_has_a_readable_signature(self, name: str) -> None:
         import inspect
 
@@ -743,9 +741,7 @@ class TestVerifyingAnImageExport:
         finally:
             exported.close()
 
-    def test_non_pixel_input_is_refused_with_the_reason(
-        self, tmp_path: object
-    ) -> None:
+    def test_non_pixel_input_is_refused_with_the_reason(self, tmp_path: object) -> None:
         model, _pixels, exported = self._image_model(tmp_path, "noise.mlpackage")
         try:
             with pytest.raises(TypeError, match="pixel data"):

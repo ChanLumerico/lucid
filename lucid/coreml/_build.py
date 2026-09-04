@@ -397,6 +397,203 @@ def _quantize_weight(
     return codes, scale_bytes, zero_bytes, channels
 
 
+#: A palette is fitted from at most this many weights.  The table has at
+#: most 256 entries, so past a certain sample the centroids stop moving
+#: and every extra element is time spent for nothing — an AlexNet
+#: classifier weight has 37 million of them.
+_PALETTE_SAMPLE = 1 << 16
+
+
+def _assign(rows: Tensor, table: Tensor, count: int) -> Tensor:
+    """Which palette entry each value falls in, a row at a time.
+
+    ``lucid.bucketize`` answers this for one shared edge list, but it
+    walks the whole list per element — a 256-entry table costs 255 passes
+    over the weight — and it cannot give each row its own edges, which is
+    the whole point of a per-channel palette. The edges are sorted and
+    ``count`` is a power of two, so bisection answers in ``log2(count)``
+    passes and the running index needs no bounds check: the steps sum to
+    ``count - 1`` exactly.
+
+    ``table`` is ``(groups, count)``: column zero is a placeholder that
+    nothing probes (the first candidate is already ``count // 2``), and
+    the rest are the midpoints between neighbouring palette entries. The
+    convention matches ``bucketize`` — the entry is the number of edges
+    strictly below the value — which is what the unit test compares
+    against.
+    """
+    found = lucid.zeros_like(rows).to(lucid.int64)
+    step = count // 2
+    while step >= 1:
+        candidate = found + step
+        picked = lucid.gather(table, candidate, 1)
+        found = lucid.where(picked < rows, candidate, found)
+        step //= 2
+    return found
+
+
+def _edge_table(centres: Tensor) -> Tensor:
+    """Midpoints between neighbouring palette entries, per row.
+
+    Column zero is the placeholder ``_assign`` never reads, kept so the
+    table indexes the same way the palette does.
+    """
+    groups = int(centres.shape[0])
+    lower = centres[:, :-1]
+    upper = centres[:, 1:]
+    head = lucid.full((groups, 1), -math.inf)
+    return lucid.concat([head, (lower + upper) / 2], dim=1)
+
+
+#: A palette is fitted from at most this many values per group.  The
+#: table has at most 256 entries, so past a certain sample the centroids
+#: stop moving and every extra element is time spent for nothing.
+_PALETTE_SAMPLE = 1 << 14
+
+#: Lloyd passes.  Well past where the movement stops mattering at these
+#: sizes, and a fixed count keeps export time predictable.
+_PALETTE_PASSES = 10
+
+
+def _palettes_for(rows: Tensor, count: int) -> Tensor:
+    """One palette per row, by Lloyd's algorithm in one dimension.
+
+    Every row is fitted at once rather than in a Python loop over
+    channels: a bisection for the assignment and two ``scatter_add``
+    passes for the means, all batched. A per-channel fit over a 2048
+    channel weight is 2048 independent clusterings, and doing them one at
+    a time is the difference between an export that takes seconds and one
+    that takes an hour.
+
+    Started from evenly spaced order statistics rather than from the
+    range, so a row whose mass sits near zero does not spend most of its
+    table on tails it barely uses.
+    """
+    groups = int(rows.shape[0])
+    width = int(rows.shape[1])
+    sample = (
+        rows[:, :: (width // _PALETTE_SAMPLE + 1)] if width > _PALETTE_SAMPLE else rows
+    )
+    span = int(sample.shape[1])
+
+    ordered = lucid.sort(sample, dim=-1)
+    marks = [
+        float(min(span - 1, int((index + 0.5) * span / count)))
+        for index in range(count)
+    ]
+    centres = lucid.gather(
+        ordered, (lucid.zeros(groups, 1) + lucid.tensor(marks)).to(lucid.int64), 1
+    )
+
+    ones = lucid.ones_like(sample)
+    empty = lucid.zeros(groups, count)
+    for _ in range(_PALETTE_PASSES):
+        assigned = _assign(sample, _edge_table(centres), count)
+        totals = lucid.scatter_add(empty, 1, assigned, sample)
+        weights = lucid.scatter_add(empty, 1, assigned, ones)
+        # An entry no value landed on keeps the centre it had; dividing by
+        # its zero population would put a NaN in the table and take the
+        # whole row's bisection with it.
+        moved = lucid.where(
+            weights > 0,
+            totals / lucid.where(weights > 0, weights, ones[:, :1]),
+            centres,
+        )
+        # Re-sorted because the bisection needs a monotone table, and a
+        # row whose entries crossed would otherwise answer nonsense.
+        centres = lucid.sort(moved, dim=-1)
+    return centres
+
+
+def _palette_groups(channels: int, count: int, elements: int) -> int:
+    """How many palettes to fit along the output-channel axis.
+
+    One per channel is what makes palettization usable — a convolution's
+    channels differ in magnitude by orders of magnitude, and a single
+    shared table spends nearly all of its resolution on the loudest ones.
+    But the tables are stored, so at 256 entries and 2048 channels they
+    would cost more than the keys they index. Groups are halved until the
+    table is a small fraction of the payload it serves.
+    """
+    key_bytes = elements * (count.bit_length() - 1) // 8
+    groups = channels
+    while groups > 1 and groups * count * 2 > key_bytes // 4:
+        groups //= 2
+    # The group count has to divide the channel count for the operation
+    # to lay the tables out over the axis.
+    while groups > 1 and channels % groups:
+        groups -= 1
+    return max(groups, 1)
+
+
+def _palettize_weight(
+    tensor: Tensor, bits: int
+) -> tuple[bytes, Tensor, list[int], int] | None:
+    """A weight as packed keys into one palette per group of channels.
+
+    ``None`` when the weight is too small to be worth the tables, or has
+    no channel axis — the same two refusals the int8 path makes, for the
+    same reasons: the tables cost something fixed, and a bias or a norm's
+    parameters have no output channel to group along and are ruinous to
+    approximate.
+
+    Returns the packed keys, the tables, the shape the operation wants
+    them in, and the width the keys were packed at — the last so the
+    caller picks its dtype tags from the same number that did the
+    packing rather than from the request.
+    """
+    if len(tensor.shape) < 2 or int(tensor.numel()) < _QUANTIZE_MIN_ELEMENTS:
+        return None
+    count = 1 << bits
+    channels = int(tensor.shape[0])
+    elements = int(tensor.numel())
+    groups = _palette_groups(channels, count, elements)
+    rows = tensor.reshape(groups, -1)
+
+    palettes = _palettes_for(rows, count)
+    keys = _assign(rows, _edge_table(palettes), count)
+    # ``[groups, 1, ..., 1, count, 1]``: one table per group along the
+    # output-channel axis, then the entries, then the vector width — one,
+    # because these are scalar palettes.
+    lut_shape = [groups] + [1] * (len(tensor.shape) - 1) + [count, 1]
+    return (
+        _C_engine.coreml.pack_bits(_unwrap(keys.reshape(-1)), bits),
+        palettes.reshape(-1),
+        lut_shape,
+        bits,
+    )
+
+
+def _sparsify_weight(tensor: Tensor, ratio: float) -> tuple[Tensor, bytes, int] | None:
+    """A weight as its surviving values plus one bit per element.
+
+    ``None`` when nothing would be dropped, or when the weight is small
+    enough that the mask costs more than the zeros save.
+    """
+    if len(tensor.shape) < 2 or ratio <= 0.0:
+        return None
+    if int(tensor.numel()) < _QUANTIZE_MIN_ELEMENTS:
+        return None
+    flat = tensor.reshape(-1)
+    threshold = float(lucid.quantile(flat.abs(), ratio).item())
+    keep = flat.abs() > threshold
+    kept = int(keep.to(lucid.int64).sum().item())
+    if kept == int(flat.numel()) or kept == 0:
+        # Nothing to drop, or nothing to keep. The second happens for
+        # real: a constant whose elements are all the same value has no
+        # element above its own median, and a folded batch norm leaves
+        # whole zero vectors behind. Such a constant would be a sparse
+        # const with an empty payload, which is not something to write —
+        # it goes out dense, at a cost of one small tensor.
+        return None
+
+    # Both of these are tensor work rather than Python loops: a weight
+    # carries tens of millions of elements and iterating them here cost
+    # minutes per layer.
+    values = lucid.masked_select(flat, keep)
+    return values, _C_engine.coreml.pack_bits(_unwrap(keep), 1), kept
+
+
 def _operands(bindings: Bindings) -> list[tuple[str, list[str]]]:
     """Parameter bindings in the shape the engine takes.
 
@@ -1154,7 +1351,7 @@ def build_package(
     path: str,
     *,
     precision: Precision = Precision.FLOAT32,
-    weights: WeightPrecision = WeightPrecision.FLOAT,
+    weights: WeightPrecision | _spec.Palettize | _spec.Sparsify = WeightPrecision.FLOAT,
     shapes: list[tuple[int, ...]] | None = None,
     shape_range: dict[int, tuple[int, int]] | None = None,
     state: list[State] | None = None,
@@ -1411,12 +1608,50 @@ def build_package(
         # numpy anywhere in this package (H4).
         shape = [int(d) for d in tensor.shape]
         name = f"_w{tid}"
+        palettized = (
+            _palettize_weight(tensor, weights.bits)
+            if is_float and isinstance(weights, _spec.Palettize)
+            else None
+        )
+        sparse = (
+            _sparsify_weight(tensor, weights.ratio)
+            if is_float and isinstance(weights, _spec.Sparsify)
+            else None
+        )
         quantized = (
             _quantize_weight(tensor, body_mil)
             if is_float and weights is WeightPrecision.INT8
             else None
         )
-        if quantized is not None:
+        if palettized is not None:
+            keys, palettes, lut_shape, key_bits = palettized
+            offset = blob.append_bytes(
+                keys, _C_engine.coreml.BLOB_SUBBYTE[str(key_bits)]
+            )
+            lut_offset = blob.append_tensor(
+                _unwrap(palettes.half() if half else palettes), body_blob
+            )
+            program.add_grouped_lut_const(
+                name,
+                (body_mil, shape),
+                offset,
+                _C_engine.coreml.MIL_SUBBYTE[str(key_bits)],
+                lut_offset,
+                body_mil,
+                lut_shape,
+            )
+            quantized_count += 1
+        elif sparse is not None:
+            values, mask, kept = sparse
+            if half:
+                values = values.half()
+            value_offset = blob.append_tensor(_unwrap(values), body_blob)
+            mask_offset = blob.append_bytes(mask, _spec.BLOB_UINT8)
+            program.add_sparse_const(
+                name, (body_mil, shape), value_offset, kept, mask_offset, len(mask)
+            )
+            quantized_count += 1
+        elif quantized is not None:
             codes, scale_bytes, zero_bytes, channels = quantized
             offset = blob.append_tensor(_unwrap(codes), _spec.BLOB_INT8)
             program.add_quantized_const(
@@ -1635,7 +1870,18 @@ def build_package(
         "outputs": declared,
         "ops": int(program.op_count),
         "precision": precision.value,
-        "weights": weights.value,
+        # A name for the summary: the enum has one, and the two
+        # parameterised forms are described by the parameter that makes
+        # them different.
+        "weights": (
+            weights.value
+            if isinstance(weights, WeightPrecision)
+            else (
+                f"PALETTIZED_{weights.bits}BIT"
+                if isinstance(weights, _spec.Palettize)
+                else f"SPARSE_{weights.ratio:g}"
+            )
+        ),
         "classifier": classifier is not None,
         "quantized_weights": quantized_count,
         "flexible": shapes is not None or shape_range is not None,

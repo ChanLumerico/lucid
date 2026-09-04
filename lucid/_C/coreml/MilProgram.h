@@ -39,6 +39,18 @@ enum class MilDataType : int {
     Float32 = 11,
     Int8 = 21,
     Int32 = 23,
+    // Compressed-weight payloads: palettization keys and sparsity masks
+    // are unsigned bytes, and both ops take their dense shape as uint32.
+    UInt8 = 31,
+    UInt32 = 33,
+    // Sub-byte key types, for the grouped palettization the iOS18
+    // operation takes.  Measured, not derived: the widths are not in
+    // numeric order.
+    UInt4 = 35,
+    UInt2 = 36,
+    UInt1 = 37,
+    UInt6 = 38,
+    UInt3 = 39,
 };
 
 // Where a description's fields live.  ``ModelDescription`` and
@@ -142,6 +154,39 @@ public:
     // ``add_op``.  ``scale_bytes`` and ``zero_point_bytes`` are the raw
     // little-endian payloads — the schema carries both as ``bytes``, which
     // is how a float16 scale and an int8 zero point fit the same field.
+    // A weight stored as indices into one or more palettes
+    // (``constexpr_lut_to_dense``).  Both payloads live in the blob and
+    // are named by inline arguments rather than by attributes, which is
+    // what separates this from the iOS16 spelling of the same operation.
+    //
+    // ``indices_dtype`` is a sub-byte key type and carries the weight's
+    // own shape.  ``lut_shape`` is ``[groups..., 1 << n_bits, 1]``: one
+    // table per group of output channels, so a convolution whose
+    // channels differ in magnitude by orders of magnitude does not have
+    // to spend a single table on all of them.  A single group is the
+    // per-tensor case.
+    //
+    // Using this raises the model's opset, and so its deployment floor,
+    // the same way carrying state does.
+    void add_grouped_lut_const(const std::string& name,
+                               const MilTensorType& output_type,
+                               std::uint64_t indices_offset,
+                               MilDataType indices_dtype,
+                               std::uint64_t lut_offset,
+                               MilDataType lut_dtype,
+                               const std::vector<std::int64_t>& lut_shape);
+
+    // A weight stored as its non-zero values plus a bit mask
+    // (``constexpr_sparse_to_dense``).  Both ride in the blob: the mask
+    // is one bit per element, which is small but not small enough to
+    // want inline.
+    void add_sparse_const(const std::string& name,
+                          const MilTensorType& output_type,
+                          std::uint64_t nonzero_offset,
+                          std::int64_t nonzero_count,
+                          std::uint64_t mask_offset,
+                          std::int64_t mask_bytes);
+
     void add_quantized_const(const std::string& name,
                              const MilTensorType& output_type,
                              std::uint64_t blob_offset,
@@ -285,6 +330,19 @@ private:
         std::vector<float> floats;
         std::vector<std::string> strings;
         std::vector<bool> bools;
+        // ``constexpr_lut_to_dense`` / ``constexpr_sparse_to_dense``: the
+        // large payload (packed indices, or the non-zero values) rides in
+        // the weight blob and the small one (the palette, or the bit
+        // mask's own blob offset) travels beside it.
+        bool is_lut = false;
+        bool is_sparse = false;
+        MilDataType palette_dtype = MilDataType::Float32;
+        MilDataType key_dtype = MilDataType::UInt8;
+        std::vector<std::int64_t> lut_shape;
+        std::int64_t palette_count = 0;
+        std::uint64_t mask_offset = 0;
+        std::int64_t mask_bytes = 0;
+        std::int64_t nonzero_count = 0;
     };
 
     void push_const(Op op);
@@ -303,6 +361,10 @@ private:
         std::string probabilities_name;
     } classifier_;
     std::string opset_;
+    // Set by anything whose spelling only exists past CoreML7, so the
+    // declared specification version follows the opset rather than
+    // tracking one feature (state) that happened to need it first.
+    bool needs_extended_opset_ = false;
     MilNamedTypes outputs_;
     std::vector<Op> ops_;
 };

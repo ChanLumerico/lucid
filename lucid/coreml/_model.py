@@ -41,6 +41,53 @@ _UNITS = {
 }
 
 
+def _reads_a_palette(path: str) -> bool:
+    """Whether the package expands weights through a lookup table.
+
+    Read off the serialized program rather than remembered from the
+    build, so a package opened by ``load`` is judged the same way as one
+    that has just been written. The operation's type is a plain string in
+    the protobuf, so finding it needs no schema — and a false positive
+    would only cost a compute unit, not correctness.
+    """
+    try:
+        with open(f"{path}/Data/com.apple.CoreML/model.mlmodel", "rb") as handle:
+            return b"constexpr_lut_to_dense" in handle.read()
+    except OSError:
+        return False
+
+
+def _palettized_units(units: ComputeUnits, palettized: bool) -> ComputeUnits:
+    """The units a palettized model may actually be run on.
+
+    Core ML's GPU path expands ``constexpr_lut_to_dense`` incorrectly for
+    the palette sizes 4, 16 and 256 — measured against the package's own
+    tables, on macOS 26: a stack of eight 128-channel convolutions comes
+    back with 15% error at four bits, while the same package on the CPU
+    or the Neural Engine is exact to the last bit. Palette sizes 2, 8 and
+    64 are unaffected.
+
+    The failure is silent, and ``ALL`` is the default, so a palettized
+    model would otherwise return plausible wrong numbers on the compute
+    unit nobody chose. ``ALL`` therefore becomes ``CPU_AND_NE`` — the
+    fast path on this hardware anyway — and an explicit request for the
+    GPU is refused rather than quietly redirected, because a caller who
+    named the GPU is owed an answer about the GPU.
+    """
+    if not palettized:
+        return units
+    if units is ComputeUnits.CPU_AND_GPU:
+        raise ValueError(
+            "lucid.coreml: a palettized model cannot be run on Core ML's GPU "
+            "path — it expands the lookup table incorrectly for palette sizes "
+            "4, 16 and 256, and does so without reporting an error. Use "
+            "ComputeUnits.CPU_AND_NE (the default for these models) or "
+            "CPU_ONLY, or export with weights=WeightPrecision.INT8, which the "
+            "GPU handles correctly."
+        )
+    return ComputeUnits.CPU_AND_NE if units is ComputeUnits.ALL else units
+
+
 class PlacementSummary:
     """Where a model's operations are scheduled.
 
@@ -109,7 +156,12 @@ class CoreMLModel:
         self.path = path
         self.input_names = input_names
         self.output_names = output_names
-        self.compute_units = compute_units
+        # A palettized package computes the wrong answer on Core ML's GPU
+        # path — see ``_palettized_units`` — so the units it is opened
+        # with are not always the units that were asked for.
+        self.palettized = _reads_a_palette(path)
+        self.compute_units = _palettized_units(compute_units, self.palettized)
+        compute_units = self.compute_units
         self.precision = precision
         # Core ML's multi-array has no rank-0 form, so a model whose output
         # is a scalar comes back shaped (1,).  Keeping the traced shapes

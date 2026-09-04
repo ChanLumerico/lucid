@@ -128,6 +128,35 @@ ProtoWriter make_int_value(std::int64_t number) {
     return value;
 }
 
+// ``Value`` holding the dense shape a compressed weight expands to.
+//
+// Carried as little-endian uint32 *bytes*, not as an integer list: MIL's
+// immediate lists are int32 and float32, and an unsigned type travels
+// the same way float16 does.  Read off a reference package rather than
+// guessed — the integer-list form parses as a different element count
+// and the model is rejected before it runs.
+ProtoWriter make_shape_value(const std::vector<std::int64_t>& dims) {
+    std::string payload(dims.size() * sizeof(std::uint32_t), '\0');
+    for (std::size_t i = 0; i < dims.size(); ++i) {
+        const auto value = static_cast<std::uint32_t>(dims[i]);
+        std::memcpy(&payload[i * sizeof(std::uint32_t)], &value, sizeof(value));
+    }
+    const std::vector<std::int64_t> extent{static_cast<std::int64_t>(dims.size())};
+    return make_bytes_value(payload, {MilDataType::UInt32, extent});
+}
+
+// ``Value`` for a payload that lives in the weight blob rather than
+// inline — the shared shape of every compressed operand.
+ProtoWriter make_blob_value(std::uint64_t offset, const MilTensorType& type) {
+    ProtoWriter value;
+    value.write_message(pb::Value::kType, make_value_type(type));
+    ProtoWriter blob;
+    blob.write_string(pb::BlobFileValue::kFileName, kWeightFileRef);
+    blob.write_int(pb::BlobFileValue::kOffset, static_cast<std::int64_t>(offset));
+    value.write_message(pb::Value::kBlobFileValue, blob);
+    return value;
+}
+
 // ``ValueType`` for a list of strings of a known length — how MIL types
 // a classifier's label set.
 ProtoWriter make_string_list_type(std::size_t length) {
@@ -182,6 +211,17 @@ ProtoWriter make_argument(const std::vector<std::string>& value_names) {
         binding.write_string(pb::Binding::kName, name);
         argument.write_message(pb::Argument::kArguments, binding);
     }
+    return argument;
+}
+
+// An argument that carries its value rather than naming one declared
+// elsewhere.  The grouped palettization operation takes its payloads
+// this way.
+ProtoWriter make_value_argument(const ProtoWriter& value) {
+    ProtoWriter binding;
+    binding.write_message(pb::Binding::kValue, value);
+    ProtoWriter argument;
+    argument.write_message(pb::Argument::kArguments, binding);
     return argument;
 }
 
@@ -275,6 +315,51 @@ void MilProgram::add_bool_const_shaped(const std::string& name,
     op.output_type = {MilDataType::Bool, shape};
     op.bools = values;
     push_const(std::move(op));
+}
+
+void MilProgram::add_grouped_lut_const(const std::string& name,
+                                       const MilTensorType& output_type,
+                                       std::uint64_t indices_offset,
+                                       MilDataType indices_dtype,
+                                       std::uint64_t lut_offset,
+                                       MilDataType lut_dtype,
+                                       const std::vector<std::int64_t>& lut_shape) {
+    Op op;
+    op.type = "constexpr_lut_to_dense";
+    op.output_name = name;
+    op.output_type = output_type;
+    op.is_lut = true;
+    op.blob = true;
+    op.blob_offset = indices_offset;
+    op.key_dtype = indices_dtype;
+    // ``mask_offset`` doubles as the table's blob offset: the operation
+    // carries exactly one auxiliary payload beside the packed keys.
+    op.mask_offset = lut_offset;
+    op.palette_dtype = lut_dtype;
+    op.lut_shape = lut_shape;
+    // The grouped spelling of this operation is iOS18 and later.
+    if (opset_ == "CoreML7") opset_ = kOpsetState;
+    needs_extended_opset_ = true;
+    ops_.push_back(std::move(op));
+}
+
+void MilProgram::add_sparse_const(const std::string& name,
+                                  const MilTensorType& output_type,
+                                  std::uint64_t nonzero_offset,
+                                  std::int64_t nonzero_count,
+                                  std::uint64_t mask_offset,
+                                  std::int64_t mask_bytes) {
+    Op op;
+    op.type = "constexpr_sparse_to_dense";
+    op.output_name = name;
+    op.output_type = output_type;
+    op.is_sparse = true;
+    op.blob = true;
+    op.blob_offset = nonzero_offset;
+    op.nonzero_count = nonzero_count;
+    op.mask_offset = mask_offset;
+    op.mask_bytes = mask_bytes;
+    ops_.push_back(std::move(op));
 }
 
 void MilProgram::add_quantized_const(const std::string& name,
@@ -504,6 +589,8 @@ ProtoWriter MilProgram::build_function() const {
                                     make_named_value_type(extra_name, extra_type));
 
         if (op.is_quantized) {
+            // (see below for the palettized and sparse forms, which
+            // carry their dense shape as an attribute of its own)
             // The codes carry the weight's own shape; the scale and zero
             // point carry one entry per channel along ``axis``.
             ProtoWriter codes;
@@ -533,6 +620,30 @@ ProtoWriter MilProgram::build_function() const {
                 make_bytes_value(op.zero_point_bytes, {MilDataType::Int8, per_channel}));
             operation.write_map_entry(pb::Operation::kAttributes, "axis",
                                       make_int_value(op.axis));
+        } else if (op.is_lut) {
+            // Unlike every other compressed form here, this one names
+            // its payloads through *inputs* carrying inline values, not
+            // through attributes, and the keys are typed by the weight's
+            // own shape at a sub-byte width rather than by a byte count.
+            operation.write_map_entry(
+                pb::Operation::kInputs, "indices",
+                make_value_argument(
+                    make_blob_value(op.blob_offset,
+                                    {op.key_dtype, op.output_type.shape})));
+            operation.write_map_entry(
+                pb::Operation::kInputs, "lut",
+                make_value_argument(
+                    make_blob_value(op.mask_offset, {op.palette_dtype, op.lut_shape})));
+        } else if (op.is_sparse) {
+            operation.write_map_entry(
+                pb::Operation::kAttributes, "nonzero_data",
+                make_blob_value(op.blob_offset,
+                                {op.output_type.dtype, {op.nonzero_count}}));
+            operation.write_map_entry(
+                pb::Operation::kAttributes, "mask",
+                make_blob_value(op.mask_offset, {MilDataType::UInt8, {op.mask_bytes}}));
+            operation.write_map_entry(pb::Operation::kAttributes, "shape",
+                                      make_shape_value(op.output_type.shape));
         } else if (op.is_const) {
             ProtoWriter value;
             value.write_message(pb::Value::kType, make_value_type(op.output_type));
@@ -762,7 +873,9 @@ std::string MilProgram::serialize() const {
 
     ProtoWriter model;
     model.write_int(pb::Model::kSpecificationVersion,
-                    states_.empty() ? kSpecificationVersion : kSpecificationVersionState);
+                    (states_.empty() && !needs_extended_opset_)
+                        ? kSpecificationVersion
+                        : kSpecificationVersionState);
     model.write_message(pb::Model::kDescription, description);
     model.write_message(pb::Model::kMlProgram, program);
     return model.bytes();
