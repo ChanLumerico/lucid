@@ -886,6 +886,53 @@ def _gather(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     ]
 
 
+@_emitter("pow_scalar")
+def _pow_scalar(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """``x ** c`` with the exponent on the trace rather than in a tensor.
+
+    Reached through LP pooling and the p-norms, which raise by a constant
+    the caller chose; MIL's ``pow`` takes both operands as tensors, so
+    the constant becomes one.
+    """
+    return "pow", [("x", ins[0]), ("y", b.const_float32(_as_float(_attr(op, "exp"))))]
+
+
+@_emitter("unfold_dim")
+def _unfold_dim(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """A sliding window along one axis, which MIL has as ``sliding_windows``.
+
+    The two disagree about where the window axis goes: MIL inserts it
+    directly after the axis it slid along, and Lucid appends it last.
+    One transpose reconciles them, and it is the whole difference —
+    ``sliding_windows`` does the sliding itself, so this does not become
+    the slice-and-concatenate chain the MPSGraph emitter needs.
+    """
+    shape = b.shape_of(ins[0])
+    rank = len(shape)
+    axis = _as_int(_attr(op, "dim"))
+    if axis < 0:
+        axis += rank
+    size = _as_int(_attr(op, "size"))
+    step = _as_int(_attr(op, "step"))
+
+    windowed = list(shape)
+    windowed[axis] = (shape[axis] - size) // step + 1
+    windowed.insert(axis + 1, size)
+    slid = b.emit(
+        "sliding_windows",
+        [
+            ("x", ins[0]),
+            ("axis", b.const_int(axis)),
+            ("size", b.const_int(size)),
+            ("stride", b.const_int(step)),
+        ],
+        windowed,
+    )
+    # Move the window axis from just after the slid one to the end.
+    perm = [i for i in range(rank + 1) if i != axis + 1] + [axis + 1]
+    return "transpose", [("x", slid), ("perm", b.const_ints(perm))]
+
+
 @_emitter("scatter_add")
 def _scatter_add(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "scatter_along_axis", [

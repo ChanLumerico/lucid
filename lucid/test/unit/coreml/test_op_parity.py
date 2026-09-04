@@ -95,6 +95,14 @@ _SPATIAL = [
     ("conv1d", nn.Conv1d(4, 2, 3).eval(), (1, 4, 10)),
     ("conv2d", nn.Conv2d(4, 2, 3).eval(), (1, 4, 6, 6)),
     ("conv3d", nn.Conv3d(4, 2, 3).eval(), (1, 4, 6, 6, 6)),
+    # A sliding window along one axis.  MIL has the operation and puts
+    # the window axis directly after the one it slid along, where Lucid
+    # appends it last — so the emitter is that op plus a transpose, and
+    # a wrong reconciliation shows up here as values rather than shapes.
+    ("unfold_dim", lambda x: x.unfold(2, 3, 2), (1, 2, 8, 4)),
+    # ``x ** c`` and ``c ** x`` with the constant on the trace.  Reached
+    # through LP pooling and the p-norms.
+    ("pow_scalar", lambda x: F.lp_pool2d(x.abs() + 0.5, 2.0, 2), (1, 2, 8, 8)),
     # MIL's ``conv_transpose`` takes the weight as (C_in, C_out / groups,
     # *K) — the layout Lucid already stores — so grouping needs no
     # relayout on this path.  The cases are here because nothing else
@@ -269,7 +277,11 @@ class TestTheGapAgainstCompileIsAccountedFor:
         "batch_norm3d",
         "cube",
         "cube_root",
-        "pow_scalar",
+        # ``rpow_scalar`` belongs to the bucket below rather than this
+        # one — nothing calls it — but it is kept here beside its
+        # sibling because ``pow_scalar`` was listed here and was wrong:
+        # LP pooling traces it, which is how ``zfnet`` found it.  Three
+        # models cannot tell a list like this from the truth.
         "rpow_scalar",
         "norm",
         # No Python caller anywhere in ``lucid/``: an engine op with no
