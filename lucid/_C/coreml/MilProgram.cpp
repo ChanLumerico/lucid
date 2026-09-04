@@ -77,6 +77,28 @@ ProtoWriter make_string_value(const std::string& text) {
 // ``Value`` holding an inline byte payload.  MIL has no float16 or int8
 // immediate list; both travel as raw little-endian bytes under
 // ``TensorValue.bytes``, which is what a reference quantized package does.
+// ``Value`` holding a float32 tensor as a typed list.
+//
+// The raw-bytes encoding below exists because MIL has no immediate list
+// for float16 or int8 — it does have one for float32, and the reader
+// wants it: handed float32 as bytes it counts elements against the
+// declared type and rejects the mismatch ("Tensor storage and type have
+// different number of elements"), which is what an int8 export with a
+// float32 body used to fail on.
+ProtoWriter make_float_value(const std::vector<float>& values, const MilTensorType& type) {
+    ProtoWriter repeated;
+    repeated.write_packed_floats(1, values);  // RepeatedFloats.values
+    ProtoWriter tensor_value;
+    tensor_value.write_message(pb::TensorValue::kFloats, repeated);
+    ProtoWriter immediate;
+    immediate.write_message(pb::ImmediateValue::kTensor, tensor_value);
+
+    ProtoWriter value;
+    value.write_message(pb::Value::kType, make_value_type(type));
+    value.write_message(pb::Value::kImmediateValue, immediate);
+    return value;
+}
+
 ProtoWriter make_bytes_value(const std::string& payload, const MilTensorType& type) {
     ProtoWriter repeated;
     repeated.write_bytes(1, payload.data(), payload.size());  // RepeatedBytes.values
@@ -494,9 +516,18 @@ ProtoWriter MilProgram::build_function() const {
             operation.write_map_entry(pb::Operation::kAttributes, "quantized_data", codes);
 
             const std::vector<std::int64_t> per_channel{op.channels};
-            operation.write_map_entry(
-                pb::Operation::kAttributes, "scale",
-                make_bytes_value(op.scale_bytes, {op.scale_dtype, per_channel}));
+            if (op.scale_dtype == MilDataType::Float32) {
+                // The bytes arrive little-endian float32; hand them over
+                // as the typed list the reader expects for this dtype.
+                std::vector<float> scales(op.scale_bytes.size() / sizeof(float));
+                std::memcpy(scales.data(), op.scale_bytes.data(), scales.size() * sizeof(float));
+                operation.write_map_entry(pb::Operation::kAttributes, "scale",
+                                          make_float_value(scales, {op.scale_dtype, per_channel}));
+            } else {
+                operation.write_map_entry(
+                    pb::Operation::kAttributes, "scale",
+                    make_bytes_value(op.scale_bytes, {op.scale_dtype, per_channel}));
+            }
             operation.write_map_entry(
                 pb::Operation::kAttributes, "zero_point",
                 make_bytes_value(op.zero_point_bytes, {MilDataType::Int8, per_channel}));

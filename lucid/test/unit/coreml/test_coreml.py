@@ -653,3 +653,59 @@ class TestThePublicSurfaceCanBeIntrospected:
         from lucid.nn.module import Module
 
         assert inspect.signature(cml.export).parameters["model"].annotation is Module
+
+
+class TestWeightQuantizationInEitherBody:
+    """``INT8`` weights used to work only alongside a float16 body.
+
+    Asked for on its own — the first thing to try, since it is a storage
+    decision and the body's precision is a separate one — the package
+    failed to parse: "Tensor storage and type have different number of
+    elements". The scale went out as raw bytes, which is the encoding
+    MIL needs for float16 because it has no immediate list for it; for
+    float32 there is one, and the reader counts elements against the
+    declared type rather than guessing.
+
+    Sizes are asserted as ratios rather than absolutes so the test says
+    what quantizing is for: four times smaller than float32, and the
+    accuracy cost is measured rather than assumed.
+    """
+
+    @staticmethod
+    def _bytes(root: str) -> int:
+        total = 0
+        for base, _dirs, files in os.walk(root):
+            for name in files:
+                total += os.path.getsize(os.path.join(base, name))
+        return total
+
+    @pytest.mark.parametrize(
+        ("name", "precision"),
+        [("float32", cml.Precision.FLOAT32), ("float16", cml.Precision.FLOAT16)],
+    )
+    def test_int8_weights_hold_in_either_body(
+        self, name: str, precision: object, tmp_path: object
+    ) -> None:
+        lucid.manual_seed(0)
+        model = M.create_model("resnet_18_cls", num_classes=10).eval()
+        x = lucid.randn(1, 3, 64, 64)
+        scale = max(float(model(x).logits.abs().max().item()), 1e-6)
+
+        plain = cml.export(
+            model, x, str(tmp_path / f"{name}.mlpackage"), precision=precision
+        )
+        quantized = cml.export(
+            model,
+            x,
+            str(tmp_path / f"{name}_int8.mlpackage"),
+            precision=precision,
+            weights=cml.WeightPrecision.INT8,
+        )
+        try:
+            assert quantized.verify(model, x) / scale < 5e-2
+            # Eight bits against thirty-two or sixteen: smaller, and by
+            # enough that a silently-unquantized export would fail here.
+            assert self._bytes(quantized.path) < self._bytes(plain.path) * 0.75
+        finally:
+            plain.close()
+            quantized.close()

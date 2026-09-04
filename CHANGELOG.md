@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - let the public entry points be introspected
 
+- int8 weights in a float32 body
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them
