@@ -621,3 +621,35 @@ class TestAPlanningFailureSaysWhichHalfFailed:
             assert exported.verify(model, ids) / scale < 1e-4
         finally:
             exported.close()
+
+
+class TestThePublicSurfaceCanBeIntrospected:
+    """``inspect.signature`` on ``export`` used to raise ``NameError``.
+
+    Annotations are evaluated lazily (PEP 649) but they are still
+    evaluated, against the defining module's globals, the moment anything
+    asks — and ``inspect.signature`` asks. Names that live only inside a
+    ``TYPE_CHECKING`` block are absent then, so ``help(cml.export)``,
+    Sphinx, and every IDE hit the same wall on this package's main entry
+    point.
+
+    The names are imported for real now. This is not only about tidiness:
+    a documentation build that cannot read a signature produces a page
+    that silently omits it.
+    """
+
+    @pytest.mark.parametrize(
+        "name", ["export", "export_functions", "load"]
+    )
+    def test_a_public_entry_point_has_a_readable_signature(self, name: str) -> None:
+        import inspect
+
+        signature = inspect.signature(getattr(cml, name))
+        assert signature.parameters
+
+    def test_the_annotations_resolve_to_the_real_classes(self) -> None:
+        import inspect
+
+        from lucid.nn.module import Module
+
+        assert inspect.signature(cml.export).parameters["model"].annotation is Module

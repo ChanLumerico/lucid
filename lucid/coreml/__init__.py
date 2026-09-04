@@ -65,6 +65,21 @@ from lucid.coreml._spec import (
     WeightPrecision,
 )
 
+# Imported for real, not only for the type checker.  Annotations are
+# evaluated lazily (PEP 649) but they are still evaluated — against this
+# module's globals — the moment anything asks for them, and
+# ``inspect.signature`` asks.  Behind a ``TYPE_CHECKING`` guard the names
+# are absent at runtime, so ``inspect.signature(export)``, ``help``, and
+# every documentation tool raised ``NameError`` on this package's main
+# entry point.
+#
+# Safe here because ``lucid.coreml`` is a lazily loaded subpackage: by
+# the time anything reaches it, ``lucid.nn`` has been importable for a
+# while.  ``TYPE_CHECKING`` stays for the checker's benefit and costs
+# nothing.
+from lucid._tensor.tensor import Tensor
+from lucid.nn.module import Module
+
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module

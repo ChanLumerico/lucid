@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - emit gather_along_axis for the opset the writer declares
 
+- let the public entry points be introspected
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them
