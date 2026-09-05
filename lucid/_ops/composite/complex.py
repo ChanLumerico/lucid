@@ -220,3 +220,11 @@ __all__ = [
     "view_as_real",
     "view_as_complex",
 ]
+
+# Bound at runtime, not only for type checking: PEP 649 evaluates a
+# function's annotations in its own module globals when something asks
+# for them, so a name that exists under ``TYPE_CHECKING`` alone makes
+# ``inspect.signature`` raise NameError — which is what help(), an IDE
+# and the docs build all call. Imported at the bottom because this
+# module is inside the cycle ``Tensor`` closes.
+from lucid._tensor.tensor import Tensor  # noqa: E402,F811

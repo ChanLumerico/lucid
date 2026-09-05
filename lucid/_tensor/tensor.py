@@ -3,10 +3,35 @@ from typing import TYPE_CHECKING, Callable, ClassVar, Self, Iterator, final, ove
 if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import DTypeLike as NpDTypeLike
+else:
+
+    class _LazyNumpy:
+        """Stands in for ``numpy`` until an annotation actually asks.
+
+        ``Tensor.__init__`` accepts an ``np.ndarray``, and says so. Under
+        PEP 649 that annotation is evaluated in this module's globals the
+        moment anyone reads the signature — ``help()``, an editor, the
+        documentation build — so a name bound only for type checking
+        makes the constructor of the package's central class impossible
+        to describe.
+
+        Importing numpy here instead would make an optional dependency a
+        required one: this file is a sanctioned bridge, but the bridge is
+        deliberately lazy so that an install without numpy still works.
+        Resolving on attribute access keeps both — nothing is imported
+        until something reads the annotation, and then only what a caller
+        holding a numpy array would have imported anyway.
+        """
+
+        def __getattr__(self, name: str) -> object:
+            import numpy  # noqa: PLC0415 — bridge import, deferred on purpose
+
+            return getattr(numpy, name)
+
+    np = _LazyNumpy()
 
 from lucid._C import engine as _C_engine
 from lucid._dtype import (
-    dtype,
     dtype as _dtype_cls,
     _ENGINE_TO_DTYPE,
     bool_,
@@ -21,7 +46,7 @@ from lucid._dtype import (
     complex64,
     complex128,
 )
-from lucid._device import device, device as _device_cls, _device_from_engine
+from lucid._device import device as _device_cls, _device_from_engine
 from lucid._dispatch import _wrap, _impl_with_grad
 from lucid._factories.creation import (
     zeros as _zeros,
@@ -76,8 +101,13 @@ class Tensor:
         self,
         data: np.ndarray | list[object] | int | float | bool | Tensor,
         *,
-        dtype: dtype | _C_engine.Dtype | str | None = None,
-        device: device | str | None = None,
+        # Spelled through the aliases, not the bare names: the class body
+        # defines ``dtype`` and ``device`` properties, and PEP 649
+        # evaluates these annotations with the class namespace in scope,
+        # so the bare names resolve to those properties and
+        # ``inspect.signature(Tensor)`` raises rather than answering.
+        dtype: _dtype_cls | _C_engine.Dtype | str | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> None:
         r"""Construct a Tensor from Python data, a NumPy array, or another Tensor.
@@ -254,7 +284,7 @@ class Tensor:
         return tuple(self._impl.shape)
 
     @property
-    def dtype(self) -> dtype:
+    def dtype(self) -> _dtype_cls:
         r"""Data type of the tensor elements.
 
         Reflects the numeric format used to store each element in memory.
@@ -290,7 +320,7 @@ class Tensor:
         return _ENGINE_TO_DTYPE[self._impl.dtype]  # type: ignore[return-value]
 
     @property
-    def device(self) -> device:
+    def device(self) -> _device_cls:
         r"""Device on which this tensor is stored.
 
         Lucid tensors reside on one of two devices:

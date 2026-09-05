@@ -1682,3 +1682,12 @@ __all__ = [
     "floor_divide",
     "diag_embed",
 ]
+
+
+# Bound at runtime, not only for type checking: PEP 649 evaluates a
+# function's annotations in its module globals when something asks for
+# them, so a name that exists only under ``TYPE_CHECKING`` makes
+# ``inspect.signature`` raise NameError — which breaks help(), IDEs and
+# the docs build. Imported at the bottom because the module is part of
+# the cycle that ``Tensor`` closes.
+from lucid._tensor.tensor import Tensor  # noqa: E402

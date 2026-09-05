@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - refuse to verify an image export against non-pixel input
 
+- a third of the public callables had no readable signature
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

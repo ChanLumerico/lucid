@@ -643,3 +643,39 @@ def __getattr__(name: str) -> object:
         return _dtypes
 
     raise AttributeError(f"module 'lucid' has no attribute '{name}'")
+
+
+def _bind_annotation_names() -> None:
+    """Give the factory modules the names their annotations mention.
+
+    PEP 649 evaluates a function's annotations in its own module globals
+    at the moment something asks for them, so a name imported only under
+    ``TYPE_CHECKING`` makes ``inspect.signature`` raise ``NameError``.
+    That is not a typing nicety: it is what ``help()``, an IDE's tooltip
+    and the docs build all call, and a third of this package's public
+    callables were failing it.
+
+    The composite modules bind ``Tensor`` themselves at the foot of the
+    file. These three cannot — they run while ``Tensor`` is still being
+    defined, since a tensor is what they exist to make — so the binding
+    happens here instead, once the class exists.
+    """
+    import sys
+
+    from lucid._tensor.tensor import Tensor as _Tensor
+
+    for _name in ("creation", "random", "converters"):
+        _module = sys.modules.get(f"lucid._factories.{_name}")
+        if _module is not None and not hasattr(_module, "Tensor"):
+            _module.Tensor = _Tensor  # type: ignore[attr-defined]
+
+    # ``from_numpy`` is deliberately left alone. Its annotation names a
+    # numpy type, and numpy is a dependency of the bridge rather than of
+    # the package — ``converters`` imports it inside the one function
+    # that needs it, so that a Lucid install without numpy still works.
+    # Binding it here to make a signature readable would turn an optional
+    # import into a required one, which is a worse trade than one
+    # callable that cannot be introspected.
+
+
+_bind_annotation_names()
