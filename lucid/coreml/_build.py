@@ -365,6 +365,65 @@ _QUANTIZE_MIN_ELEMENTS = 2048
 #: string parameter. Only the types a promotion can land on: casting a
 #: bool or a string is a different question, and an emitter that reaches
 #: one leaves the operand alone rather than inventing an answer.
+def _settle_target(
+    wanted: _spec.DeploymentTarget | None,
+    *,
+    state: object,
+    weights: object,
+    functions: bool = False,
+) -> _spec.DeploymentTarget:
+    """The floor this package will actually have, refusing a lower ask.
+
+    Three features move a program from ``CoreML7`` to ``CoreML8``, and
+    until this existed they moved it without saying so: a caller who
+    needed iOS 17 found out from a device. Asked for a floor the package
+    cannot meet, the export stops here and names which feature raised
+    it and how the call asked for it.
+
+    Parameters
+    ----------
+    wanted : DeploymentTarget or None
+        What the caller asked for. ``None`` accepts whatever the
+        features require.
+    state : list of State or None
+        The state specification, if any.
+    weights : WeightPrecision or Palettize or Sparsify
+        How weights are stored; palettization needs the newer opset.
+    functions : bool, optional, default=False
+        Whether the package carries several entry points.
+
+    Returns
+    -------
+    DeploymentTarget
+        The floor the package has.
+
+    Raises
+    ------
+    ValueError
+        When a requested floor is lower than the features allow.
+    """
+    reasons: list[str] = []
+    if state:
+        reasons.append("state")
+    if isinstance(weights, _spec.Palettize):
+        reasons.append("palettization")
+    if functions:
+        reasons.append("multiple functions")
+
+    if not reasons:
+        return wanted or _spec.DeploymentTarget.IOS17
+    if wanted is None or wanted is _spec.DeploymentTarget.IOS18:
+        return _spec.DeploymentTarget.IOS18
+
+    named = ", ".join(f"{r} ({_spec._NEEDS_IOS18[r]})" for r in reasons)
+    raise ValueError(
+        f"lucid.coreml: {wanted.name} was asked for, and this export uses "
+        f"{named}, which Core ML expresses only from IOS18. The package "
+        "would load on iOS 18 and nowhere earlier — drop the feature or "
+        "raise the target, rather than finding out on a device"
+    )
+
+
 def _refuse_if_empty(tensor: Tensor) -> None:
     """Stop on a constant with no elements, and say where it came from.
 
@@ -1953,6 +2012,7 @@ def build_package(
     classifier: Classifier | None = None,
     metadata: Metadata | None = None,
     output_field: str | None = None,
+    minimum_deployment_target: _spec.DeploymentTarget | None = None,
     into: _Shared | None = None,
 ) -> dict[str, object]:
     """Trace ``model`` and write a complete ``.mlpackage`` at ``path``.
@@ -1995,6 +2055,12 @@ def build_package(
         output shaped ``(1, len(labels))``.
     metadata : Metadata or None, optional, keyword-only, default=None
         What the package says about itself.
+    minimum_deployment_target : DeploymentTarget or None, optional, keyword-only, default=None
+        Oldest system the package must run on. State, palettization and
+        several entry points each raise that floor to ``IOS18``; naming a
+        lower one refuses the export rather than producing a package that
+        loads nowhere the caller intended. ``None`` accepts whatever the
+        features require, and the result is reported on the model.
     output_field : str or None, optional, keyword-only, default=None
         Single attribute to export from an output dataclass. ``None``
         takes every tensor field it declares.
@@ -2017,6 +2083,15 @@ def build_package(
     UnsupportedOp
         The trace contains an op with no MIL translation.
     """
+    # Settled before anything is written: a floor the package cannot
+    # meet is the caller's mistake to hear about now, not a device's to
+    # report later.
+    target = _settle_target(
+        minimum_deployment_target,
+        state=state,
+        weights=weights,
+        functions=into is not None,
+    )
     graph, feeds, inputs, outputs, traced_values = trace(
         model, example, output_field=output_field
     )
@@ -2552,6 +2627,7 @@ def build_package(
         "quantized_weights": quantized_count,
         "flexible": shapes is not None or shape_range is not None,
         "state": [(spec.input, spec.output) for spec in (state or [])],
+        "deployment_target": target,
         "program": program,
         "path": paths.root,
     }

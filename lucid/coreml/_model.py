@@ -188,6 +188,7 @@ class CoreMLModel:
         image_input: ImageInput | None = None,
         classifier: Classifier | None = None,
         function_name: str = "",
+        deployment_target: object = None,
     ) -> None:
         self.path = path
         self.input_names = input_names
@@ -213,6 +214,11 @@ class CoreMLModel:
         self.classifier = classifier
         # Empty takes whichever entry point the package names as default.
         self.function_name = function_name
+        # The oldest system this package runs on. Three features raise it
+        # — state, palettization, several entry points — and a caller who
+        # did not name a target is told what they ended up with rather
+        # than finding out from a device.
+        self.deployment_target = deployment_target
         self._handle = _C_engine.coreml.load_model(
             path, _UNITS[compute_units], function_name
         )

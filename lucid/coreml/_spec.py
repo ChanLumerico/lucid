@@ -56,6 +56,53 @@ class Precision(enum.Enum):
     FLOAT16 = "FLOAT16"
 
 
+class DeploymentTarget(enum.Enum):
+    """Oldest operating system the exported package will run on.
+
+    Three features raise this floor, and until now they raised it
+    silently: carrying state, palettizing weights, and writing several
+    entry points into one package all move the program from the
+    ``CoreML7`` opset to ``CoreML8``. A package built with any of them
+    will not load on iOS 17, and nothing said so at the time — the
+    caller found out from a device.
+
+    Naming a target makes the trade explicit in the direction that
+    matters: ask for ``IOS17`` and a feature that cannot be expressed
+    there is refused, by name, while the export is still a Python call.
+
+    There is no entry below ``IOS17`` because the emitters do not write
+    below it: this package's ``gather`` and ``scatter`` carry
+    ``validate_indices``, which iOS 16 has no field for. Supporting an
+    older floor is a change to the emitters, not a value in this enum.
+
+    Attributes
+    ----------
+    IOS17 : str
+        The opset this writer emits by default (macOS 14, iPadOS 17).
+    IOS18 : str
+        Needed for state, palettization and multi-function packages
+        (macOS 15, iPadOS 18).
+    """
+
+    IOS17 = "CoreML7"
+    IOS18 = "CoreML8"
+
+    @property
+    def opset(self) -> str:
+        """MIL opset string the program declares."""
+        return self.value
+
+
+#: What each feature costs in deployment floor, for the message that
+#: refuses it. Keyed by the words a caller would recognise from their own
+#: call, not by internal names.
+_NEEDS_IOS18 = {
+    "state": "state=[State(...)]",
+    "palettization": "weights=Palettize(...)",
+    "multiple functions": "export_functions",
+}
+
+
 class WeightPrecision(enum.Enum):
     """How a weight is stored, as distinct from how the body computes.
 

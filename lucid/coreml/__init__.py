@@ -55,6 +55,7 @@ from lucid.coreml._build import (
 )
 from lucid.coreml._model import CoreMLModel, PlacementSummary
 from lucid.coreml._spec import (
+    DeploymentTarget,
     Palettize,
     Sparsify,
     Classifier,
@@ -94,6 +95,7 @@ __all__ = [
     "ImageInput",
     "Metadata",
     "WeightPrecision",
+    "DeploymentTarget",
     "Palettize",
     "Sparsify",
     "CoreMLModel",
@@ -133,6 +135,7 @@ def export(
     metadata: Metadata | None = None,
     compute_units: ComputeUnits = ComputeUnits.ALL,
     output_field: str | None = None,
+    minimum_deployment_target: DeploymentTarget | None = None,
 ) -> CoreMLModel:
     """Trace ``model``, write a ``.mlpackage`` at ``path``, and load it.
 
@@ -188,6 +191,12 @@ def export(
         Description, author, licence and version to record in the package.
     compute_units : ComputeUnits, optional, keyword-only, default=ALL
         Which processors Core ML may schedule on.
+    minimum_deployment_target : DeploymentTarget or None, optional, keyword-only, default=None
+        Oldest system the package must run on. State, palettization and
+        several entry points each raise that floor to ``IOS18``; naming a
+        lower one refuses the export rather than producing a package that
+        loads nowhere the caller intended. ``None`` accepts whatever the
+        features require, and the result is reported on the model.
     output_field : str or None, optional, keyword-only, default=None
         Single attribute to export when the model returns an output
         dataclass. ``None`` exports every tensor field it declares —
@@ -223,6 +232,7 @@ def export(
         classifier=classifier,
         metadata=metadata,
         output_field=output_field,
+        minimum_deployment_target=minimum_deployment_target,
     )
     outputs = _features(info["outputs"])
     return CoreMLModel(
@@ -236,6 +246,7 @@ def export(
         output_shapes=None if info["flexible"] else dict(outputs),
         image_input=image_input,
         classifier=classifier,
+        deployment_target=info["deployment_target"],
     )
 
 
@@ -329,6 +340,9 @@ def export_functions(
             precision=precision.value,
             output_shapes=dict(outputs),
             function_name=name,
+            # Several entry points is itself an IOS18 feature, whatever
+            # else the package uses.
+            deployment_target=DeploymentTarget.IOS18,
         )
     return handles
 
