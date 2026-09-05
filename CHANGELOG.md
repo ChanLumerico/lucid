@@ -115,6 +115,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - reconcile mixed dtypes, and stage the rank-6 upsample
 - two more detector families, and an honest empty-constant refusal
 
+### Performance
+
+- stop emitting an operation for `contiguous`
+
 ---
 
 ## [3.10.2] — 2026-09-01

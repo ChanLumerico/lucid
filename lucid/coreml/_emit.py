@@ -229,7 +229,6 @@ _UNARY_MIL = {
     "arcsin": "asin",
     "arctan": "atan",
     "ceil": "ceil",
-    "contiguous": "identity",
     "cos": "cos",
     "cosh": "cosh",
     "erf": "erf",
@@ -886,6 +885,24 @@ def _embedding(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         # in range, and checking them would cost a comparison per lookup.
         ("validate_indices", b.const_bool(False)),
     ]
+
+
+@_emitter("contiguous")
+def _contiguous(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
+    """Nothing, because a MIL value has no layout to make contiguous.
+
+    Lucid's ``contiguous`` copies a strided tensor into packed storage.
+    A MIL program has no strides to be packed against — a value is its
+    shape and its contents — so the operation has no work to describe,
+    and emitting ``identity`` for it asks Core ML to schedule a copy that
+    means nothing.
+
+    That is not free. Swin calls it after every permute, which put 109
+    identity operations in the program, all of them scheduled on the CPU
+    — and an operation on the CPU between two on the Neural Engine costs
+    a round trip whatever the operation is.
+    """
+    return Bound([ins[0]])
 
 
 @_emitter("astype")

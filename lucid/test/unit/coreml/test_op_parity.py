@@ -317,6 +317,43 @@ class TestRankSixIsStagedRatherThanRefused:
             cml.export(_Tall().eval(), lucid.randn(2, 12), f"{tmp_path}/tall.mlpackage")
 
 
+class TestContiguousIsNotAnOperation:
+    """A MIL value has no layout, so making one contiguous is nothing.
+
+    Lucid's ``contiguous`` copies a strided tensor into packed storage.
+    A MIL program has no strides to pack against, so emitting
+    ``identity`` for it asks Core ML to schedule a copy that means
+    nothing — and Swin calls it after every permute, which put 109 such
+    operations in the program, all of them on the CPU. An operation on
+    the CPU between two on the Neural Engine costs a round trip whatever
+    the operation is: dropping them took Swin from 37% of its
+    computation on the accelerator to 50%.
+    """
+
+    def test_it_adds_no_operations(self, tmp_path: object) -> None:
+        class _Packed(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                y = x.permute(0, 2, 1).contiguous()
+                return y.permute(0, 2, 1).contiguous() + x
+
+        class _Plain(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                y = x.permute(0, 2, 1)
+                return y.permute(0, 2, 1) + x
+
+        lucid.manual_seed(0)
+        x = lucid.randn(1, 4, 6)
+        counts = []
+        for name, model in (("packed", _Packed()), ("plain", _Plain())):
+            exported = cml.export(model.eval(), x, f"{tmp_path}/{name}.mlpackage")
+            try:
+                counts.append(len(exported.compute_plan().placements))
+                assert exported.verify(model.eval(), x, relative=True) < 1e-5
+            finally:
+                exported.close()
+        assert counts[0] == counts[1]
+
+
 class TestHalfPrecisionKeepsItsIntegers:
     """A float16 body must not drag the integer values with it.
 
