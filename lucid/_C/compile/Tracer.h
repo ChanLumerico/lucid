@@ -207,6 +207,36 @@ public:
         return external_feeds_;
     }
 
+    // Every traced value that the tracer still holds, keyed by id.
+    //
+    // ``live_refs_`` already owns each :class:`TensorImpl` observed
+    // during the trace, so this costs a walk rather than a copy.  It
+    // exists for a consumer that wants a traced value's *contents* and
+    // not only its shape — constant folding an export, where a
+    // subgraph that depends on no input can be replaced by the value it
+    // produced.
+    //
+    // A buffer written in place carries the id it had when the mapping
+    // was last updated, which is the post-mutation state; a caller that
+    // needs the earlier value must not use this.
+    //
+    // Returns
+    // -------
+    // std::unordered_map<TensorId, TensorImplPtr>
+    //     Built fresh on each call.
+    std::unordered_map<TensorId, TensorImplPtr> retained_values() const {
+        std::unordered_map<TensorId, TensorImplPtr> out;
+        out.reserve(live_refs_.size());
+        for (const auto& impl : live_refs_) {
+            if (!impl)
+                continue;
+            const auto it = impl_to_id_.find(impl.get());
+            if (it != impl_to_id_.end())
+                out.emplace(it->second, impl);
+        }
+        return out;
+    }
+
     // Reverse lookup: find the :type:`TensorId` for ``impl`` if it was
     // observed during the trace (either as an external feed or as the
     // output of a traced op).  Returns ``-1`` when ``impl`` is not in

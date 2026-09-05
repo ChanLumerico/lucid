@@ -576,33 +576,38 @@ class TestAPlanningFailureSaysWhichHalfFailed:
     """ "Error in building plan" does not say what to do about it.
 
     A package can be well formed and still be refused by Core ML's
-    accelerator planner — ``roformer`` is, on the GPU and the Neural
-    Engine, while loading fine on the CPU. Malformed bytes and a planner
-    that will not take the graph need opposite responses from the
-    caller, so the runtime asks the one question that separates them
-    (does it load on the CPU?) and answers it in the message.
+    accelerator planner. Malformed bytes and a planner that will not take
+    the graph need opposite responses from the caller, so the runtime
+    asks the one question that separates them — does it load on the
+    CPU? — and answers it in the message.
+
+    ``roformer`` was the model that provoked this: it loaded on the CPU
+    and nowhere else. It plans everywhere now — constant folding took
+    its graph from something the planner refused to something it
+    accepts — so no model in the zoo reaches that message any more, and
+    what is checked here is the improvement instead. The message lives
+    in ``CoreMLRuntime.mm`` and is exercised the next time a package
+    provokes it.
     """
 
-    def test_the_message_names_the_working_configuration(
-        self, tmp_path: object
-    ) -> None:
+    def test_a_model_that_used_to_be_refused_now_plans(self, tmp_path: object) -> None:
+        """What folding bought, stated as a fact rather than a hope."""
         lucid.manual_seed(0)
         model = M.create_model("roformer").eval()
         ids = lucid.zeros(1, 16).to(lucid.int64)
 
-        with pytest.raises(RuntimeError) as excinfo:
-            cml.export(
-                model,
-                ids,
-                str(tmp_path / "roformer.mlpackage"),
-                compute_units=cml.ComputeUnits.ALL,
-            )
+        exported = cml.export(
+            model,
+            ids,
+            str(tmp_path / "roformer_all.mlpackage"),
+            compute_units=cml.ComputeUnits.ALL,
+        )
+        try:
+            assert exported.verify(model, ids, relative=True) < 1e-4
+        finally:
+            exported.close()
 
-        message = str(excinfo.value)
-        assert "well-formed" in message
-        assert "CPU_ONLY" in message
-
-    def test_and_that_configuration_actually_works(self, tmp_path: object) -> None:
+    def test_and_the_cpu_configuration_still_works(self, tmp_path: object) -> None:
         """The advice is checked, not offered."""
         lucid.manual_seed(0)
         model = M.create_model("roformer").eval()

@@ -185,6 +185,16 @@ void register_compile(py::module_& m) {
             },
             "id → TensorImpl map for inputs not produced by any traced "
             "op (model parameters + user inputs).")
+        .def_property_readonly(
+            "retained_values",
+            [](const Tracer& t) {
+                py::dict d;
+                for (const auto& [tid, impl] : t.retained_values())
+                    d[py::cast(tid)] = impl;
+                return d;
+            },
+            "id → TensorImpl map for every traced value the tracer still "
+            "holds, for a consumer that needs contents and not only shape.")
         .def(
             "lookup_id",
             [](const Tracer& t, const lucid::TensorImplPtr& impl) -> py::object {

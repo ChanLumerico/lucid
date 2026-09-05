@@ -270,7 +270,7 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
                 "model can be exported."
             )
         outputs.append((name, value_id, tensor))
-    return tracer.graph, tracer.external_feeds, inputs, outputs
+    return tracer.graph, tracer.external_feeds, inputs, outputs, tracer.retained_values
 
 
 def _flatten_ints(tensor: Tensor) -> list[int]:
@@ -1401,7 +1401,78 @@ _UNIT_AXIS_SAFE = frozenset(
 )
 
 
-def _unit_axis_rewrites(graph: Any, handled: set[int]) -> set[int]:
+#: Operations that make a tensor out of nothing. A traced node with no
+#: recorded inputs is one of these, or it is an operation whose inputs
+#: the tracer failed to record — and treating the second kind as a
+#: constant is how a package comes to answer every input with the first
+#: one's result. Only names that genuinely take no tensor are here:
+#: ``tril`` and ``meshgrid`` do take one, whatever a node missing its
+#: edges suggests.
+_TRUE_FACTORIES = frozenset(
+    {"arange", "empty", "eye", "full", "linspace", "logspace", "ones", "zeros"}
+)
+
+
+def _foldable(
+    graph: Any,
+    feeds: dict[int, Any],
+    input_ids: set[int],
+    traced_values: dict[int, Any],
+) -> tuple[set[int], set[int]]:
+    """Values a package can carry instead of computing, and who makes them.
+
+    A windowed transformer spends a third of its graph on arithmetic that
+    has nothing to do with its input: Swin builds the index into its
+    relative-position table out of ``arange``, and rebuilds it on every
+    prediction. 503 of its 1473 operations are that, and they run on the
+    CPU, between operations that run on the Neural Engine.
+
+    Constant means constant *here*: reachable only from the model's
+    weights and from operations that make a tensor out of nothing.
+    Anything one step from the input is not, and an operation whose
+    inputs the tracer never recorded is treated as unknown rather than
+    as a factory — that mistake is what freezes a model's answer.
+
+    Returns
+    -------
+    tuple[set[int], set[int]]
+        The values to emit as constants — only those something outside
+        the constant region reads, since the rest have no consumer left
+        — and the ids of every operation head inside the region, which
+        the driver skips.
+    """
+    constant: set[int] = {tid for tid in feeds if tid not in input_ids}
+    inside: set[int] = set()
+    for op in graph.ops:
+        if not op.outputs:
+            continue
+        if op.inputs:
+            if not all(i in constant for i in op.inputs):
+                continue
+        elif op.name not in _TRUE_FACTORIES:
+            continue
+        if not all(int(o.id) in traced_values for o in op.outputs):
+            # Nothing to write in its place.
+            continue
+        inside.add(int(op.outputs[0].id))
+        constant.update(int(o.id) for o in op.outputs)
+
+    if not inside:
+        return set(), set()
+
+    # Only the values something outside the region reads have to be
+    # written; the rest were steps on the way to them.
+    wanted: set[int] = set()
+    for op in graph.ops:
+        if op.outputs and int(op.outputs[0].id) in inside:
+            continue
+        wanted.update(i for i in op.inputs if i in constant and i not in feeds)
+    return wanted, inside
+
+
+def _unit_axis_rewrites(
+    graph: Any, handled: set[int], folded: set[int] | None = None
+) -> set[int]:
     """Rank-6 values that can be emitted without their leading axis.
 
     The two staging rewrites erase a rank-6 value that is only reshaped
@@ -1432,7 +1503,12 @@ def _unit_axis_rewrites(graph: Any, handled: set[int]) -> set[int]:
     if not tall:
         return set()
 
+    gone = folded or set()
     for op in graph.ops:
+        if op.outputs and int(op.outputs[0].id) in gone:
+            # Not emitted at all; its result arrives as a constant, which
+            # the driver writes at whatever rank this pass settles on.
+            continue
         touches = any(o.id in tall for o in op.outputs) or any(
             i in tall for i in op.inputs
         )
@@ -1712,7 +1788,7 @@ def _varying_axes(
     ids: list[list[int]] = []
     for shape in shapes:
         probe = lucid.zeros(*shape).to(example.dtype)
-        graph, _feeds, _inputs, _outputs = trace(
+        graph, _feeds, _inputs, _outputs, _values = trace(
             model, probe, output_field=output_field
         )
         recorded.append(
@@ -1941,7 +2017,9 @@ def build_package(
     UnsupportedOp
         The trace contains an op with no MIL translation.
     """
-    graph, feeds, inputs, outputs = trace(model, example, output_field=output_field)
+    graph, feeds, inputs, outputs, traced_values = trace(
+        model, example, output_field=output_field
+    )
 
     varying: dict[int, set[int]] = {}
     ordered: list[tuple[int, ...]] = []
@@ -2226,7 +2304,13 @@ def build_package(
     # A third shape past the cap: values that are computed on at rank 6
     # rather than passed through it. Emitted a rank lower — see
     # ``_unit_axis_rewrites`` — so they never exist at rank 6 either.
-    thinned = _unit_axis_rewrites(graph, set(rewrites) | set(stuffing) | absorbed)
+    # Folding is decided first: it removes operations, and whether the
+    # rank-6 component can be emitted a rank lower depends on which
+    # operations are left to check.
+    precomputed, folded = _foldable(graph, feeds, set(input_ids), traced_values)
+    thinned = _unit_axis_rewrites(
+        graph, set(rewrites) | set(stuffing) | absorbed, folded
+    )
     _pending_thinned = thinned
     for op in graph.ops:
         head = int(op.outputs[0].id) if op.outputs else -1
@@ -2282,7 +2366,37 @@ def build_package(
     wanted_name: dict[int, str] = (
         {} if half else {tid: field for field, tid, _t in outputs}
     )
+    # A value the graph recomputes on every prediction although nothing
+    # about it depends on the input is written down instead. See
+    # ``_foldable``: this is a third of a windowed transformer, and all
+    # of it lands on the CPU.
+    for tid in precomputed:
+        folded_value = _wrap(traced_values[tid])
+        if tid in thinned:
+            # Written a rank lower, like everything else in that
+            # component; the leading axis is one by construction.
+            folded_value = folded_value.reshape(
+                *[int(d) for d in folded_value.shape][1:]
+            )
+        if folded_value.dtype in (lucid.float32, lucid.float16):
+            names[tid] = builder.const_from_tensor(
+                folded_value.half() if half else folded_value
+            )
+        elif folded_value.dtype in (lucid.int32, lucid.int64):
+            names[tid] = builder.const_ints_shaped(
+                [int(v) for v in _flatten_ints(folded_value)],
+                [int(d) for d in folded_value.shape],
+            )
+        else:
+            # Nothing to write it as; leave the operations in place.
+            folded = set()
+            precomputed = set()
+            break
+
     for op in _reachable_ops(graph, [tid for _n, tid, _t in outputs]):
+        if op.outputs and int(op.outputs[0].id) in folded:
+            # Its result is a constant now, and so is everything it fed.
+            continue
         head = int(op.outputs[0].id) if op.outputs else -1
         if head in absorbed:
             # Emitted already, as part of the window rewrite below.

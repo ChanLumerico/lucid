@@ -120,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Performance
 
 - stop emitting an operation for `contiguous`
+- write down the work that does not depend on the input
 
 ---
 
