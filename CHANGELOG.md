@@ -121,6 +121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - cover roformer, and refuse `rand` for the reason `randn` is
 
+- measure what float16 costs a particular model
+
 ### Performance
 
 - stop emitting an operation for `contiguous`

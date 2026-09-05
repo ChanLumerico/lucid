@@ -108,6 +108,7 @@ __all__ = [
     "export",
     "export_functions",
     "load",
+    "precision_cost",
 ]
 
 
@@ -345,6 +346,88 @@ def export_functions(
             deployment_target=DeploymentTarget.IOS18,
         )
     return handles
+
+
+def precision_cost(
+    model: Module,
+    example: object,
+    *,
+    weights: WeightPrecision | Palettize | Sparsify = WeightPrecision.FLOAT,
+    output_field: str | None = None,
+) -> dict[str, float]:
+    """What each precision costs this model, measured rather than assumed.
+
+    The Neural Engine runs float16 and nothing else, so reaching the
+    accelerator means accepting whatever float16 does to a particular
+    network — and that varies by more than an order of magnitude between
+    architectures that look alike. Measured across fourteen families on
+    an untrained forward: convolutional stacks land near 1e-3, ViT at
+    1e-2, and MaxViT at 1.6e-1. Nothing in an export says which kind a
+    given model is.
+
+    So this exports it twice and compares both against the eager model,
+    relative to each output's own magnitude. The packages are written to
+    a temporary directory and removed: the answer is the point, not the
+    artifacts.
+
+    The float16 figure is Core ML's, which is better than running the
+    same model in half precision throughout — a ViT does that at 1.5
+    relative, against 1e-2 here — because the runtime keeps the parts
+    that need range in float32. It is not a bound on your own half
+    precision arithmetic elsewhere.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model to measure, in ``eval()`` mode.
+    example : Tensor or tuple of Tensor or dict of str to Tensor
+        Input to trace and compare with, as ``export`` takes it.
+    weights : WeightPrecision or Palettize or Sparsify, optional, keyword-only, default=WeightPrecision.FLOAT
+        How weights are stored, held the same across both exports so the
+        difference is the body's precision alone.
+    output_field : str or None, optional, keyword-only, default=None
+        Which field of a dataclass output to export, as ``export`` takes
+        it.
+
+    Returns
+    -------
+    dict[str, float]
+        ``{"float32": err, "float16": err}`` — the worst relative
+        disagreement with the eager model, per precision.
+
+    Raises
+    ------
+    ValueError
+        When the model answers with all zeros, since comparing against
+        that proves nothing about either precision.
+
+    Examples
+    --------
+    >>> cost = lucid.coreml.precision_cost(model, x)  # doctest: +SKIP
+    >>> cost["float16"] < 1e-2  # doctest: +SKIP
+    True
+    """
+    import tempfile
+
+    measured: dict[str, float] = {}
+    with tempfile.TemporaryDirectory() as room:
+        for name, precision in (
+            ("float32", Precision.FLOAT32),
+            ("float16", Precision.FLOAT16),
+        ):
+            exported = export(
+                model,
+                example,
+                f"{room}/{name}.mlpackage",
+                precision=precision,
+                weights=weights,
+                output_field=output_field,
+            )
+            try:
+                measured[name] = exported.verify(model, example, relative=True)
+            finally:
+                exported.close()
+    return measured
 
 
 def load(
