@@ -119,6 +119,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - let a caller name the systems a package has to run on
 
+- cover roformer, and refuse `rand` for the reason `randn` is
+
 ### Performance
 
 - stop emitting an operation for `contiguous`

@@ -98,6 +98,10 @@ TOKEN_FAMILIES = [
     # Two heads, so ``predict`` answers with a dict keyed by field name
     # rather than one tensor — the comparison goes through ``verify``.
     ("bert_tiny", (1, 16)),
+    # Was excluded for loading CPU_ONLY: Core ML's planner refused the
+    # graph on the accelerators. Constant folding left it a graph the
+    # planner accepts, everywhere.
+    ("roformer", (1, 16)),
 ]
 
 #: Families whose forward takes more than one tensor: a diffusion network
@@ -198,9 +202,12 @@ NOT_SINGLE_IMAGE = {
     # ``nice_cifar`` stands for ``nice`` and ``realnvp``, ``vqvae`` for
     # itself, ``ddpm``/``flow``/``ncsn``/``dit``/``mean`` and
     # ``transformer``/``bert`` are in the lists above.
+    # ``nice_cifar`` stands for the flow family above. ``realnvp``
+    # exports too, but an untrained one sits at the edge of its
+    # coupling's ``exp`` and a small perturbation puts it over — a
+    # property of the architecture untrained, not of the export.
     "realnvp",
     "bert",
-    "roformer",
     # ``roformer`` exports and is a well-formed package, but Core ML
     # will not build an execution plan for it on the GPU or the Neural
     # Engine — it loads with CPU_ONLY.  That is the accelerator planner

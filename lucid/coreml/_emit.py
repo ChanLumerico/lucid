@@ -602,6 +602,7 @@ def _argmin(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return _arg_reduce(b, op, ins, "reduce_argmin")
 
 
+@_emitter("rand")
 @_emitter("randn")
 def _randn(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """Refused, with the reason measured rather than assumed.
@@ -624,7 +625,7 @@ def _randn(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     from lucid.coreml._build import UnsupportedOp
 
     raise UnsupportedOp(
-        "randn",
+        op.name,
         "this model draws random numbers inside forward, and Core ML folds "
         "the draw at build time — the package would return one fixed sample "
         "on every call, for the life of the file. Export a deterministic "
