@@ -314,8 +314,8 @@ class CoreMLModel:
             return produced[self.output_names[0]]
         return produced
 
-    def verify(self, model: Module, x: object) -> float:
-        """Largest relative difference against the eager model.
+    def verify(self, model: Module, x: object, *, relative: bool = False) -> float:
+        """Largest difference against the eager model.
 
         Shapes agreeing is not evidence: a package missing a layer has
         the right shape and returns plausible numbers. This runs both and
@@ -323,18 +323,39 @@ class CoreMLModel:
         detector that exported its class scores and dropped its boxes
         would otherwise pass.
 
+        The default is an **absolute** difference, which is only
+        interpretable against outputs of a known size. A model whose
+        outputs differ in magnitude makes that trap easy to fall into:
+        RealNVP returns a latent of order 1 beside a log-probability of
+        order 1e4, so the absolute worst is set by the second, and
+        dividing it by the first reads as a 4% error when every output
+        agrees to 1e-6.
+
+        ``relative=True`` scales each output's difference by that
+        output's own magnitude — but only down to one, which is the
+        other half of the same trap: VQ-VAE's latent has values around
+        2e-3, and dividing float32 noise by that reads as 3e-4 when the
+        difference is 5e-7. Dividing by ``max(scale, 1)`` is relative
+        where relative means something and absolute where it does not,
+        which is the same bargain a tolerance pair makes.
+
         Parameters
         ----------
         model : nn.Module
             The eager model this package was exported from.
         x : Tensor or tuple of Tensor or dict of str to Tensor
             Input to run through both. Host tensors.
+        relative : bool, optional, default=False
+            Scale each output's difference by that output's own largest
+            magnitude, floored at one, before taking the worst.
 
         Returns
         -------
         float
-            The worst ``max|coreml - eager|`` across the outputs. Expect
-            ~1e-7 for a float32 export and ~1e-3 relative for float16.
+            The worst ``max|coreml - eager|`` across the outputs, or the
+            worst of those divided by each output's own scale when
+            ``relative``. Expect ~1e-7 for a float32 export and ~1e-3
+            relative for float16.
 
         Notes
         -----
@@ -397,6 +418,7 @@ class CoreMLModel:
         produced = got if isinstance(got, dict) else {self.output_names[0]: got}
 
         worst = 0.0
+        carries_signal = False
         for name in self.output_names:
             wanted = expected.get(name)
             if wanted is None:
@@ -404,19 +426,38 @@ class CoreMLModel:
                     f"lucid.coreml: the eager model no longer returns {name!r}, "
                     "which this package exports"
                 )
-            scale = float(wanted.abs().max().item())
-            if scale == 0.0:
-                # Comparing against an all-zero reference proves nothing:
-                # an exporter that dropped every layer would also return
-                # zeros and score perfectly.  Several zoo models
-                # zero-initialise their head, so this is reachable with an
-                # untrained factory rather than being a theoretical case.
+            extreme = float(wanted.abs().max().item())
+            if extreme != extreme:  # NaN: the reference has no finite answer
                 raise ValueError(
-                    f"lucid.coreml: the eager model's {name!r} is all zeros, so "
-                    "this comparison cannot detect anything — load weights, or "
-                    "perturb the zero-initialised parameters, before verifying"
+                    f"lucid.coreml: the eager model's {name!r} contains NaN, so "
+                    "there is nothing to compare the package against — the model "
+                    "produces it before any export is involved, and a difference "
+                    "against NaN is NaN whatever the package computed"
                 )
-            worst = max(worst, float((produced[name] - wanted).abs().max().item()))
+            carries_signal = carries_signal or extreme > 0.0
+            gap = float((produced[name] - wanted).abs().max().item())
+            worst = max(worst, gap / max(extreme, 1.0) if relative else gap)
+        if not carries_signal:
+            # Comparing against an all-zero reference proves nothing: an
+            # exporter that dropped every layer would also return zeros
+            # and score perfectly. Several zoo models zero-initialise
+            # their head, so this is reachable with an untrained factory
+            # rather than being a theoretical case.
+            #
+            # Only when *every* output is zero, though. A model can have
+            # one output that is legitimately zero and others that are
+            # not — NICE's log-determinant is exactly zero because the
+            # transform preserves volume, which is a fact about the
+            # architecture and not a missing weight. Refusing the whole
+            # comparison for it would hide the outputs that do carry
+            # signal, and a zero reference still catches an export that
+            # returns something else.
+            raise ValueError(
+                f"lucid.coreml: every output of the eager model "
+                f"({', '.join(self.output_names)}) is all zeros, so this "
+                "comparison cannot detect anything — load weights, or perturb "
+                "the zero-initialised parameters, before verifying"
+            )
         return worst
 
     def compute_plan(self) -> PlacementSummary:

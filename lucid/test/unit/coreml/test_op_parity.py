@@ -169,6 +169,25 @@ _OTHER = [
     ("prod", lambda x: lucid.prod(x, dim=1), True),
     ("sum", lambda x: lucid.sum(x, dim=1), False),
     ("tile", lambda x: lucid.tile(x, (1, 1, 2, 2)), False),
+    # Added when exporting families the smoke test did not reach: VQ-VAE
+    # needs the first three to look its codebook up, DETR needs cumsum
+    # for its positional encoding.
+    ("equal", lambda x: lucid.equal(x, x * 0.0).to(lucid.float32), False),
+    ("argmax", lambda x: lucid.argmax(x, dim=1).to(lucid.float32), False),
+    ("argmin", lambda x: lucid.argmin(x, dim=1).to(lucid.float32), False),
+    ("argmax_flat", lambda x: lucid.argmax(x).to(lucid.float32), False),
+    (
+        "argmax_keepdim",
+        lambda x: lucid.argmax(x, dim=1, keepdim=True).to(lucid.float32),
+        False,
+    ),
+    (
+        "one_hot",
+        lambda x: F.one_hot(lucid.argmax(x, dim=1), num_classes=4).to(lucid.float32),
+        False,
+    ),
+    ("cumsum", lambda x: lucid.cumsum(x, dim=1), False),
+    ("cumsum_last", lambda x: lucid.cumsum(x, dim=-1), False),
 ]
 
 

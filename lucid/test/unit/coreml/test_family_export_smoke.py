@@ -69,6 +69,19 @@ FAMILIES = [
     ("zfnet", (1, 3, 224, 224)),
 ]
 
+#: Families this file used to name in ``NOT_SINGLE_IMAGE`` on grounds
+#: that turned out to be false. Each takes a single tensor and exports;
+#: they are separated only because they return several outputs — boxes
+#: beside scores, a reconstruction beside a latent — so the comparison
+#: goes through ``verify`` rather than through one tensor.
+MULTI_OUTPUT = [
+    ("fcn_resnet101", (1, 3, 224, 224)),
+    ("yolo", (1, 3, 448, 448)),
+    ("detr_resnet101", (1, 3, 224, 224)),
+    ("vqvae", (1, 3, 64, 64)),
+    ("nice_cifar", (1, 3072)),
+]
+
 #: Families whose input is token indices rather than pixels.
 TOKEN_FAMILIES = [
     ("gpt", (1, 16)),
@@ -77,51 +90,93 @@ TOKEN_FAMILIES = [
     ("bert_tiny", (1, 16)),
 ]
 
+#: Families whose forward takes more than one tensor: a diffusion network
+#: is a function of a sample *and* a time, and a sequence-to-sequence
+#: model of two token streams. The sampler loop around them is Python and
+#: does not export — the network it calls is what a deployment runs, and
+#: that is what these check.
+#:
+#: Several of these zero-initialise their output projection, which is
+#: ordinary practice and makes an untrained model answer with exact
+#: zeros; ``verify`` refuses that comparison, correctly, so the fixture
+#: perturbs the zeroed parameters first.
+MULTI_INPUT = [
+    ("ddpm_cifar", lambda: (lucid.randn(1, 3, 32, 32), lucid.zeros(1).to(lucid.int64))),
+    ("flow_matching_cifar", lambda: (lucid.randn(1, 3, 32, 32), lucid.zeros(1))),
+    (
+        "ncsn_celeba",
+        lambda: (lucid.randn(1, 3, 32, 32), lucid.zeros(1).to(lucid.int64)),
+    ),
+    ("dit_base_2", lambda: (lucid.randn(1, 4, 32, 32), lucid.zeros(1).to(lucid.int64))),
+    (
+        "mean_flow_base_2",
+        lambda: (lucid.randn(1, 4, 32, 32), lucid.zeros(1), lucid.zeros(1)),
+    ),
+    (
+        "transformer_base",
+        lambda: (
+            lucid.zeros(1, 16).to(lucid.int64),
+            lucid.zeros(1, 16).to(lucid.int64),
+        ),
+    ),
+]
+
 #: Families this file does not reach, and why. Listed rather than
 #: omitted: an absence with no reason attached reads as an oversight
 #: later, and some of these are boundaries rather than gaps.
+#:
+#: The list used to be twice this size, and most of what left it was
+#: never a boundary — ``fcn`` was excluded for a shape it does not want,
+#: ``yolo`` and ``detr`` for post-processing that is not in their
+#: forward at all, and the diffusion families for a sampler loop that
+#: wraps the network rather than being inside it. Each entry below now
+#: names something that was observed, not assumed.
 NOT_SINGLE_IMAGE = {
     # Keys, not factory names: the family of ``mask2former_swin_base`` is
     # ``mask``, the same as ``mask_rcnn``'s. Crude on purpose — the point
     # is that nothing drops out of sight, not that the taxonomy is exact.
     #
-    # Two or more inputs, or a head whose post-processing is data
-    # dependent (non-maximum suppression, proposals) and cannot be a
-    # static graph at all.
-    "detr",
+    # Two-stage detectors: the proposal stage is data dependent, and the
+    # models are large enough that a representative here would dominate
+    # the suite's runtime. ``detr`` and ``yolo`` are covered above — one
+    # stage, and their non-maximum suppression is post-processing the
+    # caller runs, not part of ``forward``.
     "fast",
     "faster",
     "mask",
     "maskformer",
     "efficientdet",
-    "yolo",
     "rcnn",
-    # Token ids, not pixels.
+    # Draws random numbers inside ``forward``: a variational encoder
+    # samples its latent, so the traced graph is one draw and there is
+    # nothing stable to compare against. Not a translation gap — a model
+    # whose output is random has no reproducible answer to export.
+    "hvae",
+    "score",
+    "vae",
+    # Two inputs of different kinds (pixels beside token ids), and a
+    # mixed-dtype multiply Core ML will not promote. Reachable, but not
+    # yet.
+    "clip",
+    # Reshapes to rank 6, past Core ML's rank-5 program limit, in its
+    # patch rearrangement. The staging that fixed window partition
+    # applies here too and has not been done.
+    "rectified",
+    # A step function over latents and actions whose input specification
+    # is a rollout, not a tensor: covering these needs an agreed shape
+    # for observations and actions first.
+    "diamond",
+    "dreamer",
+    "planet",
+    "neural",
+    "stable",
+    # Covered above by a representative whose family key differs:
+    # ``nice_cifar`` stands for ``nice`` and ``realnvp``, ``vqvae`` for
+    # itself, ``ddpm``/``flow``/``ncsn``/``dit``/``mean`` and
+    # ``transformer``/``bert`` are in the lists above.
+    "realnvp",
     "bert",
     "roformer",
-    "transformer",
-    "clip",
-    # Samplers and world models: a step function over latents and time,
-    # driven from Python.
-    "ddpm",
-    "diamond",
-    "dit",
-    "dreamer",
-    "flow",
-    "hvae",
-    "mean",
-    "ncsn",
-    "neural",
-    "nice",
-    "planet",
-    "rectified",
-    "realnvp",
-    "score",
-    "stable",
-    "vae",
-    "vqvae",
-    # Segmentation shapes that are not 224-square.
-    "fcn",
     # ``roformer`` exports and is a well-formed package, but Core ML
     # will not build an execution plan for it on the GPU or the Neural
     # Engine — it loads with CPU_ONLY.  That is the accelerator planner
@@ -183,6 +238,72 @@ def test_a_token_model_exports_and_matches(factory, shape, tmp_path):
         exported.close()
 
 
+def _without_zero_initialised_parameters(factory: str) -> object:
+    """The same model with its zeroed parameters given small values.
+
+    Diffusion networks zero-initialise their output projection so that
+    the residual branch starts as the identity. An untrained one
+    therefore answers with exact zeros, and ``verify`` refuses that
+    comparison — rightly, since an export that dropped every layer would
+    score the same. Perturbing first is what the refusal asks for.
+    """
+    model = M.create_model(factory).eval()
+    replaced = {}
+    for name, value in model.state_dict().items():
+        zeroed = (
+            hasattr(value, "shape")
+            and int(value.numel()) > 0
+            and float(value.abs().max().item()) == 0.0
+        )
+        replaced[name] = lucid.randn(*value.shape) * 0.05 if zeroed else value
+    perturbed = M.create_model(factory).eval()
+    perturbed.load_state_dict(replaced)
+    return perturbed
+
+
+@pytest.mark.parametrize(
+    ("factory", "shape"), MULTI_OUTPUT, ids=[f for f, _s in MULTI_OUTPUT]
+)
+def test_a_multi_output_family_exports_and_matches(factory, shape, tmp_path):
+    """One tensor in, several out — compared through ``verify``.
+
+    ``relative=True`` because the outputs differ in magnitude: a flow
+    returns a latent of order one beside a log-probability of order
+    ten thousand, and the absolute worst across them is set by the
+    second whatever the first did.
+    """
+    lucid.manual_seed(0)
+    model = M.create_model(factory).eval()
+    x = lucid.randn(*shape)
+
+    exported = cml.export(model, x, str(tmp_path / f"{factory}.mlpackage"))
+    try:
+        assert exported.verify(model, x, relative=True) < 1e-4
+    finally:
+        exported.close()
+
+
+@pytest.mark.parametrize(
+    ("factory", "make_inputs"), MULTI_INPUT, ids=[f for f, _m in MULTI_INPUT]
+)
+def test_a_multi_input_family_exports_and_matches(factory, make_inputs, tmp_path):
+    """A network of a sample and a time, or of two token streams.
+
+    ``relative=True`` because these return outputs of different
+    magnitudes — a latent beside a log-probability — and the absolute
+    worst across them says nothing about either.
+    """
+    lucid.manual_seed(0)
+    model = _without_zero_initialised_parameters(factory)
+    inputs = make_inputs()
+
+    exported = cml.export(model, inputs, str(tmp_path / f"{factory}.mlpackage"))
+    try:
+        assert exported.verify(model, inputs, relative=True) < 1e-4
+    finally:
+        exported.close()
+
+
 def test_every_family_is_either_covered_or_named():
     """No family drops out of sight.
 
@@ -192,7 +313,10 @@ def test_every_family_is_either_covered_or_named():
     """
     import re
 
-    covered = {re.split(r"[_\d]", f)[0] for f, _s in (*FAMILIES, *TOKEN_FAMILIES)}
+    covered = {
+        re.split(r"[_\d]", f)[0]
+        for f, _s in (*FAMILIES, *TOKEN_FAMILIES, *MULTI_OUTPUT, *MULTI_INPUT)
+    }
     families = {re.split(r"[_\d]", n)[0] for n in M.list_models()}
     missing = families - covered - NOT_SINGLE_IMAGE
     assert not missing, (

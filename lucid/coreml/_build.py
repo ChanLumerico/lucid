@@ -642,6 +642,9 @@ class Builder:
         # rather than just its name (``layer_norm`` normalises over the
         # trailing axes its weight covers).
         self.shapes: dict[str, list[int]] = {}
+        # Values that are constants.  Core ML rejects a computed operand
+        # where it wants a constant, so emitters check before binding.
+        self.consts: set[str] = set()
         # Traced value id -> the axes a flexible export leaves open, so an
         # emitter that writes a shape into a constant can leave them open
         # too rather than baking the default.
@@ -669,6 +672,51 @@ class Builder:
         out = op.outputs[index]
         return _flex([int(d) for d in out.shape], self.varying.get(out.id))
 
+    def result_mil_dtype(self, op: TracedOp, index: int = 0) -> int:
+        """MIL element type the driver will declare for a result.
+
+        An emitter that has to build a constant of the *result's* type —
+        ``one_hot``'s two fill values must match it, and Core ML says so
+        at parse time — needs the same answer the driver reaches, not a
+        guess from the operation's name.
+
+        Parameters
+        ----------
+        op : TracedOp
+            Operation whose result to describe.
+        index : int, optional, default=0
+            Which result.
+
+        Returns
+        -------
+        int
+            MIL element-type number.
+        """
+        out = op.outputs[index]
+        return _spec.trace_dtype(str(out.dtype).split(".")[-1], self._body_mil)
+
+    def narrow_to_int32(self, name: str) -> str:
+        """The same value as int32, for an operand that takes nothing wider.
+
+        This opset's ``gather`` accepts int32 indices and smaller, and
+        refuses int64 when the package is parsed rather than converting
+        it. Casting int32 to int32 is a no-op the compiler drops, so the
+        emitter does not have to know which case it is in.
+        """
+        return self.emit(
+            "cast",
+            [("x", name), ("dtype", self.const_str("int32"))],
+            self.shape_of(name),
+            dtype=_C_engine.coreml.DTYPE_INT32,
+        )
+
+    def result_is_float(self, op: TracedOp, index: int = 0) -> bool:
+        """Whether a result is declared as a floating type."""
+        return self.result_mil_dtype(op, index) in (
+            _C_engine.coreml.DTYPE_FLOAT16,
+            _C_engine.coreml.DTYPE_FLOAT32,
+        )
+
     def shape_of(self, name: str) -> list[int]:
         shape = self.shapes.get(name)
         if shape is None:
@@ -682,8 +730,29 @@ class Builder:
         self._counter += 1
         return f"_c{self._counter}_{kind}"
 
+    def _const_name(self, kind: str) -> str:
+        """Allocate a name and remember that it names a constant.
+
+        Core ML refuses some operands that are not constants —
+        ``linear``'s weight and bias, a convolution's weight — so an
+        emitter has to be able to ask. Recorded rather than inferred from
+        the name: ``_next`` also names the results of operations, and a
+        prefix check would call those constants too.
+        """
+        name = self._next(kind)
+        self.consts.add(name)
+        return name
+
+    def mark_const(self, name: str) -> None:
+        """Record a constant the driver named itself, such as a weight."""
+        self.consts.add(name)
+
+    def is_const(self, name: str) -> bool:
+        """Whether this value is a constant Core ML will accept as one."""
+        return name in self.consts
+
     def const_ints(self, values: list[int]) -> str:
-        name = self._next("ints")
+        name = self._const_name("ints")
         self._program.add_int_const(name, [int(v) for v in values], False)
         return name
 
@@ -706,13 +775,13 @@ class Builder:
         str
             Name of the constant.
         """
-        name = self._next("intsn")
+        name = self._const_name("intsn")
         self._program.add_int_const_shaped(name, [int(v) for v in values], shape)
         self.shapes[name] = list(shape)
         return name
 
     def const_int(self, value: int) -> str:
-        name = self._next("int")
+        name = self._const_name("int")
         self._program.add_int_const(name, [int(value)], True)
         return name
 
@@ -726,7 +795,7 @@ class Builder:
         than inline (a reference fp16 package contains no fp16 immediate
         values at all), so this follows it there.
         """
-        name = self._next("float")
+        name = self._const_name("float")
         if not self._half:
             self._program.add_float_const(name, [float(value)], True)
             return name
@@ -757,7 +826,7 @@ class Builder:
         str
             Name of the constant.
         """
-        name = self._next("f32n")
+        name = self._const_name("f32n")
         self._program.add_float_const_shaped(name, [float(v) for v in values], shape)
         self.shapes[name] = list(shape)
         return name
@@ -782,12 +851,12 @@ class Builder:
         str
             Name of the constant.
         """
-        name = self._next("f32")
+        name = self._const_name("f32")
         self._program.add_float_const(name, [float(value)], True)
         return name
 
     def const_str(self, value: str) -> str:
-        name = self._next("str")
+        name = self._const_name("str")
         self._program.add_string_const(name, value)
         return name
 
@@ -811,7 +880,7 @@ class Builder:
             Name of the constant.
         """
         payload = tensor.half() if self._half else tensor
-        name = self._next("blobconst")
+        name = self._const_name("blobconst")
         offset = self._blob.append_tensor(_unwrap(payload), self._body_blob)
         shape = [int(d) for d in tensor.shape]
         self._program.add_blob_const(name, (self._body_mil, shape), offset)
@@ -898,7 +967,7 @@ class Builder:
         return names
 
     def const_bool(self, value: bool) -> str:
-        name = self._next("bool")
+        name = self._const_name("bool")
         self._program.add_bool_const(name, bool(value))
         return name
 
@@ -1714,6 +1783,10 @@ def build_package(
     builder.varying = varying
     builder.shapes.update(weight_shapes)
     builder.shapes.update(builder_shapes_state)
+    # Weights are constants whichever way they were stored — plain, int8,
+    # palettized or sparse. Emitters that must bind a constant ask here.
+    for weight_name in weight_shapes:
+        builder.mark_const(weight_name)
     if image_input is not None and len(inputs) != 1:
         raise ValueError(
             f"lucid.coreml: image_input needs a single-input model, and this one "

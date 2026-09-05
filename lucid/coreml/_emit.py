@@ -374,10 +374,39 @@ for _name in ("avg_pool1d", "avg_pool2d", "avg_pool3d"):
 
 @_emitter("linear")
 def _linear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    bindings: Bindings = [("x", ins[0]), ("weight", ins[1])]
-    if len(ins) > 2:
-        bindings.append(("bias", ins[2]))
-    return "linear", bindings
+    """``x @ weight.T + bias``, as one operation where Core ML allows it.
+
+    MIL's ``linear`` takes its weight and bias as constants only, and
+    says so at parse time rather than at emission: a model that computes
+    either of them — DETR builds a decoder bias from its query embedding
+    — produces a package that loads nowhere, with ``Param 'bias' must be
+    const`` and an internal value name to go on.
+
+    So the fused operation is used when both operands really are
+    constants, and otherwise the same arithmetic goes out as a transposed
+    ``matmul`` and an ``add``. Two operations instead of one, only for
+    the models that need it.
+    """
+    const_operands = all(b.is_const(name) for name in ins[1:])
+    if const_operands:
+        bindings: Bindings = [("x", ins[0]), ("weight", ins[1])]
+        if len(ins) > 2:
+            bindings.append(("bias", ins[2]))
+        return "linear", bindings
+
+    product = b.emit(
+        "matmul",
+        [
+            ("x", ins[0]),
+            ("y", ins[1]),
+            ("transpose_x", b.const_bool(False)),
+            ("transpose_y", b.const_bool(True)),
+        ],
+        b.result_shape(op),
+    )
+    if len(ins) == 2:
+        return "identity", [("x", product)]
+    return "add", [("x", product), ("y", ins[2])]
 
 
 @_emitter("batch_norm_eval")
@@ -397,6 +426,7 @@ def _batch_norm_eval(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 _BINARY_MIL = {
     "add": "add",
     "div": "real_div",
+    "equal": "equal",
     "greater": "greater",
     "greater_equal": "greater_equal",
     "less": "less",
@@ -511,6 +541,87 @@ def _leaky_relu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 def _softmax(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     axis = _as_int(_attr(op, "dim"))
     return "softmax", [("x", ins[0]), ("axis", b.const_int(axis))]
+
+
+def _arg_reduce(b: Builder, op: TracedOp, ins: list[str], mil_type: str) -> EmitResult:
+    """Index of the extreme value along one axis.
+
+    Lucid allows ``dim=None``, meaning "over every element", which MIL's
+    reduction cannot express — it always takes an axis. Flattening first
+    turns that case into the ordinary one, and the flat index is what
+    ``dim=None`` is defined to return anyway.
+    """
+    attrs = op.attrs
+    raw_axis = attrs.get("axis", attrs.get("dim"))
+    keep = bool(attrs.get("keepdim", False))
+    source = ins[0]
+    if raw_axis is None:
+        source = b.emit(
+            "reshape",
+            [("x", source), ("shape", b.const_ints([-1]))],
+            [-1],
+        )
+        axis = 0
+    else:
+        axis = _as_int(raw_axis)
+    return mil_type, [
+        ("x", source),
+        ("axis", b.const_int(axis)),
+        ("keep_dims", b.const_bool(keep)),
+    ]
+
+
+@_emitter("argmax")
+def _argmax(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return _arg_reduce(b, op, ins, "reduce_argmax")
+
+
+@_emitter("argmin")
+def _argmin(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return _arg_reduce(b, op, ins, "reduce_argmin")
+
+
+@_emitter("one_hot")
+def _one_hot(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Indices to a basis vector each.
+
+    The vector length comes from the traced result rather than from the
+    attribute: Lucid's ``num_classes=-1`` means "as many as the largest
+    index needs", which is a value the host worked out and the graph has
+    no way to recompute.
+    """
+    size = b.result_shape(op)[-1]
+    # Core ML requires the two fill values to carry the result's own
+    # dtype, and refuses at parse time otherwise. Lucid's ``one_hot``
+    # answers in the index type unless a caller casts it, so the choice
+    # follows the trace rather than assuming floats.
+    floating = b.result_is_float(op)
+    on = b.const_float(1.0) if floating else b.const_int(1)
+    off = b.const_float(0.0) if floating else b.const_int(0)
+    return "one_hot", [
+        ("indices", ins[0]),
+        ("one_hot_vector_size", b.const_int(int(size))),
+        ("axis", b.const_int(-1)),
+        ("on_value", on),
+        ("off_value", off),
+    ]
+
+
+@_emitter("cumsum")
+def _cumsum(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Running sum along one axis.
+
+    MIL takes ``exclusive`` and ``reverse`` as well; Lucid's op is the
+    inclusive forward direction, so both go out false rather than being
+    left to whatever the runtime defaults to.
+    """
+    axis = _as_int(_attr(op, "axis"))
+    return "cumsum", [
+        ("x", ins[0]),
+        ("axis", b.const_int(axis)),
+        ("exclusive", b.const_bool(False)),
+        ("reverse", b.const_bool(False)),
+    ]
 
 
 @_emitter("matmul")
@@ -715,6 +826,13 @@ def _embedding(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     pass, and an exported graph has none.
     """
     table, indices = ins[0], ins[1]
+    # This opset's ``gather`` takes int32 indices and smaller, and refuses
+    # int64 at parse time rather than converting. A token id that arrives
+    # as a model input is already narrowed on the way in, but one the
+    # graph computes — DiT builds its timestep embedding's indices — is
+    # not, so the narrowing happens here. Casting int32 to int32 is a
+    # no-op the compiler drops.
+    indices = b.narrow_to_int32(indices)
     return "gather", [
         ("x", table),
         ("indices", indices),
@@ -1190,6 +1308,44 @@ def _pad(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         ("mode", b.const_str("constant")),
         ("constant_val", b.const_float(_as_float(_attr(op, "constant")))),
     ]
+
+
+def _triangle(b: Builder, op: TracedOp, ins: list[str], lower: bool) -> EmitResult:
+    """Keep one triangle of the trailing two axes, zero the other.
+
+    MIL has ``band_part``, but its bounds are "negative means unbounded",
+    so it cannot say *strictly* upper — and ``triu(x, 1)`` is how a
+    causal mask is built, which makes the unexpressible case the common
+    one. The mask depends only on the shape and the offset, both known
+    while tracing, so it goes out as a constant and the operation is a
+    multiply.
+    """
+    import lucid
+
+    from lucid.coreml._build import UnsupportedOp
+
+    if not b.result_is_float(op):
+        raise UnsupportedOp(
+            f"{op.name}: Core ML has no dtype-preserving triangle for a "
+            "non-float tensor — cast to float before masking"
+        )
+    shape = b.shape_of(ins[0])
+    if len(shape) < 2:
+        raise UnsupportedOp(f"{op.name}: needs at least two axes, got {shape}")
+    offset = _as_int(_attr(op, "k"))
+    ones = lucid.ones(*shape[-2:])
+    mask = lucid.tril(ones, offset) if lower else lucid.triu(ones, offset)
+    return "mul", [("x", ins[0]), ("y", b.const_from_tensor(mask))]
+
+
+@_emitter("tril")
+def _tril(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return _triangle(b, op, ins, lower=True)
+
+
+@_emitter("triu")
+def _triu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    return _triangle(b, op, ins, lower=False)
 
 
 @_emitter("masked_fill")
