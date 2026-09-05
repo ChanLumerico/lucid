@@ -80,6 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - refuse a sampling forward instead of freezing its draw
 
+- float16 keeps its integers, and the plan says why it matters
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

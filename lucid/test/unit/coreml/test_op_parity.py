@@ -317,6 +317,164 @@ class TestRankSixIsStagedRatherThanRefused:
             cml.export(_Tall().eval(), lucid.randn(2, 12), f"{tmp_path}/tall.mlpackage")
 
 
+class TestHalfPrecisionKeepsItsIntegers:
+    """A float16 body must not drag the integer values with it.
+
+    Two places assumed every value was a float. The driver brackets a
+    float16 program with casts so callers still hand over and receive
+    float32 — but it cast *every* output, including an integer one, and
+    Core ML refuses a cast whose named type is not its output's. And
+    ``astype`` named the type the model asked for rather than the type
+    the program declares, which differ in a float16 body for a cast to
+    float32. VQ-VAE has both: it casts around its codebook and returns
+    the codebook indices.
+
+    Neither failed on the float32 path, which is the one the tests ran.
+    """
+
+    def test_an_integer_output_survives_a_float16_export(
+        self, tmp_path: object
+    ) -> None:
+        class _Indices(nn.Module):
+            def forward(self, x: lucid.Tensor) -> tuple[lucid.Tensor, lucid.Tensor]:
+                return x * 2.0, lucid.argmax(x, dim=1)
+
+        lucid.manual_seed(0)
+        model = _Indices().eval()
+        x = lucid.randn(2, 6)
+        exported = cml.export(
+            model,
+            x,
+            f"{tmp_path}/ints.mlpackage",
+            precision=cml.Precision.FLOAT16,
+        )
+        try:
+            got = exported.predict(x)
+            values = got if isinstance(got, dict) else {exported.output_names[0]: got}
+            indices = values[exported.output_names[1]]
+            assert "int" in str(indices.dtype)
+            want = lucid.argmax(x, dim=1)
+            assert indices.to(lucid.int64).tolist() == want.tolist()
+        finally:
+            exported.close()
+
+    def test_a_cast_to_float32_inside_a_float16_body(self, tmp_path: object) -> None:
+        """The model asks for float32; the program is float16.
+
+        Emitting the requested type produces "Specified dtype of cast
+        does not match that of output tensor" — the declared type is
+        what the rest of the program agrees with.
+        """
+
+        class _Casts(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return (x.to(lucid.float32) * 3.0).to(lucid.float32) + x
+
+        lucid.manual_seed(0)
+        model = _Casts().eval()
+        x = lucid.randn(2, 6)
+        exported = cml.export(
+            model,
+            x,
+            f"{tmp_path}/casts.mlpackage",
+            precision=cml.Precision.FLOAT16,
+        )
+        try:
+            assert exported.verify(model, x, relative=True) < 1e-2
+        finally:
+            exported.close()
+
+
+class TestWhereTheWorkActuallyGoes:
+    """A package that exports perfectly can still run nowhere useful.
+
+    The Neural Engine is a float16 device. A program left at the default
+    float32 therefore lands entirely on the CPU however the compute
+    units were asked for — measured on a ResNet-18: 66 of 66 operations
+    on the CPU at float32, 66 of 68 on the Neural Engine at float16.
+    Core ML reports no problem either way, and the accelerator is the
+    whole reason this subsystem exists.
+
+    So the plan says why, where somebody is already asking where the
+    work went.
+    """
+
+    def test_float32_lands_on_the_cpu_and_says_so(self, tmp_path: object) -> None:
+        lucid.manual_seed(0)
+        model = nn.Sequential(nn.Conv2d(3, 8, 3, padding=1), nn.ReLU()).eval()
+        x = lucid.randn(1, 3, 32, 32)
+
+        exported = cml.export(
+            model,
+            x,
+            f"{tmp_path}/f32.mlpackage",
+            compute_units=cml.ComputeUnits.CPU_AND_NE,
+        )
+        try:
+            plan = exported.compute_plan()
+            if plan.total_compute == 0:
+                pytest.skip("this macOS reports no compute plan")
+            assert plan.ane_fraction == 0.0
+            assert "float32" in plan.note
+            assert "FLOAT16" in plan.note
+        finally:
+            exported.close()
+
+    def test_float16_reaches_the_neural_engine_and_stays_quiet(
+        self, tmp_path: object
+    ) -> None:
+        lucid.manual_seed(0)
+        # Big enough that Core ML's planner bothers to dispatch: a
+        # two-operation model stays on the CPU at any precision, which is
+        # the planner's choice rather than an answer about float16.
+        model = nn.Sequential(
+            *[
+                layer
+                for _ in range(8)
+                for layer in (nn.Conv2d(64, 64, 3, padding=1), nn.ReLU())
+            ]
+        ).eval()
+        x = lucid.randn(1, 64, 32, 32)
+
+        exported = cml.export(
+            model,
+            x,
+            f"{tmp_path}/f16.mlpackage",
+            compute_units=cml.ComputeUnits.CPU_AND_NE,
+            precision=cml.Precision.FLOAT16,
+        )
+        try:
+            plan = exported.compute_plan()
+            if plan.total_compute == 0:
+                pytest.skip("this macOS reports no compute plan")
+            assert plan.ane_fraction > 0.0
+            assert plan.note == ""
+        finally:
+            exported.close()
+
+    def test_a_cpu_only_request_is_not_second_guessed(self, tmp_path: object) -> None:
+        """The note is for a request that did not take, not for one honoured.
+
+        Somebody who asked for the CPU got the CPU, and telling them how
+        to reach the Neural Engine would be answering a question they
+        did not ask.
+        """
+        lucid.manual_seed(0)
+        model = nn.Sequential(nn.Conv2d(3, 8, 3, padding=1), nn.ReLU()).eval()
+        x = lucid.randn(1, 3, 32, 32)
+
+        exported = cml.export(
+            model,
+            x,
+            f"{tmp_path}/cpu.mlpackage",
+            compute_units=cml.ComputeUnits.CPU_ONLY,
+        )
+        try:
+            assert exported.compute_plan().note == ""
+        finally:
+            exported.close()
+
+
 class TestAnEmptyConstantIsRefused:
     """A shape the trace could not know, named as such.
 

@@ -890,9 +890,20 @@ def _embedding(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 @_emitter("astype")
 def _astype(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    name = str(op.outputs[0].dtype).split(".")[-1]
-    target = _CAST_TARGETS.get(name)
+    """A cast to the type the result is declared as.
+
+    The trace says what the model asked for; the driver says what the
+    program will hold. In a float16 export those differ for a cast to
+    float32 — float intermediates follow the body — and Core ML refuses
+    a ``cast`` whose named type is not its output's. The declared type
+    wins, because it is the one the rest of the program agrees with.
+    """
+    target = b.result_cast_spelling(op)
     if target is None:
+        name = str(op.outputs[0].dtype).split(".")[-1]
+        target = _CAST_TARGETS.get(name)
+    if target is None:
+        name = str(op.outputs[0].dtype).split(".")[-1]
         raise NotImplementedError(f"lucid.coreml: no Core ML cast target for {name}")
     return "cast", [("x", ins[0]), ("dtype", b.const_str(target))]
 

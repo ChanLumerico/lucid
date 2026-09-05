@@ -405,6 +405,7 @@ _MIL_CAST_NAMES = {
     _C_engine.coreml.DTYPE_FLOAT16: "fp16",
     _C_engine.coreml.DTYPE_FLOAT32: "fp32",
     _C_engine.coreml.DTYPE_INT32: "int32",
+    _C_engine.coreml.DTYPE_BOOL: "bool",
 }
 
 
@@ -846,6 +847,30 @@ class Builder:
                 )
             )
         return agreed
+
+    def result_cast_spelling(self, op: TracedOp, index: int = 0) -> str | None:
+        """MIL's name for the type a result is *declared* as.
+
+        Not the type the trace asked for. A float16 program declares
+        every float intermediate as float16, so a model that casts to
+        float32 in the middle — VQ-VAE does, around its codebook — has a
+        ``cast`` whose requested type and whose declared output type
+        disagree, and Core ML refuses the package with "Specified dtype
+        of cast does not match that of output tensor".
+
+        Parameters
+        ----------
+        op : TracedOp
+            Operation whose result to name.
+        index : int, optional, default=0
+            Which result.
+
+        Returns
+        -------
+        str or None
+            MIL's spelling, or ``None`` for a type ``cast`` cannot name.
+        """
+        return _MIL_CAST_NAMES.get(self.result_mil_dtype(op, index))
 
     def narrow_to_int32(self, name: str) -> str:
         """The same value as int32, for an operand that takes nothing wider.
@@ -2228,7 +2253,12 @@ def build_package(
             _spec.mil_dtype(tensor.dtype),
             _flex([int(d) for d in tensor.shape], varying.get(tid)),
         )
-        if half:
+        # Only a float output needs bracketing back to fp32, and the
+        # guard has to be here as well as on the input side: casting an
+        # integer output — VQ-VAE returns its codebook indices — asks
+        # Core ML for a cast whose named type is not the output's, and
+        # the package will not parse.
+        if half and tensor.dtype in (lucid.float32, lucid.float16):
             mil_type, raw = emit_cast(builder, value, "fp32")
             program.add_op(mil_type, _operands(raw), field, flexible_type)
             value = field
