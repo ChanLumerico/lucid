@@ -885,6 +885,12 @@
       "module": "lucid.coreml._model"
     }
   ],
+  "lucid.coreml._spec.DeploymentTarget": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    }
+  ],
   "lucid.coreml._spec.ImageInput": [
     {
       "kind": "module",
@@ -909,6 +915,12 @@
       "module": "lucid.coreml._build"
     }
   ],
+  "lucid.coreml._spec.Palettize": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    }
+  ],
   "lucid.coreml._spec.Precision": [
     {
       "kind": "module",
@@ -917,6 +929,12 @@
     {
       "kind": "module",
       "module": "lucid.coreml._build"
+    }
+  ],
+  "lucid.coreml._spec.Sparsify": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
     }
   ],
   "lucid.coreml._spec.State": [
