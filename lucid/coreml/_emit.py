@@ -440,11 +440,24 @@ _BINARY_MIL = {
 }
 
 
+#: Binary operations whose result is boolean. Their operands have to
+#: agree with each other rather than with the result — casting them to
+#: ``bool`` to match the output would compare two truth values.
+_COMPARISONS = frozenset(
+    {"equal", "not_equal", "greater", "greater_equal", "less", "less_equal"}
+)
+
+
 def _register_binary(lucid_name: str, mil_name: str) -> None:
     """Bind one Lucid binary op to the MIL op of the same meaning."""
 
     def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-        return mil_name, [("x", ins[0]), ("y", ins[1])]
+        # Core ML does not promote, and says so only when the package is
+        # parsed. Lucid does, so a traced graph reaches here with mixed
+        # operands as a matter of course.
+        target = None if lucid_name in _COMPARISONS else b.result_mil_dtype(op)
+        x, y = b.agree_on_dtype([ins[0], ins[1]], target)
+        return mil_name, [("x", x), ("y", y)]
 
     EMITTERS[lucid_name] = emit
 

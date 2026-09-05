@@ -212,6 +212,111 @@ def test_a_structural_op_matches(
     _check(fn, x, tmp_path)
 
 
+class TestCoreMLDoesNotPromote:
+    """Lucid promotes mixed operands; Core ML refuses them.
+
+    And it refuses at *parse* time, naming an internal value and saying
+    only that ``x``, ``y`` and the output must share a type — which is
+    several steps from the operation that mixed them. CLIP builds its
+    position indices this way and could not be exported at all.
+
+    The cast goes to the result's declared type, not to a promotion
+    guessed from the operands: ``int64 * 3`` declares an integer result,
+    and promoting its operands to float instead produces float operands
+    feeding an int output — the same refusal, one step later.
+    """
+
+    @pytest.mark.parametrize(
+        ("name", "fn"),
+        [
+            (
+                "int-times-scalar",
+                lambda x: (lucid.arange(x.shape[-1]).to(lucid.int64) * 3).to(
+                    lucid.float32
+                )
+                + x,
+            ),
+            (
+                "float-times-int-tensor",
+                lambda x: x * lucid.arange(x.shape[-1]).to(lucid.float32),
+            ),
+            (
+                "int-compared-to-scalar",
+                lambda x: (lucid.arange(x.shape[-1]).to(lucid.int64) > 1).to(
+                    lucid.float32
+                )
+                + x,
+            ),
+            (
+                "float-compared-to-float",
+                lambda x: (x > lucid.arange(x.shape[-1]).to(lucid.float32)).to(
+                    lucid.float32
+                ),
+            ),
+        ],
+        ids=["int-scalar", "float-int", "int-compare", "float-compare"],
+    )
+    def test_a_mixed_operand_pair_is_reconciled(
+        self, name: str, fn: object, tmp_path: object
+    ) -> None:
+        lucid.manual_seed(0)
+        _check(fn, lucid.randn(2, 6), tmp_path)
+
+
+class TestRankSixIsStagedRatherThanRefused:
+    """Upsampling by stuffing zeros wants rank 6 for two axes at once.
+
+    Splitting each axis into ``(d, 1)``, padding the new axis to
+    ``(d, 2)`` and merging back is how a diffusion decoder doubles its
+    resolution before a convolution. Doing both spatial axes together
+    needs six axes, and Core ML programs stop at five.
+
+    One axis at a time leaves the rank where it started, so the same
+    arithmetic goes out in three operations per axis instead of being
+    refused. The check is against eager, since a wrong staging would
+    still produce a tensor of the right shape.
+    """
+
+    def test_a_zero_stuffing_upsample_exports(self, tmp_path: object) -> None:
+        class _Upsample(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                n, c, h, w = (int(d) for d in x.shape)
+                wide = x.reshape(n, c, h, 1, w, 1)
+                wide = lucid.pad(wide, (0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0))
+                return wide.reshape(n, c, h * 2, w * 2)
+
+        lucid.manual_seed(0)
+        model = _Upsample().eval()
+        x = lucid.randn(1, 3, 4, 4)
+        reference = model(x)
+
+        exported = cml.export(model, x, f"{tmp_path}/stuff.mlpackage")
+        try:
+            got = exported.predict(x)
+            assert tuple(got.shape) == tuple(reference.shape)
+            scale = max(float(reference.abs().max().item()), 1e-9)
+            assert float((got - reference).abs().max().item()) / scale < 1e-6
+        finally:
+            exported.close()
+
+    def test_a_rank_six_tensor_nothing_stages_is_still_refused(
+        self, tmp_path: object
+    ) -> None:
+        """The cap is a format limit, and saying so beats a parse error.
+
+        A rank-6 value that is read for real — not consumed by a pattern
+        that can be staged — has no Core ML spelling. Refusing it by name
+        is what keeps the failure near the operation that caused it.
+        """
+
+        class _Tall(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return x.reshape(1, 1, 2, 1, 3, 4) * 2.0
+
+        with pytest.raises(Exception, match="rank"):
+            cml.export(_Tall().eval(), lucid.randn(2, 12), f"{tmp_path}/tall.mlpackage")
+
+
 class TestTheOutputBufferIsReadCorrectly:
     """Core ML does not always hand back a packed array.
 

@@ -360,6 +360,16 @@ def _flatten_bools(tensor: Tensor) -> list[bool]:
 # the reference tooling uses, stated here rather than inherited.
 _QUANTIZE_MIN_ELEMENTS = 2048
 
+#: MIL's spelling of each element type, for the ``cast`` operation's
+#: string parameter. Only the types a promotion can land on: casting a
+#: bool or a string is a different question, and an emitter that reaches
+#: one leaves the operand alone rather than inventing an answer.
+_MIL_CAST_NAMES = {
+    _C_engine.coreml.DTYPE_FLOAT16: "fp16",
+    _C_engine.coreml.DTYPE_FLOAT32: "fp32",
+    _C_engine.coreml.DTYPE_INT32: "int32",
+}
+
 
 def _quantize_weight(
     tensor: Tensor, scale_mil: int
@@ -661,6 +671,11 @@ class Builder:
         # Values that are constants.  Core ML rejects a computed operand
         # where it wants a constant, so emitters check before binding.
         self.consts: set[str] = set()
+        # Value name -> MIL element type. Core ML does not promote: an
+        # elementwise operation whose two operands differ in dtype is
+        # refused when the package is parsed, naming an internal value
+        # and nothing else. Recorded so an emitter can insert the cast.
+        self.dtypes: dict[str, int] = {}
         # Traced value id -> the axes a flexible export leaves open, so an
         # emitter that writes a shape into a constant can leave them open
         # too rather than baking the default.
@@ -710,6 +725,90 @@ class Builder:
         """
         out = op.outputs[index]
         return _spec.trace_dtype(str(out.dtype).split(".")[-1], self._body_mil)
+
+    def dtype_of(self, name: str) -> int | None:
+        """MIL element type of a value, when the builder recorded one.
+
+        ``None`` for a value nothing declared — an emitter should leave
+        such an operand alone rather than guess at a cast.
+
+        Parameters
+        ----------
+        name : str
+            Value to look up.
+
+        Returns
+        -------
+        int or None
+            MIL element-type number, or ``None`` if unrecorded.
+        """
+        return self.dtypes.get(name)
+
+    def agree_on_dtype(self, names: list[str], target: int | None = None) -> list[str]:
+        """The same values, cast so an elementwise operation accepts them.
+
+        Core ML does not promote. ``mul`` of an int32 by a float32
+        constant is refused when the package is parsed — with an
+        internal value name and no indication of which operand is
+        wrong — where Lucid promoted and moved on. CLIP builds its
+        position indices that way.
+
+        Pass the operation's declared result type as ``target``: an
+        arithmetic operation must have operands of the type its output
+        was declared as, and guessing a promotion instead is how an
+        ``int64 * 3`` ends up with float operands feeding an int32
+        result. Leave ``target`` out for a comparison, whose result is
+        boolean and whose operands only have to match each other.
+
+        Values whose type was never recorded are left alone: an unforced
+        cast can be as wrong as a missing one.
+
+        Parameters
+        ----------
+        names : list of str
+            Operands of one elementwise operation.
+        target : int or None, optional, default=None
+            MIL element type to cast to. ``None`` promotes among the
+            operands, with the float side winning.
+
+        Returns
+        -------
+        list of str
+            The operands, some possibly replaced by a cast of themselves.
+        """
+        kinds = {
+            kind for kind in (self.dtype_of(name) for name in names) if kind is not None
+        }
+        if len(kinds) < 2 and (target is None or kinds <= {target}):
+            return names
+        if target is None:
+            floats = {
+                _C_engine.coreml.DTYPE_FLOAT16,
+                _C_engine.coreml.DTYPE_FLOAT32,
+            }
+            settled = self._body_mil if kinds & floats else max(kinds)
+        else:
+            settled = target
+        spelling = _MIL_CAST_NAMES.get(settled)
+        if spelling is None:
+            return names
+        agreed = []
+        for name in names:
+            kind = self.dtype_of(name)
+            if kind is None or kind == settled:
+                agreed.append(name)
+                continue
+            agreed.append(
+                self.emit(
+                    "cast",
+                    [("x", name), ("dtype", self.const_str(spelling))],
+                    # A scalar constant has no recorded shape, and none
+                    # is the right answer for it.
+                    self.shapes.get(name, []),
+                    dtype=settled,
+                )
+            )
+        return agreed
 
     def narrow_to_int32(self, name: str) -> str:
         """The same value as int32, for an operand that takes nothing wider.
@@ -769,6 +868,7 @@ class Builder:
 
     def const_ints(self, values: list[int]) -> str:
         name = self._const_name("ints")
+        self.dtypes[name] = _C_engine.coreml.DTYPE_INT32
         self._program.add_int_const(name, [int(v) for v in values], False)
         return name
 
@@ -794,10 +894,12 @@ class Builder:
         name = self._const_name("intsn")
         self._program.add_int_const_shaped(name, [int(v) for v in values], shape)
         self.shapes[name] = list(shape)
+        self.dtypes[name] = _C_engine.coreml.DTYPE_INT32
         return name
 
     def const_int(self, value: int) -> str:
         name = self._const_name("int")
+        self.dtypes[name] = _C_engine.coreml.DTYPE_INT32
         self._program.add_int_const(name, [int(value)], True)
         return name
 
@@ -812,6 +914,7 @@ class Builder:
         values at all), so this follows it there.
         """
         name = self._const_name("float")
+        self.dtypes[name] = _C_engine.coreml.DTYPE_FLOAT32
         if not self._half:
             self._program.add_float_const(name, [float(value)], True)
             return name
@@ -845,6 +948,7 @@ class Builder:
         name = self._const_name("f32n")
         self._program.add_float_const_shaped(name, [float(v) for v in values], shape)
         self.shapes[name] = list(shape)
+        self.dtypes[name] = _C_engine.coreml.DTYPE_FLOAT32
         return name
 
     def const_float32(self, value: float) -> str:
@@ -868,6 +972,7 @@ class Builder:
             Name of the constant.
         """
         name = self._const_name("f32")
+        self.dtypes[name] = _C_engine.coreml.DTYPE_FLOAT32
         self._program.add_float_const(name, [float(value)], True)
         return name
 
@@ -901,6 +1006,7 @@ class Builder:
         shape = [int(d) for d in tensor.shape]
         self._program.add_blob_const(name, (self._body_mil, shape), offset)
         self.shapes[name] = shape
+        self.dtypes[name] = self._body_mil
         return name
 
     def emit(
@@ -945,6 +1051,7 @@ class Builder:
             (self._body_mil if dtype is None else dtype, list(shape)),
         )
         self.shapes[name] = list(shape)
+        self.dtypes[name] = self._body_mil if dtype is None else int(dtype)
         return name
 
     def emit_multi(
@@ -1006,6 +1113,157 @@ class _WindowRewrite(NamedTuple):
     out_shape: list[int]
     out_id: int
     absorbs: tuple[int, ...]
+
+
+@dataclasses.dataclass(frozen=True)
+class _StuffRewrite:
+    """A ``reshape`` / ``pad`` / ``reshape`` that stuffs zeros between elements.
+
+    Upsampling before a convolution is often written by splitting each
+    axis into ``(d, 1)``, padding the new axis out to ``(d, k)`` with
+    zeros, and merging back to ``d * k`` — every element followed by
+    ``k - 1`` zeros. Doing two axes at once needs rank 6, which Core ML
+    does not have.
+    """
+
+    source_shape: list[int]
+    factors: list[int]
+    fill: float
+    out_shape: list[int]
+    out_id: int
+    absorbs: tuple[int, ...]
+
+
+def _stuff_rewrites(graph: Any) -> dict[int, _StuffRewrite]:
+    """Find the zero-stuffing upsamples that can be staged under the cap.
+
+    Matched on shape rather than on the model: the tall tensor has to be
+    the source with singleton axes interleaved, the pad has to add only
+    at the end of exactly those axes, and the result has to merge each
+    pair back. Anything else keeps its rank and is refused as before.
+    """
+    producer: dict[int, Any] = {}
+    readers: dict[int, list[Any]] = {}
+    for op in graph.ops:
+        for out in op.outputs:
+            producer[out.id] = op
+        for iid in op.inputs:
+            readers.setdefault(iid, []).append(op)
+
+    found: dict[int, _StuffRewrite] = {}
+    for op in graph.ops:
+        if op.name != "reshape" or len(op.outputs) != 1:
+            continue
+        tall = op.outputs[0]
+        if len(tall.shape) <= _MAX_RANK:
+            continue
+        mid_readers = readers.get(tall.id, [])
+        if len(mid_readers) != 1:
+            continue
+        pad_op = mid_readers[0]
+        if pad_op.name != "pad" or len(pad_op.outputs) != 1:
+            continue
+        padded = pad_op.outputs[0]
+        down_readers = readers.get(padded.id, [])
+        if len(down_readers) != 1:
+            continue
+        down = down_readers[0]
+        if down.name != "reshape" or len(down.outputs) != 1:
+            continue
+        if len(down.outputs[0].shape) > _MAX_RANK:
+            continue
+
+        tall_shape = [int(d) for d in tall.shape]
+        pads = [int(v) for v in (pad_op.attrs.get("pads") or [])]
+        if len(pads) != 2 * len(tall_shape):
+            continue
+
+        # Only singleton axes may grow, and only at their far end: that
+        # is what makes the pad an interleave rather than a border.
+        widths: dict[int, int] = {}
+        rejected = False
+        for axis, extent in enumerate(tall_shape):
+            before, after = pads[2 * axis], pads[2 * axis + 1]
+            if before != 0 or (after != 0 and extent != 1):
+                rejected = True
+                break
+            if after:
+                widths[axis] = after + 1
+        if rejected or not widths:
+            continue
+
+        # The source is the tall shape without those singletons — read
+        # off the shapes rather than from the producing operation, which
+        # does not exist when the reshape reads a model input.
+        source_shape = [d for i, d in enumerate(tall_shape) if i not in widths]
+        factors = [1] * len(source_shape)
+        walk = -1
+        for axis, extent in enumerate(tall_shape):
+            if axis in widths:
+                if walk < 0:
+                    rejected = True
+                    break
+                factors[walk] = widths[axis]
+            else:
+                walk += 1
+        if rejected:
+            continue
+
+        out_shape = [int(d) for d in down.outputs[0].shape]
+        if [d * f for d, f in zip(source_shape, factors)] != out_shape:
+            continue
+
+        found[tall.id] = _StuffRewrite(
+            source_shape=source_shape,
+            factors=factors,
+            fill=float(pad_op.attrs.get("constant", 0.0)),
+            out_shape=out_shape,
+            out_id=down.outputs[0].id,
+            absorbs=(padded.id, down.outputs[0].id),
+        )
+    return found
+
+
+def _stage_zero_stuff(builder: Any, source: str, plan: _StuffRewrite) -> str:
+    """Stuff one axis at a time, so no stage exceeds the rank cap.
+
+    Splitting every axis at once is what needed rank 6. Splitting one
+    axis, padding it and merging it back leaves the rank where it
+    started, so a rank-4 tensor never passes rank 5 however many axes
+    are upsampled.
+    """
+    current = list(plan.source_shape)
+    value = source
+    for axis, factor in enumerate(plan.factors):
+        if factor <= 1:
+            continue
+        split = current[:axis] + [current[axis], 1] + current[axis + 1 :]
+        value = builder.emit(
+            "reshape",
+            [("x", value), ("shape", builder.const_ints(split))],
+            split,
+        )
+        pads = [0] * (2 * len(split))
+        pads[2 * (axis + 1) + 1] = factor - 1
+        widened = list(split)
+        widened[axis + 1] = factor
+        value = builder.emit(
+            "pad",
+            [
+                ("x", value),
+                ("pad", builder.const_ints(pads)),
+                ("mode", builder.const_str("constant")),
+                ("constant_val", builder.const_float(plan.fill)),
+            ],
+            widened,
+        )
+        current[axis] *= factor
+        value = builder.emit(
+            "reshape",
+            [("x", value), ("shape", builder.const_ints(current))],
+            list(current),
+        )
+    return value
 
 
 def _window_rewrites(graph: Any) -> dict[int, _WindowRewrite]:
@@ -1786,10 +2044,12 @@ def build_package(
     # produces an opaque parse failure from the compiler several steps away
     # from the operation that built the tensor.
     rewrites = _window_rewrites(graph)
+    stuffing = _stuff_rewrites(graph)
     absorbed = {oid for r in rewrites.values() for oid in r.absorbs}
+    absorbed |= {oid for r in stuffing.values() for oid in r.absorbs}
     for op in graph.ops:
         head = int(op.outputs[0].id) if op.outputs else -1
-        if head in rewrites or head in absorbed:
+        if head in rewrites or head in stuffing or head in absorbed:
             continue
         for out in op.outputs:
             if len(out.shape) > _MAX_RANK:
@@ -1803,6 +2063,7 @@ def build_package(
     # palettized or sparse. Emitters that must bind a constant ask here.
     for weight_name in weight_shapes:
         builder.mark_const(weight_name)
+        builder.dtypes[weight_name] = body_mil
     if image_input is not None and len(inputs) != 1:
         raise ValueError(
             f"lucid.coreml: image_input needs a single-input model, and this one "
@@ -1811,6 +2072,7 @@ def build_package(
     for name, tid, tensor in plain_inputs:
         shape = [int(d) for d in tensor.shape]
         builder.shapes[name] = shape
+        builder.dtypes[name] = _spec.mil_dtype(tensor.dtype)
         source = name
         if image_input is not None:
             source = _declare_image(program, builder, name, shape, image_input)
@@ -1846,6 +2108,10 @@ def build_package(
         plan = rewrites.get(head)
         if plan is not None:
             names[plan.out_id] = _stage_permutation(builder, names[op.inputs[0]], plan)
+            continue
+        stuff = stuffing.get(head)
+        if stuff is not None:
+            names[stuff.out_id] = _stage_zero_stuff(builder, names[op.inputs[0]], stuff)
             continue
         emitter = EMITTERS.get(op.name)
         if emitter is None:
@@ -1884,9 +2150,10 @@ def build_package(
             program.add_op_multi(mil_type, bindings, produced)
         else:
             program.add_op(mil_type, bindings, produced[0][0], produced[0][1])
-        for (out_name, (_dt, shape)), o in zip(produced, op.outputs):
+        for (out_name, (out_dtype, shape)), o in zip(produced, op.outputs):
             names[o.id] = out_name
             builder.shapes[out_name] = shape
+            builder.dtypes[out_name] = out_dtype
 
     if into is None:
         blob.finalize()
@@ -1978,3 +2245,12 @@ def build_package(
         "program": program,
         "path": paths.root,
     }
+
+
+# Bound at runtime, not only for type checking: PEP 649 evaluates a
+# function's annotations in its own module globals when something asks
+# for them, so a name that exists under ``TYPE_CHECKING`` alone makes
+# ``inspect.signature`` raise NameError — which is what help(), an IDE
+# and the docs build all call.
+from lucid._tensor.tensor import Tensor  # noqa: E402,F811
+from lucid.nn.module import Module  # noqa: E402,F811

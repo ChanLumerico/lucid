@@ -110,6 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - say when a result was computed on the host, and export bert
 - palettization and sparsity, and the compute unit they need
 - export the families the exclusion list said it could not
+- reconcile mixed dtypes, and stage the rank-6 upsample
 
 ---
 

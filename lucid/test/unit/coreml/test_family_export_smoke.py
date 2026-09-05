@@ -119,6 +119,16 @@ MULTI_INPUT = [
             lucid.zeros(1, 16).to(lucid.int64),
         ),
     ),
+    # Pixels beside token ids, and a mixed-dtype multiply Core ML will
+    # not promote — the export inserts the cast now.
+    (
+        "clip_vit_base_16",
+        lambda: (lucid.randn(1, 3, 224, 224), lucid.zeros(1, 77).to(lucid.int64)),
+    ),
+    # Upsamples by splitting an axis, padding zeros into it and merging
+    # back, which wants rank 6 for two axes at once. Staged one axis at a
+    # time so no step passes the cap.
+    ("rectified_flow_afhq_cat", lambda: (lucid.randn(1, 3, 256, 256), lucid.zeros(1))),
 ]
 
 #: Families this file does not reach, and why. Listed rather than
@@ -154,14 +164,6 @@ NOT_SINGLE_IMAGE = {
     "hvae",
     "score",
     "vae",
-    # Two inputs of different kinds (pixels beside token ids), and a
-    # mixed-dtype multiply Core ML will not promote. Reachable, but not
-    # yet.
-    "clip",
-    # Reshapes to rank 6, past Core ML's rank-5 program limit, in its
-    # patch rearrangement. The staging that fixed window partition
-    # applies here too and has not been done.
-    "rectified",
     # A step function over latents and actions whose input specification
     # is a rollout, not a tensor: covering these needs an agreed shape
     # for observations and actions first.
