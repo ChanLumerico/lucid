@@ -360,10 +360,47 @@ def _flatten_bools(tensor: Tensor) -> list[bool]:
 # the reference tooling uses, stated here rather than inherited.
 _QUANTIZE_MIN_ELEMENTS = 2048
 
+
 #: MIL's spelling of each element type, for the ``cast`` operation's
 #: string parameter. Only the types a promotion can land on: casting a
 #: bool or a string is a different question, and an emitter that reaches
 #: one leaves the operand alone rather than inventing an answer.
+def _refuse_if_empty(tensor: Tensor) -> None:
+    """Stop on a constant with no elements, and say where it came from.
+
+    An empty constant is not a weight a model happens to leave blank; it
+    is a shape the trace could not know. A two-stage detector sizes its
+    region features by how many proposals survived, and on an untrained
+    model with random input that is often none — so the package would be
+    built around this one run's answer and give it for every input.
+
+    The blob writer refuses it too, with "the tensor has no host
+    storage", which is true and says nothing about why.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Constant about to be written.
+
+    Raises
+    ------
+    UnsupportedOp
+        When the tensor has no elements.
+    """
+    if int(tensor.numel()) != 0:
+        return
+    raise UnsupportedOp(
+        "a constant with no elements",
+        f"the traced graph contains an empty tensor of shape "
+        f"{tuple(int(d) for d in tensor.shape)}. That shape came from the "
+        "example input rather than from the model — a region proposal count, "
+        "a non-maximum suppression result — so the package would be built "
+        "around this run's answer and give it for every input. Export the "
+        "part of the model whose shapes are fixed, and keep the "
+        "data-dependent stage in the caller",
+    )
+
+
 _MIL_CAST_NAMES = {
     _C_engine.coreml.DTYPE_FLOAT16: "fp16",
     _C_engine.coreml.DTYPE_FLOAT32: "fp32",
@@ -1000,6 +1037,7 @@ class Builder:
         str
             Name of the constant.
         """
+        _refuse_if_empty(tensor)
         payload = tensor.half() if self._half else tensor
         name = self._const_name("blobconst")
         offset = self._blob.append_tensor(_unwrap(payload), self._body_blob)
@@ -1944,6 +1982,7 @@ def build_package(
         if tid in input_ids:
             continue
         tensor = _wrap(impl)
+        _refuse_if_empty(tensor)
         is_float = tensor.dtype in (lucid.float32, lucid.float16)
         if half and is_float:
             tensor = tensor.half()

@@ -317,6 +317,36 @@ class TestRankSixIsStagedRatherThanRefused:
             cml.export(_Tall().eval(), lucid.randn(2, 12), f"{tmp_path}/tall.mlpackage")
 
 
+class TestAnEmptyConstantIsRefused:
+    """A shape the trace could not know, named as such.
+
+    Fast R-CNN's region features are sized by how many proposals
+    survived, which on an untrained model with random input is often
+    none — so the graph holds a constant of shape ``(0, 512, 7, 7)`` and
+    the package, if written, would answer "no proposals" for every input.
+
+    The blob writer already refused it, with "the tensor has no host
+    storage": true, and no help at all in working out that the model's
+    shapes depend on its data. The refusal now says which shape and
+    where it came from.
+    """
+
+    def test_an_empty_constant_says_where_the_shape_came_from(
+        self, tmp_path: object
+    ) -> None:
+        class _Empty(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                # A constant with no elements, of the shape a proposal
+                # stage produces when nothing survives.
+                nothing = lucid.zeros(0, int(x.shape[-1]))
+                return lucid.concat([x, nothing], dim=0)
+
+        with pytest.raises(Exception, match="empty tensor"):
+            cml.export(
+                _Empty().eval(), lucid.randn(2, 4), f"{tmp_path}/empty.mlpackage"
+            )
+
+
 class TestTheOutputBufferIsReadCorrectly:
     """Core ML does not always hand back a packed array.
 

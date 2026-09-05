@@ -80,6 +80,12 @@ MULTI_OUTPUT = [
     ("detr_resnet101", (1, 3, 224, 224)),
     ("vqvae", (1, 3, 64, 64)),
     ("nice_cifar", (1, 3072)),
+    # Segmentation and detection heads that were excluded with the
+    # two-stage detectors and are not two-stage: one pass, no proposals.
+    ("maskformer_resnet101", (1, 3, 224, 224)),
+    # Smaller than its native 512: the translation is what is under
+    # test, and the suite has to fit in memory beside everything else.
+    ("efficientdet_d0", (1, 3, 256, 256)),
 ]
 
 #: Families whose input is token indices rather than pixels.
@@ -146,16 +152,28 @@ NOT_SINGLE_IMAGE = {
     # ``mask``, the same as ``mask_rcnn``'s. Crude on purpose — the point
     # is that nothing drops out of sight, not that the taxonomy is exact.
     #
-    # Two-stage detectors: the proposal stage is data dependent, and the
-    # models are large enough that a representative here would dominate
-    # the suite's runtime. ``detr`` and ``yolo`` are covered above — one
-    # stage, and their non-maximum suppression is post-processing the
-    # caller runs, not part of ``forward``.
+    # Two-stage detectors, each measured rather than assumed. ``detr``
+    # and ``yolo`` are covered above — one stage, and their non-maximum
+    # suppression is post-processing the caller runs, not part of
+    # ``forward``.
+    #
+    # ``fast_rcnn`` traces to a graph holding an empty constant: its
+    # region features are sized by how many proposals survived, which on
+    # an untrained model with random input is none. The export refuses
+    # it by name rather than writing a package built around that.
     "fast",
+    # ``faster_rcnn`` and ``mask_rcnn`` do not finish tracing — over four
+    # minutes on this input, in a proposal loop driven from Python.
     "faster",
+    # Keys, not factory names: ``mask`` covers ``mask_rcnn`` and
+    # ``mask2former_swin_base``. The second computes on a rank-6 tensor
+    # rather than passing through one — a deformable-attention sampling
+    # grid over (batch, queries, heads, levels, points, xy), with
+    # elementwise arithmetic along the way. The two staging patterns
+    # rewrite a rank-6 value that is only reshaped and permuted; this one
+    # is genuinely six-dimensional while being computed on.
     "mask",
-    "maskformer",
-    "efficientdet",
+    # ``rcnn`` never reaches its input from ``forward`` at all.
     "rcnn",
     # Draws random numbers inside ``forward``: a variational encoder
     # samples its latent, so the traced graph is one draw and there is
