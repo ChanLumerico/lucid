@@ -246,6 +246,43 @@ class TestWhatIsLeftAlone:
             cml.Sparsify(ratio=ratio)
 
 
+class TestAStochasticForwardIsRefused:
+    """Sampling inside ``forward`` is a boundary, not a missing emitter.
+
+    MIL has ``random_normal`` and emitting it produces a package that
+    loads and runs — and returns the same numbers on every call, from a
+    fresh load, and from a second export made under a different seed.
+    Its inputs are all constants, so the compiler folds it and the
+    sample is drawn once at build time. That is a deterministic model
+    wearing a sampler's shape.
+
+    The refusal is what this test protects: an emitter added later
+    without measuring the fold would turn a clear error into a
+    variational encoder whose latent never moves.
+    """
+
+    def test_a_model_that_samples_says_what_is_wrong(self, tmp_path: object) -> None:
+        class _Sampler(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return x + lucid.randn(2, 3)
+
+        with pytest.raises(NotImplementedError, match="one fixed sample"):
+            cml.export(_Sampler().eval(), lucid.zeros(2, 3), f"{tmp_path}/s.mlpackage")
+
+    def test_an_unmapped_op_still_reads_as_a_gap(self) -> None:
+        """The other message has to stay the other message.
+
+        A refusal with a reason and an operation nobody has mapped want
+        opposite things from the reader: one says do not do this, the
+        other says here is where to add it.
+        """
+        from lucid.coreml._build import UnsupportedOp
+
+        assert "no Core ML translation" in str(UnsupportedOp("nonesuch"))
+        assert "_emit.py" in str(UnsupportedOp("nonesuch"))
+        assert "_emit.py" not in str(UnsupportedOp("nonesuch", "because measured"))
+
+
 class TestPalettizedModelsAvoidTheGpu:
     """The defect this file exists for.
 

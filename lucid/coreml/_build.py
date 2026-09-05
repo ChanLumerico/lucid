@@ -82,20 +82,36 @@ class UnsupportedRank(NotImplementedError):
 
 
 class UnsupportedOp(NotImplementedError):
-    """A traced op has no MIL translation.
+    """A traced op has no MIL translation, or a refused one.
 
     Named rather than generic because the alternative failure — emitting
     a package that quietly lacks a layer — produces a model that loads
     and returns plausible numbers.
+
+    Parameters
+    ----------
+    op_name : str
+        Lucid operation that could not be emitted.
+    reason : str or None, optional, default=None
+        Why, when the answer is something other than "nobody has written
+        the emitter yet". An operation Core ML translates *badly* — one
+        whose package would load and be wrong — is refused deliberately,
+        and pointing the reader at ``_emit.py`` to add a mapping would
+        send them to write the very thing that was rejected.
     """
 
-    def __init__(self, op_name: str) -> None:
+    def __init__(self, op_name: str, reason: str | None = None) -> None:
         super().__init__(
-            f"lucid.coreml: no Core ML translation for Lucid op {op_name!r}. "
-            f"Mapped ops: {', '.join(sorted(EMITTERS))}. Add an emitter in "
-            f"lucid/coreml/_emit.py."
+            f"lucid.coreml: {op_name} — {reason}"
+            if reason is not None
+            else (
+                f"lucid.coreml: no Core ML translation for Lucid op "
+                f"{op_name!r}. Mapped ops: {', '.join(sorted(EMITTERS))}. "
+                f"Add an emitter in lucid/coreml/_emit.py."
+            )
         )
         self.op_name = op_name
+        self.reason = reason
 
 
 def _select_outputs(output: object, field: str | None) -> list[tuple[str, Tensor]]:

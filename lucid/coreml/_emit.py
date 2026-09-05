@@ -581,6 +581,38 @@ def _argmin(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return _arg_reduce(b, op, ins, "reduce_argmin")
 
 
+@_emitter("randn")
+def _randn(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Refused, with the reason measured rather than assumed.
+
+    A model that samples inside ``forward`` — a variational encoder
+    drawing its latent — has no single answer to export, so the question
+    is what Core ML would do with the draw. MIL has ``random_normal``,
+    and emitting it produces a package that loads and runs. It also
+    returns the same numbers on every call, from a fresh load, and from
+    a second export made under a different seed: the operation's inputs
+    are all constants, so the compiler folds it and the sample is drawn
+    once, at build time.
+
+    That is a deterministic model wearing a sampler's shape, and it is
+    the failure this subsystem works hardest to avoid — no error, no
+    fallback, plausible numbers, and the same ones forever. Better to
+    refuse and say so than to hand over a variational encoder whose
+    latent never moves.
+    """
+    from lucid.coreml._build import UnsupportedOp
+
+    raise UnsupportedOp(
+        "randn",
+        "this model draws random numbers inside forward, and Core ML folds "
+        "the draw at build time — the package would return one fixed sample "
+        "on every call, for the life of the file. Export a deterministic "
+        "path instead (a variational encoder's mean rather than a sample "
+        "from it), or keep the sampling in the caller and export the network "
+        "it wraps",
+    )
+
+
 @_emitter("one_hot")
 def _one_hot(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     """Indices to a basis vector each.

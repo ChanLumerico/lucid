@@ -78,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a third of the public callables had no readable signature
 
+- refuse a sampling forward instead of freezing its draw
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them
