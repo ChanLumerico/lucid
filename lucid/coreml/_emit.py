@@ -494,8 +494,17 @@ def _dropout(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "identity", [("x", ins[0])]
 
 
-def _out_shape(op: TracedOp) -> list[int]:
-    return [int(d) for d in op.outputs[0].shape]
+def _out_shape(op: TracedOp, b: Builder | None = None) -> list[int]:
+    """The recorded output shape, minus a leading axis the driver drops.
+
+    ``squeeze``, ``unsqueeze`` and ``contiguous`` all become a reshape to
+    this, so following the driver here is what lets a value computed at
+    rank 6 be emitted a rank lower without any of them being told.
+    """
+    shape = [int(d) for d in op.outputs[0].shape]
+    if b is not None and b.result_thinned(op):
+        return shape[1:]
+    return shape
 
 
 # ── shape ops ────────────────────────────────────────────────────────
@@ -508,12 +517,12 @@ def _out_shape(op: TracedOp) -> list[int]:
 
 @_emitter("squeeze")
 def _squeeze(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op)))]
+    return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op, b)))]
 
 
 @_emitter("unsqueeze")
 def _unsqueeze(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
-    return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op)))]
+    return "reshape", [("x", ins[0]), ("shape", b.const_ints(_out_shape(op, b)))]
 
 
 @_emitter("permute")
@@ -728,6 +737,12 @@ def _split_at(b: Builder, op: TracedOp, ins: list[str]) -> MultiOutput:
     """
     axis = _as_int(op.attrs["axis"])
     sizes = [int(o.shape[axis]) for o in op.outputs]
+    # The operand may be emitted a rank lower than the trace records —
+    # see ``_unit_axis_rewrites`` — in which case every axis after the
+    # dropped one has moved down by one. The sizes are read from the
+    # trace's shapes and do not move.
+    if b.leading_axis_dropped(ins[0]):
+        axis -= 1
     return MultiOutput(
         "split",
         [
@@ -1050,7 +1065,7 @@ def _conv_transpose2d(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         *(
             []
             if -1 in b.result_shape(op)
-            else [("output_shape", b.const_ints(_out_shape(op)))]
+            else [("output_shape", b.const_ints(_out_shape(op, b)))]
         ),
     ]
     return "conv_transpose", bindings
@@ -1630,7 +1645,7 @@ def _diagonal(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
         ],
         gathered,
     )
-    return "reshape", [("x", taken), ("shape", b.const_ints(_out_shape(op)))]
+    return "reshape", [("x", taken), ("shape", b.const_ints(_out_shape(op, b)))]
 
 
 @_emitter("meshgrid")
@@ -1643,15 +1658,21 @@ def _meshgrid(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
     """
     grid = [int(d) for d in op.outputs[0].shape]
     if len(ins) != len(grid):
-        # The tracer wires only the last operand of this op (measured
-        # 2026-09-03: two 1-D inputs, one recorded). Reconstructing the
-        # grid from what is there would put the wrong values in it, which
-        # is worse than not exporting.
         from lucid.coreml._build import UnsupportedOp
 
-        raise UnsupportedOp("meshgrid")
+        raise UnsupportedOp(
+            "meshgrid",
+            f"the trace recorded {len(ins)} operand(s) for a {len(grid)}-"
+            "dimensional grid. Reconstructing the missing ones would put "
+            "the wrong values in the grid, which is worse than not exporting",
+        )
+    # ``indexing="xy"`` swaps which axis the first two inputs vary along,
+    # and the output shapes only show it when those inputs have different
+    # lengths — so the trace carries it.
+    swapped = bool(_as_int(op.attrs.get("indexing_xy", 0))) and len(ins) >= 2
     produced: list[str] = []
-    for axis, source in enumerate(ins):
+    for index, source in enumerate(ins):
+        axis = (1 - index) if swapped and index < 2 else index
         spread = [1] * len(grid)
         spread[axis] = grid[axis]
         laid = b.emit(

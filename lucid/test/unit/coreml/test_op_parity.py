@@ -776,28 +776,59 @@ class TestTheOperationsMilDoesNotHave:
         )
 
 
-class TestOperationsTheTraceCannotCarry:
-    """Refused by name, because the trace does not hold their operands.
+class TestMeshgridCarriesAllOfItsOperands:
+    """It used to record one input however many it was given.
 
-    Not a Core ML limit: `lucid.compile` reads the same trace. Emitting
-    from what is recorded would produce a package that runs and answers
-    with the wrong values.
+    ``meshgrid`` wires each output for autograd against its own single
+    input, and the tracer takes the last write — so the node ended up
+    with one operand for a two-dimensional grid, and the emitter refused
+    rather than reconstruct the missing one and put wrong values in it.
+    The op records the full list now.
+
+    Which axis each input varies along is the whole difference between
+    the two indexings, and the output shapes reveal it only when the
+    inputs have different lengths — so the trace carries that too. The
+    square case is here because it is the one shapes cannot answer.
     """
 
-    def test_meshgrid_names_itself(self, tmp_path: object) -> None:
+    @pytest.mark.parametrize("indexing", ["ij", "xy"])
+    @pytest.mark.parametrize("square", [False, True], ids=["oblong", "square"])
+    def test_both_indexings_match(
+        self, indexing: str, square: bool, tmp_path: object
+    ) -> None:
         import lucid.nn as nn
+
+        second = 3 if square else 4
 
         class UsesMeshgrid(nn.Module):
             def forward(self, x: lucid.Tensor) -> lucid.Tensor:
-                return lucid.meshgrid(x.reshape(-1)[:3], x.reshape(-1)[:4])[0]
+                rows = lucid.arange(3).to(lucid.float32)
+                columns = lucid.arange(second).to(lucid.float32) * 100.0
+                first, last = lucid.meshgrid(rows, columns, indexing=indexing)
+                return (first + last) * x.sum()
 
-        with pytest.raises(cml.UnsupportedOp) as excinfo:
-            cml.export(
-                UsesMeshgrid().eval(),
-                lucid.randn(1, 12),
-                f"{tmp_path}/meshgrid.mlpackage",
-            )
-        assert excinfo.value.op_name == "meshgrid"
+        model = UsesMeshgrid().eval()
+        x = lucid.randn(2, 2)
+        exported = cml.export(
+            model, x, f"{tmp_path}/mesh_{indexing}_{second}.mlpackage"
+        )
+        try:
+            assert exported.verify(model, x, relative=True) < 1e-5
+        finally:
+            exported.close()
+
+    def test_a_grid_the_trace_cannot_describe_is_still_refused(self) -> None:
+        """The refusal stays, for a trace that really is short of operands.
+
+        Reconstructing a missing input would put the wrong values in the
+        grid, which is worse than not exporting — so the emitter says how
+        many it got and how many the grid needs.
+        """
+        from lucid.coreml._build import UnsupportedOp
+
+        message = str(UnsupportedOp("meshgrid", "the trace recorded 1 operand(s)"))
+        assert "meshgrid" in message
+        assert "_emit.py" not in message
 
 
 class TestTheSamplingGridIsTheOneTheModelAsked:

@@ -709,6 +709,13 @@ class Builder:
         # Values that are constants.  Core ML rejects a computed operand
         # where it wants a constant, so emitters check before binding.
         self.consts: set[str] = set()
+        # Values emitted one rank lower than the trace records, because
+        # their leading axis is one and Core ML stops at rank five. Keyed
+        # by MIL value name so an emitter can ask about its operand.
+        self.unit_axis_dropped: set[str] = set()
+        # The same set keyed by traced value id, for an emitter asking
+        # about its own result rather than about an operand.
+        self.thinned: set[int] = set()
         # Value name -> MIL element type. Core ML does not promote: an
         # elementwise operation whose two operands differ in dtype is
         # refused when the package is parsed, naming an internal value
@@ -739,7 +746,13 @@ class Builder:
             The shape, with ``-1`` where the export is flexible.
         """
         out = op.outputs[index]
-        return _flex([int(d) for d in out.shape], self.varying.get(out.id))
+        shape = [int(d) for d in out.shape]
+        # A value the driver emits a rank lower loses its leading axis
+        # here too, or an emitter that writes the shape into a constant
+        # would ask for the rank Core ML refused.
+        if int(out.id) in self.thinned:
+            shape = shape[1:]
+        return _flex(shape, self.varying.get(out.id))
 
     def result_mil_dtype(self, op: TracedOp, index: int = 0) -> int:
         """MIL element type the driver will declare for a result.
@@ -763,6 +776,43 @@ class Builder:
         """
         out = op.outputs[index]
         return _spec.trace_dtype(str(out.dtype).split(".")[-1], self._body_mil)
+
+    def result_thinned(self, op: TracedOp, index: int = 0) -> bool:
+        """Whether a result is emitted without its leading axis.
+
+        Parameters
+        ----------
+        op : TracedOp
+            Operation whose result to ask about.
+        index : int, optional, default=0
+            Which result.
+
+        Returns
+        -------
+        bool
+            True when the driver drops the leading axis of this result.
+        """
+        return int(op.outputs[index].id) in self.thinned
+
+    def leading_axis_dropped(self, name: str) -> bool:
+        """Whether this value is a rank lower than the trace recorded.
+
+        An operation that names an axis has to move it when its operand
+        lost the leading one. Everything else — arithmetic, and the shape
+        operations that reshape to their recorded output — adapts by
+        itself.
+
+        Parameters
+        ----------
+        name : str
+            Value to ask about.
+
+        Returns
+        -------
+        bool
+            True when the leading axis was dropped.
+        """
+        return name in self.unit_axis_dropped
 
     def dtype_of(self, name: str) -> int | None:
         """MIL element type of a value, when the builder recorded one.
@@ -1327,6 +1377,68 @@ def _stage_zero_stuff(builder: Any, source: str, plan: _StuffRewrite) -> str:
             list(current),
         )
     return value
+
+
+#: Operations that a leading axis of one can be taken away from without
+#: changing what they compute. Elementwise arithmetic follows its
+#: operands; the shape operations here are emitted as a reshape to their
+#: recorded output, so they adapt on their own; ``split_at`` needs its
+#: axis moved and knows to ask.
+_UNIT_AXIS_SAFE = frozenset(
+    {
+        "add",
+        "div",
+        "mul",
+        "sub",
+        "maximum",
+        "minimum",
+        "pow",
+        "reshape",
+        "squeeze",
+        "unsqueeze",
+        "split_at",
+    }
+)
+
+
+def _unit_axis_rewrites(graph: Any, handled: set[int]) -> set[int]:
+    """Rank-6 values that can be emitted without their leading axis.
+
+    The two staging rewrites erase a rank-6 value that is only reshaped
+    and permuted. Deformable attention does something they cannot touch:
+    it *computes* at rank 6, over (batch, queries, heads, levels, points,
+    xy), with ordinary arithmetic between the reshapes. Mask2Former is
+    built out of it.
+
+    Every one of those values carries a batch axis of one, and dropping
+    an axis of one from every operand of an elementwise operation leaves
+    the result unchanged — broadcasting sees the same shapes with the
+    same trailing alignment. So the whole connected set is emitted a
+    rank lower, and the operations that leave it reshape to their
+    recorded output anyway, which restores the axis without being asked.
+
+    Refuses unless the whole set qualifies: a single value that does not
+    have the leading one, or a single operation outside the safe list,
+    and none of it is rewritten. A partial rewrite would put a rank-5
+    value where the rest of the graph expects rank 6.
+    """
+    tall: set[int] = set()
+    for op in graph.ops:
+        for out in op.outputs:
+            if len(out.shape) > _MAX_RANK and out.id not in handled:
+                if int(out.shape[0]) != 1:
+                    return set()
+                tall.add(out.id)
+    if not tall:
+        return set()
+
+    for op in graph.ops:
+        touches = any(o.id in tall for o in op.outputs) or any(
+            i in tall for i in op.inputs
+        )
+        if touches and op.name not in _UNIT_AXIS_SAFE:
+            return set()
+    return tall
 
 
 def _window_rewrites(graph: Any) -> dict[int, _WindowRewrite]:
@@ -2111,16 +2223,22 @@ def build_package(
     stuffing = _stuff_rewrites(graph)
     absorbed = {oid for r in rewrites.values() for oid in r.absorbs}
     absorbed |= {oid for r in stuffing.values() for oid in r.absorbs}
+    # A third shape past the cap: values that are computed on at rank 6
+    # rather than passed through it. Emitted a rank lower — see
+    # ``_unit_axis_rewrites`` — so they never exist at rank 6 either.
+    thinned = _unit_axis_rewrites(graph, set(rewrites) | set(stuffing) | absorbed)
+    _pending_thinned = thinned
     for op in graph.ops:
         head = int(op.outputs[0].id) if op.outputs else -1
         if head in rewrites or head in stuffing or head in absorbed:
             continue
         for out in op.outputs:
-            if len(out.shape) > _MAX_RANK:
+            if len(out.shape) > _MAX_RANK and out.id not in thinned:
                 raise UnsupportedRank(op.name, tuple(int(d) for d in out.shape))
 
     builder = Builder(program, blob, body_mil, body_blob, half)
     builder.varying = varying
+    builder.thinned = set(_pending_thinned)
     builder.shapes.update(weight_shapes)
     builder.shapes.update(builder_shapes_state)
     # Weights are constants whichever way they were stored — plain, int8,
@@ -2205,7 +2323,14 @@ def build_package(
                 wanted_name.get(o.id, f"_v{o.id}_{op.name}"),
                 (
                     _spec.trace_dtype(str(o.dtype).split(".")[-1], body_mil),
-                    _flex([int(d) for d in o.shape], varying.get(o.id)),
+                    _flex(
+                        (
+                            [int(d) for d in o.shape][1:]
+                            if o.id in thinned
+                            else [int(d) for d in o.shape]
+                        ),
+                        varying.get(o.id),
+                    ),
                 ),
             )
             for o in (op.outputs if multi else op.outputs[:1])
@@ -2218,6 +2343,8 @@ def build_package(
             names[o.id] = out_name
             builder.shapes[out_name] = shape
             builder.dtypes[out_name] = out_dtype
+            if o.id in thinned:
+                builder.unit_axis_dropped.add(out_name)
 
     if into is None:
         blob.finalize()

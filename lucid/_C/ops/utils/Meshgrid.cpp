@@ -17,6 +17,7 @@
 #include "Meshgrid.h"
 
 #include "../../autograd/FuncOp.h"
+#include "../../compile/Tracer.h"
 #include "../../autograd/Helpers.h"
 #include "../../backend/Dispatcher.h"
 #include "../../core/Error.h"
@@ -106,6 +107,11 @@ std::vector<TensorImplPtr> meshgrid_op(const std::vector<TensorImplPtr>& xs, boo
     const Dtype dt = xs[0]->dtype();
     const Device device = xs[0]->device();
     OpScopeFull scope{"meshgrid", device, dt, Shape{}};
+    // Which axis each input varies along is the whole difference between
+    // the two indexings, and the output shapes only reveal it when the
+    // inputs have different lengths.  Recorded so a consumer of the
+    // trace does not have to guess.
+    scope.set_attr("indexing_xy", static_cast<std::int64_t>(indexing_xy ? 1 : 0));
     const std::size_t N = xs.size();
     std::vector<std::int64_t> dims(N);
     for (std::size_t i = 0; i < N; ++i) {
@@ -139,6 +145,15 @@ std::vector<TensorImplPtr> meshgrid_op(const std::vector<TensorImplPtr>& xs, boo
         auto out = fresh(std::move(out_storage[i]), out_shape, dt, device);
         result.push_back(attach_meshgrid_grad(xs[i], std::move(out), static_cast<int>(carry_axis)));
     }
+
+    // Each output was wired for autograd against its own single input,
+    // and ``on_op_io`` takes the last write — so the node ended up
+    // recording one input for however many it was given, and a consumer
+    // could not tell which. Recorded once more here with the full list:
+    // a non-empty input list replaces the node's inputs, and naming an
+    // output that is already registered only re-confirms its id.
+    if (auto* trc = ::lucid::compile::current_tracer(); trc && !result.empty())
+        trc->on_op_io(xs, result[0]);
     return result;
 }
 

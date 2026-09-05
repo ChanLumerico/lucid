@@ -86,6 +86,10 @@ MULTI_OUTPUT = [
     # Smaller than its native 512: the translation is what is under
     # test, and the suite has to fit in memory beside everything else.
     ("efficientdet_d0", (1, 3, 256, 256)),
+    # Deformable attention computes at rank 6; the driver emits that
+    # component a rank lower, since every value in it carries a batch
+    # axis of one.
+    ("mask2former_swin_base", (1, 3, 224, 224)),
 ]
 
 #: Families whose input is token indices rather than pixels.
@@ -163,16 +167,16 @@ NOT_SINGLE_IMAGE = {
     # it by name rather than writing a package built around that.
     "fast",
     # ``faster_rcnn`` and ``mask_rcnn`` do not finish tracing — over four
-    # minutes on this input, in a proposal loop driven from Python.
+    # minutes on this input. Their eager forward returns in seconds; it
+    # is the recording that does not scale, because non-maximum
+    # suppression is a Python loop over thousands of small indexing
+    # operations and every one of them becomes a traced node. A graph
+    # built from it would be that one input's suppression unrolled.
+    #
+    # ``mask_rcnn`` is the same story, but its family key is ``mask``,
+    # which ``mask2former_swin_base`` covers above — so it does not
+    # appear here and this comment is the only record of it.
     "faster",
-    # Keys, not factory names: ``mask`` covers ``mask_rcnn`` and
-    # ``mask2former_swin_base``. The second computes on a rank-6 tensor
-    # rather than passing through one — a deformable-attention sampling
-    # grid over (batch, queries, heads, levels, points, xy), with
-    # elementwise arithmetic along the way. The two staging patterns
-    # rewrite a rank-6 value that is only reshaped and permuted; this one
-    # is genuinely six-dimensional while being computed on.
-    "mask",
     # ``rcnn`` never reaches its input from ``forward`` at all.
     "rcnn",
     # Draws random numbers inside ``forward``: a variational encoder

@@ -115,6 +115,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - reconcile mixed dtypes, and stage the rank-6 upsample
 - two more detector families, and an honest empty-constant refusal
 
+- export the rank-6 attention, and record meshgrid's operands
+
 ### Performance
 
 - stop emitting an operation for `contiguous`
