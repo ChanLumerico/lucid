@@ -3,7 +3,7 @@
   "name": "coreml",
   "path": "lucid.coreml",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/__init__.py#L1",
   "members": [
     {
       "name": "ShapeNotFlexible",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "ShapeNotFlexible(op_name: str, detail: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_build.py#L1742",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_build.py#L2019",
       "subcategory": "build",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(op_name: str, detail: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_build.py#L1752",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_build.py#L2029",
           "subcategory": "build",
           "summary": null,
           "extended": null,
@@ -62,7 +62,7 @@
       ],
       "labels": [],
       "signature": "StatefulModel(names: list[str])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_build.py#L1761",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_build.py#L2038",
       "subcategory": "build",
       "methods": [
         {
@@ -71,7 +71,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(names: list[str])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_build.py#L1774",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_build.py#L2051",
           "subcategory": "build",
           "summary": null,
           "extended": null,
@@ -109,7 +109,7 @@
       ],
       "labels": [],
       "signature": "UnsupportedOp(op_name: str, reason: str | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_build.py#L84",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_build.py#L84",
       "subcategory": "build",
       "methods": [
         {
@@ -118,7 +118,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(op_name: str, reason: str | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_build.py#L103",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_build.py#L103",
           "subcategory": "build",
           "summary": null,
           "extended": null,
@@ -169,7 +169,7 @@
       ],
       "labels": [],
       "signature": "UnsupportedRank(op_name: str, shape: tuple[int, ...])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_build.py#L64",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_build.py#L64",
       "subcategory": "build",
       "methods": [
         {
@@ -178,7 +178,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(op_name: str, shape: tuple[int, ...])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_build.py#L74",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_build.py#L74",
           "subcategory": "build",
           "summary": null,
           "extended": null,
@@ -213,8 +213,8 @@
       "class_kind": "regular",
       "bases": [],
       "labels": [],
-      "signature": "CoreMLModel(path: str, input_names: list[str], output_names: list[str], compute_units: ComputeUnits = ComputeUnits.ALL, precision: str = 'FLOAT32', output_shapes: dict[str, tuple[int, ...]] | None = None, image_input: ImageInput | None = None, classifier: Classifier | None = None, function_name: str = '', deployment_target: object = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L170",
+      "signature": "CoreMLModel(path: str, input_names: list[str], output_names: list[str], compute_units: ComputeUnits = ComputeUnits.ALL, precision: str = 'FLOAT32', output_shapes: dict[str, tuple[int, ...]] | None = None, image_input: ImageInput | None = None, classifier: Classifier | None = None, function_name: str = '', deployment_target: object = None, noise: list[tuple[str, tuple[int, ...], str, Tensor | None]] | None = None, traced_outputs: dict[str, Tensor] | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L202",
       "subcategory": "model",
       "methods": [
         {
@@ -222,8 +222,8 @@
           "path": "lucid.coreml._model.CoreMLModel.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(path: str, input_names: list[str], output_names: list[str], compute_units: ComputeUnits = ComputeUnits.ALL, precision: str = 'FLOAT32', output_shapes: dict[str, tuple[int, ...]] | None = None, image_input: ImageInput | None = None, classifier: Classifier | None = None, function_name: str = '', deployment_target: object = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L179",
+          "signature": "__init__(path: str, input_names: list[str], output_names: list[str], compute_units: ComputeUnits = ComputeUnits.ALL, precision: str = 'FLOAT32', output_shapes: dict[str, tuple[int, ...]] | None = None, image_input: ImageInput | None = None, classifier: Classifier | None = None, function_name: str = '', deployment_target: object = None, noise: list[tuple[str, tuple[int, ...], str, Tensor | None]] | None = None, traced_outputs: dict[str, Tensor] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L211",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -247,7 +247,7 @@
             "property"
           ],
           "signature": "carries_state: bool",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L269",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L365",
           "summary": "Whether the package keeps values between predictions.",
           "extended": null,
           "parameters": [],
@@ -268,7 +268,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset_state()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L273",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L369",
           "subcategory": "model",
           "summary": "Forget everything the package has accumulated.",
           "extended": "A state persists across predictions by design, so starting a fresh\nsequence has to be asked for; there is no other way back to the\nvalue it began at.",
@@ -295,7 +295,7 @@
           "kind": "function",
           "labels": [],
           "signature": "classify(x: object)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L292",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L388",
           "subcategory": "model",
           "summary": "Run a classifier package and read back what it names.",
           "extended": null,
@@ -329,7 +329,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict(x: object)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L323",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L419",
           "subcategory": "model",
           "summary": "Run the model.",
           "extended": "Inputs must be host tensors: Core ML reads host memory, and moving\na Metal tensor here would hide a copy the caller did not ask for.\nMove it explicitly with `.to(\"cpu\")`.",
@@ -358,7 +358,7 @@
           "kind": "function",
           "labels": [],
           "signature": "verify(model: Module, x: object, relative: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L359",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L455",
           "subcategory": "model",
           "summary": "Largest difference against the eager model.",
           "extended": "Shapes agreeing is not evidence: a package missing a layer has\nthe right shape and returns plausible numbers. This runs both and\ncompares values — every output, not just the first, since a\ndetector that exported its class scores and dropped its boxes\nwould otherwise pass.\n\nThe default is an **absolute** difference, which is only\ninterpretable against outputs of a known size. A model whose\noutputs differ in magnitude makes that trap easy to fall into:\nRealNVP returns a latent of order 1 beside a log-probability of\norder 1e4, so the absolute worst is set by the second, and\ndividing it by the first reads as a 4% error when every output\nagrees to 1e-6.\n\n`relative=True` scales each output's difference by that\noutput's own magnitude — but only down to one, which is the\nother half of the same trap: VQ-VAE's latent has values around\n2e-3, and dividing float32 noise by that reads as 3e-4 when the\ndifference is 5e-7. Dividing by `max(scale, 1)` is relative\nwhere relative means something and absolute where it does not,\nwhich is the same bargain a tolerance pair makes.",
@@ -396,12 +396,58 @@
           "see_also": []
         },
         {
+          "name": "benchmark",
+          "path": "lucid.coreml._model.CoreMLModel.benchmark",
+          "kind": "function",
+          "labels": [],
+          "signature": "benchmark(x: object, repeats: int = 30, warmup: int = 5)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L655",
+          "subcategory": "model",
+          "summary": "How long one prediction takes, measured the way it should be.",
+          "extended": "The first calls are not the model: Core ML defers work to them —\nspecialising for the units it was given, laying out weights the\naccelerator wants — and a timing that includes them reports the\nsetup. Hence a warmup that is thrown away, and a median over\nrepeats rather than a mean, since a scheduling hiccup on a shared\nmachine moves a mean and not a median.\n\nMeasured on an M1 Pro with a ResNet-18 at 224 square: 18.6 ms\neager, 4.5 ms as a float32 package on the CPU, 2.7 ms at float16\non the CPU, and 1.5 ms with the Neural Engine allowed — so the\naccelerator is worth about 12x against eager and 3x against the\nsame package on the CPU. Those are this machine's numbers and\nwill not be yours, which is why this exists rather than a\ndocumented figure.",
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor or tuple of Tensor or dict of str to Tensor",
+              "description": "Input to run, in the shape the package was built for.",
+              "default": null
+            },
+            {
+              "name": "repeats",
+              "annotation": "(int, optional, keyword - only)",
+              "description": "Timed calls.",
+              "default": "30"
+            },
+            {
+              "name": "warmup",
+              "annotation": "(int, optional, keyword - only)",
+              "description": "Calls made and discarded first.",
+              "default": "5"
+            }
+          ],
+          "returns": {
+            "annotation": "Latency",
+            "description": "Median and best of the timed calls, in milliseconds."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "When `repeats` is not positive."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
           "name": "compute_plan",
           "path": "lucid.coreml._model.CoreMLModel.compute_plan",
           "kind": "function",
           "labels": [],
           "signature": "compute_plan()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L505",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L715",
           "subcategory": "model",
           "summary": "Which device Core ML assigns each operation to.",
           "extended": "Requires macOS 14.4+; an empty plan there means *unknown*, not\n*unaccelerated*.",
@@ -423,7 +469,7 @@
           "kind": "function",
           "labels": [],
           "signature": "close()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L520",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L730",
           "subcategory": "model",
           "summary": "Release the compiled model and the artifacts Core ML cached.",
           "extended": null,
@@ -445,7 +491,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__repr__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L524",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L734",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -474,6 +520,53 @@
       "see_also": []
     },
     {
+      "name": "Latency",
+      "path": "lucid.coreml._model.Latency",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "NamedTuple"
+      ],
+      "labels": [],
+      "signature": "Latency()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L180",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__repr__",
+          "path": "lucid.coreml._model.Latency.__repr__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__repr__()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L194",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "str",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What one prediction costs, with the settings that produced it.",
+      "extended": "Carries the compute units and precision because a latency without\nthem says nothing: the same package is three times slower with the\naccelerator withheld, and float32 forfeits the accelerator entirely.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "PlacementSummary",
       "path": "lucid.coreml._model.PlacementSummary",
       "kind": "class",
@@ -481,7 +574,7 @@
       "bases": [],
       "labels": [],
       "signature": "PlacementSummary(placements: list[tuple[str, str]], precision: str = '', units: ComputeUnits | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L91",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L101",
       "subcategory": "model",
       "methods": [
         {
@@ -490,7 +583,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(placements: list[tuple[str, str]], precision: str = '', units: ComputeUnits | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L100",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L110",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -514,7 +607,7 @@
             "property"
           ],
           "signature": "total_compute: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L121",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L131",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -537,7 +630,7 @@
             "property"
           ],
           "signature": "ane_fraction: float",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L125",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L135",
           "summary": "Share of computation the Neural Engine takes, 0.0 to 1.0.",
           "extended": "`0.0` on a model asked to use the ANE is the signal that the\nrequest did not take — most often because the program is float32,\nwhich the Neural Engine does not run.",
           "parameters": [],
@@ -560,7 +653,7 @@
             "property"
           ],
           "signature": "note: str",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L136",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L146",
           "summary": "Why the Neural Engine took none of the work, when it took none.",
           "extended": "A float32 program cannot run on the Neural Engine at all — it is\na float16 device — so an export that keeps the default precision\nlands entirely on the CPU however the compute units were asked\nfor. Measured on a ResNet-18: 66 of 66 operations on the CPU at\nfloat32, 66 of 68 on the Neural Engine at float16.\n\nNothing about that is an error, and Core ML reports no problem,\nso the only place it can surface is here — where somebody is\nalready asking where the work went.",
           "parameters": [],
@@ -581,7 +674,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__repr__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_model.py#L160",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_model.py#L170",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -610,6 +703,165 @@
       "see_also": []
     },
     {
+      "name": "CompressionAware",
+      "path": "lucid.coreml._optimize.CompressionAware",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Module"
+      ],
+      "labels": [],
+      "signature": "CompressionAware(model: Module, weights: WeightPrecision | Palettize | Sparsify)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_optimize.py#L151",
+      "subcategory": "optimize",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.coreml._optimize.CompressionAware.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(model: Module, weights: WeightPrecision | Palettize | Sparsify)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_optimize.py#L197",
+          "subcategory": "optimize",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "covered",
+          "path": "lucid.coreml._optimize.CompressionAware.covered",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "covered: list[str]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_optimize.py#L236",
+          "summary": "Weights this is training against, in the model's own names.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[str]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "refit",
+          "path": "lucid.coreml._optimize.CompressionAware.refit",
+          "kind": "function",
+          "labels": [],
+          "signature": "refit()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_optimize.py#L240",
+          "subcategory": "optimize",
+          "summary": "Re-fit every codebook, scale or mask to the current weights.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.coreml._optimize.CompressionAware.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(args: Tensor = (), kwargs: object = {})",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_optimize.py#L257",
+          "subcategory": "optimize",
+          "summary": "Run the model with every covered weight compressed.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor | tuple[Tensor, ...]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "settle",
+          "path": "lucid.coreml._optimize.CompressionAware.settle",
+          "kind": "function",
+          "labels": [],
+          "signature": "settle()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_optimize.py#L271",
+          "subcategory": "optimize",
+          "summary": "Write the compressed values into the model and hand it back.",
+          "extended": "Until this is called the parameters are still full precision and\nonly the forward pass sees the compression; exporting then would\nfit a palette to weights that sit near one rather than on it.",
+          "parameters": [],
+          "returns": {
+            "annotation": "nn.Module",
+            "description": "The model that was passed in, with every covered weight\nreplaced by the value the compression gives it."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "A model that trains against the compression it will be exported with.",
+      "extended": "Wrap a model, fine-tune the wrapper as if it were the model, then\n`settle` and export with the same `weights` argument. The\nforward pass uses compressed weights throughout, so the loss the\noptimizer sees is the loss the package will have.",
+      "parameters": [
+        {
+          "name": "model",
+          "annotation": "nn.Module",
+          "description": "Model to fine-tune. It is used in place rather than copied — its\nparameters are what training updates — so keep a checkpoint if\nthe uncompressed weights are still wanted.",
+          "default": null
+        },
+        {
+          "name": "weights",
+          "annotation": "WeightPrecision or Palettize or Sparsify",
+          "description": "The same value the export will be given. Anything else trains\nthe model for a constraint the package will not have.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> aware = cml.CompressionAware(model, weights=cml.Palettize(bits=4))\n>>> for x, y in loader:\n...     loss = criterion(aware(x), y)\n...     loss.backward()\n...     optimizer.step()\n...     optimizer.zero_grad()\n>>> aware.refit()               # follow the weights as they move\n>>> settled = aware.settle()\n>>> cml.export(settled, x, path, weights=cml.Palettize(bits=4))"
+      ],
+      "notes": [
+        "`refit` is the caller's to schedule. The codebook is fitted once at\nconstruction and the assignment onto it is recomputed every forward,\nso a model drifts away from its palette over a long fine-tune;\nrefitting every few hundred steps follows it back. Refitting every\nstep is not better — it moves the target the model is chasing."
+      ],
+      "attributes": [
+        {
+          "name": "covered",
+          "annotation": "list of str",
+          "description": "Qualified names of the weights being compressed. Rank-one\nparameters and anything under the export's size threshold are\nabsent, because the export leaves those in floating point too."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "DeploymentTarget",
       "path": "lucid.coreml._spec.DeploymentTarget",
       "kind": "class",
@@ -619,7 +871,7 @@
       ],
       "labels": [],
       "signature": "DeploymentTarget()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L59",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L86",
       "subcategory": "spec",
       "methods": [
         {
@@ -630,7 +882,7 @@
             "property"
           ],
           "signature": "opset: str",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L91",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L118",
           "summary": "MIL opset string the program declares.",
           "extended": null,
           "parameters": [],
@@ -669,6 +921,30 @@
       "see_also": []
     },
     {
+      "name": "Draws",
+      "path": "lucid.coreml._spec.Draws",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "Enum"
+      ],
+      "labels": [],
+      "signature": "Draws()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L60",
+      "subcategory": "spec",
+      "methods": [],
+      "summary": "What to do about a model that draws random numbers in `forward`.",
+      "extended": "Core ML has no random operation. A draw whose inputs are all\nconstants — which every `randn` is — folds at build time, so a\npackage written the obvious way returns one fixed sample for the life\nof the file. A variational encoder exported that way has a latent\nthat never moves, and nothing about the package looks wrong.\n\n`REFUSED` is the default and says so rather than shipping that.\n\n`AS_INPUT` lifts each draw to an input the caller fills. The\nreparameterisation `mu + sigma * eps` becomes a function of `eps`\ninstead of a function that makes one, which is what the model always\nwas — the draw was never part of the network. Seven families in the\nzoo are exportable only this way: variational encoders, world models\nwith a stochastic latent, and score-based samplers.\n\nThe handle draws for the caller who does not, so a package still\nanswers differently on each prediction the way the eager model does.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
       "name": "Palettize",
       "path": "lucid.coreml._spec.Palettize",
       "kind": "class",
@@ -676,7 +952,7 @@
       "bases": [],
       "labels": [],
       "signature": "Palettize(bits: int = 4)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L125",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L152",
       "subcategory": "spec",
       "methods": [
         {
@@ -685,7 +961,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(bits: int = 4)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L1",
           "subcategory": "spec",
           "summary": null,
           "extended": null,
@@ -727,7 +1003,7 @@
       "bases": [],
       "labels": [],
       "signature": "Sparsify(ratio: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L166",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L193",
       "subcategory": "spec",
       "methods": [
         {
@@ -736,7 +1012,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(ratio: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L1",
           "subcategory": "spec",
           "summary": "Initialise the ReLU module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -778,7 +1054,7 @@
       "bases": [],
       "labels": [],
       "signature": "Classifier(labels: tuple[str, ...], label_name: str = 'classLabel', probabilities_name: str = 'classLabel_probs')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L241",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L268",
       "subcategory": "spec",
       "methods": [
         {
@@ -787,7 +1063,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(labels: tuple[str, ...], label_name: str = 'classLabel', probabilities_name: str = 'classLabel_probs')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L1",
           "subcategory": "spec",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -839,7 +1115,7 @@
       "bases": [],
       "labels": [],
       "signature": "State(input: str, output: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L274",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L301",
       "subcategory": "spec",
       "methods": [
         {
@@ -848,7 +1124,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(input: str, output: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L1",
           "subcategory": "spec",
           "summary": "Initialise the driver; the executable itself is lazy.",
           "extended": null,
@@ -927,7 +1203,7 @@
       ],
       "labels": [],
       "signature": "ColorSpace()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L196",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L223",
       "subcategory": "spec",
       "methods": [],
       "summary": "Pixel layout Core ML should hand the model.",
@@ -951,7 +1227,7 @@
       ],
       "labels": [],
       "signature": "ComputeUnits()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L32",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L33",
       "subcategory": "spec",
       "methods": [],
       "summary": "Processors Core ML may schedule the model on.",
@@ -973,7 +1249,7 @@
       "bases": [],
       "labels": [],
       "signature": "ImageInput(scale: float = 1.0, bias: tuple[float, ...] = (), color: ColorSpace = ColorSpace.RGB)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L211",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L238",
       "subcategory": "spec",
       "methods": [
         {
@@ -982,7 +1258,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(scale: float = 1.0, bias: tuple[float, ...] = (), color: ColorSpace = ColorSpace.RGB)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L1",
           "subcategory": "spec",
           "summary": null,
           "extended": null,
@@ -1034,7 +1310,7 @@
       "bases": [],
       "labels": [],
       "signature": "Metadata(description: str = '', author: str = '', license: str = '', version: str = '')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L304",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L331",
       "subcategory": "spec",
       "methods": [
         {
@@ -1043,7 +1319,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(description: str = '', author: str = '', license: str = '', version: str = '')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L1",
           "subcategory": "spec",
           "summary": null,
           "extended": null,
@@ -1081,7 +1357,7 @@
       ],
       "labels": [],
       "signature": "Precision()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L46",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L47",
       "subcategory": "spec",
       "methods": [],
       "summary": "Weight and activation precision of the exported program.",
@@ -1105,7 +1381,7 @@
       ],
       "labels": [],
       "signature": "WeightPrecision()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/_spec.py#L106",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/_spec.py#L133",
       "subcategory": "spec",
       "methods": [],
       "summary": "How a weight is stored, as distinct from how the body computes.",
@@ -1124,8 +1400,8 @@
       "path": "lucid.coreml.export",
       "kind": "function",
       "labels": [],
-      "signature": "export(model: Module, example: object, path: str, precision: Precision = Precision.FLOAT32, weights: WeightPrecision | Palettize | Sparsify = WeightPrecision.FLOAT, shapes: list[tuple[int, ...]] | None = None, shape_range: dict[int, tuple[int, int]] | None = None, state: list[State] | None = None, image_input: ImageInput | None = None, classifier: Classifier | None = None, metadata: Metadata | None = None, compute_units: ComputeUnits = ComputeUnits.ALL, output_field: str | None = None, minimum_deployment_target: DeploymentTarget | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/__init__.py#L124",
+      "signature": "export(model: Module, example: object, path: str, precision: Precision = Precision.FLOAT32, weights: WeightPrecision | Palettize | Sparsify = WeightPrecision.FLOAT, shapes: list[tuple[int, ...]] | None = None, shape_range: dict[int, tuple[int, int]] | None = None, state: list[State] | None = None, image_input: ImageInput | None = None, classifier: Classifier | None = None, metadata: Metadata | None = None, compute_units: ComputeUnits = ComputeUnits.ALL, output_field: str | None = None, minimum_deployment_target: DeploymentTarget | None = None, draws: Draws = Draws.REFUSED)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/__init__.py#L133",
       "subcategory": null,
       "summary": "Trace `model`, write a `.mlpackage` at `path`, and load it.",
       "extended": null,
@@ -1203,6 +1479,12 @@
           "default": "ALL"
         },
         {
+          "name": "draws",
+          "annotation": "(Draws, optional, keyword - only)",
+          "description": "What to do about a model that draws random numbers in\n`forward`. Core ML folds a draw at build time, so the default\nrefuses rather than writing a package that returns one fixed\nsample forever. `AS_INPUT` declares each draw as an input the\ncaller fills; the handle draws for a caller who passes nothing,\nso the package still samples the way the model does.",
+          "default": "REFUSED"
+        },
+        {
           "name": "minimum_deployment_target",
           "annotation": "(DeploymentTarget or None, optional, keyword - only)",
           "description": "Oldest system the package must run on. State, palettization and\nseveral entry points each raise that floor to `IOS18`; naming a\nlower one refuses the export rather than producing a package that\nloads nowhere the caller intended. `None` accepts whatever the\nfeatures require, and the result is reported on the model.",
@@ -1241,7 +1523,7 @@
       "kind": "function",
       "labels": [],
       "signature": "export_functions(functions: dict[str, tuple[Module, object]], path: str, default: str | None = None, precision: Precision = Precision.FLOAT32, weights: WeightPrecision | Palettize | Sparsify = WeightPrecision.FLOAT, metadata: Metadata | None = None, compute_units: ComputeUnits = ComputeUnits.ALL)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/__init__.py#L254",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/__init__.py#L288",
       "subcategory": null,
       "summary": "Write several entry points into one package, sharing its weights.",
       "extended": "A decoder wants two: one that reads a whole prompt and one that reads\na single token. They are the same network, and shipping them as two\npackages ships the weights twice. Here a parameter is written once and\nevery function that uses it points at the same bytes.\n\nNeeds iOS 18 / macOS 15, which is what several entry points costs.",
@@ -1311,7 +1593,7 @@
       "kind": "function",
       "labels": [],
       "signature": "precision_cost(model: Module, example: object, weights: WeightPrecision | Palettize | Sparsify = WeightPrecision.FLOAT, output_field: str | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/__init__.py#L351",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/__init__.py#L394",
       "subcategory": null,
       "summary": "What each precision costs this model, measured rather than assumed.",
       "extended": "The Neural Engine runs float16 and nothing else, so reaching the\naccelerator means accepting whatever float16 does to a particular\nnetwork — and that varies by more than an order of magnitude between\narchitectures that look alike. Measured across fourteen families on\nan untrained forward: convolutional stacks land near 1e-3, ViT at\n1e-2, and MaxViT at 1.6e-1. Nothing in an export says which kind a\ngiven model is.\n\nSo this exports it twice and compares both against the eager model,\nrelative to each output's own magnitude. The packages are written to\na temporary directory and removed: the answer is the point, not the\nartifacts.\n\nThe float16 figure is Core ML's, which is better than running the\nsame model in half precision throughout — a ViT does that at 1.5\nrelative, against 1e-2 here — because the runtime keeps the parts\nthat need range in float32. It is not a bound on your own half\nprecision arithmetic elsewhere.",
@@ -1365,7 +1647,7 @@
       "kind": "function",
       "labels": [],
       "signature": "load(path: str, compute_units: ComputeUnits = ComputeUnits.ALL)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/6043936/lucid/coreml/__init__.py#L433",
+      "source": "https://github.com/ChanLumerico/lucid/blob/9404f89/lucid/coreml/__init__.py#L476",
       "subcategory": null,
       "summary": "Load an existing `.mlpackage`.",
       "extended": "Feature names are read from the package, so this works on packages\nLucid did not write.",

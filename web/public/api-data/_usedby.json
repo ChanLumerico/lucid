@@ -845,7 +845,19 @@
       "module": "lucid.coreml"
     }
   ],
+  "lucid.coreml._model.Latency": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    }
+  ],
   "lucid.coreml._model.PlacementSummary": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    }
+  ],
+  "lucid.coreml._optimize.CompressionAware": [
     {
       "kind": "module",
       "module": "lucid.coreml"
@@ -891,6 +903,12 @@
       "module": "lucid.coreml"
     }
   ],
+  "lucid.coreml._spec.Draws": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    }
+  ],
   "lucid.coreml._spec.ImageInput": [
     {
       "kind": "module",
@@ -919,6 +937,10 @@
     {
       "kind": "module",
       "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._optimize"
     }
   ],
   "lucid.coreml._spec.Precision": [
@@ -935,6 +957,10 @@
     {
       "kind": "module",
       "module": "lucid.coreml"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._optimize"
     }
   ],
   "lucid.coreml._spec.State": [
@@ -955,6 +981,10 @@
     {
       "kind": "module",
       "module": "lucid.coreml._build"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._optimize"
     }
   ],
   "lucid.coreml.export": [
@@ -10588,6 +10618,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.coreml._optimize"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models._base"
     },
     {
@@ -14837,6 +14871,10 @@
     {
       "kind": "module",
       "module": "lucid.coreml._build"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._optimize"
     }
   ],
   "lucid.quantization._fake_quantize.FakeQuantize": [
