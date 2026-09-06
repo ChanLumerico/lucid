@@ -271,20 +271,27 @@ class CoreMLModel:
         drives the package the way they built it.
         """
         if isinstance(x, lucid.Tensor):
-            given: list[tuple[str, Tensor]] = [(self.input_names[0], x)]
+            given: list[tuple[str, object]] = [(self.input_names[0], x)]
+            offered = 1
         elif isinstance(x, dict):
             given = list(x.items())
+            offered = len(x)
         elif isinstance(x, (tuple, list)):
             given = list(zip(self.input_names, x))
+            # Counted from what was handed over, not from what the pairing
+            # kept: ``zip`` stops at the shorter side, so a caller who
+            # passes one tensor too many would otherwise get a list that
+            # agrees with itself and a prediction that quietly ignored it.
+            offered = len(x)
         else:
             raise TypeError(
                 f"lucid.coreml: expected a Tensor, a tuple, or a mapping — got "
                 f"{type(x).__name__}"
             )
-        if len(given) != len(self.input_names):
+        if offered != len(self.input_names):
             raise ValueError(
                 f"lucid.coreml: this package takes {len(self.input_names)} input(s) "
-                f"{self.input_names}, and {len(given)} were given"
+                f"{self.input_names}, and {offered} were given"
             )
 
         fed: list[tuple[str, TensorImpl]] = []
@@ -293,6 +300,11 @@ class CoreMLModel:
                 raise KeyError(
                     f"lucid.coreml: {name!r} is not an input of this package "
                     f"{self.input_names}"
+                )
+            if not isinstance(tensor, lucid.Tensor):
+                raise TypeError(
+                    f"lucid.coreml: input {name!r} must be a Tensor — got "
+                    f"{type(tensor).__name__}"
                 )
             if tensor.dtype in (lucid.int64, lucid.int32):
                 # Core ML's multi-array has int32 and no int64, so an

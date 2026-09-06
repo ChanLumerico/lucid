@@ -506,9 +506,10 @@ run(CoreMLModel* model,
         if (tensor->dtype() != Dtype::F32 && tensor->dtype() != Dtype::F16 &&
             tensor->dtype() != Dtype::I32)
             throw std::invalid_argument(
-                "lucid.coreml: input " + name +
-                " must be float32, float16 or int32 — Core ML's multi-array has no "
-                "int64, so token ids are narrowed by the caller");
+                "lucid.coreml: input " + name + " is " +
+                std::string(dtype_name(tensor->dtype())) +
+                ", and Core ML's multi-array reads float32, float16 or int32 — there "
+                "is no int64 there, so integer inputs are narrowed before they arrive");
         if (!std::get<CpuStorage>(tensor->storage()).ptr)
             throw std::runtime_error("lucid.coreml: input " + name + " has no host storage");
     }

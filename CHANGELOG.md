@@ -92,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - refuse a comparison that cannot tell right from wrong
 
+- count the inputs before pairing them off
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them
