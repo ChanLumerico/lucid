@@ -1129,3 +1129,225 @@ class TestAHostComputedResultSaysSo:
                 lucid.randn(16),
                 f"{tmp_path}/host.mlpackage",
             )
+
+
+class TestJoiningTwoMasks:
+    """``&`` between booleans, and the reason it reached nothing until now.
+
+    A bitwise operation has no gradient, so it never goes through the
+    wiring that also records a traced operation's operands — the same
+    position comparisons are in, and ``Compare.cpp`` pushes them into the
+    tracer by hand for exactly this reason. Nothing pushed these. The
+    trace held ``bitwise_and`` with no inputs at all, its consumer read
+    an identifier nothing had produced, and the export died several
+    steps later on a bare ``KeyError: 10`` — no operation named, no
+    model, nothing to act on.
+
+    It had gone unseen because no test reached it: of a hundred and
+    twenty-nine emitters, fifteen had never run in any test, and this was
+    the one among them that was broken. An emitter nothing exercises has
+    never been compared against anything.
+
+    ``|`` and ``^`` are here because they were in the same file with the
+    same defect and had no emitter either, and a mask joined one way is
+    joined the others soon after.
+    """
+
+    @pytest.mark.parametrize(
+        ("name", "fn"),
+        [
+            ("and", lambda x: ((x > 0.0) & (x < 0.5)).to(lucid.float32)),
+            ("or", lambda x: ((x > 0.0) | (x < -0.5)).to(lucid.float32)),
+            ("xor", lambda x: ((x > 0.0) ^ (x < 0.5)).to(lucid.float32)),
+        ],
+    )
+    def test_it_agrees_with_the_eager_model(self, name, fn, tmp_path) -> None:
+        lucid.manual_seed(0)
+        _check(fn, lucid.randn(3, 6), tmp_path)
+
+    def test_a_joined_mask_selects(self, tmp_path: object) -> None:
+        """What the operation is for, rather than the operation alone.
+
+        A padding mask joined to a causal one, then used — which is where
+        an attention model meets this.
+        """
+
+        def masked(x: lucid.Tensor) -> lucid.Tensor:
+            return lucid.where((x > 0.0) & (x < 1.0), x, x * 0.0)
+
+        lucid.manual_seed(0)
+        _check(masked, lucid.randn(3, 6), tmp_path)
+
+    def test_it_still_answers_a_different_input(self, tmp_path: object) -> None:
+        """The broken trace's other possible ending.
+
+        An operation with no recorded operands is a constant as far as
+        the graph is concerned, and the folder is entitled to evaluate it
+        and bake the answer in. That would have exported cleanly and
+        returned the first input's mask forever.
+        """
+
+        def joined(x: lucid.Tensor) -> lucid.Tensor:
+            return ((x > 0.0) & (x < 0.5)).to(lucid.float32)
+
+        lucid.manual_seed(0)
+        first, second = lucid.randn(3, 6), lucid.randn(3, 6) * 4.0
+        model = _Apply(joined).eval()
+        exported = cml.export(model, first, f"{tmp_path}/joined.mlpackage")
+        try:
+            answered = exported.predict(second)
+            assert float((answered - model(second)).abs().max().item()) == 0.0
+            moved = float((answered - exported.predict(first)).abs().max().item())
+            assert moved > 0.0
+        finally:
+            exported.close()
+
+
+class TestBitsAreNotBooleans:
+    """MIL has ``logical_and`` and nothing below it.
+
+    Lucid's ``&`` also takes integers and combines their bit patterns.
+    Emitting ``logical_and`` for that would load, run, and answer — every
+    non-zero integer is true, so ``5 & 3`` comes back ``True`` where the
+    model wanted ``1``. It is refused by name instead.
+    """
+
+    def test_an_integer_pair_is_refused(self, tmp_path: object) -> None:
+        def bits(x: lucid.Tensor) -> lucid.Tensor:
+            return (x.to(lucid.int32) & 3).to(lucid.float32)
+
+        lucid.manual_seed(0)
+        with pytest.raises(cml.UnsupportedOp, match="bit level"):
+            cml.export(
+                _Apply(bits).eval(),
+                lucid.randn(3, 6) * 8.0,
+                f"{tmp_path}/bits.mlpackage",
+            )
+
+    def test_a_shift_is_refused_as_unmapped(self, tmp_path: object) -> None:
+        """Core ML has no shift at all, so this one needs no special case."""
+
+        def shifted(x: lucid.Tensor) -> lucid.Tensor:
+            return (x.to(lucid.int32) << 1).to(lucid.float32)
+
+        lucid.manual_seed(0)
+        with pytest.raises(cml.UnsupportedOp, match="bitwise_left_shift"):
+            cml.export(
+                _Apply(shifted).eval(),
+                lucid.randn(3, 6) * 8.0,
+                f"{tmp_path}/shift.mlpackage",
+            )
+
+
+# ── the emitters nothing had reached ─────────────────────────────────────────
+#
+# Recorded by wrapping the emitter table and running the whole suite:
+# of a hundred and twenty-nine, fifteen had never been called. One of
+# them, ``bitwise_and``, was broken; the rest were fine and unguarded,
+# which is the same thing a week later. They are exercised here so the
+# table has no unvisited corner left.
+
+_UNREACHED = [
+    ("greater_equal", lambda x: (x >= 0.0).to(lucid.float32)),
+    ("less_equal", lambda x: (x <= 0.0).to(lucid.float32)),
+    ("invert", lambda x: (~(x > 0.0)).to(lucid.float32)),
+    ("isfinite", lambda x: lucid.isfinite(x).to(lucid.float32)),
+    ("min", lucid.min),
+    ("min_dim", lambda x: lucid.min(x, dim=1)),
+    ("min_keepdim", lambda x: lucid.min(x, dim=1, keepdim=True)),
+    ("triu", lucid.triu),
+    ("triu_above_the_diagonal", lambda x: lucid.triu(x, k=1)),
+    ("tril_below_the_diagonal", lambda x: lucid.tril(x, k=-1)),
+    ("clone", lambda x: x.clone() + 1.0),
+    # Factories: the value is a constant, and what is checked is that the
+    # constant written into the package is the one Lucid made.
+    ("arange", lambda x: x + lucid.arange(5).to(lucid.float32)),
+    ("ones", lambda x: x * lucid.ones(3, 5)),
+    ("zeros", lambda x: x + lucid.zeros(3, 5)),
+    ("full", lambda x: x + lucid.full((3, 5), 2.5)),
+]
+
+
+@pytest.mark.parametrize(
+    ("name", "fn"), _UNREACHED, ids=[name for name, _fn in _UNREACHED]
+)
+def test_an_emitter_no_test_had_reached(name, fn, tmp_path) -> None:
+    lucid.manual_seed(0)
+    _check(fn, lucid.randn(3, 5), tmp_path)
+
+
+def test_a_grid_of_two_axes(tmp_path: object) -> None:
+    """``meshgrid`` records every operand, which it did not always.
+
+    It reached the tracer with one of a two-axis grid's inputs, so the
+    other was a constant in the package — right for the example input and
+    frozen after. Multiplying the two planes together needs both.
+    """
+
+    def grid(x: lucid.Tensor) -> lucid.Tensor:
+        rows, columns = lucid.meshgrid(x[0], x[1])
+        return rows * columns
+
+    lucid.manual_seed(0)
+    _check(grid, lucid.randn(2, 4), tmp_path)
+
+
+def test_scattering_into_a_row(tmp_path: object) -> None:
+    """Repeated indices accumulate, which is the whole of the operation."""
+
+    def scattered(x: lucid.Tensor) -> lucid.Tensor:
+        index = lucid.tensor([[0, 1, 0, 1, 0]]).to(lucid.int64)
+        return lucid.scatter_add(x, 0, index, x[:1] * 2.0)
+
+    lucid.manual_seed(0)
+    _check(scattered, lucid.randn(3, 5), tmp_path)
+
+
+def test_a_model_that_does_nothing_is_refused(tmp_path: object) -> None:
+    """``nn.Identity`` alone leaves no operation to export.
+
+    The refusal is right and worth pinning: a package with an empty
+    program would load and return its input, which reads as working.
+    """
+
+    class DoesNothing(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.through = nn.Identity()
+
+        def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+            return self.through(x)
+
+    lucid.manual_seed(0)
+    with pytest.raises(ValueError, match="never reached an op"):
+        cml.export(
+            DoesNothing().eval(), lucid.randn(3, 5), f"{tmp_path}/nothing.mlpackage"
+        )
+
+
+class TestDrawingRandomNumbersIsRefused:
+    """The refusal this subsystem works hardest for, and it had no test.
+
+    ``randn`` was reached only sideways — a model in the reloading tests
+    uses it to make an export fail on purpose — and ``rand`` was reached
+    by nothing. Both fold at build time: the operation's inputs are all
+    constants, so the draw happens once, while the package is written,
+    and every prediction for the life of the file returns that sample.
+
+    Nothing about it looks wrong. The package loads, the numbers are
+    plausible, and a variational encoder exported that way has a latent
+    that never moves. Refusing is the only honest answer, so it is worth
+    a test that names it rather than one that happens to pass through.
+    """
+
+    @pytest.mark.parametrize("draw", [lucid.randn, lucid.rand], ids=["randn", "rand"])
+    def test_it_names_the_operation(self, draw, tmp_path) -> None:
+        class Samples(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return x + draw(3, 5)
+
+        lucid.manual_seed(0)
+        with pytest.raises(cml.UnsupportedOp, match="fixed sample"):
+            cml.export(
+                Samples().eval(), lucid.randn(3, 5), f"{tmp_path}/sampled.mlpackage"
+            )

@@ -6,6 +6,7 @@
 #include "Bitwise.h"
 
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
@@ -69,7 +70,17 @@ bit_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, i
     OpScopeFull scope{name, a->device(), a->dtype(), bc.shape};
     Storage out = backend::Dispatcher::for_device(a->device())
                       .bitwise_binary(bc.a->storage(), bc.b->storage(), bc.shape, a->dtype(), op);
-    return fresh(std::move(out), bc.shape, a->dtype(), a->device());
+    auto result = fresh(std::move(out), bc.shape, a->dtype(), a->device());
+    // Bitwise operations have no meaningful gradient, so they never reach
+    // ``wire_autograd`` — which is also what records a traced op's
+    // operands.  Without this the trace holds an operation with no
+    // inputs, its consumers read an identifier nothing produced, and a
+    // Core ML export of ``(x > 0) & (x < 1)`` dies on a bare ``KeyError``
+    // rather than on anything a caller can act on.  ``Compare.cpp`` is
+    // the same case and does the same thing.
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a, b}, result);
+    return result;
 }
 
 }  // namespace
@@ -100,7 +111,12 @@ shift_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name,
     OpScopeFull scope{name, a->device(), a->dtype(), bc.shape};
     Storage out = backend::Dispatcher::for_device(a->device())
                       .bitwise_binary(bc.a->storage(), bc.b->storage(), bc.shape, a->dtype(), op);
-    return fresh(std::move(out), bc.shape, a->dtype(), a->device());
+    auto result = fresh(std::move(out), bc.shape, a->dtype(), a->device());
+    // Same reason as ``bit_dispatch``: no gradient, so nothing else
+    // records the operands.
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a, b}, result);
+    return result;
 }
 
 }  // namespace

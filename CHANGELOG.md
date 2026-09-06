@@ -94,6 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - count the inputs before pairing them off
 
+- record a bitwise op's operands in the trace
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

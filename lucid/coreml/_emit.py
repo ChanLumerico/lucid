@@ -1463,9 +1463,50 @@ def _isfinite(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "equal", [("x", zeroed), ("y", b.const_float(0.0))]
 
 
+def _refuse_non_boolean(b: Builder, op: TracedOp, ins: list[str], symbol: str) -> None:
+    """Stop before writing a logical operation over integers.
+
+    ``&`` on two integers combines their bit patterns; ``logical_and``
+    reads each side as true-or-false. Emitting one for the other would
+    load, run, and answer — ``5 & 3`` as ``True`` — so the difference has
+    to be caught here, where there is still a name to put in the message.
+    """
+    from lucid.coreml._build import UnsupportedOp
+
+    if b.result_mil_dtype(op) != _MIL_BOOL:
+        raise UnsupportedOp(
+            op.name,
+            f"Core ML has logical operations and none at the bit level, so "
+            f"``{symbol}`` is only exportable over booleans — this one joins "
+            f"integers, whose bits it would silently read as true or false. "
+            f"Compare them first if a boolean is what was meant",
+        )
+
+
 @_emitter("bitwise_and")
 def _bitwise_and(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    """Booleans only, which is the whole of what MIL offers.
+
+    Lucid's ``&`` also takes integers and combines their bit patterns;
+    MIL has ``logical_and`` and nothing at the bit level, so an integer
+    pair is refused rather than answered with the wrong operation. The
+    boolean case is the one models reach — an attention mask joined to a
+    padding mask — and it is exactly ``logical_and``.
+    """
+    _refuse_non_boolean(b, op, ins, "&")
     return "logical_and", [("x", ins[0]), ("y", ins[1])]
+
+
+@_emitter("bitwise_or")
+def _bitwise_or(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    _refuse_non_boolean(b, op, ins, "|")
+    return "logical_or", [("x", ins[0]), ("y", ins[1])]
+
+
+@_emitter("bitwise_xor")
+def _bitwise_xor(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    _refuse_non_boolean(b, op, ins, "^")
+    return "logical_xor", [("x", ins[0]), ("y", ins[1])]
 
 
 @_emitter("group_norm")
