@@ -86,6 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - sparsity beside state segfaulted Core ML's loader
 
+- a reopened package is the package that was written
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

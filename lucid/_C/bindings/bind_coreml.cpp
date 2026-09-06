@@ -436,6 +436,19 @@ void register_coreml(py::module_& m) {
             [](const PyCoreMLModel& self) {
                 return lucid::coreml::carries_state(self.raw());
             })
+        .def_property_readonly(
+            "image_input_names",
+            [](const PyCoreMLModel& self) {
+                return lucid::coreml::image_feature_names(self.raw());
+            },
+            "Input features the package declares as images, so a caller "
+            "that reopened the file feeds them the way it expects.")
+        .def_property_readonly(
+            "class_labels",
+            [](const PyCoreMLModel& self) {
+                return lucid::coreml::class_labels(self.raw());
+            },
+            "Class labels a classifier package declares; empty otherwise.")
         .def(
             "reset_state",
             [](const PyCoreMLModel& self) { lucid::coreml::reset_state(self.raw()); },

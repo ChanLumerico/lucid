@@ -314,6 +314,39 @@ std::vector<std::string> input_feature_names(const CoreMLModel* model) {
     return model == nullptr ? std::vector<std::string>{} : model->input_names;
 }
 
+std::vector<std::string> image_feature_names(const CoreMLModel* model) {
+    if (model == nullptr || model->model == nil)
+        return {};
+    @autoreleasepool {
+        std::vector<std::string> found;
+        NSDictionary<NSString*, MLFeatureDescription*>* inputs =
+            model->model.modelDescription.inputDescriptionsByName;
+        for (NSString* name in inputs) {
+            if (inputs[name].type == MLFeatureTypeImage)
+                found.push_back(std::string([name UTF8String]));
+        }
+        return found;
+    }
+}
+
+std::vector<std::string> class_labels(const CoreMLModel* model) {
+    if (model == nullptr || model->model == nil)
+        return {};
+    @autoreleasepool {
+        std::vector<std::string> labels;
+        // ``classLabels`` is nil for anything that is not a classifier,
+        // and its elements are strings or numbers depending on how the
+        // package declared them.
+        for (id label in model->model.modelDescription.classLabels) {
+            if ([label isKindOfClass:[NSString class]])
+                labels.push_back(std::string([(NSString*)label UTF8String]));
+            else
+                labels.push_back(std::string([[label description] UTF8String]));
+        }
+        return labels;
+    }
+}
+
 std::vector<std::string> output_feature_names(const CoreMLModel* model) {
     return model == nullptr ? std::vector<std::string>{} : model->output_names;
 }

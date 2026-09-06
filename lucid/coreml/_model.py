@@ -232,6 +232,12 @@ class CoreMLModel:
         # and the normalisation now lives inside the package, so a
         # comparison against the eager model has to apply it on that side.
         self.image_input = image_input
+        # How the package normalises those pixels, when it is known. It
+        # is written into the program rather than declared, so a handle
+        # that reopened the file knows *that* an input is an image and
+        # not *what* was done to it — enough to predict, not enough to
+        # compare against the eager model.
+        self.image_normalisation = image_input if image_input is not None else None
         # A classifier returns a string and a dictionary, not arrays, so
         # it is read through ``classify`` rather than ``predict``.
         self.classifier = classifier
@@ -471,8 +477,19 @@ class CoreMLModel:
             # The package normalises the pixels itself, so the eager model
             # has to be shown the same normalised values or the comparison
             # is between two different inputs.
+            if self.image_normalisation is None:
+                raise ValueError(
+                    "lucid.coreml: this package takes an image, and the "
+                    "normalisation it applies is written into the program "
+                    "rather than into anything the file declares — so a "
+                    "handle from load() cannot recover it. Comparing "
+                    "without it would measure the missing scale and bias "
+                    "instead of the export. Pass the ImageInput the "
+                    "package was written with, or verify the handle export "
+                    "returned"
+                )
             examples = [
-                (name, _apply_image_normalisation(tensor, self.image_input))
+                (name, _apply_image_normalisation(tensor, self.image_normalisation))
                 for name, tensor in examples
             ]
         if by_keyword:

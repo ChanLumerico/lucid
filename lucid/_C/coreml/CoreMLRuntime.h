@@ -135,4 +135,19 @@ LUCID_API bool carries_state(const CoreMLModel* model);
 LUCID_API std::vector<std::string> input_feature_names(const CoreMLModel* model);
 LUCID_API std::vector<std::string> output_feature_names(const CoreMLModel* model);
 
+// Input features the model declares as images rather than arrays.
+//
+// A package written with an image input will not accept a multi-array
+// for it, so a caller that reopened the file — rather than keeping the
+// handle the export returned — has to learn this from the model itself
+// or its predictions fail with Core ML's own message about feature
+// types.
+LUCID_API std::vector<std::string> image_feature_names(const CoreMLModel* model);
+
+// Class labels a classifier model declares, empty for anything else.
+//
+// Same reason: ``classify`` needs to know the package answers with
+// labels, and the package says so.
+LUCID_API std::vector<std::string> class_labels(const CoreMLModel* model);
+
 }  // namespace lucid::coreml

@@ -467,7 +467,27 @@ def load(
 
     handle = _C_engine.coreml.load_model(path, _UNITS[compute_units])
     input_names, output_names = handle.input_names, handle.output_names
+    # An exported handle carries what the export knew: that an input is
+    # a picture and not an array, that the outputs are labels and not
+    # scores. Reopening the file used to lose both, so the same package
+    # answered differently depending on how it was opened — and in a
+    # deployment, reopening is the ordinary path. The package declares
+    # all of it, so it is read back rather than asked for again.
+    images = list(handle.image_input_names)
+    labels = list(handle.class_labels)
     handle.close()
-    return CoreMLModel(
-        path, list(input_names), list(output_names), compute_units=compute_units
+    model = CoreMLModel(
+        path,
+        list(input_names),
+        list(output_names),
+        compute_units=compute_units,
+        image_input=ImageInput() if images else None,
+        classifier=Classifier(labels=tuple(labels)) if labels else None,
     )
+    # ``predict`` needs only to know the input is a picture; ``verify``
+    # needs the scale and bias, which the program applies and the file
+    # does not declare. Cleared so the comparison refuses rather than
+    # measuring a normalisation it guessed.
+    if images:
+        model.image_normalisation = None
+    return model
