@@ -5,6 +5,7 @@
 #import <Foundation/Foundation.h>
 
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <algorithm>
@@ -148,6 +149,11 @@ public:
     // prediction reads and writes the same one — that is the whole point.
     // It outlives the prediction, so the handle owns it.
     MLState* state = nil;  // ARC strong, nil unless the model declares state
+    // Taken only by a stateful model's predictions.  Core ML's own
+    // prediction is safe to call from several threads, but the state it
+    // reads and writes is one object shared by all of them, so those
+    // calls queue instead.  A stateless model takes nothing.
+    std::mutex state_lock;
     NSURL* compiled_url = nil;
     std::vector<std::string> input_names;
     std::vector<std::string> output_names;
@@ -302,6 +308,7 @@ void reset_state(CoreMLModel* model) {
         throw std::invalid_argument(
             "lucid.coreml: this model carries no state, so there is nothing to reset");
     @autoreleasepool {
+        std::lock_guard<std::mutex> queued(model->state_lock);
         model->state = [model->model newState];
     }
 }
@@ -563,10 +570,15 @@ run(CoreMLModel* model,
         throw std::runtime_error("lucid.coreml: cannot build the input features: " +
                                  describe(error));
 
-    id<MLFeatureProvider> result =
-        model->state != nil
-            ? [model->model predictionFromFeatures:features usingState:model->state error:&error]
-            : [model->model predictionFromFeatures:features error:&error];
+    id<MLFeatureProvider> result = nil;
+    if (model->state != nil) {
+        std::lock_guard<std::mutex> queued(model->state_lock);
+        result = [model->model predictionFromFeatures:features
+                                            usingState:model->state
+                                                 error:&error];
+    } else {
+        result = [model->model predictionFromFeatures:features error:&error];
+    }
     if (result == nil)
         throw std::runtime_error("lucid.coreml: prediction failed: " + describe(error));
     return result;

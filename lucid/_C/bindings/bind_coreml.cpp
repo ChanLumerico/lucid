@@ -49,27 +49,30 @@ lucid::coreml::MilTensorType to_type(const TypeSpec& spec) {
 // ``PyCompiledExecutable`` in bind_compile.cpp.
 class PyCoreMLModel {
 public:
-    explicit PyCoreMLModel(lucid::coreml::CoreMLModel* handle) : handle_(handle) {}
+    explicit PyCoreMLModel(lucid::coreml::CoreMLModel* handle)
+        : handle_(handle, &lucid::coreml::destroy_model) {}
     ~PyCoreMLModel() { close(); }
 
     PyCoreMLModel(const PyCoreMLModel&) = delete;
     PyCoreMLModel& operator=(const PyCoreMLModel&) = delete;
 
-    void close() {
-        if (handle_ != nullptr) {
-            lucid::coreml::destroy_model(handle_);
-            handle_ = nullptr;
-        }
-    }
+    void close() { handle_.reset(); }
 
-    lucid::coreml::CoreMLModel* raw() const {
-        if (handle_ == nullptr)
+    // Shared rather than owned outright because a prediction runs with
+    // the GIL released, and ``close`` is reachable from another thread
+    // while it is in flight.  The caller holds a reference for the
+    // duration of its call, so closing during one frees the model after
+    // it returns instead of underneath it.
+    std::shared_ptr<lucid::coreml::CoreMLModel> shared() const {
+        if (!handle_)
             throw std::runtime_error("lucid.coreml: the model handle is closed");
         return handle_;
     }
 
+    lucid::coreml::CoreMLModel* raw() const { return shared().get(); }
+
 private:
-    lucid::coreml::CoreMLModel* handle_;
+    std::shared_ptr<lucid::coreml::CoreMLModel> handle_;
 };
 
 }  // namespace
@@ -411,7 +414,14 @@ void register_coreml(py::module_& m) {
                const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
                const std::vector<std::string>& output_names,
                const std::vector<std::pair<std::string, int>>& images) {
-                return lucid::coreml::predict(self.raw(), inputs, output_names, images);
+                // The model is taken while the GIL is still held; the
+                // prediction itself touches nothing Python, and a big one
+                // runs for tens of milliseconds — long enough that holding
+                // the GIL across it freezes every other thread in the
+                // process, not just the ones predicting.
+                auto model = self.shared();
+                py::gil_scoped_release unlocked;
+                return lucid::coreml::predict(model.get(), inputs, output_names, images);
             },
             py::arg("inputs"), py::arg("output_names"),
             py::arg("images") = std::vector<std::pair<std::string, int>>{},
@@ -424,7 +434,9 @@ void register_coreml(py::module_& m) {
                const std::vector<std::pair<std::string, TensorImplPtr>>& inputs,
                const std::vector<std::pair<std::string, int>>& images,
                const std::string& label_name, const std::string& probabilities_name) {
-                return lucid::coreml::classify(self.raw(), inputs, images, label_name,
+                auto model = self.shared();
+                py::gil_scoped_release unlocked;
+                return lucid::coreml::classify(model.get(), inputs, images, label_name,
                                                probabilities_name);
             },
             py::arg("inputs"), py::arg("images"), py::arg("label_name"),
@@ -469,6 +481,9 @@ void register_coreml(py::module_& m) {
         "compute_plan",
         [](const std::string& path, lucid::coreml::ComputeUnits units) {
             std::vector<std::pair<std::string, std::string>> out;
+            // Planning compiles the package too, so it blocks for as long
+            // as loading does.
+            py::gil_scoped_release unlocked;
             for (const auto& placement : lucid::coreml::compute_plan(path, units))
                 out.emplace_back(placement.op_type, placement.device);
             return out;
@@ -481,8 +496,15 @@ void register_coreml(py::module_& m) {
         "load_model",
         [](const std::string& path, lucid::coreml::ComputeUnits units,
            const std::string& function_name) {
-            return std::make_shared<PyCoreMLModel>(
-                lucid::coreml::load_model(path, units, function_name));
+            lucid::coreml::CoreMLModel* handle = nullptr;
+            {
+                // Compilation is the longest call in the subsystem —
+                // seconds for a large package — and it reads a path, not
+                // Python objects.
+                py::gil_scoped_release unlocked;
+                handle = lucid::coreml::load_model(path, units, function_name);
+            }
+            return std::make_shared<PyCoreMLModel>(handle);
         },
         py::arg("path"), py::arg("units") = lucid::coreml::ComputeUnits::All,
         py::arg("function_name") = "",
