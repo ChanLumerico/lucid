@@ -267,6 +267,12 @@ public:
     // What the package says about itself, for the tooling that reads it.
     void set_metadata(const MilMetadata& metadata);
 
+    // A key and value the writer puts in the description's
+    // creator-defined dictionary.  Core ML carries it untouched and
+    // hands it back on load, which is the only way a fact the *program*
+    // knows can survive into a handle that reopened the file.
+    void set_user_metadata(const std::string& key, const std::string& value);
+
     // Turn the model into a Core ML classifier.
     //
     // Without this a package returns a score array and the app does its
@@ -372,6 +378,7 @@ private:
     std::vector<std::pair<std::string, std::vector<std::pair<std::int64_t, std::int64_t>>>>
         ranges_;
     MilMetadata metadata_;
+    std::vector<std::pair<std::string, std::string>> user_metadata_;
     struct Classifier {
         bool present = false;
         std::string label_name;

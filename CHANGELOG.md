@@ -139,6 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - time a package, and re-measure what the accelerator buys
 
+- a model's random draws can be its inputs
+
 ### Performance
 
 - stop emitting an operation for `contiguous`

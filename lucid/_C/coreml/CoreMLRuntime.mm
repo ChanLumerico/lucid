@@ -354,6 +354,28 @@ std::vector<std::string> class_labels(const CoreMLModel* model) {
     }
 }
 
+std::vector<std::pair<std::string, std::string>> user_metadata(const CoreMLModel* model) {
+    if (model == nullptr || model->model == nil)
+        return {};
+    @autoreleasepool {
+        std::vector<std::pair<std::string, std::string>> pairs;
+        NSDictionary* all = model->model.modelDescription.metadata;
+        id defined = all[MLModelCreatorDefinedKey];
+        if (![defined isKindOfClass:[NSDictionary class]])
+            return pairs;
+        for (id key in (NSDictionary*)defined) {
+            id value = ((NSDictionary*)defined)[key];
+            if (![key isKindOfClass:[NSString class]])
+                continue;
+            NSString* text = [value isKindOfClass:[NSString class]] ? (NSString*)value
+                                                                   : [value description];
+            pairs.emplace_back(std::string([(NSString*)key UTF8String]),
+                               std::string([text UTF8String]));
+        }
+        return pairs;
+    }
+}
+
 std::vector<std::string> output_feature_names(const CoreMLModel* model) {
     return model == nullptr ? std::vector<std::string>{} : model->output_names;
 }

@@ -140,6 +140,10 @@ void register_coreml(py::module_& m) {
                 self.read_state(state_name, output_name, to_type(type));
             },
             py::arg("state_name"), py::arg("output_name"), py::arg("type"))
+        .def("set_user_metadata", &lucid::coreml::MilProgram::set_user_metadata,
+             py::arg("key"), py::arg("value"),
+             "Add one key and value to the description's creator-defined "
+             "dictionary, which Core ML hands back untouched on load.")
         .def("write_state", &lucid::coreml::MilProgram::write_state,
              py::arg("state_name"), py::arg("value_name"))
         .def(
@@ -455,6 +459,14 @@ void register_coreml(py::module_& m) {
             },
             "Input features the package declares as images, so a caller "
             "that reopened the file feeds them the way it expects.")
+        .def_property_readonly(
+            "user_metadata",
+            [](const PyCoreMLModel& self) {
+                return lucid::coreml::user_metadata(self.raw());
+            },
+            "Creator-defined metadata the package was written with; the "
+            "only channel by which a fact the writer knew survives into a "
+            "handle that reopened the file.")
         .def_property_readonly(
             "class_labels",
             [](const PyCoreMLModel& self) {

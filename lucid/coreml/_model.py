@@ -221,6 +221,8 @@ class CoreMLModel:
         classifier: Classifier | None = None,
         function_name: str = "",
         deployment_target: object = None,
+        noise: list[tuple[str, tuple[int, ...], str, Tensor | None]] | None = None,
+        traced_outputs: dict[str, Tensor] | None = None,
     ) -> None:
         self.path = path
         self.input_names = input_names
@@ -250,6 +252,29 @@ class CoreMLModel:
         # A classifier returns a string and a dictionary, not arrays, so
         # it is read through ``classify`` rather than ``predict``.
         self.classifier = classifier
+        # Inputs that stand in for a draw the model used to make itself.
+        # A caller who passes nothing for them gets a fresh sample, so
+        # the package behaves like the model it came from; a caller who
+        # passes one gets a deterministic function, which is the other
+        # reason to want this.
+        self.noise_inputs = [(name, shape) for name, shape, _k, _s in noise or []]
+        self._noise_kind = {name: kind for name, _shape, kind, _s in noise or []}
+        # The samples the trace itself drew. A comparison against the
+        # eager model needs the numbers that model actually used — it
+        # cannot be asked to draw them again — and a handle that reopened
+        # the file does not have them, so it refuses instead.
+        # ``None`` for a handle that reopened the file: the samples are
+        # not in it, which is why a comparison there refuses.
+        self._traced_noise = {
+            name: sample
+            for name, _shape, _k, sample in noise or []
+            if sample is not None
+        }
+        # What the traced run answered with those samples. A model that
+        # draws cannot be re-run for a reference — it would draw again —
+        # so this is the only comparison that has both sides computing
+        # the same thing.
+        self._traced_outputs = dict(traced_outputs or {})
         # Empty takes whichever entry point the package names as default.
         self.function_name = function_name
         # The oldest system this package runs on. Three features raise it
@@ -270,14 +295,24 @@ class CoreMLModel:
         tuple in the model's argument order, or a mapping — so a caller
         drives the package the way they built it.
         """
+        # A lifted draw is an input of the package and not one of the
+        # model, so a caller who names none of them is asking for what the
+        # eager model did: a fresh sample. One who names some is asking
+        # for a deterministic function, and gets it.
+        supplied: dict[str, object] = {}
+        if isinstance(x, dict):
+            supplied = {k: v for k, v in x.items() if k in self._noise_kind}
+            x = {k: v for k, v in x.items() if k not in self._noise_kind}
+        asked = [name for name in self.input_names if name not in self._noise_kind]
+
         if isinstance(x, lucid.Tensor):
-            given: list[tuple[str, object]] = [(self.input_names[0], x)]
+            given: list[tuple[str, object]] = [(asked[0], x)] if asked else []
             offered = 1
         elif isinstance(x, dict):
             given = list(x.items())
             offered = len(x)
         elif isinstance(x, (tuple, list)):
-            given = list(zip(self.input_names, x))
+            given = list(zip(asked, x))
             # Counted from what was handed over, not from what the pairing
             # kept: ``zip`` stops at the shorter side, so a caller who
             # passes one tensor too many would otherwise get a list that
@@ -288,11 +323,20 @@ class CoreMLModel:
                 f"lucid.coreml: expected a Tensor, a tuple, or a mapping — got "
                 f"{type(x).__name__}"
             )
-        if offered != len(self.input_names):
+        if offered != len(asked):
             raise ValueError(
-                f"lucid.coreml: this package takes {len(self.input_names)} input(s) "
-                f"{self.input_names}, and {offered} were given"
+                f"lucid.coreml: this package takes {len(asked)} input(s) "
+                f"{asked}, and {offered} were given"
             )
+        for name, shape in self.noise_inputs:
+            drawn = supplied.get(name)
+            if drawn is None:
+                drawn = (
+                    lucid.randn(*shape)
+                    if self._noise_kind[name] == "randn"
+                    else lucid.rand(*shape)
+                )
+            given.append((name, drawn))
 
         fed: list[tuple[str, TensorImpl]] = []
         for name, tensor in given:
@@ -473,6 +517,14 @@ class CoreMLModel:
                 "be threaded through the same sequence. Run both over several "
                 "steps and compare, with reset_state() between runs"
             )
+        if self.noise_inputs and not self._traced_noise:
+            raise ValueError(
+                "lucid.coreml: this package takes its random draws as inputs, and "
+                "the samples the export used are not written into the file — so a "
+                "handle from load() has nothing to compare with. Running the eager "
+                "model would draw different numbers and measure that instead of "
+                "the export. Verify the handle export returned"
+            )
         examples, by_keyword = _named_examples(x)
         if self.image_input is not None:
             # A pixel buffer is eight bits per channel, so an input that
@@ -518,6 +570,26 @@ class CoreMLModel:
         else:
             reference = model(*(tensor for _, tensor in examples))
         expected = dict(_select_outputs(reference, None))
+
+        if self.noise_inputs:
+            # The eager model was run for its shape and its field names,
+            # which are what would change if the model moved out from
+            # under the package. Its *values* cannot be the reference: it
+            # drew its own sample and the package was given the trace's,
+            # so comparing them would measure two different draws. The
+            # traced answer is what the package is being asked to
+            # reproduce, and it was computed from exactly the numbers the
+            # package is about to be fed.
+            for name in self.output_names:
+                if name not in expected:
+                    raise KeyError(
+                        f"lucid.coreml: the eager model no longer returns {name!r}, "
+                        "which this package exports"
+                    )
+            expected = dict(self._traced_outputs)
+            feed = dict(_named_examples(x)[0])
+            feed.update(self._traced_noise)
+            x = feed
 
         got = self.predict(x)
         produced = got if isinstance(got, dict) else {self.output_names[0]: got}

@@ -122,11 +122,20 @@ class TestOtherThreadsKeepRunning:
             exported.predict(x)
         each = (time.perf_counter() - start) / 10
 
-        stall, _ = _longest_stall(lambda: [exported.predict(x) for _ in range(30)])
-        # A third of one prediction leaves room for an ordinary scheduling
-        # hiccup and none at all for the lock being held: measured, the
-        # stall is under a fifth of a millisecond against fourteen.
-        assert stall < each / 3, f"stalled {stall * 1e3:.1f} ms per {each * 1e3:.1f} ms"
+        # The best of three runs, because one unlucky garbage collection
+        # can stall a thread for milliseconds and that is not what is
+        # being measured. Held, the lock stalls *every* run by at least a
+        # whole prediction — there is no lucky round — so the minimum is
+        # the statistic that separates the two.
+        stalls = [
+            _longest_stall(lambda: [exported.predict(x) for _ in range(20)])[0]
+            for _ in range(3)
+        ]
+        best = min(stalls)
+        assert best < each / 3, (
+            f"best stall {best * 1e3:.1f} ms of {[f'{s * 1e3:.1f}' for s in stalls]} "
+            f"against a {each * 1e3:.1f} ms prediction"
+        )
 
     def test_compiling_a_package_does_not_either(self, heavy) -> None:
         """Loading is the longest call in the subsystem."""

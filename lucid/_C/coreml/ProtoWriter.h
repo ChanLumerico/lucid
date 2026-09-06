@@ -125,6 +125,15 @@ public:
         write_message(field, entry);
     }
 
+    // ``map<string, string>`` — the value is a scalar rather than a
+    // nested message, so it cannot go through the overload above.
+    void write_string_map_entry(int field, std::string_view key, std::string_view value) {
+        ProtoWriter entry;
+        entry.write_string(1, key);
+        entry.write_string(2, value);
+        write_message(field, entry);
+    }
+
     // ── result ───────────────────────────────────────────────────────
     const std::string& bytes() const { return buf_; }
     std::size_t size() const { return buf_.size(); }

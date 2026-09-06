@@ -43,9 +43,10 @@ Examples
     y = cm.predict(x)
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from lucid.coreml._build import (
+    _DRAWN_KEY,
     commit_staging,
     discard_staging,
     staging_path,
@@ -59,6 +60,7 @@ from lucid.coreml._build import (
 from lucid.coreml._model import CoreMLModel, Latency, PlacementSummary
 from lucid.coreml._spec import (
     DeploymentTarget,
+    Draws,
     Palettize,
     Sparsify,
     Classifier,
@@ -99,6 +101,7 @@ __all__ = [
     "Metadata",
     "WeightPrecision",
     "DeploymentTarget",
+    "Draws",
     "Palettize",
     "Sparsify",
     "CoreMLModel",
@@ -141,6 +144,7 @@ def export(
     compute_units: ComputeUnits = ComputeUnits.ALL,
     output_field: str | None = None,
     minimum_deployment_target: DeploymentTarget | None = None,
+    draws: Draws = Draws.REFUSED,
 ) -> CoreMLModel:
     """Trace ``model``, write a ``.mlpackage`` at ``path``, and load it.
 
@@ -196,6 +200,13 @@ def export(
         Description, author, licence and version to record in the package.
     compute_units : ComputeUnits, optional, keyword-only, default=ALL
         Which processors Core ML may schedule on.
+    draws : Draws, optional, keyword-only, default=REFUSED
+        What to do about a model that draws random numbers in
+        ``forward``. Core ML folds a draw at build time, so the default
+        refuses rather than writing a package that returns one fixed
+        sample forever. ``AS_INPUT`` declares each draw as an input the
+        caller fills; the handle draws for a caller who passes nothing,
+        so the package still samples the way the model does.
     minimum_deployment_target : DeploymentTarget or None, optional, keyword-only, default=None
         Oldest system the package must run on. State, palettization and
         several entry points each raise that floor to ``IOS18``; naming a
@@ -245,6 +256,7 @@ def export(
             metadata=metadata,
             output_field=output_field,
             minimum_deployment_target=minimum_deployment_target,
+            draws=draws,
         )
     except BaseException:
         discard_staging(path)
@@ -264,6 +276,10 @@ def export(
         image_input=image_input,
         classifier=classifier,
         deployment_target=info["deployment_target"],
+        noise=cast(
+            "list[tuple[str, tuple[int, ...], str, Tensor | None]]", info["noise"]
+        ),
+        traced_outputs=cast("dict[str, Tensor]", info["traced_outputs"]),
     )
 
 
@@ -499,7 +515,17 @@ def load(
     # all of it, so it is read back rather than asked for again.
     images = list(handle.image_input_names)
     labels = list(handle.class_labels)
+    # Which inputs stand in for a random draw, written by the export
+    # into the creator-defined metadata because nothing else in the file
+    # distinguishes them from an ordinary input.
+    declared_draws = dict(handle.user_metadata).get(_DRAWN_KEY, "")
     handle.close()
+    noise: list[tuple[str, tuple[int, ...], str, Tensor | None]] = []
+    for entry in declared_draws.split(","):
+        if not entry:
+            continue
+        name, kind, extent = entry.split(":")
+        noise.append((name, tuple(int(d) for d in extent.split("x")), kind, None))
     model = CoreMLModel(
         path,
         list(input_names),
@@ -507,6 +533,7 @@ def load(
         compute_units=compute_units,
         image_input=ImageInput() if images else None,
         classifier=Classifier(labels=tuple(labels)) if labels else None,
+        noise=noise,
     )
     # ``predict`` needs only to know the input is a picture; ``verify``
     # needs the scale and bias, which the program applies and the file

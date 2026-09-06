@@ -22,6 +22,7 @@ __all__ = [
     "State",
     "ColorSpace",
     "ComputeUnits",
+    "Draws",
     "ImageInput",
     "Metadata",
     "Precision",
@@ -54,6 +55,32 @@ class Precision(enum.Enum):
 
     FLOAT32 = "FLOAT32"
     FLOAT16 = "FLOAT16"
+
+
+class Draws(enum.Enum):
+    """What to do about a model that draws random numbers in ``forward``.
+
+    Core ML has no random operation. A draw whose inputs are all
+    constants — which every ``randn`` is — folds at build time, so a
+    package written the obvious way returns one fixed sample for the life
+    of the file. A variational encoder exported that way has a latent
+    that never moves, and nothing about the package looks wrong.
+
+    ``REFUSED`` is the default and says so rather than shipping that.
+
+    ``AS_INPUT`` lifts each draw to an input the caller fills. The
+    reparameterisation ``mu + sigma * eps`` becomes a function of ``eps``
+    instead of a function that makes one, which is what the model always
+    was — the draw was never part of the network. Seven families in the
+    zoo are exportable only this way: variational encoders, world models
+    with a stochastic latent, and score-based samplers.
+
+    The handle draws for the caller who does not, so a package still
+    answers differently on each prediction the way the eager model does.
+    """
+
+    REFUSED = "REFUSED"
+    AS_INPUT = "AS_INPUT"
 
 
 class DeploymentTarget(enum.Enum):

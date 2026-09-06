@@ -502,6 +502,10 @@ void MilProgram::set_image_input(const std::string& name, const MilImageSpec& sp
 
 void MilProgram::set_metadata(const MilMetadata& metadata) { metadata_ = metadata; }
 
+void MilProgram::set_user_metadata(const std::string& key, const std::string& value) {
+    user_metadata_.emplace_back(key, value);
+}
+
 void MilProgram::set_classifier(const std::string& scores_value,
                                 const std::vector<std::string>& labels,
                                 const std::string& label_name,
@@ -873,7 +877,8 @@ ProtoWriter MilProgram::build_description(const MilDescriptionFields& fields) co
 
 void MilProgram::write_metadata(ProtoWriter& description) const {
     if (!metadata_.short_description.empty() || !metadata_.author.empty() ||
-        !metadata_.license.empty() || !metadata_.version.empty()) {
+        !metadata_.license.empty() || !metadata_.version.empty() ||
+        !user_metadata_.empty()) {
         ProtoWriter metadata;
         if (!metadata_.short_description.empty())
             metadata.write_string(pb::Metadata::kShortDescription,
@@ -884,6 +889,8 @@ void MilProgram::write_metadata(ProtoWriter& description) const {
             metadata.write_string(pb::Metadata::kAuthor, metadata_.author);
         if (!metadata_.license.empty())
             metadata.write_string(pb::Metadata::kLicense, metadata_.license);
+        for (const auto& [key, value] : user_metadata_)
+            metadata.write_string_map_entry(pb::Metadata::kUserDefined, key, value);
         description.write_message(pb::ModelDescription::kMetadata, metadata);
     }
 }

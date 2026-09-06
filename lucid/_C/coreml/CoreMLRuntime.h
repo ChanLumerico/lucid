@@ -150,4 +150,18 @@ LUCID_API std::vector<std::string> image_feature_names(const CoreMLModel* model)
 // labels, and the package says so.
 LUCID_API std::vector<std::string> class_labels(const CoreMLModel* model);
 
+// The creator-defined metadata the package was written with.
+//
+// Core ML carries this dictionary untouched, so it is the only channel
+// through which a fact the *writer* knew — which of the inputs stands in
+// for a random draw, and what distribution it came from — reaches a
+// handle that reopened the file rather than exported it.
+//
+// Returns
+// -------
+// std::vector<std::pair<std::string, std::string>>
+//     Key and value pairs; empty when the package declares none.
+LUCID_API std::vector<std::pair<std::string, std::string>>
+user_metadata(const CoreMLModel* model);
+
 }  // namespace lucid::coreml

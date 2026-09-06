@@ -145,6 +145,55 @@ MULTI_INPUT = [
     ("rectified_flow_afhq_cat", lambda: (lucid.randn(1, 3, 256, 256), lucid.zeros(1))),
 ]
 
+#: Families whose ``forward`` draws random numbers, exported with the
+#: draw lifted to an input the caller fills — see
+#: :class:`~lucid.coreml.Draws`. Every one of these refused outright
+#: before that existed, and they were the largest single group of
+#: families this file could not reach.
+#:
+#: The comparison is against what the trace answered rather than against
+#: a fresh eager run, because a fresh run draws different numbers; the
+#: package is fed the sample the trace used.
+SAMPLING = [
+    ("vae", lambda: lucid.randn(1, 3, 32, 32)),
+    ("hvae", lambda: lucid.randn(1, 3, 32, 32)),
+    ("score_sde_ve", lambda: (lucid.randn(1, 3, 32, 32), lucid.zeros(1))),
+    # World models: a rollout of observations beside the actions taken,
+    # with a stochastic latent at every step — eight draws for dreamer
+    # and planet, which is what made them look like a boundary.
+    ("dreamer", lambda: (lucid.randn(1, 4, 3, 64, 64), lucid.randn(1, 4, 1))),
+    ("planet", lambda: (lucid.randn(1, 4, 3, 64, 64), lucid.randn(1, 4, 1))),
+    (
+        "diamond",
+        lambda: (
+            lucid.randn(1, 4, 3, 64, 64),
+            lucid.zeros(1, 4).to(lucid.int64),
+            lucid.randn(1, 3, 64, 64),
+        ),
+    ),
+]
+
+#: Detectors that take their region proposals rather than making them.
+#: Passing only an image sent them down a path the trace could not
+#: follow, which is what "traces to a graph holding an empty constant"
+#: was describing — not the exporter, the call.
+WITH_PROPOSALS = [
+    (
+        "fast_rcnn",
+        lambda: (
+            lucid.randn(1, 3, 64, 64),
+            lucid.tensor([[[0.0, 0.0, 32.0, 32.0], [8.0, 8.0, 48.0, 48.0]]]),
+        ),
+    ),
+    (
+        "rcnn",
+        lambda: (
+            lucid.randn(1, 3, 64, 64),
+            lucid.tensor([[[0.0, 0.0, 32.0, 32.0], [8.0, 8.0, 48.0, 48.0]]]),
+        ),
+    ),
+]
+
 #: Families this file does not reach, and why. Listed rather than
 #: omitted: an absence with no reason attached reads as an oversight
 #: later, and some of these are boundaries rather than gaps.
@@ -160,16 +209,6 @@ NOT_SINGLE_IMAGE = {
     # ``mask``, the same as ``mask_rcnn``'s. Crude on purpose — the point
     # is that nothing drops out of sight, not that the taxonomy is exact.
     #
-    # Two-stage detectors, each measured rather than assumed. ``detr``
-    # and ``yolo`` are covered above — one stage, and their non-maximum
-    # suppression is post-processing the caller runs, not part of
-    # ``forward``.
-    #
-    # ``fast_rcnn`` traces to a graph holding an empty constant: its
-    # region features are sized by how many proposals survived, which on
-    # an untrained model with random input is none. The export refuses
-    # it by name rather than writing a package built around that.
-    "fast",
     # ``faster_rcnn`` and ``mask_rcnn`` do not finish tracing — over four
     # minutes on this input. Their eager forward returns in seconds; it
     # is the recording that does not scale, because non-maximum
@@ -180,31 +219,29 @@ NOT_SINGLE_IMAGE = {
     # ``mask_rcnn`` is the same story, but its family key is ``mask``,
     # which ``mask2former_swin_base`` covers above — so it does not
     # appear here and this comment is the only record of it.
+    #
+    # ``fast_rcnn`` and ``rcnn`` used to be here on the grounds that they
+    # trace to a graph holding an empty constant. That was the call, not
+    # the model: passing only an image left ``proposals`` at its default
+    # and sent them down a path the trace could not follow. Given
+    # proposals they export, and they are in ``WITH_PROPOSALS`` above.
     "faster",
-    # ``rcnn`` never reaches its input from ``forward`` at all.
-    "rcnn",
-    # Draws random numbers inside ``forward``: a variational encoder
-    # samples its latent, so the traced graph is one draw and there is
-    # nothing stable to compare against. Not a translation gap — a model
-    # whose output is random has no reproducible answer to export.
-    "hvae",
-    "score",
-    "vae",
-    # A step function over latents and actions whose input specification
-    # is a rollout, not a tensor: covering these needs an agreed shape
-    # for observations and actions first.
-    "diamond",
-    "dreamer",
-    "planet",
+    # ``neural_ode`` exports its draws now — that was what stopped it —
+    # and stops on ``rk_combine`` instead, which is the solver's own
+    # step and has no emitter. A translation gap, and a named one.
     "neural",
+    # ``stable_diffusion`` takes an image, a text context and a
+    # timestep, and its default configuration is 512 pixels square:
+    # covering it needs an agreed small configuration first, not a
+    # translation it is missing.
     "stable",
     # Covered above by a representative whose family key differs:
-    # ``nice_cifar`` stands for ``nice`` and ``realnvp``, ``vqvae`` for
-    # itself, ``ddpm``/``flow``/``ncsn``/``dit``/``mean`` and
+    # ``nice_cifar`` stands for the flow family, ``vqvae`` for itself,
+    # ``ddpm``/``flow``/``ncsn``/``dit``/``mean`` and
     # ``transformer``/``bert`` are in the lists above.
-    # ``nice_cifar`` stands for the flow family above. ``realnvp``
-    # exports too, but an untrained one sits at the edge of its
-    # coupling's ``exp`` and a small perturbation puts it over — a
+    #
+    # ``realnvp`` exports too, but an untrained one sits at the edge of
+    # its coupling's ``exp`` and a small perturbation puts it over — a
     # property of the architecture untrained, not of the export.
     "realnvp",
     "bert",
@@ -350,6 +387,45 @@ def test_a_multi_input_family_exports_and_matches(factory, make_inputs, tmp_path
         exported.close()
 
 
+@pytest.mark.parametrize(
+    ("factory", "make_inputs"), SAMPLING, ids=[f for f, _m in SAMPLING]
+)
+def test_a_sampling_family_exports_with_its_draws_lifted(
+    factory, make_inputs, tmp_path
+):
+    """A draw is not part of the network, so it can be an input."""
+    lucid.manual_seed(0)
+    model = _without_zero_initialised_parameters(factory)
+    inputs = make_inputs()
+
+    exported = cml.export(
+        model,
+        inputs,
+        str(tmp_path / f"{factory}.mlpackage"),
+        draws=cml.Draws.AS_INPUT,
+    )
+    try:
+        assert exported.noise_inputs
+        assert exported.verify(model, inputs, relative=True) < 1e-4
+    finally:
+        exported.close()
+
+
+@pytest.mark.parametrize(
+    ("factory", "make_inputs"), WITH_PROPOSALS, ids=[f for f, _m in WITH_PROPOSALS]
+)
+def test_a_detector_given_its_proposals(factory, make_inputs, tmp_path):
+    lucid.manual_seed(0)
+    model = _without_zero_initialised_parameters(factory)
+    inputs = make_inputs()
+
+    exported = cml.export(model, inputs, str(tmp_path / f"{factory}.mlpackage"))
+    try:
+        assert exported.verify(model, inputs, relative=True) < 1e-4
+    finally:
+        exported.close()
+
+
 def test_every_family_is_either_covered_or_named():
     """No family drops out of sight.
 
@@ -361,7 +437,14 @@ def test_every_family_is_either_covered_or_named():
 
     covered = {
         re.split(r"[_\d]", f)[0]
-        for f, _s in (*FAMILIES, *TOKEN_FAMILIES, *MULTI_OUTPUT, *MULTI_INPUT)
+        for f, _s in (
+            *FAMILIES,
+            *TOKEN_FAMILIES,
+            *MULTI_OUTPUT,
+            *MULTI_INPUT,
+            *SAMPLING,
+            *WITH_PROPOSALS,
+        )
     }
     families = {re.split(r"[_\d]", n)[0] for n in M.list_models()}
     missing = families - covered - NOT_SINGLE_IMAGE

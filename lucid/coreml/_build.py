@@ -1588,6 +1588,110 @@ _TRUE_FACTORIES = frozenset(
 )
 
 
+def _named(names: dict[int, str], tid: int, consumer: str) -> str:
+    """The value a graph identifier stands for, or a diagnosis.
+
+    A bare ``KeyError`` out of this lookup has been the visible end of
+    two unrelated defects: an operation that never recorded its operands,
+    so its consumers refer to something nothing produced; and a model
+    called with fewer arguments than its forward takes, so a branch ran
+    that the trace could not follow. Both arrive here as a number with
+    nothing attached to it, several thousand operations after the cause.
+
+    Neither is worth guessing between, but naming the operation and the
+    identifier turns an unreadable failure into a place to look.
+
+    Parameters
+    ----------
+    names : dict of int to str
+        Graph identifier to the value the program calls it.
+    tid : int
+        Identifier being read.
+    consumer : str
+        What wanted it, for the message.
+
+    Returns
+    -------
+    str
+        The value's name in the program.
+
+    Raises
+    ------
+    ValueError
+        The identifier names nothing the graph produced.
+    """
+    try:
+        return names[tid]
+    except KeyError:
+        raise ValueError(
+            f"lucid.coreml: {consumer} reads value {tid}, which nothing in the "
+            f"traced graph produces. Two things do this: an operation that did "
+            f"not record its operands (the trace holds it with none, and its "
+            f"consumers point past it), and a model called with fewer arguments "
+            f"than its forward takes, so a default sent it down a path the trace "
+            f"could not follow. Check the call first — it is the likelier one"
+        ) from None
+
+
+#: Key under which the package records which of its inputs stand in for
+#: a draw. Core ML carries the creator-defined dictionary untouched, so
+#: this is the one channel a fact about the *program* has into a handle
+#: that reopened the file.
+_DRAWN_KEY = "lucid.coreml.draws"
+
+#: Operations that make a fresh sample out of nothing. Core ML folds
+#: them at build time, so they are either refused or lifted to an input
+#: the caller fills — see :class:`~lucid.coreml.Draws`.
+_DRAW_OPS = frozenset({"randn", "rand"})
+
+
+def _lift_draws(
+    graph: Any, traced_values: dict[int, Any]
+) -> list[tuple[str, int, Tensor, str]]:
+    """Each random draw in the graph, as an input the caller supplies.
+
+    The draw was never part of the network. ``mu + sigma * eps`` is a
+    function of ``eps``; that the eager model happens to make its own
+    ``eps`` on the way past is an implementation detail of running in
+    Python, and Core ML cannot do it — a folded draw returns one sample
+    forever.
+
+    Numbered in graph order, so the same model exported twice presents
+    the same interface.
+
+    Parameters
+    ----------
+    graph : TraceGraph
+        Traced operations.
+    traced_values : dict of int to TensorImpl
+        Values the tracer kept, which give each draw its shape and dtype.
+
+    Returns
+    -------
+    list of tuple
+        ``(input name, graph identifier, the sample the trace drew,
+        which operation drew it)``. The sample is kept so a comparison
+        against the eager model has the numbers that model actually used,
+        and the operation's name is kept because a handle drawing for a
+        caller has to draw from the same distribution — filling a uniform
+        draw with a normal one is a package that runs and is wrong.
+    """
+    lifted: list[tuple[str, int, Tensor, str]] = []
+    for op in graph.ops:
+        if op.name not in _DRAW_OPS or not op.outputs:
+            continue
+        tid = int(op.outputs[0].id)
+        sample = traced_values.get(tid)
+        if sample is None:
+            raise ValueError(
+                f"lucid.coreml: {op.name} was drawn and not kept, so there is no "
+                f"shape to declare an input from. This is a tracer defect rather "
+                f"than anything about the model"
+            )
+        lifted.append((f"noise_{len(lifted)}", tid, _wrap(sample), op.name))
+    return lifted
+
+
 def _foldable(
     graph: Any,
     feeds: dict[int, Any],
@@ -2129,6 +2233,7 @@ def build_package(
     metadata: Metadata | None = None,
     output_field: str | None = None,
     minimum_deployment_target: _spec.DeploymentTarget | None = None,
+    draws: _spec.Draws = _spec.Draws.REFUSED,
     into: _Shared | None = None,
 ) -> dict[str, object]:
     """Trace ``model`` and write a complete ``.mlpackage`` at ``path``.
@@ -2171,6 +2276,13 @@ def build_package(
         output shaped ``(1, len(labels))``.
     metadata : Metadata or None, optional, keyword-only, default=None
         What the package says about itself.
+    draws : _spec.Draws, optional, keyword-only, default=REFUSED
+        What to do about a model that draws random numbers in
+        ``forward``. Core ML folds a draw at build time, so the default
+        refuses rather than writing a package that returns one fixed
+        sample forever. ``AS_INPUT`` declares each draw as an input the
+        caller fills; the handle draws for a caller who passes nothing,
+        so the package still samples the way the model does.
     minimum_deployment_target : DeploymentTarget or None, optional, keyword-only, default=None
         Oldest system the package must run on. State, palettization and
         several entry points each raise that floor to ``IOS18``; naming a
@@ -2211,6 +2323,14 @@ def build_package(
     graph, feeds, inputs, outputs, traced_values = trace(
         model, example, output_field=output_field
     )
+
+    # A lifted draw is an input in every respect from here on: it is
+    # declared, it is bracketed by the same casts, and it is not a
+    # constant — which is the whole point, since folding one is what
+    # freezes the sample.
+    lifted = _lift_draws(graph, traced_values) if draws is _spec.Draws.AS_INPUT else []
+    lifted_heads = {tid for _n, tid, _t, _k in lifted}
+    inputs = [*inputs, *[(name, tid, sample) for name, tid, sample, _k in lifted]]
 
     varying: dict[int, set[int]] = {}
     ordered: list[tuple[int, ...]] = []
@@ -2602,6 +2722,9 @@ def build_package(
             # Its result is a constant now, and so is everything it fed.
             continue
         head = int(op.outputs[0].id) if op.outputs else -1
+        if head in lifted_heads:
+            # The caller supplies it; there is nothing to compute.
+            continue
         if head in absorbed:
             # Emitted already, as part of the window rewrite below.
             continue
@@ -2616,7 +2739,7 @@ def build_package(
         emitter = EMITTERS.get(op.name)
         if emitter is None:
             raise UnsupportedOp(op.name)
-        operands = [names[i] for i in op.inputs]
+        operands = [_named(names, i, f"operation {op.name!r}") for i in op.inputs]
         result = emitter(builder, op, operands)
         if isinstance(result, Constant):
             # The value is the constant; there is nothing to append.
@@ -2691,9 +2814,11 @@ def build_package(
     for field, tid, tensor in outputs:
         if field in written:
             # The caller does not receive it; Core ML keeps it.
-            program.write_state(written[field], names[tid])
+            program.write_state(
+                written[field], _named(names, tid, f"the state written from {field!r}")
+            )
             continue
-        value = names[tid]
+        value = _named(names, tid, f"output {field!r}")
         flexible_type = (
             _spec.mil_dtype(tensor.dtype),
             _flex([int(d) for d in tensor.shape], varying.get(tid)),
@@ -2729,6 +2854,19 @@ def build_package(
         program.set_metadata(
             metadata.description, metadata.author, metadata.license, metadata.version
         )
+    if lifted:
+        # Which inputs stand in for a draw, and what each was drawn from.
+        # Nothing else in the file says so — they are ordinary inputs to
+        # Core ML — and a handle that reopened the package has to know,
+        # or it asks the caller for a sample the caller did not know it
+        # wanted and fills a uniform draw with a normal one.
+        program.set_user_metadata(
+            _DRAWN_KEY,
+            ",".join(
+                f"{name}:{kind}:{'x'.join(str(int(d)) for d in sample.shape)}"
+                for name, _tid, sample, kind in lifted
+            ),
+        )
     if into is None:
         cm.finish_package(paths, program.serialize())
 
@@ -2753,6 +2891,17 @@ def build_package(
             )
         ),
         "classifier": classifier is not None,
+        "noise": [
+            (name, tuple(int(d) for d in sample.shape), kind, sample)
+            for name, _tid, sample, kind in lifted
+        ],
+        # What the traced run answered, kept only when a draw was lifted.
+        # It is the reference a comparison has to use there: running the
+        # eager model again draws different numbers, so the two sides
+        # would not be computing the same thing.
+        "traced_outputs": (
+            {field: tensor for field, _tid, tensor in outputs} if lifted else {}
+        ),
         "quantized_weights": quantized_count,
         "flexible": shapes is not None or shape_range is not None,
         "state": [(spec.input, spec.output) for spec in (state or [])],
