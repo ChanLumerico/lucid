@@ -46,6 +46,9 @@ Examples
 from typing import TYPE_CHECKING
 
 from lucid.coreml._build import (
+    commit_staging,
+    discard_staging,
+    staging_path,
     ShapeNotFlexible,
     _Shared,
     StatefulModel,
@@ -221,21 +224,33 @@ def export(
             "lucid.coreml: model is in training mode; call model.eval() first"
         )
 
-    info = build_package(
-        model,
-        example,
-        path,
-        precision=precision,
-        weights=weights,
-        shapes=shapes,
-        shape_range=shape_range,
-        state=state,
-        image_input=image_input,
-        classifier=classifier,
-        metadata=metadata,
-        output_field=output_field,
-        minimum_deployment_target=minimum_deployment_target,
-    )
+    # Built beside the destination and moved onto it only once it is
+    # whole. Writing in place means clearing first, and an export that
+    # then fails — an unsupported operation, a shape the trace could not
+    # know — used to leave the caller with neither the package they had
+    # nor the one they asked for.
+    staging = staging_path(path)
+    try:
+        info = build_package(
+            model,
+            example,
+            staging,
+            precision=precision,
+            weights=weights,
+            shapes=shapes,
+            shape_range=shape_range,
+            state=state,
+            image_input=image_input,
+            classifier=classifier,
+            metadata=metadata,
+            output_field=output_field,
+            minimum_deployment_target=minimum_deployment_target,
+        )
+    except BaseException:
+        discard_staging(path)
+        raise
+    commit_staging(path)
+    info["path"] = path
     outputs = _features(info["outputs"])
     return CoreMLModel(
         str(info["path"]),
@@ -311,31 +326,40 @@ def export_functions(
     from lucid._C import engine as _C_engine
 
     cm = _C_engine.coreml
-    paths = cm.prepare_package(path)
-    shared = _Shared(paths=paths, blob=cm.BlobWriter(paths.weight_bin))
+    # Same discipline as ``export``: built beside the destination and
+    # moved onto it whole, so a failure part way through several
+    # functions does not take an already-deployed package with it.
+    staging = staging_path(path)
+    try:
+        paths = cm.prepare_package(staging)
+        shared = _Shared(paths=paths, blob=cm.BlobWriter(paths.weight_bin))
 
-    built: dict[str, dict[str, object]] = {}
-    programs: list[tuple[str, object]] = []
-    for name, (model, example) in functions.items():
-        info = build_package(
-            model,
-            example,
-            path,
-            precision=precision,
-            weights=weights,
-            metadata=metadata if name == chosen else None,
-            into=shared,
-        )
-        built[name] = info
-        programs.append((name, info["program"]))
-    shared.blob.finalize()
-    cm.finish_package(paths, cm.serialize_functions(programs, chosen))
+        built: dict[str, dict[str, object]] = {}
+        programs: list[tuple[str, object]] = []
+        for name, (model, example) in functions.items():
+            info = build_package(
+                model,
+                example,
+                staging,
+                precision=precision,
+                weights=weights,
+                metadata=metadata if name == chosen else None,
+                into=shared,
+            )
+            built[name] = info
+            programs.append((name, info["program"]))
+        shared.blob.finalize()
+        cm.finish_package(paths, cm.serialize_functions(programs, chosen))
+    except BaseException:
+        discard_staging(path)
+        raise
+    commit_staging(path)
 
     handles: dict[str, CoreMLModel] = {}
     for name, info in built.items():
         outputs = _features(info["outputs"])
         handles[name] = CoreMLModel(
-            str(paths.root),
+            path,
             [feature for feature, _shape in _features(info["inputs"])],
             [feature for feature, _shape in outputs],
             compute_units=compute_units,

@@ -123,6 +123,62 @@ class TestAClassifierPackageSurvivesReloading:
             reopened.close()
 
 
+class TestAFailedExportLeavesTheOldPackageAlone:
+    """Writing in place meant clearing first, and clearing is destructive.
+
+    Re-exporting a deployed model and hitting an unsupported operation
+    used to leave the caller with neither the package they had nor the
+    one they asked for: the destination was emptied before the build
+    that then failed. For a file somebody is shipping, that is the worst
+    thing an export can do — worse than refusing, which is all it was
+    trying to do.
+
+    The build happens beside the destination now and is moved onto it
+    only once it is whole.
+    """
+
+    def test_the_deployed_package_survives(self, tmp_path: object) -> None:
+        class _Samples(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return x + lucid.randn(1, 3)
+
+        lucid.manual_seed(0)
+        path = f"{tmp_path}/deployed.mlpackage"
+        exported = cml.export(_Small().eval(), lucid.randn(1, 3, 32, 32), path)
+        wanted = exported.predict(lucid.ones(1, 3, 32, 32))
+        exported.close()
+
+        with pytest.raises(Exception):
+            cml.export(_Samples().eval(), lucid.zeros(1, 3), path)
+
+        reopened = cml.load(path)
+        try:
+            got = reopened.predict(lucid.ones(1, 3, 32, 32))
+            assert float((got - wanted).abs().max().item()) == 0.0
+        finally:
+            reopened.close()
+
+    def test_it_leaves_no_half_built_package_behind(self, tmp_path: object) -> None:
+        """Not at the destination, and not beside it either.
+
+        A leftover staging directory is a smaller problem than a
+        destroyed package and still a problem: it is confusing, and it
+        is the size of a model.
+        """
+        import os
+
+        class _Samples(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return x + lucid.randn(1, 3)
+
+        lucid.manual_seed(0)
+        with pytest.raises(Exception):
+            cml.export(
+                _Samples().eval(), lucid.zeros(1, 3), f"{tmp_path}/never.mlpackage"
+            )
+        assert os.listdir(str(tmp_path)) == []
+
+
 class TestAnOrdinaryPackageIsUntouched:
     """The recovery reads the model, so a package with neither gets neither.
 

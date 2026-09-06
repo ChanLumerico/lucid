@@ -424,6 +424,86 @@ def _settle_target(
     )
 
 
+def staging_path(path: str) -> str:
+    """Where a package is built before it is allowed to replace anything.
+
+    Writing straight to the destination means clearing it first, and a
+    build that then fails leaves the caller with neither the package
+    they had nor the one they asked for. Re-exporting a deployed model
+    and hitting an unsupported operation should not cost them the
+    deployed model.
+
+    A sibling of the destination, so that moving it into place is a
+    rename within one filesystem rather than a copy.
+
+    Parameters
+    ----------
+    path : str
+        Destination the caller asked for.
+
+    Returns
+    -------
+    str
+        Path to build at.
+    """
+    return f"{path}.building"
+
+
+def discard_staging(path: str) -> None:
+    """Remove a half-built package after a failed export.
+
+    Best effort on purpose: the export is already raising, and a failure
+    to clean up must not replace the reason it failed with a filesystem
+    complaint. A leftover directory is a smaller problem than losing the
+    exception that explains what went wrong.
+
+    Parameters
+    ----------
+    path : str
+        Destination the caller asked for; the staging directory is
+        derived from it.
+    """
+    import shutil
+
+    shutil.rmtree(staging_path(path), ignore_errors=True)
+
+
+def commit_staging(path: str) -> None:
+    """Move a finished package onto the destination.
+
+    The old package is moved aside first and removed after the new one
+    is in place, so the window in which neither exists is a rename wide
+    rather than a build wide.
+
+    Parameters
+    ----------
+    path : str
+        Destination the caller asked for.
+
+    Raises
+    ------
+    OSError
+        The move failed; the staging directory is left for inspection
+        rather than deleted, since it holds the only copy of the work.
+    """
+    import os
+    import shutil
+
+    staging = staging_path(path)
+    previous = f"{path}.replaced"
+    shutil.rmtree(previous, ignore_errors=True)
+    had_previous = os.path.exists(path)
+    if had_previous:
+        os.rename(path, previous)
+    try:
+        os.rename(staging, path)
+    except OSError:
+        if had_previous:
+            os.rename(previous, path)
+        raise
+    shutil.rmtree(previous, ignore_errors=True)
+
+
 def _floor_of(path: str) -> _spec.DeploymentTarget | None:
     """Oldest system a written package will run on, read back off it.
 

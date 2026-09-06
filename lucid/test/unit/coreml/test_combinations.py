@@ -19,6 +19,7 @@ computes, how the weights are stored, and what shape of interface the
 package presents.
 """
 
+import dataclasses
 import itertools
 
 import pytest
@@ -201,6 +202,104 @@ def test_an_image_input_crossed_with_the_rest(precision, weights, tmp_path):
     )
     try:
         assert tuple(exported.predict(pixels).shape) == (1, 5)
+    finally:
+        exported.close()
+
+
+@dataclasses.dataclass
+class _TwoFields:
+    """A dataclass output, so ``output_field`` has something to choose."""
+
+    logits: lucid.Tensor
+    features: lucid.Tensor
+
+
+class _Branching(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.body = nn.Sequential(
+            nn.Conv2d(3, 64, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, 3, padding=1),
+            nn.ReLU(),
+        )
+        self.head = nn.Linear(64, 5)
+
+    def forward(self, x: lucid.Tensor) -> _TwoFields:
+        features = self.body(x).mean(dim=(2, 3))
+        return _TwoFields(logits=self.head(features), features=features)
+
+
+@pytest.mark.parametrize(
+    ("precision", "weights"),
+    list(itertools.product(PRECISIONS, WEIGHTS)),
+    ids=[f"{p[0]}-{w[0]}" for p, w in itertools.product(PRECISIONS, WEIGHTS)],
+)
+def test_pixels_in_and_labels_out_at_every_storage(precision, weights, tmp_path):
+    """Three rewrites of the interface at once.
+
+    An image input replaces the feed, a classifier replaces the outputs,
+    and ``output_field`` chooses which of a dataclass's tensors either of
+    them acts on. All three happen after the body is built, and the body
+    is compressed differently in each case.
+    """
+    _precision_name, precision_value = precision
+    weights_name, weights_value = weights
+
+    lucid.manual_seed(0)
+    model = _Branching().eval()
+    pixels = (lucid.rand(1, 3, 32, 32) * 255).round()
+
+    exported = cml.export(
+        model,
+        pixels,
+        str(tmp_path / f"three_{weights_name}.mlpackage"),
+        precision=precision_value,
+        weights=weights_value,
+        output_field="logits",
+        image_input=cml.ImageInput(scale=1 / 255.0),
+        classifier=cml.Classifier(labels=[f"c{i}" for i in range(5)]),
+    )
+    try:
+        label, probabilities = exported.classify(pixels)
+        assert label in {f"c{i}" for i in range(5)}
+        assert len(probabilities) == 5
+    finally:
+        exported.close()
+
+
+@pytest.mark.parametrize(
+    ("precision", "weights"),
+    list(itertools.product(PRECISIONS, WEIGHTS)),
+    ids=[f"{p[0]}-{w[0]}" for p, w in itertools.product(PRECISIONS, WEIGHTS)],
+)
+def test_a_chosen_field_beside_metadata(precision, weights, tmp_path):
+    """The other field, and the two axes nothing else crosses.
+
+    Metadata is inert by design — it changes the description and not the
+    program — which is exactly why it is worth one pass: an axis assumed
+    to be inert is one nobody checks.
+    """
+    _precision_name, precision_value = precision
+    weights_name, weights_value = weights
+
+    lucid.manual_seed(0)
+    model = _Branching().eval()
+    x = lucid.randn(1, 3, 32, 32)
+
+    exported = cml.export(
+        model,
+        x,
+        str(tmp_path / f"field_{weights_name}.mlpackage"),
+        precision=precision_value,
+        weights=weights_value,
+        output_field="features",
+        metadata=cml.Metadata(
+            description="a branching model", author="lucid", license="MIT", version="1"
+        ),
+    )
+    try:
+        assert tuple(exported.predict(x).shape) == (1, 64)
     finally:
         exported.close()
 

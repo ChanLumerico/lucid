@@ -88,6 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a reopened package is the package that was written
 
+- a failed export no longer destroys the package it replaces
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them
