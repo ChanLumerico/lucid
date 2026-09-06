@@ -53,7 +53,7 @@ from lucid.coreml._build import (
     UnsupportedRank,
     build_package,
 )
-from lucid.coreml._model import CoreMLModel, PlacementSummary
+from lucid.coreml._model import CoreMLModel, Latency, PlacementSummary
 from lucid.coreml._spec import (
     DeploymentTarget,
     Palettize,
@@ -99,6 +99,7 @@ __all__ = [
     "Palettize",
     "Sparsify",
     "CoreMLModel",
+    "Latency",
     "PlacementSummary",
     "ShapeNotFlexible",
     "StatefulModel",

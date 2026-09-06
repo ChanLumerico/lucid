@@ -123,6 +123,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - measure what float16 costs a particular model
 
+- time a package, and re-measure what the accelerator buys
+
 ### Performance
 
 - stop emitting an operation for `contiguous`

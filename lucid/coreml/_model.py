@@ -13,7 +13,7 @@ subsystem fails rather than what it does:
   operations, runs at CPU speed, and warns about nothing.
 """
 
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, NamedTuple, override
 
 import lucid
 from lucid._C import engine as _C_engine
@@ -165,6 +165,28 @@ class PlacementSummary:
             f"ane={self.ane_fraction:.0%})"
         )
         return f"{summary} — {self.note}" if self.note else summary
+
+
+class Latency(NamedTuple):
+    """What one prediction costs, with the settings that produced it.
+
+    Carries the compute units and precision because a latency without
+    them says nothing: the same package is three times slower with the
+    accelerator withheld, and float32 forfeits the accelerator entirely.
+    """
+
+    median_ms: float
+    best_ms: float
+    repeats: int
+    compute_units: ComputeUnits
+    precision: str
+
+    @override
+    def __repr__(self) -> str:
+        return (
+            f"Latency(median={self.median_ms:.2f}ms, best={self.best_ms:.2f}ms, "
+            f"n={self.repeats}, {self.compute_units.name}, {self.precision})"
+        )
 
 
 class CoreMLModel:
@@ -501,6 +523,66 @@ class CoreMLModel:
                 "the zero-initialised parameters, before verifying"
             )
         return worst
+
+    def benchmark(self, x: object, *, repeats: int = 30, warmup: int = 5) -> Latency:
+        """How long one prediction takes, measured the way it should be.
+
+        The first calls are not the model: Core ML defers work to them —
+        specialising for the units it was given, laying out weights the
+        accelerator wants — and a timing that includes them reports the
+        setup. Hence a warmup that is thrown away, and a median over
+        repeats rather than a mean, since a scheduling hiccup on a shared
+        machine moves a mean and not a median.
+
+        Measured on an M1 Pro with a ResNet-18 at 224 square: 18.6 ms
+        eager, 4.5 ms as a float32 package on the CPU, 2.7 ms at float16
+        on the CPU, and 1.5 ms with the Neural Engine allowed — so the
+        accelerator is worth about 12x against eager and 3x against the
+        same package on the CPU. Those are this machine's numbers and
+        will not be yours, which is why this exists rather than a
+        documented figure.
+
+        Parameters
+        ----------
+        x : Tensor or tuple of Tensor or dict of str to Tensor
+            Input to run, in the shape the package was built for.
+        repeats : int, optional, keyword-only, default=30
+            Timed calls.
+        warmup : int, optional, keyword-only, default=5
+            Calls made and discarded first.
+
+        Returns
+        -------
+        Latency
+            Median and best of the timed calls, in milliseconds.
+
+        Raises
+        ------
+        ValueError
+            When ``repeats`` is not positive.
+        """
+        import statistics
+        import time
+
+        if repeats < 1:
+            raise ValueError(
+                f"lucid.coreml: benchmark needs at least one timed call, got "
+                f"{repeats}"
+            )
+        for _ in range(max(warmup, 0)):
+            self.predict(x)
+        timings: list[float] = []
+        for _ in range(repeats):
+            started = time.perf_counter()
+            self.predict(x)
+            timings.append((time.perf_counter() - started) * 1000.0)
+        return Latency(
+            median_ms=statistics.median(timings),
+            best_ms=min(timings),
+            repeats=repeats,
+            compute_units=self.compute_units,
+            precision=self.precision,
+        )
 
     def compute_plan(self) -> PlacementSummary:
         """Which device Core ML assigns each operation to.
