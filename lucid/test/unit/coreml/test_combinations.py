@@ -127,6 +127,84 @@ def test_a_combination_exports_and_runs(precision, weights, interface, tmp_path)
         exported.close()
 
 
+class _Carries(nn.Module):
+    """Reads the carried value, returns the new one beside a result."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(64, 64)
+
+    def forward(
+        self, x: lucid.Tensor, cache: lucid.Tensor
+    ) -> tuple[lucid.Tensor, lucid.Tensor]:
+        carried = cache + self.fc(x)
+        return carried, carried * 2.0
+
+
+@pytest.mark.parametrize(
+    ("name", "weights"), WEIGHTS, ids=[name for name, _w in WEIGHTS]
+)
+def test_carried_state_crossed_with_weight_storage(name, weights, tmp_path):
+    """State raises the opset, and the weight encodings have to follow.
+
+    Sparsity is written one way in a ``CoreML7`` program and another in
+    a ``CoreML8`` one, and carrying state is enough to make it the
+    second. Core ML's loader does not reject the older spelling there —
+    it segfaults on it, which is how this pair was found: a process that
+    disappears with no exception and no message.
+    """
+    lucid.manual_seed(0)
+    model = _Carries().eval()
+    example = {"x": lucid.ones(1, 64), "cache": lucid.zeros(1, 64)}
+
+    exported = cml.export(
+        model,
+        example,
+        str(tmp_path / f"state_{name}.mlpackage"),
+        precision=cml.Precision.FLOAT16,
+        weights=weights,
+        state=[cml.State(input="cache", output="output_0")],
+    )
+    try:
+        assert exported.deployment_target is cml.DeploymentTarget.IOS18
+        assert tuple(exported.predict({"x": lucid.ones(1, 64)}).shape) == (1, 64)
+    finally:
+        exported.close()
+
+
+@pytest.mark.parametrize(
+    ("precision", "weights"),
+    list(itertools.product(PRECISIONS, WEIGHTS)),
+    ids=[f"{p[0]}-{w[0]}" for p, w in itertools.product(PRECISIONS, WEIGHTS)],
+)
+def test_an_image_input_crossed_with_the_rest(precision, weights, tmp_path):
+    """Pixels in, and the body still compressed however it was asked.
+
+    An image input rewrites the interface after the body is built, which
+    is the same place the interface axis above reaches — but through a
+    different path, since Core ML refuses a multi-array for it.
+    """
+    _precision_name, precision_value = precision
+    weights_name, weights_value = weights
+
+    lucid.manual_seed(0)
+    model = _Net().eval()
+    pixels = (lucid.rand(1, 3, 32, 32) * 255).round()
+
+    exported = cml.export(
+        model,
+        pixels,
+        str(tmp_path / f"image_{weights_name}.mlpackage"),
+        precision=precision_value,
+        weights=weights_value,
+        image_input=cml.ImageInput(scale=1 / 255.0),
+    )
+    try:
+        assert tuple(exported.predict(pixels).shape) == (1, 5)
+    finally:
+        exported.close()
+
+
 def test_a_lossless_combination_still_agrees(tmp_path: object) -> None:
     """One case where closeness is meaningful, to keep the rest honest.
 

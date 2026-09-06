@@ -237,6 +237,18 @@ void register_coreml(py::module_& m) {
             py::arg("name"), py::arg("output_type"), py::arg("nonzero_offset"),
             py::arg("nonzero_count"), py::arg("mask_offset"), py::arg("mask_bytes"),
             "A weight stored as its non-zero values plus a one-bit-per-element mask.")
+        .def(
+            "add_sparse_const_extended",
+            [](lucid::coreml::MilProgram& self, const std::string& name,
+               const TypeSpec& output_type, std::uint64_t nonzero_offset,
+               std::int64_t nonzero_count, int nonzero_dtype, std::uint64_t mask_offset) {
+                self.add_sparse_const_extended(
+                    name, to_type(output_type), nonzero_offset, nonzero_count,
+                    static_cast<lucid::coreml::MilDataType>(nonzero_dtype), mask_offset);
+            },
+            py::arg("name"), py::arg("output_type"), py::arg("nonzero_offset"),
+            py::arg("nonzero_count"), py::arg("nonzero_dtype"), py::arg("mask_offset"),
+            "The same, in the iOS18 spelling a CoreML8 program requires.")
         .def("add_bool_const_shaped", &lucid::coreml::MilProgram::add_bool_const_shaped,
              py::arg("name"), py::arg("values"), py::arg("shape"),
              "Boolean constant of arbitrary shape, carried inline.")

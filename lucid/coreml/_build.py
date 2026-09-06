@@ -424,6 +424,37 @@ def _settle_target(
     )
 
 
+def _floor_of(path: str) -> _spec.DeploymentTarget | None:
+    """Oldest system a written package will run on, read back off it.
+
+    A model that was just exported knows this because the export settled
+    it; one reopened with ``load`` would otherwise not, and the two
+    should not disagree about the same file. The opset is a plain string
+    in the serialized program, so finding it needs no schema.
+
+    Parameters
+    ----------
+    path : str
+        The ``.mlpackage`` to read.
+
+    Returns
+    -------
+    DeploymentTarget or None
+        ``None`` when the file cannot be read, since a guess about a
+        deployment floor is worse than an absence.
+    """
+    try:
+        with open(f"{path}/Data/com.apple.CoreML/model.mlmodel", "rb") as handle:
+            program = handle.read()
+    except OSError:
+        return None
+    if _spec.DeploymentTarget.IOS18.opset.encode() in program:
+        return _spec.DeploymentTarget.IOS18
+    if _spec.DeploymentTarget.IOS17.opset.encode() in program:
+        return _spec.DeploymentTarget.IOS17
+    return None
+
+
 def _refuse_if_empty(tensor: Tensor) -> None:
     """Stop on a constant with no elements, and say where it came from.
 
@@ -2323,10 +2354,23 @@ def build_package(
             if half:
                 values = values.half()
             value_offset = blob.append_tensor(_unwrap(values), body_blob)
-            mask_offset = blob.append_bytes(mask, _spec.BLOB_UINT8)
-            program.add_sparse_const(
-                name, (body_mil, shape), value_offset, kept, mask_offset, len(mask)
-            )
+            # Which spelling depends on the opset the program will
+            # declare, and both are needed. Core ML's loader does not
+            # reject the older one in a CoreML8 program — it segfaults on
+            # it — so a sparse weight beside carried state or several
+            # entry points has to be written the newer way.
+            if target is _spec.DeploymentTarget.IOS18:
+                mask_offset = blob.append_bytes(
+                    mask, _C_engine.coreml.BLOB_SUBBYTE["1"]
+                )
+                program.add_sparse_const_extended(
+                    name, (body_mil, shape), value_offset, kept, body_mil, mask_offset
+                )
+            else:
+                mask_offset = blob.append_bytes(mask, _spec.BLOB_UINT8)
+                program.add_sparse_const(
+                    name, (body_mil, shape), value_offset, kept, mask_offset, len(mask)
+                )
             quantized_count += 1
         elif quantized is not None:
             codes, scale_bytes, zero_bytes, channels = quantized
@@ -2632,7 +2676,12 @@ def build_package(
         "quantized_weights": quantized_count,
         "flexible": shapes is not None or shape_range is not None,
         "state": [(spec.input, spec.output) for spec in (state or [])],
-        "deployment_target": target,
+        # Read back off the file rather than taken from the request.
+        # Asking for palettization does not mean anything was palettized
+        # — a model whose weights are all below the threshold comes out
+        # a CoreML7 program — and the package is the thing that has to
+        # run somewhere, so it is the thing that answers.
+        "deployment_target": _floor_of(str(paths.root)) or target,
         "program": program,
         "path": paths.root,
     }

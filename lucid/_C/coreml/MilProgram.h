@@ -187,6 +187,22 @@ public:
                           std::uint64_t mask_offset,
                           std::int64_t mask_bytes);
 
+    // The same operation in its iOS18 spelling: payloads named by inline
+    // arguments rather than attributes, and the mask typed ``UINT1``
+    // carrying the weight's own shape instead of a byte count.
+    //
+    // Both forms exist because both are needed. A program that declares
+    // ``CoreML7`` must use the older one, and a program that has been
+    // raised to ``CoreML8`` by some other feature — carrying state, say
+    // — must use this one: Core ML's loader does not reject the older
+    // spelling there, it crashes on it.
+    void add_sparse_const_extended(const std::string& name,
+                                   const MilTensorType& output_type,
+                                   std::uint64_t nonzero_offset,
+                                   std::int64_t nonzero_count,
+                                   MilDataType nonzero_dtype,
+                                   std::uint64_t mask_offset);
+
     void add_quantized_const(const std::string& name,
                              const MilTensorType& output_type,
                              std::uint64_t blob_offset,
@@ -336,6 +352,7 @@ private:
         // mask's own blob offset) travels beside it.
         bool is_lut = false;
         bool is_sparse = false;
+        bool sparse_extended = false;
         MilDataType palette_dtype = MilDataType::Float32;
         MilDataType key_dtype = MilDataType::UInt8;
         std::vector<std::int64_t> lut_shape;

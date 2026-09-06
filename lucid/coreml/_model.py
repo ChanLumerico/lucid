@@ -20,6 +20,7 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid.coreml import _spec
 from lucid.coreml._build import (
+    _floor_of,
     _apply_image_normalisation,
     _named_examples,
     _select_outputs,
@@ -240,7 +241,9 @@ class CoreMLModel:
         # — state, palettization, several entry points — and a caller who
         # did not name a target is told what they ended up with rather
         # than finding out from a device.
-        self.deployment_target = deployment_target
+        self.deployment_target = (
+            deployment_target if deployment_target is not None else _floor_of(path)
+        )
         self._handle = _C_engine.coreml.load_model(
             path, _UNITS[compute_units], function_name
         )

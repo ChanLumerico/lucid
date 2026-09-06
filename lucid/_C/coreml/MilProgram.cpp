@@ -362,6 +362,26 @@ void MilProgram::add_sparse_const(const std::string& name,
     ops_.push_back(std::move(op));
 }
 
+void MilProgram::add_sparse_const_extended(const std::string& name,
+                                           const MilTensorType& output_type,
+                                           std::uint64_t nonzero_offset,
+                                           std::int64_t nonzero_count,
+                                           MilDataType nonzero_dtype,
+                                           std::uint64_t mask_offset) {
+    Op op;
+    op.type = "constexpr_sparse_to_dense";
+    op.output_name = name;
+    op.output_type = output_type;
+    op.is_sparse = true;
+    op.sparse_extended = true;
+    op.blob = true;
+    op.blob_offset = nonzero_offset;
+    op.nonzero_count = nonzero_count;
+    op.palette_dtype = nonzero_dtype;
+    op.mask_offset = mask_offset;
+    ops_.push_back(std::move(op));
+}
+
 void MilProgram::add_quantized_const(const std::string& name,
                                      const MilTensorType& output_type,
                                      std::uint64_t blob_offset,
@@ -634,6 +654,17 @@ ProtoWriter MilProgram::build_function() const {
                 pb::Operation::kInputs, "lut",
                 make_value_argument(
                     make_blob_value(op.mask_offset, {op.palette_dtype, op.lut_shape})));
+        } else if (op.is_sparse && op.sparse_extended) {
+            // iOS18: inline arguments, and the mask is one bit per
+            // element of the weight rather than a count of bytes.
+            operation.write_map_entry(
+                pb::Operation::kInputs, "nonzero_data",
+                make_value_argument(make_blob_value(
+                    op.blob_offset, {op.palette_dtype, {op.nonzero_count}})));
+            operation.write_map_entry(
+                pb::Operation::kInputs, "mask",
+                make_value_argument(make_blob_value(
+                    op.mask_offset, {MilDataType::UInt1, op.output_type.shape})));
         } else if (op.is_sparse) {
             operation.write_map_entry(
                 pb::Operation::kAttributes, "nonzero_data",

@@ -33,7 +33,17 @@ pytestmark = pytest.mark.skipif(
 
 
 def _small() -> nn.Module:
+    """Small enough that nothing in it is worth compressing."""
     return nn.Sequential(nn.Conv2d(3, 8, 3, padding=1), nn.ReLU()).eval()
+
+
+def _compressible() -> nn.Module:
+    """Weights above the threshold, so a request to compress takes."""
+    return nn.Sequential(
+        nn.Conv2d(3, 64, 3, padding=1),
+        nn.ReLU(),
+        nn.Conv2d(64, 64, 3, padding=1),
+    ).eval()
 
 
 class _Carries(nn.Module):
@@ -62,7 +72,7 @@ class TestAPackageKnowsItsFloor:
     def test_palettization_raises_it_and_says_so(self, tmp_path: object) -> None:
         lucid.manual_seed(0)
         exported = cml.export(
-            _small(),
+            _compressible(),
             lucid.randn(1, 3, 32, 32),
             f"{tmp_path}/palette.mlpackage",
             weights=cml.Palettize(bits=4),
@@ -71,6 +81,54 @@ class TestAPackageKnowsItsFloor:
             assert exported.deployment_target is cml.DeploymentTarget.IOS18
         finally:
             exported.close()
+
+    def test_asking_for_palettization_is_not_the_same_as_getting_it(
+        self, tmp_path: object
+    ) -> None:
+        """The package answers, not the request.
+
+        Weights below the threshold are left alone — the tables cost
+        more than they save — so a model of small layers comes out a
+        CoreML7 program however it was asked for. Reporting IOS18 there
+        would tell somebody they need a newer system than they do.
+        """
+        lucid.manual_seed(0)
+        exported = cml.export(
+            _small(),
+            lucid.randn(1, 3, 32, 32),
+            f"{tmp_path}/nothing_to_palettize.mlpackage",
+            weights=cml.Palettize(bits=4),
+        )
+        try:
+            assert exported.deployment_target is cml.DeploymentTarget.IOS17
+        finally:
+            exported.close()
+
+    def test_reopening_a_package_agrees_with_exporting_it(
+        self, tmp_path: object
+    ) -> None:
+        """One file, one answer.
+
+        An exported handle knows its floor because the export settled
+        it; a reopened one reads it off the program. They are the same
+        package and must not disagree about it.
+        """
+        lucid.manual_seed(0)
+        path = f"{tmp_path}/reopened.mlpackage"
+        exported = cml.export(
+            _compressible(),
+            lucid.randn(1, 3, 32, 32),
+            path,
+            weights=cml.Palettize(bits=4),
+        )
+        written = exported.deployment_target
+        exported.close()
+
+        reopened = cml.load(path)
+        try:
+            assert reopened.deployment_target is written
+        finally:
+            reopened.close()
 
     def test_several_entry_points_raise_it(self, tmp_path: object) -> None:
         class _Net(nn.Module):
@@ -133,12 +191,33 @@ class TestAFloorItCannotMeetIsRefused:
         assert "state" in str(excinfo.value)
 
     def test_asking_for_ios18_is_never_refused(self, tmp_path: object) -> None:
-        """A caller who is already on the newer floor pays nothing."""
+        """A caller who is already on the newer floor pays nothing.
+
+        And may still get an older floor back. The target is a ceiling
+        on what the caller can deploy to, not an instruction to use it:
+        a package that came out CoreML7 runs on iOS 17 and everything
+        after, which is a better answer than the one they asked for.
+        """
         lucid.manual_seed(0)
         exported = cml.export(
             _small(),
             lucid.randn(1, 3, 32, 32),
             f"{tmp_path}/eighteen.mlpackage",
+            weights=cml.Palettize(bits=4),
+            minimum_deployment_target=cml.DeploymentTarget.IOS18,
+        )
+        try:
+            assert exported.deployment_target is cml.DeploymentTarget.IOS17
+        finally:
+            exported.close()
+
+    def test_asking_for_ios18_and_using_it(self, tmp_path: object) -> None:
+        """The other half: a model that really does palettize."""
+        lucid.manual_seed(0)
+        exported = cml.export(
+            _compressible(),
+            lucid.randn(1, 3, 32, 32),
+            f"{tmp_path}/eighteen_used.mlpackage",
             weights=cml.Palettize(bits=4),
             minimum_deployment_target=cml.DeploymentTarget.IOS18,
         )
