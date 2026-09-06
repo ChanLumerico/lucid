@@ -82,6 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - float16 keeps its integers, and the plan says why it matters
 
+- fit palettes in single precision, and cross the options
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

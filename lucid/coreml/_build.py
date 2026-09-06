@@ -671,7 +671,12 @@ def _palettize_weight(
     channels = int(tensor.shape[0])
     elements = int(tensor.numel())
     groups = _palette_groups(channels, count, elements)
-    rows = tensor.reshape(groups, -1)
+    # Fitted in single precision even when the body is half. The weight
+    # has already been rounded to float16 by then, so this loses nothing
+    # — and Lloyd's algorithm on half-precision centroids both converges
+    # worse and mixes dtypes against the edge table's sentinel, which is
+    # how a float16 palettized export used to fail outright.
+    rows = tensor.to(lucid.float32).reshape(groups, -1)
 
     palettes = _palettes_for(rows, count)
     keys = _assign(rows, _edge_table(palettes), count)
