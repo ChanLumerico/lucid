@@ -237,7 +237,22 @@ def test_a_family_representative_exports_and_matches(factory, shape, tmp_path):
     model = M.create_model(factory).eval()
     x = lucid.randn(*shape)
     reference = _tensor_of(model(x))
-    scale = max(float(reference.abs().max().item()), 1e-6)
+
+    # Some untrained factories answer with almost nothing —
+    # EfficientNet's logits come out around 1e-12, MobileNet's and
+    # GoogLeNet's around 1e-10 — because their heads are
+    # zero-initialised. Dividing by a floored scale then compares noise
+    # against noise and passes whatever the package does, which is how
+    # three families sat in this list for weeks proving nothing.
+    if float(reference.abs().max().item()) < 1e-6:
+        model = _without_zero_initialised_parameters(factory)
+        reference = _tensor_of(model(x))
+    scale = float(reference.abs().max().item())
+    assert scale > 1e-6, (
+        f"{factory} answers with values too small to compare even after its "
+        "zero-initialised parameters were perturbed — this test cannot see "
+        "anything about it"
+    )
 
     exported = cml.export(model, x, str(tmp_path / f"{factory}.mlpackage"))
     try:

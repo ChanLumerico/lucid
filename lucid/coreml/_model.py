@@ -34,6 +34,15 @@ if TYPE_CHECKING:
 
 __all__ = ["CoreMLModel", "PlacementSummary"]
 
+#: Smallest reference magnitude a comparison can say anything about.
+#:
+#: The export path computes in single precision, so a reference below
+#: this is being compared at the level of its own rounding: the
+#: difference comes out tiny whether the package is right or not. An
+#: untrained EfficientNet lands at 1e-12 and used to report agreement to
+#: 1e-19, which reads as a flawless export and is a blind probe.
+_COMPARABLE = 1e-6
+
 _UNITS = {
     ComputeUnits.ALL: _C_engine.coreml.ComputeUnits.ALL,
     ComputeUnits.CPU_ONLY: _C_engine.coreml.ComputeUnits.CPU_ONLY,
@@ -518,29 +527,44 @@ class CoreMLModel:
                     "produces it before any export is involved, and a difference "
                     "against NaN is NaN whatever the package computed"
                 )
-            carries_signal = carries_signal or extreme > 0.0
+            carries_signal = carries_signal or extreme > _COMPARABLE
             gap = float((produced[name] - wanted).abs().max().item())
             worst = max(worst, gap / max(extreme, 1.0) if relative else gap)
         if not carries_signal:
-            # Comparing against an all-zero reference proves nothing: an
-            # exporter that dropped every layer would also return zeros
-            # and score perfectly. Several zoo models zero-initialise
-            # their head, so this is reachable with an untrained factory
+            # Comparing against a reference with no magnitude proves
+            # nothing: an exporter that dropped every layer would score
+            # just as well. Several zoo models zero-initialise their
+            # head, so this is reachable with an untrained factory
             # rather than being a theoretical case.
             #
-            # Only when *every* output is zero, though. A model can have
-            # one output that is legitimately zero and others that are
-            # not — NICE's log-determinant is exactly zero because the
-            # transform preserves volume, which is a fact about the
-            # architecture and not a missing weight. Refusing the whole
-            # comparison for it would hide the outputs that do carry
-            # signal, and a zero reference still catches an export that
-            # returns something else.
+            # Not only exact zeros. An untrained EfficientNet answers
+            # with logits around 1e-12, and the comparison then reports
+            # agreement to 1e-19 — a number that reads as a perfect
+            # export and is really a blind probe. Below ``_COMPARABLE``
+            # the difference cannot separate a correct package from a
+            # broken one at single precision, so the refusal names the
+            # magnitude rather than pretending.
+            #
+            # Only when *every* output is that small, though. A model can
+            # have one output that is legitimately zero and others that
+            # are not — NICE's log-determinant is exactly zero because
+            # the transform preserves volume, which is a fact about the
+            # architecture and not a missing weight.
+            largest = max(
+                (
+                    float(expected[name].abs().max().item())
+                    for name in self.output_names
+                    if expected.get(name) is not None
+                ),
+                default=0.0,
+            )
             raise ValueError(
-                f"lucid.coreml: every output of the eager model "
-                f"({', '.join(self.output_names)}) is all zeros, so this "
-                "comparison cannot detect anything — load weights, or perturb "
-                "the zero-initialised parameters, before verifying"
+                f"lucid.coreml: the eager model's outputs "
+                f"({', '.join(self.output_names)}) reach only {largest:.2e}, "
+                f"which is below the {_COMPARABLE:.0e} this comparison needs to "
+                "tell a correct package from a broken one — it would report "
+                "agreement either way. Load weights, or perturb the "
+                "zero-initialised parameters, before verifying"
             )
         return worst
 

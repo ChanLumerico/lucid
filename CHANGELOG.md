@@ -90,6 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a failed export no longer destroys the package it replaces
 
+- refuse a comparison that cannot tell right from wrong
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them

@@ -95,6 +95,28 @@ class TestPackageFormat:
         handle.close()
 
 
+def _with_an_opinion(factory: str) -> object:
+    """A zoo factory whose zero-initialised parameters have been perturbed.
+
+    Several heads start at exactly zero, which is ordinary practice and
+    makes an untrained model answer every input with almost the same
+    almost-nothing. A comparison against that reports agreement whatever
+    the package does.
+    """
+    model = M.create_model(factory, num_classes=10).eval()
+    replaced = {}
+    for name, value in model.state_dict().items():
+        zeroed = (
+            hasattr(value, "shape")
+            and int(value.numel()) > 0
+            and float(value.abs().max().item()) == 0.0
+        )
+        replaced[name] = lucid.randn(*value.shape) * 0.05 if zeroed else value
+    perturbed = M.create_model(factory, num_classes=10).eval()
+    perturbed.load_state_dict(replaced)
+    return perturbed
+
+
 class TestAgreementWithEager:
     def test_a_tiny_model_matches(self, tmp_path: object) -> None:
         model, x = _tiny()
@@ -109,13 +131,19 @@ class TestAgreementWithEager:
         ["resnet_18_cls", "mobilenet_v2_cls", "densenet_121_cls", "convnext_tiny_cls"],
     )
     def test_zoo_classifiers_match(self, factory: str, tmp_path: object) -> None:
-        # Unmodified factories, output dataclass and all.  Compared
-        # relative to the output's own scale: a 64x64 input through a
-        # randomly initialised head can produce logits near 1e-12, where
-        # an absolute bound says nothing.
-        model = M.create_model(factory, num_classes=10).eval()
+        """Unmodified factories, output dataclass and all.
+
+        With one modification that the comparison needs: a
+        zero-initialised head answers a 64-square input with logits near
+        1e-12, and flooring the scale to divide by then compares noise
+        against noise — MobileNet passed this way while measuring
+        nothing. Perturbing the zeroed parameters gives the model an
+        opinion to check.
+        """
+        model = _with_an_opinion(factory)
         x = lucid.randn(1, 3, 64, 64)
-        scale = max(float(model(x).logits.abs().max().item()), 1e-6)
+        scale = float(model(x).logits.abs().max().item())
+        assert scale > 1e-6, f"{factory} still answers with nothing to compare"
 
         cm = cml.export(model, x, str(tmp_path / f"{factory}.mlpackage"))
 
@@ -216,7 +244,7 @@ class TestVerificationCannotBeVacuous:
         x = lucid.randn(1, 4)
         cm = cml.export(model, x, str(tmp_path / "zero.mlpackage"))
 
-        with pytest.raises(ValueError, match="all zeros"):
+        with pytest.raises(ValueError, match="below the"):
             cm.verify(model, x)
         cm.close()
 

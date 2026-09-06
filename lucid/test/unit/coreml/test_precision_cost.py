@@ -93,8 +93,36 @@ class TestItAnswersBothPrecisions:
             def forward(self, x: lucid.Tensor) -> lucid.Tensor:
                 return x * 0.0
 
-        with pytest.raises(ValueError, match="all zeros"):
+        with pytest.raises(ValueError, match="below the"):
             cml.precision_cost(_Zero().eval(), lucid.randn(2, 4))
+
+    def test_a_model_that_answers_almost_zero_is_refused_too(self) -> None:
+        """Exact zeros were guarded; almost-zeros were not, and are worse.
+
+        An untrained EfficientNet answers with logits around 1e-12, and
+        the comparison used to report agreement to 1e-19 — a number that
+        reads as a flawless export and is a blind probe. Three families
+        sat in the smoke list passing that way. The refusal names the
+        magnitude so the reader can see it is the model, not the export.
+        """
+
+        class _Vanishing(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return x * 1e-12
+
+        with pytest.raises(ValueError, match="reach only"):
+            cml.precision_cost(_Vanishing().eval(), lucid.randn(2, 4))
+
+    def test_an_ordinary_model_is_not_caught_by_it(self) -> None:
+        """The guard has to be as narrow as the thing it refuses.
+
+        A model with ordinary outputs must still be measurable — a
+        threshold that swallowed those would be worse than the trap it
+        replaced.
+        """
+        lucid.manual_seed(0)
+        cost = cml.precision_cost(_Deep().eval(), lucid.randn(1, 16, 16, 16) * 1e-3)
+        assert cost["float32"] < cost["float16"]
 
     def test_the_weight_storage_is_held_across_both(self) -> None:
         """Otherwise the difference would not be the body's precision.
