@@ -58,6 +58,7 @@ from lucid.coreml._build import (
     build_package,
 )
 from lucid.coreml._model import CoreMLModel, Latency, PlacementSummary
+from lucid.coreml._optimize import CompressionAware
 from lucid.coreml._spec import (
     DeploymentTarget,
     Draws,
@@ -100,6 +101,7 @@ __all__ = [
     "ImageInput",
     "Metadata",
     "WeightPrecision",
+    "CompressionAware",
     "DeploymentTarget",
     "Draws",
     "Palettize",

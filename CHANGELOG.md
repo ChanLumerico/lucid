@@ -141,6 +141,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a model's random draws can be its inputs
 
+- train a model against the compression it will ship with
+
 ### Performance
 
 - stop emitting an operation for `contiguous`

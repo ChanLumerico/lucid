@@ -689,6 +689,58 @@ _PALETTE_SAMPLE = 1 << 14
 _PALETTE_PASSES = 10
 
 
+def _values_already_there(ordered: Tensor, count: int) -> Tensor | None:
+    """The exact palette of a weight that already sits on few values.
+
+    ``None`` when any row holds more distinct values than the table has
+    entries, which is every ordinary weight.
+
+    Lloyd's algorithm does not reliably find this palette even though it
+    is the optimum with zero error. Two initial centres can land inside
+    one repeated value, leaving another value unclaimed — and an entry no
+    value landed on keeps the centre it had and never moves again, so the
+    iteration cannot recover. Measured on a fine-tuned model whose rows
+    held exactly sixteen values, the refit came back 9.3e-03 away from
+    the palette the model had been trained against.
+
+    That case is not exotic. It is what a compression-aware fine-tune
+    produces by construction, and the whole point of that fine-tune is
+    that the export writes the palette the model learned rather than a
+    nearby one.
+
+    Parameters
+    ----------
+    ordered : Tensor
+        ``(groups, span)``, each row sorted ascending.
+    count : int
+        Entries the table has.
+
+    Returns
+    -------
+    Tensor or None
+        ``(groups, count)`` palettes, ascending, with any unused tail
+        entry filled by the row's largest value so the table stays
+        monotone for the bisection.
+    """
+    groups = int(ordered.shape[0])
+    fresh = lucid.concat(
+        [
+            lucid.ones(groups, 1),
+            (ordered[:, 1:] != ordered[:, :-1]).to(lucid.float32),
+        ],
+        dim=1,
+    )
+    slot = (lucid.cumsum(fresh, dim=1) - 1.0).to(lucid.int64)
+    if int(slot.max().item()) >= count:
+        return None
+
+    empty = lucid.zeros(groups, count)
+    totals = lucid.scatter_add(empty, 1, slot, ordered)
+    hits = lucid.scatter_add(empty, 1, slot, lucid.ones_like(ordered))
+    safe = lucid.where(hits > 0, hits, lucid.ones_like(hits))
+    return lucid.where(hits > 0, totals / safe, ordered[:, -1:])
+
+
 def _palettes_for(rows: Tensor, count: int) -> Tensor:
     """One palette per row, by Lloyd's algorithm in one dimension.
 
@@ -711,6 +763,11 @@ def _palettes_for(rows: Tensor, count: int) -> Tensor:
     span = int(sample.shape[1])
 
     ordered = lucid.sort(sample, dim=-1)
+    settled = _values_already_there(ordered, count)
+    if settled is not None:
+        # Exact, and the iteration below would not find it — see the
+        # helper. Every ordinary weight falls straight through this.
+        return settled
     marks = [
         float(min(span - 1, int((index + 0.5) * span / count)))
         for index in range(count)
