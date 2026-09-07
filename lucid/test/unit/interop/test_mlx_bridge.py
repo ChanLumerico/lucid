@@ -154,3 +154,58 @@ class TestRefusals:
 
         with pytest.raises(ValueError, match="device type"):
             _C_engine.from_dlpack_metal(host)
+
+
+class TestACapsuleThatBeginsPastItsBuffer:
+    """A DLPack tensor's first element is at ``data + byte_offset``.
+
+    The import built its array from ``data`` alone and never read the
+    offset, so a capsule that begins later was adopted as though it began
+    at the buffer — every element shifted by ``byte_offset / itemsize``,
+    with no error. The packed-strides check above does not catch it: a
+    leading-axis slice of a contiguous buffer is still row-major packed
+    and merely starts further in.
+
+    It is reachable from any producer that slices, ``mlx.core`` included:
+    ``mx.arange(12)[4:]`` hands over a capsule with ``byte_offset`` 16.
+
+    Refused rather than honoured, because honouring it needs a slice this
+    layer cannot express — ``buffer_to_array`` takes the same position for
+    the same reason, and this path was bypassing it. A refusal is
+    recoverable; a tensor quietly reading the wrong four elements is not.
+    """
+
+    def test_an_offset_slice_is_refused(self) -> None:
+        import mlx.core as mx
+
+        whole = mx.arange(12, dtype=mx.float32)
+        mx.eval(whole)
+
+        with pytest.raises(ValueError, match="byte_offset"):
+            lucid.from_dlpack(whole[4:])
+
+    def test_the_message_names_the_offset(self) -> None:
+        """So the reader can tell how far off it would have been."""
+        import mlx.core as mx
+
+        whole = mx.arange(12, dtype=mx.float32)
+        mx.eval(whole)
+
+        with pytest.raises(ValueError) as refusal:
+            lucid.from_dlpack(whole[4:])
+        assert "16" in str(refusal.value)  # four float32 elements in
+
+    def test_a_capsule_that_starts_at_its_buffer_is_still_adopted(self) -> None:
+        """As narrow as the defect: the ordinary case is untouched."""
+        import mlx.core as mx
+
+        whole = mx.arange(12, dtype=mx.float32)
+        mx.eval(whole)
+
+        adopted = lucid.from_dlpack(whole)
+        assert [float(v) for v in adopted.cpu().reshape(-1)] == list(range(12))
+
+    def test_a_lucid_tensor_still_round_trips(self) -> None:
+        t = lucid.arange(6, dtype=lucid.float32).reshape(2, 3).to("metal")
+        back = lucid.from_dlpack(t)
+        assert [float(v) for v in back.cpu().reshape(-1)] == list(range(6))

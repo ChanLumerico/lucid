@@ -240,6 +240,29 @@ TensorImplPtr dlpack_to_metal(DLManagedTensor* managed) {
         }
     }
 
+    // A capsule's first element lives at ``data + byte_offset``; the array
+    // below is built from ``data`` alone.  Adopting an offset capsule
+    // without reading it therefore returns a tensor shifted by
+    // ``byte_offset / itemsize`` elements, with no error — the packed
+    // check above does not catch it, because a leading-axis slice of a
+    // contiguous buffer is still row-major packed and merely starts
+    // later.
+    //
+    // Refused rather than honoured because honouring it needs a slice
+    // MLX does not expose here: ``buffer_to_array`` takes the same
+    // position for the same reason.  A refusal is recoverable and a
+    // silently shifted tensor is not.
+    if (t.byte_offset != 0) {
+        release();
+        throw std::invalid_argument(
+            "dlpack_to_metal: this capsule's data begins at byte_offset " +
+            std::to_string(t.byte_offset) +
+            ", and adopting it without a copy would read from the start of the "
+            "buffer instead — offset views are not supported yet. Make the "
+            "producer hand over a capsule whose data begins at its buffer, or "
+            "copy it across the host");
+    }
+
     ::mlx::core::Shape mlx_shape(dims.begin(), dims.end());
     ::mlx::core::Dtype mlx_dtype = lucid::gpu::to_mlx_dtype(dtype);
 
