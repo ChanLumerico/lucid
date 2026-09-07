@@ -276,6 +276,39 @@ def export(
             "lucid.coreml: model is in training mode; call model.eval() first"
         )
 
+    inner = getattr(model, "model", None)
+    if inner is not None and type(model).__name__ == "CompiledModule":
+        # A compiled module is a wrapper around the model, and tracing it
+        # follows the wrapper rather than the network: the export ends up
+        # reporting that the model ignored its input, which is not what
+        # happened and sends the reader looking in the wrong place.
+        raise TypeError(
+            "lucid.coreml: this is a lucid.compile wrapper, not a model — the "
+            "trace would follow the wrapper and report that the input reached "
+            "nothing. Export the module it wraps (`compiled.model`); the two "
+            "compute the same thing, and Core ML compiles the package itself "
+            "so nothing is lost by exporting the uncompiled one"
+        )
+
+    on_gpu = [
+        name
+        for name, parameter in getattr(model, "named_parameters", lambda: [])()
+        if getattr(getattr(parameter, "device", None), "type", "cpu") != "cpu"
+    ]
+    if on_gpu:
+        # Reachable from the ordinary path — train on Metal, export — and
+        # what it used to raise came from the blob writer several layers
+        # down, naming neither the model nor the way out.
+        raise ValueError(
+            f"lucid.coreml: this model's parameters are on the GPU "
+            f"({len(on_gpu)} of them, {on_gpu[0]!r} among the first), and the "
+            f"package's weights are written from host memory. Move it first — "
+            f"`model.to('cpu')` — and export from there; the exported package "
+            f"runs on whichever units you open it with, so training on Metal "
+            f"and shipping to the Neural Engine is the expected path, not a "
+            f"contradiction"
+        )
+
     # Built beside the destination and moved onto it only once it is
     # whole. Writing in place means clearing first, and an export that
     # then fails — an unsupported operation, a shape the trace could not

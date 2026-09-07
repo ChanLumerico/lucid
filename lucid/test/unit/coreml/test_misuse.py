@@ -224,3 +224,55 @@ class TestAHandleIsAContextManager:
                 raise ZeroDivisionError
         with pytest.raises(RuntimeError, match="closed"):
             opened.predict(x)
+
+
+class TestTheOtherFourAxesReachingThisOne:
+    """Where the rest of Lucid meets the exporter, and what it used to say.
+
+    Both of these sit on ordinary paths — you train on Metal, and you
+    compile before you measure — and both used to fail somewhere below
+    the exporter, naming neither the cause nor the way out. Neither is a
+    translation gap: the export works fine once you know the two moves.
+    """
+
+    def test_a_model_on_the_gpu_says_what_to_do(self, tmp_path) -> None:
+        """It raised from the blob writer, several layers down.
+
+        "weights must be on the CPU to be written into the blob" is true
+        and says nothing about the model, the export, or `.to('cpu')`.
+        """
+        lucid.manual_seed(0)
+        model = _Small().eval().to("metal")
+        with pytest.raises(ValueError, match="parameters are on the GPU"):
+            cml.export(
+                model,
+                lucid.randn(1, 3, 8, 8, device="metal"),
+                f"{tmp_path}/gpu.mlpackage",
+            )
+
+    def test_and_the_move_is_all_it_takes(self, tmp_path) -> None:
+        """The refusal has to be worth following."""
+        lucid.manual_seed(0)
+        model = _Small().eval().to("metal").to("cpu")
+        x = lucid.randn(1, 3, 8, 8)
+        exported = cml.export(model, x, f"{tmp_path}/moved.mlpackage")
+        try:
+            assert tuple(exported.predict(x).shape) == (1, 8, 8, 8)
+        finally:
+            exported.close()
+
+    def test_a_compile_wrapper_is_refused_by_name(self, tmp_path) -> None:
+        """Tracing followed the wrapper and blamed the model.
+
+        "the model ignored its input" is the opposite of what happened —
+        the input reaches the network fine, and the trace never got to
+        the network.
+        """
+        lucid.manual_seed(0)
+        compiled = lucid.compile(_Small().eval().to("metal"))
+        with pytest.raises(TypeError, match="lucid.compile wrapper"):
+            cml.export(
+                compiled,
+                lucid.randn(1, 3, 8, 8, device="metal"),
+                f"{tmp_path}/compiled.mlpackage",
+            )

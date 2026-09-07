@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Fixed
+
+- the two axes that reach the exporter and used to fall through it
+
+---
+
 ## [3.11.1] — 2026-09-07
 
 A patch release out of the first outside reports against 3.11.0. Five
