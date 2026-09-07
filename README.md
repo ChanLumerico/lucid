@@ -260,10 +260,9 @@ Large models can be sharded across several files with `lucid.save_sharded` /
 
 ## 📱 Core ML Export
 
-Neither of Lucid's backends reaches the Neural Engine — nothing outside Core ML does. So
-`lucid.coreml` writes a `.mlpackage` itself: the MIL protobuf, the weight blob, the bundle.
-No conversion toolchain runs at export time and none is a dependency; the only external code
-in the loop is Apple's own runtime, loading the file.
+Neither backend reaches the Neural Engine — nothing outside Core ML does. `lucid.coreml`
+writes the `.mlpackage` itself, so no conversion toolchain is in the loop at export time or
+in your dependencies.
 
 ```python
 import lucid, lucid.models as M, lucid.coreml as cml
@@ -271,125 +270,39 @@ import lucid, lucid.models as M, lucid.coreml as cml
 model = M.create_model("resnet_18").eval()
 x = lucid.randn(1, 3, 224, 224)
 
-package = cml.export(
-    model, x, "resnet18.mlpackage",
-    precision=cml.Precision.FLOAT16,          # the Neural Engine runs float16 and nothing else
-    compute_units=cml.ComputeUnits.CPU_AND_NE,
-)
+package = cml.export(model, x, "resnet18.mlpackage",
+                     precision=cml.Precision.FLOAT16,     # the ANE runs float16, nothing else
+                     compute_units=cml.ComputeUnits.CPU_AND_NE)
 
-print(package.verify(model, x))               # largest difference against the eager model
-print(package.benchmark(x).median_ms)         # 0.90 ms
-print(package.compute_plan())                 # where each operation actually landed
+package.verify(model, x)              # largest difference against the eager model
+package.benchmark(x).median_ms        # 0.90
+package.compute_plan()                # where each operation actually landed
 ```
 
-**M1 Pro / 16 GB, macOS 26 — batch 1 at 224², float16 package.** Each figure is the median
-of five independent measurements, and each of those is itself a median over 30 predictions
-after 5 warm-ups. "Metal" is Lucid's own MLX path with the lazy graph flushed, which is the
-fair comparison; CPU is there because that is where an unexported model usually sits.
+Batch 1 at 224², float16, M1 Pro — median of five measurements. "Metal" is Lucid's own MLX
+path with the lazy graph flushed, which is the honest comparison; against the CPU the same
+numbers read 12–53×.
 
-| Model | CPU | Metal | Neural Engine | vs Metal |
-|---|---|---|---|---|
-| `alexnet` | 5.0 ms | 2.2 ms | **0.42 ms** | 5.3× |
-| `resnet_18` | 17.7 ms | 6.1 ms | **0.90 ms** | 6.7× |
-| `mobilenet_v2` | 18.6 ms | 7.9 ms | **0.61 ms** | 13.1× |
-| `convnext_tiny` | 153.3 ms | 10.5 ms | **2.87 ms** | 3.7× |
+| Model | Metal | Neural Engine | |
+|---|---|---|---|
+| `alexnet` | 2.2 ms | **0.42 ms** | 5.3× |
+| `resnet_18` | 6.1 ms | **0.90 ms** | 6.7× |
+| `mobilenet_v2` | 7.9 ms | **0.61 ms** | 13.1× |
+| `convnext_tiny` | 10.5 ms | **2.87 ms** | 3.7× |
 
-A single measurement is not enough here: one ResNet-18 run taken right after a large export
-came back at 1.70 ms against a 0.89–0.92 ms band everywhere else, which is why the numbers
-above are medians of repeats rather than one reading.
+**58 of 62 zoo families export.** Beyond precision and compute units, `export` takes weight
+compression (`INT8`, `Palettize(bits=…)`, `Sparsify(ratio=…)`), image inputs and classifier
+outputs, flexible shapes, values carried between predictions, and several entry points
+sharing one set of weights. `CompressionAware` fine-tunes a model against the compression it
+will ship with, which is what makes palettization below six bits usable at all.
 
-`compute_plan()` puts exactly two operations on the CPU in each of these and everything else
-on the Neural Engine — 14 of AlexNet's 16, 187 of ConvNeXt's 189. Float32 exports land
-**entirely on the CPU**, because the accelerator has no other precision, so
-`precision_cost(model, x)` exports both ways and tells you what half costs *this* network
-before you commit to it. That varies by more than an order of magnitude between
-architectures that look alike: convolutional stacks near 1e-3, ViT at 1e-2, MaxViT at
-1.6e-1.
-
-**58 of 62 zoo families export**, and the four that do not each name a reason rather than
-being left out.
-
-### Weight compression
-
-```python
-cml.export(model, x, "int8.mlpackage",   weights=cml.WeightPrecision.INT8)
-cml.export(model, x, "6bit.mlpackage",   weights=cml.Palettize(bits=6))
-cml.export(model, x, "sparse.mlpackage", weights=cml.Sparsify(ratio=0.3))
-```
-
-Measured on a **trained** ResNet-50 (102.7 MB), against its top-1 over five inputs: int8 is
-3.9× smaller and keeps 4/5, six-bit palettization 4.3× and 4/5. Below six bits post-training
-palettization changes every prediction, and no export setting recovers it — per-layer opt-out
-and per-channel tables were both tried and measured, and both failed.
-
-What does work is training against the compression:
-
-```python
-aware = cml.CompressionAware(model, weights=cml.Palettize(bits=2))
-for x, y in loader:                            # fine-tune the wrapper as if it were the model
-    loss = criterion(aware(x), y)
-    loss.backward(); opt.step(); opt.zero_grad()
-aware.refit()
-cml.export(aware.settle(), x, "tiny.mlpackage", weights=cml.Palettize(bits=2))
-```
-
-The forward pass uses compressed weights while the optimizer updates the full-precision ones
-behind them. On a small classifier at two bits this recovers 0.982 → 0.995 against a control
-given the same extra training; at four bits it is neutral, because there is nothing to
-recover. It helps where the compression costs something.
-
-### The interface the package presents
-
-Pixels in and labels out, a shape range, values carried between predictions, several entry
-points sharing one set of weights:
-
-```python
-cml.export(model, pixels, "classifier.mlpackage",
-           image_input=cml.ImageInput(scale=1 / 255.0),
-           classifier=cml.Classifier(labels=class_names))
-
-cml.export(model, x, "flexible.mlpackage", shape_range={0: (1, 16)})
-cml.export(model, feed, "decoder.mlpackage",
-           state=[cml.State(input="cache", output="output_0")])
-cml.export_functions({"prompt": (model, long), "step": (model, one)}, "both.mlpackage")
-```
-
-A model that samples inside `forward` — a variational encoder, a world model — cannot be
-exported naively: Core ML has no random operation, so the draw folds at build time and the
-package returns **one fixed sample for the life of the file**. That is refused by default.
-`draws=cml.Draws.AS_INPUT` lifts each draw to an input instead, which loses nothing because
-the draw was never part of the network:
-
-```python
-package = cml.export(vae, x, "vae.mlpackage", draws=cml.Draws.AS_INPUT)
-package.predict(x)                             # a fresh sample, as the eager model would
-package.predict({"input": x, "noise_0": eps})  # or supply one and it is deterministic
-```
-
-### What it refuses, and why that is the feature
-
-Silently wrong is the default failure mode here: a package missing a layer still loads and
-still returns plausible numbers. So an unmapped operation is refused **by name** rather than
-dropped; a comparison against a model whose outputs are near zero is refused rather than
-reported as a perfect match; a failed export leaves the package that was already there
-untouched; and a palettized package opens on `CPU_AND_NE` because Core ML's GPU path unpacks
-four- and sixteen-entry tables incorrectly — measured, and the same file is exact on CPU and
-ANE.
-
-`export` also tells you what system the result will need. Carrying state, palettizing
-weights and writing several entry points each raise the floor from iOS 17 to iOS 18 — the
-kind of thing you would otherwise find out from a device, after shipping:
-
-```python
-cml.export(model, x, "p.mlpackage", weights=cml.Palettize(bits=4),
-           minimum_deployment_target=cml.DeploymentTarget.IOS17)
-# ValueError: IOS17 was asked for, and this export uses palettization
-#             (weights=Palettize(...)), which needs IOS18
-```
-
-Reopening is the ordinary path in a deployment, so `cml.load(path)` recovers what the export
-knew: that an input is a picture, that the outputs are labels, which of the inputs stand in
-for a draw and what distribution each came from.
+Silently wrong is this area's default failure — a package missing a layer still loads and
+still answers — so the refusals are the load-bearing part. An unmapped operation is refused
+**by name**; a comparison against a near-zero reference is refused rather than reported as a
+flawless match; a failed export leaves the package already deployed at that path untouched;
+and a model that samples inside `forward` is refused unless the draw is lifted to an input
+(`draws=cml.Draws.AS_INPUT`), because Core ML folds it at build time and the package would
+otherwise return one fixed sample for the life of the file.
 
 ## ⚡ Performance
 
