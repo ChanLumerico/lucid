@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the two axes that reach the exporter and used to fall through it
 
+### Added
+
+- quantization-aware models reach the exporter
+
 ---
 
 ## [3.11.1] — 2026-09-07

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 import dataclasses
 import math
+import contextlib
 import struct
 
 import lucid
@@ -216,6 +217,53 @@ def _named_examples(example: object) -> tuple[list[tuple[str, Tensor]], bool]:
     )
 
 
+@contextlib.contextmanager
+def _observers_paused(model: Module) -> Any:
+    """Stop calibration machinery from writing while the model is traced.
+
+    A quantization-aware model carries observers that record the range of
+    every activation they see, and ``eval()`` does not stop them —
+    correctly, because post-training calibration runs in eval mode and is
+    exactly that recording. Tracing is not calibration: it runs the model
+    once to learn its shape, and letting the observers write turns that
+    single pass into a buffer change the export then refuses as a model
+    that mutates itself.
+
+    So they are paused around the trace and put back the way they were
+    found, whether it succeeded or not. Nothing about the exported
+    program changes — an observer contributes no operation, only a
+    record of what passed through it.
+
+    Recognised by shape rather than by class: anything carrying
+    ``disable_observer`` and ``enable_observer`` is treated as one, which
+    keeps this from importing the quantization subsystem to name it.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model about to be traced.
+
+    Yields
+    ------
+    None
+        For the duration of the trace.
+    """
+    paused = [
+        module
+        for _name, module in model.named_modules()
+        if hasattr(module, "disable_observer") and hasattr(module, "enable_observer")
+    ]
+    was_on = [bool(getattr(module, "_observer_enabled", False)) for module in paused]
+    for module in paused:
+        module.disable_observer()
+    try:
+        yield
+    finally:
+        for module, on in zip(paused, was_on):
+            if on:
+                module.enable_observer()
+
+
 def trace(model: Module, example: object, *, output_field: str | None = None) -> Any:
     """Run one traced forward pass.
 
@@ -246,15 +294,17 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
         The return value carries no tensor, or lacks the named field.
     """
     examples, by_keyword = _named_examples(example)
-    before = _buffer_marks(model)
-    with _compile._tracing() as tracer:
-        if by_keyword:
-            result = model(**dict(examples))
-        else:
-            result = model(*(tensor for _, tensor in examples))
-        selected = _select_outputs(result, output_field)
+    with _observers_paused(model):
+        before = _buffer_marks(model)
+        with _compile._tracing() as tracer:
+            if by_keyword:
+                result = model(**dict(examples))
+            else:
+                result = model(*(tensor for _, tensor in examples))
+            selected = _select_outputs(result, output_field)
 
-    after = _buffer_marks(model)
+        after = _buffer_marks(model)
+
     moved = sorted(
         name for name, mark in after.items() if before.get(name, mark) != mark
     )
