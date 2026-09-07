@@ -105,6 +105,14 @@ class PlacementSummary:
     computation — so they are counted separately and kept out of the
     fraction. Reporting 21% ANE for a model whose every computation runs
     on the ANE would be true of the raw operation list and useless.
+
+    Examples
+    --------
+    >>> plan = package.compute_plan()
+    >>> plan.compute
+    {'CPU': 2, 'ANE': 69}
+    >>> plan.note                      # empty unless something is worth saying
+    ''
     """
 
     def __init__(
@@ -183,6 +191,18 @@ class Latency(NamedTuple):
     Carries the compute units and precision because a latency without
     them says nothing: the same package is three times slower with the
     accelerator withheld, and float32 forfeits the accelerator entirely.
+
+    Examples
+    --------
+    >>> package.benchmark(x)          # the first call after an export
+    Latency(median=1.66ms, best=1.58ms, n=30, CPU_AND_NE, FLOAT16)
+    >>> package.benchmark(x).median_ms   # and again, once it has settled
+    0.94
+
+    A package is slower on its first measured runs than it will be after
+    a few — Core ML is still warming its own caches — so a single reading
+    taken right after an export is not the number to publish. Measure a
+    few times and take the median of those.
     """
 
     median_ms: float
@@ -206,6 +226,49 @@ class CoreMLModel:
     produced from it. Compilation happens once, when the handle is
     created, because it is the expensive step — hundreds of milliseconds
     for a real network — and every prediction afterwards reuses it.
+
+    Attributes
+    ----------
+    path : str
+        The ``.mlpackage`` this handle opened.
+    input_names, output_names : list of str
+        Features the package declares, in the order the program names
+        them. ``predict`` accepts a tuple in this order or a mapping.
+    noise_inputs : list of tuple
+        ``(name, shape)`` for each input that stands in for a random
+        draw, when the export lifted one — see
+        :class:`~lucid.coreml.Draws`. Empty otherwise. A caller who
+        passes nothing for these gets a fresh sample.
+    deployment_target : DeploymentTarget
+        Oldest system the package runs on. Three features raise it:
+        carrying state, palettizing weights, several entry points.
+    compute_units : ComputeUnits
+        What the handle actually opened with, which is not always what
+        was asked for — a palettized package is opened ``CPU_AND_NE``
+        whatever the request, because Core ML's GPU path unpacks small
+        palettes incorrectly.
+    precision : str
+        ``"FLOAT32"`` or ``"FLOAT16"``, as the package was written.
+    palettized : bool
+        Whether the program reads a palette.
+    image_input : ImageInput or None
+        Present when an input is declared as a picture.
+    classifier : Classifier or None
+        Present when the package answers with a label; read it through
+        :meth:`classify` rather than :meth:`predict`.
+
+    Examples
+    --------
+    >>> import lucid, lucid.coreml as cml
+    >>> package = cml.export(model, x, "m.mlpackage")
+    >>> package.predict(x).shape
+    (1, 1000)
+    >>> package.verify(model, x)          # against the eager model
+    2.4e-06        # float32; a float16 package is nearer 1e-3
+    >>> package.close()
+
+    A handle owns a compiled model, so close it — or use it as a context
+    manager if you only need it for one call.
     """
 
     def __init__(
@@ -728,8 +791,39 @@ class CoreMLModel:
         )
 
     def close(self) -> None:
-        """Release the compiled model and the artifacts Core ML cached."""
+        """Release the compiled model and the artifacts Core ML cached.
+
+        Safe to call twice, so a ``finally`` beside a ``with`` is fine.
+        """
         self._handle.close()
+
+    def __enter__(self) -> "CoreMLModel":
+        """Return the handle, so a package can be opened in a ``with``.
+
+        A handle owns a compiled model and a directory Core ML wrote it
+        into, and every use of one in this codebase was already a
+        ``try``/``finally`` around :meth:`close`.
+
+        Returns
+        -------
+        CoreMLModel
+            This handle.
+        """
+        return self
+
+    def __exit__(self, kind: object, value: object, trace: object) -> None:
+        """Close the handle, whether the block ended well or not.
+
+        Parameters
+        ----------
+        kind : type or None
+            Exception class, when the block raised.
+        value : BaseException or None
+            The exception itself.
+        trace : TracebackType or None
+            Its traceback.
+        """
+        self.close()
 
     @override
     def __repr__(self) -> str:

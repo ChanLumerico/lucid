@@ -6,7 +6,7 @@ unreachable; the same gap meant a model trained here could not ship inside
 an iOS or macOS app.  Core ML is the only public route to either.
 
 **No third-party dependency.**  The package format is written by
-:mod:`lucid._C.coreml` — the MIL protobuf, the weight blob, the bundle —
+``lucid/_C/coreml`` — the MIL protobuf, the weight blob, the bundle —
 and executed through Apple's own CoreML.framework, which stands beside
 Accelerate and Metal rather than beside a pip package.  Nothing under
 ``lucid/`` imports anything external (H4).
@@ -231,6 +231,45 @@ def export(
         The model is in training mode.
     UnsupportedOp
         The trace contains an operation with no MIL translation.
+    Examples
+    --------
+    The whole of it, for a classifier that should run on the accelerator:
+
+    >>> import lucid, lucid.models as M, lucid.coreml as cml
+    >>> model = M.create_model("resnet_18_cls").eval()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> package = cml.export(
+    ...     model, x, "resnet18.mlpackage",
+    ...     precision=cml.Precision.FLOAT16,
+    ...     compute_units=cml.ComputeUnits.CPU_AND_NE,
+    ... )
+    >>> package.verify(model, x, relative=True)
+    0.000476
+    >>> package.benchmark(x).median_ms       # once it has settled
+    0.94
+
+    A model of several inputs is given them the way its ``forward``
+    takes them — a tuple positionally, a mapping by name:
+
+    >>> cml.export(clip, (pixels, tokens), "clip.mlpackage")
+    >>> cml.export(decoder, {"x": token, "cache": cache}, "dec.mlpackage")
+
+    Smaller on disk, at a cost worth measuring before shipping it:
+
+    >>> cml.export(model, x, "int8.mlpackage",
+    ...            weights=cml.WeightPrecision.INT8)
+
+    Pixels in and labels out:
+
+    >>> cml.export(model, pixels, "cls.mlpackage",
+    ...            image_input=cml.ImageInput(scale=1 / 255.0),
+    ...            classifier=cml.Classifier(labels=names))
+
+    A batch axis the caller may vary, and a model that samples:
+
+    >>> cml.export(model, x, "flex.mlpackage", shape_range={0: (1, 16)})
+    >>> cml.export(vae, x, "vae.mlpackage", draws=cml.Draws.AS_INPUT)
+
     """
     if getattr(model, "training", False):
         raise ValueError(
@@ -331,6 +370,25 @@ def export_functions(
     ------
     ValueError
         No functions, or ``default`` names one that is not there.
+    Examples
+    --------
+    A decoder wants two entry points: one that reads a whole prompt and
+    one that reads a single token. They are the same network, so the
+    weights are written once and both point at the same bytes.
+
+    >>> handles = cml.export_functions(
+    ...     {
+    ...         "prompt": (model, lucid.zeros(1, 128).to(lucid.int64)),
+    ...         "step": (model, lucid.zeros(1, 1).to(lucid.int64)),
+    ...     },
+    ...     "decoder.mlpackage",
+    ...     default="step",
+    ... )
+    >>> handles["prompt"].predict(prompt_ids).shape
+    (1, 128, 32000)
+    >>> for handle in handles.values():
+    ...     handle.close()
+
     """
     if not functions:
         raise ValueError("lucid.coreml: a package needs at least one function")
@@ -502,6 +560,19 @@ def load(
     RuntimeError
         Core ML could not compile or load the package; its own message
         names the offending layer.
+    Examples
+    --------
+    >>> package = cml.load("resnet18.mlpackage")
+    >>> package.predict(x).shape
+    (1, 1000)
+
+    The handle recovers what the export knew — that an input is a
+    picture, that the outputs are labels, which inputs stand in for a
+    draw — because the package declares all of it:
+
+    >>> cml.load("cls.mlpackage").classify(pixels)[0]
+    'tabby cat'
+
     """
     from lucid._C import engine as _C_engine
 

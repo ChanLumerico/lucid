@@ -35,17 +35,17 @@ pytestmark = pytest.mark.skipif(not _metal_ok(), reason="Metal unavailable")
 
 PROGRAM = textwrap.dedent("""
     import lucid, lucid.nn as nn, lucid.nn.functional as F
-    from lucid._C import engine as e
+    from lucid._C import engine as _C_engine
 
     class Inverse(nn.Module):
         def forward(self, x):
             return lucid.linalg.inv(x)
 
     model = Inverse().eval().to("metal")
-    e.compile.session_cache_clear()
+    _C_engine.compile.session_cache_clear()
     compiled = lucid.compile.compile(model)
     compiled(lucid.randn(4, 4).to("metal"))
-    print("CACHE", e.compile.session_cache_size())
+    print("CACHE", _C_engine.compile.session_cache_size())
     """)
 
 

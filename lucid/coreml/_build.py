@@ -69,6 +69,14 @@ class UnsupportedRank(NotImplementedError):
     ``(B, H/w, w, W/w, w, C)``, which is rank six — and the honest answer
     is to say which operation and which shape rather than to reshape
     around it and hope the semantics survive.
+
+    Examples
+    --------
+    >>> try:
+    ...     cml.export(model, x, "m.mlpackage")
+    ... except cml.UnsupportedRank as refusal:
+    ...     print(refusal)
+    lucid.coreml: reshape produces a rank-6 tensor ...
     """
 
     def __init__(self, op_name: str, shape: tuple[int, ...]) -> None:
@@ -98,6 +106,14 @@ class UnsupportedOp(NotImplementedError):
         whose package would load and be wrong — is refused deliberately,
         and pointing the reader at ``_emit.py`` to add a mapping would
         send them to write the very thing that was rejected.
+
+    Examples
+    --------
+    >>> try:
+    ...     cml.export(model, x, "m.mlpackage")
+    ... except cml.UnsupportedOp as refusal:
+    ...     print(refusal)
+    lucid.coreml: no Core ML translation for Lucid op 'rk_combine' ...
     """
 
     def __init__(self, op_name: str, reason: str | None = None) -> None:
@@ -2024,6 +2040,14 @@ class ShapeNotFlexible(NotImplementedError):
     pool is the usual cause: the tracer records it as an average pool
     whose kernel came from the input, so the same model traced at two
     resolutions produces two different kernels.
+
+    Examples
+    --------
+    >>> try:
+    ...     cml.export(model, x, "m.mlpackage", shape_range={0: (1, 16)})
+    ... except cml.ShapeNotFlexible as refusal:
+    ...     print(refusal)
+    lucid.coreml: operation 'avg_pool2d' cannot take a flexible shape ...
     """
 
     def __init__(self, op_name: str, detail: str) -> None:
@@ -2046,6 +2070,14 @@ class StatefulModel(NotImplementedError):
     The first call still agrees, because the constants were read after
     the trace, which is what makes this worth refusing rather than
     warning about: ``verify`` runs one prediction and passes.
+
+    Examples
+    --------
+    >>> try:
+    ...     cml.export(model, x, "m.mlpackage")
+    ... except cml.StatefulModel as refusal:
+    ...     print(refusal)
+    lucid.coreml: this model writes to its own buffers while running ...
     """
 
     def __init__(self, names: list[str]) -> None:

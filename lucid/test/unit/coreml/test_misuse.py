@@ -196,3 +196,31 @@ class TestWhatCoreMLItselfCatches:
     def test_a_shape_the_package_did_not_declare(self, one_input, name, shape) -> None:
         with pytest.raises(RuntimeError, match="prediction failed|rank"):
             one_input.predict(lucid.randn(*shape))
+
+
+class TestAHandleIsAContextManager:
+    """It owns a compiled model, so closing it is not optional.
+
+    Every use of one in this codebase was already a ``try``/``finally``
+    around ``close``, which is the shape a context manager exists for.
+    """
+
+    def test_the_block_closes_it(self, tmp_path) -> None:
+        lucid.manual_seed(0)
+        x = lucid.randn(1, 3, 8, 8)
+        with cml.export(_Small().eval(), x, f"{tmp_path}/managed.mlpackage") as package:
+            assert tuple(package.predict(x).shape) == (1, 8, 8, 8)
+        with pytest.raises(RuntimeError, match="closed"):
+            package.predict(x)
+
+    def test_it_closes_when_the_block_raises(self, tmp_path) -> None:
+        """The half that matters — a failure mid-block still releases it."""
+        lucid.manual_seed(0)
+        x = lucid.randn(1, 3, 8, 8)
+        opened = cml.export(_Small().eval(), x, f"{tmp_path}/raising.mlpackage")
+        with pytest.raises(ZeroDivisionError):
+            with opened as package:
+                package.predict(x)
+                raise ZeroDivisionError
+        with pytest.raises(RuntimeError, match="closed"):
+            opened.predict(x)

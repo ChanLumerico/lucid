@@ -36,6 +36,15 @@ class ComputeUnits(enum.Enum):
     ``CPU_AND_NE`` is the reason this package exists: it is the only way
     to reach the Neural Engine, which neither of Lucid's own backends
     (Accelerate, MLX) targets.
+
+    Examples
+    --------
+    >>> import lucid.coreml as cml
+    >>> package = cml.export(model, x, "m.mlpackage",
+    ...                      precision=cml.Precision.FLOAT16,
+    ...                      compute_units=cml.ComputeUnits.CPU_AND_NE)
+    >>> package.compute_plan().compute
+    {'CPU': 2, 'ANE': 69}
     """
 
     ALL = "ALL"
@@ -51,6 +60,11 @@ class Precision(enum.Enum):
     model it came from; Core ML's own default is ``FLOAT16``, which the
     Neural Engine wants and which costs roughly 1e-4 against the eager
     model.
+
+    Examples
+    --------
+    >>> import lucid.coreml as cml
+    >>> cml.export(model, x, "half.mlpackage", precision=cml.Precision.FLOAT16)
     """
 
     FLOAT32 = "FLOAT32"
@@ -77,6 +91,27 @@ class Draws(enum.Enum):
 
     The handle draws for the caller who does not, so a package still
     answers differently on each prediction the way the eager model does.
+
+    Examples
+    --------
+    >>> package = cml.export(vae, x, "vae.mlpackage",
+    ...                      draws=cml.Draws.AS_INPUT)
+    >>> package.noise_inputs
+    [('noise_0', (1, 4))]
+
+    Pass nothing for it and the handle draws, so the package samples the
+    way the model does:
+
+    >>> float((package.predict(x) - package.predict(x)).abs().max()) > 0
+    True
+
+    Pass one and the package is a deterministic function of it:
+
+    >>> eps = lucid.randn(1, 4)
+    >>> a = package.predict({"input": x, "noise_0": eps})
+    >>> b = package.predict({"input": x, "noise_0": eps})
+    >>> float((a - b).abs().max())
+    0.0
     """
 
     REFUSED = "REFUSED"
@@ -109,6 +144,22 @@ class DeploymentTarget(enum.Enum):
     IOS18 : str
         Needed for state, palettization and multi-function packages
         (macOS 15, iPadOS 18).
+
+    Examples
+    --------
+    Read back what the package ended up needing:
+
+    >>> package = cml.export(model, x, "m.mlpackage")
+    >>> package.deployment_target
+    <DeploymentTarget.IOS17: 'CoreML7'>
+
+    Or refuse a floor the package cannot meet, while it is still a
+    Python call rather than a device:
+
+    >>> cml.export(model, x, "m.mlpackage", weights=cml.Palettize(bits=4),
+    ...            minimum_deployment_target=cml.DeploymentTarget.IOS17)
+    Traceback (most recent call last):
+    ValueError: ... palettization ... needs IOS18
     """
 
     IOS17 = "CoreML7"
@@ -143,6 +194,12 @@ class WeightPrecision(enum.Enum):
     The cost is real and one-directional: eight bits per weight cannot
     represent what sixteen did, so a quantized export is further from the
     eager model than a float16 one. ``verify`` will say by how much.
+
+    Examples
+    --------
+    >>> import lucid.coreml as cml
+    >>> cml.export(model, x, "int8.mlpackage",
+    ...            weights=cml.WeightPrecision.INT8)
     """
 
     FLOAT = "FLOAT"
@@ -178,6 +235,15 @@ class Palettize:
         instrument: it stores the same byte per weight but carries a
         scale per output channel, and on a trained ResNet-50 it measured
         both smaller and closer to the model.
+
+    Examples
+    --------
+    >>> cml.export(model, x, "6bit.mlpackage", weights=cml.Palettize(bits=6))
+
+    Below six bits, fit the palette during a fine-tune rather than
+    afterwards — see :class:`~lucid.coreml.CompressionAware`:
+
+    >>> aware = cml.CompressionAware(model, weights=cml.Palettize(bits=2))
     """
 
     bits: int = 4
@@ -209,6 +275,11 @@ class Sparsify:
     ----------
     ratio : float
         Fraction of each weight set to zero, in ``[0, 1)``.
+
+    Examples
+    --------
+    >>> cml.export(model, x, "sparse.mlpackage",
+    ...            weights=cml.Sparsify(ratio=0.3))
     """
 
     ratio: float = 0.5
@@ -228,6 +299,11 @@ class ColorSpace(enum.Enum):
     is silent: the model runs and answers badly, which is the same
     failure as feeding it an image with the red and blue channels
     swapped, because that is exactly what it is.
+
+    Examples
+    --------
+    >>> import lucid.coreml as cml
+    >>> cml.ImageInput(color=cml.ColorSpace.GRAYSCALE, scale=1 / 255.0)
     """
 
     GRAYSCALE = "GRAYSCALE"
@@ -258,6 +334,17 @@ class ImageInput:
         One offset per channel. Empty adds nothing.
     color : ColorSpace
         Pixel layout. ``GRAYSCALE`` expects one channel, the others three.
+
+    Examples
+    --------
+    Pixels are whole numbers in ``[0, 255]``; the scale is applied inside
+    the package, so the caller feeds pixels and not normalised values:
+
+    >>> pixels = (lucid.rand(1, 3, 224, 224) * 255).round()
+    >>> package = cml.export(model, pixels, "img.mlpackage",
+    ...                      image_input=cml.ImageInput(scale=1 / 255.0))
+    >>> package.predict(pixels).shape
+    (1, 1000)
     """
 
     scale: float = 1.0
@@ -291,6 +378,16 @@ class Classifier:
         Feature the winning label is returned under.
     probabilities_name : str
         Feature the label-to-probability map is returned under.
+
+    Examples
+    --------
+    >>> package = cml.export(
+    ...     model, x, "cls.mlpackage",
+    ...     classifier=cml.Classifier(labels=["cat", "dog"]),
+    ... )
+    >>> label, probabilities = package.classify(x)
+    >>> label
+    'cat'
     """
 
     labels: tuple[str, ...]
@@ -322,6 +419,20 @@ class State:
         Feature name of the input the state replaces.
     output : str
         Output field whose value is written back into it.
+
+    Examples
+    --------
+    The cache stops being an input the caller passes; Core ML keeps it
+    and each prediction sees what the last one wrote:
+
+    >>> package = cml.export(
+    ...     decoder, {"x": token, "cache": lucid.zeros(1, 64)},
+    ...     "decoder.mlpackage", precision=cml.Precision.FLOAT16,
+    ...     state=[cml.State(input="cache", output="output_0")],
+    ... )
+    >>> package.input_names
+    ['x']
+    >>> package.reset_state()      # start a fresh sequence
     """
 
     input: str
@@ -334,6 +445,13 @@ class Metadata:
 
     Empty fields are left out of the description rather than written
     blank, so a package carries only what someone actually stated.
+
+    Examples
+    --------
+    >>> cml.export(model, x, "m.mlpackage", metadata=cml.Metadata(
+    ...     description="ResNet-18 trained on ImageNet",
+    ...     author="me", license="MIT", version="1.0",
+    ... ))
     """
 
     description: str = ""

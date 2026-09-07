@@ -47,9 +47,7 @@ def _cubic_coefficients(t: float) -> tuple[float, float, float, float]:
     return far(t + 1.0), near(t), near(other), far(other + 1.0)
 
 
-def _bicubic_axis(
-    x: "Tensor", axis: int, out_size: int, align_corners: bool
-) -> "Tensor":
+def _bicubic_axis(x: Tensor, axis: int, out_size: int, align_corners: bool) -> Tensor:
     """Resample one axis with the cubic kernel.
 
     Bicubic is separable, so the 2-D filter is this applied twice; doing
@@ -88,7 +86,7 @@ def _bicubic_axis(
 
     shape = [1] * x.ndim
     shape[axis] = out_size
-    total: "Tensor" | None = None
+    total: Tensor | None = None
     for tap in range(4):
         # Out-of-range taps clamp to the border, which is what makes the
         # filter well defined at the first and last output pixel.
