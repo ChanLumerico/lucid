@@ -36,7 +36,7 @@ from typing import Any, Callable
 import lucid
 import lucid.nn as nn
 import lucid.optim as optim
-from lucid.test._fixtures.ref_framework import require_ref
+from lucid.test._fixtures.ref_framework import REF_DISPLAY_NAME, require_ref
 
 WARMUP = 8
 ITERS = 40
@@ -170,8 +170,10 @@ def _render(results: dict[str, list[dict[str, float]]], out_dir: str) -> None:
     }
     accent = "#7C5CFF"
     # The comparison is against the reference framework by its own brand colour,
-    # so the figure reads at a glance without a legend lookup.
-    ref_label = "PyTorch"
+    # so the figure reads at a glance without a legend lookup. The name comes
+    # from the fixture rather than being written here: that module is the one
+    # place H5 admits the literal.
+    ref_label = REF_DISPLAY_NAME
     os.makedirs(out_dir, exist_ok=True)
 
     for theme, colour in themes.items():

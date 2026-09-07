@@ -13,7 +13,7 @@ subsystem fails rather than what it does:
   operations, runs at CPU speed, and warns about nothing.
 """
 
-from typing import TYPE_CHECKING, NamedTuple, override
+from typing import TYPE_CHECKING, NamedTuple, Self, override
 
 import lucid
 from lucid._C import engine as _C_engine
@@ -797,7 +797,7 @@ class CoreMLModel:
         """
         self._handle.close()
 
-    def __enter__(self) -> "CoreMLModel":
+    def __enter__(self) -> Self:
         """Return the handle, so a package can be opened in a ``with``.
 
         A handle owns a compiled model and a directory Core ML wrote it

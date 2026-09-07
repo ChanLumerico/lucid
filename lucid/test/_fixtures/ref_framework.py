@@ -38,6 +38,14 @@ import pytest
 
 _REF_NAME = "torch"
 
+#: What to call the reference framework where a human reads it — a chart
+#: axis, a legend. This file is the one place H5 admits the literal, so
+#: anything that has to display the name imports it from here rather than
+#: writing it out: a benchmark figure labelled "reference framework" is a
+#: figure nobody can interpret, and spelling it out at the call site puts
+#: the word somewhere the rule does not allow.
+REF_DISPLAY_NAME = "PyTorch"
+
 
 @functools.lru_cache(maxsize=1)
 def ref_module() -> ModuleType | None:

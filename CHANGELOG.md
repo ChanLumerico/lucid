@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.0] — 2026-09-07
+
 ### Removed
 
 - drop `DDPMUNet` and `efficientdet_config` from their family namespaces —
@@ -49,53 +51,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was the only gap
 - a saved graph could not be loaded back, and said so by crashing
 - the classifier heads return what their task bases promise
-
 - the package was untyped, and mypy had been saying so
-
 - a padded output was being read as a packed one
-
 - read a package's outputs at the type it declares
-
 - say why the graph was not built, instead of falling back mutely
-
 - diagonal over the trailing axes, at any rank
-
 - trilinear resampling reads the grid the model asked for
-
 - grid_sample reaches the trace, and Core ML has always had it
-
 - a compiled model must answer its input, not the traced one
-
 - drop a node only when dropping it is safe
-
 - emit gather_along_axis for the opset the writer declares
-
 - let the public entry points be introspected
-
 - int8 weights in a float32 body
-
 - refuse to verify an image export against non-pixel input
-
 - a third of the public callables had no readable signature
-
 - refuse a sampling forward instead of freezing its draw
-
 - float16 keeps its integers, and the plan says why it matters
-
 - fit palettes in single precision, and cross the options
-
 - sparsity beside state segfaulted Core ML's loader
-
 - a reopened package is the package that was written
-
 - a failed export no longer destroys the package it replaces
-
 - refuse a comparison that cannot tell right from wrong
-
 - count the inputs before pairing them off
-
 - record a bitwise op's operands in the trace
-
 - a lifted draw is the package's input, not the model's
 
 ### Added
@@ -130,19 +108,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - export the families the exclusion list said it could not
 - reconcile mixed dtypes, and stage the rank-6 upsample
 - two more detector families, and an honest empty-constant refusal
-
 - export the rank-6 attention, and record meshgrid's operands
-
 - let a caller name the systems a package has to run on
-
 - cover roformer, and refuse `rand` for the reason `randn` is
-
 - measure what float16 costs a particular model
-
 - time a package, and re-measure what the accelerator buys
-
 - a model's random draws can be its inputs
-
 - train a model against the compression it will ship with
 
 ### Performance
@@ -3802,7 +3773,8 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.10.2...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.11.0...HEAD
+[3.11.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.11.0
 [3.10.2]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.2
 [3.10.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.1
 [3.10.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.0

@@ -57,7 +57,7 @@
 // Increments when new public symbols are added but existing ones keep
 // the same signature and semantics; clients built against an older
 // minor revision continue to work without recompilation.
-#define LUCID_VERSION_MINOR 10
+#define LUCID_VERSION_MINOR 11
 
 // Patch component of the engine SemVer; bumped on bug fixes that
 // preserve both the public API and the ABI.
@@ -65,7 +65,7 @@
 // Notes
 // -----
 // Resets to ``0`` whenever MAJOR or MINOR advances.
-#define LUCID_VERSION_PATCH 2
+#define LUCID_VERSION_PATCH 0
 
 // Human-readable version string embedded into the shared library.
 
@@ -77,7 +77,7 @@
 // optional pre-release tag (``-dev``, ``-rc1`` …) marks unstable
 // builds; release tarballs strip the tag.  Returned verbatim by
 // :func:`version_string`.
-#define LUCID_VERSION_STRING "0.10.2"
+#define LUCID_VERSION_STRING "0.11.0"
 
 // Monotonically increasing ABI generation counter.  Bump this whenever the
 // C++ binary interface changes in a way that makes old .so / .dylib objects
