@@ -218,20 +218,21 @@ class TestTheExportWritesWhatWasTrained:
         finally:
             exported.close()
 
-    def test_int8_does_not_and_the_size_of_that_is_written_down(self, tmp_path) -> None:
-        """The one of the three that is not exact, measured rather than hidden.
+    def test_int8_survives_the_export_too(self, tmp_path) -> None:
+        """It did not, and the reason was worth chasing twice.
 
-        The export derives its scale as ``max / 127.5`` and a settled
-        weight's largest value is ``127 * scale``, so re-deriving gives a
-        grid 0.4% finer than the one trained against and the weights do
-        not sit on it. Changing the convention would move the numbers of
-        every int8 package already written, for a case where the measured
-        need is small: int8 keeps a trained ResNet-50's predictions
-        without any of this.
+        The export derived its scale as ``max / 127.5``, and a settled
+        weight's largest value is ``127 * scale``, so re-deriving gave a
+        grid 0.4% finer than the one trained against — with the weights
+        not on it. This test used to pin that inexactness, on the grounds
+        that changing the convention would move the numbers of every int8
+        package already written.
 
-        The difference is the size of int8's own rounding, which is what
-        this pins — if it grew by an order of magnitude something else
-        would have changed.
+        Neither was necessary. The convention is untouched; the writer
+        notices when a weight already sits on a grid and writes it on
+        that one rather than fitting another. An ordinary weight has as
+        many distinct values as it has elements and never takes that
+        path, so nothing already written moves.
         """
         aware = cml.CompressionAware(_net(), weights=cml.WeightPrecision.INT8)
         settled = aware.settle()
@@ -244,8 +245,7 @@ class TestTheExportWritesWhatWasTrained:
             weights=cml.WeightPrecision.INT8,
         )
         try:
-            drift = exported.verify(settled, probe, relative=True)
-            assert 1e-5 < drift < 5e-2
+            assert exported.verify(settled, probe, relative=True) < 1e-5
         finally:
             exported.close()
 

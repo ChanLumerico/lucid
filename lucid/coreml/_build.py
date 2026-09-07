@@ -645,6 +645,96 @@ _MIL_CAST_NAMES = {
 }
 
 
+def _worth_storing_compressed(
+    tensor: Tensor, weights: WeightPrecision | _spec.Palettize | _spec.Sparsify
+) -> bool:
+    """Whether a folded constant should go through the weight writer.
+
+    The same rule the compressors apply themselves — rank at least two,
+    enough elements to pay for the table — asked before the value is
+    routed, so a small folded constant keeps travelling inline rather
+    than acquiring a blob entry it does not need.
+    """
+    if weights is WeightPrecision.FLOAT:
+        return False
+    return len(tensor.shape) >= 2 and int(tensor.numel()) >= _QUANTIZE_MIN_ELEMENTS
+
+
+#: A channel is tested for an existing grid on at most this many of its
+#: elements. An ordinary float weight has as many distinct values as
+#: elements, so a sample rejects it immediately; one that really sits on
+#: an 8-bit grid cannot have more than 256 however much is looked at.
+_GRID_SAMPLE = 1 << 12
+
+
+def _grid_already_there(flat: Tensor) -> Tensor | None:
+    """The step a weight is already quantized on, or ``None``.
+
+    A quantization-aware model's weights have been trained onto a grid,
+    and deriving a fresh one throws that away: this writer's scale is
+    ``max / 127.5``, so re-quantizing a weight whose extreme is
+    ``127 * step`` lands it on a grid 0.4% finer that its values do not
+    sit on. Measured on a QAT classifier, that cost 1.4e-03 against a
+    model the export could have reproduced exactly — the whole claim of
+    training with quantization, given away at the last step.
+
+    Rejected cheaply: a sample of each channel is sorted and its distinct
+    values counted, and an ordinary weight has as many as it has
+    elements. Only a weight that survives that is examined in full.
+
+    Parameters
+    ----------
+    flat : Tensor
+        ``(channels, elements)`` — the weight, one row per output
+        channel.
+
+    Returns
+    -------
+    Tensor or None
+        ``(channels, 1)`` steps, or ``None`` when any channel holds more
+        distinct values than eight bits can index, or when the values are
+        not multiples of a common step.
+    """
+    width = int(flat.shape[1])
+    sample = flat[:, :: (width // _GRID_SAMPLE + 1)] if width > _GRID_SAMPLE else flat
+    ordered = lucid.sort(sample, dim=-1)
+    fresh = (ordered[:, 1:] != ordered[:, :-1]).to(lucid.float32)
+    if float(fresh.sum(dim=1).max().item()) + 1 > 256:
+        return None
+
+    ordered = lucid.sort(flat, dim=-1)
+    gaps = ordered[:, 1:] - ordered[:, :-1]
+    # The step is the smallest gap that is not two identical values. A
+    # grid with a code missing in the middle would give a multiple of the
+    # step instead, which the integrality check below then rejects.
+    positive = lucid.where(gaps > 0, gaps, lucid.full_like(gaps, float("inf")))
+    step = positive.min(dim=1).reshape(-1, 1)
+    if not bool((step < float("inf")).all().item()):
+        return None
+
+    codes = (flat / step).round()
+    # Measured against the step rather than against the weight's range:
+    # the fake-quantize that produced these computed ``round(w / s) * s``
+    # in float32, so a value sits within an ulp of its lattice point, and
+    # an ulp of the largest weight is far larger than an ulp of the
+    # smallest. A thousandth of a step is decisively on the lattice.
+    off = (flat - codes * step).abs() / step
+    # A hundredth of a step. The discriminating work is done by the
+    # distinct-value count above — an ordinary weight has as many values
+    # as elements and never gets here — so this only has to tolerate the
+    # float32 round trip that produced the lattice, which on a trained
+    # weight runs to about a thousandth of a step and on an untrained one
+    # to a tenth of that.
+    if float(off.max().item()) > 1e-2:
+        return None
+    # int8 runs from -128 to 127, and a symmetric fake-quantize reaches
+    # the negative end — rejecting on magnitude alone would throw away
+    # the grid for a code that is perfectly representable.
+    if float(codes.max().item()) > 127.0 or float(codes.min().item()) < -128.0:
+        return None
+    return step
+
+
 def _quantize_weight(
     tensor: Tensor, scale_mil: int
 ) -> tuple[Tensor, bytes, bytes, int] | None:
@@ -681,10 +771,24 @@ def _quantize_weight(
 
     channels = int(tensor.shape[0])
     flat = tensor.reshape(channels, -1)
-    scale, zero_point = _quant.calculate_qparams(
-        flat.min(dim=1), flat.max(dim=1), _quant.per_channel_symmetric, _quant.qint8
-    )
-    codes = _quant.quantize(tensor, scale, zero_point, _quant.qint8, ch_axis=0)
+    existing = _grid_already_there(flat)
+    if existing is not None:
+        # Already on a grid, so it is written on that one. Deriving a new
+        # one would round values that were trained to sit exactly where
+        # they are.
+        scale = existing.reshape(-1)
+        zero_point = lucid.zeros_like(scale)
+        codes = (
+            (flat / existing)
+            .round()
+            .reshape(*[int(d) for d in tensor.shape])
+            .to(lucid.int8)
+        )
+    else:
+        scale, zero_point = _quant.calculate_qparams(
+            flat.min(dim=1), flat.max(dim=1), _quant.per_channel_symmetric, _quant.qint8
+        )
+        codes = _quant.quantize(tensor, scale, zero_point, _quant.qint8, ch_axis=0)
 
     # MIL has no float16 or int8 immediate list; both travel as raw
     # little-endian bytes, so they are packed here rather than handed to
@@ -2669,31 +2773,45 @@ def build_package(
     blob = into.blob if into is not None else cm.BlobWriter(paths.weight_bin)
     weight_shapes: dict[str, list[int]] = {}
     quantized_count = 0
-    for tid, impl in feeds.items():
-        if tid in input_ids:
-            continue
-        tensor = _wrap(impl)
-        _refuse_if_empty(tensor)
-        is_float = tensor.dtype in (lucid.float32, lucid.float16)
-        if half and is_float:
-            tensor = tensor.half()
-        # Float payloads go straight from the tensor's host storage — no
-        # numpy anywhere in this package (H4).
+
+    def _write_float_const(name: str, tensor: Tensor, dedup: int | None) -> None:
+        """Write one float constant, compressed the way ``weights`` asks.
+
+        Shared by the model's own weights and by the values constant
+        folding computes for it. They used to be written by different
+        code, and only the first path compressed: a weight that reached
+        the program through any foldable operation — a quantization-aware
+        model's fake-quantize, a scale, a transpose — landed as float32
+        however the export was asked to store it. On a QAT classifier
+        that was 63 KB against the 19 KB the same weights take when
+        nothing folds.
+
+        Parameters
+        ----------
+        name : str
+            Value name to declare in the program.
+        tensor : Tensor
+            The constant, already at the body's precision.
+        dedup : int or None
+            Identity to share the blob payload under, when several
+            functions carry the same parameter. ``None`` writes a fresh
+            payload — a folded value belongs to one function.
+        """
+        nonlocal quantized_count
         shape = [int(d) for d in tensor.shape]
-        name = f"_w{tid}"
         palettized = (
             _palettize_weight(tensor, weights.bits)
-            if is_float and isinstance(weights, _spec.Palettize)
+            if isinstance(weights, _spec.Palettize)
             else None
         )
         sparse = (
             _sparsify_weight(tensor, weights.ratio)
-            if is_float and isinstance(weights, _spec.Sparsify)
+            if isinstance(weights, _spec.Sparsify)
             else None
         )
         quantized = (
             _quantize_weight(tensor, body_mil)
-            if is_float and weights is WeightPrecision.INT8
+            if weights is WeightPrecision.INT8
             else None
         )
         if palettized is not None:
@@ -2751,16 +2869,30 @@ def build_package(
                 0,
             )
             quantized_count += 1
-        elif is_float:
+        else:
             # Keyed by the parameter's identity, so a weight two
             # functions share is written once and pointed at twice.
-            key = id(impl)
-            offset = into.offsets.get(key) if into is not None else None
+            offset = into.offsets.get(dedup) if into is not None and dedup else None
             if offset is None:
                 offset = blob.append_tensor(_unwrap(tensor), body_blob)
-                if into is not None:
-                    into.offsets[key] = offset
+                if into is not None and dedup:
+                    into.offsets[dedup] = offset
             program.add_blob_const(name, (body_mil, shape), offset)
+
+    for tid, impl in feeds.items():
+        if tid in input_ids:
+            continue
+        tensor = _wrap(impl)
+        _refuse_if_empty(tensor)
+        is_float = tensor.dtype in (lucid.float32, lucid.float16)
+        if half and is_float:
+            tensor = tensor.half()
+        # Float payloads go straight from the tensor's host storage — no
+        # numpy anywhere in this package (H4).
+        shape = [int(d) for d in tensor.shape]
+        name = f"_w{tid}"
+        if is_float:
+            _write_float_const(name, tensor, id(impl))
         elif tensor.dtype == lucid.bool_:
             # A boolean buffer is a mask, not a count that happens to be 0
             # or 1, and MIL types the two apart — an int32 constant would
@@ -2872,9 +3004,19 @@ def build_package(
                 *[int(d) for d in folded_value.shape][1:]
             )
         if folded_value.dtype in (lucid.float32, lucid.float16):
-            names[tid] = builder.const_from_tensor(
-                folded_value.half() if half else folded_value
-            )
+            written = folded_value.half() if half else folded_value
+            if _worth_storing_compressed(written, weights):
+                # Large enough to pay for a table, so it goes through the
+                # same writer the model's own weights do. Before this it
+                # went out float32 whatever the export was asked for.
+                name = f"_f{tid}"
+                _write_float_const(name, written, None)
+                builder.mark_const(name)
+                builder.dtypes[name] = body_mil
+                builder.shapes[name] = [int(d) for d in written.shape]
+                names[tid] = name
+            else:
+                names[tid] = builder.const_from_tensor(written)
         elif folded_value.dtype in (lucid.int32, lucid.int64):
             names[tid] = builder.const_ints_shaped(
                 [int(v) for v in _flatten_ints(folded_value)],

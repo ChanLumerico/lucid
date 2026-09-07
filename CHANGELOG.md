@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the two axes that reach the exporter and used to fall through it
 
+- a folded weight is still a weight
+
 ### Added
 
 - quantization-aware models reach the exporter
