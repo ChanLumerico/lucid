@@ -13,6 +13,7 @@ import {
   GitBranch,
   Layers,
   Network,
+  Rocket,
   Save,
   Shuffle,
   Sigma,
@@ -125,6 +126,7 @@ function buildModuleGroups(): ModuleGroup[] {
   const signal        = _memberCount("lucid.signal");
   const distributions = _memberCount("lucid.distributions");
   const diffeq        = _memberCount("lucid.diffeq");
+  const coreml        = _memberCount("lucid.coreml");
   const engineMembers = _memberCount("lucid._C.engine");
 
   return [
@@ -160,6 +162,12 @@ function buildModuleGroups(): ModuleGroup[] {
       modules: [
         { name: "lucid.autograd", slug: "lucid.autograd", description: "Function, grad, gradcheck, functional transforms.", icon: GitBranch },
         { name: "lucid.func",     slug: "lucid.func",     description: "vmap, grad, vjp, jvp, jacrev, jacfwd, hessian.",    icon: Workflow  },
+      ],
+    },
+    {
+      category: "Deployment",
+      modules: [
+        { name: "lucid.coreml", slug: "lucid.coreml", description: `Export to Core ML and run on the Neural Engine — ${coreml} names covering precision, weight compression, flexible shapes, and state.`, icon: Rocket, badge: `${coreml} names` },
       ],
     },
     {

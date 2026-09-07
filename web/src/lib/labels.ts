@@ -227,6 +227,7 @@ const PACKAGE_LABELS: Record<string, string> = {
   "lucid.utils.tokenizer":   "Tokenizers",
   "lucid.utils.transforms":  "Transforms",
   "lucid.weights":           "Weights",
+  "lucid.coreml":            "Core ML",
   "lucid.models":            "Model Zoo",
   "lucid.models.vision":     "Vision Models",
   "lucid.models.text":       "Text Models",
