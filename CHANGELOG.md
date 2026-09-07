@@ -15,10 +15,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.11.1] — 2026-09-07
+
+A patch release out of the first outside reports against 3.11.0. Five
+issues and one pull request; two were live defects, three were already
+fixed and are recorded here only so the reasoning is not lost.
 
 ### Fixed
 
-- a DLPack capsule that begins past its buffer
+- **A DLPack capsule that begins past its buffer was read from the
+  buffer.** A DLPack tensor's first element is at `data + byte_offset`,
+  and the Metal import built its array from `data` alone — every element
+  shifted by `byte_offset / itemsize`, no error raised. The packed-strides
+  check above it does not catch this: a leading-axis slice of a contiguous
+  buffer is still row-major packed and merely starts further in. Reachable
+  from any producer that slices — `mx.arange(12)[4:]` hands over a capsule
+  with `byte_offset` 16, and `lucid.from_dlpack` returned elements 0-7
+  where 4-11 were asked for. Refused now rather than honoured, which is
+  the position `buffer_to_array` already took and this path was bypassing.
+  (#79)
+
+- **`lucid.coreml`'s module docstring shipped with a paste artifact.**
+  Its first line ended `...run them on the ANE.rmfj`, so `help()`, pydoc
+  and the docs site all showed it. Found and fixed by @Jah-yee. (#80, #81)
+
+### Notes
+
+Three reports were already fixed in 3.11.0 and are closed with the
+measurements rather than silently: the Core ML emitters read `slope` and
+`dim` — the keys the tracer writes — through a helper that raises on a
+missing attribute instead of substituting a default, which is what let
+both hide (#76, #77); and `lucid/` is at zero string type hints, checked
+by parsing rather than grepping (#78).
 
 ---
 
@@ -3780,7 +3808,8 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.11.0...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.11.1...HEAD
+[3.11.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.11.1
 [3.11.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.11.0
 [3.10.2]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.2
 [3.10.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.1
