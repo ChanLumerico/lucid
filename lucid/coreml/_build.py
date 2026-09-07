@@ -2150,6 +2150,15 @@ def _varying_axes(
         if other_ids != ids[0]:
             raise ShapeNotFlexible("<graph>", "the traced values differ between shapes")
         for (name, attrs, _shape), (_n, other_attrs, _s) in zip(base, other):
+            if name in _DRAW_OPS:
+                # A draw records the seed it used, and each probe drew
+                # again — so its attributes always differ and never
+                # because of the size. Comparing them refused every
+                # flexible export of a model that samples, naming the
+                # seed as though the input had changed it. The operation
+                # is either refused outright or lifted to an input, so
+                # nothing downstream reads these.
+                continue
             if attrs != other_attrs:
                 changed = sorted(
                     key
@@ -2381,13 +2390,15 @@ def build_package(
         model, example, output_field=output_field
     )
 
-    # A lifted draw is an input in every respect from here on: it is
-    # declared, it is bracketed by the same casts, and it is not a
-    # constant — which is the whole point, since folding one is what
-    # freezes the sample.
     lifted = _lift_draws(graph, traced_values) if draws is _spec.Draws.AS_INPUT else []
     lifted_heads = {tid for _n, tid, _t, _k in lifted}
-    inputs = [*inputs, *[(name, tid, sample) for name, tid, sample, _k in lifted]]
+    lifted_names = {name for name, _tid, _t, _k in lifted}
+    # Appended only once the interface has been settled. A lifted draw is
+    # an input of the *package* and not of the model, and everything
+    # between here and there counts the model's: a flexible shape, a
+    # range and an image input each need a single-input model, and
+    # counting the draw made a one-input sampler look like two.
+    asked_for = len(inputs)
 
     varying: dict[int, set[int]] = {}
     ordered: list[tuple[int, ...]] = []
@@ -2498,6 +2509,21 @@ def build_package(
                     "has to be what was read"
                 )
 
+    for name, tid, sample, kind in lifted:
+        if tid in varying:
+            raise ShapeNotFlexible(
+                kind,
+                f"its result is shaped {tuple(int(d) for d in sample.shape)} at one "
+                f"input size and differently at another, so the input {name!r} it "
+                "becomes would have to be flexible too — and which of the package's "
+                "inputs a caller may vary is one choice, not two. Export it at a "
+                "single shape",
+            )
+
+    # A lifted draw is an input in every respect from here on: declared,
+    # bracketed by the same casts, and not a constant — which is the
+    # whole point, since folding one is what freezes the sample.
+    inputs = [*inputs, *[(name, tid, sample) for name, tid, sample, _k in lifted]]
     plain_inputs = [entry for entry in inputs if entry[0] not in carried]
     if not plain_inputs:
         raise ValueError(
@@ -2711,17 +2737,21 @@ def build_package(
     for weight_name in weight_shapes:
         builder.mark_const(weight_name)
         builder.dtypes[weight_name] = body_mil
-    if image_input is not None and len(inputs) != 1:
+    if image_input is not None and asked_for != 1:
         raise ValueError(
             f"lucid.coreml: image_input needs a single-input model, and this one "
-            f"takes {len(inputs)} — which of them is the image would be a guess"
+            f"takes {asked_for} — which of them is the image would be a guess"
         )
     for name, tid, tensor in plain_inputs:
         shape = [int(d) for d in tensor.shape]
         builder.shapes[name] = shape
         builder.dtypes[name] = _spec.mil_dtype(tensor.dtype)
         source = name
-        if image_input is not None:
+        if image_input is not None and name not in lifted_names:
+            # The caller's own input is the picture. A lifted draw is an
+            # input too and is not one — declaring it as an image refused
+            # the export, naming the noise's shape as though the caller
+            # had passed it.
             source = _declare_image(program, builder, name, shape, image_input)
             names[tid] = source
         # Only a float interface needs bracketing.  An integer input —

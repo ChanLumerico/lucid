@@ -353,3 +353,216 @@ def test_palettizing_a_half_precision_export(tmp_path: object) -> None:
     # More bits, less error — a fit that had gone wrong would not be
     # ordered.
     assert errors[8] < errors[4] < errors[2]
+
+
+# ── the axes added after this file was written ───────────────────────────────
+#
+# Lifting a draw to an input and training against the compression are
+# both new, and neither had been crossed with anything. Running the
+# crossing found three defects in the first, all of the same shape: a
+# lifted draw is an input of the *package* and the interface logic counts
+# the inputs of the *model*.
+#
+#   - a flexible shape, a range and an image input each refused, saying
+#     the model took two inputs when it took one
+#   - the image declaration was applied to every input, so the noise was
+#     declared as the picture and the export refused, naming the noise's
+#     shape as though the caller had passed it
+#   - the flexible-shape probe traces at several sizes and compares each
+#     operation's attributes; a draw records its seed and had drawn
+#     again, so every flexible export of a model that samples was refused
+#     for a seed that changed with nothing
+#
+# None of the three is reachable without crossing two features. That is
+# the argument for this file existing.
+
+_DRAW_INTERFACES = [
+    ("fixed", {}),
+    ("enumerated", {"shapes": [(1, 3, 32, 32), (2, 3, 32, 32)]}),
+    ("ranged", {"shape_range": {0: (1, 4)}}),
+    ("classifier", {"classifier": cml.Classifier(labels=[f"c{i}" for i in range(5)])}),
+    ("image", {"image_input": cml.ImageInput(scale=1 / 255.0)}),
+]
+
+_DRAW_CASES = list(itertools.product(PRECISIONS, WEIGHTS, _DRAW_INTERFACES))
+
+
+class _Samples(nn.Module):
+    """Large enough to compress, and it draws — a variational head."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.body = nn.Sequential(
+            nn.Conv2d(3, 32, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, 3, padding=1),
+            nn.ReLU(),
+        )
+        self.mu = nn.Linear(32, 5)
+        self.logvar = nn.Linear(32, 5)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        pooled = self.body(x).mean(dim=(2, 3))
+        spread = (self.logvar(pooled) * 0.5).exp()
+        return self.mu(pooled) + spread * lucid.randn(1, 5)
+
+
+@pytest.mark.parametrize(
+    ("precision", "weights", "interface"),
+    _DRAW_CASES,
+    ids=[f"{p[0]}-{w[0]}-{i[0]}" for p, w, i in _DRAW_CASES],
+)
+def test_a_lifted_draw_crossed_with_the_interface(
+    precision, weights, interface, tmp_path
+):
+    """The draw survives every way the package can present itself."""
+    _precision_name, precision_value = precision
+    _weights_name, weights_value = weights
+    interface_name, interface_kwargs = interface
+
+    lucid.manual_seed(0)
+    model = _Samples().eval()
+    x = (
+        (lucid.rand(1, 3, 32, 32) * 255).round()
+        if interface_name == "image"
+        else lucid.randn(1, 3, 32, 32)
+    )
+
+    exported = cml.export(
+        model,
+        x,
+        str(tmp_path / "drawn.mlpackage"),
+        precision=precision_value,
+        weights=weights_value,
+        draws=cml.Draws.AS_INPUT,
+        **interface_kwargs,
+    )
+    try:
+        assert exported.noise_inputs == [("noise_0", (1, 5))]
+        if interface_name == "classifier":
+            label, probabilities = exported.classify(x)
+            assert label in {f"c{i}" for i in range(5)}
+            first = probabilities["c0"]
+            second = exported.classify(x)[1]["c0"]
+        else:
+            assert tuple(exported.predict(x).shape) == (1, 5)
+            first = float(exported.predict(x).sum().item())
+            second = float(exported.predict(x).sum().item())
+        # Still a sampler: two predictions of one input must differ, or
+        # the draw was folded after all and the package is frozen.
+        assert first != second
+    finally:
+        exported.close()
+
+
+class _CarriesAndDraws(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(64, 64)
+
+    def forward(
+        self, x: lucid.Tensor, cache: lucid.Tensor
+    ) -> tuple[lucid.Tensor, lucid.Tensor]:
+        carried = cache + self.fc(x) + lucid.randn(1, 64)
+        return carried, carried * 2.0
+
+
+@pytest.mark.parametrize(
+    ("name", "weights"), WEIGHTS, ids=[name for name, _w in WEIGHTS]
+)
+def test_a_lifted_draw_beside_carried_state(name, weights, tmp_path):
+    """Both raise the opset, and a stochastic decoder wants both.
+
+    The caller supplies a sample per step and the package keeps its cache
+    between them, which is what sampling from a recurrent latent is.
+    """
+    lucid.manual_seed(0)
+    exported = cml.export(
+        _CarriesAndDraws().eval(),
+        {"x": lucid.ones(1, 64), "cache": lucid.zeros(1, 64)},
+        str(tmp_path / f"drawn_state_{name}.mlpackage"),
+        precision=cml.Precision.FLOAT16,
+        weights=weights,
+        draws=cml.Draws.AS_INPUT,
+        state=[cml.State(input="cache", output="output_0")],
+    )
+    try:
+        assert exported.noise_inputs == [("noise_0", (1, 64))]
+        assert exported.deployment_target is cml.DeploymentTarget.IOS18
+        assert tuple(exported.predict({"x": lucid.ones(1, 64)}).shape) == (1, 64)
+    finally:
+        exported.close()
+
+
+_AWARE_CASES = list(itertools.product(PRECISIONS, WEIGHTS[1:]))
+
+
+@pytest.mark.parametrize(
+    ("precision", "weights"),
+    _AWARE_CASES,
+    ids=[f"{p[0]}-{w[0]}" for p, w in _AWARE_CASES],
+)
+def test_training_against_the_compression_then_exporting_with_it(
+    precision, weights, tmp_path
+):
+    """A settled model has to export as the compression it was settled to.
+
+    Float32 is where this is exact — the weights are already on the
+    palette — so the tolerance is tight there and loose at float16, whose
+    own rounding is the larger term. INT8 is loose at both because the
+    export re-derives its scale on a half-step grid, which is measured in
+    ``test_compression_aware``.
+    """
+    precision_name, precision_value = precision
+    weights_name, weights_value = weights
+
+    lucid.manual_seed(0)
+    aware = cml.CompressionAware(_Net().eval(), weights=weights_value)
+    aware(lucid.randn(2, 3, 32, 32)).sum().backward()
+    aware.refit()
+    settled = aware.settle()
+
+    x = lucid.randn(1, 3, 32, 32)
+    exported = cml.export(
+        settled,
+        x,
+        str(tmp_path / f"aware_{weights_name}.mlpackage"),
+        precision=precision_value,
+        weights=weights_value,
+    )
+    try:
+        loose = weights_name == "int8" or precision_name == "fp16"
+        assert exported.verify(settled, x, relative=True) < (5e-2 if loose else 1e-4)
+    finally:
+        exported.close()
+
+
+@pytest.mark.parametrize(
+    ("name", "weights"), WEIGHTS[1:], ids=[name for name, _w in WEIGHTS[1:]]
+)
+def test_a_compressed_model_that_also_draws(name, weights, tmp_path):
+    """The two new axes against each other.
+
+    A variational encoder is the model that wants both: it samples, and
+    it is the kind of thing shipped compressed.
+    """
+    lucid.manual_seed(0)
+    aware = cml.CompressionAware(_Samples().eval(), weights=weights)
+    aware(lucid.randn(2, 3, 32, 32)).sum().backward()
+    settled = aware.settle()
+
+    x = lucid.randn(1, 3, 32, 32)
+    exported = cml.export(
+        settled,
+        x,
+        str(tmp_path / f"aware_drawn_{name}.mlpackage"),
+        weights=weights,
+        draws=cml.Draws.AS_INPUT,
+    )
+    try:
+        assert exported.noise_inputs == [("noise_0", (1, 5))]
+        assert exported.verify(settled, x, relative=True) < (
+            5e-2 if name == "int8" else 1e-3
+        )
+    finally:
+        exported.close()

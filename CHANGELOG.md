@@ -96,6 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - record a bitwise op's operands in the trace
 
+- a lifted draw is the package's input, not the model's
+
 ### Added
 
 - Lucid and MLX stop copying tensors between them
