@@ -808,7 +808,7 @@
         ">>> from lucid.models.multimodal.clip import CLIPTokenizer\n>>> vocab = {\"a\": 0, \"b</w>\": 1, \"ab</w>\": 2,\n...          \"<|startoftext|>\": 3, \"<|endoftext|>\": 4}\n>>> tok = CLIPTokenizer(vocab=vocab, merges=[(\"a\", \"b</w>\")])\n>>> tok.encode(\"ab\")\n[2]\n>>> tok.tokenize(\"ab\", context_length=5)\n[3, 2, 4, 0, 0]"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.3.\n\n`tokenize` is the method the model wants: it frames each\ncaption with the two sentinels and pads to a fixed width, which is\nwhat makes `argmax` over the ids find `[EOS]`.  `encode`\nis inherited and does neither — it returns the bare BPE ids, which\nis what a caller building their own framing wants."
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.3.\n\n`tokenize` is the method the model wants: it frames each\ncaption with the two sentinels and pads to a fixed width, which is\nwhat makes `argmax` over the ids find `[EOS]`.  `encode`\nis inherited and does neither — it returns the bare BPE ids, which\nis what a caller building their own framing wants."
       ],
       "attributes": [],
       "warns": [],
@@ -923,7 +923,7 @@
         ">>> from lucid.models import clip_vit_base_16\n>>> model = clip_vit_base_16()\n>>> model.config.patch_size, model.config.vision_width\n(16, 768)"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.4.\n\nIdentical to ViT-B/32 apart from the patch size, which alone\nquadruples the token count — the paper's evidence that resolution of\nthe tokenisation, not width, is what the image tower was starved of."
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.4.\n\nIdentical to ViT-B/32 apart from the patch size, which alone\nquadruples the token count — the paper's evidence that resolution of\nthe tokenisation, not width, is what the image tower was starved of."
       ],
       "attributes": [],
       "warns": [],
@@ -1171,7 +1171,7 @@
         ">>> from lucid.models import clip_vit_base_16_zero_shot\n>>> model = clip_vit_base_16_zero_shot()\n>>> model.config.patch_size\n16"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §3.1."
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §3.1."
       ],
       "attributes": [],
       "warns": [],
@@ -1427,7 +1427,7 @@
         ">>> from lucid.models import clip_vit_base_32\n>>> model = clip_vit_base_32()\n>>> model.config.patch_size, model.config.embed_dim\n(32, 512)"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.4.\n\nThe cheapest of the ViT variants: 32-pixel patches leave 49 patch\ntokens at 224 pixels, against ViT-B/16's 196, so it costs roughly a\nquarter of the attention for the same depth and width."
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.4.\n\nThe cheapest of the ViT variants: 32-pixel patches leave 49 patch\ntokens at 224 pixels, against ViT-B/16's 196, so it costs roughly a\nquarter of the attention for the same depth and width."
       ],
       "attributes": [],
       "warns": [],
@@ -1675,7 +1675,7 @@
         ">>> from lucid.models import clip_vit_base_32_zero_shot\n>>> model = clip_vit_base_32_zero_shot()\n>>> model.config.patch_size\n32"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §3.1."
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §3.1."
       ],
       "attributes": [],
       "warns": [],
@@ -1931,7 +1931,7 @@
         ">>> from lucid.models import clip_vit_large_14\n>>> model = clip_vit_large_14()\n>>> model.config.vision_layers, model.config.text_width\n(24, 768)"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.4.\n\nThe best-performing variant in the paper, and the one whose text\ntower is widened along with the image tower — 768 wide with 12 heads\nagainst the base models' 512 and 8, at the same 12 layers."
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.4.\n\nThe best-performing variant in the paper, and the one whose text\ntower is widened along with the image tower — 768 wide with 12 heads\nagainst the base models' 512 and 8, at the same 12 layers."
       ],
       "attributes": [],
       "warns": [],
@@ -2179,7 +2179,7 @@
         ">>> from lucid.models import clip_vit_large_14_336\n>>> model = clip_vit_large_14_336()\n>>> model.config.image_size\n336"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.5 — \"for\nthe ViT-L/14 we also pre-train at a higher 336 pixel resolution for\none additional epoch\", denoted ViT-L/14@336px.\n\nArchitecturally this differs from `clip_vit_large_14` in one\nnumber, but that number changes the positional table from 257 rows to\n577, so the two are not weight-compatible."
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.5 — \"for\nthe ViT-L/14 we also pre-train at a higher 336 pixel resolution for\none additional epoch\", denoted ViT-L/14@336px.\n\nArchitecturally this differs from `clip_vit_large_14` in one\nnumber, but that number changes the positional table from 257 rows to\n577, so the two are not weight-compatible."
       ],
       "attributes": [],
       "warns": [],
@@ -2427,7 +2427,7 @@
         ">>> from lucid.models import clip_vit_large_14_336_zero_shot\n>>> model = clip_vit_large_14_336_zero_shot()\n>>> model.config.image_size\n336"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), §2.5."
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), §2.5."
       ],
       "attributes": [],
       "warns": [],
@@ -2683,7 +2683,7 @@
         ">>> from lucid.models import clip_vit_large_14_zero_shot\n>>> model = clip_vit_large_14_zero_shot()\n>>> model.config.embed_dim\n768"
       ],
       "notes": [
-        "Reference: Radford et al., ICML 2021 (arXiv:2103.00020), Table 11 —\nthe variant the paper's headline zero-shot ImageNet number comes\nfrom."
+        "Reference: Radford et al., ICML 2021 ([arXiv:2103.00020](https://arxiv.org/abs/2103.00020)), Table 11 —\nthe variant the paper's headline zero-shot ImageNet number comes\nfrom."
       ],
       "attributes": [],
       "warns": [],

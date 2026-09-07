@@ -93,13 +93,13 @@
         {
           "name": "beta_min",
           "annotation": "float",
-          "description": "VP and sub-VP's linear rate range, set by the paper \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "VP and sub-VP's linear rate range, set by the paper \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1, 20.0"
         },
         {
           "name": "beta_max",
           "annotation": "float",
-          "description": "VP and sub-VP's linear rate range, set by the paper \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "VP and sub-VP's linear rate range, set by the paper \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1, 20.0"
         },
         {
@@ -169,7 +169,7 @@
         ">>> from lucid.models.generative.score_sde import ScoreSDEConfig\n>>> cfg = ScoreSDEConfig()\n>>> cfg.sde_type, cfg.beta_min, cfg.beta_max\n('vp', 0.1, 20.0)"
       ],
       "notes": [
-        "Reference: Song, Sohl-Dickstein, Kingma, Kumar, Ermon, and Poole,\n*\"Score-Based Generative Modeling through Stochastic Differential\nEquations\"*, ICLR, 2021 (arXiv:2011.13456).\n\n**The network is DDPM's U-Net.**  The paper's NCSN++ and DDPM++ are\nthat architecture plus a set of separately-ablated modifications —\nFIR up/downsampling, rescaled skip connections, progressive growing,\nand doubled depth for the \"deep\" rows of its Table 3.  None of those\nare implemented here, so a configuration in this family is the\npaper's SDE machinery over the backbone this zoo already ships, and\nthe reported FID numbers do not transfer.  The SDEs, the samplers and\nthe objective are the paper's; the backbone is not.\n\n**Continuous time reaches the U-Net through the discrete embedding.**\nThe DDPM U-Net conditions on an integer timestep, so a continuous\n$t \\in [0, 1]$ is scaled by `num_scales - 1` before it is\nhanded over — which is what the reference implementation does for its\ncontinuous VP models."
+        "Reference: Song, Sohl-Dickstein, Kingma, Kumar, Ermon, and Poole,\n*\"Score-Based Generative Modeling through Stochastic Differential\nEquations\"*, ICLR, 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)).\n\n**The network is DDPM's U-Net.**  The paper's NCSN++ and DDPM++ are\nthat architecture plus a set of separately-ablated modifications —\nFIR up/downsampling, rescaled skip connections, progressive growing,\nand doubled depth for the \"deep\" rows of its Table 3.  None of those\nare implemented here, so a configuration in this family is the\npaper's SDE machinery over the backbone this zoo already ships, and\nthe reported FID numbers do not transfer.  The SDEs, the samplers and\nthe objective are the paper's; the backbone is not.\n\n**Continuous time reaches the U-Net through the discrete embedding.**\nThe DDPM U-Net conditions on an integer timestep, so a continuous\n$t \\in [0, 1]$ is scaled by `num_scales - 1` before it is\nhanded over — which is what the reference implementation does for its\ncontinuous VP models."
       ],
       "attributes": [],
       "warns": [],
@@ -388,7 +388,7 @@
         ">>> import lucid\n>>> from lucid.models import score_sde_vp_gen\n>>> model = score_sde_vp_gen(sample_size=8, base_channels=8,\n...     channel_mult=(1,), num_res_blocks=1, resnet_groups=4,\n...     attention_resolutions=()).eval()\n>>> out = model(lucid.randn((2, 3, 8, 8)))\n>>> bool(out.loss.ndim == 0)\nTrue"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456).\n\nTrained by denoising score matching, equation 7, in the form that\nweights each time by $\\sigma(t)^2$ — which makes the loss the\nplain mean squared error between the predicted and the actual noise,\nsince the $\\sigma$ in the score and the $\\sigma^2$ in the\nweight cancel to one.  That is the same objective DDPM optimises,\nwhich is the paper's point.\n\nThree ways to sample, all from one trained network:\n\n`\"euler\"`\n    Integrate the reverse-time SDE, equation 6.\n`\"pc\"`\n    The same, with Langevin corrector steps at fixed $t$.  The\n    paper's Predictor-Corrector.\n`\"ode\"`\n    The probability-flow ODE, equation 13, handed to\n    `lucid.diffeq.odeint`."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)).\n\nTrained by denoising score matching, equation 7, in the form that\nweights each time by $\\sigma(t)^2$ — which makes the loss the\nplain mean squared error between the predicted and the actual noise,\nsince the $\\sigma$ in the score and the $\\sigma^2$ in the\nweight cancel to one.  That is the same objective DDPM optimises,\nwhich is the paper's point.\n\nThree ways to sample, all from one trained network:\n\n`\"euler\"`\n    Integrate the reverse-time SDE, equation 6.\n`\"pc\"`\n    The same, with Langevin corrector steps at fixed $t$.  The\n    paper's Predictor-Corrector.\n`\"ode\"`\n    The probability-flow ODE, equation 13, handed to\n    `lucid.diffeq.odeint`."
       ],
       "attributes": [],
       "warns": [],
@@ -538,7 +538,7 @@
         ">>> import lucid\n>>> from lucid.models import score_sde_ve\n>>> model = score_sde_ve(sample_size=8, base_channels=8,\n...     channel_mult=(1,), num_res_blocks=1, resnet_groups=4,\n...     attention_resolutions=()).eval()\n>>> model.sde.__class__.__name__\n'VESDE'"
       ],
       "notes": [
-        "Reference: Song, Sohl-Dickstein, Kingma, Kumar, Ermon, and Poole,\n*\"Score-Based Generative Modeling through Stochastic Differential\nEquations\"*, ICLR, 2021 (arXiv:2011.13456).\n\nThe network predicts the noise that was added; the score follows from\nthe perturbation kernel, since for\n$x(t) = \\mu + \\sigma \\epsilon$\n\n\n\n$$\n\\nabla_x \\log p_{0t}(x(t) \\mid x(0))\n    = -\\frac{x(t) - \\mu}{\\sigma^2}\n    = -\\frac{\\epsilon}{\\sigma}.\n$$\n\nDividing by $\\sigma$ rather than folding it into the network is\nwhat lets one trained model serve every sampler here — the samplers\nask for a score and get one at whatever $t$ they are at."
+        "Reference: Song, Sohl-Dickstein, Kingma, Kumar, Ermon, and Poole,\n*\"Score-Based Generative Modeling through Stochastic Differential\nEquations\"*, ICLR, 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)).\n\nThe network predicts the noise that was added; the score follows from\nthe perturbation kernel, since for\n$x(t) = \\mu + \\sigma \\epsilon$\n\n\n\n$$\n\\nabla_x \\log p_{0t}(x(t) \\mid x(0))\n    = -\\frac{x(t) - \\mu}{\\sigma^2}\n    = -\\frac{\\epsilon}{\\sigma}.\n$$\n\nDividing by $\\sigma$ rather than folding it into the network is\nwhat lets one trained model serve every sampler here — the samplers\nask for a score and get one at whatever $t$ they are at."
       ],
       "attributes": [],
       "warns": [],
@@ -652,7 +652,7 @@
         ">>> from lucid.models import score_sde_subvp\n>>> model = score_sde_subvp().eval()\n>>> model.config.sde_type\n'subvp'"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456), equation 12.\n\nIts variance is bounded by the VP process at every intermediate step,\nand the paper's best likelihoods — 2.99 bits per dimension on\nCIFAR-10 — are reported here."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)), equation 12.\n\nIts variance is bounded by the VP process at every intermediate step,\nand the paper's best likelihoods — 2.99 bits per dimension on\nCIFAR-10 — are reported here."
       ],
       "attributes": [],
       "warns": [],
@@ -1504,7 +1504,7 @@
         ">>> from lucid.models import score_sde_subvp_gen\n>>> model = score_sde_subvp_gen().eval()\n>>> model.config.sde_type\n'subvp'"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456)."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456))."
       ],
       "attributes": [],
       "warns": [],
@@ -2364,7 +2364,7 @@
         ">>> from lucid.models import score_sde_ve\n>>> model = score_sde_ve().eval()\n>>> model.config.sigma_min, model.config.sigma_max\n(0.01, 50.0)"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456), equation 30."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)), equation 30."
       ],
       "attributes": [],
       "warns": [],
@@ -3216,7 +3216,7 @@
         ">>> from lucid.models import score_sde_ve_gen\n>>> model = score_sde_ve_gen().eval()\n>>> model.sde.__class__.__name__\n'VESDE'"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456).\n\nThe VE prior is wide — $\\mathcal{N}(0, \\sigma_{\\max}^2 I)$ —\nso a sampler that starts from a standard normal will not work here,\nwhich is why the prior belongs to the SDE rather than the sampler."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)).\n\nThe VE prior is wide — $\\mathcal{N}(0, \\sigma_{\\max}^2 I)$ —\nso a sampler that starts from a standard normal will not work here,\nwhich is why the prior belongs to the SDE rather than the sampler."
       ],
       "attributes": [],
       "warns": [],
@@ -4076,7 +4076,7 @@
         ">>> from lucid.models import score_sde_vp\n>>> model = score_sde_vp().eval()\n>>> model.config.sde_type, model.config.beta_max\n('vp', 20.0)"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456), equation 32."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456)), equation 32."
       ],
       "attributes": [],
       "warns": [],
@@ -4928,7 +4928,7 @@
         ">>> from lucid.models import score_sde_vp_gen\n>>> model = score_sde_vp_gen().eval()\n>>> model.config.num_scales\n1000"
       ],
       "notes": [
-        "Reference: Song et al., ICLR 2021 (arXiv:2011.13456)."
+        "Reference: Song et al., ICLR 2021 ([arXiv:2011.13456](https://arxiv.org/abs/2011.13456))."
       ],
       "attributes": [],
       "warns": [],
@@ -6003,14 +6003,14 @@
         {
           "name": "beta_min",
           "annotation": "float",
-          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1",
           "inherited_from": "VPSDE"
         },
         {
           "name": "beta_max",
           "annotation": "float",
-          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1",
           "inherited_from": "VPSDE"
         }
@@ -6441,13 +6441,13 @@
         {
           "name": "beta_min",
           "annotation": "float",
-          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1"
         },
         {
           "name": "beta_max",
           "annotation": "float",
-          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in Ho et al. (2020)\".",
+          "description": "The linear rate range.  The paper's values, \"to match the\nsettings in [Ho et al. (2020)](https://arxiv.org/abs/2006.11239)\".",
           "default": "0.1"
         }
       ],

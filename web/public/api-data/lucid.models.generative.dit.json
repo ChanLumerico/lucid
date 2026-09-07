@@ -194,7 +194,7 @@
         ">>> from lucid.models.generative.dit import DiTConfig\n>>> config = DiTConfig()\n>>> config.depth, config.hidden_size, config.num_heads\n(28, 1152, 16)\nThe token count is what the scaling study varies, and it comes from\nthe patch size rather than the width:\n>>> DiTConfig(patch_size=2).num_patches, DiTConfig(patch_size=8).num_patches\n(256, 16)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748).  Backbone\nconfigurations are Table 1; the diffusion hyperparameters are ADM's,\nwhich is a linear variance schedule over 1000 steps from 1e-4 to\n2e-2 — the defaults `DiffusionModelConfig` already carries."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)).  Backbone\nconfigurations are Table 1; the diffusion hyperparameters are ADM's,\nwhich is a linear variance schedule over 1000 steps from 1e-4 to\n2e-2 — the defaults `DiffusionModelConfig` already carries."
       ],
       "attributes": [],
       "warns": [],
@@ -353,7 +353,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.dit import (\n...     DiTConfig, DiTForImageGeneration)\n>>> config = DiTConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                    depth=2, num_heads=4, num_classes=10)\n>>> model = DiTForImageGeneration(config).eval()\n>>> model.generate(2, steps=3).samples.shape\n(2, 4, 8, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023.  The diffusion\nhyperparameters are ADM's, which the paper retains wholesale: a\nlinear variance schedule over 1000 steps from 1e-4 to 2e-2.\n\nThe training objective here is the simple one — mean squared error on\nthe noise.  The covariance the decoder emits is returned rather than\ntrained; ADM's full objective adds a variational term for it, which\nthe paper inherits but does not modify and which a caller can build\nfrom `DiTOutput.variance_pred`."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023.  The diffusion\nhyperparameters are ADM's, which the paper retains wholesale: a\nlinear variance schedule over 1000 steps from 1e-4 to 2e-2.\n\nThe training objective here is the simple one — mean squared error on\nthe noise.  The covariance the decoder emits is returned rather than\ntrained; ADM's full objective adds a variational term for it, which\nthe paper inherits but does not modify and which a caller can build\nfrom `DiTOutput.variance_pred`."
       ],
       "attributes": [
         {
@@ -458,7 +458,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.dit import DiTConfig, DiTModel\n>>> config = DiTConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                    depth=2, num_heads=4, num_classes=10)\n>>> model = DiTModel(config).eval()\n>>> latent = lucid.randn((1, 4, 8, 8))\n>>> model(latent, lucid.tensor([10.0]), lucid.tensor([3], dtype=lucid.int64)).shape\n(1, 8, 8, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748).  Backbone shapes are\nTable 1."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)).  Backbone shapes are\nTable 1."
       ],
       "attributes": [
         {
@@ -568,7 +568,7 @@
       "raises": [],
       "examples": [],
       "notes": [
-        "Reference: Peebles and Xie, ICCV 2023 (arXiv:2212.09748), Table 2\nand Table 3.  The reported FIDs — 2.27 at 256 and 3.04 at 512 — are\nmeasured with classifier-free guidance at scale 1.5 over **250 DDPM\nsampling steps**, which `DiTForImageGeneration.generate` reaches\nas `steps=250, eta=1.0`; the default `eta=0.0` is DDIM's\ndeterministic step, matching the released pipeline's scheduler but\nnot the protocol behind those numbers.\n\nThe two tags differ only in the latent they were trained on — a\n32-side latent for 256-pixel images and 64 for 512 — so the 512 tag\nneeds a model built at that size, which its factory override does.\nTheir parameter counts are identical, because the positional table\nthat grows with the latent is a non-persistent buffer rather than a\nparameter and is rebuilt from the config on construction."
+        "Reference: Peebles and Xie, ICCV 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 2\nand Table 3.  The reported FIDs — 2.27 at 256 and 3.04 at 512 — are\nmeasured with classifier-free guidance at scale 1.5 over **250 DDPM\nsampling steps**, which `DiTForImageGeneration.generate` reaches\nas `steps=250, eta=1.0`; the default `eta=0.0` is DDIM's\ndeterministic step, matching the released pipeline's scheduler but\nnot the protocol behind those numbers.\n\nThe two tags differ only in the latent they were trained on — a\n32-side latent for 256-pixel images and 64 for 512 — so the 512 tag\nneeds a model built at that size, which its factory override does.\nTheir parameter counts are identical, because the positional table\nthat grows with the latent is a non-persistent buffer rather than a\nparameter and is rebuilt from the config on construction."
       ],
       "attributes": [],
       "warns": [],
@@ -607,7 +607,7 @@
         ">>> from lucid.models import dit_base_2\n>>> config = dit_base_2().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 768, 2)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 768, 12 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 768, 12 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -830,7 +830,7 @@
         ">>> from lucid.models import dit_base_2_gen\n>>> model = dit_base_2_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -1061,7 +1061,7 @@
         ">>> from lucid.models import dit_base_4\n>>> config = dit_base_4().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 768, 4)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 768, 12 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 768, 12 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -1284,7 +1284,7 @@
         ">>> from lucid.models import dit_base_4_gen\n>>> model = dit_base_4_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -1515,7 +1515,7 @@
         ">>> from lucid.models import dit_base_8\n>>> config = dit_base_8().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 768, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 768, 12 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 768, 12 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -1738,7 +1738,7 @@
         ">>> from lucid.models import dit_base_8_gen\n>>> model = dit_base_8_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -1969,7 +1969,7 @@
         ">>> from lucid.models import dit_large_2\n>>> config = dit_large_2().config\n>>> config.depth, config.hidden_size, config.patch_size\n(24, 1024, 2)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n24 layers, hidden 1024, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n24 layers, hidden 1024, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -2192,7 +2192,7 @@
         ">>> from lucid.models import dit_large_2_gen\n>>> model = dit_large_2_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -2423,7 +2423,7 @@
         ">>> from lucid.models import dit_large_4\n>>> config = dit_large_4().config\n>>> config.depth, config.hidden_size, config.patch_size\n(24, 1024, 4)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n24 layers, hidden 1024, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n24 layers, hidden 1024, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -2646,7 +2646,7 @@
         ">>> from lucid.models import dit_large_4_gen\n>>> model = dit_large_4_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -2877,7 +2877,7 @@
         ">>> from lucid.models import dit_large_8\n>>> config = dit_large_8().config\n>>> config.depth, config.hidden_size, config.patch_size\n(24, 1024, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n24 layers, hidden 1024, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n24 layers, hidden 1024, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -3100,7 +3100,7 @@
         ">>> from lucid.models import dit_large_8_gen\n>>> model = dit_large_8_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -3331,7 +3331,7 @@
         ">>> from lucid.models import dit_small_2\n>>> config = dit_small_2().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 384, 2)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 384, 6 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 384, 6 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -3554,7 +3554,7 @@
         ">>> from lucid.models import dit_small_2_gen\n>>> model = dit_small_2_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -3785,7 +3785,7 @@
         ">>> from lucid.models import dit_small_4\n>>> config = dit_small_4().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 384, 4)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 384, 6 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 384, 6 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -4008,7 +4008,7 @@
         ">>> from lucid.models import dit_small_4_gen\n>>> model = dit_small_4_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -4239,7 +4239,7 @@
         ">>> from lucid.models import dit_small_8\n>>> config = dit_small_8().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 384, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 384, 6 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 384, 6 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -4462,7 +4462,7 @@
         ">>> from lucid.models import dit_small_8_gen\n>>> model = dit_small_8_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -4699,7 +4699,7 @@
         ">>> from lucid.models import dit_xlarge_2\n>>> config = dit_xlarge_2().config\n>>> config.depth, config.hidden_size, config.patch_size\n(28, 1152, 2)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n28 layers, hidden 1152, 16 heads.\n\nReports 2.27 FID with classifier-free guidance at scale 1.50 on ImageNet 256x256 — the state of the art when published, and 3.04 at 512x512 with the same config over a 64-wide latent."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n28 layers, hidden 1152, 16 heads.\n\nReports 2.27 FID with classifier-free guidance at scale 1.50 on ImageNet 256x256 — the state of the art when published, and 3.04 at 512x512 with the same config over a 64-wide latent."
       ],
       "attributes": [],
       "warns": [],
@@ -4928,7 +4928,7 @@
         ">>> from lucid.models import dit_xlarge_2_gen\n>>> model = dit_xlarge_2_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -5159,7 +5159,7 @@
         ">>> from lucid.models import dit_xlarge_4\n>>> config = dit_xlarge_4().config\n>>> config.depth, config.hidden_size, config.patch_size\n(28, 1152, 4)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n28 layers, hidden 1152, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n28 layers, hidden 1152, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -5382,7 +5382,7 @@
         ">>> from lucid.models import dit_xlarge_4_gen\n>>> model = dit_xlarge_4_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -5613,7 +5613,7 @@
         ">>> from lucid.models import dit_xlarge_8\n>>> config = dit_xlarge_8().config\n>>> config.depth, config.hidden_size, config.patch_size\n(28, 1152, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n28 layers, hidden 1152, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n28 layers, hidden 1152, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -5836,7 +5836,7 @@
         ">>> from lucid.models import dit_xlarge_8_gen\n>>> model = dit_xlarge_8_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
+        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -6036,7 +6036,7 @@
     }
   ],
   "summary": "DiT — the diffusion model that replaced the U-Net with a transformer.",
-  "extended": "Peebles and Xie, ICCV 2023 (arXiv:2212.09748).  Latent patches through a\nplain Vision Transformer, conditioned by adaLN-Zero, and the finding that\nFID tracks the backbone's Gflops rather than its parameter count.",
+  "extended": "Peebles and Xie, ICCV 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)).  Latent patches through a\nplain Vision Transformer, conditioned by adaLN-Zero, and the finding that\nFID tracks the backbone's Gflops rather than its parameter count.",
   "parameters": [],
   "returns": null,
   "raises": [],

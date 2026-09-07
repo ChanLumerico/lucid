@@ -322,7 +322,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.realnvp import (\n...     RealNVPConfig, RealNVPForImageGeneration,\n... )\n>>> cfg = RealNVPConfig(sample_size=8, num_scales=2, residual_blocks=1,\n...                     base_dim=8)\n>>> model = RealNVPForImageGeneration(cfg).eval()\n>>> out = model(lucid.rand((2, 3, 8, 8)))\n>>> out.loss.shape                      # scalar bits/dim\n()\n>>> model.generate(n_samples=3).samples.shape\n(3, 3, 8, 8)"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation Using\nReal NVP\"*, ICLR, 2017 (arXiv:1605.08803).  Reported bits/dim: 3.49\n(CIFAR-10), 4.28 / 3.98 (Imagenet 32 / 64), 2.72–3.08 (LSUN), 3.02\n(CelebA)."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation Using\nReal NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)).  Reported bits/dim: 3.49\n(CIFAR-10), 4.28 / 3.98 (Imagenet 32 / 64), 2.72–3.08 (LSUN), 3.02\n(CelebA)."
       ],
       "attributes": [
         {
@@ -542,7 +542,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.realnvp import RealNVPConfig, RealNVPModel\n>>> cfg = RealNVPConfig(sample_size=8, num_scales=2, residual_blocks=1,\n...                     base_dim=8)\n>>> model = RealNVPModel(cfg).eval()\n>>> x = lucid.rand((2, 3, 8, 8))\n>>> z, log_det = model.encode(x)\n>>> z.shape, log_det.shape\n((2, 192), (2,))"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation Using\nReal NVP\"*, ICLR, 2017 (arXiv:1605.08803).\n\nWith batch normalisation enabled the forward pass uses batch statistics\nwhile training, exactly as in the paper; `decode` always uses the\nrunning estimates, so round-trip exactness is an `eval()`-mode\nproperty."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation Using\nReal NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)).\n\nWith batch normalisation enabled the forward pass uses batch statistics\nwhile training, exactly as in the paper; `decode` always uses the\nrunning estimates, so round-trip exactness is an `eval()`-mode\nproperty."
       ],
       "attributes": [
         {
@@ -592,7 +592,7 @@
         ">>> from lucid.models.generative.realnvp import realnvp_celeba\n>>> model = realnvp_celeba().eval()\n>>> model.prior\n'gaussian'"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803), §4.1 and Table 1.\nReported validation result: **3.02 bits/dim** (2.97 train), on an\napproximately central `148 x 148` crop resized to `64 x 64`."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)), §4.1 and Table 1.\nReported validation result: **3.02 bits/dim** (2.97 train), on an\napproximately central `148 x 148` crop resized to `64 x 64`."
       ],
       "attributes": [],
       "warns": [],
@@ -3186,7 +3186,7 @@
         ">>> from lucid.models.generative.realnvp import realnvp_celeba_gen\n>>> model = realnvp_celeba_gen().eval()\n>>> model.generate(n_samples=1).samples.shape\n(1, 3, 64, 64)"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803).  Reported: 3.02\nbits/dim."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)).  Reported: 3.02\nbits/dim."
       ],
       "attributes": [],
       "warns": [],
@@ -5788,7 +5788,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.realnvp import realnvp_cifar\n>>> model = realnvp_cifar().eval()\n>>> x = lucid.rand((1, 3, 32, 32))\n>>> model.bits_per_dim(x).shape\n(1,)"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803), §4.1 and Table 1.\nReported test result: **3.49 bits/dim**, with horizontal-flip\naugmentation and the `alpha = 0.05` logit preprocessing this model\napplies internally."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)), §4.1 and Table 1.\nReported test result: **3.49 bits/dim**, with horizontal-flip\naugmentation and the `alpha = 0.05` logit preprocessing this model\napplies internally."
       ],
       "attributes": [],
       "warns": [],
@@ -6756,7 +6756,7 @@
         ">>> from lucid.models.generative.realnvp import realnvp_cifar_gen\n>>> model = realnvp_cifar_gen().eval()\n>>> model.generate(n_samples=2).samples.shape\n(2, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803).  Reported: 3.49\nbits/dim."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)).  Reported: 3.49\nbits/dim."
       ],
       "attributes": [],
       "warns": [],
@@ -7732,7 +7732,7 @@
         ">>> from lucid.models.generative.realnvp import realnvp_imagenet32\n>>> model = realnvp_imagenet32().eval()\n>>> model.config.num_scales\n4"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803), §4.1 and Table 1.\nReported validation result: **4.28 bits/dim** (4.26 train)."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)), §4.1 and Table 1.\nReported validation result: **4.28 bits/dim** (4.26 train)."
       ],
       "attributes": [],
       "warns": [],
@@ -9784,7 +9784,7 @@
         ">>> from lucid.models.generative.realnvp import realnvp_imagenet32_gen\n>>> model = realnvp_imagenet32_gen().eval()\n>>> model.generate(n_samples=2).samples.shape\n(2, 3, 32, 32)"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803).  Reported: 4.28\nbits/dim."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)).  Reported: 4.28\nbits/dim."
       ],
       "attributes": [],
       "warns": [],
@@ -11844,7 +11844,7 @@
         ">>> from lucid.models.generative.realnvp import realnvp_imagenet64\n>>> model = realnvp_imagenet64().eval()\n>>> model.input_dim\n12288"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803), §4.1 and Table 1.\nReported validation result: **3.98 bits/dim** (3.75 train)."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)), §4.1 and Table 1.\nReported validation result: **3.98 bits/dim** (3.75 train)."
       ],
       "attributes": [],
       "warns": [],
@@ -14438,7 +14438,7 @@
         ">>> from lucid.models.generative.realnvp import realnvp_imagenet64_gen\n>>> model = realnvp_imagenet64_gen().eval()\n>>> model.generate(n_samples=1).samples.shape\n(1, 3, 64, 64)"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803).  Reported: 3.98\nbits/dim."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)).  Reported: 3.98\nbits/dim."
       ],
       "attributes": [],
       "warns": [],
@@ -17040,7 +17040,7 @@
         ">>> from lucid.models.generative.realnvp import realnvp_lsun\n>>> model = realnvp_lsun().eval()\n>>> model.config.residual_blocks\n2"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803), §4.1 and Table 1.\nReported validation results: **2.72** (bedroom), **2.81** (tower) and\n**3.08** (church outdoor) bits/dim.  Images are downsampled so the\nsmallest side is 96 px, then randomly cropped to `64 x 64`."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)), §4.1 and Table 1.\nReported validation results: **2.72** (bedroom), **2.81** (tower) and\n**3.08** (church outdoor) bits/dim.  Images are downsampled so the\nsmallest side is 96 px, then randomly cropped to `64 x 64`."
       ],
       "attributes": [],
       "warns": [],
@@ -19634,7 +19634,7 @@
         ">>> from lucid.models.generative.realnvp import realnvp_lsun_gen\n>>> model = realnvp_lsun_gen().eval()\n>>> model.generate(n_samples=1).samples.shape\n(1, 3, 64, 64)"
       ],
       "notes": [
-        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 (arXiv:1605.08803).  Reported: 2.72\n(bedroom), 2.81 (tower), 3.08 (church outdoor) bits/dim."
+        "Reference: Dinh, Sohl-Dickstein, and Bengio, *\"Density Estimation\nUsing Real NVP\"*, ICLR, 2017 ([arXiv:1605.08803](https://arxiv.org/abs/1605.08803)).  Reported: 2.72\n(bedroom), 2.81 (tower), 3.08 (church outdoor) bits/dim."
       ],
       "attributes": [],
       "warns": [],

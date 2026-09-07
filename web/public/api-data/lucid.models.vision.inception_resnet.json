@@ -2925,7 +2925,7 @@
         ">>> from lucid.models import inception_resnet_v2_cls\n>>> model = inception_resnet_v2_cls(pretrained=True).eval()"
       ],
       "notes": [
-        "Reference: Szegedy, Ioffe, Vanhoucke, Alemi, *\"Inception-v4,\nInception-ResNet and the Impact of Residual Connections on\nLearning\"*, AAAI 2017 (arXiv:1602.07261)."
+        "Reference: Szegedy, Ioffe, Vanhoucke, Alemi, *\"Inception-v4,\nInception-ResNet and the Impact of Residual Connections on\nLearning\"*, AAAI 2017 ([arXiv:1602.07261](https://arxiv.org/abs/1602.07261))."
       ],
       "attributes": [
         {

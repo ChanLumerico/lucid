@@ -330,7 +330,7 @@
         ">>> from lucid.models.generative.dreamer_v2 import DreamerV2Config\n>>> cfg = DreamerV2Config(action_dim=6)\n>>> cfg.stoch_size, cfg.discrete, cfg.stoch_width\n(32, 32, 1024)\n>>> cfg.latent_size\n2048\n>>> cfg.kl_balance\n0.8"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 (arXiv:2010.02193).\n\nThe paper tunes two configurations, and the released implementation\nkeeps both as overrides on the defaults used here:\n\n==================  ==========  ==========  ============\nfield               default     Atari       DMC (vision)\n==================  ==========  ==========  ============\n`deter_size`      1024        600         200\n`hidden_size`     1024        600         200\n`kl_weight`       1.0         0.1         1.0\n`discount`        0.99        0.999       0.99\n`actor_entropy`   2e-3        1e-3        1e-4\n`pcont`           True        True        False\n`pcont_scale`     1.0         5.0         1.0\n==================  ==========  ==========  ============\n\nLearning rates are not config fields — no model config in this zoo\ncarries them — but for the record the paper's are `2e-4` (world),\n`4e-5` (actor) and `1e-4` (critic) for Atari, against the released\ndefaults of `1e-4` / `8e-5` / `2e-4`.\n\n`stoch_size` changing meaning between this family and the Gaussian\nones is deliberate: it is the same *slot* in the shared config — how\nmuch stochastic state there is — and re-naming it would break the\ninheritance for the sake of a word.  What it costs is that\n`latent_size` is no longer `deter_size + stoch_size`, which is\nwhy this class overrides it."
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nThe paper tunes two configurations, and the released implementation\nkeeps both as overrides on the defaults used here:\n\n==================  ==========  ==========  ============\nfield               default     Atari       DMC (vision)\n==================  ==========  ==========  ============\n`deter_size`      1024        600         200\n`hidden_size`     1024        600         200\n`kl_weight`       1.0         0.1         1.0\n`discount`        0.99        0.999       0.99\n`actor_entropy`   2e-3        1e-3        1e-4\n`pcont`           True        True        False\n`pcont_scale`     1.0         5.0         1.0\n==================  ==========  ==========  ============\n\nLearning rates are not config fields — no model config in this zoo\ncarries them — but for the record the paper's are `2e-4` (world),\n`4e-5` (actor) and `1e-4` (critic) for Atari, against the released\ndefaults of `1e-4` / `8e-5` / `2e-4`.\n\n`stoch_size` changing meaning between this family and the Gaussian\nones is deliberate: it is the same *slot* in the shared config — how\nmuch stochastic state there is — and re-naming it would break the\ninheritance for the sake of a word.  What it costs is that\n`latent_size` is no longer `deter_size + stoch_size`, which is\nwhy this class overrides it."
       ],
       "attributes": [],
       "warns": [],
@@ -646,7 +646,7 @@
         ">>> import lucid\n>>> from lucid.models import dreamer_v2_world_model\n>>> model = dreamer_v2_world_model(action_dim=2, cnn_depth=2, stoch_size=3,\n...     discrete=4, deter_size=8, hidden_size=8, actor_hidden=8,\n...     value_hidden=8, reward_hidden=8, horizon=4, pcont=False)\n>>> out = model(lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2)),\n...             lucid.randn((1, 3)))\n>>> bool(out.loss.ndim == 0), bool(out.behavior.actor_loss.ndim == 0)\n(True, True)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 (arXiv:2010.02193).\n\nSame three-optimiser contract as Dreamer, and the same reason for it.\nUse `backward` — spending the losses by hand either contaminates\nthe world model or raises, depending on the order.\n\n`update_slow_target` must be called once per gradient step.  It is\nnot folded into `backward` because it counts *optimiser* steps,\nnot backward passes, and only the caller knows when one has happened.\n\nThe indexing follows the released implementation, which is worth\nstating because it is not obvious.  Imagination produces `H + 1`\nstates.  Two are lost at the end — one is the bootstrap, and one has\nan action that leads nowhere — and one target is lost at the start,\nbecause the first state came from the replay buffer rather than from\nthe policy.  So the actor is scored on states `0 .. H-2` against\ntargets `1 .. H-1`, and the critic on states `0 .. H-1`."
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nSame three-optimiser contract as Dreamer, and the same reason for it.\nUse `backward` — spending the losses by hand either contaminates\nthe world model or raises, depending on the order.\n\n`update_slow_target` must be called once per gradient step.  It is\nnot folded into `backward` because it counts *optimiser* steps,\nnot backward passes, and only the caller knows when one has happened.\n\nThe indexing follows the released implementation, which is worth\nstating because it is not obvious.  Imagination produces `H + 1`\nstates.  Two are lost at the end — one is the bootstrap, and one has\nan action that leads nowhere — and one target is lost at the start,\nbecause the first state came from the replay buffer rather than from\nthe policy.  So the actor is scored on states `0 .. H-2` against\ntargets `1 .. H-1`, and the critic on states `0 .. H-1`."
       ],
       "attributes": [],
       "warns": [],
@@ -1016,7 +1016,7 @@
         ">>> import lucid\n>>> from lucid.models import dreamer_v2\n>>> model = dreamer_v2(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,\n...     deter_size=8, hidden_size=8, actor_hidden=8, value_hidden=8,\n...     reward_hidden=8)\n>>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),\n...                               lucid.randn((1, 3, 2)))\n>>> posteriors.is_discrete, model.act(posteriors, sample=False).shape\n(True, (1, 3, 2))"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 (arXiv:2010.02193).\n\nThe critic is duplicated.  `value_head` is what learns; the frozen\n`target_value_head` is what the returns are computed from, and it is\nrefreshed on a schedule.  Without it the critic regresses onto targets\nbuilt from itself, and a small error compounds every step it is fed\nback through."
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nThe critic is duplicated.  `value_head` is what learns; the frozen\n`target_value_head` is what the returns are computed from, and it is\nrefreshed on a schedule.  Without it the critic regresses onto targets\nbuilt from itself, and a small error compounds every step it is fed\nback through."
       ],
       "attributes": [],
       "warns": [],
@@ -1140,7 +1140,7 @@
         ">>> from lucid.models import dreamer_v2\n>>> model = dreamer_v2(action_dim=6).eval()\n>>> model.config.stoch_size, model.config.discrete\n(32, 32)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 (arXiv:2010.02193)."
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193))."
       ],
       "attributes": [],
       "warns": [],
@@ -1427,7 +1427,7 @@
         ">>> from lucid.models import dreamer_v2_atari\n>>> model = dreamer_v2_atari(action_dim=18).eval()\n>>> model.config.action_space, model.config.resolved_actor_grad\n('discrete', 'reinforce')"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 (arXiv:2010.02193).\n\nAction repeat of 4 is part of this configuration and is not a model\nfield — pass it to `lucid.utils.rollout.rollout`."
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nAction repeat of 4 is part of this configuration and is not a model\nfield — pass it to `lucid.utils.rollout.rollout`."
       ],
       "attributes": [],
       "warns": [],
@@ -1720,7 +1720,7 @@
         ">>> from lucid.models import dreamer_v2_atari_world_model\n>>> model = dreamer_v2_atari_world_model(action_dim=18).eval()\n>>> model.config.kl_weight, model.config.pcont_scale\n(0.1, 5.0)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 (arXiv:2010.02193).\n\nThe actor's gradient is the score function here, resolved from the\ndiscrete action space — a one-hot offers nothing to differentiate\nthrough but a biased straight-through estimate."
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nThe actor's gradient is the score function here, resolved from the\ndiscrete action space — a one-hot offers nothing to differentiate\nthrough but a biased straight-through estimate."
       ],
       "attributes": [],
       "warns": [],
@@ -2021,7 +2021,7 @@
         ">>> from lucid.models import dreamer_v2_dmc\n>>> model = dreamer_v2_dmc(action_dim=6).eval()\n>>> model.config.deter_size, model.config.pcont\n(200, False)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 (arXiv:2010.02193).\n\nThe released implementation splits this into `dmc_vision` and\n`dmc_proprio`, which differ only in whether the encoder reads pixels\nor joint angles.  This family reads pixels, so they are one\nconfiguration here."
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nThe released implementation splits this into `dmc_vision` and\n`dmc_proprio`, which differ only in whether the encoder reads pixels\nor joint angles.  This family reads pixels, so they are one\nconfiguration here."
       ],
       "attributes": [],
       "warns": [],
@@ -2314,7 +2314,7 @@
         ">>> from lucid.models import dreamer_v2_dmc_world_model\n>>> model = dreamer_v2_dmc_world_model(action_dim=6).eval()\n>>> model.config.actor_entropy\n0.0001"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 (arXiv:2010.02193).\n\nAction repeat of 2 belongs to this configuration and is not a model\nfield — pass it to `lucid.utils.rollout.rollout`."
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nAction repeat of 2 belongs to this configuration and is not a model\nfield — pass it to `lucid.utils.rollout.rollout`."
       ],
       "attributes": [],
       "warns": [],
@@ -2615,7 +2615,7 @@
         ">>> from lucid.models import dreamer_v2_world_model\n>>> model = dreamer_v2_world_model(action_dim=6).eval()\n>>> model.config.kl_balance, model.config.resolved_actor_grad\n(0.8, 'dynamics')"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 (arXiv:2010.02193).\n\nThe three losses take **three separate optimisers**; use\n`lucid.models.DreamerV2ForWorldModeling.backward` to fill their\ngradients, and call `update_slow_target` once per step."
+        "Reference: Hafner, Lillicrap, Norouzi, and Ba, *\"Mastering Atari with\nDiscrete World Models\"*, ICLR, 2021 ([arXiv:2010.02193](https://arxiv.org/abs/2010.02193)).\n\nThe three losses take **three separate optimisers**; use\n`lucid.models.DreamerV2ForWorldModeling.backward` to fill their\ngradients, and call `update_slow_target` once per step."
       ],
       "attributes": [],
       "warns": [],

@@ -355,7 +355,7 @@
         ">>> from lucid.models.generative.dreamer_v3 import DreamerV3Config\n>>> cfg = DreamerV3Config(action_dim=6)\n>>> cfg.stoch_size, cfg.discrete, cfg.free_nats\n(32, 32, 1.0)\n>>> cfg.discount, cfg.horizon, cfg.num_bins\n(0.997, 15, 255)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nThe scaling ladder moves five quantities together, so it is a table\nrather than a knob — see `DREAMER_V3_SIZES` and the factories\nbuilt from it:\n\n========  =======  ========  =======  =====  =====\nsize      deter    hidden    classes  depth  units\n========  =======  ========  =======  =====  =====\n`12m`   2048     256       16       16     256\n`25m`   3072     384       24       24     384\n`50m`   4096     512       32       32     512\n`100m`  6144     768       48       48     768\n`200m`  8192     1024      64       64     1024\n`400m`  12288    1536      96       96     1536\n========  =======  ========  =======  =====  =====\n\nTwo details of that table are worth writing down.  Its `12m` column\nprints 1024 recurrent units where the stated rule — eight times the\nhidden size — gives 2048; the released implementation uses 2048, and\nso does this.  And the paper's own default is the `200m` rung for\nevery benchmark except the two control suites, which use `12m`; the\ndefaults here are `50m`, the middle of the ladder, because a 200M\ndefault would make merely constructing the model an expensive\noperation.  Use `dreamer_v3_200m` for the paper's setting.\n\nThe released implementation carries a few things the paper does not\nreport — extra dynamics layers, an `absolute` posterior variant, and\na value- and advantage-normalisation pair disabled in every published\nconfiguration.  Where the two disagree the paper is followed, as it is\nfor the earlier families."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nThe scaling ladder moves five quantities together, so it is a table\nrather than a knob — see `DREAMER_V3_SIZES` and the factories\nbuilt from it:\n\n========  =======  ========  =======  =====  =====\nsize      deter    hidden    classes  depth  units\n========  =======  ========  =======  =====  =====\n`12m`   2048     256       16       16     256\n`25m`   3072     384       24       24     384\n`50m`   4096     512       32       32     512\n`100m`  6144     768       48       48     768\n`200m`  8192     1024      64       64     1024\n`400m`  12288    1536      96       96     1536\n========  =======  ========  =======  =====  =====\n\nTwo details of that table are worth writing down.  Its `12m` column\nprints 1024 recurrent units where the stated rule — eight times the\nhidden size — gives 2048; the released implementation uses 2048, and\nso does this.  And the paper's own default is the `200m` rung for\nevery benchmark except the two control suites, which use `12m`; the\ndefaults here are `50m`, the middle of the ladder, because a 200M\ndefault would make merely constructing the model an expensive\noperation.  Use `dreamer_v3_200m` for the paper's setting.\n\nThe released implementation carries a few things the paper does not\nreport — extra dynamics layers, an `absolute` posterior variant, and\na value- and advantage-normalisation pair disabled in every published\nconfiguration.  Where the two disagree the paper is followed, as it is\nfor the earlier families."
       ],
       "attributes": [],
       "warns": [],
@@ -683,7 +683,7 @@
         ">>> import lucid\n>>> from lucid.models import dreamer_v3_12m_world_model\n>>> model = dreamer_v3_12m_world_model(action_dim=2, cnn_depth=2, stoch_size=3,\n...     discrete=4, deter_size=8, hidden_size=8, actor_hidden=8,\n...     value_hidden=8, reward_hidden=8, num_bins=5, horizon=4, pcont=False)\n>>> out = model(lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2)),\n...             lucid.randn((1, 3)))\n>>> bool(out.loss.ndim == 0), bool(out.behavior.actor_loss.ndim == 0)\n(True, True)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nSame three-optimiser contract as the earlier families, and the same\nreason for it.  Use `backward` — spending the losses by hand\neither contaminates the world model or raises, depending on the order.\n\n`update_slow_critic` must be called once per gradient step.  It\nis not folded into `backward` because it counts *optimiser*\nsteps, not backward passes, and only the caller knows when one has\nhappened.\n\nThe indexing is simpler than DreamerV2's, and the simplification is\nthe point.  Imagination produces `H + 1` states and `H` actions;\n`action[t]` is taken from `state[t]`, the return `R[t]` starts\nat `state[t]`, and the critic's estimate `v[t]` scores the same\nstate.  So the advantage is `R[t] - v(s_t)` paired with\n`log pi(a_t | s_t)` at every `t` in `0 .. H-1` — the textbook\nalignment, available here because the actor is score-function only\nand does not need the one-step shift dynamics backpropagation forced\non DreamerV2."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nSame three-optimiser contract as the earlier families, and the same\nreason for it.  Use `backward` — spending the losses by hand\neither contaminates the world model or raises, depending on the order.\n\n`update_slow_critic` must be called once per gradient step.  It\nis not folded into `backward` because it counts *optimiser*\nsteps, not backward passes, and only the caller knows when one has\nhappened.\n\nThe indexing is simpler than DreamerV2's, and the simplification is\nthe point.  Imagination produces `H + 1` states and `H` actions;\n`action[t]` is taken from `state[t]`, the return `R[t]` starts\nat `state[t]`, and the critic's estimate `v[t]` scores the same\nstate.  So the advantage is `R[t] - v(s_t)` paired with\n`log pi(a_t | s_t)` at every `t` in `0 .. H-1` — the textbook\nalignment, available here because the actor is score-function only\nand does not need the one-step shift dynamics backpropagation forced\non DreamerV2."
       ],
       "attributes": [],
       "warns": [],
@@ -1057,7 +1057,7 @@
         ">>> import lucid\n>>> from lucid.models import dreamer_v3_12m\n>>> model = dreamer_v3_12m(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,\n...     deter_size=8, hidden_size=8, actor_hidden=8, value_hidden=8,\n...     reward_hidden=8, num_bins=5)\n>>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),\n...                               lucid.randn((1, 3, 2)))\n>>> posteriors.is_discrete, model.act(posteriors, sample=False).shape\n(True, (1, 3, 2))"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nTwo architectural differences from DreamerV2 are visible here.\n\nThe reward and value heads are `.TwoHotHead`\\ s — they predict\na distribution over exponentially spaced bins and are read back\nthrough `symexp`, which is what decouples the gradients from the\nreward's magnitude.\n\nThe critic is duplicated, but the copy plays the opposite role to\nDreamerV2's.  There the frozen copy produced the *targets*; here the\nreturns bootstrap from the live critic and the slow copy appears only\nas a regulariser pulling the live one toward its own moving average.\nThe copy is therefore updated every step by a small fraction rather\nthan replaced wholesale on a schedule."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nTwo architectural differences from DreamerV2 are visible here.\n\nThe reward and value heads are `.TwoHotHead`\\ s — they predict\na distribution over exponentially spaced bins and are read back\nthrough `symexp`, which is what decouples the gradients from the\nreward's magnitude.\n\nThe critic is duplicated, but the copy plays the opposite role to\nDreamerV2's.  There the frozen copy produced the *targets*; here the\nreturns bootstrap from the live critic and the slow copy appears only\nas a regulariser pulling the live one toward its own moving average.\nThe copy is therefore updated every step by a small fraction rather\nthan replaced wholesale on a schedule."
       ],
       "attributes": [],
       "warns": [],
@@ -1191,7 +1191,7 @@
         ">>> from lucid.models import dreamer_v3_12m\n>>> model = dreamer_v3_12m(action_dim=6).eval()\n>>> model.config.deter_size, model.config.discrete, model.config.blocks\n(2048, 16, 8)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -1597,7 +1597,7 @@
         ">>> from lucid.models import dreamer_v3_12m_world_model\n>>> model = dreamer_v3_12m_world_model(action_dim=6).eval()\n>>> model.config.free_nats, model.config.rep_scale\n(1.0, 0.1)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nThe three losses take **three separate optimisers**; use\n`lucid.models.DreamerV3ForWorldModeling.backward` to fill their\ngradients, and call `update_slow_critic` once per step."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nThe three losses take **three separate optimisers**; use\n`lucid.models.DreamerV3ForWorldModeling.backward` to fill their\ngradients, and call `update_slow_critic` once per step."
       ],
       "attributes": [],
       "warns": [],
@@ -2011,7 +2011,7 @@
         ">>> from lucid.models import dreamer_v3_25m\n>>> model = dreamer_v3_25m(action_dim=6).eval()\n>>> model.config.hidden_size, model.config.cnn_depth\n(384, 24)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -2417,7 +2417,7 @@
         ">>> from lucid.models import dreamer_v3_25m_world_model\n>>> model = dreamer_v3_25m_world_model(action_dim=6).eval()\n>>> model.config.horizon, model.config.lambda_\n(15, 0.95)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104)."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104))."
       ],
       "attributes": [],
       "warns": [],
@@ -2831,7 +2831,7 @@
         ">>> from lucid.models import dreamer_v3_50m\n>>> model = dreamer_v3_50m(action_dim=6).eval()\n>>> model.config.deter_size, model.config.discrete\n(4096, 32)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -3237,7 +3237,7 @@
         ">>> from lucid.models import dreamer_v3_50m_world_model\n>>> model = dreamer_v3_50m_world_model(action_dim=6).eval()\n>>> model.config.critic_ema, model.config.replay_value_scale\n(0.02, 0.3)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104)."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104))."
       ],
       "attributes": [],
       "warns": [],
@@ -3651,7 +3651,7 @@
         ">>> from lucid.models import dreamer_v3_100m\n>>> model = dreamer_v3_100m(action_dim=6).eval()\n>>> model.config.deter_size, model.config.hidden_size\n(6144, 768)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -4057,7 +4057,7 @@
         ">>> from lucid.models import dreamer_v3_100m_world_model\n>>> model = dreamer_v3_100m_world_model(action_dim=6).eval()\n>>> model.config.num_bins, model.config.bin_range\n(255, 20.0)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104)."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104))."
       ],
       "attributes": [],
       "warns": [],
@@ -4471,7 +4471,7 @@
         ">>> from lucid.models import dreamer_v3_200m\n>>> model = dreamer_v3_200m(action_dim=18, action_space=\"discrete\").eval()\n>>> model.config.deter_size, model.config.discrete\n(8192, 64)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Tables 2 and 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Tables 2 and 3."
       ],
       "attributes": [],
       "warns": [],
@@ -4877,7 +4877,7 @@
         ">>> from lucid.models import dreamer_v3_200m_world_model\n>>> model = dreamer_v3_200m_world_model(action_dim=18).eval()\n>>> model.config.discount, model.config.actor_entropy\n(0.997, 0.0003)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104).\n\nThis is the configuration that collected diamonds in Minecraft from\nscratch — with, the paper is careful to note, the same hyperparameters\nas everything else.  What differs per benchmark is the *schedule*:\naction repeat, environment count and replay ratio, none of which are\nmodel fields.  Pass them to `lucid.utils.rollout.rollout` and to\nyour training loop."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)).\n\nThis is the configuration that collected diamonds in Minecraft from\nscratch — with, the paper is careful to note, the same hyperparameters\nas everything else.  What differs per benchmark is the *schedule*:\naction repeat, environment count and replay ratio, none of which are\nmodel fields.  Pass them to `lucid.utils.rollout.rollout` and to\nyour training loop."
       ],
       "attributes": [],
       "warns": [],
@@ -5291,7 +5291,7 @@
         ">>> from lucid.models import dreamer_v3_400m\n>>> model = dreamer_v3_400m(action_dim=6).eval()\n>>> model.config.deter_size, model.config.hidden_size\n(12288, 1536)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104), Figure 6c and Table 3."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104)), Figure 6c and Table 3."
       ],
       "attributes": [],
       "warns": [],
@@ -5697,7 +5697,7 @@
         ">>> from lucid.models import dreamer_v3_400m_world_model\n>>> model = dreamer_v3_400m_world_model(action_dim=6).eval()\n>>> model.config.blocks, model.config.deter_size // model.config.blocks\n(8, 1536)"
       ],
       "notes": [
-        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n(arXiv:2301.04104)."
+        "Reference: Hafner, Pasukonis, Ba, and Norouzi, *\"Mastering Diverse\nDomains through World Models\"*, Nature 640 (2025), 647-653\n([arXiv:2301.04104](https://arxiv.org/abs/2301.04104))."
       ],
       "attributes": [],
       "warns": [],

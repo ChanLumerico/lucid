@@ -177,7 +177,7 @@
         ">>> from lucid.models.generative.planet import PlaNetConfig\n>>> cfg = PlaNetConfig(action_dim=6)\n>>> cfg.stoch_size, cfg.deter_size, cfg.free_nats\n(30, 200, 3.0)\n>>> cfg.latent_size\n230"
       ],
       "notes": [
-        "The state geometry, the frame size, the action width and the two KL\nknobs are inherited from `WorldModelConfig`, which is where\nDreamer reads the same values from.\n\nReference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\n`sample_size` is pinned to 64 rather than made general.  The encoder\nis four stride-2 convolutions with 4x4 kernels and the decoder four\ntransposed convolutions with kernels `5, 5, 6, 6` — an irregular\nschedule that lands on `64` exactly (`1 -> 5 -> 13 -> 30 -> 64`) and\non nothing else.  Generalising it would mean inventing a schedule the\npaper does not give, so an unsupported size raises here instead of\nsilently reconstructing to the wrong shape.  Scale the model with\n`cnn_depth` / `deter_size` / `stoch_size`."
+        "The state geometry, the frame size, the action width and the two KL\nknobs are inherited from `WorldModelConfig`, which is where\nDreamer reads the same values from.\n\nReference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\n`sample_size` is pinned to 64 rather than made general.  The encoder\nis four stride-2 convolutions with 4x4 kernels and the decoder four\ntransposed convolutions with kernels `5, 5, 6, 6` — an irregular\nschedule that lands on `64` exactly (`1 -> 5 -> 13 -> 30 -> 64`) and\non nothing else.  Generalising it would mean inventing a schedule the\npaper does not give, so an unsupported size raises here instead of\nsilently reconstructing to the wrong shape.  Scale the model with\n`cnn_depth` / `deter_size` / `stoch_size`."
       ],
       "attributes": [],
       "warns": [],
@@ -314,7 +314,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.planet import (\n...     PlaNetConfig, PlaNetForWorldModeling,\n... )\n>>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,\n...                    hidden_size=8, cnn_depth=4, reward_hidden=8)\n>>> model = PlaNetForWorldModeling(cfg).eval()\n>>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)\n>>> out = model(obs, act, rewards=lucid.zeros(1, 3))\n>>> out.loss.shape, out.observation.shape\n((), (1, 3, 3, 64, 64))"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\n**The reconstruction term never reaches the prior head.**  Nothing\nreconstructed is computed from the prior — the decoder and the reward\nhead both read the posterior — so the KL is the prior's only teacher.\nTrain without it and the dynamics never learn to predict, while every\nshape and every loss value still looks reasonable.\n\nThe released implementation scales the reward term by 10 and uses\n3-layer, 300-unit heads.  Neither appears in the paper, which specifies\n\"two fully connected layers of size 200\"; the paper's values are used\nhere, and the discrepancy is recorded rather than silently split."
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\n**The reconstruction term never reaches the prior head.**  Nothing\nreconstructed is computed from the prior — the decoder and the reward\nhead both read the posterior — so the KL is the prior's only teacher.\nTrain without it and the dynamics never learn to predict, while every\nshape and every loss value still looks reasonable.\n\nThe released implementation scales the reward term by 10 and uses\n3-layer, 300-unit heads.  Neither appears in the paper, which specifies\n\"two fully connected layers of size 200\"; the paper's values are used\nhere, and the discrepancy is recorded rather than silently split."
       ],
       "attributes": [
         {
@@ -567,7 +567,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.planet import PlaNetConfig, PlaNetModel\n>>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,\n...                    hidden_size=8, cnn_depth=4, reward_hidden=8)\n>>> model = PlaNetModel(cfg).eval()\n>>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)\n>>> priors, posteriors = model.observe(obs, act)\n>>> posteriors.stoch.shape\n(1, 3, 4)\n>>> model.imagine(model.rssm.initial(1), act).stoch.shape\n(1, 3, 4)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\n**Action alignment.**  `actions[:, t]` is the action taken *into*\nstep `t` — the one that produced `observations[:, t]`.  A caller\nholding $(o_0, a_0, o_1, a_1, \\dots)$ shifts by one and passes a\nzero action at index 0.\n\nPlanning is **not** implemented.  The paper pairs this model with a\ncross-entropy-method planner, which is a control algorithm rather than\na network; `imagine` is the piece of it that belongs to the\nmodel, and the search on top is left to the caller."
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\n**Action alignment.**  `actions[:, t]` is the action taken *into*\nstep `t` — the one that produced `observations[:, t]`.  A caller\nholding $(o_0, a_0, o_1, a_1, \\dots)$ shifts by one and passes a\nzero action at index 0.\n\nPlanning is **not** implemented.  The paper pairs this model with a\ncross-entropy-method planner, which is a control algorithm rather than\na network; `imagine` is the piece of it that belongs to the\nmodel, and the search on top is left to the caller."
       ],
       "attributes": [
         {
@@ -724,7 +724,7 @@
         ">>> from lucid.models.generative.planet import planet\n>>> model = planet(action_dim=6).eval()\n>>> model.config.stoch_size, model.config.deter_size\n(30, 200)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\nThe recurrence carries both a deterministic and a stochastic path:\n\n\n\n$$\nh_t = f\\big(h_{t-1},\\, s_{t-1},\\, a_{t-1}\\big),\n\\qquad\ns_t \\sim p\\big(s_t \\mid h_t\\big).\n$$"
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\nThe recurrence carries both a deterministic and a stochastic path:\n\n\n\n$$\nh_t = f\\big(h_{t-1},\\, s_{t-1},\\, a_{t-1}\\big),\n\\qquad\ns_t \\sim p\\big(s_t \\mid h_t\\big).\n$$"
       ],
       "attributes": [],
       "warns": [],
@@ -969,7 +969,7 @@
         ">>> from lucid.models.generative.planet import planet_world_model\n>>> model = planet_world_model(action_dim=6).eval()\n>>> model.config.free_nats\n3.0"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n(arXiv:1811.04551).\n\nTraining objective:\n\n\n\n$$\n\\mathcal{L} = \\mathbb{E}_q\\big[\\log p(o_t \\mid h_t, s_t)\n                  + \\log p(r_t \\mid h_t, s_t)\\big]\n              - \\beta\\,\\mathrm{KL}\\big(q(s_t \\mid h_t, o_t)\n                  \\,\\|\\, p(s_t \\mid h_t)\\big).\n$$"
+        "Reference: Hafner, Lillicrap, Fischer, Villegas, Ha, Lee, and Davidson,\n*\"Learning Latent Dynamics for Planning from Pixels\"*, ICML, 2019\n([arXiv:1811.04551](https://arxiv.org/abs/1811.04551)).\n\nTraining objective:\n\n\n\n$$\n\\mathcal{L} = \\mathbb{E}_q\\big[\\log p(o_t \\mid h_t, s_t)\n                  + \\log p(r_t \\mid h_t, s_t)\\big]\n              - \\beta\\,\\mathrm{KL}\\big(q(s_t \\mid h_t, o_t)\n                  \\,\\|\\, p(s_t \\mid h_t)\\big).\n$$"
       ],
       "attributes": [],
       "warns": [],

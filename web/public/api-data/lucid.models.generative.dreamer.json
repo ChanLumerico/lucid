@@ -249,7 +249,7 @@
         ">>> from lucid.models.generative.dreamer import DreamerConfig\n>>> cfg = DreamerConfig(action_dim=6)\n>>> cfg.horizon, cfg.lambda_, cfg.discount\n(15, 0.95, 0.99)\n>>> cfg.act_fn\n'elu'"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n(arXiv:1912.01603).\n\nThe actor emits a `tanh`-squashed diagonal Gaussian, so actions are\nbounded to `(-1, 1)` — the Control Suite's range.  `actor_min_std`,\n`actor_init_std` and `actor_mean_scale` are **not stated in the\npaper**; they are the released implementation's, and are exposed here\nrather than buried so a reader can see which numbers have a citation\nand which have a source.\n\nWhere the paper and the released implementation disagree, the paper\nwins and the difference is recorded here rather than hidden:\n\n==============  ====================  ==========================\nquantity        paper                 released implementation\n==============  ====================  ==========================\nhead width      300                   400 throughout\nactor depth     3                     4\nvalue depth     3                     3\nreward depth    not stated            2  (taken, as the default)\nCNN activation  not stated            ReLU (taken; dense stays ELU)\n==============  ====================  ==========================\n\n`detach_actor_input` is the one behavioural fork.  The released\nimplementation feeds the actor a `stop_gradient`-ed state during\nimagination, which drops the terms in which a return depends on the\npolicy *through the state it read*.  Keeping them (`False`) is the\nexact gradient of $\\max_\\phi \\mathbb{E}[\\sum_\\tau V_\\lambda]$;\ndropping them is cheaper and lower-variance.  The default follows the\nreleased implementation because the paper is silent.\n\nThe three losses need **three optimisers over three parameter groups**\n— see `DreamerForWorldModeling`.  Summing them and taking one\nstep is not this algorithm: the actor's gradient would then also\ndescend the world model, and the critic would chase a target it is\nsimultaneously moving."
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n([arXiv:1912.01603](https://arxiv.org/abs/1912.01603)).\n\nThe actor emits a `tanh`-squashed diagonal Gaussian, so actions are\nbounded to `(-1, 1)` — the Control Suite's range.  `actor_min_std`,\n`actor_init_std` and `actor_mean_scale` are **not stated in the\npaper**; they are the released implementation's, and are exposed here\nrather than buried so a reader can see which numbers have a citation\nand which have a source.\n\nWhere the paper and the released implementation disagree, the paper\nwins and the difference is recorded here rather than hidden:\n\n==============  ====================  ==========================\nquantity        paper                 released implementation\n==============  ====================  ==========================\nhead width      300                   400 throughout\nactor depth     3                     4\nvalue depth     3                     3\nreward depth    not stated            2  (taken, as the default)\nCNN activation  not stated            ReLU (taken; dense stays ELU)\n==============  ====================  ==========================\n\n`detach_actor_input` is the one behavioural fork.  The released\nimplementation feeds the actor a `stop_gradient`-ed state during\nimagination, which drops the terms in which a return depends on the\npolicy *through the state it read*.  Keeping them (`False`) is the\nexact gradient of $\\max_\\phi \\mathbb{E}[\\sum_\\tau V_\\lambda]$;\ndropping them is cheaper and lower-variance.  The default follows the\nreleased implementation because the paper is silent.\n\nThe three losses need **three optimisers over three parameter groups**\n— see `DreamerForWorldModeling`.  Summing them and taking one\nstep is not this algorithm: the actor's gradient would then also\ndescend the world model, and the critic would chase a target it is\nsimultaneously moving."
       ],
       "attributes": [],
       "warns": [],
@@ -1019,7 +1019,7 @@
         ">>> from lucid.models.generative.dreamer import dreamer\n>>> model = dreamer(action_dim=6).eval()\n>>> model.config.horizon, model.config.lambda_\n(15, 0.95)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n(arXiv:1912.01603)."
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n([arXiv:1912.01603](https://arxiv.org/abs/1912.01603))."
       ],
       "attributes": [],
       "warns": [],
@@ -1348,7 +1348,7 @@
         ">>> from lucid.models.generative.dreamer import dreamer_discrete\n>>> model = dreamer_discrete(action_dim=18).eval()\n>>> model.config.action_space, model.config.horizon, model.config.kl_weight\n('discrete', 10, 0.1)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n(arXiv:1912.01603), Appendix A.\n\nThe action is sampled with straight-through gradients, as the paper\nspecifies.  That is a biased estimator, and it is the one this paper\nused; DreamerV2 later replaced it with the score function for discrete\nactions.\n\nEpsilon-greedy exploration and tanh reward bounding belong to the\nrollout and the environment respectively — see this module's docstring."
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n([arXiv:1912.01603](https://arxiv.org/abs/1912.01603)), Appendix A.\n\nThe action is sampled with straight-through gradients, as the paper\nspecifies.  That is a biased estimator, and it is the one this paper\nused; DreamerV2 later replaced it with the score function for discrete\nactions.\n\nEpsilon-greedy exploration and tanh reward bounding belong to the\nrollout and the environment respectively — see this module's docstring."
       ],
       "attributes": [],
       "warns": [],
@@ -1715,7 +1715,7 @@
         ">>> from lucid.models.generative.dreamer import dreamer_discrete_world_model\n>>> model = dreamer_discrete_world_model(action_dim=18).eval()\n>>> model.config.pcont, model.config.pcont_scale\n(True, 10.0)"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n(arXiv:1912.01603), Appendix A.\n\n`pcont=True` here, so `forward` needs its `discounts` argument —\nthe discount head is \"trained towards the soft labels of 0 and gamma\",\nwhich is what this family already does with that tensor."
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n([arXiv:1912.01603](https://arxiv.org/abs/1912.01603)), Appendix A.\n\n`pcont=True` here, so `forward` needs its `discounts` argument —\nthe discount head is \"trained towards the soft labels of 0 and gamma\",\nwhich is what this family already does with that tensor."
       ],
       "attributes": [],
       "warns": [],
@@ -2090,7 +2090,7 @@
         ">>> from lucid.models.generative.dreamer import dreamer_world_model\n>>> model = dreamer_world_model(action_dim=6).eval()\n>>> len(model.actor_parameters()) > 0\nTrue"
       ],
       "notes": [
-        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n(arXiv:1912.01603).\n\nThe three losses take **three separate optimisers** over the parameter\ngroups the model exposes — see `DreamerForWorldModeling`."
+        "Reference: Hafner, Lillicrap, Ba, and Norouzi, *\"Dream to Control:\nLearning Behaviors by Latent Imagination\"*, ICLR, 2020\n([arXiv:1912.01603](https://arxiv.org/abs/1912.01603)).\n\nThe three losses take **three separate optimisers** over the parameter\ngroups the model exposes — see `DreamerForWorldModeling`."
       ],
       "attributes": [],
       "warns": [],
