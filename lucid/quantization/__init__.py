@@ -14,11 +14,23 @@ ordinary integer :class:`~lucid.Tensor` plus float ``scale`` /
 ``zero_point`` buffers held by the owning module — no dedicated quantized
 tensor subtype and no new engine dtype.
 
-**Phase 0 surface (this commit):** the schemes / dtypes / parameter
-container and the three arithmetic primitives (:func:`quantize`,
-:func:`dequantize`, :func:`fake_quantize`).  Observers, ``QConfig``, the
-eager / dynamic / graph workflows, and the real low-precision GEMM land
-in later phases.
+**Deploying what comes out of it.**  Every workflow here reaches
+``lucid.coreml``.  A model from :func:`prepare_qat` exports with its
+weights on the grid they were trained onto, so storing them there costs
+nothing — measured at 0.00e+00 against the eager model, where the same
+network quantized after training lands at 7e-04.  A model from
+:func:`convert` or :func:`quantize_dynamic` holds a packed MLX linear
+whose Metal-only kernel a trace cannot follow, and exports through that
+form's own :func:`dequantize` reference path — the same arithmetic to
+5e-07, not an approximation of it.
+
+Two things to know before reading a number from one.  Observers keep
+recording in ``eval()`` mode, correctly, since post-training calibration
+runs there and *is* that recording; the export pauses them while it
+traces, but anything else that runs the model twice is comparing against
+something that moved.  And :func:`prepare_qat` prepares the model in
+place and hands it back, so a caller who wants to keep the float weights
+copies first.
 """
 
 from lucid.quantization._functional import dequantize, fake_quantize, quantize

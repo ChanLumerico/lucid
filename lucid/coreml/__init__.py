@@ -26,6 +26,30 @@ models were measured to emit; anything else raises
 :class:`UnsupportedOp` naming the gap, because a package quietly missing a
 layer still loads and still returns plausible numbers.
 
+**Smaller packages.**  ``weights=`` stores the weights compressed —
+:class:`WeightPrecision` for eight bits with a scale per output channel,
+:class:`Palettize` for one to eight bits through a lookup table,
+:class:`Sparsify` for the survivors plus a mask.  Measured on a trained
+ResNet-50, against its top-1 over five inputs: int8 is 3.9x smaller and
+keeps 4/5, six-bit palettization 4.3x and 4/5.  Below six bits
+post-training palettization changes every prediction, and no export
+setting recovers it — which is what :class:`CompressionAware` is for.
+
+**Models from** ``lucid.quantization`` **export.**  A model prepared for
+quantization-aware training carries observers that record what passes
+through them, and tracing is not calibration, so they are paused around
+it and put back; its weights were trained onto their grid, so storing
+them there costs nothing — measured at 0.00e+00 against the eager model
+where the same network quantized afterwards lands at 7e-04.  A converted
+model — ``quantize_dynamic``, or ``convert`` — holds a packed MLX linear
+whose Metal-only kernel the tracer cannot follow, and is exported through
+that form's own dequantize-to-float reference path, which is the same
+arithmetic to 5e-07 rather than an approximation of it.
+:class:`Activations` decides whether a prepared model's *activation*
+quantization is carried into the package as arithmetic or left out; Core
+ML quantizes weights only, so carrying it is faithful and is work the
+accelerator did not ask for.
+
 Examples
 --------
 ::
@@ -280,6 +304,21 @@ def export(
 
     >>> cml.export(model, x, "flex.mlpackage", shape_range={0: (1, 16)})
     >>> cml.export(vae, x, "vae.mlpackage", draws=cml.Draws.AS_INPUT)
+
+    A model that came out of ``lucid.quantization`` needs nothing said
+    about it — the export recognises what it is carrying:
+
+    >>> aware = q.prepare_qat(model, q.get_default_qat_qconfig_mapping(), (x,))
+    >>> ...                                       # fine-tune, then
+    >>> cml.export(aware.eval(), x, "qat.mlpackage",
+    ...            weights=cml.WeightPrecision.INT8,
+    ...            activations=cml.Activations.DROPPED)
+
+    Leave a converted model's weights alone, though. They already sit on
+    MLX's grid, and asking for another stacks two of them — 3.8e-06
+    against the quantized model becomes 3.4e-02:
+
+    >>> cml.export(q.quantize_dynamic(model), x, "dynamic.mlpackage")
 
     """
     if getattr(model, "training", False):
