@@ -110,6 +110,17 @@ class SomeOf(_Container):
     n : int
         Number of children to apply (without replacement).
     p : float, optional, default=1.0
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.SomeOf([T.HorizontalFlip(p=1.0), T.VerticalFlip(p=1.0),
+    ...                T.Transpose(p=1.0)], n=2, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
+
+    Picks ``n`` of them each call, so an augmentation pipeline varies
+    without listing every combination.
     """
 
     def __init__(
@@ -155,6 +166,17 @@ class Sequential(_Container):
     p : float, optional, default=1.0
         Block-level probability — when below 1, the chain is a
         no-op on ``1 - p`` of calls.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Sequential([T.Resize(16, 16), T.HorizontalFlip(p=1.0)])
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
+
+    Applies its members in order, and its own ``p`` decides whether the
+    whole run happens — unlike :class:`Compose`, which always runs and
+    leaves each member to its own probability.
     """
 
     def __init__(self, transforms: list[TransformLike], p: float = 1.0) -> None:
@@ -225,6 +247,16 @@ class ReplayCompose(_Container):
     After a call, ``replay_data`` holds ``(transform, params, applied)``
     per child; :meth:`replay` re-applies the *same* params to a new
     sample (e.g. to apply an identical augmentation to a paired input).
+
+    Examples
+    --------
+    Records what it sampled, so the same random transform can be applied
+    again — to a second view, or to a mask that arrived later:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ReplayCompose([T.RandomCrop(16, 16), T.HorizontalFlip(p=0.5)])
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
     """
 
     def __init__(self, transforms: list[TransformLike], p: float = 1.0) -> None:

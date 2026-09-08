@@ -130,6 +130,13 @@ class ElasticTransform(_DisplacementTransform):
         Gaussian smoothing of the displacement field (pixels).
     interpolation : int or str or Interpolation, optional, default=1
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ElasticTransform(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -188,6 +195,13 @@ class GridDistortion(_DisplacementTransform):
     distort_limit : float or (float, float), optional, default=0.3
     interpolation : int or str or Interpolation, optional, default=1
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.GridDistortion(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -274,6 +288,13 @@ class OpticalDistortion(_DisplacementTransform):
         Optical-center shift range (fraction of size).
     interpolation : int or str or Interpolation, optional, default=1
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.OpticalDistortion(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -347,6 +368,13 @@ class GridElasticDeform(_DisplacementTransform):
         Max control-point displacement in pixels.
     interpolation : int or str or Interpolation, optional, default=1
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.GridElasticDeform(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(

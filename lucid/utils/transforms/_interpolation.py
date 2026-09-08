@@ -15,6 +15,14 @@ class Interpolation(str, enum.Enum):
     Subclasses ``str`` so members compare equal to their wire value
     (``Interpolation.BILINEAR == "bilinear"``) and pass through to the
     engine's ``interpolate`` without conversion.
+
+    Examples
+    --------
+    >>> import lucid.utils.transforms as T
+    >>> [mode.name for mode in T.Interpolation][:4]
+    ['NEAREST', 'LINEAR', 'BILINEAR', 'BICUBIC']
+    >>> T.Resize(16, 16, interpolation=T.Interpolation.NEAREST)
+    Resize(height=16, width=16, p=1.0)
     """
 
     NEAREST = "nearest"

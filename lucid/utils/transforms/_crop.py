@@ -67,6 +67,16 @@ class Crop(_NoParams, GeometricTransform[Empty]):
     p : float, optional, default=1.0
         Probability of applying the crop.  Below ``1.0``, the input
         passes through unchanged on ``1 - p`` of calls.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Crop(0, 0, 16, 16, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
+
+    The box is ``(x_min, y_min, x_max, y_max)``, so this takes the
+    top-left quarter rather than a 16-pixel margin.
     """
 
     def __init__(
@@ -122,6 +132,16 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
     border_mode : int, optional, default=4
     value, mask_value : float, optional, default=0.0
     p : float, optional, default=1.0
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.PadIfNeeded(64, 64, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 64, 64)
+
+    Pads only what is short of the target; an image already large
+    enough comes back untouched.
     """
 
     def __init__(
@@ -189,6 +209,13 @@ class RandomSizedCrop(GeometricTransform[CropBox]):
         Crop width / height ratio.
     interpolation : int or str or Interpolation, optional, default=1
     p : float, optional, default=1.0
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.RandomSizedCrop((8, 16), 16, 16, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
     """
 
     def __init__(
@@ -296,6 +323,13 @@ class CropAndPad(_NoParams, GeometricTransform[Empty]):
     value : float, optional, default=0.0
         Pad fill (for positive ``px``).
     p : float, optional, default=1.0
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.CropAndPad(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, px: int = 0, value: float = 0.0, p: float = 1.0) -> None:

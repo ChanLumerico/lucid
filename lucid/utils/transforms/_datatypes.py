@@ -92,6 +92,16 @@ class Image:
         Photometric transforms operate on ``data`` in place of
         per-channel statistics; geometric transforms resample with the
         configured interpolation mode.
+
+    Examples
+    --------
+    The wrapper that says a tensor is a picture, so a transform knows to
+    resample it rather than to treat it as labels:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> holder = T.Image(lucid.rand(3, 32, 32))
+    >>> tuple(T.Resize(16, 16)(holder).data.shape)
+    (3, 16, 16)
     """
 
     data: Tensor
@@ -113,6 +123,21 @@ class Mask:
         Label / probability map with shape ``(H, W)``, ``(C, H, W)``,
         or ``(B, C, H, W)``.  Integer dtypes are recommended for class
         indices to preserve nearest-neighbour resampling exactly.
+
+    Examples
+    --------
+    Says a tensor is labels rather than a picture, which changes how it
+    is resampled — nearest-neighbour, so a class index is never
+    interpolated into one that does not exist:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> holder = T.Mask(lucid.zeros(1, 32, 32))
+    >>> tuple(T.Resize(16, 16)(holder).data.shape)
+    (1, 16, 16)
+
+    A mask is ``(C, H, W)`` like an image — a bare ``(H, W)`` is refused
+    by name rather than guessed at, since a two-dimensional tensor could
+    as easily be a single channel or a batch of rows.
     """
 
     data: Tensor
@@ -131,6 +156,24 @@ class Keypoints:
         ``(N, D)`` with ``D >= 2``; columns 0 and 1 are ``x`` and ``y``.
     canvas_size : (int, int)
         ``(H, W)`` of the image the points index into.
+
+    Examples
+    --------
+    Points move with the image, so they need the canvas they were
+    measured against:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> points = T.Keypoints(lucid.tensor([[4.0, 4.0]]), canvas_size=(32, 32))
+    >>> sample = {"image": T.Image(lucid.rand(3, 32, 32)), "keypoints": points}
+    >>> moved = T.HorizontalFlip(p=1.0)(sample)
+    >>> tuple(moved["keypoints"].data.shape)
+    (1, 2)
+
+    They have to travel with the image. On their own a geometric
+    transform refuses them — "no image / mask in the sample to derive
+    transform parameters" — because a flip needs to know the width it is
+    flipping about, and the canvas size records where the points came
+    from rather than what they are being mapped into.
     """
 
     data: Tensor

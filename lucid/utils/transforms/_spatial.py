@@ -110,6 +110,13 @@ class Transpose(_NoParams, GeometricTransform[Empty]):
     ----------
     p : float, optional, default=0.5
         Probability of applying the transpose.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Transpose(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, p: float = 0.5) -> None:
@@ -140,6 +147,13 @@ class Flip(GeometricTransform[FlipAxis]):
     r"""Flip around a random axis (Albumentations ``Flip``).
 
     Samples ``code`` ∈ {0 (vertical), 1 (horizontal), -1 (both)}.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Flip(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, p: float = 0.5) -> None:
@@ -215,6 +229,13 @@ class RandomRotate90(GeometricTransform[Rot90Param]):
     ----------
     p : float, optional, default=0.5
         Probability of applying the rotation.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.RandomRotate90(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, p: float = 0.5) -> None:
@@ -305,6 +326,13 @@ class Rotate(_WarpTransform):
     value : float, optional, default=0.0
         Constant fill (only used with ``border_mode=0``).
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Rotate(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -363,6 +391,13 @@ class ShiftScaleRotate(_WarpTransform):
         Rotation-angle range in degrees.
     interpolation, border_mode, value, p
         As in :class:`Rotate`.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ShiftScaleRotate(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -453,6 +488,13 @@ class Affine(_WarpTransform):
         Shear-angle range in degrees (applied to x).
     interpolation, border_mode, value, p
         As in :class:`Rotate`.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Affine(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -540,6 +582,13 @@ class Perspective(_WarpTransform):
     interpolation, border_mode, value, p
         As in :class:`Rotate`.  ``keep_size`` is implicit (output keeps
         the input size).
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Perspective(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -633,6 +682,19 @@ class RandomScale(GeometricTransform[ScaleParam]):
         Image resampling mode (OpenCV codes accepted).
     p : float, optional, default=0.5
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.RandomScale(scale_limit=0.1, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> 28 <= out.shape[1] <= 36
+    True
+
+    The size cannot be written down here because it follows the sampled
+    scale and differs run to run — which is the thing to know about this
+    transform. Put a :class:`Resize` after it when the batch has to
+    stack.
     """
 
     def __init__(
@@ -715,6 +777,13 @@ class D4(GeometricTransform[D4Param]):
 
     The 8 symmetries of a square = ``rot90^k`` (k∈0..3) optionally
     followed by a horizontal flip.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.D4(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, p: float = 1.0) -> None:
@@ -893,6 +962,13 @@ class RandomGridShuffle(GeometricTransform[ShuffleParam]):
     grid : (int, int), optional, default=(3, 3)
         Number of cells (rows, cols).
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.RandomGridShuffle(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, grid: tuple[int, int] = (3, 3), p: float = 0.5) -> None:

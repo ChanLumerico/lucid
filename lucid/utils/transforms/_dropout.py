@@ -57,6 +57,13 @@ class CoarseDropout(PhotometricTransform[HoleParams]):
         Default to the corresponding max.
     fill_value : float, optional, default=0.0
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.CoarseDropout(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -116,6 +123,13 @@ class GridDropout(PhotometricTransform[HoleParams]):
         Grid period in pixels.
     fill_value : float, optional, default=0.0
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.GridDropout(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(

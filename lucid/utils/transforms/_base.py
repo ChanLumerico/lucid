@@ -99,6 +99,31 @@ class Transform[P](abc.ABC):
     p : float, optional, default=1.0
         Probability of applying the transform; otherwise the input
         passes through unchanged.
+
+    Examples
+    --------
+    Every transform here is one of these. Subclassing means supplying
+    ``apply`` for each target the transform touches — an image, a mask,
+    boxes, keypoints — and inheriting the probability handling, the
+    parameter sampling and the composition machinery:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> class Halve(T.Transform):
+    ...     def make_params(self, img):
+    ...         return {}
+    ...     def _apply_image(self, img, params):
+    ...         return img * 0.5
+    >>> tuple(Halve(p=1.0)(T.Image(lucid.rand(3, 8, 8))).data.shape)
+    (3, 8, 8)
+
+    Two methods, not one. ``make_params`` samples whatever this call
+    decides — an angle, a crop box — and is handed the image so it can
+    sample against its size; ``_apply_image`` is then given the same
+    parameters, which is what keeps a random transform consistent across
+    everything in one sample. A geometric transform needs three more —
+    ``_apply_mask``, ``_apply_boxes`` and ``_apply_keypoints`` — because
+    it has to carry the same change through to whatever travels beside
+    the image.
     """
 
     def __init__(self, p: float = 1.0) -> None:
@@ -165,6 +190,19 @@ class GeometricTransform[P](Transform[P], abc.ABC):
     transform handles every target type" into a contract mypy enforces,
     preventing the silent bug where a new geometric transform forgets to
     move one of them.
+
+    Examples
+    --------
+    The base of everything that moves pixels around — crops, flips,
+    rotations, warps. Geometric transforms carry their change through to
+    masks, boxes and keypoints, which is what separates them from
+    :class:`PhotometricTransform`:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> issubclass(T.Rotate, T.GeometricTransform)
+    True
+    >>> issubclass(T.ColorJitter, T.GeometricTransform)
+    False
     """
 
     @override
@@ -188,6 +226,16 @@ class PhotometricTransform[P](Transform[P], abc.ABC):
 
     Inherits the identity companion hooks from :class:`Transform`; the
     class states intent and hosts shared photometric helpers.
+
+    Examples
+    --------
+    The base of everything that changes colour rather than position —
+    brightness, contrast, noise, blur. A mask travelling beside the image
+    is left alone, because nothing moved:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> issubclass(T.GaussNoise, T.PhotometricTransform)
+    True
     """
 
     @staticmethod
@@ -311,14 +359,18 @@ class Compose(_NoParams, Transform[Empty]):
 
     Examples
     --------
-    >>> from lucid.utils.transforms import Compose, Resize, CenterCrop, Normalize
+    >>> import lucid
+    >>> from lucid.utils.transforms import (
+    ...     Compose, Resize, CenterCrop, Normalize, Image,
+    ... )
     >>> tf = Compose([
     ...     Resize(256, 256),
     ...     CenterCrop(224, 224),
     ...     Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225),
     ...               max_pixel_value=1.0),
     ... ])
-    >>> y = tf(image)
+    >>> tuple(tf(Image(lucid.rand(3, 300, 400))).data.shape)
+    (3, 224, 224)
     """
 
     def __init__(

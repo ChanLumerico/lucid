@@ -118,6 +118,18 @@ class TransformsPreset(_NoParams, Transform[Empty], abc.ABC):
     preset_type : ClassVar[str]
         Short identifier (e.g. ``"ImageClassification"``) used as the
         ``preprocessor_type`` key in :meth:`to_dict` / :meth:`from_dict`.
+
+    Examples
+    --------
+    The base of the ready-made pipelines — :class:`ImageClassification`,
+    :class:`ImageClassificationAugment`, :class:`Detection`,
+    :class:`Segmentation`, :class:`Pose`. Each is the preprocessing its
+    task expects, so a caller reaches for one rather than assembling
+    resize, crop and normalise by hand:
+
+    >>> import lucid.utils.transforms as T
+    >>> sorted(c.__name__ for c in T.TransformsPreset.__subclasses__())
+    ['Detection', 'ImageClassification', 'ImageClassificationAugment', 'Pose', 'Segmentation']
     """
 
     preset_type: ClassVar[str]
@@ -308,6 +320,16 @@ class ImageClassification(TransformsPreset):
     -----
     Input is assumed already scaled to ``[0, 1]`` (prepend
     :class:`~lucid.utils.transforms.ToFloat` for uint8).
+
+    Examples
+    --------
+    The evaluation pipeline every ImageNet model in the zoo expects —
+    resize the shortest side, centre crop, normalise:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ImageClassification(crop_size=224)
+    >>> tuple(tf(T.Image(lucid.rand(3, 300, 400))).data.shape)
+    (3, 224, 224)
     """
 
     preset_type: ClassVar[str] = "ImageClassification"
@@ -433,6 +455,16 @@ class ImageClassificationAugment(TransformsPreset):
     mean, std : tuple of float, optional
         Per-channel normalization stats; default ImageNet.
     interpolation : str or Interpolation, optional, default="bilinear"
+
+    Examples
+    --------
+    The training counterpart of :class:`ImageClassification` — a random
+    resized crop and a horizontal flip instead of a centre crop:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ImageClassificationAugment(crop_size=224)
+    >>> tuple(tf(T.Image(lucid.rand(3, 300, 400))).data.shape)
+    (3, 224, 224)
     """
 
     preset_type: ClassVar[str] = "ImageClassificationAugment"
@@ -537,6 +569,17 @@ class Detection(TransformsPreset):
     mean, std : tuple of float, optional
         Per-channel normalization stats; default ImageNet.
     interpolation : str or Interpolation, optional, default="bilinear"
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Detection()
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 1333, 1333)
+
+    A preset, not a single transform: it resizes so the longest side
+    is at most ``max_size`` and pads to a square, which is what a
+    detector's backbone expects to batch.
     """
 
     preset_type: ClassVar[str] = "Detection"
@@ -618,6 +661,17 @@ class Segmentation(TransformsPreset):
         Per-channel normalization stats; default ImageNet.
     interpolation : str or Interpolation, optional, default="bilinear"
         Image resize interpolation.  Masks always use nearest.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Segmentation()
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 520, 520)
+
+    A preset. The mask travels with the image and is resampled with
+    nearest-neighbour so a label is never interpolated into one that
+    does not exist.
     """
 
     preset_type: ClassVar[str] = "Segmentation"
@@ -691,6 +745,16 @@ class Pose(TransformsPreset):
     mean, std : tuple of float, optional
         Per-channel normalization stats; default ImageNet.
     interpolation : str or Interpolation, optional, default="bilinear"
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Pose(crop_size=256)
+    >>> tuple(tf(T.Image(lucid.rand(3, 300, 400))).data.shape)
+    (3, 256, 256)
+
+    Keypoints handed in beside the image are moved with it, which is the
+    reason this is a preset rather than a resize and a crop.
     """
 
     preset_type: ClassVar[str] = "Pose"

@@ -156,6 +156,13 @@ class Blur(PhotometricTransform[KSizeParam]):
         rounded up to the next odd integer to keep the kernel centred.
     p : float, optional, default=0.5
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Blur(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, blur_limit: int = 7, p: float = 0.5) -> None:
@@ -211,6 +218,13 @@ class MedianBlur(PhotometricTransform[KSizeParam]):
         to the next odd integer so the window is centred.
     p : float, optional, default=0.5
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.MedianBlur(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, blur_limit: int = 7, p: float = 0.5) -> None:
@@ -273,6 +287,13 @@ class MotionBlur(PhotometricTransform[MotionParam]):
         next odd integer.
     p : float, optional, default=0.5
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.MotionBlur(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, blur_limit: int = 7, p: float = 0.5) -> None:
@@ -345,6 +366,13 @@ class GaussianBlur(PhotometricTransform[SigmaParam]):
         ``(0.0, v)``; ``0`` triggers the OpenCV auto-sigma formula.
     p : float, optional, default=0.5
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.GaussianBlur(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -402,6 +430,13 @@ class GaussNoise(PhotometricTransform[NoiseParam]):
     r"""Additive Gaussian noise (Albumentations ``GaussNoise``).
 
     ``var_limit`` is on the 0-255 scale (matching Albumentations).
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.GaussNoise(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -468,6 +503,13 @@ class MultiplicativeNoise(PhotometricTransform[MultiplierParam]):
         per image.
     p : float, optional, default=0.5
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.MultiplicativeNoise(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -521,6 +563,13 @@ class ISONoise(PhotometricTransform[NoiseParam]):
 
     Adds luminance Gaussian noise scaled by ``intensity`` plus a small
     saturation perturbation from ``color_shift``.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ISONoise(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -583,6 +632,13 @@ class Downscale(PhotometricTransform[ScaleParam]):
         ``scale_min`` for a deterministic factor).
     p : float, optional, default=0.5
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Downscale(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -666,6 +722,13 @@ class Defocus(PhotometricTransform[RadiusParam]):
         Larger radii produce more aggressive defocus.
     p : float, optional, default=0.5
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Defocus(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, radius: tuple[int, int] = (3, 10), p: float = 0.5) -> None:
@@ -741,6 +804,13 @@ class ZoomBlur(PhotometricTransform[ZoomParam]):
         levels are evenly spaced toward ``max_factor`` regardless.
     p : float, optional, default=0.5
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ZoomBlur(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(

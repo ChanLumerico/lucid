@@ -68,6 +68,13 @@ class Resize(_NoParams, GeometricTransform[Empty]):
     interpolation : int or str or Interpolation, optional, default=1
         Image resampling mode (OpenCV codes accepted; masks use nearest).
     p : float, optional, default=1.0
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Resize(64, 64, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 64, 64)
     """
 
     def __init__(
@@ -160,6 +167,16 @@ class SmallestMaxSize(_MaxSizeResize):
         Image resampling mode (OpenCV codes accepted).
     p : float, optional, default=1.0
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.SmallestMaxSize(16, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
+
+    The aspect ratio is kept, so the shortest side lands on the
+    limit and the other one is longer.
     """
 
     @override
@@ -188,6 +205,16 @@ class LongestMaxSize(_MaxSizeResize):
         Image resampling mode (OpenCV codes accepted).
     p : float, optional, default=1.0
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.LongestMaxSize(16, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
+
+    The aspect ratio is kept, so a non-square image comes back with
+    its longest side at the limit and the other one shorter.
     """
 
     @override
@@ -228,6 +255,17 @@ class ResizeShortestEdge(_MaxSizeResize):
         Image resampling mode.
     p : float, optional, default=1.0
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ResizeShortestEdge(min_size=16, max_size=32)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
+
+    The shortest side goes to ``min_size`` unless that would push the
+    longest past ``max_size``, in which case the longest one is what
+    binds — which is the rule a detector's batching depends on.
     """
 
     def __init__(
@@ -271,6 +309,13 @@ class CenterCrop(_NoParams, GeometricTransform[Empty]):
         Target crop width in pixels.
     p : float, optional, default=1.0
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.CenterCrop(16, 16, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
     """
 
     def __init__(self, height: int, width: int, p: float = 1.0) -> None:
@@ -340,6 +385,13 @@ class RandomCrop(GeometricTransform[Offset]):
         Target crop width in pixels (must be ``<= W``).
     p : float, optional, default=1.0
         Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.RandomCrop(16, 16, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
     """
 
     def __init__(self, height: int, width: int, p: float = 1.0) -> None:
@@ -395,6 +447,13 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
     r"""Crop a random area/aspect region then resize to ``height`` x ``width``.
 
     Albumentations ``RandomResizedCrop``.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.RandomResizedCrop(16, 16, p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 16, 16)
     """
 
     def __init__(
@@ -516,6 +575,13 @@ class HorizontalFlip(_NoParams, GeometricTransform[Empty]):
     ----------
     p : float, optional, default=0.5
         Probability of applying the flip.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.HorizontalFlip(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, p: float = 0.5) -> None:
@@ -554,6 +620,13 @@ class VerticalFlip(_NoParams, GeometricTransform[Empty]):
     ----------
     p : float, optional, default=0.5
         Probability of applying the flip.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.VerticalFlip(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, p: float = 0.5) -> None:

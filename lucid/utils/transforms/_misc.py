@@ -34,6 +34,13 @@ class Lambda(_NoParams, Transform[Empty]):
         Applied to the :class:`BoundingBoxes` / :class:`Keypoints` object.
     name : str, optional
     p : float, optional, default=1.0
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Lambda(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -246,6 +253,13 @@ class RandomCropNearBBox(_NoParams, Transform[Empty]):
     max_part_shift : float, optional, default=0.3
         Max jitter of the crop window edges, as a fraction of the box size.
     p : float, optional, default=1.0
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.RandomCropNearBBox(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(self, max_part_shift: float = 0.3, p: float = 1.0) -> None:
@@ -296,6 +310,13 @@ class MaskDropout(_NoParams, Transform[Empty]):
     image_fill_value : float, optional, default=0.0
     mask_fill_value : float, optional, default=0.0
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.MaskDropout(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     def __init__(

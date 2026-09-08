@@ -57,6 +57,16 @@ class ToFloat(_NoParams, PhotometricTransform[Empty]):
     max_value : float, optional, default=255.0
         Value the image is divided by.
     p : float, optional, default=1.0
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ToFloat(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
+
+    Divides by ``max_value``, so an 8-bit image lands in 0-1. The
+    input here is already float, which is why the values do not move.
     """
 
     def __init__(self, max_value: float = 255.0, p: float = 1.0) -> None:
@@ -85,6 +95,17 @@ class FromFloat(_NoParams, PhotometricTransform[Empty]):
     Stays in floating point (Lucid keeps a float tensor); the Albu
     ``dtype`` argument is accepted for signature parity but the result
     is not re-quantized.
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.FromFloat(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
+
+    The inverse of :class:`ToFloat`, and the pair is what moves an
+    image between the 0-1 range a network wants and the 0-255 one a
+    file holds.
     """
 
     def __init__(
@@ -116,6 +137,17 @@ class Normalize(_NoParams, PhotometricTransform[Empty]):
     max_pixel_value : float, optional, default=255.0
         Value the inputs are divided by (``1.0`` for ``[0, 1]`` inputs).
     p : float, optional, default=1.0
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.Normalize(mean=(0.485, 0.456, 0.406),
+    ...                  std=(0.229, 0.224, 0.225), max_pixel_value=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
+
+    ``max_pixel_value`` divides before the mean is taken, so it is 255
+    for an image read from a file and 1.0 for one already in 0-1.
     """
 
     def __init__(
@@ -179,6 +211,13 @@ class ColorJitter(PhotometricTransform[ColorJitterParams]):
     hue : float or (float, float), optional, default=0.2
         Scalar ``v`` → ``[-v, v]`` (``v`` ≤ 0.5).
     p : float, optional, default=0.5
+
+    Examples
+    --------
+    >>> import lucid, lucid.utils.transforms as T
+    >>> tf = T.ColorJitter(p=1.0)
+    >>> tuple(tf(T.Image(lucid.rand(3, 32, 32))).data.shape)
+    (3, 32, 32)
     """
 
     _ADJUST = (
