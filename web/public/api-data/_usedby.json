@@ -863,6 +863,12 @@
       "module": "lucid.coreml"
     }
   ],
+  "lucid.coreml._spec.Activations": [
+    {
+      "kind": "module",
+      "module": "lucid.coreml"
+    }
+  ],
   "lucid.coreml._spec.Classifier": [
     {
       "kind": "module",

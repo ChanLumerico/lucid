@@ -21,6 +21,7 @@ __all__ = [
     "Classifier",
     "State",
     "ColorSpace",
+    "Activations",
     "ComputeUnits",
     "Draws",
     "ImageInput",
@@ -69,6 +70,54 @@ class Precision(enum.Enum):
 
     FLOAT32 = "FLOAT32"
     FLOAT16 = "FLOAT16"
+
+
+class Activations(enum.Enum):
+    """What to do with a quantization-aware model's activation quantization.
+
+    A model prepared for quantization-aware training carries two kinds of
+    fake-quantization: one on each weight, which puts the weight onto the
+    grid it will be stored on, and one on each activation, which
+    simulates a runtime that computes in integers.
+
+    The first is what the export wants — a weight trained onto its grid
+    is written on that grid exactly. The second is a simulation of a
+    runtime this is not. Core ML's quantization is weight-only, and the
+    Neural Engine computes in float16 whatever the package declares, so
+    the simulation is carried as real arithmetic: rounding, clipping and
+    scaling at every activation, work the accelerator did not ask for.
+
+    ``SIMULATED`` is the default and keeps it, because dropping it
+    changes what the package computes and that is not a decision to make
+    on a caller's behalf. ``DROPPED`` removes it, leaving the weights
+    quantized and the activations in float — which is what Core ML would
+    do with the same network quantized after training, except that the
+    weights were trained for their grid.
+
+    Measured on a small classifier at eight bits, against the same
+    network quantized after training rather than during it:
+
+    ==================================  ========  =========  =======
+    export                              accuracy  vs eager   ops
+    ==================================  ========  =========  =======
+    post-training int8                     0.986   7.0e-04         6
+    QAT int8, activations simulated        0.997   0.00e+00       24
+    QAT int8, activations dropped          0.997   6.4e-06         6
+    ==================================  ========  =========  =======
+
+    Inert for a model that carries no fake-quantization, which is every
+    model that did not come out of ``lucid.quantization``.
+
+    Examples
+    --------
+    >>> import lucid.coreml as cml
+    >>> cml.export(qat_model, x, "small.mlpackage",
+    ...            weights=cml.WeightPrecision.INT8,
+    ...            activations=cml.Activations.DROPPED)
+    """
+
+    SIMULATED = "SIMULATED"
+    DROPPED = "DROPPED"
 
 
 class Draws(enum.Enum):

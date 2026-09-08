@@ -169,3 +169,123 @@ class TestWhatStillDoesNotCross:
         converted = q.quantize_dynamic(_net())
         with pytest.raises(ValueError, match="did not come out of the traced"):
             cml.export(converted, x, f"{tmp_path}/converted.mlpackage")
+
+
+class TestDroppingTheActivationSimulation:
+    """``Activations.DROPPED`` — the second half of the bridge.
+
+    A prepared model carries fake-quantization in two places: on each
+    weight, which puts it onto the grid it will be stored on, and on each
+    activation, which simulates a runtime that computes in integers. The
+    first is what the export wants. The second is a simulation of a
+    runtime this is not — Core ML quantizes weights only, and the Neural
+    Engine computes in float16 whatever the package says — so carrying it
+    means rounding, clipping and scaling at every activation, work the
+    accelerator did not ask for.
+
+    Measured on the classifier above: twenty-four operations against six,
+    with the accuracy unchanged. It is not the default anyway, because
+    dropping it changes what the package computes and that is the
+    caller's call to make.
+    """
+
+    def test_it_removes_the_simulation_and_keeps_the_weights(self, tmp_path) -> None:
+        x = lucid.randn(1, 3, 16, 16)
+        model = _prepared(x)
+        for module in model.modules():
+            if isinstance(module, FakeQuantize):
+                module.disable_observer()
+
+        kept = cml.export(
+            model,
+            x,
+            f"{tmp_path}/kept.mlpackage",
+            weights=cml.WeightPrecision.INT8,
+            activations=cml.Activations.SIMULATED,
+        )
+        dropped = cml.export(
+            model,
+            x,
+            f"{tmp_path}/dropped.mlpackage",
+            weights=cml.WeightPrecision.INT8,
+            activations=cml.Activations.DROPPED,
+        )
+        try:
+            assert (
+                dropped.compute_plan().total_compute < kept.compute_plan().total_compute
+            )
+        finally:
+            kept.close()
+            dropped.close()
+
+    def test_only_the_activation_one_is_paused(self) -> None:
+        """Both are the same class, told apart by where they hang.
+
+        Dropping the weight's fake-quantize alongside the activation's
+        would discard the grid the weights were trained onto, which is
+        the only reason to export a prepared model rather than the float
+        one it came from. Checked on the mechanism rather than through a
+        tolerance: what matters is which modules are paused, and a
+        numeric threshold measures that only at a distance.
+        """
+        from lucid.coreml._build import _activation_quantization_paused
+
+        x = lucid.randn(1, 3, 16, 16)
+        model = _prepared(x)
+        weights = [
+            m for n, m in model.named_modules() if n.endswith("weight_fake_quant")
+        ]
+        activations = [
+            m
+            for n, m in model.named_modules()
+            if n.endswith("activation_post_process") and isinstance(m, FakeQuantize)
+        ]
+        assert weights and activations
+
+        with _activation_quantization_paused(model):
+            assert all(m._fake_quant_enabled for m in weights)
+            assert not any(m._fake_quant_enabled for m in activations)
+
+        assert all(m._fake_quant_enabled for m in weights)
+        assert all(m._fake_quant_enabled for m in activations)
+
+    def test_it_puts_the_simulation_back(self, tmp_path) -> None:
+        """Exporting is not allowed to change the model it was given."""
+        x = lucid.randn(1, 3, 16, 16)
+        model = _prepared(x)
+        before = [
+            getattr(m, "_fake_quant_enabled", False)
+            for m in model.modules()
+            if isinstance(m, FakeQuantize)
+        ]
+        cml.export(
+            model,
+            x,
+            f"{tmp_path}/restored.mlpackage",
+            activations=cml.Activations.DROPPED,
+        ).close()
+        after = [
+            getattr(m, "_fake_quant_enabled", False)
+            for m in model.modules()
+            if isinstance(m, FakeQuantize)
+        ]
+        assert after == before
+
+    def test_it_is_inert_on_a_model_that_carries_none(self, tmp_path) -> None:
+        """Which is every model that did not come from `lucid.quantization`."""
+        lucid.manual_seed(0)
+        plain = _net()
+        x = lucid.randn(1, 3, 16, 16)
+        both = []
+        for name, setting in (
+            ("simulated", cml.Activations.SIMULATED),
+            ("dropped", cml.Activations.DROPPED),
+        ):
+            exported = cml.export(
+                plain, x, f"{tmp_path}/{name}.mlpackage", activations=setting
+            )
+            try:
+                both.append(exported.verify(plain, x, relative=True))
+            finally:
+                exported.close()
+        assert both[0] == both[1] < 1e-5

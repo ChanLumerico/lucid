@@ -60,6 +60,7 @@ from lucid.coreml._build import (
 from lucid.coreml._model import CoreMLModel, Latency, PlacementSummary
 from lucid.coreml._optimize import CompressionAware
 from lucid.coreml._spec import (
+    Activations,
     DeploymentTarget,
     Draws,
     Palettize,
@@ -101,6 +102,7 @@ __all__ = [
     "ImageInput",
     "Metadata",
     "WeightPrecision",
+    "Activations",
     "CompressionAware",
     "DeploymentTarget",
     "Draws",
@@ -147,6 +149,7 @@ def export(
     output_field: str | None = None,
     minimum_deployment_target: DeploymentTarget | None = None,
     draws: Draws = Draws.REFUSED,
+    activations: Activations = Activations.SIMULATED,
 ) -> CoreMLModel:
     """Trace ``model``, write a ``.mlpackage`` at ``path``, and load it.
 
@@ -202,6 +205,13 @@ def export(
         Description, author, licence and version to record in the package.
     compute_units : ComputeUnits, optional, keyword-only, default=ALL
         Which processors Core ML may schedule on.
+    activations : Activations, optional, keyword-only, default=SIMULATED
+        What to do with a quantization-aware model's activation
+        fake-quantization. The default carries it as arithmetic, so the
+        package reproduces the model exactly; ``DROPPED`` removes it,
+        leaving quantized weights and float activations — which is what
+        the Neural Engine computes anyway. Inert for a model that carries
+        none.
     draws : Draws, optional, keyword-only, default=REFUSED
         What to do about a model that draws random numbers in
         ``forward``. Core ML folds a draw at build time, so the default
@@ -331,6 +341,7 @@ def export(
             output_field=output_field,
             minimum_deployment_target=minimum_deployment_target,
             draws=draws,
+            activations=activations,
         )
     except BaseException:
         discard_staging(path)

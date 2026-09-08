@@ -218,6 +218,48 @@ def _named_examples(example: object) -> tuple[list[tuple[str, Tensor]], bool]:
 
 
 @contextlib.contextmanager
+def _activation_quantization_paused(model: Module) -> Any:
+    """Take a model's activation fake-quantization out of the trace.
+
+    Only the activation one. A quantization-aware module holds its
+    weight's fake-quantize as ``weight_fake_quant`` and its output's as
+    ``activation_post_process``, and dropping the first would throw away
+    the grid the weights were trained onto — the whole reason to export
+    such a model at all.
+
+    Told apart by the attribute they hang from rather than by anything
+    about the module, since both are the same class. That is a name to
+    depend on, and it is the one ``lucid.quantization`` uses.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model about to be traced.
+
+    Yields
+    ------
+    None
+        For the duration of the trace.
+    """
+    paused = [
+        module
+        for name, module in model.named_modules()
+        if name.rsplit(".", 1)[-1] == "activation_post_process"
+        and hasattr(module, "disable_fake_quant")
+        and hasattr(module, "enable_fake_quant")
+    ]
+    was_on = [bool(getattr(module, "_fake_quant_enabled", False)) for module in paused]
+    for module in paused:
+        module.disable_fake_quant()
+    try:
+        yield
+    finally:
+        for module, on in zip(paused, was_on):
+            if on:
+                module.enable_fake_quant()
+
+
+@contextlib.contextmanager
 def _observers_paused(model: Module) -> Any:
     """Stop calibration machinery from writing while the model is traced.
 
@@ -2486,6 +2528,7 @@ def build_package(
     output_field: str | None = None,
     minimum_deployment_target: _spec.DeploymentTarget | None = None,
     draws: _spec.Draws = _spec.Draws.REFUSED,
+    activations: _spec.Activations = _spec.Activations.SIMULATED,
     into: _Shared | None = None,
 ) -> dict[str, object]:
     """Trace ``model`` and write a complete ``.mlpackage`` at ``path``.
@@ -2528,6 +2571,13 @@ def build_package(
         output shaped ``(1, len(labels))``.
     metadata : Metadata or None, optional, keyword-only, default=None
         What the package says about itself.
+    activations : _spec.Activations, optional, keyword-only, default=SIMULATED
+        What to do with a quantization-aware model's activation
+        fake-quantization. The default carries it as arithmetic, so the
+        package reproduces the model exactly; ``DROPPED`` removes it,
+        leaving quantized weights and float activations — which is what
+        the Neural Engine computes anyway. Inert for a model that carries
+        none.
     draws : _spec.Draws, optional, keyword-only, default=REFUSED
         What to do about a model that draws random numbers in
         ``forward``. Core ML folds a draw at build time, so the default
@@ -2572,9 +2622,14 @@ def build_package(
         weights=weights,
         functions=into is not None,
     )
-    graph, feeds, inputs, outputs, traced_values = trace(
-        model, example, output_field=output_field
-    )
+    with (
+        _activation_quantization_paused(model)
+        if activations is _spec.Activations.DROPPED
+        else contextlib.nullcontext()
+    ):
+        graph, feeds, inputs, outputs, traced_values = trace(
+            model, example, output_field=output_field
+        )
 
     lifted = _lift_draws(graph, traced_values) if draws is _spec.Draws.AS_INPUT else []
     lifted_heads = {tid for _n, tid, _t, _k in lifted}
