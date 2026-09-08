@@ -109,27 +109,28 @@ if [[ "${LUCID_SKIP_DOCSTRING:-0}" != "1" && -f "${DOCSTRING_SCRIPT}" ]]; then
 fi
 
 # ── 2b. Cross-reference resolver ────────────────────────────────────────────
-# Soft-fail.  ``check_docstring_xrefs.py`` scans every Lucid docstring
-# for sphinx-style ``:func:`` / ``:class:`` / ``:meth:`` references and
-# flags targets that don't resolve to a known Lucid or stdlib symbol.
-# Runs only when ``web/public/api-data/`` exists (it depends on the
-# built JSON for path resolution); soft-fail because the checker can
-# legitimately false-positive on dynamically-created symbols the AST
-# scan misses.
+# Blocking.  ``check_docstring_xrefs.py`` scans every Lucid docstring for
+# sphinx-style ``:func:`` / ``:class:`` / ``:meth:`` references and flags
+# targets that don't resolve to a known Lucid, ``tools`` or stdlib
+# symbol.  Runs only when ``web/public/api-data/`` exists, since it needs
+# the built JSON to resolve paths.
+#
+# It was soft-fail for as long as it had false positives — two, both
+# correct references the resolver did not index: a ``tools.`` module and
+# an engine class emitted under its C++ name.  The resolver learned both
+# and every one of 8663 symbols resolves, so a failure here now means a
+# reference that really does not, and a broken link in the docs is worth
+# a commit being stopped over.  ``LUCID_SKIP_XREFS=1`` is the way past it
+# for a commit that has a reason.
 XREF_SCRIPT="${REPO_ROOT}/tools/check_docstring_xrefs.py"
 if [[ "${LUCID_SKIP_XREFS:-0}" != "1" && -f "${XREF_SCRIPT}" ]]; then
     if git diff --cached --name-only --diff-filter=ACMR | grep -qE '^lucid/.*\.py$'; then
         if [[ -d "${REPO_ROOT}/web/public/api-data" ]]; then
-            if ! "${PY}" "${XREF_SCRIPT}" >/dev/null 2>&1; then
-                # Re-run non-quiet for visibility, but don't block — the
-                # signal can still be informative even if not actionable.
+            if ! "${PY}" "${XREF_SCRIPT}" --list >&2; then
                 echo "" >&2
-                echo "  ⚠️  Unresolved docstring cross-references — see:" >&2
-                echo "          python3 tools/check_docstring_xrefs.py --list" >&2
-                echo "      (Not blocking; set LUCID_XREFS_STRICT=1 to enforce.)" >&2
-                if [[ "${LUCID_XREFS_STRICT:-0}" == "1" ]]; then
-                    exit 1
-                fi
+                echo "  ❌  Unresolved docstring cross-references (see above)." >&2
+                echo "      Bypass for this commit:  LUCID_SKIP_XREFS=1 git commit ..." >&2
+                exit 1
             fi
         fi
     fi

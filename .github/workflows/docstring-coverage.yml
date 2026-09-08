@@ -34,3 +34,8 @@ jobs:
       # full test matrix needs.
       - name: Run docstring coverage validator
         run: python3 tools/check_docstring_coverage.py --list
+
+      # The resolver needs the committed api-data to resolve paths, which
+      # is in the tree already so the docs workflow can skip Griffe.
+      - name: Check docstring cross-references
+        run: python3 tools/check_docstring_xrefs.py --list
