@@ -16,7 +16,7 @@ Two things the trace hands over that the driver has to sort out:
   bare ``isinstance`` check would reject every model in the zoo.
 """
 
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, cast, override
 
 import dataclasses
 import math
@@ -25,6 +25,8 @@ import struct
 
 import lucid
 import lucid.compile as _compile
+import lucid.nn as _nn
+import lucid.nn.functional as _F
 import lucid.quantization as _quant
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
@@ -215,6 +217,108 @@ def _named_examples(example: object) -> tuple[list[tuple[str, Tensor]], bool]:
         f"lucid.coreml: example must be a Tensor, a tuple of Tensors, or a "
         f"mapping of name to Tensor — got {type(example).__name__}"
     )
+
+
+class _DequantizedLinear(_nn.Module):
+    """A packed MLX linear, computed the way an exported graph can follow.
+
+    ``QuantizedLinearMLX`` runs a Metal-only grouped GEMM over a packed
+    weight and moves the activation to the GPU and back to do it. None of
+    that reaches the tracer, so a model holding one exported to a graph
+    its own output had fallen out of.
+
+    The module's own documentation names the way through: the packed form
+    has a dequantize-to-float reference path, and it is not an
+    approximation of the kernel but the same arithmetic — measured at
+    4.8e-07 between them. So the weight is reconstructed once, on the
+    host, and the layer becomes the ordinary ``linear`` the exporter
+    already writes.
+
+    What is lost is the packing, not the quantization: the reconstructed
+    weight carries the values MLX's grid gave it, and asking the export
+    for ``INT8`` stores them again on a grid of its own.
+
+    Parameters
+    ----------
+    source : nn.Module
+        The ``QuantizedLinearMLX`` to stand in for.
+    """
+
+    def __init__(self, source: Module) -> None:
+        super().__init__()
+        from lucid.quantization import _qgemm
+
+        dense = _qgemm.dequantize(
+            cast("Tensor", source.packed_weight),
+            cast("Tensor", source.scales),
+            cast("Tensor", source.biases),
+            group_size=int(cast("int", source.group_size)),
+            bits=int(cast("int", source.bits)),
+        )
+        self.weight = _nn.Parameter(dense.cpu())
+        held = cast("Tensor | None", getattr(source, "bias", None))
+        self.bias = _nn.Parameter(held.cpu()) if held is not None else None
+        self.relu = bool(getattr(source, "relu", False))
+
+    @override
+    def forward(self, *args: Tensor, **kwargs: object) -> Tensor:
+        """Apply the reconstructed weight, and the fused ReLU if there was one.
+
+        Parameters
+        ----------
+        *args : Tensor
+            The activation, as the layer this stands in for takes it.
+        **kwargs : object
+            Accepted and unused, to match the base signature.
+
+        Returns
+        -------
+        Tensor
+            ``x @ weightᵀ + bias``, through a ReLU when one was fused.
+        """
+        out = _F.linear(args[0], self.weight, self.bias)
+        return _F.relu(out) if self.relu else out
+
+
+@contextlib.contextmanager
+def _packed_linears_unpacked(model: Module) -> Any:
+    """Stand in for every packed MLX linear while the model is traced.
+
+    Swapped on the parent by attribute name and put back afterwards,
+    whether the trace succeeded or not — the caller's model is not the
+    export's to change.
+
+    Recognised by the attributes the packing needs rather than by class,
+    which keeps this from importing ``lucid.nn.quantized`` to name it.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model about to be traced.
+
+    Yields
+    ------
+    None
+        For the duration of the trace.
+    """
+    swapped: list[tuple[Module, str, Module]] = []
+    for _name, parent in model.named_modules():
+        for attribute, child in list(vars(parent).get("_modules", {}).items()):
+            if child is None:
+                continue
+            if not all(
+                hasattr(child, field)
+                for field in ("packed_weight", "scales", "biases", "group_size", "bits")
+            ):
+                continue
+            swapped.append((parent, attribute, child))
+    for parent, attribute, child in swapped:
+        setattr(parent, attribute, _DequantizedLinear(child))
+    try:
+        yield
+    finally:
+        for parent, attribute, child in swapped:
+            setattr(parent, attribute, child)
 
 
 @contextlib.contextmanager

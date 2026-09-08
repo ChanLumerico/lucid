@@ -10624,6 +10624,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.coreml._build"
+    },
+    {
+      "kind": "module",
       "module": "lucid.coreml._optimize"
     },
     {
@@ -11059,6 +11063,10 @@
     {
       "kind": "module",
       "module": "lucid.compile._core.attention_probe"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.coreml._build"
     },
     {
       "kind": "module",

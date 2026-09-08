@@ -150,25 +150,103 @@ class TestAQuantizationAwareModelExports:
             exported.close()
 
 
-class TestWhatStillDoesNotCross:
-    """Named rather than left to be discovered, and each for a reason.
+class TestAConvertedModelCrossesToo:
+    """`quantize_dynamic`, and `prepare` then `convert`.
 
-    A converted model — `quantize_dynamic`, or `prepare` then `convert` —
-    holds `QuantizedLinearMLX`, whose forward calls an MLX packed GEMM and
-    moves the activation to the GPU and back. The tracer follows none of
-    it, so the output falls out of the graph.
+    Both leave `QuantizedLinearMLX` behind: a Metal-only grouped GEMM
+    over a packed weight, which moves the activation to the GPU and back
+    to run. None of that reaches the tracer, so a model holding one used
+    to export to a graph its own output had fallen out of.
 
-    That one is a translation to write, not a refusal to fix: MLX packs
-    weights in groups along the input axis with a scale and a bias per
-    group, and Core ML's affine dequantize is per-channel along one axis.
-    The layouts differ, so the bridge is real work rather than a mapping.
+    The packed form has a dequantize-to-float reference path, and it is
+    not an approximation of the kernel but the same arithmetic — 4.8e-07
+    between them, measured. So the weight is reconstructed once, on the
+    host, and the layer becomes the ordinary `linear` the exporter
+    already writes. The packing is what is lost, not the quantization:
+    the reconstructed weight still holds the values MLX's grid gave it.
     """
 
-    def test_a_converted_model_is_refused_by_name(self, tmp_path) -> None:
+    @pytest.mark.parametrize("recipe", ["dynamic", "convert"])
+    def test_it_exports_and_agrees(self, recipe, tmp_path) -> None:
         x = lucid.randn(1, 3, 16, 16)
-        converted = q.quantize_dynamic(_net())
-        with pytest.raises(ValueError, match="did not come out of the traced"):
-            cml.export(converted, x, f"{tmp_path}/converted.mlpackage")
+        if recipe == "dynamic":
+            model = q.quantize_dynamic(_net())
+        else:
+            prepared = q.prepare(_net(), q.get_default_qconfig_mapping(), (x,))
+            prepared.eval()
+            prepared(x)
+            model = q.convert(prepared)
+
+        exported = cml.export(model, x, f"{tmp_path}/{recipe}.mlpackage")
+        try:
+            answered = exported.predict(x)
+            wanted = model(x).cpu()
+            assert float((answered - wanted).abs().max().item()) < 1e-4
+        finally:
+            exported.close()
+
+    def test_the_model_is_handed_back_as_it_came(self, tmp_path) -> None:
+        """The layers are stood in for, not replaced."""
+        x = lucid.randn(1, 3, 16, 16)
+        model = q.quantize_dynamic(_net())
+        before = [type(m).__name__ for m in model.modules()]
+        cml.export(model, x, f"{tmp_path}/restored.mlpackage").close()
+        assert [type(m).__name__ for m in model.modules()] == before
+
+    def test_a_packed_weight_on_the_gpu_is_not_turned_away(self, tmp_path) -> None:
+        """Its kernel is Metal-only, so that is where the weight lives.
+
+        The guard that stops an ordinary model being exported from the
+        GPU would otherwise reject this one for holding exactly the
+        weights it is meant to hold, which is why the substitution
+        happens before the check rather than after.
+        """
+        x = lucid.randn(1, 3, 16, 16)
+        model = q.quantize_dynamic(_net())
+        # Buffers, not parameters — the packed weight, its scales, its
+        # biases and even the layer's own bias are all registered that
+        # way, which is also why the guard had to learn to look at both.
+        packed = [
+            n
+            for n, b in model.named_buffers()
+            if getattr(getattr(b, "device", None), "type", "cpu") != "cpu"
+        ]
+        assert packed, "the fixture must actually keep weights on the GPU"
+        cml.export(model, x, f"{tmp_path}/gpu.mlpackage").close()
+
+    def test_compressing_it_again_stacks_two_grids(self, tmp_path) -> None:
+        """Which is why the default leaves the weights alone.
+
+        The values already sit on MLX's grid — groups of 64 along the
+        input axis, each with its own scale and bias — and this writer's
+        int8 is per output channel. A row spans many groups with
+        different steps, so there is no single step to recover and the
+        weight is quantized a second time onto a grid it does not share.
+        Measured on a trained classifier: 3.8e-06 leaving the weights
+        alone, 3.4e-02 asking for int8, 3.7e-01 asking for six-bit
+        palettization.
+
+        Not refused — a caller may want the size and know what it costs —
+        but the ordering is worth knowing before reading the number.
+        """
+        x = lucid.randn(1, 3, 16, 16)
+        model = q.quantize_dynamic(_net())
+
+        plain = cml.export(model, x, f"{tmp_path}/plain.mlpackage")
+        again = cml.export(
+            model,
+            x,
+            f"{tmp_path}/again.mlpackage",
+            weights=cml.WeightPrecision.INT8,
+        )
+        try:
+            wanted = model(x).cpu()
+            loose = float((again.predict(x) - wanted).abs().max().item())
+            tight = float((plain.predict(x) - wanted).abs().max().item())
+            assert tight < loose
+        finally:
+            plain.close()
+            again.close()
 
 
 class TestDroppingTheActivationSimulation:

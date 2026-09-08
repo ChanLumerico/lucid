@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, cast
 
 from lucid.coreml._build import (
     _DRAWN_KEY,
+    _packed_linears_unpacked,
     commit_staging,
     discard_staging,
     staging_path,
@@ -300,10 +301,86 @@ def export(
             "so nothing is lost by exporting the uncompiled one"
         )
 
+    # A packed MLX linear keeps its weight on the GPU because its kernel
+    # is Metal-only, and none of that kernel reaches the tracer. It is
+    # stood in for by the same layer computed from a reconstructed dense
+    # weight — the packed form's own reference path, which matches the
+    # kernel to 5e-07 — so the swap happens before the check below, or a
+    # dynamically quantized model would be turned away for holding
+    # exactly the weights it is meant to hold.
+    with _packed_linears_unpacked(model):
+        return _export_prepared(
+            model,
+            example,
+            path,
+            precision=precision,
+            weights=weights,
+            shapes=shapes,
+            shape_range=shape_range,
+            state=state,
+            image_input=image_input,
+            classifier=classifier,
+            metadata=metadata,
+            output_field=output_field,
+            compute_units=compute_units,
+            minimum_deployment_target=minimum_deployment_target,
+            draws=draws,
+            activations=activations,
+        )
+
+
+def _export_prepared(
+    model: Module,
+    example: object,
+    path: str,
+    *,
+    precision: Precision,
+    weights: WeightPrecision | Palettize | Sparsify,
+    shapes: list[tuple[int, ...]] | None,
+    shape_range: dict[int, tuple[int, int]] | None,
+    state: list[State] | None,
+    image_input: ImageInput | None,
+    classifier: Classifier | None,
+    metadata: Metadata | None,
+    output_field: str | None,
+    compute_units: ComputeUnits,
+    minimum_deployment_target: DeploymentTarget | None,
+    draws: Draws,
+    activations: Activations,
+) -> CoreMLModel:
+    """Write the package, once the model is in a shape the trace can follow.
+
+    Split from :func:`export` so the substitutions that make a model
+    traceable happen around the whole of it — the checks below included,
+    since one of them would otherwise reject a model for weights the
+    substitution has already dealt with.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model to export, already prepared.
+    example : Tensor or tuple of Tensor or dict of str to Tensor
+        Input the trace runs on.
+    path : str
+        Destination package.
+    precision, weights, shapes, shape_range, state, image_input, classifier, metadata, output_field, compute_units, minimum_deployment_target, draws, activations
+        As :func:`export` documents them.
+
+    Returns
+    -------
+    CoreMLModel
+        The written package, loaded.
+    """
+    # Buffers as well as parameters. A quantized linear keeps its packed
+    # weight, its scales and even its bias as buffers, so a check that
+    # looked only at parameters would miss a model made entirely of them
+    # and let it reach the blob writer — which is the message this exists
+    # to replace.
     on_gpu = [
         name
-        for name, parameter in getattr(model, "named_parameters", lambda: [])()
-        if getattr(getattr(parameter, "device", None), "type", "cpu") != "cpu"
+        for source in ("named_parameters", "named_buffers")
+        for name, held in getattr(model, source, lambda: [])()
+        if getattr(getattr(held, "device", None), "type", "cpu") != "cpu"
     ]
     if on_gpu:
         # Reachable from the ordinary path — train on Metal, export — and

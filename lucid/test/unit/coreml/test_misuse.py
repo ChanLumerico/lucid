@@ -276,3 +276,28 @@ class TestTheOtherFourAxesReachingThisOne:
                 lucid.randn(1, 3, 8, 8, device="metal"),
                 f"{tmp_path}/compiled.mlpackage",
             )
+
+    def test_a_model_whose_weights_are_buffers_is_caught_too(self, tmp_path) -> None:
+        """The guard first looked only at parameters, and that was a hole.
+
+        A quantized linear registers its packed weight, its scales and
+        even its bias as buffers, so a model made of them has no GPU
+        parameter at all and would have reached the blob writer — the
+        message this guard exists to replace. Reproduced with a plain
+        module carrying a GPU buffer, since that is the shape rather than
+        anything about quantization.
+        """
+
+        class Carries(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.register_buffer("held", lucid.ones(4, 4).to("metal"))
+
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return x + self.held
+
+        lucid.manual_seed(0)
+        with pytest.raises(ValueError, match="on the GPU"):
+            cml.export(
+                Carries().eval(), lucid.randn(4, 4), f"{tmp_path}/buffers.mlpackage"
+            )
