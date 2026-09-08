@@ -480,6 +480,21 @@ def _resolve(
     # Prose placeholders — not real references.
     if any(c in target for c in "…()[] "):
         return True
+    # ``tools.convert_weights.dit`` and its siblings are modules in this
+    # repository, and the index above walks ``lucid/`` only. Checked on
+    # disk rather than whitelisted, so a reference to a converter that
+    # was renamed or deleted still fails.
+    if target.startswith("tools."):
+        return (ROOT / Path(*target.split("."))).with_suffix(".py").exists() or (
+            ROOT / Path(*target.split("."))
+        ).is_dir()
+    # An engine symbol is emitted under its C++ name — ``lucid::TensorImpl``
+    # — while a docstring naturally spells the Python path it is reached
+    # by. Both name the same class, and the docs site links either.
+    if target.startswith("lucid._C.engine."):
+        leaf = target.rsplit(".", 1)[-1]
+        if f"lucid::{leaf}" in paths or leaf in paths:
+            return True
     # Module-prefix whitelist: ``json.dumps`` resolves via ``json``.
     if "." in target:
         prefix = target.split(".", 1)[0]

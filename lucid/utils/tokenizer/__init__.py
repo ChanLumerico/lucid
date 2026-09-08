@@ -17,17 +17,21 @@ HF-style API on top — :meth:`~Tokenizer.encode` /
 :meth:`~Tokenizer.__call__` with padding + truncation +
 ``return_tensors='lucid'``.
 
-Algorithms (current + planned)
-------------------------------
+Algorithms
+----------
 
-==========  ===============  =============================  ==========
-algo        modules           used by                        status
-==========  ===============  =============================  ==========
-BPE         ``_bpe``         (raw BPE — base for byte-BPE)  ✅ landed
-ByteLevel   ``_byte_bpe``    GPT, GPT-2, RoBERTa, BART      ⏳ planned
-WordPiece   ``_wordpiece``   BERT, RoFormer, DistilBERT     ⏳ planned
-Unigram     ``_unigram``     T5, LLaMA, Mistral, mBART      ⏳ planned
-==========  ===============  =============================  ==========
+==========  ===============  =============================
+algo        modules           used by
+==========  ===============  =============================
+BPE         ``_bpe``         (raw BPE — base for byte-BPE)
+ByteLevel   ``_byte_bpe``    GPT, GPT-2, RoBERTa, BART
+WordPiece   ``_wordpiece``   BERT, RoFormer, DistilBERT
+Unigram     ``_unigram``     T5, LLaMA, Mistral, mBART
+==========  ===============  =============================
+
+Each is exported from this package with a ``Fast`` variant beside it —
+:class:`ByteLevelBPETokenizer`, :class:`WordPieceTokenizer`,
+:class:`UnigramTokenizer`.
 
 Per-model wrappers live in each ``lucid.models.text.<family>``
 package's ``_tokenizer/`` directory and subclass the algorithm

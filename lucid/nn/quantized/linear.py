@@ -5,8 +5,11 @@ codes plus per-channel ``scale`` / ``zero_point`` buffers; the forward
 dequantizes the weight to ``float32``, runs the ordinary linear op, then
 fake-quantizes the output to the calibrated activation grid.  This yields
 the *numerics* of int8 inference (so accuracy matches a real int8 kernel)
-while the actual GEMM stays in float — the real low-precision GEMM is
-swapped in underneath at Phase 6 without changing this surface.
+while the actual GEMM stays in float.  The real low-precision kernel
+lives beside this rather than underneath it, in
+:class:`QuantizedLinearMLX`, and the two agree to 5e-07 — near enough
+that the float path is the reference the Core ML export reads a packed
+weight through.
 """
 
 from typing import TYPE_CHECKING, Protocol, cast, override

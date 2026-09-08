@@ -4,7 +4,9 @@ The int8-weight counterparts of the float ``lucid.nn`` layers, produced by
 :func:`lucid.quantization.convert` from a calibrated model.  Under the
 sidecar representation (design B) they store int8 weights + ``scale`` /
 ``zero_point`` buffers and compute in float (dequantize → op →
-fake-quantize); the real low-precision GEMM is swapped in at Phase 6.
+fake-quantize).  :class:`QuantizedLinearMLX` is the exception and runs
+the engine's own low-precision GEMM instead; the two agree to 5e-07,
+which is what makes the float path a usable reference for it.
 
 Also holds the boundary markers ``QuantStub`` / ``DeQuantStub`` placed in a
 float model and their runtime forms ``Quantize`` / ``DeQuantize``.

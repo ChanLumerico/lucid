@@ -6,9 +6,11 @@ stored as int8 (per-row symmetric); biases stay float.  A float ``nn.LSTM``
 ``state_dict`` — is the compute engine: on each forward its weights are
 overwritten with the dequantized values (which live on the same device as
 the int8 buffers), so only the int8 form is the persistent, device-tracked
-state.  This is weight-quantized dynamic inference; the per-timestep
-activation quantization inside the cell is left to the real low-precision
-kernel (Phase 6).
+state.  This is weight-quantized dynamic inference: the per-timestep
+activation quantization inside the cell is not done here, and the
+engine's low-precision kernel is reached through
+:class:`~lucid.nn.quantized.QuantizedLinearMLX` rather than from this
+module.
 """
 
 from typing import TYPE_CHECKING, cast, override
