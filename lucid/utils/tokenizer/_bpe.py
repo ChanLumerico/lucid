@@ -205,6 +205,21 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
     special_tokens : SpecialTokens, optional
         Special-token registry — see
         :class:`lucid.utils.tokenizer.SpecialTokens`.
+
+    Examples
+    --------
+    Trained in place from an empty vocabulary and no merges:
+
+    >>> from lucid.utils.tokenizer import BPETokenizer
+    >>> tok = BPETokenizer(vocab={}, merges=[])
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=80)
+    >>> tok.decode(tok.encode("the quick dog"))
+    'thequickdog'
+
+    The whitespace is gone, and that is the algorithm rather than a
+    defect: raw BPE has no notion of a word boundary. Use
+    :class:`ByteLevelBPETokenizer` where the round trip has to be exact.
     """
 
     def __init__(
@@ -656,6 +671,25 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
     ----------
     Same as :class:`BPETokenizer`.  The C++ backend is constructed
     transparently in ``__init__`` and held as `_cpp`.
+
+    Examples
+    --------
+    Given the same vocabulary and merges, this and
+    :class:`BPETokenizer` encode identically — so one can be trained and
+    the other used to run it:
+
+    >>> from lucid.utils.tokenizer import BPETokenizer, BPETokenizerFast
+    >>> slow = BPETokenizer(vocab={}, merges=[])
+    >>> slow.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...            vocab_size=80)
+    >>> fast = BPETokenizerFast(vocab=dict(slow._vocab),
+    ...                         merges=list(slow._merges))
+    >>> fast.encode("the quick dog") == slow.encode("the quick dog")
+    True
+
+    Trained separately they will not match, and that is the training
+    rather than the encoder: two runs settle on different merge orders,
+    both correct, and the ids follow the merges.
     """
 
     def __init__(

@@ -50,6 +50,18 @@ class ByteTokenizer(Tokenizer):
         printable byte values (``chr(b)`` for some ``b``).  IDs
         beyond 255 are NOT supported on the default vocab — extend
         the vocab manually before adding such specials.
+
+    Examples
+    --------
+    Nothing to train — every byte is already a token, so the round trip
+    is exact for any input at all:
+
+    >>> from lucid.utils.tokenizer import ByteTokenizer
+    >>> tok = ByteTokenizer()
+    >>> tok.encode("the quick dog")[:4]
+    [116, 104, 101, 32]
+    >>> tok.decode(tok.encode("héllo — 안녕"))
+    'héllo — 안녕'
     """
 
     def __init__(self, special_tokens: SpecialTokens | None = None) -> None:
@@ -191,6 +203,13 @@ class ByteTokenizerFast(Tokenizer):
     special_tokens : SpecialTokens, optional
         Special-token registry; see :class:`ByteTokenizer` for the
         constraints on default-vocab compatibility.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import ByteTokenizerFast
+    >>> tok = ByteTokenizerFast()
+    >>> tok.decode(tok.encode("the quick dog"))
+    'the quick dog'
     """
 
     def __init__(self, special_tokens: SpecialTokens | None = None) -> None:

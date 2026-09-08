@@ -122,6 +122,18 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
     --------
     ByteLevelBPETokenizerFast : C++-backed equivalent with the same API.
     BPETokenizer : Classical (non byte-level) BPE base.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import ByteLevelBPETokenizer
+    >>> tok = ByteLevelBPETokenizer(vocab={}, merges=[])
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=300)
+    >>> tok.decode(tok.encode("the quick dog"))
+    'the quick dog'
+
+    Exact, unlike raw :class:`BPETokenizer` — the byte-level alphabet
+    keeps the spaces that plain BPE drops.
     """
 
     def __init__(
@@ -316,6 +328,15 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
     See Also
     --------
     ByteLevelBPETokenizer : Pure-Python reference; same vocab format.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import ByteLevelBPETokenizerFast
+    >>> tok = ByteLevelBPETokenizerFast(vocab={}, merges=[])
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=300)
+    >>> tok.decode(tok.encode("the quick dog"))
+    'the quick dog'
     """
 
     def __init__(

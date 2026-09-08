@@ -244,6 +244,19 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
     --------
     UnigramTokenizerFast : C++-backed flavour with identical
         encode output and a much faster :meth:`~UnigramTokenizerFast.encode`.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import UnigramTokenizer
+    >>> tok = UnigramTokenizer(pieces=[])
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=48)
+    >>> tok.decode(tok.encode("the quick dog"))
+    ' the quick dog'
+
+    The leading space is the SentencePiece convention this follows — a
+    piece carries the boundary before it — and it survives the round
+    trip rather than being trimmed away.
     """
 
     def __init__(
@@ -630,6 +643,15 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
     See Also
     --------
     UnigramTokenizer : Pure-Python reference flavour.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import UnigramTokenizerFast
+    >>> tok = UnigramTokenizerFast(pieces=[])
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=48)
+    >>> tok.decode(tok.encode("the quick dog"))
+    ' the quick dog'
     """
 
     def __init__(

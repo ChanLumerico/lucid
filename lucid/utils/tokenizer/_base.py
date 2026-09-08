@@ -47,6 +47,24 @@ class SpecialTokens:
     String values are surface forms (what appears in text); the
     corresponding ids are looked up in the tokenizer's vocab at
     construction time.
+
+    Examples
+    --------
+    Naming a token here is half of it — the other half is that the
+    token has to be in the vocabulary, and ``train`` builds the
+    vocabulary from the corpus without reserving anything. Seed it:
+
+    >>> from lucid.utils.tokenizer import SpecialTokens, WordTokenizer
+    >>> marks = SpecialTokens(unk="<unk>", pad="<pad>")
+    >>> tok = WordTokenizer(vocab={"<unk>": 0}, special_tokens=marks)
+    >>> tok.unk_token_id
+    0
+    >>> tok.encode("a word it has never seen")
+    [0, 0, 0, 0, 0, 0]
+
+    Without the seed ``unk_token_id`` is ``None`` and an out-of-vocabulary
+    word raises rather than being replaced, which is the safer of the two
+    since a silent unknown is indistinguishable from a known token.
     """
 
     pad: str | None = None
@@ -95,6 +113,21 @@ class Tokenizer(ABC):
     :class:`BPETokenizer` : reference Python BPE implementation.
     :class:`BPETokenizerFast` : C++-backed wrapper around the same
         algorithm with identical encode outputs.
+
+    Examples
+    --------
+    Every tokenizer here is one of these, so the three calls below are
+    the whole surface a caller needs — build or train, encode, decode:
+
+    >>> from lucid.utils.tokenizer import WordTokenizer
+    >>> tok = WordTokenizer()
+    >>> tok.train(["the quick brown fox", "the lazy dog"], vocab_size=32)
+    >>> tok.decode(tok.encode("the quick dog"))
+    'the quick dog'
+
+    Subclassing one means supplying the algorithm and inheriting the
+    rest — the special-token handling, ``save`` / ``from_pretrained``,
+    and the batch helpers.
     """
 
     # Subclasses populate at construction time.

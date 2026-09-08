@@ -508,6 +508,15 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
     See Also
     --------
     WordPieceTokenizer : Pure-Python reference; same vocab format.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import WordPieceTokenizerFast
+    >>> tok = WordPieceTokenizerFast(vocab={})
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=64)
+    >>> tok.decode(tok.encode("the quick dog"))
+    'the quick dog'
     """
 
     def __init__(

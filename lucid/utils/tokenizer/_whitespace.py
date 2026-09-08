@@ -45,6 +45,17 @@ class WhitespaceTokenizer(Tokenizer):
         first.
     special_tokens : SpecialTokens, optional
         Special-token registry.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import WhitespaceTokenizer
+    >>> tok = WhitespaceTokenizer()
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=64)
+    >>> tok.encode("the quick dog")
+    [0, 1, 5]
+    >>> tok.decode(tok.encode("the quick dog"))
+    'the quick dog'
     """
 
     def __init__(
@@ -201,6 +212,15 @@ class WhitespaceTokenizerFast(Tokenizer):
         Pre-built word → id map.  Empty = call :meth:`train` first.
     special_tokens : SpecialTokens, optional
         Special-token registry.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import WhitespaceTokenizerFast
+    >>> tok = WhitespaceTokenizerFast()
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=64)
+    >>> tok.encode("the quick dog")
+    [0, 1, 5]
     """
 
     def __init__(

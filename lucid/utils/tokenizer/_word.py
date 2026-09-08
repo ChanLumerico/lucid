@@ -143,9 +143,14 @@ class WordTokenizer(Tokenizer):
                 out.append(unk)
             else:
                 raise ValueError(
-                    f"WordTokenizer.encode: OOV word {w!r} encountered "
-                    f"and no UNK token is configured.  Set "
-                    f"``special_tokens.unk``."
+                    f"WordTokenizer.encode: OOV word {w!r} encountered and "
+                    f"there is no id to put in its place. What is missing is "
+                    f"the token in the vocabulary, not the setting: "
+                    f"``special_tokens.unk`` names it and ``train`` does not "
+                    f"reserve it, so seed the vocabulary with it — "
+                    f"``WordTokenizer(vocab={{'<unk>': 0}}, "
+                    f"special_tokens=SpecialTokens(unk='<unk>'))`` — or "
+                    f"encode text the vocabulary covers."
                 )
         return out
 
@@ -277,6 +282,15 @@ class WordTokenizerFast(Tokenizer):
     See Also
     --------
     WordTokenizer : Pure-Python reference sibling.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import WordTokenizerFast
+    >>> tok = WordTokenizerFast()
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=64)
+    >>> tok.decode(tok.encode("the quick dog"))
+    'the quick dog'
     """
 
     def __init__(
@@ -353,8 +367,14 @@ class WordTokenizerFast(Tokenizer):
                 if w not in self._vocab:
                     raise ValueError(
                         f"WordTokenizerFast.encode: OOV word {w!r} "
-                        f"encountered and no UNK token is configured.  "
-                        f"Set ``special_tokens.unk``."
+                        f"encountered and there is no id to put in its "
+                        f"place. What is missing is the token in the "
+                        f"vocabulary, not the setting: "
+                        f"``special_tokens.unk`` names it and ``train`` "
+                        f"does not reserve it, so seed the vocabulary with "
+                        f"it — ``WordTokenizerFast(vocab={{'<unk>': 0}}, "
+                        f"special_tokens=SpecialTokens(unk='<unk>'))`` — or "
+                        f"encode text the vocabulary covers."
                     )
         return list(self._cpp.encode(text))
 

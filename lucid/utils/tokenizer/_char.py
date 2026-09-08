@@ -48,6 +48,17 @@ class CharTokenizer(Tokenizer):
     special_tokens : SpecialTokens, optional
         Special-token registry.  Configuring ``unk`` enables OOV
         fallback (otherwise unknown codepoints are dropped).
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import CharTokenizer
+    >>> tok = CharTokenizer()
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=64)
+    >>> tok.encode("the quick dog")[:5]
+    [0, 1, 2, 3, 4]
+    >>> tok.decode(tok.encode("the quick dog"))
+    'the quick dog'
     """
 
     def __init__(
@@ -209,6 +220,14 @@ class CharTokenizerFast(Tokenizer):
         constructed empty (call :meth:`train` before encoding).
     special_tokens : SpecialTokens, optional
         Special-token registry; configure ``unk`` for OOV fallback.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import CharTokenizerFast
+    >>> tok = CharTokenizerFast()
+    >>> tok.train(["the quick brown fox"], vocab_size=64)
+    >>> tok.decode(tok.encode("the quick"))
+    'the quick'
     """
 
     def __init__(

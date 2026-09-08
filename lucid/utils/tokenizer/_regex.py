@@ -322,6 +322,15 @@ class RegexTokenizerFast(Tokenizer):
     See Also
     --------
     RegexTokenizer : Pure-Python reference sibling.
+
+    Examples
+    --------
+    >>> from lucid.utils.tokenizer import RegexTokenizerFast
+    >>> tok = RegexTokenizerFast(r"\w+|\S")
+    >>> tok.train(["the quick brown fox", "the lazy dog sleeps"],
+    ...           vocab_size=64)
+    >>> tok.decode(tok.encode("the quick dog"))
+    'the quick dog'
     """
 
     def __init__(
