@@ -124,4 +124,13 @@ def load_weight_entry(
     entry = weights.entry if isinstance(weights, WeightsEnum) else weights
     path = download(entry.url, entry.sha256, name=name)
     state_dict: dict[str, Tensor] = _serial.load_safetensors(str(path))  # type: ignore[assignment]
+    if entry.key_map:
+        missing = sorted(k for k in entry.key_map if k not in state_dict)
+        if missing:
+            raise RuntimeError(
+                f"{name}: the entry renames {', '.join(missing)}, which the "
+                f"checkpoint does not contain. The map describes a layout "
+                f"the checkpoint no longer has, so loading would be a guess."
+            )
+        state_dict = {entry.key_map.get(k, k): v for k, v in state_dict.items()}
     return model.load_state_dict(state_dict, strict=strict)

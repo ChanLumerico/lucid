@@ -95,6 +95,14 @@ class ResNeSt200Weights(WeightsEnum):
             "num_params": 70_201_544,
             "metrics": {"ImageNet-1k": {"acc@1": 83.9}},
         },
+        # timm's head is a bare Linear; §4.2's dropout makes Lucid's a
+        # Sequential for the two deep variants, which moves the same
+        # weights to classifier.1.  Dropout has no parameters, so this
+        # renames and nothing else.
+        key_map={
+            "classifier.weight": "classifier.1.weight",
+            "classifier.bias": "classifier.1.bias",
+        },
     )
     DEFAULT = IN1K
 
@@ -122,6 +130,14 @@ class ResNeSt269Weights(WeightsEnum):
             "license": "apache-2.0",
             "num_params": 110_929_480,
             "metrics": {"ImageNet-1k": {"acc@1": 84.5}},
+        },
+        # timm's head is a bare Linear; §4.2's dropout makes Lucid's a
+        # Sequential for the two deep variants, which moves the same
+        # weights to classifier.1.  Dropout has no parameters, so this
+        # renames and nothing else.
+        key_map={
+            "classifier.weight": "classifier.1.weight",
+            "classifier.bias": "classifier.1.bias",
         },
     )
     DEFAULT = IN1K

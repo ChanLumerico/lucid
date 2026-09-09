@@ -247,3 +247,93 @@ class TestFactoryWiring:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ── WeightEntry.key_map ─────────────────────────────────────────────
+
+
+class TestARenamedCheckpointLoads:
+    """A converted checkpoint can be right and still not fit.
+
+    ResNeSt-200/269 put a dropout before the classifier because §4.2
+    asks for one, which makes the head a ``Sequential`` and moves the
+    Linear to ``classifier.1``.  timm's head is a bare ``Linear``, so
+    the converted checkpoint carries the *same* weights under
+    ``classifier`` — dropout has no parameters — and the load failed on
+    two names.  ``key_map`` renames, and does nothing else.
+    """
+
+    @staticmethod
+    def _entry(key_map: dict[str, str]) -> WeightEntry:
+        return WeightEntry(
+            url="https://example.invalid/model.safetensors",
+            sha256="0" * 64,
+            num_classes=2,
+            transforms=ImageClassification(crop_size=4, resize_size=4),
+            key_map=key_map,
+        )
+
+    @staticmethod
+    def _patch(monkeypatch: pytest.MonkeyPatch, state: dict) -> None:
+        import lucid.serialization as serialization
+        import lucid.weights._loading as loading
+
+        monkeypatch.setattr(loading, "download", lambda *a, **k: "unused")
+        monkeypatch.setattr(serialization, "load_safetensors", lambda _p: state)
+
+    def test_the_rename_lands_the_weights(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        model = lucid.nn.Sequential(lucid.nn.Dropout(0.2), lucid.nn.Linear(3, 2))
+        flat = {"1.weight": lucid.ones(2, 3), "1.bias": lucid.zeros(2)}
+        self._patch(monkeypatch, {"weight": flat["1.weight"], "bias": flat["1.bias"]})
+        W.load_weight_entry(
+            model,
+            self._entry({"weight": "1.weight", "bias": "1.bias"}),
+            name="renamed",
+        )
+        assert float(model[1].weight.sum().item()) == 6.0
+
+    def test_an_entry_without_a_map_is_untouched(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The overwhelming majority of entries, and they must not change."""
+        model = lucid.nn.Linear(3, 2)
+        self._patch(monkeypatch, {"weight": lucid.ones(2, 3), "bias": lucid.zeros(2)})
+        W.load_weight_entry(model, self._entry({}), name="plain")
+        assert float(model.weight.sum().item()) == 6.0
+
+    def test_a_map_the_checkpoint_outgrew_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Silently skipping a stale rename is the dangerous reading.
+
+        If the checkpoint is re-uploaded with corrected names, a map
+        left behind would quietly do nothing and keep passing — right
+        for the wrong reason, until some later layout change makes it
+        wrong for good.
+        """
+        model = lucid.nn.Linear(3, 2)
+        self._patch(monkeypatch, {"weight": lucid.ones(2, 3), "bias": lucid.zeros(2)})
+        with pytest.raises(RuntimeError, match="does not contain"):
+            W.load_weight_entry(model, self._entry({"gone": "weight"}), name="stale")
+
+
+class TestTheTwoEntriesThatNeedIt:
+    """Structural, so it holds without reaching the network."""
+
+    def test_only_the_deep_resnests_rename(self) -> None:
+        from lucid.models.vision.resnest import (
+            ResNeSt50Weights,
+            ResNeSt101Weights,
+            ResNeSt200Weights,
+            ResNeSt269Weights,
+        )
+
+        assert ResNeSt50Weights.DEFAULT.entry.key_map == {}
+        assert ResNeSt101Weights.DEFAULT.entry.key_map == {}
+        for deep in (ResNeSt200Weights, ResNeSt269Weights):
+            assert deep.DEFAULT.entry.key_map == {
+                "classifier.weight": "classifier.1.weight",
+                "classifier.bias": "classifier.1.bias",
+            }

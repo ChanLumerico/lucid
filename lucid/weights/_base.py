@@ -68,6 +68,22 @@ class WeightEntry:
         ``{dataset: {metric: value}}``), ``num_params``, ``gflops``,
         ``file_size_mb``.  Rendered into the Hub ``config.json`` +
         model card by the conversion tool.
+    key_map : dict
+        Old-name → new-name renames applied to the checkpoint's keys
+        before loading, for a converted checkpoint whose layout differs
+        from the model's by naming alone.  Empty for almost every entry.
+
+        It exists because a head can be a bare ``Linear`` in one variant
+        and a ``Sequential`` of ``[Dropout, Linear]`` in another: the
+        dropout carries no parameters, so the two hold *identical*
+        weights under different names, and a converter that flattened
+        the head produces a checkpoint that is correct yet unloadable.
+        Renaming is honest here in a way that shape-changing would not
+        be — nothing about the tensors is reinterpreted.
+
+        A rename whose source key is absent from the checkpoint is an
+        error, not a silent no-op; a stale map would otherwise keep
+        passing after the layout it patched had changed.
 
     Notes
     -----
@@ -82,6 +98,7 @@ class WeightEntry:
     num_classes: int
     transforms: Transform
     meta: dict[str, object] = field(default_factory=dict)
+    key_map: dict[str, str] = field(default_factory=dict)
 
 
 class WeightsEnum(enum.Enum):
