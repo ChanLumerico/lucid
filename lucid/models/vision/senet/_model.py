@@ -93,13 +93,31 @@ class _SEBasicBlock(nn.Module):
         out = cast(
             Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
         )
-        # No activation between bn2 and the SE gate: the canonical residual
-        # unit (He et al. 2015, Fig. 5 left) puts BN alone after the second
-        # 3x3 and takes the ReLU *after* the addition, and Figure 3 wraps that
-        # whole unit unchanged, inserting Squeeze/Excitation/Scale between it
-        # and the (+).  The extra ReLU here rectified the signal before the
-        # gate ever saw it, so SE could only scale non-negative activations.
-        out = cast(Tensor, self.bn2(cast(Tensor, self.conv2(out))))
+        # An activation between bn2 and the SE gate, which the papers as
+        # drawn do not call for: the canonical residual unit (He et al.
+        # 2015, Fig. 5 left) puts BN alone after the second 3x3 and takes
+        # the ReLU *after* the addition, and SENet Fig. 3 wraps that unit
+        # unchanged, inserting Squeeze/Excitation/Scale between it and the
+        # (+).  Read that way the ReLU is wrong, and it does cost the gate
+        # something real — it rectifies the signal before SE ever sees it,
+        # so the excitation can only scale non-negative activations.
+        #
+        # The authors' own implementation has it anyway, and every
+        # SE-ResNet-18/34 checkpoint in circulation was trained with it,
+        # including the ones this family ships (timm's
+        # legacy_seresnet18/34.in1k).  Leaving it out cost nothing at load
+        # time — the shapes are identical — and quietly changed every
+        # prediction: parity against the source implementation was 1.66,
+        # and 1e-06 with the ReLU restored.  A model that loads its own
+        # published weights and computes a different function is worse
+        # than one that disagrees with a figure.
+        #
+        # The bottleneck block below is *not* the same: measured against
+        # legacy_seresnet101, bn3's output reaches the gate untouched,
+        # negatives and all.  The quirk is the basic block's alone.
+        out = cast(Tensor, self.relu(cast(Tensor, self.bn2(
+            cast(Tensor, self.conv2(out))
+        ))))
         out = cast(Tensor, self.se(out))
 
         if self.downsample is not None:

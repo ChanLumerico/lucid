@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a rotted import aborted the whole parity collection
 
+- se_resnet computed a different function than its weights
+
 ### Added
 
 - quantization-aware models reach the exporter
