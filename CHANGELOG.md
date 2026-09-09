@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - se_resnet computed a different function than its weights
 
+- cspnet activated at darknet's slope, not its weights'
+
 ### Added
 
 - quantization-aware models reach the exporter

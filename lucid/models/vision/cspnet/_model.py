@@ -34,6 +34,19 @@ from lucid.models.vision.cspnet._config import CSPNetConfig
 # ---------------------------------------------------------------------------
 
 
+# darknet writes ``activation=leaky`` for slope 0.1, and this family was
+# built to that spelling.  Every checkpoint it ships was trained somewhere
+# else: all three come from timm, whose ``act_layer='leaky_relu'`` resolves
+# to the framework default of 0.01.  Loading is unaffected — an activation
+# has no weights — so the mismatch was invisible until the models were run
+# side by side, where cspdarknet_53 agreed to 1.3e-02 at 0.1 and to 6.5e-09
+# at 0.01.  The published weights decide it.
+#
+# A from-scratch darknet reproduction would want 0.1 back; that is the
+# point at which this earns a config field rather than a constant.
+_LEAKY_SLOPE: float = 0.01
+
+
 class _ConvBnAct(nn.Module):
     """``Conv2d`` + ``BatchNorm2d`` + optional ``ReLU``.
 
@@ -72,9 +85,7 @@ class _ConvBnAct(nn.Module):
         x = cast(Tensor, self.conv(x))
         x = cast(Tensor, self.bn(x))
         if self.apply_act:
-            # darknet's ``activation=leaky`` is slope 0.1, not the framework
-            # default 0.01 that ``act_layer='leaky_relu'`` resolves to.
-            x = F.leaky_relu(x, negative_slope=0.1)
+            x = F.leaky_relu(x, negative_slope=_LEAKY_SLOPE)
         return x
 
 
@@ -119,7 +130,7 @@ class _BottleneckBlock(nn.Module):
         x = cast(Tensor, self.conv3(x))
         x = cast(Tensor, self.attn3(x))
         x = cast(Tensor, self.drop_path(x)) + shortcut
-        return F.leaky_relu(x, negative_slope=0.1)
+        return F.leaky_relu(x, negative_slope=_LEAKY_SLOPE)
 
 
 # ---------------------------------------------------------------------------
