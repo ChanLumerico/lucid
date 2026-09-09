@@ -252,11 +252,20 @@ def transfer(
 
 
 def transfer_positional(lucid_model: Any, timm_model: Any) -> None:
-    """Copy Lucid weights → timm by matching parameters positionally.
+    """Copy Lucid weights → timm by matching state positionally.
 
     Used as a fallback when named alignment fails (e.g. when our module
     attribute names differ from timm's but shapes / order match).
     Raises ``AssertionError`` on count or shape mismatch.
+
+    Parameters *and* buffers.  It copied only parameters for a long
+    while, which is a quiet way to be wrong: the running statistics of
+    every BatchNorm stayed at whatever each side happened to hold, and
+    since ``_randomise_norm_buffers`` deliberately makes those differ,
+    the comparison then measured the statistics rather than the model.
+    Thirty-three specs lean on this fallback; the ResNet family read as
+    a numerical failure with the divergence sitting entirely in ``bn``
+    layers, which is exactly what a missing buffer looks like.
     """
     from lucid.test._fixtures.ref_framework import require_ref
 
@@ -271,13 +280,34 @@ def transfer_positional(lucid_model: Any, timm_model: Any) -> None:
             f"lucid={len(lparams)} timm={len(tparams)}"
         )
 
+    lbuffers = list(lucid_model.buffers())
+    tbuffers = list(timm_model.buffers())
+
+    if len(lbuffers) != len(tbuffers):
+        raise AssertionError(
+            f"positional transfer: buffer count mismatch "
+            f"lucid={len(lbuffers)} timm={len(tbuffers)}"
+        )
+
     mismatches: list[str] = []
+
+    def _copy(index: int, source: Any, destination: Any, what: str) -> None:
+        arr = source.numpy() if hasattr(source, "numpy") else source.data.numpy()
+        # A 0-d scalar and a length-1 vector are the same value here:
+        # num_batches_tracked is stored one way on each side.
+        trivial = arr.shape in ((), (1,)) and tuple(destination.shape) in ((), (1,))
+        if arr.shape != tuple(destination.shape) and not trivial:
+            mismatches.append(
+                f"  [{what} {index}] lucid={arr.shape} "
+                f"vs timm={tuple(destination.shape)}"
+            )
+            return
+        destination.data.copy_(_ref.from_numpy(arr).reshape(destination.shape))
+
     for i, (lp, tp) in enumerate(zip(lparams, tparams)):
-        arr = lp.data.numpy()
-        if arr.shape != tuple(tp.shape):
-            mismatches.append(f"  [{i}] lucid={arr.shape} vs timm={tuple(tp.shape)}")
-        else:
-            tp.data.copy_(_ref.from_numpy(arr))
+        _copy(i, lp.data, tp, "param")
+    for i, (lb, tb) in enumerate(zip(lbuffers, tbuffers)):
+        _copy(i, lb, tb, "buffer")
 
     if mismatches:
         raise AssertionError(

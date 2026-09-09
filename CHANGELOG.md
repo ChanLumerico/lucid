@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - diamond offers the tag it cannot load
 
+- the positional fallback dropped every buffer
+
 ### Added
 
 - quantization-aware models reach the exporter
