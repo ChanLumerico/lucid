@@ -29,6 +29,8 @@ Run with::
 from typing import Any
 
 import numpy as np
+import importlib
+
 import pytest
 
 import lucid
@@ -42,7 +44,21 @@ from lucid.test._fixtures.ref_framework import require_ref, require_ref_vision
 from lucid.test._helpers.compare import assert_close
 
 _ref = require_ref(module_level=True)
-v2 = require_ref_vision(module_level=True).transforms.v2
+
+# ``transforms.v2`` is a submodule, not an attribute the package imports
+# for you.  Reaching it with a plain attribute access worked on the
+# version this was written against and raises AttributeError on newer
+# ones — at module scope, which aborts collection for the whole parity
+# tree rather than skipping this file.  The version guard below never
+# got the chance to run.
+_ref_vision = require_ref_vision(module_level=True)
+try:
+    v2 = importlib.import_module(f"{_ref_vision.__name__}.transforms.v2")
+except ImportError:  # pragma: no cover - depends on the installed version
+    pytest.skip(
+        "the reference vision package ships no transforms.v2",
+        allow_module_level=True,
+    )
 
 # The reference vision package ships MixUp / CutMix only on recent versions
 # — skip cleanly when running against an older install.

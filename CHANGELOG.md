@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the positional fallback dropped every buffer
 
+- a rotted import aborted the whole parity collection
+
 ### Added
 
 - quantization-aware models reach the exporter
