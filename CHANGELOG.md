@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - cspnet split its cross-stages the way darknet does
 
+- the gate discarded every parity failure
+
 ### Added
 
 - quantization-aware models reach the exporter

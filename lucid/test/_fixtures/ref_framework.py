@@ -76,6 +76,26 @@ def ref_vision_module() -> ModuleType | None:
         return None
 
 
+@functools.lru_cache(maxsize=1)
+def zoo_module() -> ModuleType | None:
+    """Return the model-zoo oracle, or ``None`` when it is not installed.
+
+    A third independent install: the model parity specs compare against
+    this package's architectures, and having the core framework says
+    nothing about whether it is present.  Kept here with the other two so
+    the literal names stay in the one file allowed to spell them, and so
+    a caller outside the tests -- the local gate, which needs to say
+    whether the parity tier is verifying anything or merely skipping --
+    can ask without an import that raises.
+    """
+    try:
+        import timm  # noqa: PLC0415 — lazy import is the whole point
+
+        return timm
+    except ImportError:
+        return None
+
+
 def require_ref(*, module_level: bool = False) -> ModuleType:
     """Return the reference module or skip when it's unavailable.
 

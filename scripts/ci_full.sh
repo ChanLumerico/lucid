@@ -26,9 +26,25 @@ echo "==> Python fast tier (non-models)"
     -x -q
 
 # ── 3. Parity tier (requires reference framework; auto-skips when missing) ──
+#
+# The two outcomes this used to fold together are not the same thing.  A
+# missing oracle means the tier skips and verifies nothing, which is a
+# warning; a parity failure means Lucid and the reference disagree about
+# what a model computes, which is a stop.  Swallowing both as "continuing"
+# meant that when the oracle *was* installed, five real defects passed the
+# gate — se_resnet computing a different function than its own published
+# weights among them.
 echo "==> Parity tier (vs reference framework)"
-"$PYTHON_BIN" -m pytest lucid/test/parity/ --tb=short -q || \
-    echo "[WARN] Parity tier failed or reference framework not installed — continuing."
+if ! "$PYTHON_BIN" -c "
+import sys
+sys.path.insert(0, '.')
+from lucid.test._fixtures.ref_framework import ref_module, zoo_module
+sys.exit(0 if ref_module() and zoo_module() else 1)
+" 2>/dev/null; then
+    echo "  [WARN] the reference framework or the model-zoo oracle is not"
+    echo "         installed — the parity tier will skip, not verify."
+fi
+"$PYTHON_BIN" -m pytest lucid/test/parity/ --tb=short -q -rs
 
 # ── 4. Integration tier ──────────────────────────────────────────────────────
 echo "==> Integration tier"
