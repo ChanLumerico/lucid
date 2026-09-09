@@ -88,6 +88,30 @@ echo "==> H4 numpy guard (sanctioned bridge files only)"
 echo "==> Model-zoo family contract"
 "$PYTHON_BIN" -m tools.validate_model_zoo --runtime
 
+# Published checkpoints — that each one still fits the factory offering it.
+# `validate_model_zoo` checks the shape of the *code* (a factory takes
+# `pretrained: bool = False`, the family has its five slots); it never asks
+# whether the checkpoint that factory points at would actually load.  Nothing
+# did, and three families were shipping weights that could not: sk_resnet_18/34
+# (a paper floor the checkpoints were trained without), maskformer_resnet50/101
+# (a 6-layer encoder with no weights behind it, against a config comment that
+# said 0), resnest_200/269 (a dropout that moved the classifier one level down).
+# Each built, trained and exported fine — only `pretrained=True` raised.
+#
+# Reads safetensors headers over range requests, so it downloads a few KB per
+# checkpoint rather than the weights.  Exit 2 means some URL was unreachable,
+# which is not the same as a mismatch and must not fail the gate.
+echo "==> Published checkpoint fit"
+set +e
+"$PYTHON_BIN" -m tools.check_weight_fit
+weight_fit_status=$?
+set -e
+if [ "$weight_fit_status" -eq 1 ]; then
+    exit 1
+elif [ "$weight_fit_status" -ne 0 ]; then
+    echo "  [WARN] some checkpoints were unreachable — fit unverified for those"
+fi
+
 # Model summaries — the layer tree and parameter count the docs site renders
 # per factory.  ``validate_model_zoo`` checks the *declared* ``params=`` against
 # what a factory actually builds, and passes; it never looks at this cache, and

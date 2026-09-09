@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - drop a QAT model's activation simulation on request
 - a converted model exports through its own reference path
 - rename a converted checkpoint's keys at load
+- check that published checkpoints still fit
 
 ---
 
