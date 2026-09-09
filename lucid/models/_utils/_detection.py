@@ -35,6 +35,14 @@ def box_area(boxes: Tensor) -> Tensor:
     Tensor
         Shape ``(N,)``.  Element ``i`` is
         ``(x2_i - x1_i) * (y2_i - y1_i)``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import box_area
+    >>> boxes = lucid.tensor([[0.0, 0.0, 10.0, 10.0], [5.0, 5.0, 15.0, 15.0]])
+    >>> box_area(boxes).tolist()
+    [100.0, 100.0]
     """
     return (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
 
@@ -54,6 +62,17 @@ def box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
     Tensor
         Shape ``(N, M)``.  Entry ``(i, j)`` is the intersection-over-union
         of ``boxes1[i]`` and ``boxes2[j]``, in ``[0, 1]``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import box_iou
+    >>> boxes = lucid.tensor([[0.0, 0.0, 10.0, 10.0], [5.0, 5.0, 15.0, 15.0]])
+    >>> [[round(v, 4) for v in row] for row in box_iou(boxes, boxes).tolist()]
+    [[1.0, 0.1429], [0.1429, 1.0]]
+
+    The two overlap on a 5x5 corner against a union of 175, which is the
+    0.1429 off the diagonal.
     """
     area1 = box_area(boxes1)  # (N,)
     area2 = box_area(boxes2)  # (M,)
@@ -104,6 +123,18 @@ def generalized_box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
     ----------
     .. [1] Rezatofighi et al., *Generalized Intersection over Union: A
        Metric and A Loss for Bounding Box Regression*, CVPR 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import generalized_box_iou
+    >>> boxes = lucid.tensor([[0.0, 0.0, 10.0, 10.0], [5.0, 5.0, 15.0, 15.0]])
+    >>> [[round(v, 4) for v in row] for row in generalized_box_iou(boxes, boxes).tolist()]
+    [[1.0, -0.0794], [-0.0794, 1.0]]
+
+    Unlike IoU this goes negative: the penalty for the empty space in the
+    enclosing box is what gives a gradient to boxes that do not overlap
+    at all, where plain IoU is flat at zero.
     """
     area1 = box_area(boxes1)  # (N,)
     area2 = box_area(boxes2)  # (M,)
@@ -147,6 +178,14 @@ def box_xyxy_to_cxcywh(boxes: Tensor) -> Tensor:
     -------
     Tensor
         Shape ``(..., 4)`` in cxcywh format (centre / width / height).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import box_xyxy_to_cxcywh
+    >>> boxes = lucid.tensor([[0.0, 0.0, 10.0, 10.0], [5.0, 5.0, 15.0, 15.0]])
+    >>> box_xyxy_to_cxcywh(boxes).tolist()
+    [[5.0, 5.0, 10.0, 10.0], [10.0, 10.0, 10.0, 10.0]]
     """
     x1 = boxes[..., 0:1]
     y1 = boxes[..., 1:2]
@@ -167,6 +206,20 @@ def box_cxcywh_to_xyxy(boxes: Tensor) -> Tensor:
     -------
     Tensor
         Shape ``(..., 4)`` in xyxy format.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import (
+    ...     box_cxcywh_to_xyxy,
+    ...     box_xyxy_to_cxcywh,
+    ... )
+    >>> boxes = lucid.tensor([[0.0, 0.0, 10.0, 10.0], [5.0, 5.0, 15.0, 15.0]])
+    >>> box_cxcywh_to_xyxy(box_xyxy_to_cxcywh(boxes)).tolist()
+    [[0.0, 0.0, 10.0, 10.0], [5.0, 5.0, 15.0, 15.0]]
+
+    The round trip is exact, which is what lets a model predict in centre
+    form and be scored in corner form.
     """
     cx = boxes[..., 0:1]
     cy = boxes[..., 1:2]
@@ -190,6 +243,14 @@ def clip_boxes_to_image(boxes: Tensor, size: tuple[int, int]) -> Tensor:
     Tensor
         Shape ``(N, 4)`` with every coordinate clamped into the image
         rectangle ``[0, width] × [0, height]``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import clip_boxes_to_image
+    >>> boxes = lucid.tensor([[-5.0, -5.0, 20.0, 20.0]])
+    >>> clip_boxes_to_image(boxes, (10, 10)).tolist()
+    [[0.0, 0.0, 10.0, 10.0]]
     """
     h, w = size
     x1 = boxes[:, 0:1].clamp(0.0, float(w))
@@ -214,6 +275,17 @@ def remove_small_boxes(boxes: Tensor, min_size: float) -> Tensor:
     Tensor
         1-D ``int64`` index tensor of surviving box positions; empty when
         every box is below threshold.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import remove_small_boxes
+    >>> boxes = lucid.tensor([[0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 10.0, 10.0]])
+    >>> remove_small_boxes(boxes, 2.0).tolist()
+    [1]
+
+    Indices of what survives, not the boxes themselves, so the caller can
+    take the same rows out of the scores and labels beside them.
     """
     ws = boxes[:, 2] - boxes[:, 0]
     hs = boxes[:, 3] - boxes[:, 1]
@@ -254,6 +326,19 @@ def encode_boxes(
     -------
     Tensor
         Shape ``(N, 4)`` regression targets.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import encode_boxes
+    >>> target = lucid.tensor([[0.0, 0.0, 10.0, 10.0]])
+    >>> proposal = lucid.tensor([[1.0, 1.0, 11.0, 11.0]])
+    >>> [round(v, 4) for v in encode_boxes(target, proposal).tolist()[0]]
+    [-0.1, -0.1, 0.0, 0.0]
+
+    The centre moved one tenth of a width and the size did not change, so
+    the last two deltas are zero: they are log ratios, and a ratio of one
+    is a log of nothing.
     """
     wx, wy, ww, wh = weights
 
@@ -296,6 +381,22 @@ def decode_boxes(
     -------
     Tensor
         Shape ``(N, 4)`` decoded boxes in xyxy format.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import (
+    ...     decode_boxes,
+    ...     encode_boxes,
+    ... )
+    >>> target = lucid.tensor([[0.0, 0.0, 10.0, 10.0]])
+    >>> proposal = lucid.tensor([[1.0, 1.0, 11.0, 11.0]])
+    >>> deltas = encode_boxes(target, proposal)
+    >>> [round(v, 3) for v in decode_boxes(deltas, proposal).tolist()[0]]
+    [0.0, 0.0, 10.0, 10.0]
+
+    The inverse of :func:`encode_boxes` against the same anchors, which
+    is what turns a head's regression back into pixels.
     """
     wx, wy, ww, wh = weights
 
@@ -352,6 +453,19 @@ def nms(
 
     Returns:
         1-D int Tensor of surviving box indices (descending score order).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import nms
+    >>> boxes = lucid.tensor([[0.0, 0.0, 10.0, 10.0], [5.0, 5.0, 15.0, 15.0]])
+    >>> scores = lucid.tensor([0.9, 0.8])
+    >>> nms(boxes, scores, 0.3).tolist()
+    [0, 1]
+
+    Both survive: they overlap at 0.14, under the 0.3 threshold. Raising
+    the threshold keeps more, not fewer — it is the overlap a box is
+    allowed to have with a better-scoring one before it is dropped.
     """
     N: int = int(boxes.shape[0])
     dev = boxes.device.type
@@ -409,6 +523,18 @@ def batched_nms(
 
     Returns:
         Surviving box indices (sorted by score, descending).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import batched_nms
+    >>> boxes = lucid.tensor([[0.0, 0.0, 10.0, 10.0], [5.0, 5.0, 15.0, 15.0]])
+    >>> scores = lucid.tensor([0.9, 0.8])
+    >>> batched_nms(boxes, scores, lucid.tensor([0, 1]), 0.3).tolist()
+    [0, 1]
+
+    The class indices keep the suppression inside each class, so a person
+    and a car that overlap never suppress one another.
     """
     max_coord = float(boxes.max().item())
     offsets = idxs.float() * (max_coord + 1.0)
@@ -432,6 +558,19 @@ class AnchorGenerator(nn.Module):
                        e.g. ``((32,), (64,), (128,), (256,), (512,))``.
         aspect_ratios: Width/height ratios per FPN level,
                        e.g. ``((0.5, 1.0, 2.0),) * 5``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import AnchorGenerator
+    >>> generator = AnchorGenerator(sizes=((32,),), aspect_ratios=((1.0,),))
+    >>> anchors = generator([lucid.randn(1, 4, 8, 8)], (64, 64), [(8, 8)])
+    >>> anchors[0].shape
+    (64, 4)
+
+    One anchor per cell of an 8x8 map is 64 of them, in corner form and
+    in image coordinates — the stride is what carries them there, which
+    is why it is passed per level rather than inferred.
     """
 
     def __init__(
@@ -574,6 +713,18 @@ def roi_align(
 
     Returns:
         (sum(N_i), C, out_h, out_w) stacked crops.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import roi_align
+    >>> features = lucid.randn(1, 4, 16, 16)
+    >>> boxes = [lucid.tensor([[0.0, 0.0, 8.0, 8.0]])]
+    >>> roi_align(features, boxes, output_size=(2, 2), spatial_scale=1.0).shape
+    (1, 4, 2, 2)
+
+    One row per box across the whole list, not per image, so a batch with
+    differing box counts still comes back as a single tensor.
     """
     if isinstance(output_size, int):
         out_h = out_w = output_size
@@ -737,6 +888,18 @@ def paste_masks_in_image(
     Returns:
         ``(D, 1, H, W)`` binary masks.  A degenerate box yields an all-zero
         plane rather than an error.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import paste_masks_in_image
+    >>> masks = lucid.zeros(1, 1, 28, 28)
+    >>> boxes = lucid.tensor([[0.0, 0.0, 10.0, 10.0]])
+    >>> paste_masks_in_image(masks, boxes, (32, 32)).shape
+    (1, 1, 32, 32)
+
+    A mask head predicts at a fixed small resolution; this puts each one
+    back where its box was, at the image's size.
     """
     H, W = image_size
     D = int(masks.shape[0])
@@ -788,6 +951,19 @@ def roi_pool(
 
     Returns:
         (sum(N_i), C, out_h, out_w).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import roi_pool
+    >>> features = lucid.randn(1, 4, 16, 16)
+    >>> boxes = [lucid.tensor([[0.0, 0.0, 8.0, 8.0]])]
+    >>> roi_pool(features, boxes, output_size=(2, 2), spatial_scale=1.0).shape
+    (1, 4, 2, 2)
+
+    The same shape :func:`roi_align` gives, reached by max-pooling
+    quantised bins instead of sampling — cheaper, and it loses the
+    sub-pixel alignment that align exists for.
     """
     if isinstance(output_size, int):
         out_h = out_w = output_size
@@ -935,6 +1111,20 @@ class FPN(nn.Module):
         out_channels: Unified channel count for all pyramid levels.
         extra_blocks: Additional coarser levels appended via 3×3 stride-2
                       conv on the coarsest FPN output (default: 1 → P6).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import FPN
+    >>> neck = FPN([4, 8], 16).eval()
+    >>> features = [lucid.randn(1, 4, 16, 16), lucid.randn(1, 8, 8, 8)]
+    >>> [tuple(t.shape) for t in neck(features)]
+    [(1, 16, 16, 16), (1, 16, 8, 8), (1, 16, 4, 4)]
+
+    Two levels in and three out: ``extra_blocks`` adds a coarser level on
+    top by striding, which is where the largest objects get detected.
+    Every output carries the same channel count, so one head can be
+    shared across all of them.
     """
 
     def __init__(
@@ -1218,6 +1408,16 @@ def solve_assignment(
         Pure Python so it works inside autograd-free preprocessing on every
         backend.  For very large matrices (~1000+) consider a vectorised
         solver — none of Lucid's detection models hit that regime today.
+
+    Examples
+    --------
+    >>> from lucid.models._utils._detection import solve_assignment
+    >>> solve_assignment([[1.0, 4.0], [3.0, 2.0]])
+    ([0, 1], [0, 1])
+
+    Rows and columns of the cheapest one-to-one pairing: row 0 takes
+    column 0 at cost 1 and row 1 takes column 1 at cost 2, for 3 rather
+    than the 7 the other pairing would cost.
     """
     nr = len(cost)
     if nr == 0:
@@ -1537,6 +1737,29 @@ def assign_anchors_to_targets(
         ``(labels, matched)`` — ``labels`` is ``1`` foreground, ``0``
         background, ``-1`` ignored; ``matched`` gives the ground-truth index
         per anchor and is meaningful only where ``labels == 1``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import (
+    ...     Matcher,
+    ...     assign_anchors_to_targets,
+    ... )
+    >>> anchors = lucid.tensor(
+    ...     [[0.0, 0.0, 10.0, 10.0], [50.0, 50.0, 60.0, 60.0]]
+    ... )
+    >>> gt = lucid.tensor([[0.0, 0.0, 10.0, 10.0]])
+    >>> labels, matched = assign_anchors_to_targets(
+    ...     anchors, gt, Matcher(0.7, 0.3), (64, 64)
+    ... )
+    >>> labels.tolist()
+    [1, 0]
+    >>> matched.tolist()
+    [0, -1]
+
+    The first anchor is foreground and points at ground truth 0; the
+    second overlaps nothing and is background, with -1 standing for "no
+    target" rather than an index.
     """
     n = int(anchors.shape[0])
     dev = anchors.device.type
@@ -1900,6 +2123,20 @@ def flatten_rpn_outputs(
     Returns:
         ``(scores, deltas)`` — one entry per level, flattened to
         ``(B, H*W*A)`` and ``(B, H*W*A, 4)``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import flatten_rpn_outputs
+    >>> logits = [lucid.randn(1, 3, 4, 4)]
+    >>> deltas = [lucid.randn(1, 12, 4, 4)]
+    >>> flat_logits, flat_deltas = flatten_rpn_outputs(logits, deltas)
+    >>> flat_logits[0].shape, flat_deltas[0].shape
+    ((1, 48), (1, 48, 4))
+
+    Three anchors across a 4x4 map is 48 predictions, and the deltas
+    carry four numbers each — which is the layout the loss wants and the
+    convolution does not produce.
     """
     per_level_scores: list[Tensor] = []
     per_level_deltas: list[Tensor] = []
@@ -2247,6 +2484,19 @@ def multiscale_roi_align(
         Pooled features of shape
         ``(sum(N_i), C, output_size, output_size)``, image-major and
         preserving per-image proposal order.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import multiscale_roi_align
+    >>> features = [lucid.randn(1, 4, 16, 16)]
+    >>> boxes = [lucid.tensor([[0.0, 0.0, 8.0, 8.0]])]
+    >>> multiscale_roi_align(features, boxes, (2, 2), [1.0], 2).shape
+    (1, 4, 2, 2)
+
+    With a pyramid of several levels each box is routed to the one whose
+    resolution suits its size, so a small box is not cropped from a map
+    that has already thrown its detail away.
     """
     num_levels = len(features)
     C = int(features[0].shape[1])
