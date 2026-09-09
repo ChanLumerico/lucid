@@ -30,6 +30,7 @@ _CFG_SK18 = SKNetConfig(
     split_input=True,
     rd_ratio=1.0 / 8,
     rd_divisor=16,
+    min_attn_channels=16,
 )
 _CFG_SK34 = SKNetConfig(
     layers=(3, 4, 6, 3),
@@ -39,6 +40,7 @@ _CFG_SK34 = SKNetConfig(
     split_input=True,
     rd_ratio=1.0 / 8,
     rd_divisor=16,
+    min_attn_channels=16,
 )
 
 # sk_resnet_50 / sk_resnet_101:

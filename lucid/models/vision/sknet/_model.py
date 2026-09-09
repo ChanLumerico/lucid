@@ -28,9 +28,6 @@ from lucid.models._utils._common import (
 )
 from lucid.models.vision.sknet._config import SKNetConfig
 
-# Paper Eq. (4): L, "the minimal value of d", is 32 in every experiment.
-_SK_MIN_ATTN_CHANNELS: int = 32
-
 # ---------------------------------------------------------------------------
 # SelectiveKernelAttn — attention module (Conv2d-based, as in timm)
 # ---------------------------------------------------------------------------
@@ -162,6 +159,7 @@ class _SelectiveKernel(nn.Module):
         split_input: bool = True,
         rd_ratio: float = 1.0 / 16,
         rd_divisor: int = 8,
+        min_attn_channels: int = 32,
     ) -> None:
         super().__init__()
         out_channels = out_channels if out_channels is not None else in_channels
@@ -203,12 +201,16 @@ class _SelectiveKernel(nn.Module):
             ]
         )
 
-        # Eq. (4): d = max(C/r, L) with L = 32 — "the minimal value of d".
-        # Without the floor the attention bottleneck collapses on narrow
-        # stages (out_channels=64, r=1/16 gives d=8, four times too small).
+        # Eq. (4): d = max(C/r, L). Without a floor the attention
+        # bottleneck collapses on narrow stages (out_channels=64, r=1/16
+        # gives d=8, four times too small), which is what L is for.
+        #
+        # L comes from the config rather than a constant because the two
+        # variants that ship checkpoints were trained without it --
+        # see SKNetConfig.min_attn_channels.
         attn_channels = max(
             _make_divisible(out_channels * rd_ratio, divisor=rd_divisor),
-            _SK_MIN_ATTN_CHANNELS,
+            min_attn_channels,
         )
         self.attn = _SelectiveKernelAttn(out_channels, self.num_paths, attn_channels)
 
@@ -266,6 +268,7 @@ class _SelectiveKernelBasic(nn.Module):
         split_input: bool = False,
         rd_ratio: float = 1.0 / 16,
         rd_divisor: int = 8,
+        min_attn_channels: int = 32,
     ) -> None:
         super().__init__()
         width = int(math.floor(planes * (base_width / 64)) * cardinality)
@@ -278,6 +281,7 @@ class _SelectiveKernelBasic(nn.Module):
             split_input=split_input,
             rd_ratio=rd_ratio,
             rd_divisor=rd_divisor,
+            min_attn_channels=min_attn_channels,
         )
         self.conv2 = _ConvBnAct(
             width,
@@ -326,6 +330,7 @@ class _SelectiveKernelBottleneck(nn.Module):
         split_input: bool = True,
         rd_ratio: float = 1.0 / 16,
         rd_divisor: int = 8,
+        min_attn_channels: int = 32,
     ) -> None:
         super().__init__()
         # ResNeXt-style width computation (planes for standard ResNet when base_width=64)
@@ -341,6 +346,7 @@ class _SelectiveKernelBottleneck(nn.Module):
             split_input=split_input,
             rd_ratio=rd_ratio,
             rd_divisor=rd_divisor,
+            min_attn_channels=min_attn_channels,
         )
         self.conv3 = _ConvBnAct(
             width, outplanes, kernel_size=1, padding=0, apply_act=False
@@ -378,6 +384,7 @@ def _make_stage(
     split_input: bool,
     rd_ratio: float,
     rd_divisor: int,
+    min_attn_channels: int,
     block_type: str = "bottleneck",
 ) -> tuple[nn.Sequential, int]:
     """Build one ResNet stage of SK blocks (bottleneck or basic)."""
@@ -402,6 +409,7 @@ def _make_stage(
         split_input=split_input,
         rd_ratio=rd_ratio,
         rd_divisor=rd_divisor,
+        min_attn_channels=min_attn_channels,
     )
 
     blocks: list[nn.Module] = [
@@ -455,6 +463,7 @@ def _build_body(
         split_input=config.split_input,
         rd_ratio=config.rd_ratio,
         rd_divisor=config.rd_divisor,
+        min_attn_channels=config.min_attn_channels,
         block_type=config.block_type,
     )
 

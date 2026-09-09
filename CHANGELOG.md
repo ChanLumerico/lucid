@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a folded weight is still a weight
 
+- sknet ships weights its own floor rejects
+
 ### Added
 
 - quantization-aware models reach the exporter

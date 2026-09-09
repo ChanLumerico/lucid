@@ -100,6 +100,19 @@ class SKNetConfig(ModelConfig):
     ``block_type``
         ``"bottleneck"`` (default, expansion=4) for SK-ResNet-50/101 or
         ``"basic"`` (expansion=1) for SK-ResNet-18/34.
+    ``min_attn_channels``
+        Eq. (4)'s :math:`L`, "the minimal value of :math:`d`", which the
+        paper sets to 32 in every experiment.  It stops the attention
+        bottleneck from collapsing on narrow stages, where
+        :math:`C/r` alone would give 8.
+
+        SK-ResNet-18 and -34 set it to 16 instead, because the
+        checkpoints those two factories ship were trained without the
+        floor: with 32 the first two stages want a 32-wide bottleneck
+        and the weights carry a 16-wide one, so the load fails outright.
+        The paper's geometry is still reachable --
+        ``SKNetConfig(min_attn_channels=32)`` -- it simply has no
+        published weights.
     """
 
     model_type: ClassVar[str] = "sknet"
@@ -113,6 +126,7 @@ class SKNetConfig(ModelConfig):
     split_input: bool = True
     rd_ratio: float = 1.0 / 16
     rd_divisor: int = 8
+    min_attn_channels: int = 32
     # §4.1: "Label-smoothing regularization is used during training."
     # Reproducing the paper's reported top-1 needs it, but it is a training
     # choice, so it defaults off and inference is unaffected either way.
