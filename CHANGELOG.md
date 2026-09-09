@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - maskformer builds an encoder its checkpoints lack
 
+- diamond offers the tag it cannot load
+
 ### Added
 
 - quantization-aware models reach the exporter

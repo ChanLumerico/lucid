@@ -37,6 +37,12 @@ _PRESET_CSGO = ImageClassification(
 
 @register_weights("diamond")
 @register_weights("diamond_world_model")
+# Without this, list_pretrained("diamond_csgo") answers [] -- "no
+# weights", which is wrong: the CSGO checkpoint is that factory's and
+# loads there.  The registry maps a factory to an enum, not to a
+# subset of its tags, so each factory refuses the other's tags by name
+# (see _tag / _csgo_tag) rather than by not listing them.
+@register_weights("diamond_csgo")
 class DIAMONDWeights(WeightsEnum):
     """Pretrained agents for :func:`lucid.models.diamond`.
 

@@ -80,7 +80,21 @@ def _tag(pretrained: bool | str) -> bool | str:
     bool or str
         The same value, upper-cased when it is a name.
     """
-    return pretrained.upper() if isinstance(pretrained, str) else pretrained
+    if isinstance(pretrained, str):
+        tag = pretrained.upper()
+        if tag == "CSGO":
+            # The enum holds every checkpoint, and list_pretrained("diamond")
+            # therefore offers this one — but CS:GO is a 382M world model
+            # against this factory's 13M Atari agent, so loading it here
+            # fails on several hundred shapes.  Say which factory instead.
+            raise ValueError(
+                "the CSGO checkpoint belongs to diamond_csgo, not diamond: "
+                "it is a world model of a different size, and loading it "
+                "here would fail on hundreds of shapes. "
+                "Use diamond_csgo(pretrained=True)."
+            )
+        return tag
+    return pretrained
 
 
 def _csgo_tag(pretrained: bool | str) -> bool | str:
@@ -101,7 +115,20 @@ def _csgo_tag(pretrained: bool | str) -> bool | str:
     bool or str
         ``"CSGO"`` for ``True``, otherwise the tag upper-cased.
     """
-    return "CSGO" if pretrained is True else _tag(pretrained)
+    if pretrained is True:
+        return "CSGO"
+    if isinstance(pretrained, str) and pretrained.upper() == "CSGO":
+        # Not via ``_tag``: that one refuses CSGO, which is right for the
+        # Atari factories and exactly wrong here.
+        return "CSGO"
+    if isinstance(pretrained, str):
+        # The mirror of the refusal in ``_tag``: an Atari agent named
+        # explicitly here would be 13M of weights against a 382M model.
+        raise ValueError(
+            f"{pretrained!r} is an Atari checkpoint and belongs to diamond, "
+            f"not diamond_csgo. Use diamond(pretrained={pretrained!r})."
+        )
+    return _tag(pretrained)
 
 
 def _actions_for(
