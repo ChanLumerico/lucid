@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the layer diagnostic recorded views, not values
 
+- cspnet split its cross-stages the way darknet does
+
 ### Added
 
 - quantization-aware models reach the exporter

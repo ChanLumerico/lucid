@@ -39,7 +39,7 @@ _CFG_CSPRESNET_50 = CSPNetConfig(
     block_ratio=(1.0, 1.0, 1.0, 1.0),
     # csresnet50.cfg / csresnext50.cfg: the split convs are
     # activation=leaky in stages 1 and 4, activation=linear in 2 and 3.
-    cross_linear=(False, True, True, False),
+    cross_linear=(True, True, True, True),
     down_growth=(False, False, False, False),
     block_type=("bottle", "bottle", "bottle", "bottle"),
 )
@@ -58,7 +58,7 @@ _CFG_CSPRESNEXT_50 = CSPNetConfig(
     block_ratio=(0.5, 0.5, 0.5, 0.5),
     # csresnet50.cfg / csresnext50.cfg: the split convs are
     # activation=leaky in stages 1 and 4, activation=linear in 2 and 3.
-    cross_linear=(False, True, True, False),
+    cross_linear=(True, True, True, True),
     down_growth=(False, False, False, False),
     block_type=("bottle", "bottle", "bottle", "bottle"),
 )

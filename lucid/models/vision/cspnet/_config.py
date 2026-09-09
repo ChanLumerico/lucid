@@ -134,11 +134,15 @@ class CSPNetConfig(ModelConfig):
     expand_ratio: tuple[float, ...] = (2.0, 2.0, 2.0, 2.0)
     bottle_ratio: tuple[float, ...] = (0.5, 0.5, 0.5, 0.5)
     block_ratio: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0)
-    # csresnet50.cfg / csresnext50.cfg: the stage-1 and stage-4 split convs
-    # are ``activation=leaky``; only stages 2 and 3 are ``activation=linear``.
-    # The registered factories already override to this pattern, but a caller
-    # building CSPNetConfig() directly got linear splits everywhere.
-    cross_linear: tuple[bool, ...] = (False, True, True, False)
+    # darknet's csresnet50.cfg / csresnext50.cfg make the stage-1 and
+    # stage-4 split convs ``activation=leaky`` and only stages 2 and 3
+    # ``activation=linear``, and this followed that.  The checkpoints do
+    # not: measured against timm's cspresnet50 and cspresnext50, every
+    # conv_exp is linear.  An activation carries no weights, so the two
+    # extra ones cost nothing at load time and changed every prediction.
+    # cspdarknet_53 is the other way round -- leaky throughout -- and
+    # sets that itself.
+    cross_linear: tuple[bool, ...] = (True, True, True, True)
     down_growth: tuple[bool, ...] = (False, False, False, False)
     block_type: tuple[str, ...] = ("bottle", "bottle", "bottle", "bottle")
 
