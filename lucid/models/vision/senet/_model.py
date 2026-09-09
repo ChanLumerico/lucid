@@ -115,9 +115,9 @@ class _SEBasicBlock(nn.Module):
         # The bottleneck block below is *not* the same: measured against
         # legacy_seresnet101, bn3's output reaches the gate untouched,
         # negatives and all.  The quirk is the basic block's alone.
-        out = cast(Tensor, self.relu(cast(Tensor, self.bn2(
-            cast(Tensor, self.conv2(out))
-        ))))
+        out = cast(
+            Tensor, self.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
+        )
         out = cast(Tensor, self.se(out))
 
         if self.downsample is not None:
