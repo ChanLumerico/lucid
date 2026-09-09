@@ -1,6 +1,12 @@
-"""CSPNet parity tests (CSPResNet-50).
+"""CSPNet parity tests.
 
-Self-consistency only — no exact timm equivalent."""
+All three registered variants have a reference counterpart.  Only
+cspresnet_50 was listed here for a long time, and the two that were not
+had both drifted: cspdarknet_53 activated at darknet's leaky slope of
+0.1 where its checkpoint was trained at 0.01, and cspresnext_50 split
+two cross-stages with an activation the checkpoint leaves linear.
+Neither could be seen from a load — an activation has no weights — and
+neither was ever compared."""
 
 import pytest
 import lucid.models as M
@@ -15,6 +21,8 @@ from lucid.test.parity.models._utils import (
 _FACTORIES = frozenset(
     {
         M.cspresnet_50_cls,
+        M.cspresnext_50_cls,
+        M.cspdarknet_53_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

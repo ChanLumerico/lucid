@@ -16,6 +16,7 @@ from lucid.test.parity.models._utils import (
 _FACTORIES = frozenset(
     {
         M.densenet_121_cls,
+        M.densenet_161_cls,
         M.densenet_169_cls,
         M.densenet_201_cls,
         M.densenet_264_cls,

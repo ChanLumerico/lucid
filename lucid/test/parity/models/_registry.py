@@ -375,9 +375,19 @@ SPECS: list[ParitySpec] = [
     # sk_resnet_101 has no timm counterpart → self-consistency only.
     ParitySpec(M.sk_resnet_18_cls, "skresnet18", use_positional_fallback=True),
     ParitySpec(M.sk_resnet_34_cls, "skresnet34", use_positional_fallback=True),
-    ParitySpec(
-        M.sk_resnet_50_cls, "skresnet50", tier="slow", use_positional_fallback=True
-    ),
+    # sk_resnet_50 is compared against nothing on purpose.  Eq. (4)'s
+    # floor L = 32 gives it 32-wide attention at every stage; timm's
+    # skresnet50 has no floor and runs 8/8/16/32, so 84 of its keys can
+    # never line up and the spec had been skipping on "alignment
+    # incomplete (84% coverage)" -- indefinitely, and quietly, which is
+    # indistinguishable in a green run from a comparison that passed.
+    #
+    # Unlike 18/34 there is no checkpoint forcing the question: that pair
+    # matched the reference because the weights they ship were trained
+    # against it, and this one ships none.  Keeping the paper's geometry
+    # and saying the comparison is not available beats pretending it
+    # might run one day.
+    ParitySpec(M.sk_resnet_50_cls, None, tier="slow"),
     ParitySpec(M.sk_resnet_101_cls, None, tier="slow"),
     ParitySpec(
         M.sk_resnext_50_32x4d_cls,
