@@ -1,0 +1,118 @@
+name: Model parity
+
+# The zoo's architectures are checked against a reference implementation by
+# lucid/test/parity/models — 89 specs that had never run automatically.  The
+# oracle is deliberately absent from the ``[test]`` extra (Lucid is
+# standalone; pyproject says so), so ``.[test]`` installs everything except
+# the one package these specs need, and the whole tier skipped in CI while
+# reading green.
+#
+# What that cost, measured when it was finally run: five defects, four of
+# them models that loaded their own published weights and computed a
+# different function — se_resnet missing a ReLU the checkpoints were
+# trained with, cspnet activating two cross-stages the checkpoints leave
+# linear and at the wrong slope.  Shapes matched in every case, so nothing
+# else in the repository could have noticed.
+#
+# Kept out of ci.yml rather than folded into it: this installs a large
+# dependency tree the engine gate has no use for, and it only needs to run
+# when a model or a spec changes.
+
+on:
+  pull_request:
+    paths:
+      - "lucid/models/**"
+      - "lucid/test/parity/**"
+      - "lucid/test/_fixtures/ref_framework.py"
+      - ".github/workflows/model-parity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "lucid/models/**"
+      - "lucid/test/parity/**"
+      - "lucid/test/_fixtures/ref_framework.py"
+  # Architectures drift against a moving reference, not only against our own
+  # commits: a spec that passes today can fail on next month's release of the
+  # oracle.  A weekly run separates "we changed" from "it changed".
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: model-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    name: Model zoo vs reference
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Enforce Apple Silicon runner
+        run: |
+          python - <<'PY'
+          import platform
+
+          system = platform.system()
+          machine = platform.machine()
+          if system != "Darwin" or machine != "arm64":
+              raise SystemExit(f"Lucid CI supports macOS arm64 only, got {system}/{machine}")
+          print(f"runner={system}/{machine}")
+          PY
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: model-parity-py3.14
+          max-size: 600M
+
+      - name: Install Lucid
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1" mlx
+          python -m pip install --no-build-isolation -e ".[test]"
+
+      # Installed here and nowhere else.  Naming only the zoo oracle keeps
+      # the core reference framework at whatever ``[test]`` resolved, so this
+      # job does not quietly move the baseline the op-level parity runs on.
+      - name: Install the model-zoo oracle
+        run: python -m pip install timm
+
+      # A run where the oracle failed to import would skip every spec and
+      # report success.  Fail loudly instead — this job exists to verify.
+      - name: Confirm the oracle is present
+        run: |
+          python - <<'PY'
+          from lucid.test._fixtures.ref_framework import ref_module, zoo_module
+
+          missing = [
+              name
+              for name, mod in (("reference framework", ref_module()),
+                                ("model-zoo oracle", zoo_module()))
+              if mod is None
+          ]
+          if missing:
+              raise SystemExit(
+                  "this job verifies nothing without " + " and ".join(missing)
+              )
+          print("both oracles present")
+          PY
+
+      - name: Model parity
+        run: python -m pytest lucid/test/parity/models -q -rs --tb=short
+
+      # Skips are how this suite says "I could not check that", and they are
+      # invisible in a green run.  Print the count so a tier that quietly
+      # stops verifying shows up in the log.
+      - name: Report what was skipped
+        if: always()
+        run: |
+          python -m pytest lucid/test/parity/models -q -rs --tb=no \
+            | grep -E "^SKIPPED|passed|failed" || true
