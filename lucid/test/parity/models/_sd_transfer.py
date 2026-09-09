@@ -367,7 +367,8 @@ def diagnose_forward(
 
         def _hook_lucid(m: Any, inp: Any, out: Any, _n: str = name) -> None:
             if hasattr(out, "numpy"):
-                lucid_acts[_n] = out.numpy()
+                # .copy(): see the note on the reference hook below.
+                lucid_acts[_n] = out.numpy().copy()
 
         lucid_handles.append(mod.register_forward_hook(_hook_lucid))
 
@@ -379,7 +380,14 @@ def diagnose_forward(
 
         def _hook_timm(m: Any, inp: Any, out: Any, _n: str = name) -> None:
             if isinstance(out, _ref.Tensor):
-                timm_acts[_n] = out.detach().cpu().numpy()
+                # ``.numpy()`` shares memory with the tensor, and the
+                # reference's residual blocks activate in place, so the
+                # array recorded here was being overwritten with the
+                # post-activation values a moment later.  Every layer
+                # followed by an inplace ReLU then read as a large
+                # divergence — which is every ``bn`` in a ResNet, and is
+                # exactly what the table showed.  Copy at capture time.
+                timm_acts[_n] = out.detach().cpu().numpy().copy()
 
         timm_handles.append(mod.register_forward_hook(_hook_timm))
 

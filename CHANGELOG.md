@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - cspnet activated at darknet's slope, not its weights'
 
+- the layer diagnostic recorded views, not values
+
 ### Added
 
 - quantization-aware models reach the exporter
