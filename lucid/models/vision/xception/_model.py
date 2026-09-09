@@ -463,8 +463,8 @@ class Xception(PretrainedModel, BackboneMixin):
     >>> backbone = xception()
     >>> x = lucid.randn(2, 3, 299, 299)
     >>> out = backbone(x)
-    >>> out.last_hidden_state.shape
-    (2, 2048, 1, 1)
+    >>> out.last_hidden_state.shape   # 299 / 32, rounded up — not pooled
+    (2, 2048, 10, 10)
     """
 
     config_class: ClassVar[type[XceptionConfig]] = XceptionConfig

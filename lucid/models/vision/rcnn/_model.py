@@ -249,7 +249,7 @@ class RCNNForObjectDetection(ObjectDetectionModel):
     ...      [100.0, 80.0, 450.0, 400.0]])]
     >>> out = model(x, proposals)
     >>> out.logits.shape, out.pred_boxes.shape
-    ((3, 81), (3, 4))
+    ((3, 81), (3, 80, 4))
 
     Apply post-processing (score threshold + per-class NMS) on the raw
     output to obtain final per-image detections:

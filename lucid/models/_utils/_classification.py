@@ -87,8 +87,7 @@ class DropPath(nn.Module):
     --------
     >>> import lucid
     >>> from lucid.models._utils._classification import DropPath
-    >>> dp = DropPath(drop_prob=0.1)
-    >>> dp.train()
+    >>> dp = DropPath(drop_prob=0.1).train()
     >>> x = lucid.randn(8, 96, 7, 7)
     >>> y = dp(x)              # ~10 % of samples zeroed; survivors rescaled
     >>> y.shape

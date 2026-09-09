@@ -55,6 +55,8 @@ class ModelConfig(ABC):
     Examples
     --------
     >>> from dataclasses import dataclass
+    >>> from typing import ClassVar
+    >>> from lucid.models import ModelConfig
     >>> @dataclass(frozen=True)
     ... class MyConfig(ModelConfig):
     ...     model_type: ClassVar[str] = "myfamily"
@@ -63,6 +65,13 @@ class ModelConfig(ABC):
     >>> cfg = MyConfig(hidden_size=1024)
     >>> cfg.to_dict()["model_type"]
     'myfamily'
+
+    ``model_type`` is a ClassVar, so it identifies the family rather than
+    varying per instance — and it survives the round trip that a saved
+    config makes.
+
+    >>> cfg.to_dict()["hidden_size"]
+    1024
     """
 
     model_type: ClassVar[str] = "base"
@@ -262,6 +271,16 @@ class PretrainedModel(nn.Module):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> from dataclasses import dataclass
+    >>> from typing import ClassVar
+    >>> from lucid.models import ModelConfig, PretrainedModel
+    >>> @dataclass(frozen=True)
+    ... class MyConfig(ModelConfig):
+    ...     model_type: ClassVar[str] = "myfamily"
+    ...     hidden_size: int = 768
+    ...     num_classes: int = 10
     >>> class MyModel(PretrainedModel):
     ...     config_class: ClassVar[type[MyConfig]] = MyConfig
     ...     def __init__(self, config):

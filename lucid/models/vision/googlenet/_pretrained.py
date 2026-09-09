@@ -71,7 +71,7 @@ def googlenet(pretrained: bool = False, **overrides: object) -> GoogLeNet:
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape   # (B, 1024, 1, 1)
-    (1, 1024, 1, 1)
+    (1, 1024, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("googlenet", alternative="googlenet_cls")

@@ -309,9 +309,13 @@ class BackboneProtocol(PretrainedModelProtocol, Protocol):
     >>> from lucid.models._protocols import BackboneProtocol, TaskWrapperProtocol
     >>> isinstance(ResNet, BackboneProtocol)
     True
+
+    Both protocols are structural, and a backbone happens to satisfy the
+    wrapper's shape as well — so this says nothing about which role the
+    class plays. Naming is what separates them.
+
     >>> isinstance(ResNet, TaskWrapperProtocol)
-    True  # all backbones structurally satisfy the wrapper protocol too;
-          # nominal naming is what distinguishes them
+    True
     """
 
 

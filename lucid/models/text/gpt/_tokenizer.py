@@ -68,8 +68,10 @@ class GPTTokenizer(BPETokenizer):
     >>> from lucid.models.text.gpt import GPTTokenizer
     >>> vocab = {"l": 0, "o": 1, "o</w>": 2, "lo</w>": 3}
     >>> tok = GPTTokenizer(vocab=vocab, merges=[("l", "o</w>")])
-    >>> tok.encode("lo").ids
+    >>> tok.encode("lo")
     [3]
+    >>> tok.decode(tok.encode("lo"))
+    'lo'
     """
 
     def __init__(

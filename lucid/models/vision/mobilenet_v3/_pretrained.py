@@ -70,7 +70,7 @@ def mobilenet_v3_large(pretrained: bool = False, **overrides: object) -> MobileN
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.last_hidden_state.shape
-    (1, 960, 1, 1)
+    (1, 960, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained(
@@ -132,7 +132,7 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.last_hidden_state.shape
-    (1, 576, 1, 1)
+    (1, 576, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained(

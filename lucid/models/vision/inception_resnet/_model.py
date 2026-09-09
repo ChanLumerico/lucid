@@ -523,7 +523,7 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
     >>> x = lucid.randn(1, 3, 299, 299)
     >>> out = backbone(x)
     >>> out.last_hidden_state.shape   # (B, 1536, 1, 1)
-    (1, 1536, 1, 1)
+    (1, 1536, 8, 8)
     """
 
     config_class: ClassVar[type[InceptionResNetConfig]] = InceptionResNetConfig

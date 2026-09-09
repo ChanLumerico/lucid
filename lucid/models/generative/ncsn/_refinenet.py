@@ -56,6 +56,9 @@ class CondInstanceNormPlusPlus(nn.Module):
     Examples
     --------
     >>> import lucid
+    >>> from lucid.models.generative.ncsn._refinenet import (
+    ...     CondInstanceNormPlusPlus,
+    ... )
     >>> norm = CondInstanceNormPlusPlus(4, num_classes=3)
     >>> out = norm(lucid.randn(2, 4, 8, 8), lucid.tensor([0, 2]).long())
     >>> out.shape
@@ -193,6 +196,7 @@ class RefineNetScoreNet(nn.Module):
     Examples
     --------
     >>> import lucid
+    >>> from lucid.models.generative.ncsn._refinenet import RefineNetScoreNet
     >>> net = RefineNetScoreNet(3, base_channels=16, num_classes=4)
     >>> out = net(lucid.randn(2, 3, 32, 32), lucid.tensor([0, 3]).long())
     >>> out.shape

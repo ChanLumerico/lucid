@@ -395,8 +395,11 @@ def fit_linear_svm(
     >>> from lucid.models._utils._common import fit_linear_svm
     >>> x = lucid.tensor([[2.0, 0.0], [-2.0, 0.0]])
     >>> w, b = fit_linear_svm(x, lucid.tensor([1.0, -1.0]))
-    >>> bool((x @ w + b).tolist()[0] > 0)
-    True
+    >>> w.shape                       # one weight per feature, not a matrix
+    (2,)
+    >>> margins = (x * w).sum(dim=-1) + b
+    >>> bool(margins.tolist()[0] > 0), bool(margins.tolist()[1] < 0)
+    (True, True)
     """
     values = cast(list[float], labels.reshape(-1).tolist())
     if any(v not in (1.0, -1.0) for v in values):
@@ -485,9 +488,15 @@ def mine_hard_negatives(
     >>> from lucid.models._utils._common import mine_hard_negatives
     >>> pos = lucid.randn(8, 4) + 3.0
     >>> neg = lucid.randn(200, 4) - 3.0
+    >>> lucid.manual_seed(0)
     >>> w, b, history = mine_hard_negatives(pos, neg, rounds=2)
-    >>> len(history)
-    2
+    >>> history                       # working-set size, one entry per round
+    [200]
+
+    Two rounds were allowed and one was run: mining stops early when a
+    round turns up no negative the current separator gets wrong, so the
+    length of ``history`` reports what happened rather than what was
+    asked for.
     """
     n_pos = int(positives.shape[0])
     n_neg = int(negative_pool.shape[0])

@@ -1331,9 +1331,14 @@ class Matcher:
     --------
     >>> import lucid
     >>> from lucid.models._utils._detection import Matcher
-    >>> iou = lucid.tensor([[0.9, 0.2, 0.05]])   # 1 ground truth, 3 anchors
+    >>> iou = lucid.tensor([[0.9, 0.5, 0.05]])   # 1 ground truth, 3 anchors
     >>> Matcher(0.7, 0.3)(iou).tolist()
     [0, -2, -1]
+
+    Matched to ground truth 0, ignored, background — the three outcomes
+    in order. The middle anchor needs an overlap *between* the two
+    thresholds to land in the ignore band; below the low one it is
+    background like any other miss.
     """
 
     BELOW_LOW_THRESHOLD: int = -1

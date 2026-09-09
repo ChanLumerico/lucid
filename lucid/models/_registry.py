@@ -42,11 +42,30 @@ class ModelFactory(Protocol):
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> from dataclasses import dataclass
+    >>> from typing import ClassVar
+    >>> from lucid.models import ModelConfig, PretrainedModel
     >>> from lucid.models import register_model, create_model
+    >>> @dataclass(frozen=True)
+    ... class MyConfig(ModelConfig):
+    ...     model_type: ClassVar[str] = "myfamily"
+    ...     hidden_size: int = 8
+    ...     num_classes: int = 2
+    >>> class MyModel(PretrainedModel):
+    ...     config_class: ClassVar[type[MyConfig]] = MyConfig
+    ...     def __init__(self, config):
+    ...         super().__init__(config)
+    ...         self.linear = nn.Linear(config.hidden_size, config.num_classes)
+    ...     def forward(self, x):
+    ...         return self.linear(x)
     >>> @register_model(task="image-classification", family="myfamily")
     ... def my_model(pretrained: bool = False, **overrides: object):
     ...     return MyModel(MyConfig(**overrides))
     >>> model = create_model("my_model", num_classes=10)
+    >>> model(lucid.randn(1, 8)).shape
+    (1, 10)
     """
 
     __name__: str  # every Python function has __name__; Protocol must declare it
@@ -288,8 +307,15 @@ def list_models(*, task: str | None = None, family: str | None = None) -> list[s
     --------
     >>> from lucid.models import list_models
     >>> list_models(family="resnet")[:3]
-    ['resnet_101', 'resnet_152', 'resnet_18']
+    ['resnet_101', 'resnet_101_cls', 'resnet_152']
+
+    A backbone and the classifier built on it are separate entries under
+    separate names, so filtering by task returns the ``_cls`` one and not
+    the bare architecture.
+
     >>> "vit_base_16" in list_models(task="image-classification")
+    False
+    >>> "vit_base_16_cls" in list_models(task="image-classification")
     True
     """
     out: list[str] = []

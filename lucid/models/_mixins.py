@@ -50,6 +50,7 @@ class FeatureInfo:
 
     Examples
     --------
+    >>> from lucid.models._mixins import FeatureInfo
     >>> info = FeatureInfo(stage=3, num_channels=512, reduction=32)
     >>> info.reduction
     32
@@ -82,12 +83,36 @@ class BackboneMixin(ABC):
 
     Examples
     --------
-    >>> class MyBackbone(PretrainedModel, BackboneMixin):
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> from dataclasses import dataclass
+    >>> from typing import ClassVar
+    >>> from lucid.models import ModelConfig, PretrainedModel
+    >>> from lucid.models._mixins import BackboneMixin, FeatureInfo
+    >>> @dataclass(frozen=True)
+    ... class TinyConfig(ModelConfig):
+    ...     model_type: ClassVar[str] = "tiny"
+    ...     hidden_size: int = 64
+    >>> class TinyBackbone(PretrainedModel, BackboneMixin):
+    ...     config_class: ClassVar[type[TinyConfig]] = TinyConfig
+    ...     def __init__(self, config):
+    ...         super().__init__(config)
+    ...         self.stages = nn.Conv2d(3, config.hidden_size, 3, stride=4, padding=1)
     ...     def forward_features(self, x):
     ...         return self.stages(x)
     ...     @property
     ...     def feature_info(self):
-    ...         return [FeatureInfo(0, 64, 4), FeatureInfo(1, 128, 8)]
+    ...         return [FeatureInfo(stage=0, num_channels=64, reduction=4)]
+    >>> backbone = TinyBackbone(TinyConfig()).eval()
+    >>> backbone.forward_features(lucid.randn(1, 3, 32, 32)).shape
+    (1, 64, 8, 8)
+
+    ``feature_info`` is what a detector reads to size its neck, so the
+    reduction it advertises has to be the stride the features actually
+    came out at.
+
+    >>> backbone.feature_info[0].reduction
+    4
     """
 
     @abstractmethod
@@ -136,14 +161,37 @@ class ClassificationHeadMixin:
 
     Examples
     --------
-    >>> class MyClassifier(PretrainedModel, ClassificationHeadMixin):
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> from dataclasses import dataclass
+    >>> from typing import ClassVar
+    >>> from lucid.models import ModelConfig, PretrainedModel
+    >>> from lucid.models._mixins import ClassificationHeadMixin
+    >>> @dataclass(frozen=True)
+    ... class TinyConfig(ModelConfig):
+    ...     model_type: ClassVar[str] = "tiny"
+    ...     hidden_size: int = 64
+    ...     num_classes: int = 1000
+    ...     dropout: float = 0.0
+    >>> class TinyClassifier(PretrainedModel, ClassificationHeadMixin):
+    ...     config_class: ClassVar[type[TinyConfig]] = TinyConfig
     ...     def __init__(self, config):
     ...         super().__init__(config)
-    ...         self.backbone = MyBackbone(config)
-    ...         self._build_classifier(config.hidden_size, config.num_classes,
-    ...                                dropout=config.dropout)
-    >>> model = MyClassifier(cfg)
+    ...         self.pool = nn.AdaptiveAvgPool2d(1)
+    ...         self._build_classifier(
+    ...             config.hidden_size, config.num_classes, dropout=config.dropout
+    ...         )
+    ...     def forward(self, x):
+    ...         return self.classifier(self.pool(x).reshape(x.shape[0], -1))
+    >>> model = TinyClassifier(TinyConfig()).eval()
+    >>> model(lucid.randn(2, 64, 7, 7)).shape
+    (2, 1000)
+
+    Transfer learning swaps the head and leaves the body where it is.
+
     >>> model.reset_classifier(num_classes=10)
+    >>> model(lucid.randn(2, 64, 7, 7)).shape
+    (2, 10)
     """
 
     classifier: nn.Module
@@ -255,11 +303,19 @@ class MaskedLMMixin:
 
     Examples
     --------
-    >>> class BERTForMaskedLM(PretrainedModel, MaskedLMMixin):
-    ...     def forward(self, input_ids, labels=None):
-    ...         logits = self.head(self.bert(input_ids))
-    ...         loss = self.compute_lm_loss(logits, labels) if labels else None
-    ...         return MaskedLMOutput(logits=logits, loss=loss)
+    >>> import lucid
+    >>> from lucid.models import create_model
+    >>> model = create_model("bert_base_mlm").eval()
+    >>> input_ids = lucid.zeros(1, 16, dtype=lucid.int64)
+    >>> out = model(input_ids)
+    >>> out.logits.shape              # (B, T, vocab)
+    (1, 16, 30522)
+
+    ``compute_lm_loss`` is only reached when labels are supplied, so a
+    forward without them leaves the loss empty rather than zero.
+
+    >>> out.loss is None
+    True
     """
 
     @staticmethod
@@ -347,10 +403,12 @@ class CausalLMMixin:
 
     Examples
     --------
-    >>> model = AutoModelForCausalLM.from_pretrained("gpt2_small")
-    >>> prompt = lucid.tensor([[1, 2, 3]]).long()
-    >>> out = model.generate(prompt, max_new_tokens=10, do_sample=True, top_p=0.9)
-    >>> out.shape
+    >>> import lucid
+    >>> from lucid.models import create_model
+    >>> model = create_model("gpt2_small_lm").eval()
+    >>> prompt = lucid.zeros(1, 3, dtype=lucid.int64)
+    >>> out = model.generate(prompt, max_new_tokens=10)
+    >>> out.shape                     # the prompt, then what was written
     (1, 13)
     """
 

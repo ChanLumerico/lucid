@@ -350,7 +350,7 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
     >>> x = lucid.randn(2, 3, 224, 224)
     >>> out = backbone(x)
     >>> out.logits.shape   # (B, 1024, 1, 1)
-    (2, 1024, 1, 1)
+    (2, 1024, 7, 7)
     """
 
     config_class: ClassVar[type[GoogLeNetConfig]] = GoogLeNetConfig

@@ -167,9 +167,16 @@ def compute_model_summary(model: nn.Module) -> dict[str, Any]:
 
     Examples
     --------
+    >>> from lucid.models._summary import compute_model_summary
     >>> from lucid.models.vision.alexnet import alexnet_cls
     >>> tree = compute_model_summary(alexnet_cls())
     >>> tree["params"]
     61100840
+
+    Every node carries the total beneath it and the parameters it owns
+    itself, so a container reports its subtree while holding nothing.
+
+    >>> sorted(tree)
+    ['children', 'name', 'own_params', 'params', 'type']
     """
     return compress_repeats(_module_node(type(model).__name__, model))

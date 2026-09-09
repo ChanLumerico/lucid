@@ -312,7 +312,7 @@ class MobileNetV3(PretrainedModel, BackboneMixin):
     >>> x = lucid.randn(2, 3, 224, 224)
     >>> out = backbone(x)
     >>> out.last_hidden_state.shape
-    (2, 960, 1, 1)
+    (2, 960, 7, 7)
     """
 
     config_class: ClassVar[type[MobileNetV3Config]] = MobileNetV3Config
