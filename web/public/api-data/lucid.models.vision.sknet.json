@@ -3,7 +3,7 @@
   "name": "sknet",
   "path": "lucid.models.vision.sknet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/__init__.py#L1",
   "members": [
     {
       "name": "SKNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "SKNetConfig(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), block_type: str = 'bottleneck', cardinality: int = 1, base_width: int = 64, split_input: bool = True, rd_ratio: float = 1.0 / 16, rd_divisor: int = 8, min_attn_channels: int = 32, label_smoothing: float = 0.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, layers: tuple[int, ...] = (3, 4, 6, 3), block_type: str = 'bottleneck', cardinality: int = 1, base_width: int = 64, split_input: bool = True, rd_ratio: float = 1.0 / 16, rd_divisor: int = 8, min_attn_channels: int = 32, label_smoothing: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "SKNet(config: SKNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_model.py#L498",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_model.py#L498",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: SKNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_model.py#L571",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_model.py#L571",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_model.py#L590",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_model.py#L590",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_model.py#L593",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_model.py#L593",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,7 +139,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_model.py#L603",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_model.py#L603",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -215,7 +215,7 @@
       ],
       "labels": [],
       "signature": "SKNetForImageClassification(config: SKNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_model.py#L613",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_model.py#L613",
       "subcategory": "model",
       "methods": [
         {
@@ -224,7 +224,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: SKNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_model.py#L670",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_model.py#L670",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -246,7 +246,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_model.py#L696",
+          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_model.py#L696",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -312,7 +312,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_18(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L77",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L77",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-18 feature-extracting backbone (no classification head).",
       "extended": "Builds an `SKNet` with ResNet-18 topology\n(`_SelectiveKernelBasic` blocks stacked `[2, 2, 2, 2]`).\nBoth $3 \\times 3$ convolutions inside every block are\nreplaced by Selective Kernel units, giving full SK treatment\nof the basic-block design.  Approximately 24.7M parameters.",
@@ -348,7 +348,7 @@
       "model_summary": {
         "name": "SKNet",
         "type": "SKNet",
-        "params": 11463616,
+        "params": 11445056,
         "own_params": 0,
         "children": [
           {
@@ -390,19 +390,19 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 160640,
+            "params": 154432,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 80320,
+                "params": 77216,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 43328,
+                    "params": 40224,
                     "own_params": 0,
                     "children": [
                       {
@@ -446,21 +446,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6208,
+                        "params": 3104,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 1024,
+                            "own_params": 1024,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -473,8 +473,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
@@ -525,19 +525,19 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 550784,
+            "params": 538432,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 242752,
+                "params": 236576,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 86592,
+                    "params": 80416,
                     "own_params": 0,
                     "children": [
                       {
@@ -581,21 +581,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12352,
+                        "params": 6176,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -608,8 +608,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -679,13 +679,13 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBasic",
-                "params": 308032,
+                "params": 301856,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 160320,
+                    "params": 154144,
                     "own_params": 0,
                     "children": [
                       {
@@ -729,21 +729,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12352,
+                        "params": 6176,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -756,8 +756,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -1377,7 +1377,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_18_cls(pretrained: bool | str = False, weights: SKResNet18Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L383",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L383",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-18 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `SKNetForImageClassification` with the\nSK-ResNet-18 backbone (basic blocks stacked `[2, 2, 2, 2]`;\nthe first $3 \\times 3$ of each block is a Selective Kernel\nunit, the second a plain conv) followed by global average pooling\nand a linear projection to `config.num_classes`.  Approximately\n11.96M parameters.",
@@ -1419,7 +1419,7 @@
       "model_summary": {
         "name": "SKNetForImageClassification",
         "type": "SKNetForImageClassification",
-        "params": 11976616,
+        "params": 11958056,
         "own_params": 0,
         "children": [
           {
@@ -1461,19 +1461,19 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 160640,
+            "params": 154432,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 80320,
+                "params": 77216,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 43328,
+                    "params": 40224,
                     "own_params": 0,
                     "children": [
                       {
@@ -1517,21 +1517,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6208,
+                        "params": 3104,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 1024,
+                            "own_params": 1024,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -1544,8 +1544,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
@@ -1596,19 +1596,19 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 550784,
+            "params": 538432,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 242752,
+                "params": 236576,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 86592,
+                    "params": 80416,
                     "own_params": 0,
                     "children": [
                       {
@@ -1652,21 +1652,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12352,
+                        "params": 6176,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -1679,8 +1679,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -1750,13 +1750,13 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBasic",
-                "params": 308032,
+                "params": 301856,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 160320,
+                    "params": 154144,
                     "own_params": 0,
                     "children": [
                       {
@@ -1800,21 +1800,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12352,
+                        "params": 6176,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -1827,8 +1827,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -2462,7 +2462,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_34(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L138",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L138",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-34 feature-extracting backbone (no classification head).",
       "extended": "Builds an `SKNet` with ResNet-34 topology\n(`_SelectiveKernelBasic` blocks stacked `[3, 4, 6, 3]`).\nOnly the *first* $3 \\times 3$ of each basic block is a\nSelective Kernel unit; the second stays a plain conv-BN-act.\nApproximately 21.8M parameters.",
@@ -2498,7 +2498,7 @@
       "model_summary": {
         "name": "SKNet",
         "type": "SKNet",
-        "params": 21803392,
+        "params": 21769376,
         "own_params": 0,
         "children": [
           {
@@ -2540,19 +2540,19 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 240960,
+            "params": 231648,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 80320,
+                "params": 77216,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 43328,
+                    "params": 40224,
                     "own_params": 0,
                     "children": [
                       {
@@ -2596,21 +2596,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6208,
+                        "params": 3104,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 1024,
+                            "own_params": 1024,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -2623,8 +2623,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
@@ -2675,19 +2675,19 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 1166848,
+            "params": 1142144,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 242752,
+                "params": 236576,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 86592,
+                    "params": 80416,
                     "own_params": 0,
                     "children": [
                       {
@@ -2731,21 +2731,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12352,
+                        "params": 6176,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -2758,8 +2758,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -2829,13 +2829,13 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBasic",
-                "params": 308032,
+                "params": 301856,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 160320,
+                    "params": 154144,
                     "own_params": 0,
                     "children": [
                       {
@@ -2879,21 +2879,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12352,
+                        "params": 6176,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -2906,8 +2906,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -3530,7 +3530,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_34_cls(pretrained: bool | str = False, weights: SKResNet34Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L465",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L465",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-34 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `SKNetForImageClassification` with the\nSK-ResNet-34 backbone (basic blocks stacked `[3, 4, 6, 3]`;\nthe first $3 \\times 3$ of each block is a Selective Kernel\nunit, the second a plain conv) followed by global average pooling\nand a linear projection.  Approximately 22.28M parameters.",
@@ -3572,7 +3572,7 @@
       "model_summary": {
         "name": "SKNetForImageClassification",
         "type": "SKNetForImageClassification",
-        "params": 22316392,
+        "params": 22282376,
         "own_params": 0,
         "children": [
           {
@@ -3614,19 +3614,19 @@
           {
             "name": "layer1",
             "type": "Sequential",
-            "params": 240960,
+            "params": 231648,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 80320,
+                "params": 77216,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 43328,
+                    "params": 40224,
                     "own_params": 0,
                     "children": [
                       {
@@ -3670,21 +3670,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 6208,
+                        "params": 3104,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 2048,
-                            "own_params": 2048,
+                            "params": 1024,
+                            "own_params": 1024,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -3697,8 +3697,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
@@ -3749,19 +3749,19 @@
           {
             "name": "layer2",
             "type": "Sequential",
-            "params": 1166848,
+            "params": 1142144,
             "own_params": 0,
             "children": [
               {
                 "name": "0",
                 "type": "_SelectiveKernelBasic",
-                "params": 242752,
+                "params": 236576,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 86592,
+                    "params": 80416,
                     "own_params": 0,
                     "children": [
                       {
@@ -3805,21 +3805,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12352,
+                        "params": 6176,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -3832,8 +3832,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -3903,13 +3903,13 @@
               {
                 "name": "1",
                 "type": "_SelectiveKernelBasic",
-                "params": 308032,
+                "params": 301856,
                 "own_params": 0,
                 "children": [
                   {
                     "name": "conv1",
                     "type": "_SelectiveKernel",
-                    "params": 160320,
+                    "params": 154144,
                     "own_params": 0,
                     "children": [
                       {
@@ -3953,21 +3953,21 @@
                       {
                         "name": "attn",
                         "type": "_SelectiveKernelAttn",
-                        "params": 12352,
+                        "params": 6176,
                         "own_params": 0,
                         "children": [
                           {
                             "name": "fc_reduce",
                             "type": "Conv2d",
-                            "params": 4096,
-                            "own_params": 4096,
+                            "params": 2048,
+                            "own_params": 2048,
                             "children": []
                           },
                           {
                             "name": "bn",
                             "type": "BatchNorm2d",
-                            "params": 64,
-                            "own_params": 64,
+                            "params": 32,
+                            "own_params": 32,
                             "children": []
                           },
                           {
@@ -3980,8 +3980,8 @@
                           {
                             "name": "fc_select",
                             "type": "Conv2d",
-                            "params": 8192,
-                            "own_params": 8192,
+                            "params": 4096,
+                            "own_params": 4096,
                             "children": []
                           },
                           {
@@ -4618,7 +4618,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_50(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L194",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L194",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-50 feature-extracting backbone (no classification head).",
       "extended": "Builds an `SKNet` with ResNet-50 bottleneck topology\n(`_SelectiveKernelBottleneck` blocks stacked\n`[3, 4, 6, 3]`).  The central $3 \\times 3$ of every\nbottleneck is replaced by a two-branch Selective Kernel unit\nwith `split_input=True` (each branch receives half the\nchannels — matching timm's `skresnet50` layout).\nApproximately 25.8M parameters.",
@@ -6066,7 +6066,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_50_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L536",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L536",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-50 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `SKNetForImageClassification` with the\nSK-ResNet-50 backbone (bottleneck blocks stacked\n`[3, 4, 6, 3]`, one SK unit per bottleneck) followed by\nglobal average pooling and a linear projection.  Approximately\n25.8M parameters.",
@@ -7528,7 +7528,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_101(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L253",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L253",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-101 feature-extracting backbone (no classification head).",
       "extended": "Builds an `SKNet` with ResNet-101 bottleneck topology\n(`_SelectiveKernelBottleneck` blocks stacked\n`[3, 4, 23, 3]`).  Approximately 45M parameters.  Deeper\nvariant of SK-ResNet-50 for higher-accuracy budgets.",
@@ -8976,7 +8976,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnet_101_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L594",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L594",
       "subcategory": "pretrained",
       "summary": "SK-ResNet-101 image classifier (backbone + GAP + linear head).",
       "extended": "Builds an `SKNetForImageClassification` with the\nSK-ResNet-101 backbone (bottleneck blocks stacked\n`[3, 4, 23, 3]`) followed by global average pooling and a\nlinear classifier.  Approximately 45M parameters.",
@@ -10438,7 +10438,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnext_50_32x4d(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L308",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L308",
       "subcategory": "pretrained",
       "summary": "SK-ResNeXt-50 32×4d feature-extracting backbone (the paper's SKNet-50).",
       "extended": "Builds an `SKNet` with ResNet-50 bottleneck topology\nand ResNeXt-style grouped widening: `cardinality = 32`,\n`base_width = 4`, `split_input = False`.  The bottleneck\nwidth per stage follows the ResNeXt formula\n\n$$\n\\text{width} = \\lfloor \\mathrm{planes} \\cdot\n    \\tfrac{\\text{base\\_width}}{64} \\rfloor \\cdot\n    \\text{cardinality},\n$$\n\nmatching the `SKNet-50` entry in Li et al., 2019.  Table 2 gives\nthat entry 27.5M parameters, 4.47 GFLOPs and top-1 *error* 20.79 at\na 224 centre crop — i.e. 79.21% accuracy, not the 77.5% previously\nquoted here (the paper reports error, not accuracy).",
@@ -11886,7 +11886,7 @@
       "kind": "function",
       "labels": [],
       "signature": "sk_resnext_50_32x4d_cls(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_pretrained.py#L651",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_pretrained.py#L651",
       "subcategory": "pretrained",
       "summary": "SK-ResNeXt-50 32×4d image classifier — the paper's SKNet-50.",
       "extended": "Builds an `SKNetForImageClassification` with the\nResNeXt-style SK backbone (`cardinality = 32`,\n`base_width = 4`) followed by global average pooling and a\nlinear projection to `config.num_classes`.  Approximately\n27.5M parameters and 79.21% ImageNet-1k top-1 accuracy\n(Table 2 reports 20.79 top-1 *error*) in\nLi et al., 2019 (Table 1, SKNet-50 row).",
@@ -13352,7 +13352,7 @@
       ],
       "labels": [],
       "signature": "SKResNet18Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_weights.py#L18",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_weights.py#L18",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.sk_resnet_18_cls`.",
@@ -13376,7 +13376,7 @@
       ],
       "labels": [],
       "signature": "SKResNet34Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/sknet/_weights.py#L44",
+      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/sknet/_weights.py#L44",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.sk_resnet_34_cls`.",
