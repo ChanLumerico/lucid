@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - sknet ships weights its own floor rejects
 
+- maskformer builds an encoder its checkpoints lack
+
 ### Added
 
 - quantization-aware models reach the exporter

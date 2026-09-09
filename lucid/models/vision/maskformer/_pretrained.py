@@ -18,7 +18,10 @@ _CFG_R50 = MaskFormerConfig(
     backbone_layers=(3, 4, 6, 3),
     d_model=256,
     n_head=8,
-    num_encoder_layers=6,
+    # ENC_LAYERS: 0 in the semantic-segmentation config these
+    # checkpoints come from -- C5 goes straight into the decoder.
+    # A 6-layer encoder here has no weights to load into.
+    num_encoder_layers=0,
     num_decoder_layers=6,
     dim_feedforward=2048,
     dropout=0.1,
@@ -32,7 +35,10 @@ _CFG_R101 = MaskFormerConfig(
     backbone_layers=(3, 4, 23, 3),  # ResNet-101
     d_model=256,
     n_head=8,
-    num_encoder_layers=6,
+    # ENC_LAYERS: 0 in the semantic-segmentation config these
+    # checkpoints come from -- C5 goes straight into the decoder.
+    # A 6-layer encoder here has no weights to load into.
+    num_encoder_layers=0,
     num_decoder_layers=6,
     dim_feedforward=2048,
     dropout=0.1,
