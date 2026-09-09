@@ -1,10 +1,12 @@
 """Auto classes — task-aware generic model / config loaders.
 
 Each ``AutoModelFor{Task}`` is a thin shell that delegates to the registry,
-filtered by ``_task``.  The same name can resolve to different classes under
-different Auto types: ``AutoModel.from_pretrained("resnet_50")`` returns the
-backbone, ``AutoModelForImageClassification.from_pretrained("resnet_50")``
-returns the classification head.
+filtered by ``_task``.  The filter is the whole mechanism: a backbone and the
+head built on it are *separate* registry entries under separate names, so
+``AutoModel`` resolves ``resnet_50`` to ``ResNet`` and
+``AutoModelForImageClassification`` resolves ``resnet_50_cls`` to
+``ResNetForImageClassification``.  Asking one Auto type for the other's name
+is refused rather than coerced, and the refusal names the entry that fits.
 """
 
 from pathlib import Path
@@ -100,7 +102,9 @@ class _BaseAutoClass:
         Examples
         --------
         >>> from lucid.models import AutoModelForImageClassification
-        >>> model = AutoModelForImageClassification.from_pretrained("resnet_50")
+        >>> model = AutoModelForImageClassification.from_pretrained(
+        ...     "resnet_50_cls"
+        ... )
         >>> type(model).__name__
         'ResNetForImageClassification'
         """
@@ -422,19 +426,34 @@ class AutoModel(_BaseAutoClass):
     Each registered model carries a ``_task`` tag; this class filters on
     ``_task == "base"``.  A given name can resolve to different classes
     under different ``AutoModelFor*`` shells — for example,
-    ``AutoModel.from_pretrained("resnet_50")`` returns ``ResNet`` whereas
-    ``AutoModelForImageClassification.from_pretrained("resnet_50")``
-    returns ``ResNetForImageClassification``.
+    ``AutoModel`` resolves to the bare backbone (``ResNet``) whereas
+    ``AutoModelForImageClassification.from_pretrained("resnet_50_cls")``
+    returns ``ResNetForImageClassification``.  The two are separate
+    registry entries, and only the classifier has published weights.
 
     Examples
     --------
+    A classifier's backbone is not published on its own — the weights
+    were trained with the head and are kept with it — so asking for one
+    is refused, and the refusal names the factory that has them rather
+    than handing back a model that is "pretrained" and random.
+
     >>> from lucid.models import AutoModel
-    >>> backbone = AutoModel.from_pretrained("resnet_50")
+    >>> AutoModel.from_pretrained("resnet_50")
+    Traceback (most recent call last):
+        ...
+    NotImplementedError: No pretrained weights are published for ``resnet_50``; ``resnet_50(pretrained=True)`` cannot be honoured.  Use ``resnet_50_cls`` for the checkpointed variant.
+
+    Families whose backbone *is* checkpointed load through the same call;
+    ``gpt`` is one. For an architecture without weights, build it
+    directly instead:
+
+    >>> import lucid
+    >>> from lucid.models import create_model
+    >>> backbone = create_model("resnet_50").eval()
     >>> type(backbone).__name__
     'ResNet'
-    >>> import lucid
-    >>> features = backbone.forward_features(lucid.randn(1, 3, 224, 224))
-    >>> features.shape
+    >>> backbone(lucid.randn(1, 3, 224, 224)).last_hidden_state.shape
     (1, 2048, 7, 7)
     """
 
@@ -465,7 +484,7 @@ class AutoModelForImageClassification(_BaseAutoClass):
     Examples
     --------
     >>> from lucid.models import AutoModelForImageClassification
-    >>> model = AutoModelForImageClassification.from_pretrained("resnet_50")
+    >>> model = AutoModelForImageClassification.from_pretrained("resnet_50_cls")
     >>> type(model).__name__
     'ResNetForImageClassification'
     >>> import lucid
@@ -549,7 +568,7 @@ class AutoModelForLanguageModeling(_BaseAutoClass):
     Examples
     --------
     >>> from lucid.models import AutoModelForLanguageModeling
-    >>> model = AutoModelForLanguageModeling.from_pretrained("gpt")
+    >>> model = AutoModelForLanguageModeling.from_pretrained("gpt_lm")
     >>> type(model).__name__
     'GPTLMHeadModel'
     """
@@ -651,8 +670,20 @@ class AutoModelForWorldModeling(_BaseAutoClass):
 
     Examples
     --------
+    Only ``diamond_world_model`` has published weights; the PlaNet and
+    Dreamer entries are architectures without checkpoints, so asking for
+    one is refused rather than answered with random parameters.
+
     >>> from lucid.models import AutoModelForWorldModeling
-    >>> model = AutoModelForWorldModeling.from_pretrained("planet_world_model")
+    >>> AutoModelForWorldModeling.from_pretrained("planet_world_model")
+    Traceback (most recent call last):
+        ...
+    NotImplementedError: No pretrained weights are published for ``planet_world_model``; ``planet_world_model(pretrained=True)`` cannot be honoured.
+
+    Build one directly to work with the architecture itself:
+
+    >>> from lucid.models import create_model
+    >>> model = create_model("planet_world_model")
     >>> type(model).__name__
     'PlaNetForWorldModeling'
     """

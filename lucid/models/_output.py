@@ -37,7 +37,8 @@ class ModelOutput:
 
     Examples
     --------
-    >>> # ImageClassificationOutput is a typical subclass
+    >>> import lucid
+    >>> from lucid.models import ImageClassificationOutput
     >>> out = ImageClassificationOutput(logits=lucid.randn(1, 10))
     >>> out["logits"].shape           # dict-style access
     (1, 10)
@@ -150,10 +151,17 @@ class BaseModelOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = AutoModel.from_pretrained("bert_base")
-    >>> out = model(input_ids)
+    >>> import lucid
+    >>> from lucid.models import BaseModelOutput
+    >>> out = BaseModelOutput(last_hidden_state=lucid.zeros(1, 128, 768))
     >>> out.last_hidden_state.shape
     (1, 128, 768)
+
+    The two optional fields are populated only when a model is asked for
+    them, so an ordinary forward leaves them empty.
+
+    >>> out.hidden_states is None, out.attentions is None
+    (True, True)
     """
 
     last_hidden_state: Tensor
@@ -188,10 +196,14 @@ class BaseModelOutputWithPooling(ModelOutput):
 
     Examples
     --------
-    >>> model = AutoModel.from_pretrained("bert_base")
-    >>> out = model(input_ids)
-    >>> out.pooler_output.shape
-    (1, 768)
+    >>> import lucid
+    >>> from lucid.models import BaseModelOutputWithPooling
+    >>> out = BaseModelOutputWithPooling(
+    ...     last_hidden_state=lucid.zeros(1, 128, 768),
+    ...     pooler_output=lucid.zeros(1, 768),
+    ... )
+    >>> out.last_hidden_state.shape, out.pooler_output.shape
+    ((1, 128, 768), (1, 768))
     """
 
     last_hidden_state: Tensor
@@ -225,10 +237,16 @@ class ImageClassificationOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = AutoModelForImageClassification.from_pretrained("resnet_50")
+    >>> import lucid
+    >>> from lucid.models import create_model
+    >>> model = create_model("resnet_18_cls", num_classes=10).eval()
     >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> type(out).__name__
+    'ImageClassificationOutput'
     >>> out.logits.shape
-    (1, 1000)
+    (1, 10)
+    >>> out.loss is None              # no labels were passed
+    True
     """
 
     logits: Tensor
@@ -274,10 +292,20 @@ class ObjectDetectionOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = AutoModelForObjectDetection.from_pretrained("detr_resnet50")
-    >>> out = model(lucid.randn(1, 3, 800, 800))
+    >>> import lucid
+    >>> from lucid.models import ObjectDetectionOutput
+    >>> out = ObjectDetectionOutput(
+    ...     logits=lucid.zeros(1, 100, 92),
+    ...     pred_boxes=lucid.zeros(1, 100, 4),
+    ... )
     >>> out.logits.shape, out.pred_boxes.shape
-    ((1, 100, 91), (1, 100, 4))
+    ((1, 100, 92), (1, 100, 4))
+
+    ``proposals`` and ``objectness`` carry the two-stage detectors'
+    intermediate results and stay empty for a single-stage one.
+
+    >>> out.proposals is None, out.objectness is None
+    (True, True)
     """
 
     logits: Tensor
@@ -323,10 +351,15 @@ class InstanceSegmentationOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = create_model("mask_rcnn")
-    >>> out = model(lucid.randn(1, 3, 800, 800))
-    >>> out.pred_masks.shape[-2:]
-    (28, 28)
+    >>> import lucid
+    >>> from lucid.models import InstanceSegmentationOutput
+    >>> out = InstanceSegmentationOutput(
+    ...     logits=lucid.zeros(1, 100, 81),
+    ...     pred_boxes=lucid.zeros(1, 100, 4),
+    ...     pred_masks=lucid.zeros(1, 100, 28, 28),
+    ... )
+    >>> out.pred_masks.shape          # one mask per detection
+    (1, 100, 28, 28)
     """
 
     logits: Tensor
@@ -360,10 +393,12 @@ class SemanticSegmentationOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = AutoModelForSemanticSegmentation.from_pretrained("fcn_resnet50")
-    >>> out = model(lucid.randn(1, 3, 512, 512))
-    >>> out.logits.shape
-    (1, 21, 512, 512)
+    >>> import lucid
+    >>> from lucid.models import create_model
+    >>> model = create_model("fcn_resnet50", num_classes=21).eval()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape              # (B, K, H, W) at input resolution
+    (1, 21, 224, 224)
     """
 
     logits: Tensor
@@ -400,10 +435,17 @@ class CausalLMOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = AutoModelForCausalLM.from_pretrained("gpt2_small")
-    >>> out = model(input_ids)
-    >>> out.logits.shape
+    >>> import lucid
+    >>> from lucid.models import CausalLMOutput
+    >>> out = CausalLMOutput(logits=lucid.zeros(1, 128, 50257))
+    >>> out.logits.shape              # (B, T, vocab)
     (1, 128, 50257)
+
+    ``past_key_values`` holds the cache that makes the next step cheap,
+    and is filled only when generation asks for it.
+
+    >>> out.past_key_values is None
+    True
     """
 
     logits: Tensor
@@ -437,10 +479,11 @@ class MaskedLMOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = AutoModelForMaskedLM.from_pretrained("bert_base_mlm")
-    >>> out = model(input_ids, labels=labels)
-    >>> out.loss.item()
-    2.34
+    >>> import lucid
+    >>> from lucid.models import MaskedLMOutput
+    >>> out = MaskedLMOutput(logits=lucid.zeros(1, 128, 30522))
+    >>> out.logits.shape              # (B, T, vocab)
+    (1, 128, 30522)
     """
 
     logits: Tensor
@@ -483,10 +526,20 @@ class Seq2SeqLMOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = AutoModelForSeq2SeqLM.from_pretrained("transformer_base_seq2seq")
-    >>> out = model(input_ids=src, decoder_input_ids=tgt)
-    >>> out.logits.shape
-    (1, 16, 32000)
+    >>> import lucid
+    >>> from lucid.models import Seq2SeqLMOutput
+    >>> out = Seq2SeqLMOutput(
+    ...     logits=lucid.zeros(1, 32, 32128),
+    ...     encoder_last_hidden_state=lucid.zeros(1, 128, 768),
+    ... )
+    >>> out.logits.shape, out.encoder_last_hidden_state.shape
+    ((1, 32, 32128), (1, 128, 768))
+
+    The decoder and encoder keep separate hidden-state and attention
+    fields, which is what distinguishes this from CausalLMOutput.
+
+    >>> out.decoder_hidden_states is None, out.encoder_hidden_states is None
+    (True, True)
     """
 
     logits: Tensor
@@ -533,10 +586,11 @@ class DiffusionModelOutput(ModelOutput):
 
     Examples
     --------
-    >>> unet = _DDPMUNet(cfg)
-    >>> out = unet(x_noisy, t)
-    >>> out.sample.shape == x_noisy.shape
-    True
+    >>> import lucid
+    >>> from lucid.models import DiffusionModelOutput
+    >>> out = DiffusionModelOutput(sample=lucid.zeros(1, 3, 32, 32))
+    >>> out.sample.shape
+    (1, 3, 32, 32)
     """
 
     sample: Tensor
@@ -574,10 +628,22 @@ class VAEOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = create_model("vae")
-    >>> out = model(images)
-    >>> out.sample.shape, out.mu.shape
-    ((4, 3, 64, 64), (4, 128))
+    >>> import lucid
+    >>> from lucid.models import VAEOutput
+    >>> out = VAEOutput(
+    ...     sample=lucid.zeros(1, 3, 32, 32),
+    ...     latent=lucid.zeros(1, 128),
+    ...     mu=lucid.zeros(1, 128),
+    ...     logvar=lucid.zeros(1, 128),
+    ... )
+    >>> out.sample.shape, out.latent.shape
+    ((1, 3, 32, 32), (1, 128))
+
+    The reconstruction and KL terms are kept apart from the total so a
+    caller can watch them move against each other during training.
+
+    >>> out.recon_loss is None, out.kl_loss is None
+    (True, True)
     """
 
     sample: Tensor
@@ -627,10 +693,15 @@ class NormalizingFlowOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = create_model("nice_mnist")
-    >>> out = model(images)
+    >>> import lucid
+    >>> from lucid.models import NormalizingFlowOutput
+    >>> out = NormalizingFlowOutput(
+    ...     latent=lucid.zeros(4, 128),
+    ...     log_det_jacobian=lucid.zeros(4),
+    ...     log_prob=lucid.zeros(4),
+    ... )
     >>> out.latent.shape, out.log_prob.shape
-    ((4, 784), (4,))
+    ((4, 128), (4,))
     """
 
     latent: Tensor
@@ -663,11 +734,17 @@ class GenerationOutput(ModelOutput):
 
     Examples
     --------
-    >>> model = AutoModelForImageGeneration.from_pretrained("ddpm_cifar_gen")
-    >>> scheduler = DDPMScheduler(num_train_timesteps=1000)
-    >>> out = model.generate(scheduler, n_samples=4, num_inference_steps=50)
+    >>> import lucid
+    >>> from lucid.models import GenerationOutput
+    >>> out = GenerationOutput(samples=lucid.zeros(4, 3, 32, 32))
     >>> out.samples.shape
     (4, 3, 32, 32)
+
+    ``intermediates`` is filled only when the caller asks to keep the
+    trajectory, which costs one tensor per step.
+
+    >>> out.intermediates is None
+    True
     """
 
     samples: Tensor
@@ -700,9 +777,11 @@ class SequenceClassificationOutput(ModelOutput):
 
     Examples
     --------
-    >>> out = model(input_ids, labels=labels)
-    >>> out.logits.shape
-    (8, 2)
+    >>> import lucid
+    >>> from lucid.models import SequenceClassificationOutput
+    >>> out = SequenceClassificationOutput(logits=lucid.zeros(1, 2))
+    >>> out.logits.shape              # (B, num_labels)
+    (1, 2)
     """
 
     logits: Tensor
@@ -735,9 +814,11 @@ class TokenClassificationOutput(ModelOutput):
 
     Examples
     --------
-    >>> out = model(input_ids, labels=labels)
-    >>> out.logits.shape
-    (8, 128, 9)
+    >>> import lucid
+    >>> from lucid.models import TokenClassificationOutput
+    >>> out = TokenClassificationOutput(logits=lucid.zeros(1, 128, 9))
+    >>> out.logits.shape              # (B, T, num_labels)
+    (1, 128, 9)
     """
 
     logits: Tensor
@@ -774,9 +855,14 @@ class QuestionAnsweringOutput(ModelOutput):
 
     Examples
     --------
-    >>> out = model(input_ids)
+    >>> import lucid
+    >>> from lucid.models import QuestionAnsweringOutput
+    >>> out = QuestionAnsweringOutput(
+    ...     start_logits=lucid.zeros(1, 384),
+    ...     end_logits=lucid.zeros(1, 384),
+    ... )
     >>> out.start_logits.shape, out.end_logits.shape
-    ((8, 128), (8, 128))
+    ((1, 384), (1, 384))
     """
 
     start_logits: Tensor
