@@ -520,6 +520,22 @@ class CrossViT(PretrainedModel, BackboneMixin):
         ``last_hidden_state`` carries the concatenation of the two
         per-branch CLS tokens along the channel dimension.  Use
         :meth:`forward_features` to get the two CLS tokens separately.
+
+    Examples
+    --------
+    The backbone alone, built from a config rather than a factory. It
+    answers with a pooled vector, not a feature map — the two branches
+    have already been fused and their class tokens concatenated.
+
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import CrossViT, CrossViTConfig
+    >>> model = CrossViT(CrossViTConfig()).eval()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.last_hidden_state.shape
+    (1, 288)
+
+    240 pixels rather than 224: the branches take 12- and 16-pixel
+    patches, and 240 is the smaller size both divide.
     """
 
     config_class: ClassVar[type[CrossViTConfig]] = CrossViTConfig
@@ -649,6 +665,20 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
 
     Paper §3.3 — the final prediction is the *mean* of the two
     branch-specific logits, an implicit two-model ensemble.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import (
+    ...     CrossViTForImageClassification,
+    ...     CrossViTConfig,
+    ... )
+    >>> model = CrossViTForImageClassification(CrossViTConfig()).eval()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.logits.shape
+    (1, 1000)
+    >>> out.loss is None
+    True
     """
 
     config_class: ClassVar[type[CrossViTConfig]] = CrossViTConfig

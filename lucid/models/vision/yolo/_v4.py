@@ -150,6 +150,15 @@ class YOLOV4Config(ModelConfig):
         score_thresh: Minimum class score to keep a detection.
         nms_thresh:   IoU threshold for per-class NMS.
         lambda_noobj: Objectness loss weight for negative anchors.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.yolo import YOLOV4Config
+    >>> cfg = YOLOV4Config()
+    >>> cfg.num_classes
+    80
+    >>> cfg.model_type
+    'yolo_v4'
     """
 
     model_type: ClassVar[str] = "yolo_v4"

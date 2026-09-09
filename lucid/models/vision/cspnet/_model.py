@@ -418,6 +418,17 @@ class CSPNet(PretrainedModel, BackboneMixin):
     Builds a four-stage CSP-wrapped (or plain Darknet) trunk according to
     :class:`CSPNetConfig`.  Returns the final feature map without
     pooling.
+
+    Examples
+    --------
+    The backbone, which returns a feature map rather than logits.
+
+    >>> import lucid
+    >>> from lucid.models.vision.cspnet import CSPNet, CSPNetConfig
+    >>> model = CSPNet(CSPNetConfig()).eval()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape   # (B, C, H/32, W/32)
+    (1, 1024, 7, 7)
     """
 
     config_class: ClassVar[type[CSPNetConfig]] = CSPNetConfig

@@ -81,6 +81,15 @@ class FCNConfig(ModelConfig):
                              Hidden channels in the FCN segmentation head.
         aux_hidden_channels: Hidden channels in the auxiliary head.
         dropout:             Dropout probability in the heads.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.fcn import FCNConfig
+    >>> cfg = FCNConfig()
+    >>> cfg.num_classes
+    21
+    >>> cfg.model_type
+    'fcn'
     """
 
     model_type: ClassVar[str] = "fcn"

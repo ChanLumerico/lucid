@@ -130,6 +130,15 @@ class YOLOV3Config(ModelConfig):
         nms_thresh:    IoU threshold for per-class NMS.
         lambda_coord:  Box regression loss weight.
         lambda_noobj:  Objectness loss weight for negative anchors.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.yolo import YOLOV3Config
+    >>> cfg = YOLOV3Config()
+    >>> cfg.num_classes
+    80
+    >>> cfg.model_type
+    'yolo_v3'
     """
 
     model_type: ClassVar[str] = "yolo_v3"

@@ -26,6 +26,16 @@ class FasterRCNNResNet50FPNWeights(WeightsEnum):
 
     Single COCO checkpoint converted from the reference
     ``FasterRCNN_ResNet50_FPN_Weights.COCO_V1`` (91 classes, box AP 37.0).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.faster_rcnn import FasterRCNNResNet50FPNWeights
+    >>> list(FasterRCNNResNet50FPNWeights.__members__)
+    ['COCO_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_V1 = WeightEntry(

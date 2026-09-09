@@ -238,6 +238,29 @@ class FCNOutput(SemanticSegmentationOutput):
     aux_logits : Tensor or None, optional
         Auxiliary head logits at input resolution, or ``None`` when the
         model was built without an auxiliary classifier.
+
+    Examples
+    --------
+    The value a segmentation forward returns. It is not exported from the
+    package — you receive one rather than construct one.
+
+    >>> import lucid
+    >>> from lucid.models.vision.fcn import fcn_resnet50
+    >>> model = fcn_resnet50(num_classes=21).eval()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> type(out).__name__
+    'FCNOutput'
+    >>> out.logits.shape          # (B, K, H, W) — full input resolution
+    (1, 21, 224, 224)
+
+    ``aux_logits`` is the auxiliary head's map at the same resolution. It
+    exists to be added to the loss during training and is ignored at
+    inference, so a prediction reads ``logits`` alone.
+
+    >>> out.aux_logits.shape
+    (1, 21, 224, 224)
+    >>> out.loss is None          # no targets were passed
+    True
     """
 
     aux_logits: Tensor | None = None

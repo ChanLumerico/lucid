@@ -166,6 +166,15 @@ class YOLOConfig(ModelConfig):
         score_thresh: Minimum class-confidence score at inference.
         nms_thresh:   IoU threshold for NMS.
         tiny:         Use the tiny Darknet backbone instead of the full one.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.yolo import YOLOConfig
+    >>> cfg = YOLOConfig()
+    >>> cfg.num_classes
+    80
+    >>> cfg.model_type
+    'yolo'
     """
 
     model_type: ClassVar[str] = "yolo"

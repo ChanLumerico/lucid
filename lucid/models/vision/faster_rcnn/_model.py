@@ -252,8 +252,7 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
     --------
     >>> import lucid
     >>> from lucid.models.vision.faster_rcnn import faster_rcnn_resnet50_fpn
-    >>> model = faster_rcnn_resnet50_fpn()
-    >>> model.eval()
+    >>> model = faster_rcnn_resnet50_fpn().eval()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape[-1]   # num_classes

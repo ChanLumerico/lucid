@@ -100,6 +100,15 @@ class CSPNetConfig(ModelConfig):
         applies the channel expansion.
     dropout : float, optional, default=0.0
         Head dropout probability.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.cspnet import CSPNetConfig
+    >>> cfg = CSPNetConfig()
+    >>> cfg.num_classes
+    1000
+    >>> cfg.model_type
+    'cspnet'
     """
 
     model_type: ClassVar[str] = "cspnet"

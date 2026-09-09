@@ -28,6 +28,16 @@ class MaskFormerResNet50Weights(WeightsEnum):
     Single ADE20k semantic checkpoint converted from
     ``facebook/maskformer-resnet50-ade`` (Cheng et al., 2021; ~41.3M
     params, 44.5 mIoU on the ADE20k validation set).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.maskformer import MaskFormerResNet50Weights
+    >>> list(MaskFormerResNet50Weights.__members__)
+    ['ADE20K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     ADE20K = WeightEntry(
@@ -53,6 +63,16 @@ class MaskFormerResNet101Weights(WeightsEnum):
     Single ADE20k semantic checkpoint converted from
     ``facebook/maskformer-resnet101-ade`` (Cheng et al., 2021; ~60.3M
     params, 45.5 mIoU on the ADE20k validation set).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.maskformer import MaskFormerResNet101Weights
+    >>> list(MaskFormerResNet101Weights.__members__)
+    ['ADE20K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     ADE20K = WeightEntry(

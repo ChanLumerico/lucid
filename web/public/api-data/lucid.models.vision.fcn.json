@@ -3,7 +3,7 @@
   "name": "fcn",
   "path": "lucid.models.vision.fcn",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/__init__.py#L1",
   "members": [
     {
       "name": "FCNConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "FCNConfig(num_classes: int = 21, in_channels: int = 3, backbone: str = 'resnet50', variant: str = 'fcn32s', classifier_hidden_channels: int = 512, aux_hidden_channels: int = 256, dropout: float = 0.1, ignore_index: int = 255)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 21, in_channels: int = 3, backbone: str = 'resnet50', variant: str = 'fcn32s', classifier_hidden_channels: int = 512, aux_hidden_channels: int = 256, dropout: float = 0.1, ignore_index: int = 255)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,57 +42,14 @@
         }
       ],
       "summary": "Configuration for Fully Convolutional Network (FCN).",
-      "extended": "FCN adapts a classification CNN backbone (ResNet) into a dense\npredictor by replacing fully-connected layers with convolutions and\nadding upsampling to restore spatial resolution.",
-      "parameters": [
-        {
-          "name": "num_classes",
-          "annotation": "int",
-          "description": "Number of output segmentation classes.",
-          "default": "21"
-        },
-        {
-          "name": "in_channels",
-          "annotation": "int",
-          "description": "Number of input image channels.",
-          "default": "3"
-        },
-        {
-          "name": "backbone",
-          "annotation": "str",
-          "description": "Backbone descriptor label (\"resnet50\" or \"resnet101\").",
-          "default": "'resnet50'"
-        },
-        {
-          "name": "variant",
-          "annotation": "str",
-          "description": "FCN variant string (\"fcn32s\", \"fcn16s\", \"fcn8s\").",
-          "default": "'fcn32s'"
-        },
-        {
-          "name": "classifier_hidden_channels",
-          "annotation": "int",
-          "description": "Hidden channels in the FCN segmentation head.",
-          "default": "512"
-        },
-        {
-          "name": "aux_hidden_channels",
-          "annotation": "int",
-          "description": "Hidden channels in the auxiliary head.",
-          "default": "256"
-        },
-        {
-          "name": "dropout",
-          "annotation": "float",
-          "description": "Dropout probability in the heads.",
-          "default": "0.1"
-        }
-      ],
+      "extended": "FCN adapts a classification CNN backbone (ResNet) into a dense\npredictor by replacing fully-connected layers with convolutions and\nadding upsampling to restore spatial resolution.\n\nArchitecture overview:\n  ResNet backbone with dilated convolutions (layer3 dilation=2,\n  layer4 dilation=4) → FCN head (3×3 conv + BN + ReLU + 1×1 conv)\n  → bilinear upsample to input resolution.\n\nAn auxiliary head on layer3 output provides additional supervision\n  during training.\n\nArgs:\n    num_classes:         Number of output segmentation classes.\n    in_channels:         Number of input image channels.\n    backbone:            Backbone descriptor label (\"resnet50\" or \"resnet101\").\n    variant:             FCN variant string (\"fcn32s\", \"fcn16s\", \"fcn8s\").\n    classifier_hidden_channels:\n                         Hidden channels in the FCN segmentation head.\n    aux_hidden_channels: Hidden channels in the auxiliary head.\n    dropout:             Dropout probability in the heads.",
+      "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "ResNet backbone with dilated convolutions (layer3 dilation=2,\nlayer4 dilation=4) → FCN head (3×3 conv + BN + ReLU + 1×1 conv)\n→ bilinear upsample to input resolution.\n\nAn auxiliary head on layer3 output provides additional supervision\nduring training."
+      "examples": [
+        ">>> from lucid.models.vision.fcn import FCNConfig\n>>> cfg = FCNConfig()\n>>> cfg.num_classes\n21\n>>> cfg.model_type\n'fcn'"
       ],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": []
@@ -107,7 +64,7 @@
       ],
       "labels": [],
       "signature": "FCNForSemanticSegmentation(config: FCNConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/_model.py#L246",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/_model.py#L269",
       "subcategory": "model",
       "methods": [
         {
@@ -116,7 +73,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: FCNConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/_model.py#L320",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/_model.py#L343",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -138,7 +95,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/_model.py#L346",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/_model.py#L369",
           "subcategory": "model",
           "summary": "Run FCN forward pass.",
           "extended": null,
@@ -217,7 +174,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fcn_resnet50(pretrained: bool | str = False, weights: FCNResNet50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/_pretrained.py#L45",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/_pretrained.py#L45",
       "subcategory": "pretrained",
       "summary": "FCN with ResNet-50 backbone (Long et al., CVPR 2015).",
       "extended": "Builds an `FCNForSemanticSegmentation` with a dilated\nResNet-50 backbone (`layer3` dilation = 2, `layer4` dilation = 4),\n21 output classes (Pascal VOC default), a 512-channel main FCN head,\nand a 256-channel auxiliary head.  The dilation trick keeps the\nfinal feature map at stride 8 instead of stride 32, retaining 16x\nmore spatial sampling for dense prediction.",
@@ -924,7 +881,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fcn_resnet101(pretrained: bool | str = False, weights: FCNResNet101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/_pretrained.py#L113",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/_pretrained.py#L113",
       "subcategory": "pretrained",
       "summary": "FCN with ResNet-101 backbone (Long et al., CVPR 2015).",
       "extended": "Builds an `FCNForSemanticSegmentation` with the same head\nconfiguration as `fcn_resnet50` but a deeper dilated ResNet-101\nbackbone (23 blocks in layer3 vs 6 for ResNet-50).  Typically gains\n1-2 mIoU points on Pascal VOC at the cost of ~70% more FLOPs.",
@@ -1633,7 +1590,7 @@
       ],
       "labels": [],
       "signature": "FCNResNet50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/_weights.py#L23",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/_weights.py#L23",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.fcn_resnet50`.",
@@ -1641,7 +1598,9 @@
       "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.fcn import FCNResNet50Weights\n>>> list(FCNResNet50Weights.__members__)\n['COCO_WITH_VOC_LABELS_V1', 'DEFAULT']\nDEFAULT is an alias for the tag a bare\npretrained=True resolves to, so the two ways of asking for\nweights cannot drift apart."
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],
@@ -1657,7 +1616,7 @@
       ],
       "labels": [],
       "signature": "FCNResNet101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/fcn/_weights.py#L49",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/fcn/_weights.py#L59",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.fcn_resnet101`.",
@@ -1665,7 +1624,9 @@
       "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.fcn import FCNResNet101Weights\n>>> list(FCNResNet101Weights.__members__)\n['COCO_WITH_VOC_LABELS_V1', 'DEFAULT']\nDEFAULT is an alias for the tag a bare\npretrained=True resolves to, so the two ways of asking for\nweights cannot drift apart."
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],

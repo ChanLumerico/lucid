@@ -816,6 +816,30 @@ class MaskFormerOutput(SemanticSegmentationOutput):
     masks_queries_logits : Tensor
         Per-query mask logits at the mask-feature resolution, shape
         ``(B, N, fH, fW)`` — *not* upsampled, matching the reference.
+
+    Examples
+    --------
+    Mask classification returns three tensors, not one. ``logits`` is the
+    per-pixel semantic map the two query tensors were resolved into, and
+    is what you would compare against a segmentation label.
+
+    >>> import lucid
+    >>> from lucid.models.vision.maskformer import maskformer_resnet50
+    >>> model = maskformer_resnet50().eval()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape                      # (B, K, H, W)
+    (1, 150, 224, 224)
+
+    The queries are the model's own representation: 100 of them, each
+    carrying a class distribution and a mask. The class axis is 151 and
+    not 150 because the last slot is "no object" — a query that matched
+    nothing, which is how a fixed number of queries covers a variable
+    number of regions.
+
+    >>> out.class_queries_logits.shape        # (B, Q, K + 1)
+    (1, 100, 151)
+    >>> out.masks_queries_logits.shape        # (B, Q, H/4, W/4)
+    (1, 100, 56, 56)
     """
 
     class_queries_logits: Tensor | None = None

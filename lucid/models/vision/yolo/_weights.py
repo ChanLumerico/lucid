@@ -35,6 +35,16 @@ class YOLOV2Weights(WeightsEnum):
     ``yolov2.weights``, hosted under ``huggingface.co/lucid-dl/yolo-v2``.
     Evaluated at :math:`608 \times 608`, where the darknet release reports
     ``mAP@0.5 = 48.1``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.yolo import YOLOV2Weights
+    >>> list(YOLOV2Weights.__members__)
+    ['COCO_2014', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_2014 = WeightEntry(
@@ -62,6 +72,16 @@ class YOLOV3Weights(WeightsEnum):
     ``yolov3.weights``, hosted under ``huggingface.co/lucid-dl/yolo-v3``.
     Evaluated at :math:`416 \times 416`, where the darknet release reports
     ``mAP@0.5 = 55.3``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.yolo import YOLOV3Weights
+    >>> list(YOLOV3Weights.__members__)
+    ['COCO_2014', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_2014 = WeightEntry(
@@ -90,6 +110,16 @@ class YOLOV3TinyWeights(WeightsEnum):
     ``huggingface.co/lucid-dl/yolo-v3-tiny``.  Evaluated at
     :math:`416 \times 416`, where the darknet release reports
     ``mAP@0.5 = 33.1``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.yolo import YOLOV3TinyWeights
+    >>> list(YOLOV3TinyWeights.__members__)
+    ['COCO_2014', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_2014 = WeightEntry(
@@ -118,6 +148,16 @@ class YOLOV4Weights(WeightsEnum):
     ``huggingface.co/lucid-dl/yolo-v4``.  Evaluated at
     :math:`608 \times 608`, where that release reports
     ``mAP@0.5 = 65.7`` on COCO ``test-dev``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.yolo import YOLOV4Weights
+    >>> list(YOLOV4Weights.__members__)
+    ['COCO_2017', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_2017 = WeightEntry(

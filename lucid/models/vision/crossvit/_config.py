@@ -102,6 +102,15 @@ class CrossViTConfig(ModelConfig):
     layer_norm_eps : float, optional, default=1e-6
         ``eps`` for every LayerNorm in the trunk (paper / timm use
         ``1e-6``; matches the reference checkpoints exactly).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.crossvit import CrossViTConfig
+    >>> cfg = CrossViTConfig()
+    >>> cfg.num_classes, cfg.image_size
+    (1000, 240)
+    >>> cfg.model_type
+    'crossvit'
     """
 
     model_type: ClassVar[str] = "crossvit"

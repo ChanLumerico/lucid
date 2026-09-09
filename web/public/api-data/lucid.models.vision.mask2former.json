@@ -3,7 +3,7 @@
   "name": "mask2former",
   "path": "lucid.models.vision.mask2former",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/__init__.py#L1",
   "members": [
     {
       "name": "Mask2FormerConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerConfig(num_classes: int = 150, in_channels: int = 3, swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, swin_mlp_ratio: float = 4.0, d_model: int = 256, mask_feature_size: int = 256, n_head: int = 8, num_encoder_layers: int = 6, encoder_feedforward_dim: int = 1024, num_decoder_layers: int = 10, dim_feedforward: int = 2048, dropout: float = 0.0, num_queries: int = 100, class_weight: float = 2.0, mask_weight: float = 5.0, dice_weight: float = 5.0, no_object_weight: float = 0.1, train_num_points: int = 12544, oversample_ratio: float = 3.0, importance_sample_ratio: float = 0.75, deep_supervision: bool = True, num_feature_levels: int = 3, feature_strides: tuple[int, int, int, int] = (4, 8, 16, 32), common_stride: int = 4)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 150, in_channels: int = 3, swin_embed_dim: int = 96, swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2), swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24), swin_window_size: int = 7, swin_mlp_ratio: float = 4.0, d_model: int = 256, mask_feature_size: int = 256, n_head: int = 8, num_encoder_layers: int = 6, encoder_feedforward_dim: int = 1024, num_decoder_layers: int = 10, dim_feedforward: int = 2048, dropout: float = 0.0, num_queries: int = 100, class_weight: float = 2.0, mask_weight: float = 5.0, dice_weight: float = 5.0, no_object_weight: float = 0.1, train_num_points: int = 12544, oversample_ratio: float = 3.0, importance_sample_ratio: float = 0.75, deep_supervision: bool = True, num_feature_levels: int = 3, feature_strides: tuple[int, int, int, int] = (4, 8, 16, 32), common_stride: int = 4)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,174 +42,13 @@
         }
       ],
       "summary": "Configuration for Mask2Former (Cheng et al., CVPR 2022).",
-      "extended": "The field set mirrors the reference framework's `Mask2FormerConfig`\nso the pretrained-weight converter is a near-identity key map.  The\npipeline is:\n\nImage → Swin backbone → [stage1..4] feature maps\n    → MSDeformAttn pixel decoder → 3 multi-scale memory levels\n                                 + 1/4-scale mask features\n    → 9-layer masked-attention transformer decoder (cycling levels)\n    → class head (Linear → K+1) + mask head (MLP → dot mask features)\n\n> **Note:**\n>\n> **Training.**  Pass `targets` to `forward` for §3.2.2's\n> objective: Hungarian matching on a class + mask-BCE + dice cost,\n> the same three terms as the loss, all mask terms evaluated on\n> `train_num_points` importance-sampled points, and — under\n> `deep_supervision` — the whole criterion repeated on every\n> decoder layer.",
-      "parameters": [
-        {
-          "name": "num_classes",
-          "annotation": "int",
-          "description": "Number of semantic classes (foreground; the\n                   class head emits `num_classes + 1`).",
-          "default": "150"
-        },
-        {
-          "name": "in_channels",
-          "annotation": "int",
-          "description": "Input image channels.",
-          "default": "3"
-        },
-        {
-          "name": "swin_embed_dim",
-          "annotation": "int",
-          "description": "Swin patch-embedding dimension.",
-          "default": "96"
-        },
-        {
-          "name": "swin_depths",
-          "annotation": "tuple[int, int, int, int]",
-          "description": "Swin per-stage block counts.",
-          "default": "(2, 2, 6, 2)"
-        },
-        {
-          "name": "swin_num_heads",
-          "annotation": "tuple[int, int, int, int]",
-          "description": "Swin per-stage head counts.",
-          "default": "(3, 6, 12, 24)"
-        },
-        {
-          "name": "swin_window_size",
-          "annotation": "int",
-          "description": "Swin attention window size.",
-          "default": "7"
-        },
-        {
-          "name": "swin_mlp_ratio",
-          "annotation": "float",
-          "description": "Swin MLP expansion ratio.",
-          "default": "4.0"
-        },
-        {
-          "name": "d_model",
-          "annotation": "int",
-          "description": "Transformer / pixel-decoder feature dim.",
-          "default": "256"
-        },
-        {
-          "name": "mask_feature_size",
-          "annotation": "int",
-          "description": "Per-pixel mask-feature channel width.",
-          "default": "256"
-        },
-        {
-          "name": "n_head",
-          "annotation": "int",
-          "description": "Number of attention heads.",
-          "default": "8"
-        },
-        {
-          "name": "num_encoder_layers",
-          "annotation": "int",
-          "description": "Deformable pixel-decoder encoder depth.",
-          "default": "6"
-        },
-        {
-          "name": "encoder_feedforward_dim",
-          "annotation": "int",
-          "description": "Pixel-decoder FFN inner dim.",
-          "default": "1024"
-        },
-        {
-          "name": "num_decoder_layers",
-          "annotation": "int",
-          "description": "Transformer decoder depth (the decoder uses\n                   `num_decoder_layers - 1` masked layers; the\n                   extra slot is the pre-layer mask prediction).",
-          "default": "10"
-        },
-        {
-          "name": "dim_feedforward",
-          "annotation": "int",
-          "description": "Transformer-decoder FFN inner dim.",
-          "default": "2048"
-        },
-        {
-          "name": "dropout",
-          "annotation": "float",
-          "description": "Dropout probability (0 at inference).",
-          "default": "0.0"
-        },
-        {
-          "name": "num_queries",
-          "annotation": "int",
-          "description": "Number of learnable object queries N.",
-          "default": "100"
-        },
-        {
-          "name": "num_feature_levels",
-          "annotation": "int",
-          "description": "Number of multi-scale memory levels (3).",
-          "default": "3"
-        },
-        {
-          "name": "feature_strides",
-          "annotation": "tuple[int, int, int, int]",
-          "description": "Backbone output strides.",
-          "default": "(4, 8, 16, 32)"
-        },
-        {
-          "name": "common_stride",
-          "annotation": "int",
-          "description": "Finest pixel-decoder stride.",
-          "default": "4"
-        },
-        {
-          "name": "class_weight",
-          "annotation": "float",
-          "description": "Weight of the classification term, and of the\n               class cost inside the Hungarian matcher.",
-          "default": "2.0"
-        },
-        {
-          "name": "mask_weight",
-          "annotation": "float",
-          "description": "Weight of the point-sampled mask BCE.",
-          "default": "5.0"
-        },
-        {
-          "name": "dice_weight",
-          "annotation": "float",
-          "description": "Weight of the point-sampled dice term.",
-          "default": "5.0"
-        },
-        {
-          "name": "no_object_weight",
-          "annotation": "float",
-          "description": "Class weight of the \"no object\" slot (0.1).",
-          "default": "0.1"
-        },
-        {
-          "name": "train_num_points",
-          "annotation": "int",
-          "description": "K points per mask (12,544 = 112 x 112).",
-          "default": "12544"
-        },
-        {
-          "name": "oversample_ratio",
-          "annotation": "float",
-          "description": "Candidate multiplier for the importance sampler.",
-          "default": "3.0"
-        },
-        {
-          "name": "importance_sample_ratio",
-          "annotation": "float",
-          "description": "Share of K taken from the most uncertain\n               candidates; the rest are uniform.",
-          "default": "0.75"
-        },
-        {
-          "name": "deep_supervision",
-          "annotation": "bool",
-          "description": "Apply the criterion to every decoder layer, not\n               just the last.",
-          "default": "True"
-        }
-      ],
+      "extended": "The field set mirrors the reference framework's `Mask2FormerConfig`\nso the pretrained-weight converter is a near-identity key map.  The\npipeline is:\n\nImage → Swin backbone → [stage1..4] feature maps\n    → MSDeformAttn pixel decoder → 3 multi-scale memory levels\n                                 + 1/4-scale mask features\n    → 9-layer masked-attention transformer decoder (cycling levels)\n    → class head (Linear → K+1) + mask head (MLP → dot mask features)\n\nArgs:\n    num_classes:           Number of semantic classes (foreground; the\n                           class head emits `num_classes + 1`).\n    in_channels:           Input image channels.\n    swin_embed_dim:        Swin patch-embedding dimension.\n    swin_depths:           Swin per-stage block counts.\n    swin_num_heads:        Swin per-stage head counts.\n    swin_window_size:      Swin attention window size.\n    swin_mlp_ratio:        Swin MLP expansion ratio.\n    d_model:               Transformer / pixel-decoder feature dim.\n    mask_feature_size:     Per-pixel mask-feature channel width.\n    n_head:                Number of attention heads.\n    num_encoder_layers:    Deformable pixel-decoder encoder depth.\n    encoder_feedforward_dim: Pixel-decoder FFN inner dim.\n    num_decoder_layers:    Transformer decoder depth (the decoder uses\n                           `num_decoder_layers - 1` masked layers; the\n                           extra slot is the pre-layer mask prediction).\n    dim_feedforward:       Transformer-decoder FFN inner dim.\n    dropout:               Dropout probability (0 at inference).\n    num_queries:           Number of learnable object queries N.\n    num_feature_levels:    Number of multi-scale memory levels (3).\n    feature_strides:       Backbone output strides.\n    common_stride:         Finest pixel-decoder stride.\n\n-- Training objective (§3.2.2) --\n    class_weight:      Weight of the classification term, and of the\n                       class cost inside the Hungarian matcher.\n    mask_weight:       Weight of the point-sampled mask BCE.\n    dice_weight:       Weight of the point-sampled dice term.\n    no_object_weight:  Class weight of the \"no object\" slot (0.1).\n    train_num_points:  K points per mask (12,544 = 112 x 112).\n    oversample_ratio:  Candidate multiplier for the importance sampler.\n    importance_sample_ratio: Share of K taken from the most uncertain\n                       candidates; the rest are uniform.\n    deep_supervision:  Apply the criterion to every decoder layer, not\n                       just the last.\n\n> **Note:**\n>\n> **Training.**  Pass `targets` to `forward` for §3.2.2's\n> objective: Hungarian matching on a class + mask-BCE + dice cost,\n> the same three terms as the loss, all mask terms evaluated on\n> `train_num_points` importance-sampled points, and — under\n> `deep_supervision` — the whole criterion repeated on every\n> decoder layer.",
+      "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.mask2former import Mask2FormerConfig\n>>> cfg = Mask2FormerConfig()\n>>> cfg.num_classes, cfg.num_queries\n(150, 100)\n>>> cfg.model_type\n'mask2former'"
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],
@@ -225,7 +64,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerForSemanticSegmentation(config: Mask2FormerConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_model.py#L1434",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_model.py#L1434",
       "subcategory": "model",
       "methods": [
         {
@@ -234,7 +73,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: Mask2FormerConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_model.py#L1490",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_model.py#L1490",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -256,7 +95,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: list[dict[str, Tensor]] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_model.py#L1500",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_model.py#L1500",
           "subcategory": "model",
           "summary": "Run Mask2Former for semantic segmentation.",
           "extended": null,
@@ -335,7 +174,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_tiny(pretrained: bool | str = False, weights: Mask2FormerSwinTinyWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_pretrained.py#L62",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_pretrained.py#L62",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Tiny backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the Swin-Tiny\nbackbone (`embed_dim = 96`, `depths = (2, 2, 6, 2)`,\n`num_heads = (3, 6, 12, 24)`, `window_size = 7`), a 6-layer\nmulti-scale deformable pixel decoder, and a 9-layer masked-attention\ntransformer decoder with 100 queries.  Default targets ADE20K\n(150 classes); reaches ADE20K validation mIoU of 47.7%.",
@@ -1288,7 +1127,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_small(pretrained: bool | str = False, weights: Mask2FormerSwinSmallWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_pretrained.py#L122",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_pretrained.py#L122",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Small backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the Swin-Small\nbackbone (`embed_dim = 96`, `depths = (2, 2, 18, 2)`,\n`num_heads = (3, 6, 12, 24)`).  Same transformer head as\n`mask2former_swin_tiny`; ADE20K validation mIoU of 51.3%.",
@@ -2241,7 +2080,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_base(pretrained: bool | str = False, weights: Mask2FormerSwinBaseWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_pretrained.py#L180",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_pretrained.py#L180",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Base backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the Swin-Base\nbackbone (`embed_dim = 128`, `depths = (2, 2, 18, 2)`,\n`num_heads = (4, 8, 16, 32)`).  ADE20K validation mIoU of 53.9%.",
@@ -3194,7 +3033,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask2former_swin_large(pretrained: bool | str = False, weights: Mask2FormerSwinLargeWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_pretrained.py#L235",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_pretrained.py#L235",
       "subcategory": "pretrained",
       "summary": "Mask2Former with Swin-Large backbone (Cheng et al., CVPR 2022).",
       "extended": "Builds a `Mask2FormerForSemanticSegmentation` with the largest\nSwin backbone (`embed_dim = 192`, `depths = (2, 2, 18, 2)`,\n`num_heads = (6, 12, 24, 48)`).  Reaches ADE20K validation mIoU of\n56.1% — the headline result of the paper.",
@@ -4151,7 +3990,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinTinyWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_weights.py#L34",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_weights.py#L34",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_tiny`.",
@@ -4159,7 +3998,9 @@
       "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.mask2former import Mask2FormerSwinTinyWeights\n>>> list(Mask2FormerSwinTinyWeights.__members__)\n['ADE20K', 'DEFAULT']\nDEFAULT is an alias for the tag a bare\npretrained=True resolves to, so the two ways of asking for\nweights cannot drift apart."
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],
@@ -4175,7 +4016,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinSmallWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_weights.py#L65",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_weights.py#L75",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_small`.",
@@ -4183,7 +4024,9 @@
       "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.mask2former import Mask2FormerSwinSmallWeights\n>>> list(Mask2FormerSwinSmallWeights.__members__)\n['ADE20K', 'DEFAULT']\nDEFAULT is an alias for the tag a bare\npretrained=True resolves to, so the two ways of asking for\nweights cannot drift apart."
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],
@@ -4199,7 +4042,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinBaseWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_weights.py#L91",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_weights.py#L111",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_base`.",
@@ -4207,7 +4050,9 @@
       "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.mask2former import Mask2FormerSwinBaseWeights\n>>> list(Mask2FormerSwinBaseWeights.__members__)\n['ADE20K', 'DEFAULT']\nDEFAULT is an alias for the tag a bare\npretrained=True resolves to, so the two ways of asking for\nweights cannot drift apart."
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],
@@ -4223,7 +4068,7 @@
       ],
       "labels": [],
       "signature": "Mask2FormerSwinLargeWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask2former/_weights.py#L120",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask2former/_weights.py#L150",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask2former_swin_large`.",
@@ -4231,7 +4076,9 @@
       "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.mask2former import Mask2FormerSwinLargeWeights\n>>> list(Mask2FormerSwinLargeWeights.__members__)\n['ADE20K', 'DEFAULT']\nDEFAULT is an alias for the tag a bare\npretrained=True resolves to, so the two ways of asking for\nweights cannot drift apart."
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],

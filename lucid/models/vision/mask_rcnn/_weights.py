@@ -27,6 +27,16 @@ class MaskRCNNResNet50FPNWeights(WeightsEnum):
     Single COCO checkpoint converted from the reference
     ``MaskRCNN_ResNet50_FPN_Weights.COCO_V1`` (91 classes, box AP 37.9 /
     mask AP 34.6).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mask_rcnn import MaskRCNNResNet50FPNWeights
+    >>> list(MaskRCNNResNet50FPNWeights.__members__)
+    ['COCO_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_V1 = WeightEntry(

@@ -115,6 +115,15 @@ class FasterRCNNConfig(ModelConfig):
        positive; under 0.3 as negative; the band between ignored) and the
        samplers follow §3.1.3.  The one clause not on by default is
        cross-boundary anchor removal — see ``rpn_ignore_cross_boundary``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.faster_rcnn import FasterRCNNConfig
+    >>> cfg = FasterRCNNConfig()
+    >>> cfg.num_classes
+    91
+    >>> cfg.model_type
+    'faster_rcnn'
     """
 
     model_type: ClassVar[str] = "faster_rcnn"

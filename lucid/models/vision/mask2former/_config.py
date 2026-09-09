@@ -120,6 +120,15 @@ class Mask2FormerConfig(ModelConfig):
        ``train_num_points`` importance-sampled points, and — under
        ``deep_supervision`` — the whole criterion repeated on every
        decoder layer.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mask2former import Mask2FormerConfig
+    >>> cfg = Mask2FormerConfig()
+    >>> cfg.num_classes, cfg.num_queries
+    (150, 100)
+    >>> cfg.model_type
+    'mask2former'
     """
 
     model_type: ClassVar[str] = "mask2former"

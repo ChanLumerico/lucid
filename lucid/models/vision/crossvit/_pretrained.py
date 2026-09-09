@@ -107,7 +107,17 @@ def _c(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViTForImageClassifica
 )
 def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-Ti backbone — ``embed_dims=(96, 192)``, depths
-    ``((1, 4, 0))×3``, 3 heads.  ~7M params (paper Table 2)."""
+    ``((1, 4, 0))×3``, 3 heads.  ~7M params (paper Table 2).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_tiny
+    >>> model = crossvit_tiny()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.last_hidden_state.shape
+    (1, 288)
+    """
     if pretrained:
         reject_unavailable_pretrained("crossvit_tiny", alternative="crossvit_tiny_cls")
     return _b(_CFG_TINY, overrides)
@@ -123,7 +133,17 @@ def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
 )
 def crossvit_small(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-S backbone — ``embed_dims=(192, 384)``, depths
-    ``((1, 4, 0))×3``, 6 heads.  ~26.7M params (paper Table 2)."""
+    ``((1, 4, 0))×3``, 6 heads.  ~26.7M params (paper Table 2).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_small
+    >>> model = crossvit_small()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.last_hidden_state.shape
+    (1, 576)
+    """
     if pretrained:
         reject_unavailable_pretrained(
             "crossvit_small", alternative="crossvit_small_cls"
@@ -141,7 +161,17 @@ def crossvit_small(pretrained: bool = False, **overrides: object) -> CrossViT:
 )
 def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-B backbone — ``embed_dims=(384, 768)``, depths
-    ``((1, 4, 0))×3``, 12 heads.  ~105M params (paper Table 2)."""
+    ``((1, 4, 0))×3``, 12 heads.  ~105M params (paper Table 2).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_base
+    >>> model = crossvit_base()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.last_hidden_state.shape
+    (1, 1152)
+    """
     if pretrained:
         reject_unavailable_pretrained("crossvit_base", alternative="crossvit_base_cls")
     return _b(_CFG_BASE, overrides)
@@ -157,7 +187,20 @@ def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
 )
 def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-9 backbone — ``embed_dims=(128, 256)``, depths
-    ``((1, 3, 0))×3``, 4 heads.  ~8.6M params (paper Table 2)."""
+    ``((1, 3, 0))×3``, 4 heads.  ~8.6M params (paper Table 2).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_9
+    >>> model = crossvit_9()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.last_hidden_state.shape
+    (1, 384)
+
+    CrossViT works at 240 pixels rather than 224: the two branches
+    use 12- and 16-pixel patches, and 240 is what both divide.
+    """
     if pretrained:
         reject_unavailable_pretrained("crossvit_9", alternative="crossvit_9_cls")
     return _b(_CFG_9, overrides)
@@ -173,7 +216,17 @@ def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
 )
 def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-15 backbone — ``embed_dims=(192, 384)``, depths
-    ``((1, 5, 0))×3``, 6 heads.  ~27.4M params (paper Table 2)."""
+    ``((1, 5, 0))×3``, 6 heads.  ~27.4M params (paper Table 2).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_15
+    >>> model = crossvit_15()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.last_hidden_state.shape
+    (1, 576)
+    """
     if pretrained:
         reject_unavailable_pretrained("crossvit_15", alternative="crossvit_15_cls")
     return _b(_CFG_15, overrides)
@@ -189,7 +242,17 @@ def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
 )
 def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-18 backbone — ``embed_dims=(224, 448)``, depths
-    ``((1, 6, 0))×3``, 7 heads.  ~43.3M params (paper Table 2)."""
+    ``((1, 6, 0))×3``, 7 heads.  ~43.3M params (paper Table 2).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_18
+    >>> model = crossvit_18()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.last_hidden_state.shape
+    (1, 672)
+    """
     if pretrained:
         reject_unavailable_pretrained("crossvit_18", alternative="crossvit_18_cls")
     return _b(_CFG_18, overrides)
@@ -245,6 +308,15 @@ def crossvit_tiny_cls(
     Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
     Multi-Scale Vision Transformer for Image Classification"*, ICCV
     2021 (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_tiny_cls
+    >>> model = crossvit_tiny_cls()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.logits.shape
+    (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViTTinyWeights, pretrained, weights)
     model = _c(_CFG_TINY, overrides)
@@ -292,6 +364,15 @@ def crossvit_small_cls(
     Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
     Multi-Scale Vision Transformer for Image Classification"*, ICCV
     2021 (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_small_cls
+    >>> model = crossvit_small_cls()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.logits.shape
+    (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViTSmallWeights, pretrained, weights)
     model = _c(_CFG_SMALL, overrides)
@@ -339,6 +420,15 @@ def crossvit_base_cls(
     Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
     Multi-Scale Vision Transformer for Image Classification"*, ICCV
     2021 (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_base_cls
+    >>> model = crossvit_base_cls()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.logits.shape
+    (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViTBaseWeights, pretrained, weights)
     model = _c(_CFG_BASE, overrides)
@@ -386,6 +476,15 @@ def crossvit_9_cls(
     Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
     Multi-Scale Vision Transformer for Image Classification"*, ICCV
     2021 (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_9_cls
+    >>> model = crossvit_9_cls()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.logits.shape
+    (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViT9Weights, pretrained, weights)
     model = _c(_CFG_9, overrides)
@@ -433,6 +532,15 @@ def crossvit_15_cls(
     Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
     Multi-Scale Vision Transformer for Image Classification"*, ICCV
     2021 (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_15_cls
+    >>> model = crossvit_15_cls()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.logits.shape
+    (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViT15Weights, pretrained, weights)
     model = _c(_CFG_15, overrides)
@@ -480,6 +588,15 @@ def crossvit_18_cls(
     Reference: Chen, Fan, and Panda, *"CrossViT: Cross-Attention
     Multi-Scale Vision Transformer for Image Classification"*, ICCV
     2021 (arXiv:2103.14899).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import crossvit_18_cls
+    >>> model = crossvit_18_cls()
+    >>> out = model(lucid.randn(1, 3, 240, 240))
+    >>> out.logits.shape
+    (1, 1000)
     """
     entry = weights_mod.resolve_weights(CrossViT18Weights, pretrained, weights)
     model = _c(_CFG_18, overrides)

@@ -169,6 +169,15 @@ class YOLOV2Config(ModelConfig):
         nms_thresh:   IoU threshold for NMS at inference.
         lambda_coord: Up-weighting for box regression loss.
         lambda_noobj: Down-weighting for no-object confidence loss.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.yolo import YOLOV2Config
+    >>> cfg = YOLOV2Config()
+    >>> cfg.num_classes
+    80
+    >>> cfg.model_type
+    'yolo_v2'
     """
 
     model_type: ClassVar[str] = "yolo_v2"

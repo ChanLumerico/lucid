@@ -256,8 +256,7 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
     --------
     >>> import lucid
     >>> from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn
-    >>> model = mask_rcnn_resnet50_fpn()
-    >>> model.eval()
+    >>> model = mask_rcnn_resnet50_fpn().eval()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape[-1]   # num_classes

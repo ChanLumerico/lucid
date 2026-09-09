@@ -113,6 +113,15 @@ def cspresnet_50(pretrained: bool = False, **overrides: object) -> CSPNet:
 
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.cspnet import cspresnet_50
+    >>> model = cspresnet_50()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 1024, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("cspresnet_50", alternative="cspresnet_50_cls")
@@ -136,6 +145,15 @@ def cspresnext_50(pretrained: bool = False, **overrides: object) -> CSPNet:
 
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.cspnet import cspresnext_50
+    >>> model = cspresnext_50()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 2048, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("cspresnext_50", alternative="cspresnext_50_cls")
@@ -160,6 +178,15 @@ def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
 
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.cspnet import cspdarknet_53
+    >>> model = cspdarknet_53()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 1024, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("cspdarknet_53", alternative="cspdarknet_53_cls")
@@ -209,6 +236,15 @@ def cspresnet_50_cls(
     -----
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.cspnet import cspresnet_50_cls
+    >>> model = cspresnet_50_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     entry = weights_mod.resolve_weights(CSPResNet50Weights, pretrained, weights)
     model = _c(_CFG_CSPRESNET_50, overrides)
@@ -254,6 +290,15 @@ def cspresnext_50_cls(
     -----
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.cspnet import cspresnext_50_cls
+    >>> model = cspresnext_50_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     entry = weights_mod.resolve_weights(CSPResNeXt50Weights, pretrained, weights)
     model = _c(_CFG_CSPRESNEXT_50, overrides)
@@ -299,6 +344,15 @@ def cspdarknet_53_cls(
     -----
     Reference: Wang et al., *"CSPNet: A New Backbone that can Enhance
     Learning Capability of CNN"*, CVPRW 2020 (arXiv:1911.11929).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.cspnet import cspdarknet_53_cls
+    >>> model = cspdarknet_53_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     entry = weights_mod.resolve_weights(CSPDarknet53Weights, pretrained, weights)
     model = _c(_CFG_CSPDARKNET_53, overrides)

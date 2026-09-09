@@ -3,7 +3,7 @@
   "name": "detr",
   "path": "lucid.models.vision.detr",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/__init__.py#L1",
   "members": [
     {
       "name": "DETRConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "DETRConfig(num_classes: int = 80, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, aux_loss: bool = True, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, num_bbox_layers: int = 3, bbox_hidden_dim: int = 256, score_thresh: float = 0.7)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 80, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), d_model: int = 256, n_head: int = 8, num_encoder_layers: int = 6, aux_loss: bool = True, num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1, num_queries: int = 100, num_bbox_layers: int = 3, bbox_hidden_dim: int = 256, score_thresh: float = 0.7)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,99 +42,14 @@
         }
       ],
       "summary": "Configuration for DETR (DEtection TRansformer).",
-      "extended": "DETR (Carion et al., ECCV 2020) reformulates object detection as a direct\nset prediction problem.  A CNN backbone extracts image features, a\nTransformer encoder-decoder processes them with N learned object queries,\nand FFN heads predict class labels + normalised (cx, cy, w, h) boxes.\nTraining uses the Hungarian algorithm to match predictions to ground-truth\nobjects (no hand-crafted anchors, no NMS at inference).",
-      "parameters": [
-        {
-          "name": "num_classes",
-          "annotation": "int",
-          "description": "Number of foreground classes (background = class 0).",
-          "default": "80"
-        },
-        {
-          "name": "in_channels",
-          "annotation": "int",
-          "description": "Input image channels.",
-          "default": "3"
-        },
-        {
-          "name": "backbone_layers",
-          "annotation": "tuple[int, int, int, int]",
-          "description": "ResNet-50 layer counts (default 3,4,6,3).",
-          "default": "(3, 4, 6, 3)"
-        },
-        {
-          "name": "d_model",
-          "annotation": "int",
-          "description": "Transformer embedding dimension.",
-          "default": "256"
-        },
-        {
-          "name": "n_head",
-          "annotation": "int",
-          "description": "Number of self-/cross-attention heads.",
-          "default": "8"
-        },
-        {
-          "name": "num_encoder_layers",
-          "annotation": "int",
-          "description": "Encoder depth.",
-          "default": "6"
-        },
-        {
-          "name": "aux_loss",
-          "annotation": "bool",
-          "description": "Apply the set loss after every decoder layer, not\n               only the last (paper: \"auxiliary decoding losses\").",
-          "default": "True"
-        },
-        {
-          "name": "num_decoder_layers",
-          "annotation": "int",
-          "description": "Decoder depth.",
-          "default": "6"
-        },
-        {
-          "name": "dim_feedforward",
-          "annotation": "int",
-          "description": "FFN inner dimension in each transformer layer.",
-          "default": "2048"
-        },
-        {
-          "name": "dropout",
-          "annotation": "float",
-          "description": "Dropout in transformer.",
-          "default": "0.1"
-        },
-        {
-          "name": "num_queries",
-          "annotation": "int",
-          "description": "Number of object queries (N).",
-          "default": "100"
-        },
-        {
-          "name": "num_bbox_layers",
-          "annotation": "int",
-          "description": "MLP depth for bounding-box head.",
-          "default": "3"
-        },
-        {
-          "name": "bbox_hidden_dim",
-          "annotation": "int",
-          "description": "Hidden width inside the bbox MLP.",
-          "default": "256"
-        },
-        {
-          "name": "score_thresh",
-          "annotation": "float",
-          "description": "Minimum predicted class probability (before NMS).",
-          "default": "0.7"
-        }
-      ],
+      "extended": "DETR (Carion et al., ECCV 2020) reformulates object detection as a direct\nset prediction problem.  A CNN backbone extracts image features, a\nTransformer encoder-decoder processes them with N learned object queries,\nand FFN heads predict class labels + normalised (cx, cy, w, h) boxes.\nTraining uses the Hungarian algorithm to match predictions to ground-truth\nobjects (no hand-crafted anchors, no NMS at inference).\n\nArchitecture overview:\n  Image → ResNet-50 (C5 feature map) → 1×1 projection (d_model)\n    → flatten + 2-D sinusoidal positional encoding\n  → Transformer encoder (N_enc layers, d_model, n_head)\n  → Transformer decoder (N_dec layers, N_queries object queries)\n  → FFN: cls head (num_classes + 1) + box head (4, sigmoid)\n\nArgs:\n    num_classes:     Number of foreground classes (background = class 0).\n    in_channels:     Input image channels.\n\n-- Backbone --\n    backbone_layers: ResNet-50 layer counts (default 3,4,6,3).\n\n-- Transformer --\n    d_model:       Transformer embedding dimension.\n    n_head:        Number of self-/cross-attention heads.\n    num_encoder_layers: Encoder depth.\n    aux_loss:          Apply the set loss after every decoder layer, not\n                       only the last (paper: \"auxiliary decoding losses\").\n    num_decoder_layers: Decoder depth.\n    dim_feedforward:   FFN inner dimension in each transformer layer.\n    dropout:           Dropout in transformer.\n    num_queries:   Number of object queries (N).\n\n-- FFN heads --\n    num_bbox_layers:   MLP depth for bounding-box head.\n    bbox_hidden_dim:   Hidden width inside the bbox MLP.\n\n-- Inference --\n    score_thresh:  Minimum predicted class probability (before NMS).",
+      "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "Image → ResNet-50 (C5 feature map) → 1×1 projection (d_model)\n  → flatten + 2-D sinusoidal positional encoding\n→ Transformer encoder (N_enc layers, d_model, n_head)\n→ Transformer decoder (N_dec layers, N_queries object queries)\n→ FFN: cls head (num_classes + 1) + box head (4, sigmoid)"
+      "examples": [
+        ">>> from lucid.models.vision.detr import DETRConfig\n>>> cfg = DETRConfig()\n>>> cfg.num_classes, cfg.num_queries\n(80, 100)\n>>> cfg.model_type\n'detr'"
       ],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": []
@@ -149,7 +64,7 @@
       ],
       "labels": [],
       "signature": "DETRForObjectDetection(config: DETRConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_model.py#L617",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_model.py#L617",
       "subcategory": "model",
       "methods": [
         {
@@ -158,7 +73,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DETRConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_model.py#L722",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_model.py#L722",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -180,7 +95,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: list[dict[str, Tensor]] | None = None, pixel_mask: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_model.py#L756",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_model.py#L756",
           "subcategory": "model",
           "summary": "Run DETR.",
           "extended": null,
@@ -221,7 +136,7 @@
           "kind": "function",
           "labels": [],
           "signature": "postprocess(output: ObjectDetectionOutput, image_sizes: list[tuple[int, int]])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_model.py#L1013",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_model.py#L1013",
           "subcategory": "model",
           "summary": "Filter queries by score threshold and convert to pixel coordinates.",
           "extended": null,
@@ -264,7 +179,7 @@
       "returns": null,
       "raises": [],
       "examples": [
-        "Inference returns class logits and normalised cxcywh boxes for every\nquery:\n>>> import lucid\n>>> from lucid.models.vision.detr import detr_resnet50\n>>> model = detr_resnet50()\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.logits.shape   # (B, num_queries, K + 1)\n(1, 100, 81)\n>>> out.pred_boxes.shape\n(1, 100, 4)\nTraining pass with normalised xyxy ground-truth boxes (Hungarian\nmatching computes the set loss):\n>>> targets = [{\n...     \"boxes\":  lucid.tensor([[0.1, 0.1, 0.5, 0.5]]),\n...     \"labels\": lucid.tensor([3], dtype=lucid.int64),\n... }]\n>>> out = model(x, targets=targets)\n>>> out.loss.shape\n()"
+        "Inference returns class logits and normalised cxcywh boxes for every\nquery:\n>>> import lucid\n>>> from lucid.models.vision.detr import detr_resnet50\n>>> model = detr_resnet50()\n>>> x = lucid.randn(1, 3, 800, 800)\n>>> out = model(x)\n>>> out.logits.shape   # (B, num_queries, K + 1)\n(1, 100, 92)\n>>> out.pred_boxes.shape\n(1, 100, 4)\nTraining pass with normalised xyxy ground-truth boxes (Hungarian\nmatching computes the set loss):\n>>> targets = [{\n...     \"boxes\":  lucid.tensor([[0.1, 0.1, 0.5, 0.5]]),\n...     \"labels\": lucid.tensor([3], dtype=lucid.int64),\n... }]\n>>> out = model(x, targets=targets)\n>>> out.loss.shape\n()"
       ],
       "notes": [
         "See Carion et al., \"End-to-End Object Detection with Transformers\",\nECCV 2020 ([arXiv:2005.12872](https://arxiv.org/abs/2005.12872)).  The bipartite Hungarian assignment\nfinds the permutation $\\hat{\\sigma} \\in \\mathfrak{S}_N$ that\nminimises\n\n\n\n$$\n\\hat{\\sigma} = \\arg\\min_{\\sigma \\in \\mathfrak{S}_N}\n               \\sum_{i=1}^{N}\n               \\mathcal{L}_\\mathrm{match}\\bigl(y_i, \\hat{y}_{\\sigma(i)}\\bigr),\n$$\n\nwith the pair cost\n\n\n\n$$\n\\mathcal{L}_\\mathrm{match}(y, \\hat{y}) =\n    -\\mathbb{1}_{c \\ne \\varnothing}\\,\\hat{p}(c)\n    + \\mathbb{1}_{c \\ne \\varnothing}\\,\n      \\bigl(\\lambda_{\\mathrm{L_1}}\\|b - \\hat{b}\\|_1\n            + \\lambda_\\mathrm{GIoU}\\,\n              (1 - \\mathrm{GIoU}(b, \\hat{b}))\\bigr).\n$$\n\nThe final loss reuses the same per-pair terms, with \"no-object\"\nmatches penalised at reduced weight.  Removing NMS / anchors makes\nDETR conceptually simple but training-data hungry — the paper\nreports needing 500 epochs to fully converge on COCO."
@@ -315,7 +230,7 @@
       "kind": "function",
       "labels": [],
       "signature": "detr_resnet50(pretrained: bool | str = False, weights: DETRResNet50Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_pretrained.py#L58",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_pretrained.py#L58",
       "subcategory": "pretrained",
       "summary": "DETR with ResNet-50 backbone (Carion et al., ECCV 2020).",
       "extended": "Builds a `DETRForObjectDetection` with the paper-cited\nResNet-50 + transformer configuration: 100 object queries, a 6-layer\nencoder + 6-layer decoder with `d_model = 256`, 8 attention heads,\nand `dim_feedforward = 2048`.  The COCO config uses\n`num_classes = 91`.  Reaches COCO box mAP of 42.0 (paper Table 1).\nApproximately 41.5M parameters with a notable *no-anchor / no-NMS*\ndesign.",
@@ -1140,7 +1055,7 @@
       "kind": "function",
       "labels": [],
       "signature": "detr_resnet101(pretrained: bool | str = False, weights: DETRResNet101Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_pretrained.py#L128",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_pretrained.py#L128",
       "subcategory": "pretrained",
       "summary": "DETR with ResNet-101 backbone (Carion et al., ECCV 2020).",
       "extended": "Builds a `DETRForObjectDetection` with the same transformer\nhead as `detr_resnet50` but a deeper ResNet-101 backbone\n(`[3, 4, 23, 3]` bottleneck blocks).  The COCO config uses\n`num_classes = 91`.  Approximately 60.5M parameters and COCO box\nmAP of 43.5 (paper Table 1, DETR-R101 row).",
@@ -1969,7 +1884,7 @@
       ],
       "labels": [],
       "signature": "DETRResNet50Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_weights.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_weights.py#L21",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.detr_resnet50`.",
@@ -1977,7 +1892,9 @@
       "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.detr import DETRResNet50Weights\n>>> list(DETRResNet50Weights.__members__)\n['COCO_2017', 'DEFAULT']\nDEFAULT is an alias for the tag a bare\npretrained=True resolves to, so the two ways of asking for\nweights cannot drift apart."
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],
@@ -1993,7 +1910,7 @@
       ],
       "labels": [],
       "signature": "DETRResNet101Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/detr/_weights.py#L46",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/detr/_weights.py#L56",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.detr_resnet101`.",
@@ -2001,7 +1918,9 @@
       "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.detr import DETRResNet101Weights\n>>> list(DETRResNet101Weights.__members__)\n['COCO_2017', 'DEFAULT']\nDEFAULT is an alias for the tag a bare\npretrained=True resolves to, so the two ways of asking for\nweights cannot drift apart."
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],

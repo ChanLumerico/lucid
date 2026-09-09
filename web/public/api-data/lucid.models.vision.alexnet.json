@@ -3,7 +3,7 @@
   "name": "alexnet",
   "path": "lucid.models.vision.alexnet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/__init__.py#L1",
   "members": [
     {
       "name": "AlexNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "AlexNetConfig(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 1000, in_channels: int = 3, dropout: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -63,7 +63,7 @@
       ],
       "labels": [],
       "signature": "AlexNet(config: AlexNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_model.py#L122",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_model.py#L122",
       "subcategory": "model",
       "methods": [
         {
@@ -72,7 +72,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: AlexNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_model.py#L201",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_model.py#L201",
           "subcategory": "model",
           "summary": "Initialise the LayerNorm module. See the class docstring for parameter semantics.",
           "extended": null,
@@ -96,7 +96,7 @@
             "property"
           ],
           "signature": "feature_info: list[FeatureInfo]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_model.py#L220",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_model.py#L220",
           "summary": null,
           "extended": null,
           "parameters": [],
@@ -117,7 +117,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward_features(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_model.py#L223",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_model.py#L223",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -139,40 +139,29 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_model.py#L228",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_model.py#L228",
           "subcategory": "model",
-          "summary": "Run R-CNN on a batch of images.",
+          "summary": "Apply the reconstructed weight, and the fused ReLU if there was one.",
           "extended": null,
           "parameters": [
             {
-              "name": "x",
-              "annotation": null,
-              "description": "(B, C, H, W) image batch.",
+              "name": "*args",
+              "annotation": "Tensor",
+              "description": "The activation, as the layer this stands in for takes it.",
               "default": null
             },
             {
-              "name": "proposals",
-              "annotation": null,
-              "description": "list of B tensors, each (N_i, 4) xyxy region proposals.\n       Pass `None` to return empty detections.",
-              "default": null
-            },
-            {
-              "name": "targets",
-              "annotation": null,
-              "description": "Optional per-image `{\"boxes\": (M, 4) xyxy, \"labels\":\n       (M,) 1-based class ids}`.  When given, the stage-1\n       and stage-3 losses are computed; the stage-2 SVMs are\n       an offline pass and are not part of this model — see\n       `RCNNConfig`.",
+              "name": "**kwargs",
+              "annotation": "object",
+              "description": "Accepted and unused, to match the base signature.",
               "default": null
             }
           ],
           "returns": {
-            "annotation": "BaseModelOutput",
-            "description": "`ObjectDetectionOutput` with:\n`logits`     : (Σ N_i, num_classes + 1) raw class logits.\n`pred_boxes` : (Σ N_i, 4) decoded xyxy boxes (top class).\n`loss`       : scalar sum of the two terms, or `None`."
+            "annotation": "Tensor",
+            "description": "`x @ weightᵀ + bias`, through a ReLU when one was fused."
           },
-          "raises": [
-            {
-              "annotation": "ValueError",
-              "description": "If `targets` is given without `proposals`, since\nR-CNN does not generate its own regions and there would be\nnothing to assign them to."
-            }
-          ],
+          "raises": [],
           "examples": [],
           "notes": [],
           "attributes": [],
@@ -234,7 +223,7 @@
       ],
       "labels": [],
       "signature": "AlexNetForImageClassification(config: AlexNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_model.py#L238",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_model.py#L238",
       "subcategory": "model",
       "methods": [
         {
@@ -243,7 +232,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: AlexNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_model.py#L313",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_model.py#L313",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -265,7 +254,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_model.py#L325",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_model.py#L325",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -336,7 +325,7 @@
       "kind": "function",
       "labels": [],
       "signature": "alexnet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_pretrained.py#L16",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_pretrained.py#L16",
       "subcategory": "pretrained",
       "summary": "AlexNet feature-extracting backbone (no fully-connected head).",
       "extended": "Builds an `AlexNet` with the Krizhevsky 2014 single-stream\nOWT topology: five convolutional blocks (Conv1: 3→64 with\n$11\\times11$ stride-4; Conv2: 64→192 with $5\\times5$;\nConv3: 192→384, Conv4: 384→256, Conv5: 256→256, all\n$3\\times3$), and overlapping $3\\times3$ max-pools\nafter blocks 1, 2, 5.  Approximately 2.5 M parameters in the\nconvolutional trunk alone (≈61.1 M for the full classifier\nvariant).",
@@ -490,7 +479,7 @@
       "kind": "function",
       "labels": [],
       "signature": "alexnet_cls(pretrained: bool | str = False, weights: AlexNetWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_pretrained.py#L83",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_pretrained.py#L83",
       "subcategory": "pretrained",
       "summary": "AlexNet image classifier (backbone + FC6 + FC7 + linear head).",
       "extended": "Builds an `AlexNetForImageClassification` with the\nKrizhevsky 2014 single-stream OWT topology: the five-block conv\ntrunk followed by FC6 (9216 → 4096), FC7 (4096 → 4096), and a\nfinal linear projection to `config.num_classes` (default 1000\nfor ImageNet-1k).  Approximately 61.1 M parameters total,\ndominated by the two 4096-dim FC layers (≈54.5 M).\n`lucid.nn.Dropout` with `p=config.dropout` (default 0.5)\nis applied after both hidden activations.",
@@ -683,7 +672,7 @@
       ],
       "labels": [],
       "signature": "AlexNetWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/alexnet/_weights.py#L22",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/alexnet/_weights.py#L22",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weight tags for `lucid.models.alexnet_cls`.",

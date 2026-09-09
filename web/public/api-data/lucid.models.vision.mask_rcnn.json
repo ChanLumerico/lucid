@@ -3,7 +3,7 @@
   "name": "mask_rcnn",
   "path": "lucid.models.vision.mask_rcnn",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/__init__.py#L1",
   "members": [
     {
       "name": "MaskRCNNConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "MaskRCNNConfig(num_classes: int = 91, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_bn_eps: float = 0.0, fpn_out_channels: int = 256, rpn_anchor_sizes: tuple[int, ...] = (32, 64, 128, 256, 512), rpn_anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0), rpn_pre_nms_top_n: int = 1000, rpn_post_nms_top_n: int = 1000, rpn_nms_thresh: float = 0.7, rpn_min_size: float = 0.001, rpn_score_thresh: float = 0.0, rpn_fg_iou_thresh: float = 0.7, rpn_bg_iou_thresh: float = 0.3, rpn_batch_size_per_image: int = 256, rpn_positive_fraction: float = 0.5, roi_det_size: int = 7, roi_sampling_ratio: int = 2, roi_representation: int = 1024, roi_fg_iou_thresh: float = 0.5, roi_bg_iou_thresh: float = 0.5, roi_batch_size_per_image: int = 512, roi_positive_fraction: float = 0.25, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), canonical_scale: int = 224, canonical_level: int = 4, roi_mask_size: int = 14, mask_hidden_channels: int = 256, mask_num_convs: int = 4, mask_predictor_hidden: int = 256, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 100, mask_thresh: float = 0.5)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 91, in_channels: int = 3, backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3), backbone_bn_eps: float = 0.0, fpn_out_channels: int = 256, rpn_anchor_sizes: tuple[int, ...] = (32, 64, 128, 256, 512), rpn_anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0), rpn_pre_nms_top_n: int = 1000, rpn_post_nms_top_n: int = 1000, rpn_nms_thresh: float = 0.7, rpn_min_size: float = 0.001, rpn_score_thresh: float = 0.0, rpn_fg_iou_thresh: float = 0.7, rpn_bg_iou_thresh: float = 0.3, rpn_batch_size_per_image: int = 256, rpn_positive_fraction: float = 0.5, roi_det_size: int = 7, roi_sampling_ratio: int = 2, roi_representation: int = 1024, roi_fg_iou_thresh: float = 0.5, roi_bg_iou_thresh: float = 0.5, roi_batch_size_per_image: int = 512, roi_positive_fraction: float = 0.25, bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0), canonical_scale: int = 224, canonical_level: int = 4, roi_mask_size: int = 14, mask_hidden_channels: int = 256, mask_num_convs: int = 4, mask_predictor_hidden: int = 256, score_thresh: float = 0.05, nms_thresh: float = 0.5, max_detections: int = 100, mask_thresh: float = 0.5)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,195 +42,14 @@
         }
       ],
       "summary": "Configuration for Mask R-CNN.",
-      "extended": "Mask R-CNN (He et al., ICCV 2017) extends Faster R-CNN with:\n  1. Feature Pyramid Network (FPN) backbone replacing single-scale VGG16.\n  2. RoI Align replacing RoI Pool (eliminating quantisation misalignment).\n  3. A parallel mask branch predicting K binary segmentation masks per RoI.\n\n> **Note:**\n>\n> **Training.**  Pass `targets` to `forward` for §3's\n> multi-task objective `L = L_cls + L_box + L_mask` on top of the\n> inherited RPN terms.  `L_mask` is the per-pixel sigmoid BCE on the\n> ground-truth class's mask channel only, with targets from\n> RoI-aligning the ground-truth masks onto the sampled proposals.\n> `\"masks\"` may be omitted from a target to train the detector\n> alone.",
-      "parameters": [
-        {
-          "name": "num_classes",
-          "annotation": "int",
-          "description": "Foreground categories (background = class 0).",
-          "default": "91"
-        },
-        {
-          "name": "in_channels",
-          "annotation": "int",
-          "description": "Input image channels.",
-          "default": "3"
-        },
-        {
-          "name": "backbone_layers",
-          "annotation": "tuple[int, int, int, int]",
-          "description": "ResNet layer counts (default ResNet-50 = 3,4,6,3).",
-          "default": "(3, 4, 6, 3)"
-        },
-        {
-          "name": "backbone_bn_eps",
-          "annotation": "float",
-          "description": "FrozenBatchNorm2d epsilon (reference uses 0).",
-          "default": "0.0"
-        },
-        {
-          "name": "fpn_out_channels",
-          "annotation": "int",
-          "description": "Channel width of every FPN output level.",
-          "default": "256"
-        },
-        {
-          "name": "rpn_anchor_sizes",
-          "annotation": "tuple[int, ...]",
-          "description": "One anchor size per FPN level (P2–P6).",
-          "default": "(32, 64, 128, 256, 512)"
-        },
-        {
-          "name": "rpn_anchor_ratios",
-          "annotation": "tuple[float, ...]",
-          "description": "Aspect ratios shared across all levels.",
-          "default": "(0.5, 1.0, 2.0)"
-        },
-        {
-          "name": "rpn_pre_nms_top_n",
-          "annotation": "int",
-          "description": "Proposals kept per level before NMS.",
-          "default": "1000"
-        },
-        {
-          "name": "rpn_post_nms_top_n",
-          "annotation": "int",
-          "description": "Proposals kept per image after NMS.",
-          "default": "1000"
-        },
-        {
-          "name": "rpn_nms_thresh",
-          "annotation": "float",
-          "description": "RPN NMS IoU threshold.",
-          "default": "0.7"
-        },
-        {
-          "name": "rpn_min_size",
-          "annotation": "float",
-          "description": "Minimum proposal side length (feature pixels).",
-          "default": "0.001"
-        },
-        {
-          "name": "rpn_score_thresh",
-          "annotation": "float",
-          "description": "Minimum objectness score (post-sigmoid).",
-          "default": "0.0"
-        },
-        {
-          "name": "rpn_fg_iou_thresh",
-          "annotation": "float",
-          "description": "Anchor→GT IoU for foreground label.",
-          "default": "0.7"
-        },
-        {
-          "name": "rpn_bg_iou_thresh",
-          "annotation": "float",
-          "description": "Anchor→GT IoU upper bound for background.",
-          "default": "0.3"
-        },
-        {
-          "name": "roi_det_size",
-          "annotation": "int",
-          "description": "RoI Align output for detection (7 → 7×7).",
-          "default": "7"
-        },
-        {
-          "name": "roi_sampling_ratio",
-          "annotation": "int",
-          "description": "RoI Align sub-bin sampling ratio (2).",
-          "default": "2"
-        },
-        {
-          "name": "roi_representation",
-          "annotation": "int",
-          "description": "Hidden size of the 2-FC detection head.",
-          "default": "1024"
-        },
-        {
-          "name": "roi_fg_iou_thresh",
-          "annotation": "float",
-          "description": "Proposal→GT IoU for fg assignment.",
-          "default": "0.5"
-        },
-        {
-          "name": "roi_bg_iou_thresh",
-          "annotation": "float",
-          "description": "Proposal→GT IoU upper bound for bg.",
-          "default": "0.5"
-        },
-        {
-          "name": "bbox_reg_weights",
-          "annotation": "tuple[float, float, float, float]",
-          "description": "Per-component bbox delta scale.",
-          "default": "(10.0, 10.0, 5.0, 5.0)"
-        },
-        {
-          "name": "canonical_scale",
-          "annotation": "int",
-          "description": "FPN level-assignment canonical scale (224).",
-          "default": "224"
-        },
-        {
-          "name": "canonical_level",
-          "annotation": "int",
-          "description": "FPN level-assignment canonical level (4).",
-          "default": "4"
-        },
-        {
-          "name": "roi_mask_size",
-          "annotation": "int",
-          "description": "RoI Align output for the mask branch (14 → 14×14).",
-          "default": "14"
-        },
-        {
-          "name": "mask_hidden_channels",
-          "annotation": "int",
-          "description": "Channel width inside the mask FCN.",
-          "default": "256"
-        },
-        {
-          "name": "mask_num_convs",
-          "annotation": "int",
-          "description": "Number of 3×3 convs in the mask head (4).",
-          "default": "4"
-        },
-        {
-          "name": "mask_predictor_hidden",
-          "annotation": "int",
-          "description": "Channel width of the deconv upsampler (256).",
-          "default": "256"
-        },
-        {
-          "name": "score_thresh",
-          "annotation": "float",
-          "description": "Minimum final class score.",
-          "default": "0.05"
-        },
-        {
-          "name": "nms_thresh",
-          "annotation": "float",
-          "description": "Per-class NMS IoU threshold.",
-          "default": "0.5"
-        },
-        {
-          "name": "max_detections",
-          "annotation": "int",
-          "description": "Maximum detections returned per image.",
-          "default": "100"
-        },
-        {
-          "name": "mask_thresh",
-          "annotation": "float",
-          "description": "Binarisation threshold applied to mask sigmoid output.",
-          "default": "0.5"
-        }
-      ],
+      "extended": "Mask R-CNN (He et al., ICCV 2017) extends Faster R-CNN with:\n  1. Feature Pyramid Network (FPN) backbone replacing single-scale VGG16.\n  2. RoI Align replacing RoI Pool (eliminating quantisation misalignment).\n  3. A parallel mask branch predicting K binary segmentation masks per RoI.\n\nArchitecture overview:\n  Image → ResNet-50 (C2–C5, strides 4/8/16/32)\n    ↓ FPN (lateral convs + top-down merging) → [P2, P3, P4, P5, P6] (256ch)\n  P2–P6 → RPN → proposals\n  P2–P5 + proposals → FPN-level assignment → RoI Align (7×7) → 2-FC head\n                                            → RoI Align (14×14) → Mask head\n\nArgs:\n    num_classes:  Foreground categories (background = class 0).\n    in_channels:  Input image channels.\n\n-- Backbone/FPN --\n    backbone_layers:   ResNet layer counts (default ResNet-50 = 3,4,6,3).\n    backbone_bn_eps:   FrozenBatchNorm2d epsilon (reference uses 0).\n    fpn_out_channels:  Channel width of every FPN output level.\n\n-- RPN hyper-parameters --\n    rpn_anchor_sizes:   One anchor size per FPN level (P2–P6).\n    rpn_anchor_ratios:  Aspect ratios shared across all levels.\n    rpn_pre_nms_top_n:  Proposals kept per level before NMS.\n    rpn_post_nms_top_n: Proposals kept per image after NMS.\n    rpn_nms_thresh:     RPN NMS IoU threshold.\n    rpn_min_size:       Minimum proposal side length (feature pixels).\n    rpn_score_thresh:   Minimum objectness score (post-sigmoid).\n    rpn_fg_iou_thresh:  Anchor→GT IoU for foreground label.\n    rpn_bg_iou_thresh:  Anchor→GT IoU upper bound for background.\n\n-- Detection head --\n    roi_det_size:         RoI Align output for detection (7 → 7×7).\n    roi_sampling_ratio:   RoI Align sub-bin sampling ratio (2).\n    roi_representation:   Hidden size of the 2-FC detection head.\n    roi_fg_iou_thresh:    Proposal→GT IoU for fg assignment.\n    roi_bg_iou_thresh:    Proposal→GT IoU upper bound for bg.\n    bbox_reg_weights:     Per-component bbox delta scale.\n    canonical_scale:      FPN level-assignment canonical scale (224).\n    canonical_level:      FPN level-assignment canonical level (4).\n\n-- Mask head --\n    roi_mask_size:        RoI Align output for the mask branch (14 → 14×14).\n    mask_hidden_channels: Channel width inside the mask FCN.\n    mask_num_convs:       Number of 3×3 convs in the mask head (4).\n    mask_predictor_hidden: Channel width of the deconv upsampler (256).\n\n-- Inference --\n    score_thresh:    Minimum final class score.\n    nms_thresh:      Per-class NMS IoU threshold.\n    max_detections:  Maximum detections returned per image.\n    mask_thresh:     Binarisation threshold applied to mask sigmoid output.\n\n> **Note:**\n>\n> **Training.**  Pass `targets` to `forward` for §3's\n> multi-task objective `L = L_cls + L_box + L_mask` on top of the\n> inherited RPN terms.  `L_mask` is the per-pixel sigmoid BCE on the\n> ground-truth class's mask channel only, with targets from\n> RoI-aligning the ground-truth masks onto the sampled proposals.\n> `\"masks\"` may be omitted from a target to train the detector\n> alone.",
+      "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "Image → ResNet-50 (C2–C5, strides 4/8/16/32)\n  ↓ FPN (lateral convs + top-down merging) → [P2, P3, P4, P5, P6] (256ch)\nP2–P6 → RPN → proposals\nP2–P5 + proposals → FPN-level assignment → RoI Align (7×7) → 2-FC head\n                                          → RoI Align (14×14) → Mask head"
+      "examples": [
+        ">>> from lucid.models.vision.mask_rcnn import MaskRCNNConfig\n>>> cfg = MaskRCNNConfig()\n>>> cfg.num_classes\n91\n>>> cfg.model_type\n'mask_rcnn'"
       ],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": []
@@ -245,7 +64,7 @@
       ],
       "labels": [],
       "signature": "MaskRCNNForObjectDetection(config: MaskRCNNConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/_model.py#L216",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/_model.py#L216",
       "subcategory": "model",
       "methods": [
         {
@@ -254,7 +73,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: MaskRCNNConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/_model.py#L275",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/_model.py#L274",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -276,7 +95,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: list[dict[str, Tensor]] | None = None, proposals: list[Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/_model.py#L431",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/_model.py#L430",
           "subcategory": "model",
           "summary": "Run Mask R-CNN on a (pre-processed) image batch.",
           "extended": null,
@@ -322,7 +141,7 @@
           "kind": "function",
           "labels": [],
           "signature": "postprocess(output: InstanceSegmentationOutput, image_sizes: list[tuple[int, int]] | None = None, proposals: list[Tensor] | None = None, features: list[Tensor] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/_model.py#L583",
+          "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/_model.py#L582",
           "subcategory": "model",
           "summary": "Box post-process → per-detection mask gather.",
           "extended": "Mirrors the reference inference flow: run the box branch\npost-processing (softmax → per-class score filter → per-class NMS →\ntop-`max_detections`), then sigmoid the per-RoI mask logits and\ngather the channel for each detection's predicted class.",
@@ -377,7 +196,7 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn\n>>> model = mask_rcnn_resnet50_fpn()\n>>> model.eval()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape[-1]   # num_classes\n91\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
+        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn\n>>> model = mask_rcnn_resnet50_fpn().eval()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.logits.shape[-1]   # num_classes\n91\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
       ],
       "notes": [
         "See He et al., \"Mask R-CNN\", ICCV 2017 ([arXiv:1703.06870](https://arxiv.org/abs/1703.06870)), Ren et al.,\n\"Faster R-CNN\", NeurIPS 2015, and Lin et al., \"Feature Pyramid Networks\nfor Object Detection\", CVPR 2017.  The model expects an already resized\n+ normalised image batch; final per-instance detections + masks come\nfrom `postprocess`."
@@ -413,7 +232,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask_rcnn(pretrained: bool | str = False, weights: MaskRCNNResNet50FPNWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/_pretrained.py#L26",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/_pretrained.py#L26",
       "subcategory": "pretrained",
       "summary": "Mask R-CNN with a ResNet-50-FPN backbone (He et al., ICCV 2017).",
       "extended": "Alias of `mask_rcnn_resnet50_fpn` — the canonical reference\nconfiguration: Faster R-CNN's ResNet-50 trunk (frozen BN) + Feature\nPyramid Network + Region Proposal Network + Fast R-CNN box head, plus\na parallel FCN mask branch.  The COCO config uses `num_classes = 91`.\nReaches COCO box AP 37.9 / mask AP 34.6 (reference\n`maskrcnn_resnet50_fpn`).",
@@ -443,7 +262,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn\n>>> model = mask_rcnn(num_classes=91)\n>>> model.eval()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
+        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn\n>>> model = mask_rcnn(num_classes=91).eval()\n>>> x = lucid.randn(1, 3, 224, 224)\n>>> out = model(x)\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
       ],
       "notes": [],
       "attributes": [],
@@ -1297,7 +1116,7 @@
       "kind": "function",
       "labels": [],
       "signature": "mask_rcnn_resnet50_fpn(pretrained: bool | str = False, weights: MaskRCNNResNet50FPNWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/_pretrained.py#L88",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/_pretrained.py#L87",
       "subcategory": "pretrained",
       "summary": "Mask R-CNN with a ResNet-50-FPN backbone (COCO-pretrained).",
       "extended": "Builds the reference `maskrcnn_resnet50_fpn` detector: Faster\nR-CNN's ResNet-50 backbone with frozen batch-norm, a 5-level Feature\nPyramid Network (P2-P5 + a parameter-free pool level for RPN), anchors\nat sizes `((32,),(64,),(128,),(256,),(512,))` and ratios\n`(0.5, 1.0, 2.0)`, a Fast R-CNN box head (TwoMLPHead +\nFastRCNNPredictor) over MultiScale RoI Align (7×7), and a parallel\nmask branch (MaskRCNNHeads + MaskRCNNPredictor) over MultiScale RoI\nAlign (14×14) emitting `28×28` per-class masks.  COCO box AP 37.9 /\nmask AP 34.6, ~44.4M parameters.",
@@ -1327,7 +1146,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn\n>>> model = mask_rcnn_resnet50_fpn()\n>>> model.eval()\n>>> out = model(lucid.randn(1, 3, 224, 224))\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
+        ">>> import lucid\n>>> from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn\n>>> model = mask_rcnn_resnet50_fpn().eval()\n>>> out = model(lucid.randn(1, 3, 224, 224))\n>>> out.pred_masks.shape[-2:]\n(28, 28)"
       ],
       "notes": [
         "Pretrained weights are converted from the reference\n`MaskRCNN_ResNet50_FPN_Weights.COCO_V1` checkpoint and hosted under\n`lucid-dl/mask-rcnn-resnet-50-fpn`.  The detector expects an already\nresized + normalised image batch (the\n`lucid.utils.transforms.Detection` preset)."
@@ -2187,7 +2006,7 @@
       ],
       "labels": [],
       "signature": "MaskRCNNResNet50FPNWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/e328ed1/lucid/models/vision/mask_rcnn/_weights.py#L22",
+      "source": "https://github.com/ChanLumerico/lucid/blob/7db0387ed/lucid/models/vision/mask_rcnn/_weights.py#L22",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.mask_rcnn_resnet50_fpn`.",
@@ -2195,7 +2014,9 @@
       "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.vision.mask_rcnn import MaskRCNNResNet50FPNWeights\n>>> list(MaskRCNNResNet50FPNWeights.__members__)\n['COCO_V1', 'DEFAULT']\nDEFAULT is an alias for the tag a bare\npretrained=True resolves to, so the two ways of asking for\nweights cannot drift apart."
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],

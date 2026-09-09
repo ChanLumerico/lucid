@@ -100,6 +100,15 @@ class DETRConfig(ModelConfig):
 
         -- Inference --
         score_thresh:  Minimum predicted class probability (before NMS).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.detr import DETRConfig
+    >>> cfg = DETRConfig()
+    >>> cfg.num_classes, cfg.num_queries
+    (80, 100)
+    >>> cfg.model_type
+    'detr'
     """
 
     model_type: ClassVar[str] = "detr"

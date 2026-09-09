@@ -67,8 +67,7 @@ def faster_rcnn(
     --------
     >>> import lucid
     >>> from lucid.models.vision.faster_rcnn import faster_rcnn
-    >>> model = faster_rcnn(num_classes=91)
-    >>> model.eval()
+    >>> model = faster_rcnn(num_classes=91).eval()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape[-1]
@@ -138,8 +137,7 @@ def faster_rcnn_resnet50_fpn(
     --------
     >>> import lucid
     >>> from lucid.models.vision.faster_rcnn import faster_rcnn_resnet50_fpn
-    >>> model = faster_rcnn_resnet50_fpn()
-    >>> model.eval()
+    >>> model = faster_rcnn_resnet50_fpn().eval()
     >>> out = model(lucid.randn(1, 3, 224, 224))
     >>> out.logits.shape[-1]
     91

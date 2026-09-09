@@ -121,6 +121,15 @@ class MaskRCNNConfig(ModelConfig):
        RoI-aligning the ground-truth masks onto the sampled proposals.
        ``"masks"`` may be omitted from a target to train the detector
        alone.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mask_rcnn import MaskRCNNConfig
+    >>> cfg = MaskRCNNConfig()
+    >>> cfg.num_classes
+    91
+    >>> cfg.model_type
+    'mask_rcnn'
     """
 
     model_type: ClassVar[str] = "mask_rcnn"

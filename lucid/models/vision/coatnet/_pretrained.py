@@ -254,6 +254,15 @@ def coatnet_1(pretrained: bool = False, **overrides: object) -> CoAtNet:
     -----
     Reaches **83.3% ImageNet-1k top-1** at 224×224 (Table 5, NeurIPS
     2021).  See `arXiv:2106.04803 <https://arxiv.org/abs/2106.04803>`_.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_1
+    >>> model = coatnet_1()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 768, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_1")
@@ -277,6 +286,15 @@ def coatnet_1_cls(
     Backbone + standard CoAtNet head (GAP → LayerNorm → Linear+Tanh →
     classifier).  Approximately **42M parameters**, 83.3% ImageNet-1k
     top-1 at 224x224 (Table 5).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_1_cls
+    >>> model = coatnet_1_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_1_cls")
@@ -304,6 +322,15 @@ def coatnet_2(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ``dims=(128, 256, 512, 1024)``, ``stem_width=128``,
     ``attn_heads=(16, 32)``.  Approximately **75M parameters**, **84.1%
     ImageNet-1k top-1** at 224×224 (Table 5).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_2
+    >>> model = coatnet_2()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 1024, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_2")
@@ -327,6 +354,15 @@ def coatnet_2_cls(
     Wider variant — ``dims=(128, 256, 512, 1024)`` — with the standard
     CoAtNet head.  Approximately **75M parameters**, 84.1% ImageNet-1k
     top-1 at 224x224 (Table 5).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_2_cls
+    >>> model = coatnet_2_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_2_cls")
@@ -355,6 +391,15 @@ def coatnet_3(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ``attn_heads=(24, 48)``.  Approximately **168M parameters**, **84.5%
     ImageNet-1k top-1** at 224×224 (Table 5).  With ImageNet-21k or
     JFT-3B pretraining the paper reports 86.5% / 87.8% at 384x384.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_3
+    >>> model = coatnet_3()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 1536, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_3")
@@ -378,6 +423,15 @@ def coatnet_3_cls(
     Larger variant — ``dims=(192, 384, 768, 1536)`` — with the standard
     CoAtNet head.  Approximately **168M parameters**, 84.5% ImageNet-1k
     top-1 at 224x224 (Table 5).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_3_cls
+    >>> model = coatnet_3_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_3_cls")
@@ -406,6 +460,15 @@ def coatnet_4(pretrained: bool = False, **overrides: object) -> CoAtNet:
     ``attn_heads=(24, 48)``.  Approximately **275M parameters**, **85.0%
     ImageNet-1k top-1** at 224×224 (Table 5).  Paper headline with
     JFT-3B pretrain reaches 88.4% at 512x512.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_4
+    >>> model = coatnet_4()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 1536, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_4")
@@ -429,6 +492,15 @@ def coatnet_4_cls(
     Deepest of the CoAtNet-0..4 series — same dims as CoAtNet-3 but with
     ``blocks_per_stage=(2, 12, 28, 2)``.  Approximately **275M
     parameters**, 85.0% ImageNet-1k top-1 at 224x224 (Table 5).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_4_cls
+    >>> model = coatnet_4_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_4_cls")
@@ -465,6 +537,15 @@ def coatnet_5(pretrained: bool = False, **overrides: object) -> CoAtNet:
     activations on the order of ``B × D × H/32 × W/32`` channels with
     D=2048.  Instantiating + running this variant on a 16 GB host is
     near-the-edge; prefer measuring on a larger GPU.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_5
+    >>> model = coatnet_5()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 2048, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_5")
@@ -488,6 +569,15 @@ def coatnet_5_cls(
     Widest paper-cited variant — ``dims=(256, 512, 1280, 2048)`` — with
     the standard CoAtNet head.  Approximately **688M parameters**,
     85.8% ImageNet-1k top-1 at 224x224 (Table 5).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_5_cls
+    >>> model = coatnet_5_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_5_cls")
@@ -531,6 +621,15 @@ def coatnet_6(pretrained: bool = False, **overrides: object) -> CoAtNet:
     can comfortably instantiate (≈ 6 GB of params alone before
     activations); use a larger GPU.  Building this variant is
     reserved for inference on dedicated hardware.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_6
+    >>> model = coatnet_6()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 2048, 7, 7)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_6")
@@ -552,6 +651,15 @@ def coatnet_6_cls(
     r"""CoAtNet-6 image classifier (Dai et al., 2021).
 
     Mixed-S3 variant.  Approximately **1.5B parameters**.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_6_cls
+    >>> model = coatnet_6_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_6_cls")
@@ -586,6 +694,18 @@ def coatnet_7(pretrained: bool = False, **overrides: object) -> CoAtNet:
     Approximately **2.4B parameters** — paper's strongest published
     CoAtNet, only usable with JFT-3B pretraining.  Not buildable on a
     16 GB host (param footprint alone is ≈ 9.7 GB before activations).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_7
+    >>> model = coatnet_7()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.last_hidden_state.shape
+    (1, 3072, 7, 7)
+
+    Two and a half billion parameters — the largest variant in the
+    paper, and worth knowing before instantiating one.
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_7")
@@ -607,6 +727,15 @@ def coatnet_7_cls(
     r"""CoAtNet-7 image classifier (Dai et al., 2021).
 
     Widest mixed-S3 variant.  Approximately **2.4B parameters**.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import coatnet_7_cls
+    >>> model = coatnet_7_cls()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
     """
     if pretrained:
         reject_unavailable_pretrained("coatnet_7_cls")

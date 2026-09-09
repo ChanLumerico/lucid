@@ -90,6 +90,15 @@ class MaskFormerConfig(ModelConfig):
         dropout:           Dropout probability.
         num_queries:       Number of learnable object queries N.
         fpn_out_channels:  FPN lateral / output channel width.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.maskformer import MaskFormerConfig
+    >>> cfg = MaskFormerConfig()
+    >>> cfg.num_classes, cfg.num_queries
+    (150, 100)
+    >>> cfg.model_type
+    'maskformer'
     """
 
     model_type: ClassVar[str] = "maskformer"

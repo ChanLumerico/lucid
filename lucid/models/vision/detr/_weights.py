@@ -25,6 +25,16 @@ class DETRResNet50Weights(WeightsEnum):
     Single COCO 2017 checkpoint converted from Facebook DETR's
     ``detr_resnet50`` reference checkpoint (Carion et al., 2020; ~41.5M
     params, 42.0 box mAP).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.detr import DETRResNet50Weights
+    >>> list(DETRResNet50Weights.__members__)
+    ['COCO_2017', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_2017 = WeightEntry(
@@ -50,6 +60,16 @@ class DETRResNet101Weights(WeightsEnum):
     Single COCO 2017 checkpoint converted from Facebook DETR's
     ``detr_resnet101`` reference checkpoint (Carion et al., 2020; ~60.5M
     params, 43.5 box mAP).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.detr import DETRResNet101Weights
+    >>> list(DETRResNet101Weights.__members__)
+    ['COCO_2017', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_2017 = WeightEntry(

@@ -27,6 +27,16 @@ class FCNResNet50Weights(WeightsEnum):
     Single COCO-with-VOC-labels checkpoint converted from reference_vision's
     ``FCN_ResNet50_Weights.COCO_WITH_VOC_LABELS_V1`` (Long et al., 2015;
     ~35.3M params, 60.5 mIoU / 91.4 pixel acc).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.fcn import FCNResNet50Weights
+    >>> list(FCNResNet50Weights.__members__)
+    ['COCO_WITH_VOC_LABELS_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_WITH_VOC_LABELS_V1 = WeightEntry(
@@ -53,6 +63,16 @@ class FCNResNet101Weights(WeightsEnum):
     Single COCO-with-VOC-labels checkpoint converted from reference_vision's
     ``FCN_ResNet101_Weights.COCO_WITH_VOC_LABELS_V1`` (Long et al., 2015;
     ~54.3M params, 63.7 mIoU / 91.9 pixel acc).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.fcn import FCNResNet101Weights
+    >>> list(FCNResNet101Weights.__members__)
+    ['COCO_WITH_VOC_LABELS_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     COCO_WITH_VOC_LABELS_V1 = WeightEntry(

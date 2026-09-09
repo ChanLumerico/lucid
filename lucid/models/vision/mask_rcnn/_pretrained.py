@@ -68,8 +68,7 @@ def mask_rcnn(
     --------
     >>> import lucid
     >>> from lucid.models.vision.mask_rcnn import mask_rcnn
-    >>> model = mask_rcnn(num_classes=91)
-    >>> model.eval()
+    >>> model = mask_rcnn(num_classes=91).eval()
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.pred_masks.shape[-2:]
@@ -140,8 +139,7 @@ def mask_rcnn_resnet50_fpn(
     --------
     >>> import lucid
     >>> from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn
-    >>> model = mask_rcnn_resnet50_fpn()
-    >>> model.eval()
+    >>> model = mask_rcnn_resnet50_fpn().eval()
     >>> out = model(lucid.randn(1, 3, 224, 224))
     >>> out.pred_masks.shape[-2:]
     (28, 28)

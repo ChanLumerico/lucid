@@ -38,6 +38,16 @@ class Mask2FormerSwinTinyWeights(WeightsEnum):
     Single ADE20k semantic checkpoint converted from
     ``facebook/mask2former-swin-tiny-ade-semantic`` (Cheng et al., 2022;
     ~47.4M params, 47.7 mIoU on the ADE20k validation set).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mask2former import Mask2FormerSwinTinyWeights
+    >>> list(Mask2FormerSwinTinyWeights.__members__)
+    ['ADE20K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     ADE20K = WeightEntry(
@@ -69,6 +79,16 @@ class Mask2FormerSwinSmallWeights(WeightsEnum):
     Single ADE20k semantic checkpoint converted from
     ``facebook/mask2former-swin-small-ade-semantic`` (Cheng et al., 2022;
     ~68.7M params, 51.3 mIoU on the ADE20k validation set).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mask2former import Mask2FormerSwinSmallWeights
+    >>> list(Mask2FormerSwinSmallWeights.__members__)
+    ['ADE20K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     ADE20K = WeightEntry(
@@ -95,6 +115,16 @@ class Mask2FormerSwinBaseWeights(WeightsEnum):
     Single ADE20k semantic checkpoint converted from
     ``facebook/mask2former-swin-base-ade-semantic`` (Cheng et al., 2022;
     ~107M params, 52.4 mIoU on the ADE20k validation set).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mask2former import Mask2FormerSwinBaseWeights
+    >>> list(Mask2FormerSwinBaseWeights.__members__)
+    ['ADE20K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     ADE20K = WeightEntry(
@@ -125,6 +155,16 @@ class Mask2FormerSwinLargeWeights(WeightsEnum):
     ``facebook/mask2former-swin-large-ade-semantic`` (Cheng et al., 2022;
     ~215M params, 56.1 mIoU on the ADE20k validation set — the headline
     paper result).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mask2former import Mask2FormerSwinLargeWeights
+    >>> list(Mask2FormerSwinLargeWeights.__members__)
+    ['ADE20K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias for the tag a bare
+    ``pretrained=True`` resolves to, so the two ways of asking for
+    weights cannot drift apart.
     """
 
     ADE20K = WeightEntry(

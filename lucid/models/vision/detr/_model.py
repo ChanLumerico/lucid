@@ -700,7 +700,7 @@ class DETRForObjectDetection(ObjectDetectionModel):
     >>> x = lucid.randn(1, 3, 800, 800)
     >>> out = model(x)
     >>> out.logits.shape   # (B, num_queries, K + 1)
-    (1, 100, 81)
+    (1, 100, 92)
     >>> out.pred_boxes.shape
     (1, 100, 4)
 
