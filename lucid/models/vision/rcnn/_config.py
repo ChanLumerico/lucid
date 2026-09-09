@@ -94,6 +94,15 @@ class RCNNConfig(ModelConfig):
        features from a frozen network over a whole dataset, and scoring
        with the resulting weights instead of the softmax, remain the
        caller's pipeline.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.rcnn._config import RCNNConfig
+    >>> cfg = RCNNConfig()
+    >>> cfg.model_type
+    'rcnn'
+    >>> cfg.num_classes, cfg.in_channels
+    (80, 3)
     """
 
     model_type: ClassVar[str] = "rcnn"

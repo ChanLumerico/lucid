@@ -21,6 +21,20 @@ class GoogLeNetWeights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from reference_vision's
     ``GoogLeNet_Weights.IMAGENET1K_V1`` (Szegedy et al., 2015; ~13.0M
     params with auxiliary heads, 69.778% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.googlenet._weights import GoogLeNetWeights
+    >>> list(GoogLeNetWeights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> GoogLeNetWeights.DEFAULT is GoogLeNetWeights.IMAGENET1K_V1
+    True
+    >>> GoogLeNetWeights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(

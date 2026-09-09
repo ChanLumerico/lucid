@@ -120,6 +120,15 @@ class VAEConfig(GenerativeModelConfig):
             scales every level's KL identically.
         recon_loss: Reconstruction term — ``"mse"`` (Gaussian likelihood,
             default) or ``"bce"`` (Bernoulli likelihood for [0, 1] data).
+
+    Examples
+    --------
+    >>> from lucid.models.generative.vae._config import VAEConfig
+    >>> cfg = VAEConfig()
+    >>> cfg.model_type
+    'vae'
+    >>> cfg.in_channels
+    3
     """
 
     model_type: ClassVar[str] = "vae"

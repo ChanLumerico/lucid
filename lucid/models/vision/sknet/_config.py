@@ -113,6 +113,15 @@ class SKNetConfig(ModelConfig):
         The paper's geometry is still reachable --
         ``SKNetConfig(min_attn_channels=32)`` -- it simply has no
         published weights.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.sknet._config import SKNetConfig
+    >>> cfg = SKNetConfig()
+    >>> cfg.model_type
+    'sknet'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "sknet"

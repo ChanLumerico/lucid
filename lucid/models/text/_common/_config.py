@@ -61,6 +61,15 @@ class LanguageModelConfig(ModelConfig):
         use_cache: Decoder models can cache past key/value tensors for
             ``generate()``.  This flag toggles cache emission in
             ``forward``; runtime can still override it per-call.
+
+    Examples
+    --------
+    >>> from lucid.models.text._common._config import LanguageModelConfig
+    >>> cfg = LanguageModelConfig()
+    >>> cfg.model_type
+    'language_model'
+    >>> cfg.hidden_size, cfg.vocab_size
+    (768, 30522)
     """
 
     model_type: ClassVar[str] = "language_model"

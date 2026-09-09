@@ -44,6 +44,15 @@ class GenerativeModelConfig(ModelConfig):
             diffusion models that predict variance use ``2 * in_channels``.
         act_fn: Activation used inside the trunk.  Most modern image
             generators default to ``"silu"``.
+
+    Examples
+    --------
+    >>> from lucid.models.generative._common._config import GenerativeModelConfig
+    >>> cfg = GenerativeModelConfig()
+    >>> cfg.model_type
+    'generative'
+    >>> cfg.in_channels
+    3
     """
 
     model_type: ClassVar[str] = "generative"
@@ -87,6 +96,15 @@ class DiffusionModelConfig(GenerativeModelConfig):
             (the noise, default) is the canonical Ho parameterisation;
             ``"sample"`` predicts ``x_0`` directly; ``"v_prediction"`` is the
             Imagen / Progressive Distillation reparameterisation.
+
+    Examples
+    --------
+    >>> from lucid.models.generative._common._config import DiffusionModelConfig
+    >>> cfg = DiffusionModelConfig()
+    >>> cfg.model_type
+    'diffusion'
+    >>> cfg.in_channels
+    3
     """
 
     model_type: ClassVar[str] = "diffusion"
@@ -126,6 +144,15 @@ class NormalizingFlowConfig(GenerativeModelConfig):
             ``"logistic"`` — heavier-tailed, the default in Dinh et al.,
             2014 for dequantised pixel data; ``"gaussian"`` — standard
             normal.
+
+    Examples
+    --------
+    >>> from lucid.models.generative._common._config import NormalizingFlowConfig
+    >>> cfg = NormalizingFlowConfig()
+    >>> cfg.model_type
+    'normalizing_flow'
+    >>> cfg.in_channels
+    3
     """
 
     model_type: ClassVar[str] = "normalizing_flow"
@@ -193,6 +220,15 @@ class WorldModelConfig(GenerativeModelConfig):
         — are deliberately *not* hoisted, because this class would then
         have to pick a number neither paper backs.  Promoting a field here
         means the families were observed to agree, not that they could.
+
+    Examples
+    --------
+    >>> from lucid.models.generative._common._config import WorldModelConfig
+    >>> cfg = WorldModelConfig()
+    >>> cfg.model_type
+    'world_model'
+    >>> cfg.hidden_size, cfg.in_channels
+    (200, 3)
     """
 
     model_type: ClassVar[str] = "world_model"

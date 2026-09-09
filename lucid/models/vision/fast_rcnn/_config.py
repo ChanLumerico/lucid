@@ -87,6 +87,15 @@ class FastRCNNConfig(ModelConfig):
         bg_iou_thresh_lo:     Lower edge of the hard-negative band;
                               proposals below it are ignored entirely
                               rather than treated as background.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.fast_rcnn._config import FastRCNNConfig
+    >>> cfg = FastRCNNConfig()
+    >>> cfg.model_type
+    'fast_rcnn'
+    >>> cfg.num_classes, cfg.in_channels
+    (80, 3)
     """
 
     model_type: ClassVar[str] = "fast_rcnn"

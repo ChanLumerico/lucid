@@ -88,6 +88,15 @@ class InceptionResNetConfig(ModelConfig):
     ``scale_b`` — residual scale for Block17 (paper suggests 0.10).
     ``scale_c`` — residual scale for Block8  (paper suggests 0.20).
     ``dropout`` — head dropout rate (0.2 in the paper).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.inception_resnet._config import InceptionResNetConfig
+    >>> cfg = InceptionResNetConfig()
+    >>> cfg.model_type
+    'inception_resnet'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "inception_resnet"

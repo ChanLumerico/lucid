@@ -28,6 +28,20 @@ class AlexNetWeights(WeightsEnum):
     distributed by the reference-framework model zoo, re-hosted under
     ``huggingface.co/lucid-dl/alexnet`` with the published
     ``acc@1=56.522 / acc@5=79.066`` validation metrics.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.alexnet._weights import AlexNetWeights
+    >>> list(AlexNetWeights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> AlexNetWeights.DEFAULT is AlexNetWeights.IMAGENET1K_V1
+    True
+    >>> AlexNetWeights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(

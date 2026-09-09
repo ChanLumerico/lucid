@@ -25,6 +25,20 @@ class MobileNetV2Weights(WeightsEnum):
     the V1 weights distributed by the reference-framework model zoo,
     re-hosted under ``huggingface.co/lucid-dl/mobilenet-v2`` with the
     official ``acc@1=71.878 / acc@5=90.286`` validation metrics.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mobilenet_v2._weights import MobileNetV2Weights
+    >>> list(MobileNetV2Weights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> MobileNetV2Weights.DEFAULT is MobileNetV2Weights.IMAGENET1K_V1
+    True
+    >>> MobileNetV2Weights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(

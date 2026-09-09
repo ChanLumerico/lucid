@@ -84,6 +84,15 @@ class TransformerConfig(LanguageModelConfig):
     default here.  ``decoder_vocab_size`` / ``share_embeddings`` stay
     configurable so callers porting a checkpoint with split vocabularies can
     turn sharing off.
+
+    Examples
+    --------
+    >>> from lucid.models.text.transformer._config import TransformerConfig
+    >>> cfg = TransformerConfig()
+    >>> cfg.model_type
+    'transformer'
+    >>> cfg.hidden_size, cfg.vocab_size
+    (512, 37000)
     """
 
     model_type: ClassVar[str] = "transformer"

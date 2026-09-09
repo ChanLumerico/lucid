@@ -65,6 +65,15 @@ class XceptionConfig(ModelConfig):
     Designed for 299×299 inputs.
 
     ``dropout`` — head dropout rate (0.5 in the paper).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.xception._config import XceptionConfig
+    >>> cfg = XceptionConfig()
+    >>> cfg.model_type
+    'xception'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "xception"

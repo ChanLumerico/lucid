@@ -57,6 +57,15 @@ class MobileNetV2Config(ModelConfig):
 
     ``width_mult`` — uniform channel multiplier; 1.0 = full model.
     ``dropout``    — classifier dropout probability.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mobilenet_v2._config import MobileNetV2Config
+    >>> cfg = MobileNetV2Config()
+    >>> cfg.model_type
+    'mobilenet_v2'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "mobilenet_v2"

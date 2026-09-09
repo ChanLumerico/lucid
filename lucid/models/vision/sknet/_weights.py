@@ -23,6 +23,20 @@ class SKResNet18Weights(WeightsEnum):
     ``timm/skresnet18.ra_in1k`` — Wightman's RandAugment recipe, hosted
     under ``huggingface.co/lucid-dl/sk-resnet-18`` with the official
     ``acc@1 = 73.020 / acc@5 = 91.172`` validation metrics.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.sknet._weights import SKResNet18Weights
+    >>> list(SKResNet18Weights.__members__)
+    ['RA_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> SKResNet18Weights.DEFAULT is SKResNet18Weights.RA_IN1K
+    True
+    >>> SKResNet18Weights.RA_IN1K.num_classes
+    1000
     """
 
     RA_IN1K = WeightEntry(
@@ -49,6 +63,20 @@ class SKResNet34Weights(WeightsEnum):
     ``timm/skresnet34.ra_in1k`` — Wightman's RandAugment recipe, hosted
     under ``huggingface.co/lucid-dl/sk-resnet-34`` with the official
     ``acc@1 = 76.956 / acc@5 = 93.320`` validation metrics.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.sknet._weights import SKResNet34Weights
+    >>> list(SKResNet34Weights.__members__)
+    ['RA_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> SKResNet34Weights.DEFAULT is SKResNet34Weights.RA_IN1K
+    True
+    >>> SKResNet34Weights.RA_IN1K.num_classes
+    1000
     """
 
     RA_IN1K = WeightEntry(

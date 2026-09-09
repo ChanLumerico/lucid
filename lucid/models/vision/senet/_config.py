@@ -75,6 +75,15 @@ class SENetConfig(ModelConfig):
     (``padding=0``, ``ceil_mode=True``) used by the canonical SE-ResNet
     line; ``False`` (default) uses the modern ResNet stem pool
     (``padding=1``, ``ceil_mode=False``).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.senet._config import SENetConfig
+    >>> cfg = SENetConfig()
+    >>> cfg.model_type
+    'senet'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "senet"

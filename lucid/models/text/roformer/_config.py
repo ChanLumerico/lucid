@@ -87,6 +87,15 @@ class RoFormerConfig(LanguageModelConfig):
         num_labels: Number of classes the sequence-classification head
             projects to.
         classifier_dropout: Dropout applied before that head.
+
+    Examples
+    --------
+    >>> from lucid.models.text.roformer._config import RoFormerConfig
+    >>> cfg = RoFormerConfig()
+    >>> cfg.model_type
+    'roformer'
+    >>> cfg.hidden_size, cfg.vocab_size
+    (768, 50000)
     """
 
     model_type: ClassVar[str] = "roformer"

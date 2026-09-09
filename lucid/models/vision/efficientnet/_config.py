@@ -70,6 +70,15 @@ class EfficientNetConfig(ModelConfig):
 
     ``drop_connect_rate`` — stochastic depth rate applied linearly across blocks.
     ``se_ratio`` — squeeze-and-excitation reduction ratio (0.25 in the paper).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.efficientnet._config import EfficientNetConfig
+    >>> cfg = EfficientNetConfig()
+    >>> cfg.model_type
+    'efficientnet'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "efficientnet"

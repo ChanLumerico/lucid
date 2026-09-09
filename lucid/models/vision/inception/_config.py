@@ -57,6 +57,15 @@ class InceptionConfig(ModelConfig):
       the text only in §4 and as "label-dropout" in §7.  (timm defaults
       this to 0.0.)
     ``version`` — only ``"v3"`` is supported in this module.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.inception._config import InceptionConfig
+    >>> cfg = InceptionConfig()
+    >>> cfg.model_type
+    'inception_v3'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "inception_v3"

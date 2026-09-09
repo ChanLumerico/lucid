@@ -25,6 +25,20 @@ class ResNeSt50Weights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``resnest50d.in1k`` (Zhang et al., 2022; ~27.5M params, 81.1%
     top-1).  Evaluated at 224 crop / 256 resize / bilinear.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.resnest._weights import ResNeSt50Weights
+    >>> list(ResNeSt50Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ResNeSt50Weights.DEFAULT is ResNeSt50Weights.IN1K
+    True
+    >>> ResNeSt50Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -52,6 +66,20 @@ class ResNeSt101Weights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``resnest101e.in1k`` (Zhang et al., 2022; ~48.3M params, 82.8%
     top-1).  Evaluated at 256 crop / 293 resize / bilinear.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.resnest._weights import ResNeSt101Weights
+    >>> list(ResNeSt101Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ResNeSt101Weights.DEFAULT is ResNeSt101Weights.IN1K
+    True
+    >>> ResNeSt101Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -79,6 +107,20 @@ class ResNeSt200Weights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``resnest200e.in1k`` (Zhang et al., 2022; ~70.2M params, 83.9%
     top-1).  Evaluated at 320 crop / 352 resize / bicubic.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.resnest._weights import ResNeSt200Weights
+    >>> list(ResNeSt200Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ResNeSt200Weights.DEFAULT is ResNeSt200Weights.IN1K
+    True
+    >>> ResNeSt200Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -115,6 +157,20 @@ class ResNeSt269Weights(WeightsEnum):
     ``resnest269e.in1k`` (Zhang et al., 2022; ~110.9M params, 84.5%
     top-1) — the deepest paper-cited variant.  Evaluated at 416 crop /
     448 resize / bicubic.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.resnest._weights import ResNeSt269Weights
+    >>> list(ResNeSt269Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ResNeSt269Weights.DEFAULT is ResNeSt269Weights.IN1K
+    True
+    >>> ResNeSt269Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(

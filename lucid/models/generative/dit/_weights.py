@@ -66,6 +66,20 @@ class DiTXLarge2Weights(WeightsEnum):
     Their parameter counts are identical, because the positional table
     that grows with the latent is a non-persistent buffer rather than a
     parameter and is rebuilt from the config on construction.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.dit._weights import DiTXLarge2Weights
+    >>> list(DiTXLarge2Weights.__members__)
+    ['IMAGENET1K_256', 'IMAGENET1K_512', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> DiTXLarge2Weights.DEFAULT is DiTXLarge2Weights.IMAGENET1K_256
+    True
+    >>> DiTXLarge2Weights.IMAGENET1K_256.num_classes
+    1000
     """
 
     IMAGENET1K_256 = WeightEntry(

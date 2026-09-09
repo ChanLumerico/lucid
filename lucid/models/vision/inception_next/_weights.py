@@ -39,6 +39,20 @@ class InceptionNeXtTinyWeights(WeightsEnum):
     Ships a single ImageNet-1k checkpoint (:attr:`SAIL_IN1K`) converted
     from timm's ``inception_next_tiny.sail_in1k`` weights and re-hosted
     under ``huggingface.co/lucid-dl/inception-next-tiny``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.inception_next._weights import InceptionNeXtTinyWeights
+    >>> list(InceptionNeXtTinyWeights.__members__)
+    ['SAIL_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> InceptionNeXtTinyWeights.DEFAULT is InceptionNeXtTinyWeights.SAIL_IN1K
+    True
+    >>> InceptionNeXtTinyWeights.SAIL_IN1K.num_classes
+    1000
     """
 
     SAIL_IN1K = WeightEntry(
@@ -64,6 +78,20 @@ class InceptionNeXtSmallWeights(WeightsEnum):
     Ships a single ImageNet-1k checkpoint (:attr:`SAIL_IN1K`) converted
     from timm's ``inception_next_small.sail_in1k`` weights and re-hosted
     under ``huggingface.co/lucid-dl/inception-next-small``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.inception_next._weights import InceptionNeXtSmallWeights
+    >>> list(InceptionNeXtSmallWeights.__members__)
+    ['SAIL_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> InceptionNeXtSmallWeights.DEFAULT is InceptionNeXtSmallWeights.SAIL_IN1K
+    True
+    >>> InceptionNeXtSmallWeights.SAIL_IN1K.num_classes
+    1000
     """
 
     SAIL_IN1K = WeightEntry(
@@ -90,6 +118,20 @@ class InceptionNeXtBaseWeights(WeightsEnum):
     from timm's ``inception_next_base.sail_in1k`` weights and re-hosted
     under ``huggingface.co/lucid-dl/inception-next-base``.  Uses a
     tighter ``crop_pct=0.95`` eval pipeline (236 resize / 224 crop).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.inception_next._weights import InceptionNeXtBaseWeights
+    >>> list(InceptionNeXtBaseWeights.__members__)
+    ['SAIL_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> InceptionNeXtBaseWeights.DEFAULT is InceptionNeXtBaseWeights.SAIL_IN1K
+    True
+    >>> InceptionNeXtBaseWeights.SAIL_IN1K.num_classes
+    1000
     """
 
     SAIL_IN1K = WeightEntry(

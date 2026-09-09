@@ -53,6 +53,15 @@ class ZFNetConfig(ModelConfig):
     ZFNet is an AlexNet variant with modified first two conv layers:
     - Conv1: 7×7 stride=2 pad=1 (vs AlexNet's 11×11 stride=4)
     - Conv2: 5×5 stride=2 (vs AlexNet's 5×5 stride=1)
+
+    Examples
+    --------
+    >>> from lucid.models.vision.zfnet._config import ZFNetConfig
+    >>> cfg = ZFNetConfig()
+    >>> cfg.model_type
+    'zfnet'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "zfnet"

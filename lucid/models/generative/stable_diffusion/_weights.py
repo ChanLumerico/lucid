@@ -72,6 +72,20 @@ class StableDiffusionWeights(WeightsEnum):
     Loading these gives a model that denoises but cannot yet be
     prompted — the conditioning sequence is the caller's to produce, and
     at this configuration's width it comes from CLIP ViT-L/14.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.stable_diffusion._weights import StableDiffusionWeights
+    >>> list(StableDiffusionWeights.__members__)
+    ['COMPVIS_LAION', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> StableDiffusionWeights.DEFAULT is StableDiffusionWeights.COMPVIS_LAION
+    True
+    >>> StableDiffusionWeights.COMPVIS_LAION.num_classes
+    0
     """
 
     COMPVIS_LAION = WeightEntry(

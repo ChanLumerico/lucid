@@ -86,6 +86,15 @@ class AttentionUNetConfig(ModelConfig):
             training-only auxiliary loss: the prediction itself comes out of
             the fusion, so switching it on changes inference too.  Defaults
             off so existing checkpoints keep loading.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.attention_unet._config import AttentionUNetConfig
+    >>> cfg = AttentionUNetConfig()
+    >>> cfg.model_type
+    'attention_unet'
+    >>> cfg.num_classes, cfg.in_channels
+    (2, 1)
     """
 
     model_type: ClassVar[str] = "attention_unet"

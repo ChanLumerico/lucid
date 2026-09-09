@@ -136,6 +136,15 @@ class RealNVPConfig(NormalizingFlowConfig):
         bijection on its sample space.  ``sample_size`` must be divisible
         by ``2 ** (num_scales - 1)`` so every squeeze has an even spatial
         extent to work on.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.realnvp._config import RealNVPConfig
+    >>> cfg = RealNVPConfig()
+    >>> cfg.model_type
+    'realnvp'
+    >>> cfg.in_channels
+    3
     """
 
     model_type: ClassVar[str] = "realnvp"

@@ -30,6 +30,20 @@ class ViTBase16Weights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from reference_vision's
     ``ViT_B_16_Weights.IMAGENET1K_V1`` (Dosovitskiy et al., 2021;
     ~86.6M params, 81.072% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.vit._weights import ViTBase16Weights
+    >>> list(ViTBase16Weights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ViTBase16Weights.DEFAULT is ViTBase16Weights.IMAGENET1K_V1
+    True
+    >>> ViTBase16Weights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -55,6 +69,20 @@ class ViTBase32Weights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from reference_vision's
     ``ViT_B_32_Weights.IMAGENET1K_V1`` (Dosovitskiy et al., 2021;
     ~88.2M params, 75.912% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.vit._weights import ViTBase32Weights
+    >>> list(ViTBase32Weights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ViTBase32Weights.DEFAULT is ViTBase32Weights.IMAGENET1K_V1
+    True
+    >>> ViTBase32Weights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -81,6 +109,20 @@ class ViTLarge16Weights(WeightsEnum):
     ``ViT_L_16_Weights.IMAGENET1K_V1`` (Dosovitskiy et al., 2021;
     ~304.3M params, 79.662% top-1).  Uses a 242-pixel resize before the
     224 center crop (vs. 256 for the other variants).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.vit._weights import ViTLarge16Weights
+    >>> list(ViTLarge16Weights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ViTLarge16Weights.DEFAULT is ViTLarge16Weights.IMAGENET1K_V1
+    True
+    >>> ViTLarge16Weights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -108,6 +150,20 @@ class ViTLarge32Weights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from reference_vision's
     ``ViT_L_32_Weights.IMAGENET1K_V1`` (Dosovitskiy et al., 2021;
     ~306.5M params, 76.972% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.vit._weights import ViTLarge32Weights
+    >>> list(ViTLarge32Weights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ViTLarge32Weights.DEFAULT is ViTLarge32Weights.IMAGENET1K_V1
+    True
+    >>> ViTLarge32Weights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(

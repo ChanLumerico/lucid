@@ -67,6 +67,15 @@ class DenseNetConfig(ModelConfig):
     ``dropout_rate`` — dropout after each dense layer (0 = disabled).
     ``memory_efficient`` — toggles checkpointing in dense blocks (unused here,
       kept for API parity with other frameworks).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.densenet._config import DenseNetConfig
+    >>> cfg = DenseNetConfig()
+    >>> cfg.model_type
+    'densenet'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "densenet"

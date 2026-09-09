@@ -127,6 +127,15 @@ class NICEConfig(NormalizingFlowConfig):
         :class:`GenerativeModelConfig` (``sample_size``, ``in_channels``,
         ``out_channels``) are pinned to the equivalent vector encoding
         rather than to an image shape the sources never state.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.nice._config import NICEConfig
+    >>> cfg = NICEConfig()
+    >>> cfg.model_type
+    'nice'
+    >>> cfg.in_channels
+    1
     """
 
     model_type: ClassVar[str] = "nice"

@@ -72,6 +72,15 @@ class LeNetConfig(ModelConfig):
 
     ``in_channels`` defaults to 1 (grayscale). Set to 3 for RGB inputs,
     though the canonical use-case is MNIST / single-channel images.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.lenet._config import LeNetConfig
+    >>> cfg = LeNetConfig()
+    >>> cfg.model_type
+    'lenet'
+    >>> cfg.num_classes, cfg.in_channels
+    (10, 1)
     """
 
     model_type: ClassVar[str] = "lenet"

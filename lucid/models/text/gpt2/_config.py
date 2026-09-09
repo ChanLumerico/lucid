@@ -64,6 +64,15 @@ class GPT2Config(LanguageModelConfig):
     (the file historically known as ``117M``).  Larger sizes are reached by
     overriding ``hidden_size`` / ``num_hidden_layers`` / ``num_attention_heads``
     — see :mod:`lucid.models.text.gpt2._pretrained` for the canonical table.
+
+    Examples
+    --------
+    >>> from lucid.models.text.gpt2._config import GPT2Config
+    >>> cfg = GPT2Config()
+    >>> cfg.model_type
+    'gpt2'
+    >>> cfg.hidden_size, cfg.vocab_size
+    (768, 50257)
     """
 
     model_type: ClassVar[str] = "gpt2"

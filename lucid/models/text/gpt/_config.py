@@ -69,6 +69,15 @@ class GPTConfig(LanguageModelConfig):
 
     Args mirror the HuggingFace ``OpenAIGPTConfig`` field set so checkpoint
     porting is a flat key rename.
+
+    Examples
+    --------
+    >>> from lucid.models.text.gpt._config import GPTConfig
+    >>> cfg = GPTConfig()
+    >>> cfg.model_type
+    'gpt'
+    >>> cfg.hidden_size, cfg.vocab_size
+    (768, 40478)
     """
 
     model_type: ClassVar[str] = "gpt"

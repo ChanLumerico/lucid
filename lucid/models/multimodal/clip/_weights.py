@@ -67,6 +67,20 @@ class CLIPViTBase32Weights(WeightsEnum):
     Trained on WIT-400M, the paper's 400-million image-text pair
     dataset.  ``num_classes`` is 0 because CLIPModel has no fixed label set —
     that is the point of it.
+
+    Examples
+    --------
+    >>> from lucid.models.multimodal.clip._weights import CLIPViTBase32Weights
+    >>> list(CLIPViTBase32Weights.__members__)
+    ['OPENAI_WIT400M', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> CLIPViTBase32Weights.DEFAULT is CLIPViTBase32Weights.OPENAI_WIT400M
+    True
+    >>> CLIPViTBase32Weights.OPENAI_WIT400M.num_classes
+    0
     """
 
     OPENAI_WIT400M = WeightEntry(
@@ -93,6 +107,20 @@ class CLIPViTBase16Weights(WeightsEnum):
     196 patch tokens where the other reads 49 — four times the attention
     for the same 151M-scale budget, and the paper's better-scoring base
     model because of it.
+
+    Examples
+    --------
+    >>> from lucid.models.multimodal.clip._weights import CLIPViTBase16Weights
+    >>> list(CLIPViTBase16Weights.__members__)
+    ['OPENAI_WIT400M', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> CLIPViTBase16Weights.DEFAULT is CLIPViTBase16Weights.OPENAI_WIT400M
+    True
+    >>> CLIPViTBase16Weights.OPENAI_WIT400M.num_classes
+    0
     """
 
     OPENAI_WIT400M = WeightEntry(
@@ -118,6 +146,20 @@ class CLIPViTLarge14Weights(WeightsEnum):
     The paper's best variant, and the only one whose text tower is
     widened along with the image tower — 768 wide with 12 heads against
     the base models' 512 and 8, at the same 12 layers.
+
+    Examples
+    --------
+    >>> from lucid.models.multimodal.clip._weights import CLIPViTLarge14Weights
+    >>> list(CLIPViTLarge14Weights.__members__)
+    ['OPENAI_WIT400M', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> CLIPViTLarge14Weights.DEFAULT is CLIPViTLarge14Weights.OPENAI_WIT400M
+    True
+    >>> CLIPViTLarge14Weights.OPENAI_WIT400M.num_classes
+    0
     """
 
     OPENAI_WIT400M = WeightEntry(
@@ -146,6 +188,20 @@ class CLIPViTLarge14_336Weights(WeightsEnum):
     identical tower shape: the positional table has 577 rows here
     against 257 there, so loading either into the other's model fails on
     that one tensor.
+
+    Examples
+    --------
+    >>> from lucid.models.multimodal.clip._weights import CLIPViTLarge14_336Weights
+    >>> list(CLIPViTLarge14_336Weights.__members__)
+    ['OPENAI_WIT400M', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> CLIPViTLarge14_336Weights.DEFAULT is CLIPViTLarge14_336Weights.OPENAI_WIT400M
+    True
+    >>> CLIPViTLarge14_336Weights.OPENAI_WIT400M.num_classes
+    0
     """
 
     OPENAI_WIT400M = WeightEntry(

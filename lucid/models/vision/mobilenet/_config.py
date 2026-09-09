@@ -69,6 +69,15 @@ class MobileNetConfig(ModelConfig):
     have less trouble with overfitting".  0.001 is TF-Slim's
     ``dropout_keep_prob=0.999`` restated as a drop probability, which is
     what the released model was trained with.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mobilenet._config import MobileNetConfig
+    >>> cfg = MobileNetConfig()
+    >>> cfg.model_type
+    'mobilenet'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "mobilenet"

@@ -122,6 +122,15 @@ class EfficientDetConfig(ModelConfig):
         score_thresh:   Minimum sigmoid class score.
         nms_thresh:     Per-class NMS threshold.
         max_detections: Maximum detections per image.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.efficientdet._config import EfficientDetConfig
+    >>> cfg = EfficientDetConfig()
+    >>> cfg.model_type
+    'efficientdet'
+    >>> cfg.num_classes, cfg.image_size
+    (80, 512)
     """
 
     model_type: ClassVar[str] = "efficientdet"

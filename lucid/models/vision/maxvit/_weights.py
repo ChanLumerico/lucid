@@ -27,6 +27,20 @@ class MaxViTTinyWeights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``maxvit_tiny_tf_224.in1k`` (Tu et al., 2022; ~30.9M params,
     83.62% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.maxvit._weights import MaxViTTinyWeights
+    >>> list(MaxViTTinyWeights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> MaxViTTinyWeights.DEFAULT is MaxViTTinyWeights.IN1K
+    True
+    >>> MaxViTTinyWeights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -52,6 +66,20 @@ class MaxViTSmallWeights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``maxvit_small_tf_224.in1k`` (Tu et al., 2022; ~68.9M params,
     84.45% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.maxvit._weights import MaxViTSmallWeights
+    >>> list(MaxViTSmallWeights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> MaxViTSmallWeights.DEFAULT is MaxViTSmallWeights.IN1K
+    True
+    >>> MaxViTSmallWeights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -77,6 +105,20 @@ class MaxViTBaseWeights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``maxvit_base_tf_224.in1k`` (Tu et al., 2022; ~119.5M params,
     84.95% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.maxvit._weights import MaxViTBaseWeights
+    >>> list(MaxViTBaseWeights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> MaxViTBaseWeights.DEFAULT is MaxViTBaseWeights.IN1K
+    True
+    >>> MaxViTBaseWeights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -102,6 +144,20 @@ class MaxViTLargeWeights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``maxvit_large_tf_224.in1k`` (Tu et al., 2022; ~211.8M params,
     85.17% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.maxvit._weights import MaxViTLargeWeights
+    >>> list(MaxViTLargeWeights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> MaxViTLargeWeights.DEFAULT is MaxViTLargeWeights.IN1K
+    True
+    >>> MaxViTLargeWeights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(

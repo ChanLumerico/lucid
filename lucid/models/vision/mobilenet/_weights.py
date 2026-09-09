@@ -32,6 +32,20 @@ class MobileNetWeights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``mobilenetv1_100.ra4_e3600_r224_in1k`` (Howard et al., 2017;
     ~4.2M params, 75.4% top-1 at 224x224 under timm's RA4 recipe).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mobilenet._weights import MobileNetWeights
+    >>> list(MobileNetWeights.__members__)
+    ['RA4_E3600_R224_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> MobileNetWeights.DEFAULT is MobileNetWeights.RA4_E3600_R224_IN1K
+    True
+    >>> MobileNetWeights.RA4_E3600_R224_IN1K.num_classes
+    1000
     """
 
     RA4_E3600_R224_IN1K = WeightEntry(

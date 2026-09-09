@@ -60,6 +60,15 @@ class AlexNetConfig(ModelConfig):
 
     ``dropout`` controls the two dropout layers inside the classifier
     (0.5 in the original paper).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.alexnet._config import AlexNetConfig
+    >>> cfg = AlexNetConfig()
+    >>> cfg.model_type
+    'alexnet'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "alexnet"

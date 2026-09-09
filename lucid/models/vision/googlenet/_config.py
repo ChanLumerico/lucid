@@ -68,6 +68,15 @@ class GoogLeNetConfig(ModelConfig):
 
     ``dropout`` — main classifier dropout rate (0.4 in the paper).
     ``aux_dropout`` — auxiliary classifier dropout rate (0.7 in the paper).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.googlenet._config import GoogLeNetConfig
+    >>> cfg = GoogLeNetConfig()
+    >>> cfg.model_type
+    'googlenet'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "googlenet"

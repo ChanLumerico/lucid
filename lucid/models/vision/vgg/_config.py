@@ -57,6 +57,15 @@ class VGGConfig(ModelConfig):
 
     ``batch_norm`` enables BatchNorm after each Conv+ReLU pair (VGG-BN).
     ``dropout`` applies to the two 4096-dim FC layers (0.5 in the paper).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.vgg._config import VGGConfig
+    >>> cfg = VGGConfig()
+    >>> cfg.model_type
+    'vgg'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "vgg"

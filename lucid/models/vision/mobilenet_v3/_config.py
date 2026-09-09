@@ -57,6 +57,15 @@ class MobileNetV3Config(ModelConfig):
     ``variant``    — "large" or "small".
     ``width_mult`` — uniform channel multiplier.
     ``dropout``    — classifier dropout probability.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.mobilenet_v3._config import MobileNetV3Config
+    >>> cfg = MobileNetV3Config()
+    >>> cfg.model_type
+    'mobilenet_v3'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "mobilenet_v3"

@@ -62,6 +62,22 @@ class DIAMONDWeights(WeightsEnum):
     different resolution and nearly thirty times the size, from the
     paper's Section 6.  It loads into :func:`lucid.models.diamond_csgo`
     rather than the Atari factories.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.diamond._weights import DIAMONDWeights
+    >>> len(DIAMONDWeights.__members__)
+    28
+    >>> "BREAKOUT" in DIAMONDWeights.__members__
+    True
+
+    Twenty-seven Atari agents and one CS:GO world model share this enum,
+    and the two are not interchangeable: ``diamond`` and
+    ``diamond_world_model`` refuse the CS:GO tag, and ``diamond_csgo``
+    refuses the Atari ones.
+
+    >>> DIAMONDWeights.BREAKOUT.num_classes   # Breakout has four actions
+    4
     """
 
     ALIEN = WeightEntry(

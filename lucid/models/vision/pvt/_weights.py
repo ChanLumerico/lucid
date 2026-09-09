@@ -22,6 +22,20 @@ class PVTv2B0Weights(WeightsEnum):
 
     Single ImageNet-1k checkpoint converted from timm's
     ``pvt_v2_b0.in1k`` (Wang et al., 2022; ~3.7M params, 70.5% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.pvt._weights import PVTv2B0Weights
+    >>> list(PVTv2B0Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> PVTv2B0Weights.DEFAULT is PVTv2B0Weights.IN1K
+    True
+    >>> PVTv2B0Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -46,6 +60,20 @@ class PVTv2B1Weights(WeightsEnum):
 
     Single ImageNet-1k checkpoint converted from timm's
     ``pvt_v2_b1.in1k`` (Wang et al., 2022; ~14.0M params, 78.7% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.pvt._weights import PVTv2B1Weights
+    >>> list(PVTv2B1Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> PVTv2B1Weights.DEFAULT is PVTv2B1Weights.IN1K
+    True
+    >>> PVTv2B1Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -70,6 +98,20 @@ class PVTv2B2Weights(WeightsEnum):
 
     Single ImageNet-1k checkpoint converted from timm's
     ``pvt_v2_b2.in1k`` (Wang et al., 2022; ~25.4M params, 82.0% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.pvt._weights import PVTv2B2Weights
+    >>> list(PVTv2B2Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> PVTv2B2Weights.DEFAULT is PVTv2B2Weights.IN1K
+    True
+    >>> PVTv2B2Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -94,6 +136,20 @@ class PVTv2B3Weights(WeightsEnum):
 
     Single ImageNet-1k checkpoint converted from timm's
     ``pvt_v2_b3.in1k`` (Wang et al., 2022; ~45.2M params, 83.1% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.pvt._weights import PVTv2B3Weights
+    >>> list(PVTv2B3Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> PVTv2B3Weights.DEFAULT is PVTv2B3Weights.IN1K
+    True
+    >>> PVTv2B3Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -118,6 +174,20 @@ class PVTv2B4Weights(WeightsEnum):
 
     Single ImageNet-1k checkpoint converted from timm's
     ``pvt_v2_b4.in1k`` (Wang et al., 2022; ~62.6M params, 83.6% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.pvt._weights import PVTv2B4Weights
+    >>> list(PVTv2B4Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> PVTv2B4Weights.DEFAULT is PVTv2B4Weights.IN1K
+    True
+    >>> PVTv2B4Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(
@@ -142,6 +212,20 @@ class PVTv2B5Weights(WeightsEnum):
 
     Single ImageNet-1k checkpoint converted from timm's
     ``pvt_v2_b5.in1k`` (Wang et al., 2022; ~82.0M params, 83.8% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.pvt._weights import PVTv2B5Weights
+    >>> list(PVTv2B5Weights.__members__)
+    ['IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> PVTv2B5Weights.DEFAULT is PVTv2B5Weights.IN1K
+    True
+    >>> PVTv2B5Weights.IN1K.num_classes
+    1000
     """
 
     IN1K = WeightEntry(

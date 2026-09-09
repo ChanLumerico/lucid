@@ -29,6 +29,20 @@ class XceptionWeights(WeightsEnum):
     Ships a single ImageNet-1k checkpoint (:attr:`TF_IN1K`) converted
     from timm's ``legacy_xception.tf_in1k``, re-hosted under
     ``huggingface.co/lucid-dl/xception``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.xception._weights import XceptionWeights
+    >>> list(XceptionWeights.__members__)
+    ['TF_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> XceptionWeights.DEFAULT is XceptionWeights.TF_IN1K
+    True
+    >>> XceptionWeights.TF_IN1K.num_classes
+    1000
     """
 
     TF_IN1K = WeightEntry(

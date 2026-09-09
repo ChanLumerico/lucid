@@ -89,6 +89,15 @@ class UNetConfig(ModelConfig):
         bilinear:      If True, use bilinear upsampling + Conv2d;
                        otherwise use ConvTranspose2d for learned upsampling.
         dropout:       Dropout probability applied in DoubleConv blocks.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.unet._config import UNetConfig
+    >>> cfg = UNetConfig()
+    >>> cfg.model_type
+    'unet'
+    >>> cfg.num_classes, cfg.in_channels
+    (2, 1)
     """
 
     model_type: ClassVar[str] = "unet"

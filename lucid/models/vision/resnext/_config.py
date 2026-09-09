@@ -63,6 +63,15 @@ class ResNeXtConfig(ModelConfig):
     ``layers`` is the per-stage repetition count, e.g. ``(3, 4, 6, 3)`` for
     ResNeXt-50.  ``cardinality`` and ``width_per_group`` jointly determine the
     intermediate width inside each bottleneck.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.resnext._config import ResNeXtConfig
+    >>> cfg = ResNeXtConfig()
+    >>> cfg.model_type
+    'resnext'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "resnext"

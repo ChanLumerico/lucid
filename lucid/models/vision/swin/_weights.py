@@ -40,6 +40,20 @@ class SwinTinyWeights(WeightsEnum):
     Ships a single ImageNet-1k checkpoint (:attr:`IMAGENET1K_V1`)
     converted from the reference-framework ``Swin_T_Weights`` and
     re-hosted under ``huggingface.co/lucid-dl/swin-tiny``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.swin._weights import SwinTinyWeights
+    >>> list(SwinTinyWeights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> SwinTinyWeights.DEFAULT is SwinTinyWeights.IMAGENET1K_V1
+    True
+    >>> SwinTinyWeights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -66,6 +80,20 @@ class SwinSmallWeights(WeightsEnum):
     Ships a single ImageNet-1k checkpoint (:attr:`IMAGENET1K_V1`)
     converted from the reference-framework ``Swin_S_Weights`` and
     re-hosted under ``huggingface.co/lucid-dl/swin-small``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.swin._weights import SwinSmallWeights
+    >>> list(SwinSmallWeights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> SwinSmallWeights.DEFAULT is SwinSmallWeights.IMAGENET1K_V1
+    True
+    >>> SwinSmallWeights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -92,6 +120,20 @@ class SwinBaseWeights(WeightsEnum):
     Ships a single ImageNet-1k checkpoint (:attr:`IMAGENET1K_V1`)
     converted from the reference-framework ``Swin_B_Weights`` and
     re-hosted under ``huggingface.co/lucid-dl/swin-base``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.swin._weights import SwinBaseWeights
+    >>> list(SwinBaseWeights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> SwinBaseWeights.DEFAULT is SwinBaseWeights.IMAGENET1K_V1
+    True
+    >>> SwinBaseWeights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -122,6 +164,20 @@ class SwinLargeWeights(WeightsEnum):
     the figure published for this checkpoint tag; the paper does not
     report a 224×224 number for Swin-L, and its Table 2 is COCO
     detection, not classification.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.swin._weights import SwinLargeWeights
+    >>> list(SwinLargeWeights.__members__)
+    ['MS_IN22K_FT_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> SwinLargeWeights.DEFAULT is SwinLargeWeights.MS_IN22K_FT_IN1K
+    True
+    >>> SwinLargeWeights.MS_IN22K_FT_IN1K.num_classes
+    1000
     """
 
     MS_IN22K_FT_IN1K = WeightEntry(

@@ -110,6 +110,15 @@ class NCSNConfig(GenerativeModelConfig):
             size is ``ε · σ_i² / σ_L²`` (Song 2019 §4.3).
         scale_by_sigma: Divide the network output by σ (NCSNv2 Technique 3).
             Default True; set False for the NCSN v1 parameterisation.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.ncsn._config import NCSNConfig
+    >>> cfg = NCSNConfig()
+    >>> cfg.model_type
+    'ncsn'
+    >>> cfg.in_channels
+    3
     """
 
     model_type: ClassVar[str] = "ncsn"

@@ -28,6 +28,20 @@ class ConvNeXtTinyWeights(WeightsEnum):
     Currently ships :attr:`IMAGENET1K_V1` — reference_vision's ImageNet-1k
     checkpoint (acc@1 = 82.520 / acc@5 = 96.146) re-hosted under
     ``huggingface.co/lucid-dl/convnext-tiny``.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.convnext._weights import ConvNeXtTinyWeights
+    >>> list(ConvNeXtTinyWeights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ConvNeXtTinyWeights.DEFAULT is ConvNeXtTinyWeights.IMAGENET1K_V1
+    True
+    >>> ConvNeXtTinyWeights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -54,6 +68,20 @@ class ConvNeXtSmallWeights(WeightsEnum):
 
     Currently ships :attr:`IMAGENET1K_V1` — reference_vision's ImageNet-1k
     checkpoint (acc@1 = 83.616 / acc@5 = 96.650).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.convnext._weights import ConvNeXtSmallWeights
+    >>> list(ConvNeXtSmallWeights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ConvNeXtSmallWeights.DEFAULT is ConvNeXtSmallWeights.IMAGENET1K_V1
+    True
+    >>> ConvNeXtSmallWeights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -80,6 +108,20 @@ class ConvNeXtBaseWeights(WeightsEnum):
 
     Currently ships :attr:`IMAGENET1K_V1` — reference_vision's ImageNet-1k
     checkpoint (acc@1 = 84.062 / acc@5 = 96.870).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.convnext._weights import ConvNeXtBaseWeights
+    >>> list(ConvNeXtBaseWeights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ConvNeXtBaseWeights.DEFAULT is ConvNeXtBaseWeights.IMAGENET1K_V1
+    True
+    >>> ConvNeXtBaseWeights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(
@@ -110,6 +152,20 @@ class ConvNeXtXLargeWeights(WeightsEnum):
     ``convnext_xlarge.fb_in22k_ft_in1k`` and re-hosted under
     ``huggingface.co/lucid-dl/convnext-xlarge``.  reference_vision does not
     publish a 1k-class ConvNeXt-XLarge head.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.convnext._weights import ConvNeXtXLargeWeights
+    >>> list(ConvNeXtXLargeWeights.__members__)
+    ['FB_IN22K_FT_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ConvNeXtXLargeWeights.DEFAULT is ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K
+    True
+    >>> ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K.num_classes
+    1000
     """
 
     FB_IN22K_FT_IN1K = WeightEntry(
@@ -138,6 +194,20 @@ class ConvNeXtLargeWeights(WeightsEnum):
 
     Currently ships :attr:`IMAGENET1K_V1` — reference_vision's ImageNet-1k
     checkpoint (acc@1 = 84.414 / acc@5 = 96.976).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.convnext._weights import ConvNeXtLargeWeights
+    >>> list(ConvNeXtLargeWeights.__members__)
+    ['IMAGENET1K_V1', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> ConvNeXtLargeWeights.DEFAULT is ConvNeXtLargeWeights.IMAGENET1K_V1
+    True
+    >>> ConvNeXtLargeWeights.IMAGENET1K_V1.num_classes
+    1000
     """
 
     IMAGENET1K_V1 = WeightEntry(

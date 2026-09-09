@@ -25,6 +25,20 @@ class EfficientFormerL1Weights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``efficientformer_l1.snap_dist_in1k`` (Li et al., 2022; ~12.3M params,
     79.2% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.efficientformer._weights import EfficientFormerL1Weights
+    >>> list(EfficientFormerL1Weights.__members__)
+    ['SNAP_DIST_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> EfficientFormerL1Weights.DEFAULT is EfficientFormerL1Weights.SNAP_DIST_IN1K
+    True
+    >>> EfficientFormerL1Weights.SNAP_DIST_IN1K.num_classes
+    1000
     """
 
     SNAP_DIST_IN1K = WeightEntry(
@@ -53,6 +67,20 @@ class EfficientFormerL3Weights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``efficientformer_l3.snap_dist_in1k`` (Li et al., 2022; ~31.4M params,
     82.4% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.efficientformer._weights import EfficientFormerL3Weights
+    >>> list(EfficientFormerL3Weights.__members__)
+    ['SNAP_DIST_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> EfficientFormerL3Weights.DEFAULT is EfficientFormerL3Weights.SNAP_DIST_IN1K
+    True
+    >>> EfficientFormerL3Weights.SNAP_DIST_IN1K.num_classes
+    1000
     """
 
     SNAP_DIST_IN1K = WeightEntry(
@@ -81,6 +109,20 @@ class EfficientFormerL7Weights(WeightsEnum):
     Single ImageNet-1k checkpoint converted from timm's
     ``efficientformer_l7.snap_dist_in1k`` (Li et al., 2022; ~82.2M params,
     83.3% top-1).
+
+    Examples
+    --------
+    >>> from lucid.models.vision.efficientformer._weights import EfficientFormerL7Weights
+    >>> list(EfficientFormerL7Weights.__members__)
+    ['SNAP_DIST_IN1K', 'DEFAULT']
+
+    ``DEFAULT`` is an alias rather than a fourth entry, so a bare
+    ``pretrained=True`` and the tag it resolves to cannot drift apart.
+
+    >>> EfficientFormerL7Weights.DEFAULT is EfficientFormerL7Weights.SNAP_DIST_IN1K
+    True
+    >>> EfficientFormerL7Weights.SNAP_DIST_IN1K.num_classes
+    1000
     """
 
     SNAP_DIST_IN1K = WeightEntry(

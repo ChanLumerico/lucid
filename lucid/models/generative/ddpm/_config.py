@@ -121,6 +121,15 @@ class DDPMConfig(DiffusionModelConfig):
             ``1e-3``).  Only read when ``learn_sigma=True``.
         clip_denoised: Clip the predicted ``x_0`` to ``[-1, 1]`` during
             sampling (default True).
+
+    Examples
+    --------
+    >>> from lucid.models.generative.ddpm._config import DDPMConfig
+    >>> cfg = DDPMConfig()
+    >>> cfg.model_type
+    'ddpm'
+    >>> cfg.in_channels
+    3
     """
 
     model_type: ClassVar[str] = "ddpm"

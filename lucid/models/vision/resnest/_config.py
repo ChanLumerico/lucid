@@ -72,6 +72,15 @@ class ResNeStConfig(ModelConfig):
     ``avd_first``        — place the AvgPool before (True) or after (False) SplitAttn.
     ``stem_width``       — channel width of each deep-stem conv (output = stem_width*2).
     ``deep_stem``        — use a 3-convolution deep stem instead of a single 7×7 conv.
+
+    Examples
+    --------
+    >>> from lucid.models.vision.resnest._config import ResNeStConfig
+    >>> cfg = ResNeStConfig()
+    >>> cfg.model_type
+    'resnest'
+    >>> cfg.num_classes, cfg.in_channels
+    (1000, 3)
     """
 
     model_type: ClassVar[str] = "resnest"
