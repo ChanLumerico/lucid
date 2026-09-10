@@ -79,6 +79,17 @@ class RoFormerTokenizer(WordPieceTokenizer):
     RoFormerTokenizerFast : C++-backed variant with identical output.
     lucid.models.text.bert.BERTTokenizer : Sibling wrapper sharing
         the same algorithm and defaults.
+
+    Examples
+    --------
+    >>> from lucid.models.text.roformer._tokenizer import RoFormerTokenizer
+    >>> vocab = {"[UNK]": 0, "he": 1, "##llo": 2}
+    >>> tok = RoFormerTokenizer(vocab=vocab)
+    >>> tok.encode("hello")
+    [1, 2]
+
+    WordPiece: the longest prefix in the vocabulary wins, and what is
+    left continues with the ``##`` marker.
     """
 
     def __init__(
@@ -125,6 +136,16 @@ class RoFormerTokenizerFast(WordPieceTokenizerFast):
 
     Constructor parameters mirror :class:`RoFormerTokenizer` — see
     that class for the full reference.
+
+    Examples
+    --------
+    >>> from lucid.models.text.roformer._tokenizer import (
+    ...     RoFormerTokenizerFast,
+    ... )
+    >>> vocab = {"[UNK]": 0, "he": 1, "##llo": 2}
+    >>> tok = RoFormerTokenizerFast(vocab=vocab)
+    >>> tok.encode("hello")
+    [1, 2]
     """
 
     def __init__(

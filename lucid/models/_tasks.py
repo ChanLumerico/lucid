@@ -68,6 +68,23 @@ class TaskModel(PretrainedModel):
     task : ClassVar[str]
         The registry tag for this task.  ``""`` on this class because it
         names no task; every concrete base overrides it.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> from lucid.models._tasks import (
+    ...     ImageClassificationModel,
+    ...     TaskModel,
+    ... )
+    >>> model = create_model("resnet_18_cls")
+    >>> isinstance(model, TaskModel)
+    True
+
+    Every task base derives from this one, so a wrapper is recognisable
+    as *some* task before anything asks which.
+
+    >>> isinstance(model, ImageClassificationModel)
+    True
     """
 
     task: ClassVar[str] = ""
@@ -80,6 +97,18 @@ class ImageClassificationModel(TaskModel):
     the head produces a richer result — CLIP's zero-shot wrapper scores
     images against text prompts and returns its own output type.  That is
     the specialisation this base is deliberately coarse enough to hold.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> from lucid.models._tasks import ImageClassificationModel
+    >>> model = create_model("resnet_18_cls")
+    >>> isinstance(model, ImageClassificationModel)
+    True
+
+    The check is nominal rather than structural: a backbone that happens
+    to expose the same methods is not an image classifier, and the registry's task
+    filter relies on that distinction.
     """
 
     task: ClassVar[str] = "image-classification"
@@ -92,6 +121,18 @@ class ImageGenerationModel(TaskModel):
     sampling procedures have nothing in common beyond producing pixels —
     which is why the base fixes the output family and leaves ``generate``
     to the mixins in :mod:`lucid.models._mixins`.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> from lucid.models._tasks import ImageGenerationModel
+    >>> model = create_model("ddpm_cifar_gen")
+    >>> isinstance(model, ImageGenerationModel)
+    True
+
+    The check is nominal rather than structural: a backbone that happens
+    to expose the same methods is not a diffusion sampler, and the registry's task
+    filter relies on that distinction.
     """
 
     task: ClassVar[str] = "image-generation"
@@ -104,6 +145,18 @@ class ObjectDetectionModel(TaskModel):
     :class:`~lucid.models.InstanceSegmentationOutput` where the head also
     predicts masks (Mask R-CNN) — the mask is an addition to detection
     rather than a different task.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> from lucid.models._tasks import ObjectDetectionModel
+    >>> model = create_model("detr_resnet50")
+    >>> isinstance(model, ObjectDetectionModel)
+    True
+
+    The check is nominal rather than structural: a backbone that happens
+    to expose the same methods is not a detector, and the registry's task
+    filter relies on that distinction.
     """
 
     task: ClassVar[str] = "object-detection"
@@ -113,6 +166,18 @@ class SemanticSegmentationModel(TaskModel):
     """A model that labels every pixel.
 
     Returns :class:`~lucid.models.SemanticSegmentationOutput`.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> from lucid.models._tasks import SemanticSegmentationModel
+    >>> model = create_model("fcn_resnet50")
+    >>> isinstance(model, SemanticSegmentationModel)
+    True
+
+    The check is nominal rather than structural: a backbone that happens
+    to expose the same methods is not a segmenter, and the registry's task
+    filter relies on that distinction.
     """
 
     task: ClassVar[str] = "semantic-segmentation"
@@ -128,6 +193,18 @@ class SequenceClassificationModel(TaskModel):
     :class:`~lucid.models.QuestionAnsweringOutput` rather than the
     sequence-classification one; the shape of the answer differs, the task
     it serves does not.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> from lucid.models._tasks import SequenceClassificationModel
+    >>> model = create_model("bert_base_cls")
+    >>> isinstance(model, SequenceClassificationModel)
+    True
+
+    The check is nominal rather than structural: a backbone that happens
+    to expose the same methods is not a sequence classifier, and the registry's task
+    filter relies on that distinction.
     """
 
     task: ClassVar[str] = "sequence-classification"
@@ -140,6 +217,18 @@ class TokenClassificationModel(TaskModel):
     from sequence classification because the head shape genuinely differs
     — per-token logits against one pooled vector — rather than because the
     families differ.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> from lucid.models._tasks import TokenClassificationModel
+    >>> model = create_model("bert_base_token_cls")
+    >>> isinstance(model, TokenClassificationModel)
+    True
+
+    The check is nominal rather than structural: a backbone that happens
+    to expose the same methods is not a token classifier, and the registry's task
+    filter relies on that distinction.
     """
 
     task: ClassVar[str] = "token-classification"
@@ -158,6 +247,18 @@ class LanguageModelingModel(TaskModel):
     variants need a second required argument, so this is the base where
     the "not interchangeable" warning in the module docstring bites
     hardest.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> from lucid.models._tasks import LanguageModelingModel
+    >>> model = create_model("gpt2_small_lm")
+    >>> isinstance(model, LanguageModelingModel)
+    True
+
+    The check is nominal rather than structural: a backbone that happens
+    to expose the same methods is not a language model, and the registry's task
+    filter relies on that distinction.
     """
 
     task: ClassVar[str] = "language-modeling"
@@ -169,6 +270,18 @@ class WorldModelingModel(TaskModel):
     Returns the family's own output dataclass — these carry a recurrent
     state rather than logits, and no shared output type would describe
     them without inventing one no caller reads.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> from lucid.models._tasks import WorldModelingModel
+    >>> model = create_model("planet_world_model")
+    >>> isinstance(model, WorldModelingModel)
+    True
+
+    The check is nominal rather than structural: a backbone that happens
+    to expose the same methods is not a world model, and the registry's task
+    filter relies on that distinction.
     """
 
     task: ClassVar[str] = "world-modeling"

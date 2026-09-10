@@ -225,6 +225,23 @@ class CLIPOutput(ModelOutput):
         where the two directions get accidentally tied.
     loss : Tensor or None
         The symmetric contrastive loss, present only when asked for.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.multimodal.clip._model import CLIPOutput
+    >>> out = CLIPOutput(
+    ...     image_embeds=lucid.zeros(2, 512),
+    ...     text_embeds=lucid.zeros(3, 512),
+    ...     logits_per_image=lucid.zeros(2, 3),
+    ...     logits_per_text=lucid.zeros(3, 2),
+    ... )
+    >>> out.logits_per_image.shape, out.logits_per_text.shape
+    ((2, 3), (3, 2))
+
+    Both directions are carried because the contrastive loss reads the
+    matrix by rows and by columns, and one is not the other's transpose
+    once the temperature has been applied.
     """
 
     image_embeds: Tensor
@@ -245,6 +262,21 @@ class CLIPZeroShotOutput(ModelOutput):
         order the prompts were given.
     image_embeds, text_embeds : Tensor
         The normalised embeddings the scores came from.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.multimodal.clip._model import CLIPZeroShotOutput
+    >>> out = CLIPZeroShotOutput(
+    ...     logits=lucid.zeros(2, 10),
+    ...     image_embeds=lucid.zeros(2, 512),
+    ...     text_embeds=lucid.zeros(10, 512),
+    ... )
+    >>> out.logits.shape
+    (2, 10)
+
+    Ten classes because ten prompts were embedded, not because anything
+    was trained on ten: the class list is whatever text was handed in.
     """
 
     logits: Tensor

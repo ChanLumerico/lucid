@@ -78,6 +78,18 @@ class GPT2Tokenizer(ByteLevelBPETokenizer):
     GPT2TokenizerFast : C++-backed variant with identical output.
     lucid.models.text.gpt.GPTTokenizer : Predecessor without an
         end-of-text marker.
+
+    Examples
+    --------
+    >>> from lucid.models.text.gpt2._tokenizer import GPT2Tokenizer
+    >>> vocab = {"l": 0, "o": 1, "o</w>": 2, "lo</w>": 3}
+    >>> tok = GPT2Tokenizer(vocab=vocab, merges=[("l", "o</w>")])
+    >>> tok.encode("lo")
+    [0, 1]
+
+    The ids themselves, not an object wrapping them. Two here rather
+    than one because the merge is only applied when both halves are
+    present as written, and the pretokeniser split this differently.
     """
 
     def __init__(
@@ -109,6 +121,18 @@ class GPT2TokenizerFast(ByteLevelBPETokenizerFast):
 
     Constructor parameters mirror :class:`GPT2Tokenizer` — see that
     class for the full reference.
+
+    Examples
+    --------
+    >>> from lucid.models.text.gpt2._tokenizer import GPT2TokenizerFast
+    >>> vocab = {"l": 0, "o": 1, "o</w>": 2, "lo</w>": 3}
+    >>> tok = GPT2TokenizerFast(vocab=vocab, merges=[("l", "o</w>")])
+    >>> tok.encode("lo")
+    [0, 1]
+
+    Same ids as the plain tokenizer — the speed comes from how the merges
+    are looked up, not from a different segmentation, and the two must
+    not disagree.
     """
 
     def __init__(
