@@ -73,6 +73,16 @@ def make_beta_schedule(
 
     Returns:
         ``(num_steps,)`` float tensor.
+
+    Examples
+    --------
+    >>> from lucid.models._utils._generative import make_beta_schedule
+    >>> [round(v, 5) for v in make_beta_schedule(5).tolist()]
+    [0.0001, 0.00508, 0.01005, 0.01503, 0.02]
+
+    The noise added per step, rising across the schedule: almost nothing
+    at the start, where the signal is still intact and worth protecting,
+    and most of it at the end.
     """
     if schedule == "linear":
         step = (beta_end - beta_start) / max(num_steps - 1, 1)
@@ -126,6 +136,20 @@ def extract_into_tensor(
     Returns:
         ``(B, 1, 1, …)`` (rank == ``len(broadcast_shape)``) so it broadcasts
         elementwise against an ``(B, C, H, W)`` image.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import extract_into_tensor
+    >>> alphas = lucid.tensor([0.1, 0.2, 0.3, 0.4, 0.5])
+    >>> steps = lucid.tensor([0, 2])
+    >>> picked = extract_into_tensor(alphas, steps, (2, 1, 1))
+    >>> picked.shape
+    (2, 1, 1)
+
+    One coefficient per item of the batch, shaped so it broadcasts
+    against images — each sample in a diffusion batch is usually at a
+    different timestep, so a scalar per step is not enough.
     """
     B = int(timesteps.shape[0])
     # Manual gather — ``arr`` is small (≤ a few thousand entries) and we
@@ -158,6 +182,17 @@ def normal_kl(mean1: Tensor, logvar1: Tensor, mean2: Tensor, logvar2: Tensor) ->
 
     Returns:
         Elementwise ``KL(N(mean1, exp(logvar1)) ‖ N(mean2, exp(logvar2)))``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import normal_kl
+    >>> zeros = lucid.zeros(2)
+    >>> normal_kl(zeros, zeros, zeros, zeros).tolist()
+    [0.0, 0.0]
+
+    Zero between a distribution and itself, elementwise rather than
+    summed, so the caller chooses what to reduce over.
     """
     return 0.5 * (
         -1.0
@@ -196,6 +231,22 @@ def discretized_gaussian_log_likelihood(
 
     Returns:
         Elementwise log probability, in nats.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import (
+    ...     discretized_gaussian_log_likelihood,
+    ... )
+    >>> x = lucid.zeros(2, 3)
+    >>> discretized_gaussian_log_likelihood(
+    ...     x, means=x, log_scales=x
+    ... ).shape
+    (2, 3)
+
+    Discretized because the last step of a diffusion model lands on
+    8-bit pixels: the likelihood integrates over the bin a value falls
+    in rather than reading a density at a point.
     """
     centered = x - means
     inv_stdv = (-log_scales).exp()
@@ -271,6 +322,20 @@ def diffusion_posterior_constants(
 
     Returns:
         A :class:`DiffusionPosterior` of three ``(T,)`` tensors.
+
+    Examples
+    --------
+    >>> from lucid.models._utils._generative import (
+    ...     diffusion_posterior_constants,
+    ...     make_beta_schedule,
+    ... )
+    >>> constants = diffusion_posterior_constants(make_beta_schedule(5))
+    >>> type(constants).__name__
+    'DiffusionPosterior'
+
+    Precomputed once for a schedule rather than per step: every one is a
+    function of the betas alone, and a sampler reads them thousands of
+    times.
     """
     T = int(betas.shape[0])
     beta_l = [float(betas[i].item()) for i in range(T)]
@@ -400,6 +465,18 @@ def gaussian_kl_divergence(
 
     Returns:
         Scalar (or ``(B,)`` if ``reduction="none"``).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import gaussian_kl_divergence
+    >>> mu, logvar = lucid.zeros(2, 3), lucid.zeros(2, 3)
+    >>> float(gaussian_kl_divergence(mu, logvar).item())
+    0.0
+
+    Against the standard normal, so zero mean and unit variance — which
+    ``logvar=0`` is — costs nothing. This is the term that pulls a VAE's
+    posterior toward the prior.
     """
     var = logvar.exp()
     per_dim = 0.5 * (mu * mu + var - logvar - 1.0)  # (B, D)
@@ -441,6 +518,19 @@ def reparameterize(mu: Tensor, logvar: Tensor) -> Tensor:
     References
     ----------
     .. [1] Kingma & Welling, *Auto-Encoding Variational Bayes*, ICLR 2014.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import reparameterize
+    >>> lucid.manual_seed(0)
+    >>> mu, logvar = lucid.zeros(2, 3), lucid.zeros(2, 3)
+    >>> reparameterize(mu, logvar).shape
+    (2, 3)
+
+    ``mu + sigma * eps``: the sampling happens in ``eps``, which carries
+    no gradient, so the path back to ``mu`` and ``logvar`` stays
+    differentiable. Sampling the distribution directly would not.
     """
     std = (0.5 * logvar).exp()
     eps = lucid.randn(mu.shape, device=mu.device.type)
@@ -479,6 +569,16 @@ def flow_prior_log_prob(name: str, h: Tensor) -> Tensor:
     ------
     ValueError
         If ``name`` is not a supported prior.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import flow_prior_log_prob
+    >>> flow_prior_log_prob("gaussian", lucid.zeros(2, 3)).shape
+    (2, 3)
+
+    Elementwise, not summed — a flow adds the log-determinant to this
+    before reducing, and the two have to line up first.
     """
     if name == "logistic":
         return -(F.softplus(h) + F.softplus(-h))
@@ -517,6 +617,15 @@ def flow_prior_sample(
     ------
     ValueError
         If ``name`` is not a supported prior.
+
+    Examples
+    --------
+    >>> from lucid.models._utils._generative import flow_prior_sample
+    >>> flow_prior_sample("gaussian", (2, 3)).shape
+    (2, 3)
+
+    ``"gaussian"`` and ``"logistic"`` are the two a flow can be given;
+    anything else is refused rather than silently defaulted.
     """
     if name == "logistic":
         # Clip away the open-interval endpoints — the inverse CDF diverges
@@ -547,6 +656,13 @@ def generative_activation(name: str, x: Tensor) -> Tensor:
 
     Raises:
         ValueError: If ``name`` is not a supported alias.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import generative_activation
+    >>> generative_activation("relu", lucid.tensor([-1.0, 2.0])).tolist()
+    [0.0, 2.0]
     """
     if name in ("silu", "swish"):
         return F.silu(x)
@@ -589,6 +705,17 @@ def make_sigma_schedule(
 
     Returns:
         ``(num_noise_levels,)`` float tensor in *descending* order.
+
+    Examples
+    --------
+    >>> from lucid.models._utils._generative import make_sigma_schedule
+    >>> sigmas = make_sigma_schedule(4, sigma_max=1.0, sigma_min=0.1)
+    >>> [round(v, 4) for v in sigmas.tolist()]
+    [1.0, 0.4642, 0.2154, 0.1]
+
+    Geometric rather than linear, so each level is the same factor from
+    the next — score matching wants the noise levels evenly spaced in
+    log, not in magnitude.
     """
     if num_noise_levels <= 0:
         raise ValueError(f"num_noise_levels must be positive, got {num_noise_levels}")
@@ -637,6 +764,17 @@ def trace_probe(like: Tensor, noise: str) -> Tensor:
     ------
     ValueError
         If ``noise`` names neither distribution.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import trace_probe
+    >>> trace_probe(lucid.zeros(2, 3), "gaussian").shape
+    (2, 3)
+
+    The random vector Hutchinson's estimator contracts the Jacobian
+    against. Its shape follows the state, which is why it takes a tensor
+    to imitate rather than a shape.
     """
     if noise == "rademacher":
         # sign() of a centred uniform: ±1 with equal probability.
@@ -771,6 +909,16 @@ def resolve_generation_device(model: nn.Module, device: str | None) -> str:
         Any module; its first parameter decides the device.
     device : str or None
         Caller's explicit choice, or ``None`` to follow the model.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> from lucid.models._utils._generative import resolve_generation_device
+    >>> resolve_generation_device(nn.Linear(2, 2), None)
+    'cpu'
+
+    ``None`` means "wherever the model already is", which is what keeps
+    sampling from quietly moving a model between devices mid-run.
     """
     if device is not None:
         return device

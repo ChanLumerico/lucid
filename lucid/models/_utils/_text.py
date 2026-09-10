@@ -34,6 +34,16 @@ def text_activation(name: str, x: Tensor) -> Tensor:
 
     Raises:
         ValueError: If ``name`` is not a supported activation alias.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._text import text_activation
+    >>> [round(v, 4) for v in text_activation("gelu", lucid.tensor([-1.0, 1.0])).tolist()]
+    [-0.1587, 0.8413]
+
+    Unlike ReLU this leaves a little of the negative side alive, which is
+    what transformer stacks were tuned against.
     """
     # Divergence, deliberate: ``"gelu"`` is the exact erf form here, which is
     # what the checkpoint-publishing reference implementation does — but BERT's
@@ -86,6 +96,18 @@ def extended_attention_mask(
             A mask covering only the new tokens cannot describe which of the
             *cached* positions were padding, and silently treating the past
             as all-real would attend to padded history.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._text import extended_attention_mask
+    >>> extended_attention_mask(lucid.ones(2, 5), (2, 5)).shape
+    (2, 1, 1, 5)
+
+    Two axes are inserted so the mask broadcasts across heads and query
+    positions. The values become 0 and a large negative rather than 1 and
+    0, because this is added to the scores before the softmax, not
+    multiplied after.
     """
     if attention_mask is None:
         return None

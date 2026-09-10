@@ -118,6 +118,17 @@ def init_cnn_fan_out(model: nn.Module, *, linear_std: float | None = None) -> No
     -------
     None
         ``model`` is modified in place.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> from lucid.models._utils._common import init_cnn_fan_out
+    >>> layer = nn.Linear(4, 4)
+    >>> init_cnn_fan_out(layer) is None
+    True
+
+    Rewrites the module's parameters where they sit and returns nothing,
+    so it is called for its effect rather than assigned.
     """
     for m in model.modules():
         if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
@@ -265,6 +276,18 @@ def reject_unavailable_pretrained(factory_name: str, *, alternative: str = "") -
     alternative : str, optional
         A sibling factory that *does* publish weights, mentioned in the
         message when given.
+
+    Examples
+    --------
+    >>> from lucid.models._utils._common import reject_unavailable_pretrained
+    >>> reject_unavailable_pretrained("foo_backbone", alternative="foo_cls")
+    Traceback (most recent call last):
+        ...
+    NotImplementedError: No pretrained weights are published for ``foo_backbone``; ``foo_backbone(pretrained=True)`` cannot be honoured.  Use ``foo_cls`` for the checkpointed variant.
+
+    Refusing beats handing back a randomly initialised model that claims
+    to be pretrained, and naming the alternative saves the caller from
+    guessing which entry does have weights.
     """
     hint = (
         f"  Use ``{alternative}`` for the checkpointed variant." if alternative else ""

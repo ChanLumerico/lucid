@@ -41,6 +41,18 @@ def pairwise_sigmoid_ce(mask_logits: Tensor, gt_masks: Tensor) -> Tensor:
 
     Returns:
         ``(N, M)`` mean per-point cross-entropy for each pairing.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._segmentation import pairwise_sigmoid_ce
+    >>> predictions = lucid.zeros(2, 16)
+    >>> targets = lucid.zeros(3, 16)
+    >>> pairwise_sigmoid_ce(predictions, targets).shape
+    (2, 3)
+
+    Every prediction against every target, which is the cost matrix a
+    Hungarian matcher needs — not a loss between aligned pairs.
     """
     p = int(mask_logits.shape[1])
     # Through logsigmoid so saturated logits stay finite.
@@ -63,6 +75,17 @@ def pairwise_dice(mask_logits: Tensor, gt_masks: Tensor) -> Tensor:
         both numerator and denominator — the reference's smoothing, which
         scores an empty prediction against an empty target as 0 rather than
         the 1.0 a bare epsilon guard would give.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._segmentation import pairwise_dice
+    >>> pairwise_dice(lucid.zeros(2, 16), lucid.zeros(3, 16)).shape
+    (2, 3)
+
+    The overlap half of the same matching cost. Cross-entropy alone
+    prefers predicting nothing when masks are small; dice does not,
+    which is why matchers use both.
     """
     prob = F.sigmoid(mask_logits)
     inter = prob @ gt_masks.permute(1, 0)
@@ -80,6 +103,16 @@ def sigmoid_ce_loss(mask_logits: Tensor, gt_masks: Tensor) -> Tensor:
     Returns:
         Scalar — the mean over points, summed over pairs and divided by the
         pair count, as the reference normalises it.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._segmentation import sigmoid_ce_loss
+    >>> round(float(sigmoid_ce_loss(lucid.zeros(2, 16), lucid.zeros(2, 16)).item()), 6)
+    0.693147
+
+    log 2, which is what a logit of zero costs: the prediction is exactly
+    undecided.
     """
     if int(mask_logits.shape[0]) == 0:
         return lucid.zeros((), device=mask_logits.device.type)
@@ -95,6 +128,17 @@ def dice_loss(mask_logits: Tensor, gt_masks: Tensor) -> Tensor:
 
     Returns:
         Scalar mean over the matched pairs.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._segmentation import dice_loss
+    >>> round(float(dice_loss(lucid.zeros(2, 16), lucid.zeros(2, 16)).item()), 6)
+    0.888889
+
+    Not zero against an empty target: a logit of zero is a probability of
+    a half, so the prediction claims half of every pixel while the target
+    claims none.
     """
     m = int(mask_logits.shape[0])
     if m == 0:
@@ -122,6 +166,18 @@ def sample_point_coords(
 
     Returns:
         ``(K, 2)`` coordinates in ``[0, 1]``, ordered ``(x, y)``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._segmentation import sample_point_coords
+    >>> lucid.manual_seed(0)
+    >>> sample_point_coords(5).shape
+    (5, 2)
+
+    Normalised (x, y) in [0, 1]. Mask heads score a scattering of points
+    rather than a full grid, which is what makes a high-resolution mask
+    affordable.
     """
     return lucid.rand(num_points, 2, device=device)
 
@@ -142,6 +198,22 @@ def point_sample(masks: Tensor, coords: Tensor) -> Tensor:
     Notes:
         ``grid_sample`` takes coordinates in ``[-1, 1]``, so the unit-square
         points are rescaled here rather than at every call site.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._segmentation import (
+    ...     point_sample,
+    ...     sample_point_coords,
+    ... )
+    >>> lucid.manual_seed(0)
+    >>> masks = lucid.zeros(1, 8, 8)
+    >>> coords = sample_point_coords(5).reshape(1, 5, 2)
+    >>> point_sample(masks, coords).shape
+    (1, 5)
+
+    One value per point, read off the mask by bilinear interpolation, so
+    the coordinates need not land on pixel centres.
     """
     n = int(masks.shape[0])
     k = int(coords.shape[-2])
@@ -184,6 +256,17 @@ def uncertain_point_coords(
 
     Returns:
         ``(N, K, 2)`` coordinates in ``[0, 1]``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._segmentation import uncertain_point_coords
+    >>> uncertain_point_coords(lucid.zeros(1, 8, 8), 4).shape
+    (1, 4, 2)
+
+    Points chosen where the logit sits closest to zero — the boundary,
+    where refinement is worth spending on. An all-zero mask is uncertain
+    everywhere, which is why this one returns whatever it likes.
     """
     n = int(mask_logits.shape[0])
     dev = mask_logits.device.type
