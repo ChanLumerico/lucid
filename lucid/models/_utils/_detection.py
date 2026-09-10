@@ -1989,6 +1989,29 @@ def fastrcnn_loss(
 
     Returns:
         ``(classification_loss, regression_loss)``, both scalars.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import fastrcnn_loss
+    >>> class_logits = lucid.zeros(4, 3)
+    >>> box_deltas = lucid.zeros(4, 8)
+    >>> labels = [lucid.tensor([0, 1, 2, 1])]
+    >>> regression = [lucid.zeros(4, 4)]
+    >>> classification, box = fastrcnn_loss(
+    ...     class_logits, box_deltas, labels, regression
+    ... )
+    >>> round(float(classification.item()), 6)
+    1.098612
+
+    log 3 across three classes, again the undecided cost.
+
+    >>> round(float(box.item()), 6)
+    0.0
+
+    The box term counts only the foreground proposals, so a batch whose
+    deltas are already correct contributes nothing — background
+    proposals have no box to regress toward at all.
     """
     dev = class_logits.device.type
     labels_cat = lucid.cat(labels, dim=0)
@@ -2094,6 +2117,21 @@ def maskrcnn_loss(
         Scalar loss.  Zero when the minibatch contains no positive RoI —
         an image can legitimately sample none, and a NaN there would poison
         the whole step.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import maskrcnn_loss
+    >>> mask_logits = lucid.zeros(2, 5, 28, 28)
+    >>> labels = lucid.tensor([1, 2])
+    >>> mask_targets = lucid.zeros(2, 28, 28)
+    >>> round(float(maskrcnn_loss(mask_logits, labels, mask_targets).item()), 6)
+    0.693147
+
+    log 2, the cost of an undecided logit. Only the channel matching each
+    proposal's label contributes — the head predicts a mask per class and
+    the loss reads one of them, which is what keeps classes from
+    competing inside a single mask.
     """
     dev = mask_logits.device.type
     flat = cast(list[int], labels.reshape(-1).tolist())
