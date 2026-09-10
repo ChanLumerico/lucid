@@ -74,6 +74,24 @@ class StableDiffusionOutput(ModelOutput):
         The noised latent the prediction was made from.
     loss : Tensor or None
         The denoising objective, present only when a target was given.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.stable_diffusion._model import (
+    ...     StableDiffusionOutput,
+    ... )
+    >>> out = StableDiffusionOutput(
+    ...     noise_pred=lucid.zeros(1, 4, 32, 32),
+    ...     latent=lucid.zeros(1, 4, 32, 32),
+    ... )
+    >>> out.noise_pred.shape
+    (1, 4, 32, 32)
+    >>> out.loss is None
+    True
+
+    Both live in latent space, not pixels — decoding is a separate step,
+    and doing it per training step would cost more than the training.
     """
 
     noise_pred: Tensor

@@ -51,6 +51,18 @@ def lambda_return(
     terminated at :math:`V_\lambda(s_H) = v(s_H)`.  Written this way it
     costs one pass rather than the :math:`O(H^2)` the closed form suggests,
     and each :math:`\lambda` power appears exactly once.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._common._returns import lambda_return
+    >>> rewards = lucid.zeros(2, 5)
+    >>> values = lucid.zeros(2, 5)
+    >>> lambda_return(rewards, values, 0.99, 0.95).shape
+    (2, 4)
+
+    One step shorter than the input: the last value has nothing after it
+    to bootstrap from, so it is the bootstrap rather than a return.
     """
     horizon = int(reward.shape[1]) - 1
     if horizon < 1:

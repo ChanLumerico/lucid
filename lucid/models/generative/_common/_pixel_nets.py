@@ -56,6 +56,18 @@ def pixel_embed_size(cnn_depth: int) -> int:
         ``32 * cnn_depth`` — 1024 at the papers' ``cnn_depth=32``.  Both
         the RSSM's embedding input and the decoder's lift are sized from
         this, so it lives here rather than being recomputed in each.
+
+    Examples
+    --------
+    >>> from lucid.models.generative._common._pixel_nets import (
+    ...     pixel_embed_size,
+    ... )
+    >>> pixel_embed_size(32)
+    1024
+
+    The flat width a pixel encoder hands the recurrent state, derived
+    from the CNN depth rather than configured beside it, so the two
+    cannot be set to disagree.
     """
     return 32 * cnn_depth
 

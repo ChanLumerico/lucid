@@ -286,6 +286,24 @@ class AutoencoderKLOutput(ModelOutput):
         the mode was asked for.
     kl : Tensor
         The posterior's divergence from a standard normal, a scalar.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.stable_diffusion._autoencoder import (
+    ...     AutoencoderKLOutput,
+    ... )
+    >>> out = AutoencoderKLOutput(
+    ...     reconstruction=lucid.zeros(1, 3, 256, 256),
+    ...     latent=lucid.zeros(1, 4, 32, 32),
+    ...     kl=lucid.zeros(()),
+    ... )
+    >>> out.reconstruction.shape, out.latent.shape
+    ((1, 3, 256, 256), (1, 4, 32, 32))
+
+    Eight times smaller in each direction and four channels wide: this is
+    the compression that lets diffusion run at all, and the reason it is
+    a latent model rather than a pixel one.
     """
 
     reconstruction: Tensor

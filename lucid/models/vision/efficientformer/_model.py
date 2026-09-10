@@ -656,6 +656,23 @@ class EfficientFormerOutput(ImageClassificationOutput):
         Logits from the ground-truth classification head.
     head_dist_logits : Tensor or None, optional
         Logits from the distillation head.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientformer._model import (
+    ...     EfficientFormerOutput,
+    ... )
+    >>> out = EfficientFormerOutput(logits=lucid.zeros(1, 1000))
+    >>> out.logits.shape
+    (1, 1000)
+
+    ``head_logits`` and ``head_dist_logits`` hold the two heads apart
+    when distillation is on; ``logits`` is their average, which is what
+    inference should read.
+
+    >>> out.head_logits is None, out.head_dist_logits is None
+    (True, True)
     """
 
     head_logits: Tensor | None = None

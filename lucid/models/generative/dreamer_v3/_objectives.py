@@ -101,6 +101,20 @@ def percentile(values: Tensor, fraction: float) -> Tensor:
     estimate smoothed by a long moving average, so the difference between
     the two conventions is far below the noise the average is there to
     remove, and nearest-rank needs no gather.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.dreamer_v3._objectives import percentile
+    >>> values = lucid.tensor([float(i) for i in range(1, 101)])
+    >>> float(percentile(values, 95).item())
+    95.0
+
+    ``fraction`` is in [0, 100], not [0, 1] — 0.5 asks for the half-th
+    percentile and returns the smallest value, not the median.
+
+    >>> float(percentile(values, 0.5).item())
+    1.0
     """
     if not 0.0 <= fraction <= 100.0:
         raise ValueError(f"fraction must be in [0, 100], got {fraction}")

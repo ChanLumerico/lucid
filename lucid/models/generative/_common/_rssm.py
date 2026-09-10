@@ -1081,6 +1081,17 @@ def categorical_kl(posterior_logits: Tensor, prior_logits: Tensor) -> Tensor:
     Taking both sides through ``log_softmax`` keeps it stable: the
     subtraction happens in log space, so a class the prior has written off
     contributes a large finite number rather than ``inf``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._common._rssm import categorical_kl
+    >>> logits = lucid.zeros(2, 4, 8)
+    >>> categorical_kl(logits, logits).shape
+    (2,)
+
+    Summed over the stochastic axes and kept per batch element, which is
+    what the free-bits clamp is applied to.
     """
     posterior_log = F.log_softmax(posterior_logits, dim=-1)
     prior_log = F.log_softmax(prior_logits, dim=-1)

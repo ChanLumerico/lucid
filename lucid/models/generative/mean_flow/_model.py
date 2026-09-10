@@ -91,6 +91,22 @@ class MeanFlowOutput(ModelOutput):
         Reported because the gap between the two *is* the objective, and
         because a target that has drifted from the prediction's scale is
         the first symptom of a mis-specified tangent.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.mean_flow._model import MeanFlowOutput
+    >>> out = MeanFlowOutput(
+    ...     loss=lucid.zeros(()),
+    ...     prediction=lucid.zeros(1, 3, 32, 32),
+    ...     target=lucid.zeros(1, 3, 32, 32),
+    ... )
+    >>> out.prediction.shape, out.target.shape
+    ((1, 3, 32, 32), (1, 3, 32, 32))
+
+    The target is returned alongside because it is computed, not given —
+    it depends on the model's own output at another time, so a caller
+    cannot reconstruct it afterwards.
     """
 
     loss: Tensor

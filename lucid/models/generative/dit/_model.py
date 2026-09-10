@@ -144,6 +144,22 @@ class DiTOutput(ModelOutput):
         only when ``learn_sigma``.  Reported rather than dropped because
         it is half of what the network computed, and a caller training
         the full ADM objective needs it.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.dit._model import DiTOutput
+    >>> out = DiTOutput(
+    ...     loss=lucid.zeros(()), noise_pred=lucid.zeros(1, 4, 32, 32)
+    ... )
+    >>> out.noise_pred.shape
+    (1, 4, 32, 32)
+
+    ``variance_pred`` stays empty unless the model learns the variance
+    as well as the mean, which is optional and doubles the head.
+
+    >>> out.variance_pred is None
+    True
     """
 
     loss: Tensor

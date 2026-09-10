@@ -1033,6 +1033,22 @@ class DIAMONDOutput(ModelOutput):
         because the loss is an average over a *distribution* of noise
         levels, and a run that only ever drew easy ones would report a
         falling loss while learning nothing about the hard regime.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.diamond._model import DIAMONDOutput
+    >>> out = DIAMONDOutput(
+    ...     loss=lucid.zeros(()),
+    ...     prediction=lucid.zeros(1, 3, 64, 64),
+    ...     sigma=lucid.zeros(1),
+    ... )
+    >>> out.prediction.shape
+    (1, 3, 64, 64)
+
+    ``sigma`` is carried out with the prediction rather than left behind:
+    the noise level a denoiser was asked to work at is what the loss has
+    to weight by, so losing it makes the number meaningless.
     """
 
     loss: Tensor
@@ -1064,6 +1080,29 @@ class DIAMONDBehaviorOutput(ModelOutput):
         clearest statement of what "training in imagination" means.
     history_actions : Tensor
         The actions beside it, ``(B, L)``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.diamond._model import (
+    ...     DIAMONDBehaviorOutput,
+    ... )
+    >>> zero = lucid.zeros(())
+    >>> out = DIAMONDBehaviorOutput(
+    ...     policy_loss=zero,
+    ...     value_loss=zero,
+    ...     entropy=zero,
+    ...     returns=lucid.zeros(1, 4),
+    ...     frames=lucid.zeros(1, 4, 3, 64, 64),
+    ...     history=lucid.zeros(1, 4, 3, 64, 64),
+    ...     history_actions=lucid.zeros(1, 4),
+    ... )
+    >>> out.frames.shape
+    (1, 4, 3, 64, 64)
+
+    The imagined rollout comes back with the losses, not instead of them:
+    the frames the policy was trained against are the only way to see
+    what the world model actually showed it.
     """
 
     policy_loss: Tensor
