@@ -1338,6 +1338,19 @@ class RoIHead(nn.Module):
         roi_size:            (H, W) of the RoI Align output crop.
         num_classes:         Foreground classes (background adds +1).
         representation_size: Hidden size of the two FC layers.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import RoIHead
+    >>> head = RoIHead(16, (2, 2), 5).eval()
+    >>> logits, deltas = head(lucid.randn(2, 16, 2, 2))
+    >>> logits.shape, deltas.shape
+    ((2, 6), (2, 20))
+
+    Six classes for five plus background, and twenty deltas because the
+    box is regressed per class — four coordinates for each of the five,
+    with background getting none.
     """
 
     def __init__(

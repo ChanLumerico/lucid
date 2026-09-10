@@ -102,6 +102,25 @@ class PixelEncoder(nn.Module):
         Width of the first convolution; the stack widens from there.
     act_fn : {"silu", "swish", "relu", "gelu"}
         Activation after every convolution.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._common._pixel_nets import (
+    ...     PixelEncoder,
+    ...     pixel_embed_size,
+    ... )
+    >>> encoder = PixelEncoder(3, 32, "relu").eval()
+    >>> frames = lucid.randn(2, 5, 3, 64, 64)
+    >>> encoder(frames).shape
+    (2, 5, 1024)
+
+    Five frames of a two-episode batch, and the time axis is required
+    rather than optional — a world model always sees sequences, so the
+    convolutions fold it away and put it back.
+
+    >>> pixel_embed_size(32)
+    1024
     """
 
     def __init__(self, in_channels: int, cnn_depth: int, act_fn: str) -> None:
@@ -147,6 +166,18 @@ class PixelDecoder(nn.Module):
     The last transposed convolution is deliberately unactivated: its output
     is the mean of a unit-variance Gaussian over pixels, not a hidden
     layer.  Activating it would clamp reconstructions to a half-line.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._common._pixel_nets import PixelDecoder
+    >>> decoder = PixelDecoder(1024, 3, 32, "relu").eval()
+    >>> decoder(lucid.randn(2, 5, 1024)).shape
+    (2, 5, 3, 64, 64)
+
+    The encoder's inverse, back to frames. Reconstruction is what forces
+    the latent to keep the pixels rather than only what the reward
+    happened to need.
     """
 
     def __init__(
@@ -207,6 +238,18 @@ class DenseHead(nn.Module):
         Activation between hidden layers; the output layer is unactivated.
     squeeze : bool, default=False
         Drop the trailing axis when ``out_features == 1``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._common._pixel_nets import DenseHead
+    >>> head = DenseHead(1024, 64, 2).eval()
+    >>> head(lucid.randn(2, 5, 1024)).shape
+    (2, 5, 1)
+
+    One number per step by default — reward, value, or the probability
+    an episode ended. The same shape serves all three, which is why they
+    share a class.
     """
 
     def __init__(

@@ -42,6 +42,29 @@ class SDE(ABC):
     single network evaluation, and the prior the reverse process starts
     from.  Everything else — reverse SDE, probability-flow ODE,
     Predictor-Corrector — is derived from these and lives with the model.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.score_sde._sde import make_sde
+    >>> sde = make_sde("vp")
+    >>> x = lucid.zeros(2, 3, 8, 8)
+    >>> t = lucid.zeros(2) + 0.5
+    >>> sde.drift(x, t).shape
+    (2, 3, 8, 8)
+
+    The drift follows the state and the diffusion does not: it is a
+    scalar per sample, which is what makes the noise isotropic.
+
+    >>> sde.diffusion(t).shape
+    (2,)
+
+    ``t_min`` is not zero. The reverse process is integrated backwards
+    and the score blows up at the origin, so sampling stops just short
+    of it.
+
+    >>> sde.t_min
+    0.001
     """
 
     @abstractmethod
@@ -120,6 +143,17 @@ class VESDE(SDE):
     :math:`\sigma(0^+) = \sigma_{\min}`, "causing the VE SDE ... undefined
     for t = 0".  Sampling therefore stops at :attr:`t_min` rather than
     running to zero.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.score_sde._sde import VESDE
+    >>> sde = VESDE(sigma_min=0.01, sigma_max=50.0)
+    >>> sde.prior_variance
+    2500.0
+
+    Variance exploding: the prior is as wide as sigma_max squared, so
+    the terminal distribution is nothing like the data and the model
+    learns the whole way down.
     """
 
     def __init__(self, sigma_min: float = 0.01, sigma_max: float = 50.0) -> None:
@@ -193,6 +227,17 @@ class VPSDE(SDE):
     with the perturbation kernel of equation 33.  Starting from unit
     variance the process keeps it, which is the difference from VE and
     the reason the prior is a standard normal rather than a wide one.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.score_sde._sde import VPSDE
+    >>> sde = VPSDE(beta_min=0.1, beta_max=20.0)
+    >>> sde.prior_variance
+    1.0
+
+    Variance preserving: the process is scaled so the terminal
+    distribution is the unit Gaussian, which is the same place DDPM
+    ends up and why the two are usually interchangeable.
     """
 
     def __init__(self, beta_min: float = 0.1, beta_max: float = 20.0) -> None:
@@ -270,6 +315,17 @@ class SubVPSDE(VPSDE):
     equation 29 gives ``[1 - e^{-∫β}]^2`` where VP has ``1 - e^{-∫β}`` —
     so the standard deviation is that quantity rather than its square
     root.  Getting that wrong leaves a model that still trains.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.score_sde._sde import SubVPSDE
+    >>> sde = SubVPSDE(beta_min=0.1, beta_max=20.0)
+    >>> sde.prior_variance
+    1.0
+
+    The same terminal variance as VP with a smaller one along the way,
+    which is what the "sub" refers to — it reports better likelihoods at
+    the same endpoints.
     """
 
     def _integral_beta(self, t: Tensor) -> Tensor:
@@ -318,6 +374,15 @@ def make_sde(
     ------
     ValueError
         If ``kind`` is not one of the three.
+
+    Examples
+    --------
+    >>> from lucid.models.generative.score_sde._sde import make_sde
+    >>> [type(make_sde(k)).__name__ for k in ("ve", "vp", "subvp")]
+    ['VESDE', 'VPSDE', 'SubVPSDE']
+
+    The three the literature settled on, by name rather than by import,
+    so a config can carry the choice as a string.
     """
     if kind == "ve":
         return VESDE(sigma_min, sigma_max)

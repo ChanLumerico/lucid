@@ -31,6 +31,19 @@ class DiffusionScheduler(ABC):
     timesteps : Tensor
         Currently-active inference schedule (descending integer indices into
         the training schedule).  Set by :meth:`set_timesteps`.
+
+    Examples
+    --------
+    >>> from lucid.models.generative._common._schedulers import (
+    ...     DDPMScheduler,
+    ...     DiffusionScheduler,
+    ... )
+    >>> isinstance(DDPMScheduler(num_train_timesteps=10), DiffusionScheduler)
+    True
+
+    The interface a sampler is written against — ``add_noise`` for
+    training, ``set_timesteps`` and ``step`` for inference — so a model
+    does not know which schedule it is being run with.
     """
 
     num_train_timesteps: int
@@ -86,6 +99,28 @@ class DDPMScheduler(DiffusionScheduler):
         The scheduler is *stateless w.r.t. weights* — it only owns the noise
         schedule.  Multiple schedulers (DDPM / DDIM / …) can sample from
         the same trained network without re-loading anything.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._common._schedulers import DDPMScheduler
+    >>> scheduler = DDPMScheduler(num_train_timesteps=1000)
+    >>> scheduler.betas.shape
+    (1000,)
+
+    Sampling need not visit every step it was trained on:
+    ``set_timesteps`` picks a subsequence, which is the whole reason a
+    thousand-step model can be sampled in ten.
+
+    >>> scheduler.set_timesteps(10)
+    >>> scheduler.timesteps.shape
+    (10,)
+
+    >>> lucid.manual_seed(0)
+    >>> clean = lucid.zeros(1, 3, 8, 8)
+    >>> noise = lucid.ones(1, 3, 8, 8)
+    >>> scheduler.add_noise(clean, noise, lucid.tensor([500])).shape
+    (1, 3, 8, 8)
     """
 
     betas: Tensor
