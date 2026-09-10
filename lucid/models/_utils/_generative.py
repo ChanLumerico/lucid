@@ -288,6 +288,21 @@ class DiffusionPosterior(NamedTuple):
         mean_coef_t:     ``(T,)`` weight on :math:`x_t` in the mean.
         log_variance:    ``(T,)`` :math:`\log \tilde\beta_t`, with the ``t=0``
             entry substituted (see :func:`diffusion_posterior_constants`).
+
+    Examples
+    --------
+    >>> from lucid.models._utils._generative import (
+    ...     diffusion_posterior_constants,
+    ...     make_beta_schedule,
+    ... )
+    >>> posterior = diffusion_posterior_constants(make_beta_schedule(5))
+    >>> posterior._fields
+    ('mean_coef_start', 'mean_coef_t', 'log_variance')
+    >>> posterior.mean_coef_start.shape
+    (5,)
+
+    One entry per timestep, computed once for a schedule: a sampler
+    reads these thousands of times and none of them depends on the data.
     """
 
     mean_coef_start: Tensor
@@ -388,6 +403,26 @@ def diffusion_posterior(
 
     Returns:
         ``(mean, log_variance)``, both broadcast against ``x_start``'s rank.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import (
+    ...     diffusion_posterior,
+    ...     diffusion_posterior_constants,
+    ...     make_beta_schedule,
+    ... )
+    >>> posterior = diffusion_posterior_constants(make_beta_schedule(5))
+    >>> x = lucid.zeros(2, 3, 8, 8)
+    >>> mean, log_variance = diffusion_posterior(
+    ...     x_start=x, x_t=x, t=lucid.tensor([0, 2]), posterior=posterior
+    ... )
+    >>> mean.shape, log_variance.shape
+    ((2, 3, 8, 8), (2, 1, 1, 1))
+
+    The mean follows the image and the variance does not: it depends on
+    the timestep alone, which is why it comes back shaped to broadcast
+    rather than filled in.
     """
     shape = tuple(int(s) for s in x_start.shape)
     c1 = extract_into_tensor(posterior.mean_coef_start, t, shape)

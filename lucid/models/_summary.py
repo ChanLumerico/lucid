@@ -118,6 +118,24 @@ def compress_repeats(node: dict[str, Any]) -> dict[str, Any]:
     the middle of the run breaks the chain, preserving the underlying
     ResNet stage structure (``Downsample`` + ``Bottleneck × 5`` for
     deeper stages).
+
+    Examples
+    --------
+    >>> from lucid.models._summary import compress_repeats
+    >>> block = {
+    ...     "name": "0", "type": "Block", "params": 1,
+    ...     "own_params": 1, "children": [],
+    ... }
+    >>> stage = {
+    ...     "name": "layer1", "type": "Sequential", "params": 2,
+    ...     "own_params": 0, "children": [block, dict(block, name="1")],
+    ... }
+    >>> len(compress_repeats(stage)["children"])
+    1
+
+    Two identical blocks collapse to one entry. A 152-layer network is
+    mostly the same block repeated, and a layer tree that lists each
+    copy is unreadable for the same reason it is uninformative.
     """
     children = node.get("children") or []
     if not children:

@@ -39,6 +39,21 @@ class ModelFamilyMeta:
         ``:math:`...`` inline math and ``.. math::`` blocks; rendered
         through the same pipeline as docstring extended-description
         sections on the API docs site.
+
+    Examples
+    --------
+    >>> from lucid.models._meta import ModelFamilyMeta
+    >>> meta = ModelFamilyMeta(
+    ...     canonical_name="ResNet",
+    ...     citation="He et al., CVPR 2016",
+    ...     theory="Residual connections let depth stop hurting.",
+    ... )
+    >>> meta.canonical_name
+    'ResNet'
+
+    Attached to a family's config by the decorator rather than written
+    into each factory, so the docs site reads one source instead of
+    however many entries the family registers.
     """
 
     canonical_name: str

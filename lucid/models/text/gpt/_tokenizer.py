@@ -139,4 +139,15 @@ class GPTTokenizerFast(GPTTokenizer):
 
     Byte-level families (GPT-2, RoBERTa) do have a genuine fast path; see
     :class:`~lucid.utils.tokenizer.ByteLevelBPETokenizerFast`.
+
+    Examples
+    --------
+    >>> from lucid.models.text.gpt._tokenizer import GPTTokenizerFast
+    >>> vocab = {"l": 0, "o": 1, "o</w>": 2, "lo</w>": 3}
+    >>> tok = GPTTokenizerFast(vocab=vocab, merges=[("l", "o</w>")])
+    >>> tok.encode("lo")
+    [3]
+
+    One id: the merge applies and the pair collapses into the vocabulary
+    entry that covers both.
     """

@@ -166,6 +166,17 @@ class BERTTokenizerFast(WordPieceTokenizerFast):
 
     Constructor parameters mirror :class:`BERTTokenizer` exactly —
     see that class for the full reference.
+
+    Examples
+    --------
+    >>> from lucid.models.text.bert._tokenizer import BERTTokenizerFast
+    >>> vocab = {"[UNK]": 0, "he": 1, "##llo": 2}
+    >>> BERTTokenizerFast(vocab=vocab).encode("hello")
+    [1, 2]
+
+    The same ids the plain tokenizer produces. The speed is in the
+    lookup, and a pair that segmented differently would be a bug no type
+    can catch.
     """
 
     def __init__(

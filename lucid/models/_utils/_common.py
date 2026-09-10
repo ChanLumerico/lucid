@@ -81,6 +81,19 @@ def transform_input_imagenet_to_tf(x: Tensor) -> Tensor:
     :math:`\sigma = (0.229, 0.224, 0.225)`.  Skipping it leaves every channel
     off by a factor of ~2.2 in scale plus an offset, a large distribution
     shift for a BatchNorm network and a silent drop in top-1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._common import (
+    ...     transform_input_imagenet_to_tf,
+    ... )
+    >>> transform_input_imagenet_to_tf(lucid.zeros(1, 3, 4, 4)).shape
+    (1, 3, 4, 4)
+
+    Same shape, different normalisation: weights converted from a
+    TensorFlow checkpoint expect inputs in [-1, 1] rather than the
+    ImageNet mean and standard deviation the rest of the zoo uses.
     """
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
@@ -173,6 +186,17 @@ def zero_init_last_bn(
     -------
     None
         ``model`` is modified in place.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> from lucid.models._utils._common import zero_init_last_bn
+    >>> zero_init_last_bn(nn.Linear(4, 4), ()) is None
+    True
+
+    Zeroing the last norm of each residual block makes the block start
+    as the identity, so a deep network begins as a shallow one and grows
+    into its depth instead of fighting it.
     """
     for m in model.modules():
         if isinstance(m, block_types):
@@ -217,6 +241,19 @@ def init_transformer_trunc_normal(
     -------
     None
         ``model`` is modified in place.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> from lucid.models._utils._common import (
+    ...     init_transformer_trunc_normal,
+    ... )
+    >>> init_transformer_trunc_normal(nn.Linear(4, 4)) is None
+    True
+
+    Truncated rather than plain normal: the tail of an untruncated draw
+    puts a few weights far enough out to dominate the first steps, which
+    a transformer's residual path then carries all the way up.
     """
     for m in model.modules():
         if isinstance(m, nn.Linear):
