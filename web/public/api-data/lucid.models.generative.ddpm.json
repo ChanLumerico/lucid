@@ -3,7 +3,7 @@
   "name": "ddpm",
   "path": "lucid.models.generative.ddpm",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/__init__.py#L1",
   "members": [
     {
       "name": "DDPMConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "DDPMConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_train_timesteps: int = 1000, beta_start: float = 0.0001, beta_end: float = 0.02, beta_schedule: BetaSchedule = 'linear', prediction_type: Literal['epsilon', 'sample', 'v_prediction'] = 'epsilon', base_channels: int = 128, channel_mult: tuple[int, ...] = (lambda: (1, 2, 2, 2))(), num_res_blocks: int = 2, attention_resolutions: tuple[int, ...] = (lambda: (16,))(), num_heads: int = 1, dropout: float = 0.1, resnet_groups: int = 32, use_scale_shift_norm: bool = False, rescale_timesteps: bool = False, learn_sigma: bool = False, vlb_weight: float = 0.001, clip_denoised: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_config.py#L21",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_config.py#L21",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "out_channels_effective: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_config.py#L223",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_config.py#L232",
           "summary": "How many channels the U-Net actually emits (doubled when\n`learn_sigma=True`).",
           "extended": null,
           "parameters": [],
@@ -47,7 +47,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_train_timesteps: int = 1000, beta_start: float = 0.0001, beta_end: float = 0.02, beta_schedule: BetaSchedule = 'linear', prediction_type: Literal['epsilon', 'sample', 'v_prediction'] = 'epsilon', base_channels: int = 128, channel_mult: tuple[int, ...] = (lambda: (1, 2, 2, 2))(), num_res_blocks: int = 2, attention_resolutions: tuple[int, ...] = (lambda: (16,))(), num_heads: int = 1, dropout: float = 0.1, resnet_groups: int = 32, use_scale_shift_norm: bool = False, rescale_timesteps: bool = False, learn_sigma: bool = False, vlb_weight: float = 0.001, clip_denoised: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -65,135 +65,13 @@
         }
       ],
       "summary": "Configuration for every DDPM variant.",
-      "extended": null,
-      "parameters": [
-        {
-          "name": "sample_size",
-          "annotation": "int | tuple[int, int]",
-          "description": "Output spatial resolution in pixels.  Square images use\nan int (`32` → `32 × 32`); rectangular targets pass a tuple.",
-          "default": "32",
-          "inherited_from": "GenerativeModelConfig"
-        },
-        {
-          "name": "in_channels",
-          "annotation": "int",
-          "description": "Input image channels (3 for RGB, 1 for greyscale, 4\nfor VAE latent samples, …).",
-          "default": "3",
-          "inherited_from": "GenerativeModelConfig"
-        },
-        {
-          "name": "out_channels",
-          "annotation": "int",
-          "description": "Output channels — usually equal to `in_channels`;\ndiffusion models that predict variance use `2 * in_channels`.",
-          "default": "3",
-          "inherited_from": "GenerativeModelConfig"
-        },
-        {
-          "name": "act_fn",
-          "annotation": "GenerativeActivation",
-          "description": "Activation used inside the trunk.  Most modern image\ngenerators default to `\"silu\"`.",
-          "default": "'silu'",
-          "inherited_from": "GenerativeModelConfig"
-        },
-        {
-          "name": "num_train_timesteps",
-          "annotation": "int",
-          "description": "Number of forward-process steps `T`.  DDPM\nuses 1000, NCSN traditionally a smaller grid.",
-          "default": "1000",
-          "inherited_from": "DiffusionModelConfig"
-        },
-        {
-          "name": "beta_start",
-          "annotation": "float",
-          "description": "First step's noise rate `β_1`, the low end of the\nlinear schedule.  Ignored when `beta_schedule == \"cosine\"`.",
-          "default": "0.0001",
-          "inherited_from": "DiffusionModelConfig"
-        },
-        {
-          "name": "beta_end",
-          "annotation": "float",
-          "description": "Last step's noise rate `β_T`, the high end of the\nsame schedule.  Ignored when `beta_schedule == \"cosine\"`.",
-          "default": "0.02",
-          "inherited_from": "DiffusionModelConfig"
-        },
-        {
-          "name": "beta_schedule",
-          "annotation": "BetaSchedule",
-          "description": "`\"linear\"` (Ho et al., 2020), `\"scaled_linear\"`\n(Rombach et al., 2022 — linear in `sqrt(beta)`, then squared;\n*not* the same curve as `\"linear\"` between the same\nendpoints) or `\"cosine\"` (Nichol\n& Dhariwal, 2021 — improves low-resolution sample quality).",
-          "default": "'linear'",
-          "inherited_from": "DiffusionModelConfig"
-        },
-        {
-          "name": "prediction_type",
-          "annotation": "Literal['epsilon', 'sample', 'v_prediction']",
-          "description": "What the network predicts at each step.  `\"epsilon\"`\n(the noise, default) is the canonical Ho parameterisation;\n`\"sample\"` predicts `x_0` directly; `\"v_prediction\"` is the\nImagen / Progressive Distillation reparameterisation.",
-          "default": "'epsilon'",
-          "inherited_from": "DiffusionModelConfig"
-        },
-        {
-          "name": "base_channels",
-          "annotation": "int",
-          "description": "Channel width of the first U-Net stage `C_0`.  All\nother stages are integer multiples (see `channel_mult`).\nPaper default: 128.",
-          "default": "128"
-        },
-        {
-          "name": "channel_mult",
-          "annotation": "tuple[int, ...]",
-          "description": "Per-stage channel multiplier.  `(1, 2, 2, 2)` for\nCIFAR (Table 9), `(1, 1, 2, 2, 4, 4)` for LSUN/CelebA-HQ.\nLength = number of downsampling stages; spatial resolution\ndivides by `2 ** (L - 1)` (no downsample after the final\nstage).",
-          "default": "(lambda: (1, 2, 2, 2))()"
-        },
-        {
-          "name": "num_res_blocks",
-          "annotation": "int",
-          "description": "ResBlocks per stage (paper: 2).",
-          "default": "2"
-        },
-        {
-          "name": "attention_resolutions",
-          "annotation": "tuple[int, ...]",
-          "description": "Spatial sizes at which self-attention is\napplied.  Ho 2020 uses `(16,)` — attention only at the\n16×16 feature scale.",
-          "default": "(lambda: (16,))()"
-        },
-        {
-          "name": "num_heads",
-          "annotation": "int",
-          "description": "Attention head count (paper: 1 for CIFAR, can scale).",
-          "default": "1"
-        },
-        {
-          "name": "dropout",
-          "annotation": "float",
-          "description": "Dropout inside ResBlocks.  Paper: 0.1 (CIFAR), 0.0\n(CelebA / LSUN).",
-          "default": "0.1"
-        },
-        {
-          "name": "resnet_groups",
-          "annotation": "int",
-          "description": "`GroupNorm` group count inside ResBlocks (paper\ndefault: 32).  Must divide every per-stage channel count.",
-          "default": "32"
-        },
-        {
-          "name": "learn_sigma",
-          "annotation": "bool",
-          "description": "Improved-DDPM (Nichol 2021) — when `True`, the\nnetwork predicts the variance in addition to the mean.  Output\nchannels become `2 * in_channels`, and training switches to\nthe hybrid objective (see `vlb_weight`), since the fixed\nsimple loss carries no signal for a variance head.",
-          "default": "False"
-        },
-        {
-          "name": "vlb_weight",
-          "annotation": "float",
-          "description": "The λ on the variational term of\n`L_simple + λ·L_vlb` (Nichol & Dhariwal 2021 §4; default\n`1e-3`).  Only read when `learn_sigma=True`.",
-          "default": "0.001"
-        },
-        {
-          "name": "clip_denoised",
-          "annotation": "bool",
-          "description": "Clip the predicted `x_0` to `[-1, 1]` during\nsampling (default True).",
-          "default": "True"
-        }
-      ],
+      "extended": "Args:\n    base_channels: Channel width of the first U-Net stage `C_0`.  All\n        other stages are integer multiples (see `channel_mult`).\n        Paper default: 128.\n    channel_mult: Per-stage channel multiplier.  `(1, 2, 2, 2)` for\n        CIFAR (Table 9), `(1, 1, 2, 2, 4, 4)` for LSUN/CelebA-HQ.\n        Length = number of downsampling stages; spatial resolution\n        divides by `2 ** (L - 1)` (no downsample after the final\n        stage).\n    num_res_blocks: ResBlocks per stage (paper: 2).\n    attention_resolutions: Spatial sizes at which self-attention is\n        applied.  Ho 2020 uses `(16,)` — attention only at the\n        16×16 feature scale.\n    num_heads: Attention head count (paper: 1 for CIFAR, can scale).\n    dropout: Dropout inside ResBlocks.  Paper: 0.1 (CIFAR), 0.0\n        (CelebA / LSUN).\n    resnet_groups: `GroupNorm` group count inside ResBlocks (paper\n        default: 32).  Must divide every per-stage channel count.\n    learn_sigma: Improved-DDPM (Nichol 2021) — when `True`, the\n        network predicts the variance in addition to the mean.  Output\n        channels become `2 * in_channels`, and training switches to\n        the hybrid objective (see `vlb_weight`), since the fixed\n        simple loss carries no signal for a variance head.\n    vlb_weight: The λ on the variational term of\n        `L_simple + λ·L_vlb` (Nichol & Dhariwal 2021 §4; default\n        `1e-3`).  Only read when `learn_sigma=True`.\n    clip_denoised: Clip the predicted `x_0` to `[-1, 1]` during\n        sampling (default True).",
+      "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
+      "examples": [
+        ">>> from lucid.models.generative.ddpm._config import DDPMConfig\n>>> cfg = DDPMConfig()\n>>> cfg.model_type\n'ddpm'\n>>> cfg.in_channels\n3"
+      ],
       "notes": [],
       "attributes": [],
       "warns": [],
@@ -210,7 +88,7 @@
       ],
       "labels": [],
       "signature": "DDPMForImageGeneration(config: DDPMConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_model.py#L667",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_model.py#L667",
       "subcategory": "model",
       "methods": [
         {
@@ -219,7 +97,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DDPMConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_model.py#L744",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_model.py#L744",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -241,7 +119,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(sample: Tensor, timestep: Tensor, target: Tensor | None = None, x_start: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_model.py#L815",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_model.py#L815",
           "subcategory": "model",
           "summary": "Predict noise (or `[noise, σ²]`) at the given timestep.",
           "extended": null,
@@ -310,7 +188,7 @@
       ],
       "labels": [],
       "signature": "DDPMModel(config: DDPMConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_model.py#L531",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_model.py#L531",
       "subcategory": "model",
       "methods": [
         {
@@ -319,7 +197,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DDPMConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_model.py#L598",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_model.py#L598",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -341,7 +219,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(sample: Tensor, timestep: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_model.py#L602",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_model.py#L602",
           "subcategory": "model",
           "summary": "Predict noise (or `[noise, σ²]`) at the given timestep.",
           "extended": null,
@@ -419,7 +297,7 @@
       ],
       "labels": [],
       "signature": "DDPMOutput(sample: Tensor, loss: Tensor | None = None, loss_simple: Tensor | None = None, loss_vlb: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_model.py#L615",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_model.py#L615",
       "subcategory": "model",
       "methods": [
         {
@@ -428,7 +306,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample: Tensor, loss: Tensor | None = None, loss_simple: Tensor | None = None, loss_vlb: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -475,7 +353,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ddpm_cifar(pretrained: bool | str = False, weights: DDPMCifarWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_pretrained.py#L93",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_pretrained.py#L93",
       "subcategory": "pretrained",
       "summary": "Construct a DDPM U-Net trunk for the CIFAR-10 setup.",
       "extended": "Paper-faithful CIFAR-10 configuration from Ho, Jain, and Abbeel, 2020\nAppendix B.1 / Table 9: sample size 32x32, `base_channels=128`,\n`channel_mult=(1, 2, 2, 2)` (four spatial stages — 32 -> 16 -> 8 ->\n4), 2 ResBlocks per stage, self-attention at the 16x16 feature map,\n1 attention head, dropout 0.1, and a 1000-step linear `beta`\nschedule.",
@@ -1334,7 +1212,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ddpm_cifar_gen(pretrained: bool | str = False, weights: DDPMCifarWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_pretrained.py#L286",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_pretrained.py#L286",
       "subcategory": "pretrained",
       "summary": "Construct a DDPM CIFAR-10 model with training loss and `.generate()`.",
       "extended": "Same trunk as `ddpm_cifar` (sample size 32x32, 4-stage U-Net),\nwrapped with the Ho 2020 simplified training objective and\n`DiffusionMixin.generate` for ancestral sampling.",
@@ -2193,7 +2071,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ddpm_imagenet64(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_pretrained.py#L227",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_pretrained.py#L227",
       "subcategory": "pretrained",
       "summary": "Construct an Improved-DDPM U-Net trunk for ImageNet 64x64.",
       "extended": "Paper-faithful ImageNet 64x64 configuration from Nichol and Dhariwal,\n2021 Table 1: sample size 64x64, `base_channels=128`,\n`channel_mult=(1, 2, 3, 4)` (four spatial stages — 64 -> 32 -> 16\n-> 8), 3 ResBlocks per stage, multi-scale self-attention at the 8 /\n16 / 32 feature maps, 4 attention heads, learned variance head\nenabled (`learn_sigma=True`), and a 4000-step cosine `beta`\nschedule.",
@@ -3707,7 +3585,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ddpm_imagenet64_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_pretrained.py#L412",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_pretrained.py#L412",
       "subcategory": "pretrained",
       "summary": "Construct an Improved-DDPM ImageNet 64x64 model with training loss and `.generate()`.",
       "extended": "Same trunk as `ddpm_imagenet64` (sample size 64x64, 4-stage U-Net\nwith `learn_sigma=True`), trained with the hybrid\n$L_{\\text{simple}} + \\lambda L_{\\text{vlb}}$ objective that the\nlearned variance head requires.",
@@ -5221,7 +5099,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ddpm_lsun(pretrained: bool | str = False, weights: DDPMChurchWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_pretrained.py#L162",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_pretrained.py#L162",
       "subcategory": "pretrained",
       "summary": "Construct a DDPM U-Net trunk for the LSUN / CelebA-HQ 256x256 setup.",
       "extended": "Paper-faithful 256x256 configuration from Ho, Jain, and Abbeel, 2020\nAppendix B.2 (LSUN church / bedroom and CelebA-HQ): sample size\n256x256, `base_channels=128`, `channel_mult=(1, 1, 2, 2, 4, 4)`\n(six spatial stages — 256 -> 128 -> ... -> 8), 2 ResBlocks per stage,\nself-attention at the 16x16 feature map, 1 attention head, no\ndropout, and a 1000-step linear `beta` schedule.",
@@ -6414,7 +6292,7 @@
       "kind": "function",
       "labels": [],
       "signature": "ddpm_lsun_gen(pretrained: bool | str = False, weights: DDPMChurchWeights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_pretrained.py#L350",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_pretrained.py#L350",
       "subcategory": "pretrained",
       "summary": "Construct a DDPM LSUN / CelebA-HQ model with training loss and `.generate()`.",
       "extended": "Same trunk as `ddpm_lsun` (sample size 256x256, 6-stage U-Net),\nwrapped with the Ho 2020 simplified training objective and\n`DiffusionMixin.generate` for ancestral sampling.",
@@ -7611,7 +7489,7 @@
       ],
       "labels": [],
       "signature": "DDPMChurchWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_weights.py#L66",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_weights.py#L66",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained DDPM weights for `lucid.models.ddpm_lsun`.",
@@ -7650,7 +7528,7 @@
       ],
       "labels": [],
       "signature": "DDPMCifarWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/generative/ddpm/_weights.py#L24",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/generative/ddpm/_weights.py#L24",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained DDPM weights for `lucid.models.ddpm_cifar`.",

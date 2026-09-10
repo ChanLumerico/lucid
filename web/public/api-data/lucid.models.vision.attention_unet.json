@@ -3,7 +3,7 @@
   "name": "attention_unet",
   "path": "lucid.models.vision.attention_unet",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/attention_unet/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/vision/attention_unet/__init__.py#L1",
   "members": [
     {
       "name": "AttentionUNetConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "AttentionUNetConfig(num_classes: int = 2, spatial_dims: int = 2, in_channels: int = 1, base_channels: int = 64, depth: int = 4, bilinear: bool = False, deep_supervision: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/attention_unet/_config.py#L10",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/vision/attention_unet/_config.py#L10",
       "subcategory": "config",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(num_classes: int = 2, spatial_dims: int = 2, in_channels: int = 1, base_channels: int = 64, depth: int = 4, bilinear: bool = False, deep_supervision: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/attention_unet/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/vision/attention_unet/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -42,51 +42,14 @@
         }
       ],
       "summary": "Configuration for Attention U-Net.",
-      "extended": "Extends the standard U-Net architecture (Ronneberger et al., 2015) by\nadding soft attention gates on skip connections.  Each gate computes a\nspatial attention map from the skip feature and the gating signal from\nthe decoder, suppressing irrelevant activations before concatenation.",
-      "parameters": [
-        {
-          "name": "num_classes",
-          "annotation": "int",
-          "description": "Number of output segmentation classes.",
-          "default": "2"
-        },
-        {
-          "name": "in_channels",
-          "annotation": "int",
-          "description": "Number of input image channels.",
-          "default": "1"
-        },
-        {
-          "name": "base_channels",
-          "annotation": "int",
-          "description": "Feature channels at the first encoder stage.\n           Doubles at each depth level.",
-          "default": "64"
-        },
-        {
-          "name": "depth",
-          "annotation": "int",
-          "description": "Number of encoder/decoder stages (excluding bottleneck).",
-          "default": "4"
-        },
-        {
-          "name": "bilinear",
-          "annotation": "bool",
-          "description": "If True, use bilinear upsampling; otherwise ConvTranspose2d.",
-          "default": "False"
-        },
-        {
-          "name": "deep_supervision",
-          "annotation": "bool",
-          "description": "Attach a 1x1 classifier to *every* decoder level,\nresample each to the input resolution, and fuse the stack with a\nfinal 1x1 convolution — the `dsv` in the reference's\n`unet_CT_multi_att_dsv` model.  Despite the name this is not a\ntraining-only auxiliary loss: the prediction itself comes out of\nthe fusion, so switching it on changes inference too.  Defaults\noff so existing checkpoints keep loading.",
-          "default": "False"
-        }
-      ],
+      "extended": "Extends the standard U-Net architecture (Ronneberger et al., 2015) by\nadding soft attention gates on skip connections.  Each gate computes a\nspatial attention map from the skip feature and the gating signal from\nthe decoder, suppressing irrelevant activations before concatenation.\n\nArchitecture overview:\n  Encoder: depth × (2×Conv3x3-BN-ReLU + MaxPool2x2)\n  Bottleneck: 2×Conv3x3-BN-ReLU\n  Decoder: depth × (Upsample/ConvTranspose + AttentionGate + Cat + 2×Conv3x3-BN-ReLU)\n  Head: Conv1x1 → num_classes\n\nArgs:\n    num_classes:   Number of output segmentation classes.\n    in_channels:   Number of input image channels.\n    base_channels: Feature channels at the first encoder stage.\n                   Doubles at each depth level.\n    depth:         Number of encoder/decoder stages (excluding bottleneck).\n    bilinear:      If True, use bilinear upsampling; otherwise ConvTranspose2d.\n    deep_supervision: Attach a 1x1 classifier to *every* decoder level,\n        resample each to the input resolution, and fuse the stack with a\n        final 1x1 convolution — the `dsv` in the reference's\n        `unet_CT_multi_att_dsv` model.  Despite the name this is not a\n        training-only auxiliary loss: the prediction itself comes out of\n        the fusion, so switching it on changes inference too.  Defaults\n        off so existing checkpoints keep loading.",
+      "parameters": [],
       "returns": null,
       "raises": [],
-      "examples": [],
-      "notes": [
-        "Encoder: depth × (2×Conv3x3-BN-ReLU + MaxPool2x2)\nBottleneck: 2×Conv3x3-BN-ReLU\nDecoder: depth × (Upsample/ConvTranspose + AttentionGate + Cat + 2×Conv3x3-BN-ReLU)\nHead: Conv1x1 → num_classes"
+      "examples": [
+        ">>> from lucid.models.vision.attention_unet._config import AttentionUNetConfig\n>>> cfg = AttentionUNetConfig()\n>>> cfg.model_type\n'attention_unet'\n>>> cfg.num_classes, cfg.in_channels\n(2, 1)"
       ],
+      "notes": [],
       "attributes": [],
       "warns": [],
       "see_also": []
@@ -101,7 +64,7 @@
       ],
       "labels": [],
       "signature": "AttentionUNetForSemanticSegmentation(config: AttentionUNetConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/attention_unet/_model.py#L259",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/vision/attention_unet/_model.py#L259",
       "subcategory": "model",
       "methods": [
         {
@@ -110,7 +73,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: AttentionUNetConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/attention_unet/_model.py#L330",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/vision/attention_unet/_model.py#L330",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -132,7 +95,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, targets: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/attention_unet/_model.py#L404",
+          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/vision/attention_unet/_model.py#L404",
           "subcategory": "model",
           "summary": "Run Attention U-Net.",
           "extended": null,
@@ -216,7 +179,7 @@
       "kind": "function",
       "labels": [],
       "signature": "attention_unet(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/attention_unet/_pretrained.py#L33",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/vision/attention_unet/_pretrained.py#L33",
       "subcategory": "pretrained",
       "summary": "Attention U-Net (Oktay et al., MIDL 2018).",
       "extended": "Builds an `AttentionUNetForSemanticSegmentation` with the\nstandard configuration: 4-level encoder / decoder, `base_channels =\n64` (channel schedule 64 -> 128 -> 256 -> 512 -> 1024),\n`in_channels = 1` (medical imaging default), and `num_classes = 2`.\nSoft attention gates on every skip connection suppress irrelevant\nencoder activations.",
@@ -1028,7 +991,7 @@
       "kind": "function",
       "labels": [],
       "signature": "attention_unet_3d(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/f365e50/lucid/models/vision/attention_unet/_pretrained.py#L98",
+      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/models/vision/attention_unet/_pretrained.py#L98",
       "subcategory": "pretrained",
       "summary": "Attention U-Net, 3-D (Oktay et al., MIDL 2018).",
       "extended": "The rank the paper actually specifies.  Its Implementation Details\nstate \"in contrast to the state-of-the-art CNN segmentation frameworks\n... we propose a 3D-model to capture sufficient semantic context\", and\nevery released network is `Conv3d` / `BatchNorm3d` with trilinear\nresampling — it was built for CT volumes.\n\nIdentical to `attention_unet` in every other respect; only the\nconvolution rank differs, so the attention gate that is the paper's\ncontribution is the same mechanism in both.",
