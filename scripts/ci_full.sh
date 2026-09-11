@@ -97,6 +97,33 @@ echo "==> Storage API compliance"
 echo "==> H4 numpy guard (sanctioned bridge files only)"
 "$PYTHON_BIN" tools/check_numpy_h4.py
 
+# ── The symbol x axis sweep ──────────────────────────────────────────────────
+#
+# 1,512 symbols against 33 contract axes, plus the self-check that asks
+# whether the instruments can still go red.  Half the test suite carries
+# the ``audit`` marker and ``addopts`` deselects it, so none of this ran
+# here — while its own README calls it a gate and says that one running
+# only part of it "reports clean over half a framework".
+#
+# ``--audit-only`` is the self-check and the sweep: a minute, because the
+# sweep is static contract probing rather than model work.  The other two
+# stages (suite, doctests) are already covered above and would only
+# duplicate them.
+#
+# Exit is 0 only when every stage that ran is clean, so no output needs
+# reading.  2 means the harness broke, which is not the same as 1 — the
+# framework — and is worth saying out loud rather than folding together.
+echo "==> Symbol x axis audit"
+set +e
+"$PYTHON_BIN" -m lucid.test.audit --audit-only
+audit_status=$?
+set -e
+if [ "$audit_status" -eq 2 ]; then
+    echo "  [WARN] the audit harness itself failed — the sweep proved nothing"
+elif [ "$audit_status" -ne 0 ]; then
+    exit 1
+fi
+
 # Model-zoo family contract — verifies the 5-slot structure and Protocol
 # conformance of every family under lucid/models/.  Strict mode is OFF so
 # advisory warnings don't fail CI; flip to --strict when ready to enforce.
