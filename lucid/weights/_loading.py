@@ -122,6 +122,7 @@ def load_weight_entry(
     import lucid.serialization as _serial
 
     entry = weights.entry if isinstance(weights, WeightsEnum) else weights
+    _assert_config_matches(model, entry, name=name)
     path = download(entry.url, entry.sha256, name=name)
     state_dict: dict[str, Tensor] = _serial.load_safetensors(str(path))  # type: ignore[assignment]
     if entry.key_map:
@@ -134,3 +135,56 @@ def load_weight_entry(
             )
         state_dict = {entry.key_map.get(k, k): v for k, v in state_dict.items()}
     return model.load_state_dict(state_dict, strict=strict)
+
+
+def _assert_config_matches(model: Module, entry: WeightEntry, *, name: str) -> None:
+    """Refuse a checkpoint whose architecture the model was not built for.
+
+    Checked before the download rather than after it: a mismatch is
+    settled by two integers, and finding out afterwards costs a few
+    hundred megabytes to learn the same thing.
+
+    A field the config does not have is an error too.  It means the
+    entry describes a knob that has been renamed or removed, and a
+    declaration that quietly matches nothing is worse than none — it
+    reads as a check while checking nothing.
+    """
+    if not entry.requires_config:
+        return
+
+    config = getattr(model, "config", None)
+    if config is None:
+        raise RuntimeError(
+            f"{name}: the entry declares the config it needs "
+            f"({', '.join(sorted(entry.requires_config))}), and this model "
+            f"carries no config to check it against."
+        )
+
+    def _comparable(value: object) -> object:
+        # A tuple field round-trips through JSON and a config as a list;
+        # they describe the same architecture.
+        return tuple(value) if isinstance(value, (list, tuple)) else value
+
+    missing: list[str] = []
+    wrong: list[str] = []
+    for key, wanted in entry.requires_config.items():
+        if not hasattr(config, key):
+            missing.append(key)
+            continue
+        got = getattr(config, key)
+        if _comparable(got) != _comparable(wanted):
+            wrong.append(f"{key}={got!r}, checkpoint needs {wanted!r}")
+
+    if missing:
+        raise RuntimeError(
+            f"{name}: the entry requires {', '.join(sorted(missing))}, which "
+            f"{type(config).__name__} does not have. The declaration is "
+            f"describing a config that has since changed."
+        )
+    if wrong:
+        raise RuntimeError(
+            f"{name}: this model is built as {'; '.join(wrong)}. The "
+            f"checkpoint was trained against the other one, and loading it "
+            f"here would either fail on a shape or — where the field touches "
+            f"no parameter — succeed and compute something else."
+        )

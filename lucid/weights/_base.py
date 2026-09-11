@@ -85,6 +85,31 @@ class WeightEntry:
         error, not a silent no-op; a stale map would otherwise keep
         passing after the layout it patched had changed.
 
+    requires_config : dict
+        Config fields this checkpoint was trained with, checked against
+        the model before anything is downloaded.  Empty for most
+        entries; the ones that carry it earned it.
+
+        A checkpoint is trained against one architecture, and the config
+        that describes it is written somewhere else entirely — in a
+        factory, beside a paper citation, by someone reading a reference
+        implementation.  When the two drift, what happens depends on
+        whether the field touches a parameter.  If it does, the load
+        fails on a shape and the caller finds out.  If it does not, the
+        load is clean and the model computes a different function: the
+        checkpoints for this zoo's SE-ResNet were trained with an
+        activation the code did not apply, and CSPNet's with a different
+        leaky slope and two cross-stages left linear.  Nothing about
+        either is visible to a shape check, and both were found by
+        running the models against the implementation the weights came
+        from — which is not a thing a load can do.
+
+        Declaring the values is what turns that class of drift back into
+        an error at the point it matters.  It cannot cover everything:
+        a constant in the model file rather than a field in the config
+        has nothing to declare against, and CSPNet's leaky slope is
+        still one of those.
+
     Notes
     -----
     Frozen (``frozen=True``) so entries can be shared by reference and
@@ -99,6 +124,7 @@ class WeightEntry:
     transforms: Transform
     meta: dict[str, object] = field(default_factory=dict)
     key_map: dict[str, str] = field(default_factory=dict)
+    requires_config: dict[str, object] = field(default_factory=dict)
 
 
 class WeightsEnum(enum.Enum):

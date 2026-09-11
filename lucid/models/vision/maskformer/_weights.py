@@ -52,6 +52,10 @@ class MaskFormerResNet50Weights(WeightsEnum):
             "num_params": 41_307_863,
             "metrics": {"ADE20K": {"mIoU": 44.5}},
         },
+        # ENC_LAYERS: 0 in the semantic-segmentation config these come
+        # from -- C5 goes straight into the decoder.  A six-layer encoder
+        # has no weights behind it and fails on 72 keys.
+        requires_config={"num_encoder_layers": 0},
     )
     DEFAULT = ADE20K
 
@@ -88,5 +92,9 @@ class MaskFormerResNet101Weights(WeightsEnum):
             "num_params": 60_299_991,
             "metrics": {"ADE20K": {"mIoU": 45.5}},
         },
+        # ENC_LAYERS: 0 in the semantic-segmentation config these come
+        # from -- C5 goes straight into the decoder.  A six-layer encoder
+        # has no weights behind it and fails on 72 keys.
+        requires_config={"num_encoder_layers": 0},
     )
     DEFAULT = ADE20K

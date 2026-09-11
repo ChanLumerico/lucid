@@ -51,6 +51,10 @@ class SKResNet18Weights(WeightsEnum):
             "num_params": 11_958_056,
             "metrics": {"ImageNet-1k": {"acc@1": 73.020, "acc@5": 91.172}},
         },
+        # timm's skresnet18/34 carry no Eq. (4) floor, so the two narrow
+        # stages are 16 wide and not the paper's 32.  A model built at 32
+        # fails on 24 shapes; declaring it says so before the download.
+        requires_config={"min_attn_channels": 16},
     )
     DEFAULT = RA_IN1K
 
@@ -91,5 +95,9 @@ class SKResNet34Weights(WeightsEnum):
             "num_params": 22_282_376,
             "metrics": {"ImageNet-1k": {"acc@1": 76.956, "acc@5": 93.320}},
         },
+        # timm's skresnet18/34 carry no Eq. (4) floor, so the two narrow
+        # stages are 16 wide and not the paper's 32.  A model built at 32
+        # fails on 24 shapes; declaring it says so before the download.
+        requires_config={"min_attn_channels": 16},
     )
     DEFAULT = RA_IN1K

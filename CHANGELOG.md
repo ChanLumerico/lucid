@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - a converted model exports through its own reference path
 - rename a converted checkpoint's keys at load
 - check that published checkpoints still fit
+- an entry declares the architecture it was trained for
 
 ---
 

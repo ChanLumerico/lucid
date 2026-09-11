@@ -62,6 +62,11 @@ class CSPResNet50Weights(WeightsEnum):
             "num_params": 21_620_000,
             "metrics": {"ImageNet-1k": {"acc@1": 79.58}},
         },
+        # Every conv_exp is linear in the implementation these came from.
+        # darknet's cfg makes two of them leaky, and that difference
+        # touches no parameter at all -- it loaded clean and changed every
+        # prediction.
+        requires_config={"cross_linear": (True, True, True, True)},
     )
     DEFAULT = RA_IN1K
 
@@ -115,6 +120,11 @@ class CSPResNeXt50Weights(WeightsEnum):
             "num_params": 20_570_000,
             "metrics": {"ImageNet-1k": {"acc@1": 80.04}},
         },
+        # Every conv_exp is linear in the implementation these came from.
+        # darknet's cfg makes two of them leaky, and that difference
+        # touches no parameter at all -- it loaded clean and changed every
+        # prediction.
+        requires_config={"cross_linear": (True, True, True, True)},
     )
     DEFAULT = RA_IN1K
 
@@ -164,5 +174,7 @@ class CSPDarknet53Weights(WeightsEnum):
             "num_params": 27_610_000,
             "metrics": {"ImageNet-1k": {"acc@1": 80.06}},
         },
+        # cspdarknet is the other way round: leaky throughout.
+        requires_config={"cross_linear": (False, False, False, False, False)},
     )
     DEFAULT = RA_IN1K

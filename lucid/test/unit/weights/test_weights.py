@@ -337,3 +337,101 @@ class TestTheTwoEntriesThatNeedIt:
                 "classifier.weight": "classifier.1.weight",
                 "classifier.bias": "classifier.1.bias",
             }
+
+
+# ── WeightEntry.requires_config ─────────────────────────────────────
+
+
+class TestAnEntryDeclaresTheArchitectureItNeeds:
+    """The drift that shapes cannot see.
+
+    A checkpoint is trained against one configuration and the config
+    that describes it is written somewhere else — a factory, a paper
+    citation, someone reading a reference implementation. When they
+    part company, what happens depends on whether the field touches a
+    parameter. If it does, the load fails on a shape. If it does not,
+    the load is clean and the model computes a different function:
+    SE-ResNet's checkpoints were trained with an activation the code did
+    not apply, and CSPNet's with two cross-stages the code left leaky.
+    Both loaded without complaint and changed every prediction.
+    """
+
+    @staticmethod
+    def _entry(requires: dict[str, object]) -> WeightEntry:
+        return WeightEntry(
+            url="https://example.invalid/model.safetensors",
+            sha256="0" * 64,
+            num_classes=2,
+            transforms=ImageClassification(crop_size=4, resize_size=4),
+            requires_config=requires,
+        )
+
+    @staticmethod
+    def _model(**fields: object) -> lucid.nn.Module:
+        module = lucid.nn.Linear(2, 2)
+        module.config = type("Config", (), dict(fields))()  # type: ignore[assignment]
+        return module
+
+    def test_a_mismatch_is_refused_before_anything_is_downloaded(self) -> None:
+        """The URL is unreachable, so reaching it would raise differently.
+
+        That is the assertion: a config error costs nothing to find, and
+        settling it after several hundred megabytes have moved teaches
+        the same thing for a worse price.
+        """
+        model = self._model(min_attn_channels=32)
+        with pytest.raises(RuntimeError, match="built as min_attn_channels=32"):
+            W.load_weight_entry(
+                model, self._entry({"min_attn_channels": 16}), name="drifted"
+            )
+
+    def test_a_field_the_config_lost_is_an_error_too(self) -> None:
+        """A declaration matching nothing reads as a check while being none."""
+        model = self._model(something_else=1)
+        with pytest.raises(RuntimeError, match="does not have"):
+            W.load_weight_entry(
+                model, self._entry({"min_attn_channels": 16}), name="renamed"
+            )
+
+    def test_a_model_without_a_config_cannot_be_checked(self) -> None:
+        with pytest.raises(RuntimeError, match="no config"):
+            W.load_weight_entry(
+                lucid.nn.Linear(2, 2),
+                self._entry({"min_attn_channels": 16}),
+                name="configless",
+            )
+
+    def test_a_tuple_and_its_list_describe_the_same_architecture(self) -> None:
+        """Configs round-trip through JSON, which has no tuples."""
+        model = self._model(cross_linear=[True, True, True, True])
+        entry = self._entry({"cross_linear": (True, True, True, True)})
+        # Gets past the config check and fails on the unreachable URL.
+        with pytest.raises(Exception) as excinfo:
+            W.load_weight_entry(model, entry, name="tuples")
+        assert "built as" not in str(excinfo.value)
+
+    def test_the_entries_that_carry_one_declare_what_was_measured(self) -> None:
+        """Structural, so it holds without the network."""
+        from lucid.models.vision.cspnet import CSPResNet50Weights
+        from lucid.models.vision.maskformer import MaskFormerResNet50Weights
+        from lucid.models.vision.sknet import SKResNet18Weights
+
+        assert SKResNet18Weights.DEFAULT.entry.requires_config == {
+            "min_attn_channels": 16
+        }
+        assert MaskFormerResNet50Weights.DEFAULT.entry.requires_config == {
+            "num_encoder_layers": 0
+        }
+        assert CSPResNet50Weights.DEFAULT.entry.requires_config == {
+            "cross_linear": (True, True, True, True)
+        }
+
+    def test_almost_every_entry_declares_nothing(self) -> None:
+        """The field earns its place by being rare.
+
+        If it spread to every entry it would be a second copy of the
+        configs, drifting on its own.
+        """
+        from lucid.models.vision.resnet import ResNet18Weights
+
+        assert ResNet18Weights.DEFAULT.entry.requires_config == {}
