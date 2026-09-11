@@ -31,6 +31,16 @@ _STR_TO_DEVICE_ENUM: dict[str, _C_engine.Device] = {
 
 def _inject_to(cls: type) -> None:
     """Attach .to(), .metal(), .cpu(), and dtype-cast methods to Tensor."""
+    # These methods are annotated ``self: Tensor`` and ``-> Tensor`` while
+    # ``Tensor`` is imported for type checking only, so under PEP 649
+    # nothing could resolve the annotations: ``inspect.signature`` on
+    # ``to``, ``cpu``, ``metal`` and the dtype casts raised NameError.
+    #
+    # The same absence has bitten at runtime before — see the note in
+    # ``to`` below, where a bare ``Tensor`` in a cast made
+    # ``x.to(other_tensor)`` fail. That was patched where it hurt; the
+    # name was still unbound everywhere else.
+    globals().setdefault("Tensor", cls)
 
     def to(
         self: Tensor,

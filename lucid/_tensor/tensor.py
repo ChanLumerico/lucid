@@ -3751,6 +3751,15 @@ from lucid._tensor._dunders import _inject_dunders  # noqa: E402
 from lucid._tensor._methods import _inject_methods  # noqa: E402
 from lucid._tensor._to import _inject_to  # noqa: E402
 
+# ``register_hook`` is annotated ``-> _RemovableHandle``, imported under
+# TYPE_CHECKING to keep the module's import graph acyclic.  PEP 649 then
+# has nothing to resolve it against, so ``inspect.signature`` on that one
+# method raised NameError.  Bound here rather than at the top: by this
+# point the class exists and the import cannot cycle back through it.
+from lucid.autograd._hooks import (  # noqa: E402
+    RemovableHandle as _RemovableHandle,
+)
+
 _inject_dunders(Tensor)
 _inject_methods(Tensor)
 _inject_to(Tensor)
