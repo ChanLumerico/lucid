@@ -1,0 +1,102 @@
+name: Pretrained parity
+
+# The published checkpoints, run against the implementations they were
+# converted from.
+#
+# The zoo's other checks stop short of this. ``check_weight_fit`` asks
+# whether a checkpoint loads; the model parity suite asks whether the
+# architecture matches, and transfers *random* weights to do it. Neither
+# looks at the numbers actually shipped, so a conversion that transposed
+# a kernel or mapped the wrong source produces a file that loads into the
+# right shapes and answers with something else — silently, since nothing
+# downstream has anything to compare against.
+#
+# Not an accuracy benchmark. No labels and no dataset are involved: it
+# checks conversion, not training, and says nothing about whether a model
+# reaches its paper's numbers.
+#
+# Kept out of the local gate on purpose. It downloads both sides of every
+# checkpoint it compares — tens of gigabytes across the zoo — which is
+# fine on a runner that is thrown away and is not fine on a laptop.
+
+on:
+  # Weekly rather than per-commit: conversions change when someone
+  # re-uploads a checkpoint or edits a factory's source mapping, not when
+  # ordinary code lands.
+  schedule:
+    - cron: "0 7 * * 2"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Compare at most this many (blank for all)"
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - "lucid/models/**/_weights.py"
+      - "tools/check_pretrained_parity.py"
+      - ".github/workflows/pretrained-parity.yml"
+
+concurrency:
+  group: pretrained-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    name: Published checkpoints vs their sources
+    runs-on: macos-26
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Enforce Apple Silicon runner
+        run: |
+          python - <<'PY'
+          import platform
+
+          system = platform.system()
+          machine = platform.machine()
+          if system != "Darwin" or machine != "arm64":
+              raise SystemExit(f"Lucid CI supports macOS arm64 only, got {system}/{machine}")
+          print(f"runner={system}/{machine}")
+          PY
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: pretrained-parity-py3.14
+          max-size: 600M
+
+      - name: Install Lucid
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1" mlx
+          python -m pip install --no-build-isolation -e ".[test]"
+
+      # Both reference families, because the zoo's sources are mixed:
+      # resnet_18 came from the reference vision package and sk_resnet_18
+      # from the zoo oracle. Comparing a model against the wrong one shows
+      # every weight differing and reads exactly like a defect.
+      - name: Install the reference implementations
+        run: python -m pip install timm
+
+      - name: Disk before
+        run: df -h / | tail -1
+
+      - name: Compare published checkpoints against their sources
+        run: |
+          python -m tools.check_pretrained_parity \
+            ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
+
+      # Downloads are the cost here, and a run that quietly stopped
+      # comparing would look the same as one that passed. The counts in
+      # the tool's own summary are the check on that; this is the disk it
+      # took to get them.
+      - name: Disk after
+        if: always()
+        run: df -h / | tail -1
