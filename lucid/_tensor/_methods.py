@@ -20,6 +20,18 @@ if TYPE_CHECKING:
 
 def _inject_methods(tensor_cls: type) -> None:
     """Attach all registry ops as Tensor methods."""
+    # The generated methods are annotated ``self: Tensor`` and
+    # ``-> Tensor``, and ``Tensor`` is imported here for type checking
+    # only, so under PEP 649 nothing could resolve those annotations at
+    # runtime: ``inspect.signature`` raised NameError on 193 of the 236
+    # callables on Tensor, and ``typing.get_type_hints`` with them.
+    # Everything that reads annotations — an IDE, ``help()``, a docs
+    # walker — saw the same wall.
+    #
+    # The class is right here as ``tensor_cls``.  Binding the name it is
+    # already written as costs nothing and cannot drift, because the
+    # TYPE_CHECKING import and this binding name the same object.
+    globals().setdefault("Tensor", tensor_cls)
 
     def _make_method(e: OpEntry) -> object:
         """Build a Tensor method that dispatches to ``e.engine_fn``.
