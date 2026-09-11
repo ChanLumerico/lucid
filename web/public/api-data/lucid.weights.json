@@ -3,7 +3,7 @@
   "name": "weights",
   "path": "lucid.weights",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/__init__.py#L1",
   "members": [
     {
       "name": "WeightEntry",
@@ -12,8 +12,8 @@
       "class_kind": "dataclass",
       "bases": [],
       "labels": [],
-      "signature": "WeightEntry(url: str, sha256: str, num_classes: int, transforms: Transform, meta: dict[str, object] = dict(), key_map: dict[str, str] = dict())",
-      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L33",
+      "signature": "WeightEntry(url: str, sha256: str, num_classes: int, transforms: Transform, meta: dict[str, object] = dict(), key_map: dict[str, str] = dict(), requires_config: dict[str, object] = dict())",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L33",
       "subcategory": "base",
       "methods": [
         {
@@ -21,8 +21,8 @@
           "path": "lucid.weights._base.WeightEntry.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(url: str, sha256: str, num_classes: int, transforms: Transform, meta: dict[str, object] = dict(), key_map: dict[str, str] = dict())",
-          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L1",
+          "signature": "__init__(url: str, sha256: str, num_classes: int, transforms: Transform, meta: dict[str, object] = dict(), key_map: dict[str, str] = dict(), requires_config: dict[str, object] = dict())",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L1",
           "subcategory": "base",
           "summary": null,
           "extended": null,
@@ -77,6 +77,12 @@
           "annotation": "dict",
           "description": "Old-name → new-name renames applied to the checkpoint's keys\nbefore loading, for a converted checkpoint whose layout differs\nfrom the model's by naming alone.  Empty for almost every entry.\n\nIt exists because a head can be a bare `Linear` in one variant\nand a `Sequential` of `[Dropout, Linear]` in another: the\ndropout carries no parameters, so the two hold *identical*\nweights under different names, and a converter that flattened\nthe head produces a checkpoint that is correct yet unloadable.\nRenaming is honest here in a way that shape-changing would not\nbe — nothing about the tensors is reinterpreted.\n\nA rename whose source key is absent from the checkpoint is an\nerror, not a silent no-op; a stale map would otherwise keep\npassing after the layout it patched had changed.",
           "default": "dict()"
+        },
+        {
+          "name": "requires_config",
+          "annotation": "dict",
+          "description": "Config fields this checkpoint was trained with, checked against\nthe model before anything is downloaded.  Empty for most\nentries; the ones that carry it earned it.\n\nA checkpoint is trained against one architecture, and the config\nthat describes it is written somewhere else entirely — in a\nfactory, beside a paper citation, by someone reading a reference\nimplementation.  When the two drift, what happens depends on\nwhether the field touches a parameter.  If it does, the load\nfails on a shape and the caller finds out.  If it does not, the\nload is clean and the model computes a different function: the\ncheckpoints for this zoo's SE-ResNet were trained with an\nactivation the code did not apply, and CSPNet's with a different\nleaky slope and two cross-stages left linear.  Nothing about\neither is visible to a shape check, and both were found by\nrunning the models against the implementation the weights came\nfrom — which is not a thing a load can do.\n\nDeclaring the values is what turns that class of drift back into\nan error at the point it matters.  It cannot cover everything:\na constant in the model file rather than a field in the config\nhas nothing to declare against, and CSPNet's leaky slope is\nstill one of those.",
+          "default": "dict()"
         }
       ],
       "returns": null,
@@ -99,7 +105,7 @@
       ],
       "labels": [],
       "signature": "WeightsEnum()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L104",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L130",
       "subcategory": "base",
       "methods": [
         {
@@ -110,7 +116,7 @@
             "property"
           ],
           "signature": "entry: WeightEntry",
-          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L131",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L157",
           "summary": "The underlying `WeightEntry` value.",
           "extended": null,
           "parameters": [],
@@ -133,7 +139,7 @@
             "property"
           ],
           "signature": "tag: str",
-          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L142",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L168",
           "summary": "The variant tag (member name), e.g. `\"IMAGENET1K_V1\"`.",
           "extended": "For the `DEFAULT` alias this resolves to the canonical\nmember's name (the one it aliases), not the literal string\n`\"DEFAULT\"`.",
           "parameters": [],
@@ -156,7 +162,7 @@
             "property"
           ],
           "signature": "url: str",
-          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L152",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L178",
           "summary": "Download URL of this checkpoint (see `WeightEntry.url`).",
           "extended": null,
           "parameters": [],
@@ -179,7 +185,7 @@
             "property"
           ],
           "signature": "sha256: str",
-          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L157",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L183",
           "summary": "Expected SHA-256 of this checkpoint.",
           "extended": null,
           "parameters": [],
@@ -202,7 +208,7 @@
             "property"
           ],
           "signature": "num_classes: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L162",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L188",
           "summary": "Output-class count of this checkpoint's head.",
           "extended": null,
           "parameters": [],
@@ -225,7 +231,7 @@
             "property"
           ],
           "signature": "meta: dict[str, object]",
-          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L167",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L193",
           "summary": "Provenance + metrics dict (see `WeightEntry.meta`).",
           "extended": null,
           "parameters": [],
@@ -246,7 +252,7 @@
           "kind": "function",
           "labels": [],
           "signature": "transforms()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_base.py#L171",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_base.py#L197",
           "subcategory": "base",
           "summary": "Return the preprocessing pipeline the weights expect.",
           "extended": null,
@@ -284,7 +290,7 @@
       "kind": "function",
       "labels": [],
       "signature": "download(url: str, sha256: str, name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_hub.py#L71",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_hub.py#L71",
       "subcategory": "hub",
       "summary": "Download `url` to the local cache, verify SHA-256, return the path.",
       "extended": "Idempotent — when the file already exists in cache and verifies, it\nis returned without re-fetching.  A cached file that *fails*\nverification is treated as corrupt and re-downloaded.",
@@ -336,7 +342,7 @@
       "kind": "function",
       "labels": [],
       "signature": "load_weight_entry(model: Module, weights: WeightsEnum | WeightEntry, name: str, strict: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_loading.py#L78",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_loading.py#L78",
       "subcategory": "loading",
       "summary": "Download the checkpoint described by `weights` and load it.",
       "extended": null,
@@ -390,7 +396,7 @@
       "kind": "function",
       "labels": [],
       "signature": "resolve_weights(enum_cls: type[WeightsEnum], pretrained: bool | str, weights: WeightsEnum | None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_loading.py#L18",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_loading.py#L18",
       "subcategory": "loading",
       "summary": "Resolve a factory's `pretrained` / `weights` args to a member.",
       "extended": "Implements the shared selection logic every pretrained factory uses,\nso the three call styles all funnel to one enum member (or `None`\nfor random init).",
@@ -440,7 +446,7 @@
       "kind": "function",
       "labels": [],
       "signature": "get_weight(name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_registry.py#L104",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_registry.py#L104",
       "subcategory": "registry",
       "summary": "Resolve a dotted `\"EnumName.TAG\"` string to a weights member.",
       "extended": null,
@@ -476,7 +482,7 @@
       "kind": "function",
       "labels": [],
       "signature": "list_pretrained(model_name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_registry.py#L76",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_registry.py#L76",
       "subcategory": "registry",
       "summary": "List the available weight tags for a model.",
       "extended": null,
@@ -507,7 +513,7 @@
       "kind": "function",
       "labels": [],
       "signature": "register_weights(model_name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_registry.py#L19",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_registry.py#L19",
       "subcategory": "registry",
       "summary": "Class decorator registering a `WeightsEnum` for discovery.",
       "extended": null,
@@ -538,7 +544,7 @@
       "kind": "function",
       "labels": [],
       "signature": "weights_for(model_name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/baed778/lucid/weights/_registry.py#L52",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/weights/_registry.py#L52",
       "subcategory": "registry",
       "summary": "Return the `WeightsEnum` registered for `model_name`.",
       "extended": null,
