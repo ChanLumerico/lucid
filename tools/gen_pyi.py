@@ -9,9 +9,8 @@ Output:
   lucid/__init__.pyi         (top-level factories + registry free functions)
 """
 
+import ast
 import sys
-import os
-import textwrap
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -2093,7 +2092,6 @@ def _sig_from_callable(name: str, fn: object) -> str:
     when source is unavailable (built-ins, C extensions, lambdas).  Never
     emits ``*args`` / ``**kwargs`` — these are forbidden in stubs (H9).
     """
-    import ast
     import inspect
     import textwrap
 
@@ -2199,7 +2197,7 @@ _RETURN_TYPE_MAP: dict[str, str] = {
 }
 
 
-def _sig_from_ast(name: str, node: "ast.FunctionDef | ast.AsyncFunctionDef") -> str:  # type: ignore[name-defined]
+def _sig_from_ast(name: str, node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     """Emit a stub line from a parsed AST ``FunctionDef`` node.
 
     Annotation nodes are converted to strings via ``ast.unparse`` (never
@@ -2208,8 +2206,6 @@ def _sig_from_ast(name: str, node: "ast.FunctionDef | ast.AsyncFunctionDef") -> 
     ``*args`` / ``**kwargs`` are omitted per H9 unless the parameter name
     implies genuine variadic intent (e.g. ``*tensors``).
     """
-    import ast
-
     args = node.args
 
     def _ann(ann_node: "ast.expr | None") -> str:
@@ -2299,7 +2295,6 @@ def _simplify_annotation(ann: object) -> str:
 
 
 def gen_init_pyi() -> tuple[str, int]:
-    import inspect
     from lucid._ops._registry import _REGISTRY
 
     # Preserve any manually-written docstrings in the existing __init__.pyi.

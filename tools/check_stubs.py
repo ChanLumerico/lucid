@@ -7,10 +7,7 @@ Exits non-zero if any stub is stale.
 """
 
 import sys
-import os
 import difflib
-import tempfile
-import importlib
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -79,7 +76,7 @@ def main() -> int:
         )
         print("    python tools/gen_pyi.py")
         print(
-            f"    git add lucid/_C/engine.pyi lucid/_tensor/tensor.pyi lucid/__init__.pyi"
+            "    git add lucid/_C/engine.pyi lucid/_tensor/tensor.pyi lucid/__init__.pyi"
         )
         return 1
 

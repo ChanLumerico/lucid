@@ -13,7 +13,8 @@ sys.path.insert(0, str(ROOT))
 
 def main() -> int:
     from lucid._ops._registry import _REGISTRY
-    from lucid._C import engine as _C_engine
+    # noqa: F401 — the import is the check: a missing engine fails here.
+    from lucid._C import engine as _C_engine  # noqa: F401
 
     errors: list[str] = []
 

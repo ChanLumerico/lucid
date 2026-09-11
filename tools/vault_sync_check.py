@@ -17,7 +17,6 @@ from __future__ import annotations  # local script — not part of lucid package
 
 import fnmatch
 import json
-import os
 import sys
 from pathlib import Path
 

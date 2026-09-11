@@ -36,7 +36,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-import lucid.models  # populates the registry
+import lucid.models  # noqa: F401 — imported for the registry it populates
 from lucid.models._registry import _REGISTRY, _RegistryEntry
 from lucid.models._summary import compute_model_summary
 from lucid.nn._shadow import shadow_alloc

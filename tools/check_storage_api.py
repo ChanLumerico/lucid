@@ -40,7 +40,7 @@ def main() -> int:
             print(i)
         return 1
 
-    print(f"[check_storage_api] Storage.h has all required types and methods.")
+    print("[check_storage_api] Storage.h has all required types and methods.")
     return 0
 
 
