@@ -1128,10 +1128,23 @@ def _receiver_position(free_fn: Any, method_fn: Any) -> int:
             for name, param in inspect.signature(free_fn).parameters.items()
             if param.kind in (param.POSITIONAL_ONLY, param.POSITIONAL_OR_KEYWORD)
         ]
-        method_names = {name for name in inspect.signature(method_fn).parameters}
-    except TypeError, ValueError, NameError:
+        method_params = inspect.signature(method_fn).parameters
+        method_names = set(method_params)
+    except (TypeError, ValueError, NameError):
         return 0
     method_names.discard("self")
+
+    # A registry-injected method is ``(self, *args, **kwargs)``: it names
+    # nothing, so *every* free parameter looks unmatched and the
+    # derivation below reads that as "the names did not settle it".
+    #
+    # Until these signatures could be read at all, ``inspect.signature``
+    # raised and the except above returned 0 — the right answer, reached
+    # by accident. Repairing the annotations turned that accident into
+    # ``-1`` for any op with three arguments or more, and 69 entry-axis
+    # cells went from pass to unanswered. Say the same thing on purpose.
+    if not method_names - {"args", "kwargs"}:
+        return 0
     missing = [i for i, name in enumerate(free_names) if name not in method_names]
     if len(missing) == 1:
         return missing[0]
