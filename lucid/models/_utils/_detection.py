@@ -1041,6 +1041,25 @@ def multi_scale_deformable_attention(
     -------
     Tensor
         ``(bs, num_queries, num_heads * head_dim)`` attended features.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import (
+    ...     multi_scale_deformable_attention,
+    ... )
+    >>> value = lucid.zeros(1, 64, 2, 8)
+    >>> locations = lucid.zeros(1, 4, 2, 1, 4, 2)
+    >>> weights = lucid.zeros(1, 4, 2, 1, 4)
+    >>> multi_scale_deformable_attention(
+    ...     value, [(8, 8)], locations, weights
+    ... ).shape
+    (1, 4, 16)
+
+    Four queries attend to four sampled points each rather than to all 64
+    positions — which is what makes deformable attention affordable
+    across a feature pyramid, and why the locations carry a trailing 2
+    for (x, y).
     """
     bs = int(value.shape[0])
     num_heads = int(value.shape[2])
@@ -1202,6 +1221,21 @@ class RPN(nn.Module):
         nms_threshold:  IoU threshold for NMS.
         min_size:       Minimum proposal side length (pixels).
         score_thresh:   Minimum objectness score (post-sigmoid).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import RPN
+    >>> rpn = RPN(16, 3).eval()
+    >>> features = [lucid.randn(1, 16, 8, 8)]
+    >>> anchors = [lucid.randn(192, 4)]
+    >>> proposals, scores = rpn(features, anchors, (64, 64))
+    >>> len(proposals), len(scores)
+    (1, 1)
+
+    Proposals per image, not per level: the head runs on every pyramid
+    level and the results are merged, ranked and cut down by NMS before
+    they come back, which is why the count does not follow the features.
     """
 
     def __init__(
@@ -1834,6 +1868,44 @@ def rpn_loss(
 
     Returns:
         ``(objectness_loss, regression_loss)``, both scalars.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import (
+    ...     BalancedPositiveNegativeSampler,
+    ...     Matcher,
+    ...     rpn_loss,
+    ... )
+    >>> logits = [lucid.zeros(1, 3, 4, 4)]
+    >>> deltas = [lucid.zeros(1, 12, 4, 4)]
+    >>> anchors = [lucid.tensor([[0.0, 0.0, 10.0, 10.0]] * 48)]
+    >>> targets = [{
+    ...     "boxes": lucid.tensor([[0.0, 0.0, 10.0, 10.0]]),
+    ...     "labels": lucid.tensor([1]),
+    ... }]
+    >>> objectness, box = rpn_loss(
+    ...     logits,
+    ...     deltas,
+    ...     anchors,
+    ...     targets,
+    ...     Matcher(0.7, 0.3),
+    ...     BalancedPositiveNegativeSampler(64, 0.5),
+    ...     (64, 64),
+    ... )
+    >>> round(float(objectness.item()), 6)
+    0.693147
+
+    log 2 — a logit of zero is exactly undecided about whether an anchor
+    holds an object.
+
+    >>> round(float(box.item()), 6)
+    0.0
+
+    The sampler is not optional. Anchors are overwhelmingly background,
+    and training on all of them teaches the head to answer "nothing"
+    every time; it draws a fixed batch at a fixed positive fraction
+    instead.
     """
     dev = logits[0].device.type
     flat_scores, flat_deltas = flatten_rpn_outputs(logits, deltas)
@@ -1923,6 +1995,36 @@ def select_training_samples(
         each per image and already restricted to the sampled RoIs.  The
         matched indices are what a mask branch needs to find each RoI's
         ground-truth mask.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import (
+    ...     BalancedPositiveNegativeSampler,
+    ...     Matcher,
+    ...     select_training_samples,
+    ... )
+    >>> proposals = [lucid.tensor(
+    ...     [[0.0, 0.0, 10.0, 10.0], [50.0, 50.0, 60.0, 60.0]]
+    ... )]
+    >>> targets = [{
+    ...     "boxes": lucid.tensor([[0.0, 0.0, 10.0, 10.0]]),
+    ...     "labels": lucid.tensor([1]),
+    ... }]
+    >>> sampled, labels, regression, _ = select_training_samples(
+    ...     proposals,
+    ...     targets,
+    ...     Matcher(0.5, 0.5),
+    ...     BalancedPositiveNegativeSampler(64, 0.25),
+    ...     (10.0, 10.0, 5.0, 5.0),
+    ... )
+    >>> sampled[0].shape, labels[0].shape
+    ((3, 4), (3,))
+
+    Three out of two: the ground-truth boxes are appended to the
+    proposals before matching. Early in training the region proposals are
+    noise, and without that the second stage would have almost no
+    positive to learn from.
     """
     out_props: list[Tensor] = []
     out_labels: list[Tensor] = []
@@ -2068,6 +2170,20 @@ def project_masks_on_boxes(
 
     Returns:
         ``(P, mask_size, mask_size)`` float targets in ``[0, 1]``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._detection import project_masks_on_boxes
+    >>> gt_masks = lucid.zeros(1, 32, 32)
+    >>> proposals = lucid.tensor([[0.0, 0.0, 16.0, 16.0]])
+    >>> matched = lucid.tensor([0])
+    >>> project_masks_on_boxes(gt_masks, proposals, matched, 14).shape
+    (1, 14, 14)
+
+    The ground-truth mask cropped to each proposal and resampled to the
+    head's resolution. Training targets have to live in the proposal's
+    frame, not the image's, because that is where the head predicts.
     """
     if int(proposals.shape[0]) == 0:
         return lucid.zeros((0, mask_size, mask_size), device=gt_masks.device.type)

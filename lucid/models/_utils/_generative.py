@@ -460,6 +460,31 @@ def diffusion_vlb_term(
     Returns:
         ``(B,)`` per-sample bound term, divided by ``log 2`` so the units are
         bits rather than nats.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import (
+    ...     diffusion_posterior_constants,
+    ...     diffusion_vlb_term,
+    ...     make_beta_schedule,
+    ... )
+    >>> posterior = diffusion_posterior_constants(make_beta_schedule(5))
+    >>> x = lucid.zeros(2, 3, 8, 8)
+    >>> diffusion_vlb_term(
+    ...     x_start=x,
+    ...     x_t=x,
+    ...     t=lucid.tensor([0, 2]),
+    ...     model_mean=x,
+    ...     model_log_variance=lucid.zeros(2, 1, 1, 1),
+    ...     posterior=posterior,
+    ... ).shape
+    (2,)
+
+    One number per sample in nats. This is the term that makes a learned
+    variance worth anything — the simple noise-prediction loss ignores
+    the variance entirely, so a model that learns one needs this to
+    supervise it.
     """
     true_mean, true_log_var = diffusion_posterior(
         x_start=x_start, x_t=x_t, t=t, posterior=posterior
@@ -859,6 +884,27 @@ def hutchinson_divergence(
     Reference: Grathwohl et al., *"FFJORD: Free-Form Continuous Dynamics
     for Scalable Reversible Generative Models"*, ICLR, 2019
     (arXiv:1810.01367), §3.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import (
+    ...     hutchinson_divergence,
+    ...     trace_probe,
+    ... )
+    >>> state = lucid.randn(2, 3, requires_grad=True)
+    >>> velocity = state * 2.0
+    >>> probe = trace_probe(state, "gaussian")
+    >>> hutchinson_divergence(velocity, state, probe).shape
+    (2,)
+
+    ``state`` has to carry a live graph — the divergence is read out of
+    the Jacobian by differentiating, so a detached tensor has nothing to
+    differentiate through.
+
+    One probe gives an unbiased estimate of the trace and costs a single
+    backward pass, whatever the dimension. That is the trade this exists
+    to make: the exact answer needs one pass per dimension.
     """
     (row,) = lucid.autograd.grad(
         velocity,
@@ -907,6 +953,20 @@ def exact_divergence(
     -------
     Tensor
         ``(B,)`` exact trace; differentiable only when ``create_graph``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._generative import exact_divergence
+    >>> state = lucid.randn(2, 3, requires_grad=True)
+    >>> velocity = state * 2.0
+    >>> seeds = [lucid.zeros(2, 3) for _ in range(3)]
+    >>> exact_divergence(velocity, state, seeds).shape
+    (2,)
+
+    One seed per dimension, and that is the cost: three here, but a
+    backward pass per channel of an image is not something a sampler can
+    afford. Use it to check the estimator, not in the loop.
     """
     total: Tensor | None = None
     for index, seed in enumerate(seeds):

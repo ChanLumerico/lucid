@@ -62,6 +62,31 @@ def free_bits_kl(
     not; clipping each step first means those steps simply stop
     contributing.  DreamerV2's ``free_nats`` clipped the mean, and that
     difference is part of why this one does not need a tuned KL scale.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._common._rssm import RSSMState
+    >>> state = RSSMState(
+    ...     deter=lucid.zeros(2, 8),
+    ...     stoch=lucid.zeros(2, 4, 8),
+    ...     mean=None,
+    ...     std=None,
+    ...     logits=lucid.zeros(2, 4, 8),
+    ... )
+    >>> from lucid.models.generative.dreamer_v3._objectives import (
+    ...     free_bits_kl,
+    ... )
+    >>> dynamics, representation = free_bits_kl(
+    ...     state, state, dyn_scale=1.0, rep_scale=1.0, free_nats=1.0
+    ... )
+    >>> float(dynamics.item()), float(representation.item())
+    (1.0, 1.0)
+
+    Two terms rather than v2's single balanced one, each clamped at the
+    free-nats floor on its own. Returning them apart is what lets the
+    two be scaled differently — v3 weights the dynamics term far above
+    the representation one.
     """
     if not (posterior.is_discrete and prior.is_discrete):
         raise ValueError("free bits here expects two categorical states")

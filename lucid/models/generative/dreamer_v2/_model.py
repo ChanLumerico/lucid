@@ -190,6 +190,30 @@ def balanced_kl(
     Both halves are the same number when nothing is detached — the split
     is entirely about where the gradient goes, which is why a test that
     only checks the value cannot tell this apart from a plain KL.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative._common._rssm import RSSMState
+    >>> state = RSSMState(
+    ...     deter=lucid.zeros(2, 8),
+    ...     stoch=lucid.zeros(2, 4, 8),
+    ...     mean=None,
+    ...     std=None,
+    ...     logits=lucid.zeros(2, 4, 8),
+    ... )
+    >>> from lucid.models.generative.dreamer_v2._model import balanced_kl
+    >>> balanced_kl(state, state, balance=0.8, free_nats=1.0).shape
+    ()
+
+    A scalar, and against itself it is the free-nats floor rather than
+    zero — the clamp is what stops the KL collapsing the stochastic
+    state to the prior early in training.
+
+    ``balance`` splits the term in two: the posterior is pulled toward a
+    stopped-gradient prior and the prior toward a stopped-gradient
+    posterior, with 0.8 of the weight on the second. Without that split
+    the representation gives way and the dynamics never have to learn.
     """
     if not (posterior.is_discrete and prior.is_discrete):
         raise ValueError("KL balancing here expects two categorical states")

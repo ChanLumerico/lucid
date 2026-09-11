@@ -98,9 +98,20 @@ class TransformerModelOutput(ModelOutput):
 
     Examples
     --------
+    >>> import lucid
+    >>> from lucid.models.text.transformer._model import (
+    ...     TransformerModelOutput,
+    ... )
+    >>> out = TransformerModelOutput(
+    ...     last_hidden_state=lucid.zeros(1, 32, 512),
+    ...     encoder_last_hidden_state=lucid.zeros(1, 128, 512),
+    ... )
+    >>> out.last_hidden_state.shape, out.encoder_last_hidden_state.shape
+    ((1, 32, 512), (1, 128, 512))
+
     ``TransformerModel(cfg)(input_ids, decoder_input_ids)`` returns this
-    type; for the base config ``last_hidden_state`` is ``(B, T_dec, 512)``
-    and ``encoder_last_hidden_state`` is ``(B, T_src, 512)``.
+    type. The two lengths differ because the decoder is partway through a
+    sequence the encoder has already read in full.
     """
 
     last_hidden_state: Tensor
