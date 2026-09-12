@@ -19,6 +19,7 @@ Three properties, each with its own failure mode:
 
 import functools
 import os
+import subprocess
 
 import pytest
 
@@ -60,6 +61,26 @@ def _has_neural_engine() -> bool:
 def _require_neural_engine() -> None:
     if not _has_neural_engine():
         pytest.skip("no Neural Engine on this machine; a hosted CI runner is a VM")
+
+
+@functools.cache
+def _under_hypervisor() -> bool:
+    """Whether this process is running inside a virtual machine.
+
+    ``kern.hv_vmm_present`` is 1 under a hypervisor and 0 on hardware.
+    Asked directly rather than inferred from a missing Neural Engine,
+    because what it gates has nothing to do with the Neural Engine.
+    """
+    try:
+        done = subprocess.run(
+            ["/usr/sbin/sysctl", "-n", "kern.hv_vmm_present"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except OSError, subprocess.CalledProcessError:
+        return False
+    return done.stdout.strip() == "1"
 
 
 class _Tiny(nn.Module):
@@ -417,6 +438,13 @@ class TestSegmentationAndDetection:
         that loads, runs, and returns plausible numbers for a third of
         the model. Nothing about it looks wrong from the outside.
         """
+        if _under_hypervisor():
+            # On the hosted runner's virtual machine the whole process dies
+            # here with SIGTRAP (exit 133) and no traceback, taking the rest
+            # of the suite with it. It passes on hardware; the cause inside
+            # Core ML is not known yet. Run it with ``-s`` on a VM to see
+            # what Core ML prints before the trap — capture discards it.
+            pytest.skip("Core ML traps exporting YOLOv3 inside a VM; runs on hardware")
         model = M.create_model("yolo_v3").eval()
         x = lucid.randn(1, 3, 416, 416)
         reference = model(x)
