@@ -21,6 +21,16 @@ checkpoint while ``sk_resnet_18`` is a timm one.  Comparing a model
 against the wrong source shows every weight differing and looks exactly
 like a defect — which is how this tool's first run was misread.
 
+Text and CLIP checkpoints come from transformers.  Their outputs are
+compared field by field — hidden states, logits, span logits, image and
+text embeddings — relative to the reference's own scale, because a
+language model's logits run to the hundreds and an absolute bound that
+suits a classifier would fail them on float32 rounding.  The first of
+these compared by hand, ``bert_base``, was 4.14 apart: the embedding
+lookup zeroed the trained ``[PAD]`` row.  Models over ``_MAX_PARAMS`` are
+reported rather than loaded: both copies at once do not fit a 16 GB
+MacBook or a hosted runner.
+
 Only sources whose reference package is installed can be checked; the
 rest are reported as unreachable rather than skipped silently.
 
@@ -29,6 +39,7 @@ Run::
     python -m tools.check_pretrained_parity --limit 5
     python -m tools.check_pretrained_parity --model resnet_18_cls
     python -m tools.check_pretrained_parity --source timm
+    python -m tools.check_pretrained_parity --source transformers
     python -m tools.check_pretrained_parity --list
 
 Exit codes
@@ -50,6 +61,7 @@ import numpy as np
 import lucid
 import lucid.models  # noqa: F401 — populates the registry
 from lucid.models import create_model
+from lucid.models._registry import _REGISTRY
 from lucid.weights._registry import _WEIGHTS_BY_MODEL
 from lucid.test._fixtures.ref_framework import (
     ref_module,
@@ -60,8 +72,46 @@ from lucid.test._fixtures.ref_framework import (
 #: Outputs agreeing to this are the same computation in a different order.
 _ATOL = 1e-4
 
+#: The same, relative to the reference's largest magnitude — for outputs
+#: whose scale is not a classifier's.
+_RTOL = 1e-4
+
 #: Below this the comparison is against noise rather than a model.
 _MIN_SCALE = 1e-3
+
+#: Larger than this is reported, not loaded.  Two float32 copies of a
+#: 774M-parameter model are over 6 GB before any activation.
+_MAX_PARAMS = 500_000_000
+
+#: The transformers class that reproduces each Lucid class, and the output
+#: fields the two share.  A Lucid class not listed here is reported as
+#: unsupported rather than compared against the wrong head.
+_HF_HEADS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "BERTModel": ("AutoModel", ("last_hidden_state",)),
+    "BERTForMaskedLM": ("AutoModelForMaskedLM", ("logits",)),
+    "BERTForQuestionAnswering": (
+        "AutoModelForQuestionAnswering",
+        ("start_logits", "end_logits"),
+    ),
+    "BERTForTokenClassification": ("AutoModelForTokenClassification", ("logits",)),
+    "GPTModel": ("AutoModel", ("last_hidden_state",)),
+    "GPTLMHeadModel": ("AutoModelForCausalLM", ("logits",)),
+    "GPT2Model": ("AutoModel", ("last_hidden_state",)),
+    "GPT2LMHeadModel": ("AutoModelForCausalLM", ("logits",)),
+    "RoFormerModel": ("AutoModel", ("last_hidden_state",)),
+    "RoFormerForMaskedLM": ("AutoModelForMaskedLM", ("logits",)),
+    "CvTForImageClassification": ("AutoModelForImageClassification", ("logits",)),
+    "CLIPModel": ("CLIPModel", ("image_embeds", "text_embeds")),
+}
+
+#: CLIP's entries record only that OpenAI's weights were re-hosted by
+#: transformers, not where; these are the repositories they came from.
+_CLIP_REPOS: dict[str, tuple[str, int]] = {
+    "clip_vit_base_16": ("openai/clip-vit-base-patch16", 224),
+    "clip_vit_base_32": ("openai/clip-vit-base-patch32", 224),
+    "clip_vit_large_14": ("openai/clip-vit-large-patch14", 224),
+    "clip_vit_large_14_336": ("openai/clip-vit-large-patch14-336", 336),
+}
 
 
 def _reference_for(source: str) -> tuple[str, str] | None:
@@ -69,14 +119,27 @@ def _reference_for(source: str) -> tuple[str, str] | None:
 
     ``reference_vision/ResNet18_Weights.IMAGENET1K_V1`` names a weights
     enum in the reference vision package; ``timm/resnet18.a1_in1k`` names
-    a model in the zoo oracle.  Anything else — transformers, diffusers,
-    darknet, a research repo — needs a loader this does not have.
+    a model in the zoo oracle; ``transformers/google-bert/bert-base-uncased``
+    names a repository; CLIP's entries say only that transformers
+    re-hosted them.  Anything else — diffusers, darknet, a research repo —
+    needs a loader this does not have.
     """
     if source.startswith("reference_vision/"):
         return ("vision", source.split("/", 1)[1])
     if source.startswith("timm/"):
         return ("timm", source.split("/", 1)[1])
+    if source.startswith("transformers/"):
+        return ("transformers", source.split("/", 1)[1])
+    if source.startswith("openai/CLIPModel"):
+        return ("clip", "")
     return None
+
+
+def _transformers_module() -> object | None:
+    try:
+        return importlib.import_module("transformers")
+    except ImportError:
+        return None
 
 
 def _build_reference(kind: str, identifier: str) -> object:
@@ -128,11 +191,15 @@ def _build_reference(kind: str, identifier: str) -> object:
     )
 
 
-def _compare(model_name: str, source: str, shape: tuple[int, ...]) -> dict[str, object]:
+def _compare(
+    model_name: str, source: str, shape: tuple[int, ...], params: int | None
+) -> dict[str, object]:
     resolved = _reference_for(source)
     if resolved is None:
         return {"unreachable": f"no loader for {source.split('/')[0]!r}"}
     kind, identifier = resolved
+    if kind in ("transformers", "clip"):
+        return _compare_transformers(model_name, kind, identifier, params)
     if (kind == "timm" and zoo_module() is None) or (
         kind == "vision" and ref_vision_module() is None
     ):
@@ -183,6 +250,102 @@ def _compare(model_name: str, source: str, shape: tuple[int, ...]) -> dict[str, 
     }
 
 
+def _compare_transformers(
+    model_name: str, kind: str, identifier: str, params: int | None
+) -> dict[str, object]:
+    """One checkpoint against the transformers model it was converted from.
+
+    Token ids are drawn at random below the vocabulary size, pixels from a
+    unit normal; no tokenizer is involved, since the question is whether
+    the same ids reach the same numbers, not what the text means.
+    """
+    transformers = _transformers_module()
+    ref = ref_module()
+    if transformers is None or ref is None:
+        return {
+            "unreachable": "transformers or the reference framework is not installed"
+        }
+
+    cls_name = _REGISTRY[model_name].model_class.__name__
+    head = _HF_HEADS.get(cls_name)
+    if head is None:
+        return {"unsupported": f"no transformers head mapped for {cls_name}"}
+    auto_name, fields = head
+    repo, side = identifier, 224
+    if kind == "clip":
+        if model_name not in _CLIP_REPOS:
+            return {"unsupported": f"no repository recorded for {model_name}"}
+        repo, side = _CLIP_REPOS[model_name]
+    if params is not None and params > _MAX_PARAMS:
+        return {
+            "unreachable": (
+                f"{params / 1e6:.0f}M parameters — too large to hold both "
+                f"copies here (limit {_MAX_PARAMS / 1e6:.0f}M)"
+            )
+        }
+
+    try:
+        ours = create_model(model_name, pretrained=True).eval()
+        theirs = getattr(transformers, auto_name).from_pretrained(repo).eval()
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"[:200]}
+
+    rng = np.random.default_rng(0)
+    ours_args: list[object] = []
+    theirs_kwargs: dict[str, object] = {}
+    if cls_name in ("CvTForImageClassification", "CLIPModel"):
+        pixels = rng.standard_normal((1, 3, side, side)).astype(np.float32)
+        ours_args.append(lucid.from_numpy(pixels.copy()))
+        theirs_kwargs["pixel_values"] = ref.from_numpy(pixels.copy())
+    if cls_name != "CvTForImageClassification":
+        vocab = int(ours.config.vocab_size)
+        # CLIP's text tower takes exactly its context length and pools at
+        # the [EOS] token, found as the largest id. Ending every sequence
+        # on the top id pins that position on both sides, whichever way
+        # the reference locates it.
+        length = int(getattr(ours.config, "context_length", 16))
+        ids = rng.integers(1, vocab - 1, size=(1, length)).astype(np.int64)
+        if kind == "clip":
+            ids[:, -1] = vocab - 1
+        ours_args.append(lucid.from_numpy(ids.copy()).long())
+        theirs_kwargs["input_ids"] = ref.from_numpy(ids.copy())
+
+    try:
+        with ref.no_grad():
+            reference_out = theirs(**theirs_kwargs)
+        answer = ours(*ours_args)
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"[:200]}
+
+    worst, scale, agrees = 0.0, 0.0, True
+    for field in fields:
+        wanted = getattr(reference_out, field).numpy()
+        got = getattr(answer, field).numpy()
+        if got.shape != wanted.shape:
+            return {"error": f"{field}: shape {got.shape} against {wanted.shape}"}
+        field_scale = float(np.abs(wanted).max())
+        if field_scale < _MIN_SCALE:
+            return {"degenerate": f"{field} reaches only {field_scale:.2g}"}
+        worst = max(worst, float(np.abs(got - wanted).max()) / field_scale)
+        scale = max(scale, field_scale)
+        if "logits" in field:
+            agrees = agrees and bool((got.argmax(-1) == wanted.argmax(-1)).all())
+
+    return {
+        "max_diff": worst,
+        "scale": scale,
+        "top1_agrees": agrees,
+        "tolerance": _RTOL,
+        "relative": True,
+    }
+
+
+def _params_of(name: str, member: object) -> int | None:
+    meta = getattr(getattr(member, "value", None), "meta", {}) or {}
+    count = meta.get("num_params") or getattr(_REGISTRY.get(name), "params", None)
+    return int(count) if count else None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     parser.add_argument("--model", help="only this factory")
@@ -191,7 +354,7 @@ def main() -> int:
     parser.add_argument("--list", action="store_true", help="print what is checkable")
     args = parser.parse_args()
 
-    targets: list[tuple[str, str]] = []
+    targets: list[tuple[str, str, int | None]] = []
     for name, enum in sorted(_WEIGHTS_BY_MODEL.items()):
         for tag, member in enum.__members__.items():
             if tag == "DEFAULT":
@@ -202,11 +365,11 @@ def main() -> int:
             if args.source and not source.startswith(args.source):
                 continue
             if _reference_for(source) is not None:
-                targets.append((name, source))
+                targets.append((name, source, _params_of(name, member)))
             break  # one tag per factory is enough to catch a bad conversion
 
     if args.list:
-        for name, source in targets:
+        for name, source, _params in targets:
             print(f"{name}: {source}")
         print(f"\n{len(targets)} checkable")
         return 0
@@ -222,8 +385,8 @@ def main() -> int:
     unreachable = 0
     checked = 0
 
-    for index, (name, source) in enumerate(targets, 1):
-        report = _compare(name, source, (1, 3, 224, 224))
+    for index, (name, source, params) in enumerate(targets, 1):
+        report = _compare(name, source, (1, 3, 224, 224), params)
         if "unreachable" in report:
             unreachable += 1
             print(f"  [{index}/{len(targets)}] {name:26s} — {report['unreachable']}")
@@ -242,15 +405,17 @@ def main() -> int:
         checked += 1
         diff = float(report["max_diff"])  # type: ignore[arg-type]
         agrees = bool(report["top1_agrees"])
-        ok = diff <= _ATOL and agrees
+        tolerance = float(report.get("tolerance", _ATOL))  # type: ignore[arg-type]
+        label = "rel|Δ|" if report.get("relative") else "max|Δ|"
+        ok = diff <= tolerance and agrees
         print(
-            f"  [{index}/{len(targets)}] {name:26s} max|Δ|={diff:.2e} "
+            f"  [{index}/{len(targets)}] {name:26s} {label}={diff:.2e} "
             f"top1={'=' if agrees else '≠'} {'ok' if ok else 'MISMATCH'}",
             flush=True,
         )
         if not ok:
             bad.append(
-                f"  {name}: max|Δ|={diff:.3e} against {source}"
+                f"  {name}: {label}={diff:.3e} against {source}"
                 + ("" if agrees else " — and the top-1 class differs")
             )
 

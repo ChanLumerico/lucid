@@ -78,12 +78,13 @@ jobs:
           python -m pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1" mlx
           python -m pip install --no-build-isolation -e ".[test]"
 
-      # Both reference families, because the zoo's sources are mixed:
-      # resnet_18 came from the reference vision package and sk_resnet_18
-      # from the zoo oracle. Comparing a model against the wrong one shows
-      # every weight differing and reads exactly like a defect.
+      # Every reference family, because the zoo's sources are mixed:
+      # resnet_18 came from the reference vision package, sk_resnet_18
+      # from the zoo oracle, and BERT, GPT-2, RoFormer, CvT and CLIP from
+      # transformers. Comparing a model against the wrong one shows every
+      # weight differing and reads exactly like a defect.
       - name: Install the reference implementations
-        run: python -m pip install timm
+        run: python -m pip install timm transformers
 
       - name: Disk before
         run: df -h / | tail -1
