@@ -25,11 +25,18 @@ import lucid
 import lucid.coreml as cml
 import lucid.models as M
 from lucid._C import engine as _C_engine
+from lucid.test.unit.coreml._helpers import translation_units
 
 pytestmark = pytest.mark.skipif(
     not hasattr(_C_engine, "coreml"),
     reason="the engine was built without the Core ML writer",
 )
+
+#: ``ALL`` on hardware, ``CPU_ONLY`` inside a virtual machine.  On the
+#: hosted runner the paravirtual GPU put ZFNet 1.7e-3 from eager where an
+#: M1 Pro's GPU puts it 2.2e-6 away; this file checks the translation,
+#: not that device.
+_UNITS = translation_units()
 
 #: One factory per family, with the input it takes: ``img`` for pixels
 #: and ``ids`` for token indices. Small on purpose — this is checking
@@ -291,7 +298,9 @@ def test_a_family_representative_exports_and_matches(factory, shape, tmp_path):
         "anything about it"
     )
 
-    exported = cml.export(model, x, str(tmp_path / f"{factory}.mlpackage"))
+    exported = cml.export(
+        model, x, str(tmp_path / f"{factory}.mlpackage"), compute_units=_UNITS
+    )
     try:
         got = exported.predict(x)
         assert tuple(got.shape) == tuple(reference.shape)
@@ -311,7 +320,9 @@ def test_a_token_model_exports_and_matches(factory, shape, tmp_path):
     reference = _tensor_of(model(x))
     scale = max(float(reference.abs().max().item()), 1e-6)
 
-    exported = cml.export(model, x, str(tmp_path / f"{factory}.mlpackage"))
+    exported = cml.export(
+        model, x, str(tmp_path / f"{factory}.mlpackage"), compute_units=_UNITS
+    )
     try:
         # ``verify`` rather than ``predict``: a model with two heads
         # answers with a dict, and the comparison should not depend on
@@ -359,7 +370,9 @@ def test_a_multi_output_family_exports_and_matches(factory, shape, tmp_path):
     model = M.create_model(factory).eval()
     x = lucid.randn(*shape)
 
-    exported = cml.export(model, x, str(tmp_path / f"{factory}.mlpackage"))
+    exported = cml.export(
+        model, x, str(tmp_path / f"{factory}.mlpackage"), compute_units=_UNITS
+    )
     try:
         assert exported.verify(model, x, relative=True) < 1e-4
     finally:
@@ -380,7 +393,9 @@ def test_a_multi_input_family_exports_and_matches(factory, make_inputs, tmp_path
     model = _without_zero_initialised_parameters(factory)
     inputs = make_inputs()
 
-    exported = cml.export(model, inputs, str(tmp_path / f"{factory}.mlpackage"))
+    exported = cml.export(
+        model, inputs, str(tmp_path / f"{factory}.mlpackage"), compute_units=_UNITS
+    )
     try:
         assert exported.verify(model, inputs, relative=True) < 1e-4
     finally:
@@ -403,6 +418,7 @@ def test_a_sampling_family_exports_with_its_draws_lifted(
         inputs,
         str(tmp_path / f"{factory}.mlpackage"),
         draws=cml.Draws.AS_INPUT,
+        compute_units=_UNITS,
     )
     try:
         assert exported.noise_inputs
@@ -419,7 +435,9 @@ def test_a_detector_given_its_proposals(factory, make_inputs, tmp_path):
     model = _without_zero_initialised_parameters(factory)
     inputs = make_inputs()
 
-    exported = cml.export(model, inputs, str(tmp_path / f"{factory}.mlpackage"))
+    exported = cml.export(
+        model, inputs, str(tmp_path / f"{factory}.mlpackage"), compute_units=_UNITS
+    )
     try:
         assert exported.verify(model, inputs, relative=True) < 1e-4
     finally:
