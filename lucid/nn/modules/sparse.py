@@ -203,40 +203,47 @@ class Embedding(Module):
             )
 
     def _zero_pad_row(self) -> None:
-        """Set ``weight[padding_idx]`` to zero in-place via engine ops.
+        """Set ``weight[padding_idx]`` to zero, written through in place.
 
-        Cheap because it only fires from ``__init__``; runtime forward
-        does not need this.
+        Through the weight's own storage, the way ``nn.init`` writes, so the
+        parameter stays a leaf that requires grad.  This used to compute the
+        zeroed table with gradient tracking on and swap it in as the
+        weight's impl: the weight became the output of an ``index_fill``
+        node rather than a leaf, and backward never accumulated into its
+        ``.grad``.  Every embedding built with a ``padding_idx`` — BERT's and
+        RoFormer's word tables among them — was untrainable, with no error.
         """
-        # ``index_fill`` on dim=0 zeroes the chosen row; rebind ``weight._impl``
-        # so requires_grad / parameter identity are preserved.
-        new_w: Tensor = _lucid.index_fill(
-            self.weight,
-            0,
-            _lucid.tensor(
-                [int(self.padding_idx)], dtype=_lucid.int64, device=self.weight.device  # type: ignore[arg-type]
-            ),
-            0.0,
+        pad = _lucid.tensor(
+            [int(self.padding_idx)], dtype=_lucid.int64, device=self.weight.device  # type: ignore[arg-type]
         )
-        self.weight._impl = new_w._impl
+        with _lucid.no_grad():
+            zeroed: Tensor = _lucid.index_fill(self.weight, 0, pad, 0.0)
+        init._fill_from_impl(self.weight, zeroed._impl)
 
     def _renorm_weight_inplace(self) -> None:
-        """Apply ``max_norm`` rescaling to rows that exceed the cap."""
+        """Apply ``max_norm`` rescaling to rows that exceed the cap.
+
+        A write to the table, not a step in the computation: under
+        ``no_grad`` and through the weight's storage, as the reference does
+        it.  Swapping ``w * scale`` in as the weight made it a non-leaf on the
+        first forward, after which it never received a gradient.
+        """
         w: Tensor = self.weight
-        # Per-row Lp-norm via engine ops.
-        if self.norm_type == 2.0:
-            norms: Tensor = (w * w).sum(dim=1).sqrt()
-        elif self.norm_type == 1.0:
-            norms = w.abs().sum(dim=1)
-        else:
-            norms = (w.abs() ** float(self.norm_type)).sum(dim=1) ** (
-                1.0 / float(self.norm_type)
-            )
-        scale_raw: Tensor = float(self.max_norm) / (norms + 1e-7)  # type: ignore[arg-type]
-        ones: Tensor = _lucid.ones_like(scale_raw)
-        scale: Tensor = scale_raw.minimum(ones).unsqueeze(-1)
-        new_w: Tensor = w * scale
-        self.weight._impl = new_w._impl
+        with _lucid.no_grad():
+            # Per-row Lp-norm via engine ops.
+            if self.norm_type == 2.0:
+                norms: Tensor = (w * w).sum(dim=1).sqrt()
+            elif self.norm_type == 1.0:
+                norms = w.abs().sum(dim=1)
+            else:
+                norms = (w.abs() ** float(self.norm_type)).sum(dim=1) ** (
+                    1.0 / float(self.norm_type)
+                )
+            scale_raw: Tensor = float(self.max_norm) / (norms + 1e-7)  # type: ignore[arg-type]
+            ones: Tensor = _lucid.ones_like(scale_raw)
+            scale: Tensor = scale_raw.minimum(ones).unsqueeze(-1)
+            new_w: Tensor = w * scale
+        init._fill_from_impl(self.weight, new_w._impl)
 
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]

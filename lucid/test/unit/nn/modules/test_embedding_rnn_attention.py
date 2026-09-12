@@ -18,6 +18,27 @@ class TestEmbedding:
         # ``init`` zeroes the pad row.
         np.testing.assert_array_equal(m.weight[0].numpy(), [0.0, 0.0, 0.0, 0.0])
 
+    def test_padding_idx_keeps_the_weight_trainable(self) -> None:
+        # Zeroing the pad row used to swap an ``index_fill`` output in as
+        # the weight — not a leaf — so backward never reached ``.grad`` and
+        # every embedding with a padding_idx was untrainable.
+        m = nn.Embedding(10, 4, padding_idx=0)
+        assert m.weight.is_leaf and m.weight.requires_grad
+        m(lucid.tensor([[0, 1, 2, 0]], dtype=lucid.int64)).sum().backward()
+        assert m.weight.grad is not None
+        # The pad row takes no gradient; the rows looked up do.
+        np.testing.assert_array_equal(m.weight.grad[0].numpy(), [0.0, 0.0, 0.0, 0.0])
+        assert float(m.weight.grad[1].abs().sum().item()) > 0
+
+    def test_max_norm_keeps_the_weight_trainable(self) -> None:
+        # The renorm ran with gradient tracking on and swapped ``w * scale``
+        # in as the weight, which stopped being a leaf on the first forward.
+        m = nn.Embedding(10, 4, max_norm=1.0)
+        m(lucid.tensor([1, 2], dtype=lucid.int64)).sum().backward()
+        assert m.weight.is_leaf and m.weight.grad is not None
+        norms = (m.weight * m.weight).sum(dim=1).sqrt()
+        assert float(norms[1].item()) <= 1.0 + 1e-5
+
 
 class TestSequential:
     def test_chain(self) -> None:

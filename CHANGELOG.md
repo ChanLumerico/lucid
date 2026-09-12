@@ -50,6 +50,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lay out an empty namespace the way clang-format does
 
+- an embedding with padding_idx or max_norm could not be trained
+
 ### Added
 
 - quantization-aware models reach the exporter
