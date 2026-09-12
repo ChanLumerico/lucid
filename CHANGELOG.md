@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - CompressionAware was the one module the probe could not build
 
+- keep timm's tag, or the parity check compares other weights
+
 ### Added
 
 - quantization-aware models reach the exporter

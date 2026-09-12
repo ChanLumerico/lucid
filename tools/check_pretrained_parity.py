@@ -83,7 +83,13 @@ def _build_reference(kind: str, identifier: str) -> object:
     if kind == "timm":
         timm = zoo_module()
         assert timm is not None
-        return timm.create_model(identifier.split(".")[0], pretrained=True).eval()
+        # The whole identifier, tag included. ``resnext101_32x4d`` alone
+        # loads timm's default tag, ``fb_ssl_yfcc100m_ft_in1k``, while this
+        # zoo's checkpoint came from ``gluon_in1k`` — dropping the tag
+        # compared two different checkpoints and reported the gap (5.75,
+        # top-1 differing) as a conversion defect. seresnet50 the same:
+        # ``a1_in1k`` by default, ``ra2_in1k`` here.
+        return timm.create_model(identifier, pretrained=True).eval()
 
     vision = ref_vision_module()
     assert vision is not None
