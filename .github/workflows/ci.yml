@@ -137,15 +137,21 @@ jobs:
         # Model-zoo tests are excluded — they use 50–60 GB locally, far
         # past any hosted runner. Coverage on engine / nn / optim /
         # autograd / linalg / fft / etc. fits fine.
+        #
+        # Three processes, split the way scripts/ci_full.sh splits the fast
+        # tier: one process carrying every earlier test into the Core ML
+        # export smoke file runs the runner out of memory. --parallel-mode
+        # writes a data file per process and ``combine`` joins them.
         run: |
           python -m pip install coverage
           mkdir -p build/coverage
-          python -m coverage run --source=lucid -m pytest lucid/test/ \
-              --ignore=lucid/test/parity \
-              --ignore=lucid/test/integration \
-              --ignore=lucid/test/perf \
-              --ignore=lucid/test/unit/models \
-              -q
+          IGNORES="--ignore=lucid/test/parity --ignore=lucid/test/integration --ignore=lucid/test/perf --ignore=lucid/test/unit/models"
+          COREML=lucid/test/unit/coreml
+          SMOKE=$COREML/test_family_export_smoke.py
+          python -m coverage run --parallel-mode --source=lucid -m pytest lucid/test/ $IGNORES --ignore=$COREML -q
+          python -m coverage run --parallel-mode --source=lucid -m pytest $COREML --ignore=$SMOKE -q
+          python -m coverage run --parallel-mode --source=lucid -m pytest $SMOKE -q
+          python -m coverage combine
           python -m coverage xml -o build/coverage/coverage.xml
           python -m coverage report
 

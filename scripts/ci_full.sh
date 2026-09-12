@@ -17,13 +17,25 @@ echo "==> Release build"
 # Model-zoo tests are excluded — locally a full pass uses 50–60 GB of
 # RAM (paper-faithful architectures + activations), well past any hosted
 # runner. Run them locally before opening a PR; CI covers the rest.
+#
+# Three processes rather than one, so each starts from a clean heap. The
+# Core ML tests export real models — mask2former, detr, clip — and a
+# single process carrying 1,300 earlier tests into them was SIGKILLed on
+# the hosted runner partway through the export smoke file, which alone
+# peaks near 5 GB on an M1 Pro. The ignores are complementary: the three
+# together select exactly what the single run did (7,587 tests).
 echo "==> Python fast tier (non-models)"
-"$PYTHON_BIN" -m pytest lucid/test/ \
-    --ignore=lucid/test/parity \
-    --ignore=lucid/test/integration \
-    --ignore=lucid/test/perf \
-    --ignore=lucid/test/unit/models \
-    -x -q
+FAST_TIER_IGNORES=(
+    --ignore=lucid/test/parity
+    --ignore=lucid/test/integration
+    --ignore=lucid/test/perf
+    --ignore=lucid/test/unit/models
+)
+COREML_TESTS=lucid/test/unit/coreml
+EXPORT_SMOKE=$COREML_TESTS/test_family_export_smoke.py
+"$PYTHON_BIN" -m pytest lucid/test/ "${FAST_TIER_IGNORES[@]}" --ignore="$COREML_TESTS" -x -q
+"$PYTHON_BIN" -m pytest "$COREML_TESTS" --ignore="$EXPORT_SMOKE" -x -q
+"$PYTHON_BIN" -m pytest "$EXPORT_SMOKE" -x -q
 
 # ── 3. Parity tier (requires reference framework; auto-skips when missing) ──
 #

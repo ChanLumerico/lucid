@@ -156,8 +156,11 @@ MULTI_INPUT = [
     ),
     # Upsamples by splitting an axis, padding zeros into it and merging
     # back, which wants rank 6 for two axes at once. Staged one axis at a
-    # time so no step passes the cap.
-    ("rectified_flow_afhq_cat", lambda: (lucid.randn(1, 3, 256, 256), lucid.zeros(1))),
+    # time so no step passes the cap. At 64 rather than its native 256,
+    # like efficientdet above: at 256 this one export peaked near 7 GB on
+    # an M1 Pro, and at 64 it peaks at 1.65 GB through the same staged
+    # upsample (verify 1.5e-08).
+    ("rectified_flow_afhq_cat", lambda: (lucid.randn(1, 3, 64, 64), lucid.zeros(1))),
 ]
 
 #: Families whose ``forward`` draws random numbers, exported with the
