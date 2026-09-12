@@ -10,7 +10,8 @@
 //     $y = W[\text{idx}]$ on a $(V, D)$ weight matrix.  The backward
 //     is a sparse scatter-add of ``grad_out`` into a zero-initialized
 //     ``dW`` at the positions given by the saved integer indices;
-//     rows at ``padding_idx`` are zeroed in both forward and backward.
+//     rows at ``padding_idx`` receive no gradient.  The forward returns
+//     them as stored — see ``EmbeddingBackward`` for why.
 //   * ``RotaryPosEmbeddingBackward`` — Rotary Position Embedding
 //     (RoPE, Su et al. 2021).  Rotates pairs of features in the last
 //     dimension by angles derived from precomputed cos/sin tables;
@@ -46,10 +47,18 @@ namespace lucid {
 // scatter-add ``grad_out`` into the correct rows of ``dW``.
 //
 // Forward dispatches to ``IBackend::embedding_forward`` which gathers
-// rows from the weight storage at positions given by ``indices``,
-// zeroing any output row whose index equals ``padding_idx``.  Backward
-// uses ``IBackend::embedding_backward`` to scatter-add ``grad_out``
-// into a zero-initialized ``dW`` at those same positions.
+// rows from the weight storage at positions given by ``indices`` —
+// every row, ``padding_idx`` included.  Backward uses
+// ``IBackend::embedding_backward`` to scatter-add ``grad_out`` into a
+// zero-initialized ``dW`` at those same positions, skipping any whose
+// index equals ``padding_idx``.
+//
+// ``padding_idx`` is a training contract, not a lookup mask.  The
+// module zeroes that row at initialisation and the backward keeps it
+// from being updated, so a fresh table answers zeros there and a
+// loaded checkpoint answers with the vector it carries — BERT's
+// ``[PAD]`` is a trained one.  Masking the lookup instead is the
+// mistake this used to make, in eager and compiled alike.
 //
 // Attributes
 // ----------
@@ -57,8 +66,8 @@ namespace lucid {
 //     Registered schema (name ``"embedding"``, version 1,
 //     ``AmpPolicy::Promote``).
 // padding_idx_ : int
-//     Index whose row is masked to zero in both forward and backward.
-//     ``-1`` disables the masking entirely.
+//     Index whose row receives no gradient.  ``-1`` disables it.  The
+//     forward does not apply it.
 // weight_shape_ : Shape
 //     ``(num_embeddings, embed_dim)``; recovered during backward to
 //     size ``dW``.
@@ -72,7 +81,7 @@ namespace lucid {
 class LUCID_API EmbeddingBackward : public FuncOp<EmbeddingBackward, 1> {
 public:
     static const OpSchema schema_v1;
-    int padding_idx_ = -1;   // Rows at this index are zeroed and skipped.
+    int padding_idx_ = -1;   // Row that receives no gradient; -1 for none.
     Shape weight_shape_;     // (num_embeddings, embed_dim).
     Storage saved_indices_;  // Integer index tensor from forward.
     Shape saved_indices_shape_;
@@ -89,8 +98,8 @@ public:
     //     Integer-typed tensor of any shape with values in
     //     ``[0, num_embeddings)``.
     // padding_idx : int
-    //     Row whose lookup is forced to zero; pass a negative value to
-    //     disable.
+    //     Row the backward leaves without gradient; pass a negative
+    //     value to disable.  The lookup returns that row as stored.
     //
     // Returns
     // -------
@@ -101,8 +110,8 @@ public:
     //
     // Math
     // ----
-    // $$y[\ldots] = W[\text{idx}[\ldots]],
-    //   \qquad y[\ldots] = 0 \text{ if } \text{idx}[\ldots] = \text{padding\_idx}.$$
+    // $$y[\ldots] = W[\text{idx}[\ldots]]$$
+    // for every index, ``padding_idx`` included.
     //
     // Shape
     // -----

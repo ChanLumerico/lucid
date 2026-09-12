@@ -6,9 +6,10 @@
 //                   matching index shape to the source rank, selects
 //                   along ``axis`` only.  MPSGraph's
 //                   ``gatherAlongAxis:`` mirrors the contract exactly.
-//   - ``embedding`` (lucid/_C/ops/utils/Select.cpp) — gather along
-//                   axis=0 with arbitrary-rank indices, then zero every
-//                   row selected at ``padding_idx``.
+//   - ``embedding`` (lucid/_C/nn/Embedding.cpp) — gather along axis=0
+//                   with arbitrary-rank indices.  ``padding_idx`` rides
+//                   on the node and is deliberately not applied; see the
+//                   note in ``emit``.
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
@@ -79,35 +80,22 @@ public:
                                             batchDimensions:0
                                                      name:@"embedding"];
 
-        // ``padding_idx`` is part of the op's contract, not a hint: the eager
-        // kernel zeroes every row gathered at that index, so a compiled graph
-        // that only gathers silently hands the pad token a real embedding.
-        // The mismatch is invisible whenever the weight's pad row happens to
-        // be zero, which is why it survived — a freshly initialised table
-        // usually has it zeroed already.
-        auto pad_it = node.attrs.find("padding_idx");
-        if (pad_it != node.attrs.end()) {
-            const auto* pad_p = std::get_if<std::int64_t>(&pad_it->second);
-            if (pad_p != nullptr && *pad_p >= 0) {
-                MPSGraphTensor* pad_c =
-                    [graph constantWithScalar:static_cast<double>(*pad_p)
-                                     dataType:i_t.dataType];
-                // (indices != pad) -> 1/0, cast to the output dtype and
-                // broadcast over the trailing embedding dimension.
-                MPSGraphTensor* keep = [graph notEqualWithPrimaryTensor:i_t
-                                                       secondaryTensor:pad_c
-                                                                  name:@"emb_pad_ne"];
-                keep = [graph castTensor:keep
-                                  toType:out.dataType
-                                    name:@"emb_pad_mask"];
-                keep = [graph expandDimsOfTensor:keep
-                                            axis:-1
-                                            name:@"emb_pad_mask_bc"];
-                out = [graph multiplicationWithPrimaryTensor:out
-                                             secondaryTensor:keep
-                                                        name:@"emb_pad_apply"];
-            }
-        }
+        // ``padding_idx`` does not mask the gather, here or in eager.
+        //
+        // This used to, and the comment that stood here said the eager
+        // kernel zeroed the pad row so a compiled graph had to match.
+        // That was true and both were wrong: the convention zeroes the
+        // row at initialisation and stops its gradient, leaving the
+        // lookup alone, so a trained checkpoint returns whatever it
+        // learned there. BERT's [PAD] carries a real vector, and zeroing
+        // it put bert_base 4.14 away from the implementation its weights
+        // came from.
+        //
+        // Left as a note rather than deleted because the pairing is the
+        // point: eager and compiled have to agree, and the way to keep
+        // them agreeing is to fix the contract in one place and follow
+        // it in the other — which is what happened, twice, in opposite
+        // directions.
 
         ctx.bind(node.outputs[0].id, (__bridge void*)out);
         return true;

@@ -8988,15 +8988,21 @@ public:
                 return static_cast<std::int64_t>(reinterpret_cast<const std::int32_t*>(ip)[i]);
             }
         };
+        // padding_idx does not mask the lookup.  The convention it comes
+        // from zeroes that row at initialisation and stops its gradient,
+        // so the row holds whatever training left there — and a loaded
+        // checkpoint carries a real vector in it.  BERT's [PAD] is the
+        // usual case: masking here returned zeros where the reference
+        // returns the trained embedding, and bert_base drifted 4.14 from
+        // the implementation its weights came from.  The gradient block
+        // lives in embedding_backward, which is the whole of the
+        // contract.
+        (void)padding_idx;
         for (std::size_t i = 0; i < M; ++i) {
             const std::int64_t id = read_idx(i);
             std::byte* dst = out_cpu.ptr.get() + i * row_bytes;
-            if (padding_idx >= 0 && id == static_cast<std::int64_t>(padding_idx)) {
-                std::memset(dst, 0, row_bytes);
-            } else {
-                const std::byte* src = ws.ptr.get() + static_cast<std::size_t>(id) * row_bytes;
-                std::memcpy(dst, src, row_bytes);
-            }
+            const std::byte* src = ws.ptr.get() + static_cast<std::size_t>(id) * row_bytes;
+            std::memcpy(dst, src, row_bytes);
         }
         return Storage{std::move(out_cpu)};
     }

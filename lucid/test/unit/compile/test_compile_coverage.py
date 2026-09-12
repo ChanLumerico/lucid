@@ -104,21 +104,36 @@ def test_lstm_head_compiles() -> None:
 
 
 def test_embedding_padding_idx_compiles() -> None:
-    """``padding_idx`` must survive compilation.
+    """Compiled and eager must answer the same at the pad index.
 
-    The emitter used to gather and stop, so a compiled embedding handed the
-    pad token whatever row the weight happened to hold.  Nothing caught it
-    because a freshly built table usually has that row zeroed already — the
-    two paths agreed by accident.  Filling it deliberately is what makes the
-    contract testable.
+    This test used to assert the pad rows came back zero, which pinned
+    the wrong contract. ``padding_idx`` zeroes that row at initialisation
+    and stops its gradient; it does not mask the lookup, so a table whose
+    pad row holds a trained vector returns that vector. Asserting zero
+    made a compiled graph match an eager kernel that was itself wrong,
+    and the pair agreed all the way to bert_base answering 4.14 away from
+    the implementation its weights came from.
+
+    What the test was for still holds: the two paths have to agree, and
+    a freshly built table has the pad row zeroed already, so they agree
+    by accident unless it is filled deliberately.
     """
     emb = nn.Embedding(8, 4, padding_idx=0)
     nn.init.normal_(emb.weight, std=1.0)
-    ids = lucid.tensor([[0, 1, 2, 0]]).long().to(COMPILE_DEVICE)
-    assert_compiles(emb, ids)
 
+    # The eager answer, taken before anything moves: ``assert_compiles``
+    # leaves the module on the compile device, and once it is there
+    # neither side is left on CPU to compare against.
     emb.eval()
+    cpu_ids = lucid.tensor([[0, 1, 2, 0]]).long()
+    expected = emb(cpu_ids).numpy()
+
+    ids = cpu_ids.to(COMPILE_DEVICE)
+    assert_compiles(emb, ids)
     to_metal(emb)
-    out = emb(ids)
-    pad_rows = out[0, 0].abs().sum() + out[0, 3].abs().sum()
-    assert float(pad_rows.item()) == 0.0
+    out = emb(ids).numpy()
+
+    assert (
+        abs(float(expected[0, 0].sum())) > 1e-6
+    ), "the pad row is zero, so this would pass without comparing anything"
+    assert float(abs(out - expected).max()) < 1e-5

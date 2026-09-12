@@ -4411,16 +4411,17 @@ public:
         const auto& gw = std::get<GpuStorage>(weight);
         const auto& gi = std::get<GpuStorage>(indices);
         auto idx = ::mlx::core::astype(*gi.arr, ::mlx::core::int64);
+        // padding_idx does not mask the lookup.  The convention it comes
+        // from zeroes that row at initialisation and stops its gradient,
+        // so the row holds whatever training left there — and a loaded
+        // checkpoint carries a real vector in it.  BERT's [PAD] is the
+        // usual case: masking here returned zeros where the reference
+        // returns the trained embedding, and bert_base drifted 4.14 from
+        // the implementation its weights came from.  The gradient block
+        // lives in embedding_backward, which is the whole of the
+        // contract.
+        (void)padding_idx;
         auto out = ::mlx::core::take(*gw.arr, idx, 0);
-        if (padding_idx >= 0) {
-            auto pad_v = ::mlx::core::astype(::mlx::core::array(padding_idx), ::mlx::core::int64);
-            auto mask = ::mlx::core::not_equal(idx, pad_v);
-            auto mask_dt = ::mlx::core::astype(mask, gpu::to_mlx_dtype(dt));
-            auto mask_shape_v = mask_dt.shape();
-            mask_shape_v.push_back(1);
-            mask_dt = ::mlx::core::reshape(mask_dt, mask_shape_v);
-            out = ::mlx::core::multiply(out, mask_dt);
-        }
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 

@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the gate discarded every parity failure
 
+- padding_idx zeroed the trained vector it was meant to freeze
+
 ### Added
 
 - quantization-aware models reach the exporter

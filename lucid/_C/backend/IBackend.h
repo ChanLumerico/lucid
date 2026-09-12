@@ -1554,8 +1554,9 @@ public:
                                     const Shape& x_shape,
                                     Dtype dt) = 0;
 
-    // Embedding table lookup: out[i] = weight[indices[i]].
-    // padding_idx entries are zeroed in the output.
+    // Embedding table lookup: out[i] = weight[indices[i]], for every index.
+    // padding_idx does not mask the lookup — it only keeps that row's
+    // gradient out of embedding_backward.
     virtual Storage embedding_forward(const Storage& weight,
                                       const Storage& indices,
                                       const Shape& weight_shape,
