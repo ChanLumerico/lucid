@@ -1,0 +1,109 @@
+name: Core ML VM probe
+
+# Why Core ML traps inside the hosted runner's virtual machine.
+#
+# The unit tests leave the Core ML runtime to hardware when they run under
+# a hypervisor (lucid/test/unit/coreml/conftest.py), because two unrelated
+# packages killed the test process by SIGTRAP there with nothing in the
+# log: pytest's capture discards whatever the framework printed, and the
+# process takes the rest of the suite with it.  Both pass on hardware.
+#
+# This runs only those tests, with the runtime back on, one per process,
+# without capture, with faulthandler dumping the Python stack on SIGTRAP,
+# and prints the crash report macOS writes for each trap — the faulting
+# thread's frames are the only account of where it comes from.
+#
+# Manual only.  It is a diagnosis, not a gate.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    name: Core ML inside the VM
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: phase-gate-py3.14
+          max-size: 600M
+
+      - name: Install Lucid
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1" mlx
+          python -m pip install --no-build-isolation -e ".[test]"
+
+      - name: Host
+        run: |
+          sw_vers
+          sysctl -n kern.hv_vmm_present machdep.cpu.brand_string hw.memsize
+          python - <<'PY'
+          from lucid.test.unit.coreml._helpers import has_neural_engine, under_hypervisor
+          print("under_hypervisor:", under_hypervisor(), "| neural engine:", has_neural_engine())
+          PY
+
+      - name: Run each trapping test in its own process, runtime on
+        run: |
+          probe="$RUNNER_TEMP/probe"
+          mkdir -p "$probe"
+          cat > "$probe/runtime_on.py" <<'PY'
+          # Tell the Core ML tests they are on hardware, so both the
+          # conftest policy and the per-test skips step aside, and dump
+          # the Python stack of every thread if the process takes SIGTRAP.
+          import faulthandler
+          import signal
+
+          import lucid.test.unit.coreml._helpers as helpers
+
+          helpers.under_hypervisor = lambda: False
+          faulthandler.register(signal.SIGTRAP, all_threads=True, chain=True)
+          PY
+          cat > "$probe/frames.py" <<'PY'
+          import json
+          import sys
+
+          header, _, body = open(sys.argv[1]).read().partition("\n")
+          report = json.loads(body)
+          print("process:", json.loads(header).get("app_name"), "|", report.get("exception"))
+          images = report.get("usedImages", [])
+          thread = report["threads"][report.get("faultingThread", 0)]
+          for frame in thread.get("frames", [])[:40]:
+              index = frame.get("imageIndex")
+              image = images[index].get("name", "?") if index is not None and index < len(images) else "?"
+              print(f"  {image:36s} {frame.get('symbol', hex(frame.get('imageOffset', 0)))}")
+          PY
+          set +e
+          for t in \
+            "lucid/test/unit/coreml/test_coreml.py::TestSegmentationAndDetection::test_a_detector_exports_all_three_of_its_heads" \
+            "lucid/test/unit/coreml/test_flexible_shapes.py::TestFlexibleResolution::test_a_fully_convolutional_model_takes_both"
+          do
+            echo "::group::$t"
+            touch "$probe/marker"
+            PYTHONPATH="$probe" python -m pytest "$t" -s -q -p runtime_on -p no:cacheprovider
+            echo "pytest exit=$?"
+            report=""
+            for _ in 1 2 3 4 5 6; do
+              report=$(find ~/Library/Logs/DiagnosticReports /Library/Logs/DiagnosticReports \
+                -name '*.ips' -newer "$probe/marker" 2>/dev/null | head -1)
+              [ -n "$report" ] && break
+              sleep 5
+            done
+            if [ -n "$report" ]; then
+              echo "== $report"
+              python "$probe/frames.py" "$report" || head -120 "$report"
+            else
+              echo "no crash report was written for this test"
+            fi
+            echo "::endgroup::"
+          done
+          exit 0
