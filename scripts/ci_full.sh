@@ -81,8 +81,18 @@ else
 fi
 
 # ── 6. UBSan build ────────────────────────────────────────────────────────────
-echo "==> UBSan build + fast tests"
-./scripts/ci_sanitizer.sh ubsan || echo "[WARN] Sanitizer step failed."
+# LUCID_CI_SLOW_STAGES=0 skips the two stages that cost the most and
+# almost never change with a push: this sanitizer build (7.5 minutes,
+# and warn-only, so it never stopped the gate anyway) and the published
+# checkpoint fit below (every checkpoint downloaded).  CI sets it for
+# pushes; the nightly schedule, manual runs and a local ``ci_full.sh``
+# run everything.
+if [ "${LUCID_CI_SLOW_STAGES:-1}" = "1" ]; then
+    echo "==> UBSan build + fast tests"
+    ./scripts/ci_sanitizer.sh ubsan || echo "[WARN] Sanitizer step failed."
+else
+    echo "==> UBSan build + fast tests — skipped (LUCID_CI_SLOW_STAGES=0)"
+fi
 
 # ── 7. Validator tools ────────────────────────────────────────────────────────
 echo "==> Layer dependency check"
@@ -156,15 +166,19 @@ echo "==> Model-zoo family contract"
 # Reads safetensors headers over range requests, so it downloads a few KB per
 # checkpoint rather than the weights.  Exit 2 means some URL was unreachable,
 # which is not the same as a mismatch and must not fail the gate.
-echo "==> Published checkpoint fit"
-set +e
-"$PYTHON_BIN" -m tools.check_weight_fit
-weight_fit_status=$?
-set -e
-if [ "$weight_fit_status" -eq 1 ]; then
-    exit 1
-elif [ "$weight_fit_status" -ne 0 ]; then
-    echo "  [WARN] some checkpoints were unreachable — fit unverified for those"
+if [ "${LUCID_CI_SLOW_STAGES:-1}" = "1" ]; then
+    echo "==> Published checkpoint fit"
+    set +e
+    "$PYTHON_BIN" -m tools.check_weight_fit
+    weight_fit_status=$?
+    set -e
+    if [ "$weight_fit_status" -eq 1 ]; then
+        exit 1
+    elif [ "$weight_fit_status" -ne 0 ]; then
+        echo "  [WARN] some checkpoints were unreachable — fit unverified for those"
+    fi
+else
+    echo "==> Published checkpoint fit — skipped (LUCID_CI_SLOW_STAGES=0; see the UBSan stage)"
 fi
 
 # Model summaries — the layer tree and parameter count the docs site renders

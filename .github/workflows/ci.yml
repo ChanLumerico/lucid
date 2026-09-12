@@ -81,6 +81,12 @@ jobs:
 
       - name: Run full local gate
         run: ./scripts/ci_full.sh
+        env:
+          # Pushes skip the UBSan build (warn-only) and the published
+          # checkpoint fit (downloads every checkpoint) — together most of
+          # the gate's wall clock, and neither changes with an ordinary
+          # push. The nightly schedule and manual runs keep both.
+          LUCID_CI_SLOW_STAGES: ${{ github.event_name == 'push' && '0' || '1' }}
 
       # A test that dies by signal inside Core ML leaves no Python traceback,
       # and pytest's capture discards whatever the framework printed along
