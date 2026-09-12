@@ -226,8 +226,7 @@ constexpr int kInt64KeyType = 1;
 constexpr int kStringKeyType = 2;
 }  // namespace DictionaryFeatureType
 
-namespace StringFeatureType {
-}  // namespace StringFeatureType
+namespace StringFeatureType {}  // namespace StringFeatureType
 
 namespace EnumeratedShapes {
 constexpr int kShapes = 1;

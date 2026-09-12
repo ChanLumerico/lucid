@@ -162,8 +162,7 @@ ProtoWriter make_blob_value(std::uint64_t offset, const MilTensorType& type) {
 ProtoWriter make_string_list_type(std::size_t length) {
     ProtoWriter element;
     ProtoWriter element_tensor;
-    element_tensor.write_enum(pb::TensorType::kDataType,
-                              static_cast<int>(MilDataType::String));
+    element_tensor.write_enum(pb::TensorType::kDataType, static_cast<int>(MilDataType::String));
     element.write_message(pb::ValueType::kTensorType, element_tensor);
 
     ProtoWriter constant;
@@ -338,7 +337,8 @@ void MilProgram::add_grouped_lut_const(const std::string& name,
     op.palette_dtype = lut_dtype;
     op.lut_shape = lut_shape;
     // The grouped spelling of this operation is iOS18 and later.
-    if (opset_ == "CoreML7") opset_ = kOpsetState;
+    if (opset_ == "CoreML7")
+        opset_ = kOpsetState;
     needs_extended_opset_ = true;
     ops_.push_back(std::move(op));
 }
@@ -434,8 +434,8 @@ void MilProgram::add_op_multi(const std::string& op_type,
     ops_.push_back(std::move(op));
 }
 
-void MilProgram::set_enumerated_shapes(
-    const std::string& name, const std::vector<std::vector<std::int64_t>>& shapes) {
+void MilProgram::set_enumerated_shapes(const std::string& name,
+                                       const std::vector<std::vector<std::int64_t>>& shapes) {
     for (auto& [existing, held] : enumerated_) {
         if (existing == name) {
             held = shapes;
@@ -457,8 +457,7 @@ void MilProgram::read_state(const std::string& state_name,
     add_op("read_state", {{"input", {state_name}}}, output_name, type);
 }
 
-void MilProgram::write_state(const std::string& state_name,
-                             const std::string& value_name) {
+void MilProgram::write_state(const std::string& state_name, const std::string& value_name) {
     Op op;
     op.type = "write_state";
     op.inputs = {{"input", {state_name}}, {"data", {value_name}}};
@@ -467,9 +466,8 @@ void MilProgram::write_state(const std::string& state_name,
     ops_.push_back(std::move(op));
 }
 
-void MilProgram::set_shape_range(
-    const std::string& name,
-    const std::vector<std::pair<std::int64_t, std::int64_t>>& bounds) {
+void MilProgram::set_shape_range(const std::string& name,
+                                 const std::vector<std::pair<std::int64_t, std::int64_t>>& bounds) {
     for (auto& [existing, held] : ranges_) {
         if (existing == name) {
             held = bounds;
@@ -500,7 +498,9 @@ void MilProgram::set_image_input(const std::string& name, const MilImageSpec& sp
     images_.emplace_back(name, spec);
 }
 
-void MilProgram::set_metadata(const MilMetadata& metadata) { metadata_ = metadata; }
+void MilProgram::set_metadata(const MilMetadata& metadata) {
+    metadata_ = metadata;
+}
 
 void MilProgram::set_user_metadata(const std::string& key, const std::string& value) {
     user_metadata_.emplace_back(key, value);
@@ -528,7 +528,9 @@ void MilProgram::add_output(const std::string& name, const MilTensorType& type) 
     outputs_.emplace_back(name, type);
 }
 
-void MilProgram::set_opset(const std::string& opset) { opset_ = opset; }
+void MilProgram::set_opset(const std::string& opset) {
+    opset_ = opset;
+}
 
 ProtoWriter MilProgram::build_function() const {
     if (outputs_.empty() && !classifier_.present)
@@ -561,8 +563,7 @@ ProtoWriter MilProgram::build_function() const {
                 ProtoWriter immediate;
                 immediate.write_message(pb::ImmediateValue::kTensor, tensor_value);
                 ProtoWriter entry;
-                entry.write_message(pb::Value::kType,
-                                    make_value_type({MilDataType::String, {}}));
+                entry.write_message(pb::Value::kType, make_value_type({MilDataType::String, {}}));
                 entry.write_message(pb::Value::kImmediateValue, immediate);
                 list.write_message(pb::ListValue::kValues, entry);
             }
@@ -594,8 +595,7 @@ ProtoWriter MilProgram::build_function() const {
 
             ProtoWriter probabilities;
             probabilities.write_string(pb::NamedValueType::kName, op.second_output_name);
-            probabilities.write_message(pb::NamedValueType::kType,
-                                        make_string_double_dict_type());
+            probabilities.write_message(pb::NamedValueType::kType, make_string_double_dict_type());
             operation.write_message(pb::Operation::kOutputs, probabilities);
 
             operation.write_map_entry(pb::Operation::kAttributes, "name",
@@ -642,38 +642,32 @@ ProtoWriter MilProgram::build_function() const {
             operation.write_map_entry(
                 pb::Operation::kAttributes, "zero_point",
                 make_bytes_value(op.zero_point_bytes, {MilDataType::Int8, per_channel}));
-            operation.write_map_entry(pb::Operation::kAttributes, "axis",
-                                      make_int_value(op.axis));
+            operation.write_map_entry(pb::Operation::kAttributes, "axis", make_int_value(op.axis));
         } else if (op.is_lut) {
             // Unlike every other compressed form here, this one names
             // its payloads through *inputs* carrying inline values, not
             // through attributes, and the keys are typed by the weight's
             // own shape at a sub-byte width rather than by a byte count.
-            operation.write_map_entry(
-                pb::Operation::kInputs, "indices",
-                make_value_argument(
-                    make_blob_value(op.blob_offset,
-                                    {op.key_dtype, op.output_type.shape})));
-            operation.write_map_entry(
-                pb::Operation::kInputs, "lut",
-                make_value_argument(
-                    make_blob_value(op.mask_offset, {op.palette_dtype, op.lut_shape})));
+            operation.write_map_entry(pb::Operation::kInputs, "indices",
+                                      make_value_argument(make_blob_value(
+                                          op.blob_offset, {op.key_dtype, op.output_type.shape})));
+            operation.write_map_entry(pb::Operation::kInputs, "lut",
+                                      make_value_argument(make_blob_value(
+                                          op.mask_offset, {op.palette_dtype, op.lut_shape})));
         } else if (op.is_sparse && op.sparse_extended) {
             // iOS18: inline arguments, and the mask is one bit per
             // element of the weight rather than a count of bytes.
-            operation.write_map_entry(
-                pb::Operation::kInputs, "nonzero_data",
-                make_value_argument(make_blob_value(
-                    op.blob_offset, {op.palette_dtype, {op.nonzero_count}})));
+            operation.write_map_entry(pb::Operation::kInputs, "nonzero_data",
+                                      make_value_argument(make_blob_value(
+                                          op.blob_offset, {op.palette_dtype, {op.nonzero_count}})));
             operation.write_map_entry(
                 pb::Operation::kInputs, "mask",
-                make_value_argument(make_blob_value(
-                    op.mask_offset, {MilDataType::UInt1, op.output_type.shape})));
+                make_value_argument(
+                    make_blob_value(op.mask_offset, {MilDataType::UInt1, op.output_type.shape})));
         } else if (op.is_sparse) {
             operation.write_map_entry(
                 pb::Operation::kAttributes, "nonzero_data",
-                make_blob_value(op.blob_offset,
-                                {op.output_type.dtype, {op.nonzero_count}}));
+                make_blob_value(op.blob_offset, {op.output_type.dtype, {op.nonzero_count}}));
             operation.write_map_entry(
                 pb::Operation::kAttributes, "mask",
                 make_blob_value(op.mask_offset, {MilDataType::UInt8, {op.mask_bytes}}));
@@ -759,8 +753,7 @@ ProtoWriter MilProgram::build_description(const MilDescriptionFields& fields) co
             image_feature_type.write_message(pb::FeatureType::kImageType, image);
             ProtoWriter image_description;
             image_description.write_string(pb::FeatureDescription::kName, name);
-            image_description.write_message(pb::FeatureDescription::kType,
-                                            image_feature_type);
+            image_description.write_message(pb::FeatureDescription::kType, image_feature_type);
             return image_description;
         }
         ProtoWriter array;
@@ -774,9 +767,8 @@ ProtoWriter MilProgram::build_description(const MilDescriptionFields& fields) co
             if (stated_name == name)
                 stated_shape = &stated;
         }
-        const bool open =
-            std::find(stated_shape->begin(), stated_shape->end(), kUnknownDim) !=
-            stated_shape->end();
+        const bool open = std::find(stated_shape->begin(), stated_shape->end(), kUnknownDim) !=
+                          stated_shape->end();
         if (!open)
             array.write_packed_ints(pb::ArrayFeatureType::kShape, *stated_shape);
         int array_dtype = pb::ArrayFeatureType_ArrayDataType::kFLOAT32;
@@ -827,8 +819,7 @@ ProtoWriter MilProgram::build_description(const MilDescriptionFields& fields) co
         ProtoWriter label_feature_type;
         label_feature_type.write_message(pb::FeatureType::kStringType, string_type);
         ProtoWriter label_description;
-        label_description.write_string(pb::FeatureDescription::kName,
-                                       classifier_.label_name);
+        label_description.write_string(pb::FeatureDescription::kName, classifier_.label_name);
         label_description.write_message(pb::FeatureDescription::kType, label_feature_type);
         description.write_message(fields.output, label_description);
 
@@ -836,8 +827,7 @@ ProtoWriter MilProgram::build_description(const MilDescriptionFields& fields) co
         ProtoWriter dictionary;
         dictionary.write_message(pb::DictionaryFeatureType::kStringKeyType, string_key);
         ProtoWriter probabilities_feature_type;
-        probabilities_feature_type.write_message(pb::FeatureType::kDictionaryType,
-                                                 dictionary);
+        probabilities_feature_type.write_message(pb::FeatureType::kDictionaryType, dictionary);
         ProtoWriter probabilities_description;
         probabilities_description.write_string(pb::FeatureDescription::kName,
                                                classifier_.probabilities_name);
@@ -845,15 +835,12 @@ ProtoWriter MilProgram::build_description(const MilDescriptionFields& fields) co
                                                 probabilities_feature_type);
         description.write_message(fields.output, probabilities_description);
 
-        description.write_string(fields.predicted_feature,
-                                 classifier_.label_name);
-        description.write_string(fields.predicted_probabilities,
-                                 classifier_.probabilities_name);
+        description.write_string(fields.predicted_feature, classifier_.label_name);
+        description.write_string(fields.predicted_probabilities, classifier_.probabilities_name);
     } else {
         for (const auto& [name, type] : outputs_)
             description.write_message(fields.output, feature(name, type));
     }
-
 
     for (const auto& [name, type] : states_) {
         ProtoWriter array;
@@ -877,12 +864,10 @@ ProtoWriter MilProgram::build_description(const MilDescriptionFields& fields) co
 
 void MilProgram::write_metadata(ProtoWriter& description) const {
     if (!metadata_.short_description.empty() || !metadata_.author.empty() ||
-        !metadata_.license.empty() || !metadata_.version.empty() ||
-        !user_metadata_.empty()) {
+        !metadata_.license.empty() || !metadata_.version.empty() || !user_metadata_.empty()) {
         ProtoWriter metadata;
         if (!metadata_.short_description.empty())
-            metadata.write_string(pb::Metadata::kShortDescription,
-                                  metadata_.short_description);
+            metadata.write_string(pb::Metadata::kShortDescription, metadata_.short_description);
         if (!metadata_.version.empty())
             metadata.write_string(pb::Metadata::kVersionString, metadata_.version);
         if (!metadata_.author.empty())
@@ -903,25 +888,23 @@ std::string MilProgram::serialize() const {
     program.write_map_entry(pb::Program::kFunctions, "main", function);
 
     ProtoWriter description = build_description(
-        {pb::ModelDescription::kInput, pb::ModelDescription::kOutput,
-         pb::ModelDescription::kState, pb::ModelDescription::kPredictedFeatureName,
+        {pb::ModelDescription::kInput, pb::ModelDescription::kOutput, pb::ModelDescription::kState,
+         pb::ModelDescription::kPredictedFeatureName,
          pb::ModelDescription::kPredictedProbabilitiesName});
 
     write_metadata(description);
 
     ProtoWriter model;
-    model.write_int(pb::Model::kSpecificationVersion,
-                    (states_.empty() && !needs_extended_opset_)
-                        ? kSpecificationVersion
-                        : kSpecificationVersionState);
+    model.write_int(pb::Model::kSpecificationVersion, (states_.empty() && !needs_extended_opset_)
+                                                          ? kSpecificationVersion
+                                                          : kSpecificationVersionState);
     model.write_message(pb::Model::kDescription, description);
     model.write_message(pb::Model::kMlProgram, program);
     return model.bytes();
 }
 
-std::string
-serialize_functions(const std::vector<std::pair<std::string, MilProgram*>>& functions,
-                    const std::string& default_name) {
+std::string serialize_functions(const std::vector<std::pair<std::string, MilProgram*>>& functions,
+                                const std::string& default_name) {
     if (functions.empty())
         throw std::logic_error("serialize_functions: a package needs at least one function");
 
@@ -935,19 +918,17 @@ serialize_functions(const std::vector<std::pair<std::string, MilProgram*>>& func
         named = named || name == default_name;
     }
     if (!named)
-        throw std::logic_error("serialize_functions: the default function " +
-                               default_name + " is not one of the functions");
+        throw std::logic_error("serialize_functions: the default function " + default_name +
+                               " is not one of the functions");
 
     ProtoWriter program_message;
     program_message.write_int(pb::Program::kVersion, kProgramVersion);
     ProtoWriter description;
     for (const auto& [name, program] : functions) {
-        program_message.write_map_entry(pb::Program::kFunctions, name,
-                                        program->build_function());
+        program_message.write_map_entry(pb::Program::kFunctions, name, program->build_function());
         ProtoWriter one = program->build_description(
             {pb::FunctionDescription::kInput, pb::FunctionDescription::kOutput,
-             pb::FunctionDescription::kState,
-             pb::FunctionDescription::kPredictedFeatureName,
+             pb::FunctionDescription::kState, pb::FunctionDescription::kPredictedFeatureName,
              pb::FunctionDescription::kPredictedProbabilitiesName});
         ProtoWriter entry;
         entry.write_string(pb::FunctionDescription::kName, name);

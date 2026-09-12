@@ -47,9 +47,8 @@ enum class ComputeUnits : int {
 //     program.
 // ``function_name`` selects one entry point of a package that has
 // several; empty takes the default the package names.
-LUCID_API CoreMLModel* load_model(const std::string& path,
-                                  ComputeUnits units,
-                                  const std::string& function_name = "");
+LUCID_API CoreMLModel*
+load_model(const std::string& path, ComputeUnits units, const std::string& function_name = "");
 
 // Release a handle.  Safe with ``nullptr``.
 LUCID_API void destroy_model(CoreMLModel* model);
@@ -161,7 +160,6 @@ LUCID_API std::vector<std::string> class_labels(const CoreMLModel* model);
 // -------
 // std::vector<std::pair<std::string, std::string>>
 //     Key and value pairs; empty when the package declares none.
-LUCID_API std::vector<std::pair<std::string, std::string>>
-user_metadata(const CoreMLModel* model);
+LUCID_API std::vector<std::pair<std::string, std::string>> user_metadata(const CoreMLModel* model);
 
 }  // namespace lucid::coreml

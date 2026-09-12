@@ -113,8 +113,7 @@ void register_coreml(py::module_& m) {
         .def(
             "add_int_const_shaped",
             [](lucid::coreml::MilProgram& self, const std::string& name,
-               const std::vector<std::int64_t>& values,
-               const std::vector<std::int64_t>& shape) {
+               const std::vector<std::int64_t>& values, const std::vector<std::int64_t>& shape) {
                 self.add_int_const_shaped(name, values, shape);
             },
             py::arg("name"), py::arg("values"), py::arg("shape"),
@@ -129,23 +128,23 @@ void register_coreml(py::module_& m) {
             "Float32 constant of arbitrary shape, carried inline.")
         .def(
             "add_state",
-            [](lucid::coreml::MilProgram& self, const std::string& name,
-               const TypeSpec& type) { self.add_state(name, to_type(type)); },
+            [](lucid::coreml::MilProgram& self, const std::string& name, const TypeSpec& type) {
+                self.add_state(name, to_type(type));
+            },
             py::arg("name"), py::arg("type"),
             "Declare a value the model carries between predictions.")
         .def(
             "read_state",
             [](lucid::coreml::MilProgram& self, const std::string& state_name,
-               const std::string& output_name, const TypeSpec& type) {
-                self.read_state(state_name, output_name, to_type(type));
-            },
+               const std::string& output_name,
+               const TypeSpec& type) { self.read_state(state_name, output_name, to_type(type)); },
             py::arg("state_name"), py::arg("output_name"), py::arg("type"))
-        .def("set_user_metadata", &lucid::coreml::MilProgram::set_user_metadata,
-             py::arg("key"), py::arg("value"),
+        .def("set_user_metadata", &lucid::coreml::MilProgram::set_user_metadata, py::arg("key"),
+             py::arg("value"),
              "Add one key and value to the description's creator-defined "
              "dictionary, which Core ML hands back untouched on load.")
-        .def("write_state", &lucid::coreml::MilProgram::write_state,
-             py::arg("state_name"), py::arg("value_name"))
+        .def("write_state", &lucid::coreml::MilProgram::write_state, py::arg("state_name"),
+             py::arg("value_name"))
         .def(
             "set_shape_range",
             [](lucid::coreml::MilProgram& self, const std::string& name,
@@ -157,9 +156,7 @@ void register_coreml(py::module_& m) {
         .def(
             "set_default_shape",
             [](lucid::coreml::MilProgram& self, const std::string& name,
-               const std::vector<std::int64_t>& shape) {
-                self.set_default_shape(name, shape);
-            },
+               const std::vector<std::int64_t>& shape) { self.set_default_shape(name, shape); },
             py::arg("name"), py::arg("shape"),
             "The concrete shape the description states for a feature whose "
             "program type leaves axes open.")
@@ -174,9 +171,8 @@ void register_coreml(py::module_& m) {
         .def(
             "set_image_input",
             [](lucid::coreml::MilProgram& self, const std::string& name, std::int64_t width,
-               std::int64_t height, int color_space) {
-                self.set_image_input(name, {width, height, color_space});
-            },
+               std::int64_t height,
+               int color_space) { self.set_image_input(name, {width, height, color_space}); },
             py::arg("name"), py::arg("width"), py::arg("height"), py::arg("color_space"),
             "Present this input as an image in the model description.")
         .def(
@@ -193,12 +189,11 @@ void register_coreml(py::module_& m) {
         .def(
             "set_metadata",
             [](lucid::coreml::MilProgram& self, const std::string& short_description,
-               const std::string& author, const std::string& license,
-               const std::string& version) {
+               const std::string& author, const std::string& license, const std::string& version) {
                 self.set_metadata({short_description, author, license, version});
             },
-            py::arg("short_description"), py::arg("author"), py::arg("license"),
-            py::arg("version"), "What the package says about itself.")
+            py::arg("short_description"), py::arg("author"), py::arg("license"), py::arg("version"),
+            "What the package says about itself.")
         .def("add_string_const", &lucid::coreml::MilProgram::add_string_const, py::arg("name"),
              py::arg("value"))
         .def("add_bool_const", &lucid::coreml::MilProgram::add_bool_const, py::arg("name"),
@@ -236,8 +231,7 @@ void register_coreml(py::module_& m) {
             "add_sparse_const",
             [](lucid::coreml::MilProgram& self, const std::string& name,
                const TypeSpec& output_type, std::uint64_t nonzero_offset,
-               std::int64_t nonzero_count, std::uint64_t mask_offset,
-               std::int64_t mask_bytes) {
+               std::int64_t nonzero_count, std::uint64_t mask_offset, std::int64_t mask_bytes) {
                 self.add_sparse_const(name, to_type(output_type), nonzero_offset, nonzero_count,
                                       mask_offset, mask_bytes);
             },
@@ -449,9 +443,7 @@ void register_coreml(py::module_& m) {
             "label's probability.")
         .def_property_readonly(
             "carries_state",
-            [](const PyCoreMLModel& self) {
-                return lucid::coreml::carries_state(self.raw());
-            })
+            [](const PyCoreMLModel& self) { return lucid::coreml::carries_state(self.raw()); })
         .def_property_readonly(
             "image_input_names",
             [](const PyCoreMLModel& self) {
@@ -461,17 +453,13 @@ void register_coreml(py::module_& m) {
             "that reopened the file feeds them the way it expects.")
         .def_property_readonly(
             "user_metadata",
-            [](const PyCoreMLModel& self) {
-                return lucid::coreml::user_metadata(self.raw());
-            },
+            [](const PyCoreMLModel& self) { return lucid::coreml::user_metadata(self.raw()); },
             "Creator-defined metadata the package was written with; the "
             "only channel by which a fact the writer knew survives into a "
             "handle that reopened the file.")
         .def_property_readonly(
             "class_labels",
-            [](const PyCoreMLModel& self) {
-                return lucid::coreml::class_labels(self.raw());
-            },
+            [](const PyCoreMLModel& self) { return lucid::coreml::class_labels(self.raw()); },
             "Class labels a classifier package declares; empty otherwise.")
         .def(
             "reset_state",
@@ -529,20 +517,20 @@ void register_coreml(py::module_& m) {
     cm.attr("BLOB_FLOAT32") = static_cast<int>(lucid::coreml::BlobDataType::Float32);
     // Sub-byte palettization keys, paired so a caller picks both tags
     // from one width rather than matching two tables by hand.
-    cm.attr("BLOB_SUBBYTE") = py::dict(
-        py::arg("1") = static_cast<int>(lucid::coreml::BlobDataType::UInt1),
-        py::arg("2") = static_cast<int>(lucid::coreml::BlobDataType::UInt2),
-        py::arg("3") = static_cast<int>(lucid::coreml::BlobDataType::UInt3),
-        py::arg("4") = static_cast<int>(lucid::coreml::BlobDataType::UInt4),
-        py::arg("6") = static_cast<int>(lucid::coreml::BlobDataType::UInt6),
-        py::arg("8") = static_cast<int>(lucid::coreml::BlobDataType::UInt8));
-    cm.attr("MIL_SUBBYTE") = py::dict(
-        py::arg("1") = static_cast<int>(lucid::coreml::MilDataType::UInt1),
-        py::arg("2") = static_cast<int>(lucid::coreml::MilDataType::UInt2),
-        py::arg("3") = static_cast<int>(lucid::coreml::MilDataType::UInt3),
-        py::arg("4") = static_cast<int>(lucid::coreml::MilDataType::UInt4),
-        py::arg("6") = static_cast<int>(lucid::coreml::MilDataType::UInt6),
-        py::arg("8") = static_cast<int>(lucid::coreml::MilDataType::UInt8));
+    cm.attr("BLOB_SUBBYTE") =
+        py::dict(py::arg("1") = static_cast<int>(lucid::coreml::BlobDataType::UInt1),
+                 py::arg("2") = static_cast<int>(lucid::coreml::BlobDataType::UInt2),
+                 py::arg("3") = static_cast<int>(lucid::coreml::BlobDataType::UInt3),
+                 py::arg("4") = static_cast<int>(lucid::coreml::BlobDataType::UInt4),
+                 py::arg("6") = static_cast<int>(lucid::coreml::BlobDataType::UInt6),
+                 py::arg("8") = static_cast<int>(lucid::coreml::BlobDataType::UInt8));
+    cm.attr("MIL_SUBBYTE") =
+        py::dict(py::arg("1") = static_cast<int>(lucid::coreml::MilDataType::UInt1),
+                 py::arg("2") = static_cast<int>(lucid::coreml::MilDataType::UInt2),
+                 py::arg("3") = static_cast<int>(lucid::coreml::MilDataType::UInt3),
+                 py::arg("4") = static_cast<int>(lucid::coreml::MilDataType::UInt4),
+                 py::arg("6") = static_cast<int>(lucid::coreml::MilDataType::UInt6),
+                 py::arg("8") = static_cast<int>(lucid::coreml::MilDataType::UInt8));
     cm.attr("DTYPE_BOOL") = static_cast<int>(lucid::coreml::MilDataType::Bool);
     cm.attr("DTYPE_STRING") = static_cast<int>(lucid::coreml::MilDataType::String);
     cm.attr("DTYPE_FLOAT16") = static_cast<int>(lucid::coreml::MilDataType::Float16);

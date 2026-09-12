@@ -85,9 +85,7 @@ public:
     // message can simply be joined — which is how a message assembled in
     // pieces (a function's name here, its inputs and outputs there) comes
     // back together without re-encoding either half.
-    void append_raw(const ProtoWriter& other) {
-        buf_.append(other.buf_.data(), other.buf_.size());
-    }
+    void append_raw(const ProtoWriter& other) { buf_.append(other.buf_.data(), other.buf_.size()); }
 
     // Embed an already-built submessage.
     void write_message(int field, const ProtoWriter& sub) {

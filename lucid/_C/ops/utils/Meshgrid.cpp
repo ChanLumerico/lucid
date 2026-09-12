@@ -17,9 +17,9 @@
 #include "Meshgrid.h"
 
 #include "../../autograd/FuncOp.h"
-#include "../../compile/Tracer.h"
 #include "../../autograd/Helpers.h"
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"

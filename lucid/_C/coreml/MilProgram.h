@@ -20,13 +20,12 @@
 #pragma once
 
 #include <cstdint>
-
-#include "ProtoWriter.h"
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "../api.h"
+#include "ProtoWriter.h"
 
 namespace lucid::coreml {
 
@@ -128,13 +127,15 @@ public:
     // emits carries float payloads only, and MIL already has an inline
     // integer tensor, so integer buffers go inline rather than teaching
     // the blob a dtype code that would have to be guessed.
-    void add_int_const_shaped(const std::string& name, const std::vector<std::int64_t>& values,
+    void add_int_const_shaped(const std::string& name,
+                              const std::vector<std::int64_t>& values,
                               const std::vector<std::int64_t>& shape);
     void add_float_const(const std::string& name, const std::vector<float>& values, bool scalar);
     // Float constant of arbitrary shape, carried inline.  Image
     // preprocessing needs a per-channel bias shaped ``(1, C, 1, 1)``, which
     // neither the scalar nor the rank-1 form can express.
-    void add_float_const_shaped(const std::string& name, const std::vector<float>& values,
+    void add_float_const_shaped(const std::string& name,
+                                const std::vector<float>& values,
                                 const std::vector<std::int64_t>& shape);
     void add_string_const(const std::string& name, const std::string& value);
     void add_bool_const(const std::string& name, bool value);
@@ -142,7 +143,8 @@ public:
     // Boolean constant of arbitrary shape, carried inline.  A traced mask
     // is a real tensor of booleans, not a count that happens to be 0 or 1,
     // and MIL types the two apart.
-    void add_bool_const_shaped(const std::string& name, const std::vector<bool>& values,
+    void add_bool_const_shaped(const std::string& name,
+                               const std::vector<bool>& values,
                                const std::vector<std::int64_t>& shape);
 
     // A weight stored as int8 codes plus a per-channel scale, dequantized
@@ -241,7 +243,8 @@ public:
     void add_state(const std::string& name, const MilTensorType& type);
 
     // Read the current value of a declared state into an ordinary value.
-    void read_state(const std::string& state_name, const std::string& output_name,
+    void read_state(const std::string& state_name,
+                    const std::string& output_name,
                     const MilTensorType& type);
 
     // Store a value into a declared state.  Produces nothing.
@@ -257,8 +260,7 @@ public:
     // The concrete shape the description should state for a feature whose
     // program type leaves axes open.  A ``-1`` in a description is not
     // "flexible": Core ML reads it as a shape and rejects it.
-    void set_default_shape(const std::string& name,
-                           const std::vector<std::int64_t>& shape);
+    void set_default_shape(const std::string& name, const std::vector<std::int64_t>& shape);
 
     // Present an input as an image in the model description.  Must name
     // one of the inputs the program was constructed with.
@@ -375,8 +377,7 @@ private:
     MilNamedTypes states_;
     std::vector<std::pair<std::string, std::vector<std::vector<std::int64_t>>>> enumerated_;
     std::vector<std::pair<std::string, std::vector<std::int64_t>>> defaults_;
-    std::vector<std::pair<std::string, std::vector<std::pair<std::int64_t, std::int64_t>>>>
-        ranges_;
+    std::vector<std::pair<std::string, std::vector<std::pair<std::int64_t, std::int64_t>>>> ranges_;
     MilMetadata metadata_;
     std::vector<std::pair<std::string, std::string>> user_metadata_;
     struct Classifier {
