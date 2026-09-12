@@ -159,18 +159,27 @@ def render(
     out.append("#pragma once")
     out.append("")
     out.append("namespace lucid::coreml::pb {")
+
+    def namespace(name: str, body: list[str]) -> list[str]:
+        # An empty namespace goes on one line: that is what clang-format
+        # makes of it, and this header has to pass the format gate byte for
+        # byte as well as --check. The two disagreed about
+        # StringFeatureType, which has no fields.
+        if not body:
+            return [f"namespace {name} {{}}  // namespace {name}"]
+        return [f"namespace {name} {{", *body, f"}}  // namespace {name}"]
+
     for message in MESSAGES:
+        body = [
+            f"constexpr int k{_constant_name(fname)} = {number};"
+            for fname, number in fields[message]
+        ]
         out.append("")
-        out.append(f"namespace {message} {{")
-        for fname, number in fields[message]:
-            out.append(f"constexpr int k{_constant_name(fname)} = {number};")
-        out.append(f"}}  // namespace {message}")
+        out.extend(namespace(message, body))
     for enum_name, values in enums.items():
+        body = [f"constexpr int k{vname} = {number};" for vname, number in values]
         out.append("")
-        out.append(f"namespace {enum_name} {{")
-        for vname, number in values:
-            out.append(f"constexpr int k{vname} = {number};")
-        out.append(f"}}  // namespace {enum_name}")
+        out.extend(namespace(enum_name, body))
     out.append("")
     out.append("}  // namespace lucid::coreml::pb")
     out.append("")

@@ -48,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - keep timm's tag, or the parity check compares other weights
 
+- lay out an empty namespace the way clang-format does
+
 ### Added
 
 - quantization-aware models reach the exporter
