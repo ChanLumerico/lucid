@@ -1130,7 +1130,7 @@ def _receiver_position(free_fn: Any, method_fn: Any) -> int:
         ]
         method_params = inspect.signature(method_fn).parameters
         method_names = set(method_params)
-    except (TypeError, ValueError, NameError):
+    except TypeError, ValueError, NameError:
         return 0
     method_names.discard("self")
 
@@ -2543,6 +2543,11 @@ def _default_submodule(name: str, rank: int = 2) -> Any:
         "relu": lambda: nn.ReLU(),
         "linear": lambda: nn.Linear(4, 4),
         "module": lambda: nn.Linear(4, 4),
+        # A model the Core ML export would actually compress: it leaves
+        # any weight under 2048 elements alone, so ``Linear(4, 4)`` gives
+        # ``CompressionAware`` nothing to train against and it refuses.
+        # 4 in keeps the (2, 4) probe input; 1024 out clears the floor.
+        "compressible": lambda: nn.Linear(4, 1024),
         "parametrization": lambda: nn.Identity(),
         "original": lambda: nn.Parameter(
             _probe.as_f32(_probe.sample("moderate", (4, 4)))
@@ -2591,6 +2596,32 @@ _CTOR_BY_CLASS: "dict[str, dict[str, Any]]" = {
 }
 
 
+def _default_compression() -> Any:
+    """A compression spec ``CompressionAware`` accepts.
+
+    The annotation is ``WeightPrecision | Palettize | Sparsify``, which no
+    rule here reads, and the enum rule alone would pick ``FLOAT`` — the
+    one value the class refuses, since it compresses nothing.  A 4-bit
+    palette is the class's own documented example.
+    """
+    import lucid.coreml as cml  # noqa: PLC0415 - optional subsystem
+
+    return cml.Palettize(bits=4)
+
+
+#: :data:`_CTOR_BY_CLASS` for arguments that have to be built: the same
+#: narrow collisions, where the value is an object rather than a constant.
+#: ``model`` and ``weights`` are generic enough names that answering them
+#: in :data:`_CTOR_FACTORY` would change how every other class taking one
+#: is built.
+_CTOR_FACTORY_BY_CLASS: "dict[str, dict[str, Any]]" = {
+    "CompressionAware": {
+        "model": lambda: _default_submodule("compressible"),
+        "weights": _default_compression,
+    },
+}
+
+
 def _ctor_value(name: str, annotation: Any, depth: int, cls_name: str = "") -> Any:
     """One constructor argument, by name first and annotation second.
 
@@ -2601,6 +2632,12 @@ def _ctor_value(name: str, annotation: Any, depth: int, cls_name: str = "") -> A
     override = _CTOR_BY_CLASS.get(cls_name, {})
     if name in override:
         return override[name]
+    factories = _CTOR_FACTORY_BY_CLASS.get(cls_name, {})
+    if name in factories:
+        try:
+            return factories[name]()
+        except Exception as exc:  # noqa: BLE001
+            raise KeyError(name) from exc
     if name in _CTOR_BY_NAME:
         return _CTOR_BY_NAME[name]
     if name in ("conv", "bn", "norm", "relu"):

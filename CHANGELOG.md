@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - padding_idx zeroed the trained vector it was meant to freeze
 
+- CompressionAware was the one module the probe could not build
+
 ### Added
 
 - quantization-aware models reach the exporter

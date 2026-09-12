@@ -12,7 +12,7 @@
     "Regenerate with:  lucid-audit --update-coverage",
     "Do that only when the new state is the intended one."
   ],
-  "cells": 8148,
+  "cells": 8149,
   "answered": {
     "broadcast::F.gumbel_softmax": "pass",
     "broadcast::F.straight_through": "pass",
@@ -4633,6 +4633,7 @@
     "metadata::lucid.numel": "pass",
     "metadata::lucid.promote_types": "pass",
     "metadata::lucid.result_type": "pass",
+    "module::lucid.coreml.CompressionAware": "pass",
     "module::lucid.nn.intrinsic.ConvReLU1d": "pass",
     "module::lucid.nn.intrinsic.ConvReLU2d": "pass",
     "module::lucid.nn.intrinsic.ConvReLU3d": "pass",
