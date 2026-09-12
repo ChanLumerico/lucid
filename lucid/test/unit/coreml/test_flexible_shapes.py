@@ -19,6 +19,7 @@ import lucid
 import lucid.coreml as cml
 import lucid.models as M
 from lucid._C import engine as _C_engine
+from lucid.test.unit.coreml._helpers import under_hypervisor
 
 pytestmark = pytest.mark.skipif(
     not hasattr(_C_engine, "coreml"),
@@ -98,6 +99,12 @@ class TestFlexibleBatch:
 
 class TestFlexibleResolution:
     def test_a_fully_convolutional_model_takes_both(self, tmp_path: object) -> None:
+        if under_hypervisor():
+            # On the hosted runner's virtual machine the process dies here
+            # with SIGTRAP (exit 133) and no traceback, like the YOLOv3
+            # export in test_coreml.py. It passes on hardware; the gate's
+            # crash-report step shows where the trap comes from.
+            pytest.skip("Core ML traps running an enumerated-shape package in a VM")
         model = M.create_model("unet").eval()
         exported = cml.export(
             model,

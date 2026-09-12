@@ -82,6 +82,33 @@ jobs:
       - name: Run full local gate
         run: ./scripts/ci_full.sh
 
+      # A test that dies by signal inside Core ML leaves no Python traceback,
+      # and pytest's capture discards whatever the framework printed along
+      # with the process. macOS still writes a crash report; the crashed
+      # thread's frames are the only account of where the trap came from.
+      - name: Crash report (on failure)
+        if: failure()
+        run: |
+          for _ in 1 2 3 4 5 6; do
+            f=$(ls -t ~/Library/Logs/DiagnosticReports/*.ips /Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -1)
+            [ -n "$f" ] && break
+            sleep 5
+          done
+          if [ -z "$f" ]; then echo "no crash report was written"; exit 0; fi
+          echo "== $f"
+          python - "$f" <<'PY' || head -120 "$f"
+          import json, sys
+          header, _, body = open(sys.argv[1]).read().partition("\n")
+          report = json.loads(body)
+          print("process:", json.loads(header).get("app_name"), "|", report.get("exception"))
+          images = report.get("usedImages", [])
+          thread = report["threads"][report.get("faultingThread", 0)]
+          for frame in thread.get("frames", [])[:30]:
+              index = frame.get("imageIndex")
+              image = images[index].get("name", "?") if index is not None and index < len(images) else "?"
+              print(f"  {image:36s} {frame.get('symbol', hex(frame.get('imageOffset', 0)))}")
+          PY
+
       # `ci_full.sh` step 9 (`scripts/ci_publish.sh`) already builds + verifies
       # the wheel into `dist/`, so we just upload the artifact here.
       - uses: actions/upload-artifact@v4
