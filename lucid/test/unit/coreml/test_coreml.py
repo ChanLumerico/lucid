@@ -17,6 +17,7 @@ Three properties, each with its own failure mode:
   about nothing.  ``compute_plan`` turns that into an assertion.
 """
 
+import functools
 import os
 
 import pytest
@@ -31,6 +32,34 @@ pytestmark = pytest.mark.skipif(
     not hasattr(_C_engine, "coreml"),
     reason="the engine was built without the Core ML writer",
 )
+
+
+@functools.cache
+def _has_neural_engine() -> bool:
+    """Whether Core ML has a Neural Engine to place work on here.
+
+    A hosted CI runner is a virtual machine, and a virtual machine gets
+    none.  Every placement assertion below then reads 0.0: the float16
+    ones fail, and the float32 one passes without being able to fail.
+    The answer comes from Core ML's own device list rather than from a
+    compute plan — a plan is the thing these tests are checking.
+    """
+    try:
+        from coremltools.models.compute_device import (  # noqa: PLC0415
+            MLComputeDevice,
+            MLNeuralEngineComputeDevice,
+        )
+    except ImportError:
+        return True  # cannot tell, so assert as if it were there
+    return any(
+        isinstance(device, MLNeuralEngineComputeDevice)
+        for device in MLComputeDevice.get_all_compute_devices()
+    )
+
+
+def _require_neural_engine() -> None:
+    if not _has_neural_engine():
+        pytest.skip("no Neural Engine on this machine; a hosted CI runner is a VM")
 
 
 class _Tiny(nn.Module):
@@ -167,7 +196,10 @@ class TestTheAcceleratorIsActuallyUsed:
 
     def test_float32_reaches_no_neural_engine(self, tmp_path: object) -> None:
         # The silent failure: asking for the ANE with a float32 program
-        # succeeds, returns correct numbers, and uses none of it.
+        # succeeds, returns correct numbers, and uses none of it.  Without
+        # a Neural Engine 0.0 is the only answer there is, so asserting it
+        # would pass without being able to fail.
+        _require_neural_engine()
         model = M.create_model("resnet_18_cls", num_classes=10).eval()
         x = lucid.randn(1, 3, 64, 64)
 
@@ -187,6 +219,7 @@ class TestTheAcceleratorIsActuallyUsed:
     def test_float16_runs_the_computation_on_the_neural_engine(
         self, tmp_path: object
     ) -> None:
+        _require_neural_engine()
         model = M.create_model("resnet_18_cls", num_classes=10).eval()
         x = lucid.randn(1, 3, 64, 64)
 
@@ -313,8 +346,10 @@ class TestTextModels:
         # Indices cast to half would not merely lose precision, they would
         # look up different rows; the error would be enormous, not ~1e-2.
         assert float((cm.predict(ids) - reference).abs().max().item()) / scale < 0.05
+        # Where it ran is a separate claim, and only hardware with a Neural
+        # Engine can answer it; the numbers above hold either way.
         plan = cm.compute_plan()
-        if plan.total_compute:
+        if plan.total_compute and _has_neural_engine():
             assert plan.ane_fraction > 0.9
         cm.close()
 
@@ -536,6 +571,7 @@ class TestQuantizedWeights:
     def test_a_quantized_package_still_reaches_the_neural_engine(
         self, tmp_path: object
     ) -> None:
+        _require_neural_engine()
         model = M.create_model("resnet_18_cls", num_classes=10).eval()
         x = lucid.randn(1, 3, 224, 224)
         exported = cml.export(
