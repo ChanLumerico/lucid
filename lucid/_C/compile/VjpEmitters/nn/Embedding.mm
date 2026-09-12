@@ -18,11 +18,13 @@
 // d(idx) = no gradient (idx is integer — the walker treats it as a
 // grad-sink for free since we just don't accumulate onto it).
 //
-// padding_idx is currently ignored (Phase 5+ TODO).  When set, the
-// rows with ``idx == padding_idx`` should contribute 0 — mask via
-// ``select(equal(idx, padding_idx), zero, grad_2d)`` before the
-// scatter.  The standard transformer training path doesn't use a
-// padding_idx so this gap is harmless for the smoke surface.
+// ``padding_idx`` takes no gradient: rows whose index equals it are
+// multiplied by zero before the scatter, which is what eager's
+// ``embedding_backward`` does.  This used to be left out on the grounds
+// that the standard transformer path has no padding_idx — BERT and
+// RoFormer both have one, so a compiled training step moved the pad row
+// that eager holds fixed.  The forward leaves the row alone either way;
+// see the note in OpEmitters/index/Gather.mm.
 //
 // Why this is the centerpiece VJP: MPSGraph's
 // ``gradientForPrimaryTensor:`` asserts on
@@ -97,6 +99,28 @@ public:
         NSArray<NSNumber*>* grad_grid_ns = shape_to_ns(grad_grid_shape);
         MPSGraphTensor* grad_grid =
             [g reshapeTensor:grad withShape:grad_grid_ns name:nil];
+
+        // Rows looked up at ``padding_idx`` contribute nothing, as in
+        // eager's ``embedding_backward``: (idx != pad) cast to the
+        // gradient's dtype, (M, 1) broadcast across the D columns.
+        auto pad_it = node.attrs.find("padding_idx");
+        if (pad_it != node.attrs.end()) {
+            const auto* pad_p = std::get_if<std::int64_t>(&pad_it->second);
+            if (pad_p != nullptr && *pad_p >= 0) {
+                MPSGraphTensor* pad_c =
+                    [g constantWithScalar:static_cast<double>(*pad_p)
+                                 dataType:idx_col.dataType];
+                MPSGraphTensor* keep = [g notEqualWithPrimaryTensor:idx_col
+                                                   secondaryTensor:pad_c
+                                                              name:@"embedding_vjp_pad_ne"];
+                keep = [g castTensor:keep
+                              toType:grad_grid.dataType
+                                name:@"embedding_vjp_pad_mask"];
+                grad_grid = [g multiplicationWithPrimaryTensor:grad_grid
+                                               secondaryTensor:keep
+                                                          name:@"embedding_vjp_pad_apply"];
+            }
+        }
 
         // base = zeros((V, D))   dtype = grad's dtype (chain dtype
         // under autocast — W may be F32 master while grad is F16).

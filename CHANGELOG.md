@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - in-place index_put_ under no_grad froze the tensor it wrote
 
+- the compiled embedding backward trained the pad row
+
 ### Added
 
 - quantization-aware models reach the exporter

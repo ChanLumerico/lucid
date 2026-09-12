@@ -38,9 +38,9 @@ SEQ = 6
 
 
 class _EmbedNet(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, padding_idx: int | None = None) -> None:
         super().__init__()
-        self.emb = nn.Embedding(VOCAB, EMB_DIM)
+        self.emb = nn.Embedding(VOCAB, EMB_DIM, padding_idx=padding_idx)
         self.fc = nn.Linear(EMB_DIM, OUT_DIM)
 
     def forward(self, idx: lucid.Tensor) -> lucid.Tensor:
@@ -123,3 +123,27 @@ def test_manual_vjp_env_seen() -> None:
     """Confirm both env vars are visible inside the test."""
     assert os.environ.get("LUCID_MANUAL_VJP") == "1"
     assert os.environ.get("LUCID_MANUAL_VJP_REQUIRE") == "1"
+
+
+def test_manual_vjp_embedding_holds_the_pad_row() -> None:
+    """``padding_idx`` takes no gradient in the compiled step either.
+
+    The manual VJP scattered every looked-up row's gradient, pad included,
+    so a compiled step moved the row eager holds fixed — and BERT and
+    RoFormer both train with a padding_idx.  Index 0 is fed on purpose;
+    the step writes the parameters back in place, so the row can be read
+    straight off the module afterwards.
+    """
+    lucid.manual_seed(0)
+    idx = lucid.randint(0, VOCAB, size=(BATCH, SEQ))
+    idx[:, 0] = 0
+    idx = idx.to(COMPILE_DEVICE)
+    t = metal_tensor(BATCH, OUT_DIM)
+    model = _EmbedNet(padding_idx=0).to(COMPILE_DEVICE)
+    weight_before = model.emb.weight.detach().clone()
+
+    _compile_trajectory(model, idx, t, steps=3, lr=1e-1)
+
+    moved = (model.emb.weight.detach() - weight_before).abs()
+    assert float(moved[0].max().item()) == 0.0, "the compiled step moved the pad row"
+    assert float(moved.max().item()) > 0.0, "the compiled step moved nothing at all"
