@@ -261,6 +261,114 @@ CASES: list[Any] = [
 ]
 
 
+# -- detection and segmentation: the loss needs targets, and each family
+# -- wants them in its own shape --------------------------------------------
+
+
+def _boxes(side: int, *, normalised: bool) -> Callable[[], Inputs]:
+    """One box and label per image, ``xyxy`` — in pixels or in [0, 1]."""
+
+    def make() -> Inputs:
+        x = lucid.randn(_BATCH, 3, side, side)
+        scale = 1.0 if normalised else float(side)
+        box = lucid.tensor([[0.25, 0.25, 0.75, 0.75]]) * scale
+        targets = [
+            {"boxes": box, "labels": lucid.randint(0, _CLASSES, (1,))}
+            for _ in range(_BATCH)
+        ]
+        return (x,), {"targets": targets}
+
+    return make
+
+
+def _class_map(side: int, channels: int = 3) -> Callable[[], Inputs]:
+    """A per-pixel class map, ``(B, H, W)``."""
+
+    def make() -> Inputs:
+        x = lucid.randn(_BATCH, channels, side, side)
+        classes = lucid.randint(0, _CLASSES, (_BATCH, side, side))
+        return (x,), {"targets": classes}
+
+    return make
+
+
+def _mask_map(side: int) -> Callable[[], Inputs]:
+    """MaskFormer's targets: a mapping holding the ``(B, H, W)`` class map."""
+
+    def make() -> Inputs:
+        x = lucid.randn(_BATCH, 3, side, side)
+        masks = lucid.randint(0, _CLASSES, (_BATCH, side, side))
+        return (x,), {"targets": {"masks": masks}}
+
+    return make
+
+
+CASES += [
+    (
+        "yolo",
+        "yolo_v3_tiny",
+        {"num_classes": _CLASSES},
+        _boxes(64, normalised=False),
+    ),
+    (
+        "detr",
+        "detr_resnet50",
+        {
+            "num_classes": _CLASSES,
+            "backbone_layers": (1, 1, 1, 1),
+            "n_head": 2,
+            "num_encoder_layers": 1,
+            "num_decoder_layers": 1,
+            "dim_feedforward": 32,
+            "num_queries": 4,
+        },
+        _boxes(64, normalised=True),
+    ),
+    (
+        "efficientdet",
+        "efficientdet_d0",
+        {
+            "num_classes": _CLASSES,
+            "image_size": 256,
+            "fpn_channels": 16,
+            "fpn_repeats": 1,
+            "head_repeats": 1,
+        },
+        _boxes(256, normalised=False),
+    ),
+    (
+        "unet",
+        "unet",
+        {"num_classes": _CLASSES, "base_channels": 8, "depth": 2},
+        _class_map(32, channels=1),
+    ),
+    (
+        "fcn",
+        "fcn_resnet50",
+        {
+            "num_classes": _CLASSES,
+            "classifier_hidden_channels": 16,
+            "aux_hidden_channels": 16,
+        },
+        _class_map(64),
+    ),
+    (
+        "maskformer",
+        "maskformer_resnet50",
+        {
+            "num_classes": _CLASSES,
+            "backbone_layers": (1, 1, 1, 1),
+            "n_head": 2,
+            "num_decoder_layers": 1,
+            "dim_feedforward": 32,
+            "num_queries": 4,
+            "fpn_out_channels": 32,
+        },
+        _mask_map(64),
+    ),
+]
+
+
 def _family_of(case: Any) -> str:
     return str(case.values[0] if hasattr(case, "values") else case[0])
 
@@ -353,16 +461,10 @@ ELSEWHERE: dict[str, str] = {
     "mask2former": "test_models_segmentation.py — overfit",
 }
 
-#: Families trained nowhere yet.  Each needs targets this file does not
-#: build — boxes, masks, a mapping — and is the next thing to add here.
-NOT_YET: dict[str, str] = {
-    "yolo": "targets are boxes, normalised for v1/v2 and in pixels for v3",
-    "detr": "targets are normalised boxes with labels",
-    "efficientdet": "targets are boxes with labels; input must be at least 256",
-    "unet": "targets are a (B, H, W) class map",
-    "fcn": "targets are a (B, H, W) class map; no config field shrinks it",
-    "maskformer": "targets are a mapping of masks, not a list",
-}
+#: Families trained nowhere yet, with what stands in the way.  Empty since
+#: the detection and segmentation cases above went in — yolo, detr,
+#: efficientdet, unet, fcn and maskformer were the last six.
+NOT_YET: dict[str, str] = {}
 
 
 def test_every_family_takes_a_step_or_says_where() -> None:
