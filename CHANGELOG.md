@@ -54,6 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - partial assignment under no_grad froze the tensor it wrote
 
+- in-place index_put_ under no_grad froze the tensor it wrote
+
 ### Added
 
 - quantization-aware models reach the exporter

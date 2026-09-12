@@ -108,6 +108,25 @@ class TestIndexPut:
         assert ret is x
         assert x.numpy()[0, 1] == 5.0
 
+    def test_inplace_under_no_grad_keeps_a_parameter_trainable(self) -> None:
+        # The result is swapped in as the destination's impl; under no_grad
+        # that impl does not require grad, so a Parameter written this way
+        # silently stopped training.
+        import lucid.nn as nn
+
+        p = nn.Parameter(lucid.zeros(3, 4))
+        with lucid.no_grad():
+            lucid.index_put_(
+                p,
+                (
+                    lucid.tensor([0], dtype=lucid.int64),
+                    lucid.tensor([1], dtype=lucid.int64),
+                ),
+                lucid.tensor([5.0]),
+            )
+        assert p.requires_grad and p.is_leaf
+        assert p.detach().numpy()[0, 1] == 5.0
+
 
 class TestNonzero:
     def test_basic(self, device: str) -> None:

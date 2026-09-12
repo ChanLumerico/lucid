@@ -471,7 +471,14 @@ def index_put_(
         The same ``input`` tensor, now holding the updated values.
     """
     new_t: Tensor = index_put(input, indices, values, accumulate=accumulate)
-    input._impl = new_t._impl
+    # Keep the flag the destination carried.  Under ``no_grad`` the result
+    # does not require grad, and swapping it in wholesale froze a Parameter
+    # — the defect ``Tensor.__setitem__`` had too (see its ``_rebind``).
+    keep = input._impl.requires_grad
+    impl = new_t._impl
+    input._impl = (
+        impl.clone_with_grad(True) if keep and not impl.requires_grad else impl
+    )
     return input
 
 
