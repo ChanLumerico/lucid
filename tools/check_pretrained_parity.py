@@ -29,7 +29,8 @@ suits a classifier would fail them on float32 rounding.  The first of
 these compared by hand, ``bert_base``, was 4.14 apart: the embedding
 lookup zeroed the trained ``[PAD]`` row.  Models over ``_MAX_PARAMS`` are
 reported rather than loaded: both copies at once do not fit a 16 GB
-MacBook or a hosted runner.
+MacBook or a hosted runner.  ``--max-params`` raises the bound on a
+machine that can hold them.
 
 Only sources whose reference package is installed can be checked; the
 rest are reported as unreachable rather than skipped silently.
@@ -40,6 +41,7 @@ Run::
     python -m tools.check_pretrained_parity --model resnet_18_cls
     python -m tools.check_pretrained_parity --source timm
     python -m tools.check_pretrained_parity --source transformers
+    python -m tools.check_pretrained_parity --source transformers/gpt2 --max-params 2e9
     python -m tools.check_pretrained_parity --list
 
 Exit codes
@@ -192,14 +194,18 @@ def _build_reference(kind: str, identifier: str) -> object:
 
 
 def _compare(
-    model_name: str, source: str, shape: tuple[int, ...], params: int | None
+    model_name: str,
+    source: str,
+    shape: tuple[int, ...],
+    params: int | None,
+    max_params: float = _MAX_PARAMS,
 ) -> dict[str, object]:
     resolved = _reference_for(source)
     if resolved is None:
         return {"unreachable": f"no loader for {source.split('/')[0]!r}"}
     kind, identifier = resolved
     if kind in ("transformers", "clip"):
-        return _compare_transformers(model_name, kind, identifier, params)
+        return _compare_transformers(model_name, kind, identifier, params, max_params)
     if (kind == "timm" and zoo_module() is None) or (
         kind == "vision" and ref_vision_module() is None
     ):
@@ -251,7 +257,11 @@ def _compare(
 
 
 def _compare_transformers(
-    model_name: str, kind: str, identifier: str, params: int | None
+    model_name: str,
+    kind: str,
+    identifier: str,
+    params: int | None,
+    max_params: float = _MAX_PARAMS,
 ) -> dict[str, object]:
     """One checkpoint against the transformers model it was converted from.
 
@@ -276,11 +286,11 @@ def _compare_transformers(
         if model_name not in _CLIP_REPOS:
             return {"unsupported": f"no repository recorded for {model_name}"}
         repo, side = _CLIP_REPOS[model_name]
-    if params is not None and params > _MAX_PARAMS:
+    if params is not None and params > max_params:
         return {
             "unreachable": (
                 f"{params / 1e6:.0f}M parameters — too large to hold both "
-                f"copies here (limit {_MAX_PARAMS / 1e6:.0f}M)"
+                f"copies here (limit {max_params / 1e6:.0f}M; see --max-params)"
             )
         }
 
@@ -352,6 +362,15 @@ def main() -> int:
     parser.add_argument("--source", help="only sources starting with this")
     parser.add_argument("--limit", type=int, help="stop after this many")
     parser.add_argument("--list", action="store_true", help="print what is checkable")
+    parser.add_argument(
+        "--max-params",
+        type=float,
+        default=_MAX_PARAMS,
+        help=(
+            "report rather than load transformers models larger than this "
+            f"(default {_MAX_PARAMS:.0e}; raise it where two copies fit)"
+        ),
+    )
     args = parser.parse_args()
 
     targets: list[tuple[str, str, int | None]] = []
@@ -386,7 +405,7 @@ def main() -> int:
     checked = 0
 
     for index, (name, source, params) in enumerate(targets, 1):
-        report = _compare(name, source, (1, 3, 224, 224), params)
+        report = _compare(name, source, (1, 3, 224, 224), params, args.max_params)
         if "unreachable" in report:
             unreachable += 1
             print(f"  [{index}/{len(targets)}] {name:26s} — {report['unreachable']}")
@@ -432,7 +451,11 @@ def main() -> int:
         )
         return 1
     if checked == 0:
-        print("no reference installed — nothing was verified", file=sys.stderr)
+        print(
+            "nothing was verified — no reference installed, or every "
+            "selection was unreachable",
+            file=sys.stderr,
+        )
         return 2
     print("[check_pretrained_parity] OK — every checkpoint reproduces its source.")
     return 0
