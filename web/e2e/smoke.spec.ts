@@ -31,6 +31,8 @@ const PAGES = [
   { path: "/api", name: "api landing" },
   { path: "/api/lucid.nn", name: "module overview" },
   { path: "/api/lucid.models.vision.resnet/resnet_50", name: "model member" },
+  { path: "/architecture", name: "architecture landing" },
+  { path: "/architecture/layer-map", name: "architecture diagram" },
 ];
 
 for (const { path, name } of PAGES) {

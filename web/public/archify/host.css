@@ -1,0 +1,22 @@
+/*
+ * Host mode for archify viewers embedded in the Lucid docs site — see
+ * host.js, which sets html[data-lucid-host] only inside the site's iframe.
+ * The page renders the diagram's title and key-fact cards with the site's
+ * own components, so the viewer's copies are dropped here.
+ */
+
+/* Hidden rather than removed: the row keeps its height, which is what the
+   viewer's fixed toolbar sits beside. */
+html[data-lucid-host] .header-row,
+html[data-lucid-host] .header .subtitle {
+  visibility: hidden;
+}
+
+html[data-lucid-host] .cards {
+  display: none;
+}
+
+/* The site's surfaces are flat; drop the viewer's decorative glow. */
+html[data-lucid-host] body {
+  background-image: none;
+}

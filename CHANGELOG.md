@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - an entry declares the architecture it was trained for
 - the parity check reaches the transformers and CLIP checkpoints
 - let a larger machine check the checkpoints over the cap
+- an Architecture tab with interactive diagrams of the runtime
 
 ---
 

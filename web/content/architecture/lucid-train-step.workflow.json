@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "One Training Step",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "frontend": { "label": "Python API" },
+        "backend": { "label": "Engine · optimizer" },
+        "security": { "label": "AMP gate" },
+        "database": { "label": "Data · checkpoint" }
+      }
+    },
+    "views": [
+      { "id": "happy-path", "label": "Batch to update", "focus": ["batch", "forward", "loss", "backward", "step", "sched"], "note": "A batch goes through forward, backward and optimizer.step, then loops back for the next batch." },
+      { "id": "amp-branch", "label": "AMP branch", "focus": ["backward", "scaler", "step", "skip"], "note": "GradScaler unscales first and skips the whole step on inf or nan." },
+      { "id": "bookkeeping", "label": "Bookkeeping", "focus": ["zero", "backward", "sched", "save"], "note": "zero_grad clears grads before backward; lucid.save runs at epoch end." }
+    ]
+  },
+  "lanes": [
+    { "id": "nn", "label": "lucid.nn · data" },
+    { "id": "autograd", "label": "autograd engine" },
+    { "id": "optim", "label": "lucid.optim" },
+    { "id": "amp", "label": "lucid.amp (optional)", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "input", "label": "Input", "fromCol": 0, "toCol": 0 },
+    { "id": "fwd", "label": "Forward", "fromCol": 1, "toCol": 2, "variant": "emphasis" },
+    { "id": "bwd", "label": "Backward", "fromCol": 3, "toCol": 3 },
+    { "id": "upd", "label": "Update", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["batch", "forward", "loss", "backward", "step", "sched"],
+  "nodes": [
+    { "id": "batch", "lane": "nn", "col": 0, "type": "database", "label": "DataLoader", "sublabel": "BatchSampler → collate", "width": 150 },
+    { "id": "forward", "lane": "nn", "col": 1, "type": "frontend", "label": "model(x)", "sublabel": "Module.__call__", "width": 150 },
+    { "id": "loss", "lane": "nn", "col": 2, "type": "frontend", "label": "F.cross_entropy", "sublabel": "log_softmax → gather", "width": 150 },
+    { "id": "save", "lane": "nn", "col": 5, "type": "database", "label": "lucid.save", "sublabel": "state_dict → pickle", "width": 150 },
+    { "id": "backward", "lane": "autograd", "col": 3, "type": "backend", "label": "loss.backward()", "sublabel": "Engine::backward", "width": 150 },
+    { "id": "zero", "lane": "optim", "col": 2, "type": "backend", "label": "zero_grad()", "sublabel": "p.grad = None", "width": 150 },
+    { "id": "step", "lane": "optim", "col": 4, "type": "backend", "label": "optimizer.step()", "sublabel": "C++ Adam · bump_version", "width": 150 },
+    { "id": "sched", "lane": "optim", "col": 5, "type": "backend", "label": "scheduler.step()", "sublabel": "lr → engine sync", "width": 150 },
+    { "id": "scaler", "lane": "amp", "col": 4, "type": "security", "label": "GradScaler", "sublabel": "unscale_ · inf check", "width": 150 },
+    { "id": "skip", "lane": "amp", "col": 5, "type": "security", "label": "skip step", "sublabel": "scale × 0.5", "width": 150 }
+  ],
+  "edges": [
+    { "id": "batch-forward", "from": "batch", "to": "forward", "label": "batch", "variant": "emphasis", "role": "main" },
+    { "id": "forward-loss", "from": "forward", "to": "loss", "label": "logits", "variant": "emphasis", "role": "main" },
+    { "id": "loss-backward", "from": "loss", "to": "backward", "variant": "emphasis", "role": "main" },
+    { "id": "zero-backward", "from": "zero", "to": "backward", "label": "clear grads", "variant": "dashed", "role": "branch" },
+    { "id": "backward-step", "from": "backward", "to": "step", "label": ".grad", "variant": "emphasis", "role": "main" },
+    { "id": "backward-scaler", "from": "backward", "to": "scaler", "label": "AMP", "variant": "dashed", "role": "branch" },
+    { "id": "scaler-step", "from": "scaler", "to": "step", "label": "finite", "variant": "default", "role": "branch", "route": "straight" },
+    { "id": "scaler-skip", "from": "scaler", "to": "skip", "label": "inf / nan", "variant": "security", "role": "error" },
+    { "id": "step-sched", "from": "step", "to": "sched", "variant": "emphasis", "role": "main" },
+    { "id": "sched-save", "from": "sched", "to": "save", "label": "epoch end", "variant": "dashed", "role": "branch", "route": "straight" },
+    { "id": "next-batch", "from": "sched", "to": "batch", "label": "next batch", "variant": "dashed", "role": "return", "fromSide": "right", "toSide": "top" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Setup, then a lazy optimizer",
+      "items": [
+        "Once: create_model → pretrained weights → .to('metal') → Adam(params)",
+        "Adam builds nothing until the first step(), which binds the TensorImpls it sees then"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "step() on Metal",
+      "items": [
+        "exp_avg and exp_avg_sq live on the param's device and dtype",
+        "One batched mlx eval at the end of step materializes the params"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "AMP branch",
+      "items": [
+        "GradScaler.step always unscales first and skips on inf or nan",
+        "update halves the scale on overflow, doubles it after 2000 clean steps"
+      ]
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import { KeyboardShortcuts } from "@/components/layout/KeyboardShortcuts";
 const NAV_LINKS = [
   { href: "/docs", label: "Docs" },
   { href: "/api", label: "API Reference" },
+  { href: "/architecture", label: "Architecture" },
   { href: "/changelog", label: "Changelog" },
 ] as const;
 

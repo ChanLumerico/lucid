@@ -25,6 +25,7 @@ const FOOTER_LINKS = [
     title: "Resources",
     links: [
       { label: "GitHub",         href: "https://github.com/ChanLumerico/lucid", external: true },
+      { label: "Architecture",   href: "/architecture" },
       { label: "Changelog",      href: "/changelog" },
       { label: "BibTeX",         href: "/citations.bib", external: true },
     ],

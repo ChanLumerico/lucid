@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "How Tensor Bytes Move",
+    "locale": "en",
+    "legend": {
+      "entries": {
+        "dashed": { "label": "zero-copy" }
+      }
+    },
+    "viewBox": [940, 540],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "ingest", "label": "Ways in", "focus": ["host", "hub", "dataset", "conv", "weights", "loader", "cpu"], "note": "Outside values pass one of three bridges and are almost always copied into CpuStorage." },
+      { "id": "devices", "label": "Two devices", "focus": ["cpu", "gpu", "shared"], "note": "to('metal') is an upload copy; SharedStorage is read on CPU through cpu_view without a copy." },
+      { "id": "egress", "label": "Ways out", "focus": ["cpu", "gpu", "npout", "save", "export"], "note": "Three exits: numpy views, checkpoints, and compile or Core ML." }
+    ]
+  },
+  "stages": [
+    { "label": "Outside" },
+    { "label": "Bridge in" },
+    { "label": "Storage" },
+    { "label": "Exit" }
+  ],
+  "nodes": [
+    { "id": "host", "type": "external", "label": "Host values", "sublabel": "list · scalar · DLPack", "stage": 0, "row": 0 },
+    { "id": "hub", "type": "cloud", "label": "HF Hub", "sublabel": "lucid-dl", "stage": 0, "row": 1 },
+    { "id": "dataset", "type": "external", "label": "Dataset", "sublabel": "__getitem__", "stage": 0, "row": 2 },
+    { "id": "conv", "type": "frontend", "label": "lucid.tensor", "sublabel": "converters.py", "stage": 1, "row": 0 },
+    { "id": "weights", "type": "frontend", "label": "weights._hub", "sublabel": "cache · SHA-256", "stage": 1, "row": 1 },
+    { "id": "loader", "type": "frontend", "label": "DataLoader", "sublabel": "default_collate", "stage": 1, "row": 2 },
+    { "id": "gpu", "type": "database", "label": "GpuStorage", "sublabel": "mlx::core::array", "stage": 2, "row": 0 },
+    { "id": "cpu", "type": "database", "label": "CpuStorage", "sublabel": "64B aligned · pool", "stage": 2, "row": 1, "height": 98, "yOffset": -20 },
+    { "id": "shared", "type": "database", "label": "SharedStorage", "sublabel": "Metal shared buffer", "stage": 2, "row": 2 },
+    { "id": "export", "type": "backend", "label": "Graph export", "sublabel": "compile · coreml", "stage": 3, "row": 0 },
+    { "id": "save", "type": "database", "label": "lucid.save", "sublabel": "pickle · tensor_v3", "stage": 3, "row": 1, "yOffset": -7 },
+    { "id": "npout", "type": "external", "label": "NumPy/DLPack", "sublabel": "numpy() · __dlpack__", "stage": 3, "row": 2 }
+  ],
+  "flows": [
+    { "id": "host-conv", "from": "host", "to": "conv", "label": "list · ndarray", "classification": "always copied", "variant": "emphasis" },
+    { "id": "hub-weights", "from": "hub", "to": "weights", "label": "safetensors", "classification": "SHA-256 checked" },
+    { "id": "dataset-loader", "from": "dataset", "to": "loader", "label": "samples", "classification": "Python objects" },
+    { "id": "conv-cpu", "from": "conv", "to": "cpu", "label": "from_bytes", "variant": "emphasis" },
+    { "id": "weights-cpu", "from": "weights", "to": "cpu", "label": "load_safetensors", "labelDy": 13 },
+    { "id": "loader-cpu", "from": "loader", "to": "cpu", "label": "stack" },
+    { "id": "cpu-gpu", "from": "cpu", "to": "gpu", "label": "to('metal')", "variant": "emphasis" },
+    { "id": "shared-cpu", "from": "shared", "to": "cpu", "label": "cpu_view", "variant": "dashed" },
+    { "id": "gpu-export", "from": "gpu", "to": "export", "label": "MTLBuffer", "classification": "zero-copy", "variant": "dashed" },
+    { "id": "cpu-save", "from": "cpu", "to": "save", "label": "to_bytes", "classification": "copied" },
+    { "id": "cpu-npout", "from": "cpu", "to": "npout", "label": "numpy()", "classification": "zero-copy view" }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Copying is the default",
+      "items": [
+        "tensor, from_numpy and as_tensor all copy, despite from_numpy's 'shares memory' docstring",
+        "Eager reshape, permute and slice allocate a new buffer on CPU"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Where zero-copy happens",
+      "items": [
+        "A kDLMetal DLPack capsule is adopted as an MLX array",
+        "CPU numpy(), SharedStorage cpu_view, compile feeds and Core ML inputs"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "GPU is lazy",
+      "items": [
+        "GpuStorage stays an MLX graph until evaluated",
+        "item, numpy, repr and save force eval plus a CPU download"
+      ]
+    }
+  ]
+}

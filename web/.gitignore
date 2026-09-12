@@ -58,3 +58,12 @@ next-env.d.ts
 
 # Generated BibTeX (rewritten from data/citations.json by build-bibtex.py)
 /public/citations.bib
+
+# archify viewers copied from content/architecture by scripts/sync-archify.mjs
+# (host.css / host.js beside them are source and stay tracked)
+/public/archify/*.html
+
+# archify ``visual-check`` evidence (screenshots, receipt JSON, contact sheet)
+# written beside each viewer — regenerate on demand with
+# ``archify visual-check content/architecture/<name>.html``
+/content/architecture/*.visual-check.*

@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Lucid Layer Map",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/ChanLumerico/lucid",
+      "revision": "2a49b4571db33208cb6260ea42dfa60cfc3305e0"
+    },
+    "views": [
+      {
+        "id": "call-path",
+        "label": "Op call path",
+        "focus": ["user", "api", "pyops", "bindings", "ops", "kernel", "backend"],
+        "note": "One line of user code crosses Python and the pybind11 boundary down to a C++ kernel."
+      },
+      {
+        "id": "streams",
+        "label": "CPU and GPU streams",
+        "focus": ["backend", "accelerate", "mlx", "tensor"],
+        "note": "Dispatcher routes by Device: CPU to Accelerate, GPU to MLX. The two streams never mix (H3)."
+      },
+      {
+        "id": "autograd-record",
+        "label": "Autograd recording",
+        "focus": ["kernel", "autograd", "tensor"],
+        "note": "The forward kernel leaves itself behind as the grad_fn node and re-checks saved input versions in backward."
+      },
+      {
+        "id": "compile-path",
+        "label": "compile and Core ML",
+        "focus": ["kernel", "compile"],
+        "note": "A Tracer hooked into OpScopeFull gathers ops into TraceGraph IR, then compiles to MPSGraph or exports to Core ML."
+      }
+    ]
+  },
+  "layout": { "mode": "grid", "origin": [40, 72], "cols": 6, "gapX": 80, "gapY": 72, "cellW": 128, "cellH": 64 },
+  "components": [
+    { "id": "user", "type": "external", "label": "User code", "sublabel": "import lucid", "row": 0, "col": 0 },
+    {
+      "id": "api", "type": "frontend", "label": "Public API", "sublabel": "lucid · nn · optim", "tag": "Tier 1 · 2", "row": 1, "col": 0,
+      "sources": [
+        { "path": "lucid/__init__.py", "line": 605, "label": "__getattr__ lazy loader" },
+        { "path": "lucid/_ops/_registry.py", "line": 147, "label": "OpEntry(add)" }
+      ]
+    },
+    {
+      "id": "pyops", "type": "frontend", "label": "Tensor · _ops", "sublabel": "dunder · _dispatch", "row": 1, "col": 1,
+      "sources": [
+        { "path": "lucid/_tensor/_dunders.py", "line": 65, "label": "__add__" },
+        { "path": "lucid/_dispatch.py", "line": 126, "label": "_unwrap_or_scalar" },
+        { "path": "lucid/_dispatch.py", "line": 192, "label": "_wrap" }
+      ]
+    },
+    {
+      "id": "bindings", "type": "messagebus", "label": "pybind11", "sublabel": "_C.engine module", "row": 1, "col": 2,
+      "sources": [
+        { "path": "lucid/_C/bindings/bind.cpp", "line": 60, "label": "PYBIND11_MODULE(engine)" },
+        { "path": "lucid/_C/bindings/bind_bfunc.cpp", "line": 47, "label": "bind_binary<AddBackward>" }
+      ]
+    },
+    {
+      "id": "ops", "type": "backend", "label": "ops", "sublabel": "op defs · schema_v1", "row": 1, "col": 3,
+      "sources": [
+        { "path": "lucid/_C/ops/bfunc/Add.cpp", "line": 21, "label": "AddBackward::schema_v1" },
+        { "path": "lucid/_C/ops/bfunc/Add.cpp", "line": 43, "label": "add_op" }
+      ]
+    },
+    {
+      "id": "kernel", "type": "backend", "label": "kernel", "sublabel": "Binary/UnaryKernel", "row": 1, "col": 4,
+      "sources": [
+        { "path": "lucid/_C/kernel/BinaryKernel.h", "line": 557, "label": "BinaryKernel::forward" },
+        { "path": "lucid/_C/kernel/BinaryKernel.h", "line": 572, "label": "SchemaGuard" }
+      ]
+    },
+    {
+      "id": "backend", "type": "backend", "label": "Dispatcher", "sublabel": "Cpu/GpuBackend", "row": 1, "col": 5,
+      "sources": [
+        { "path": "lucid/_C/backend/Dispatcher.h", "line": 90, "label": "for_device" },
+        { "path": "lucid/_C/backend/cpu/CpuBackend.h", "line": 584, "label": "CpuBackend::add" },
+        { "path": "lucid/_C/backend/gpu/GpuBackend.h", "line": 289, "label": "GpuBackend::add" }
+      ]
+    },
+    {
+      "id": "compile", "type": "backend", "label": "compile · coreml", "sublabel": "TraceGraph IR", "row": 0, "col": 2,
+      "sources": [
+        { "path": "lucid/_C/compile/Tracer.h", "line": 85, "label": "class Tracer" },
+        { "path": "lucid/compile/__init__.py", "line": 409, "label": "lucid.compile" },
+        { "path": "lucid/coreml/__init__.py", "line": 160, "label": "lucid.coreml.export" }
+      ]
+    },
+    {
+      "id": "autograd", "type": "backend", "label": "autograd", "sublabel": "Node · Engine", "row": 0, "col": 4,
+      "sources": [
+        { "path": "lucid/_C/autograd/AutogradNode.h", "line": 134, "label": "AutogradNode" },
+        { "path": "lucid/_C/autograd/Engine.cpp", "line": 152, "label": "Engine::backward" },
+        { "path": "lucid/_C/core/TensorMeta.h", "line": 198, "label": "AutogradMeta" }
+      ]
+    },
+    {
+      "id": "tensor", "type": "database", "label": "TensorImpl", "sublabel": "Storage · Allocator", "tag": "core/", "row": 0, "col": 5,
+      "sources": [
+        { "path": "lucid/_C/core/TensorImpl.h", "line": 101, "label": "class TensorImpl" },
+        { "path": "lucid/_C/core/Storage.h", "line": 334, "label": "Storage variant" },
+        { "path": "lucid/_C/core/Allocator.cpp", "line": 44, "label": "4 MB pool cap" }
+      ]
+    },
+    {
+      "id": "accelerate", "type": "external", "label": "Accelerate", "sublabel": "vDSP · BLAS · BNNS", "tag": "CPU stream", "row": 2, "col": 4,
+      "sources": [
+        { "path": "lucid/_C/backend/cpu/Vdsp.cpp", "line": 36, "label": "vDSP_vadd" }
+      ]
+    },
+    {
+      "id": "mlx", "type": "external", "label": "MLX → Metal", "sublabel": "lazy evaluation", "tag": "GPU stream", "row": 2, "col": 5,
+      "sources": [
+        { "path": "lucid/_C/backend/gpu/MlxBridge.cpp", "line": 199, "label": "wrap_mlx_array" }
+      ]
+    }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Python · lucid/", "wraps": ["api", "pyops"], "pad": 16 },
+    { "kind": "region", "label": "C++ engine · lucid/_C", "wraps": ["bindings", "ops", "kernel", "backend", "compile", "autograd", "tensor"], "pad": 16 },
+    { "kind": "region", "label": "Apple frameworks", "wraps": ["accelerate", "mlx"], "pad": 16 }
+  ],
+  "connections": [
+    { "id": "user-api", "from": "user", "to": "api", "label": "call", "labelDy": 24 },
+    { "id": "api-pyops", "from": "api", "to": "pyops", "label": "OpEntry", "variant": "emphasis" },
+    { "id": "pyops-bindings", "from": "pyops", "to": "bindings", "label": "_impl", "variant": "emphasis" },
+    { "id": "bindings-ops", "from": "bindings", "to": "ops", "variant": "emphasis" },
+    { "id": "ops-kernel", "from": "ops", "to": "kernel", "label": "CRTP", "variant": "emphasis" },
+    { "id": "kernel-backend", "from": "kernel", "to": "backend", "label": "Device", "variant": "emphasis" },
+    { "id": "backend-accelerate", "from": "backend", "to": "accelerate", "label": "CPU" },
+    { "id": "backend-mlx", "from": "backend", "to": "mlx", "label": "GPU", "labelDy": 24 },
+    { "id": "kernel-autograd", "from": "kernel", "to": "autograd", "label": "records grad_fn", "variant": "dashed" },
+    { "id": "autograd-tensor", "from": "autograd", "to": "tensor", "label": "saved", "variant": "dashed" },
+    { "id": "backend-tensor", "from": "backend", "to": "tensor", "label": "allocates" },
+    { "id": "kernel-compile", "from": "kernel", "to": "compile", "label": "trace", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Dependency direction",
+      "items": [
+        "C++ depends one way: bindings → ops → kernel → autograd → backend → tensor → core (convention, DEVELOPMENT.md §2.2)",
+        "tools/check_layers.py guards Python only: autograd, linalg and diffeq may not import nn or optim"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "H3 · Stream split",
+      "items": [
+        "CPU uses Accelerate only, GPU uses MLX only",
+        "Carve-outs: linalg and FFT run on MLX's CPU stream; nonzero and unique round-trip through the CPU"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "H4 · No external deps",
+      "items": [
+        "No numpy or other third-party import on any compute path",
+        "Only six bridge boundaries may touch the outside world"
+      ]
+    }
+  ]
+}

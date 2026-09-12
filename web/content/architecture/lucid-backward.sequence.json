@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "loss.backward(), End to End",
+    "locale": "en",
+    "legend": {
+      "entries": {
+        "security": { "label": "version check" },
+        "dashed": { "label": "runs after engine" }
+      }
+    },
+    "viewBox": [1080, 620],
+    "column_fit": "spread",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "entry", "label": "Seed and entry", "focus": ["user", "tensor", "binding", "engine"], "note": "Tensor.backward is a thin wrapper; the real work is one C++ Engine::backward call." },
+      { "id": "walk", "label": "Reverse walk", "focus": ["engine", "sumnode", "mulnode", "accum"], "note": "Each node runs once in topo_order, and grads flow along next_edges." },
+      { "id": "version-check", "label": "Version check", "focus": ["engine", "mulnode"], "note": "If a saved tensor was modified in place after forward, the pass stops here." },
+      { "id": "python-hooks", "label": "Python hooks", "focus": ["tensor", "hooks"], "note": "Tensor hooks run in Python after the engine returns." }
+    ]
+  },
+  "participants": [
+    { "id": "user", "type": "external", "label": "User", "sublabel": "(a * w).sum()" },
+    { "id": "tensor", "type": "frontend", "label": "Tensor", "sublabel": ".backward()" },
+    { "id": "hooks", "type": "frontend", "label": "hooks", "sublabel": "tensor hooks" },
+    { "id": "binding", "type": "messagebus", "label": "pybind11", "sublabel": "engine_backward" },
+    { "id": "engine", "type": "backend", "label": "Engine", "sublabel": "Engine::backward" },
+    { "id": "sumnode", "type": "backend", "label": "Sum node", "sublabel": "SumBackward" },
+    { "id": "mulnode", "type": "backend", "label": "Mul node", "sublabel": "MulBackward" },
+    { "id": "accum", "type": "database", "label": "Leaf w", "sublabel": "AccumulateGrad" }
+  ],
+  "segments": [
+    { "from": 150, "to": 226, "label": "Entry" },
+    { "from": 240, "to": 428, "label": "Reverse walk" },
+    { "from": 442, "to": 546, "label": "Cleanup" }
+  ],
+  "messages": [
+    { "id": "call-backward", "from": "user", "to": "tensor", "y": 160, "label": "loss.backward()", "variant": "emphasis" },
+    { "id": "enter-binding", "from": "tensor", "to": "binding", "y": 188, "label": "engine_backward", "variant": "emphasis", "note": "With a gradient argument it differentiates (self * g).sum() instead, so only a scalar seed goes in" },
+    { "id": "enter-engine", "from": "binding", "to": "engine", "y": 216, "label": "empty seed", "note": "Called with the GIL held. ones seed → fusion pass → topo_order (reverse DFS post-order)" },
+    { "id": "apply-sum", "from": "engine", "to": "sumnode", "y": 250, "label": "apply(1)", "variant": "emphasis", "note": "Per node: validate_versions → apply → release_saved" },
+    { "id": "sum-grad", "from": "sumnode", "to": "engine", "y": 278, "label": "g", "variant": "return", "note": "grad broadcast back to the input shape" },
+    { "id": "check-versions", "from": "engine", "to": "mulnode", "y": 306, "label": "validate_versions", "variant": "security", "note": "Throws VersionMismatch if a saved input changed since forward" },
+    { "id": "apply-mul", "from": "engine", "to": "mulnode", "y": 334, "label": "apply(g)", "variant": "emphasis" },
+    { "id": "mul-grads", "from": "mulnode", "to": "engine", "y": 362, "label": "g·w, g·a", "variant": "return", "note": "reduce_grad_to_shape undoes broadcasting" },
+    { "id": "send-leaf", "from": "engine", "to": "accum", "y": 390, "label": "g·a", "variant": "emphasis", "note": "Grads bound for the same node are summed in the pending map first" },
+    { "id": "grad-stored", "from": "accum", "to": "engine", "y": 418, "label": "w.grad +=", "variant": "return", "note": "The first write moves the grad in; later ones use accumulate_into" },
+    { "id": "engine-done", "from": "engine", "to": "binding", "y": 452, "label": "graph released", "variant": "return", "note": "With retain_graph=False the saved tensors are already freed; root.clear_grad_fn drops the chain" },
+    { "id": "binding-done", "from": "binding", "to": "tensor", "y": 480, "label": "return", "variant": "return" },
+    { "id": "run-hooks", "from": "tensor", "to": "hooks", "y": 508, "label": "run hooks", "variant": "dashed", "note": "_dispatch_tensor_grad_hooks: a returned tensor replaces only that tensor's .grad" },
+    { "id": "grad-ready", "from": "tensor", "to": "user", "y": 536, "label": ".grad ready", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "tensor", "from": 160, "to": 542, "type": "frontend" },
+    { "participant": "binding", "from": 188, "to": 486, "type": "messagebus" },
+    { "participant": "engine", "from": 216, "to": 458, "type": "backend" },
+    { "participant": "sumnode", "from": 250, "to": 284, "type": "backend" },
+    { "participant": "mulnode", "from": 306, "to": 368, "type": "backend" },
+    { "participant": "accum", "from": 390, "to": 424, "type": "database" },
+    { "participant": "hooks", "from": 508, "to": 530, "type": "frontend" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "How the order is chosen",
+      "items": [
+        "topo_order is the reverse of an iterative DFS post-order over next_edges",
+        "No dependency counters, no ready queue: one single-threaded pass"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Version check",
+      "items": [
+        "forward stamps input versions with set_saved_versions",
+        "An in-place change to a saved input raises VersionMismatch"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Releasing the graph",
+      "items": [
+        "retain_graph=False frees saved tensors node by node",
+        "create_graph=True forces retain_graph and takes backward_for_graph"
+      ]
+    }
+  ]
+}

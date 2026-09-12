@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "A Tensor's Autograd Life",
+    "locale": "en",
+    "viewBox": [1080, 630],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "main-life", "label": "Record to .grad", "focus": ["leaf", "recorded", "walking", "release", "done"], "note": "A leaf used in an op builds a graph; backward fills the grads, then the graph is released." },
+      { "id": "keep-graph", "label": "Keeping the graph", "focus": ["release", "kept", "walking"], "note": "Only a graph kept with retain_graph=True can run backward again." },
+      { "id": "recovery", "label": "Version mismatch", "focus": ["walking", "mismatch", "recorded"], "note": "An in-place change to a saved tensor stops the walk; re-running forward recovers." },
+      { "id": "no-record", "label": "Nothing recorded", "focus": ["leaf", "nograd"], "note": "With GradMode off (no_grad, inference_mode) the kernels skip node creation entirely." }
+    ]
+  },
+  "lanes": [
+    { "id": "main", "label": "Main path" },
+    { "id": "waiting", "label": "Graph kept" },
+    { "id": "exceptions", "label": "Recovery loop" },
+    { "id": "terminal", "label": "Not recorded" }
+  ],
+  "states": [
+    { "id": "leaf", "type": "start", "label": "Leaf tensor", "sublabel": "requires_grad=True", "lane": "main", "col": 0, "step": "01", "tag": "AccumulateGrad" },
+    { "id": "recorded", "type": "active", "label": "Graph recorded", "sublabel": "grad_fn · saved_versions", "lane": "main", "col": 1, "step": "02", "tag": "forward" },
+    { "id": "walking", "type": "active", "label": "Backward walk", "sublabel": "topo_order · apply", "lane": "main", "col": 2, "step": "03", "tag": "Engine" },
+    { "id": "release", "type": "decision", "label": "Free saved?", "sublabel": "check retain_graph", "lane": "main", "col": 3, "step": "04", "tag": "per node" },
+    { "id": "done", "type": "success", "label": ".grad final", "sublabel": "root grad_fn cleared", "lane": "main", "col": 4, "step": "05", "tag": "after hooks" },
+    { "id": "kept", "type": "waiting", "label": "Graph kept", "sublabel": "retain_graph=True", "lane": "waiting", "col": 1, "tag": "reusable" },
+    { "id": "mismatch", "type": "failure", "label": "VersionMismatch", "sublabel": "in-place after save", "lane": "exceptions", "col": 0, "tag": "recoverable" },
+    { "id": "nograd", "type": "neutral", "label": "No node", "sublabel": "no_grad · inference_mode", "lane": "terminal", "col": 0, "tag": "GradMode off" }
+  ],
+  "transitions": [
+    { "id": "keep", "from": "release", "to": "kept", "label": "retain_graph=True", "variant": "default", "labelDy": 24 },
+    { "id": "again", "from": "kept", "to": "walking", "label": "backward again", "variant": "emphasis" },
+    { "id": "version-fail", "from": "walking", "to": "mismatch", "label": "version mismatch", "variant": "security", "labelDy": 24 },
+    { "id": "rerun", "from": "mismatch", "to": "recorded", "label": "re-run forward", "variant": "emphasis" },
+    { "id": "grad-off", "from": "leaf", "to": "nograd", "label": "GradMode off", "variant": "dashed", "fromSide": "bottom", "toSide": "left" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "What gets recorded",
+      "items": [
+        "grad_fn (XxxBackward), next_edges and the input versions",
+        "A leaf gets AccumulateGrad as its grad_fn on first use"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Ways back",
+      "items": [
+        "VersionMismatch clears once forward re-runs and builds a new graph",
+        "Only a graph kept with retain_graph=True can be walked again"
+      ]
+    }
+  ]
+}

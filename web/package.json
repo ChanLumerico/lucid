@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "./scripts/py.sh scripts/build-api-data-cached.py && ./scripts/py.sh scripts/build-cross-links.py && ./scripts/py.sh scripts/build-usedby.py && ./scripts/py.sh scripts/link-citations.py && ./scripts/py.sh scripts/build-bibtex.py && ./scripts/py.sh scripts/build-meta.py",
+    "predev": "node scripts/sync-archify.mjs && ./scripts/py.sh scripts/build-api-data-cached.py && ./scripts/py.sh scripts/build-cross-links.py && ./scripts/py.sh scripts/build-usedby.py && ./scripts/py.sh scripts/link-citations.py && ./scripts/py.sh scripts/build-bibtex.py && ./scripts/py.sh scripts/build-meta.py",
     "dev": "next dev",
-    "dev:fast": "SKIP_API_BUILD=1 ./scripts/py.sh scripts/build-bibtex.py && ./scripts/py.sh scripts/build-meta.py && next dev",
-    "prebuild": "./scripts/py.sh scripts/build-api-data-cached.py && ./scripts/py.sh scripts/build-cross-links.py && ./scripts/py.sh scripts/build-usedby.py && ./scripts/py.sh scripts/link-citations.py && ./scripts/py.sh scripts/build-bibtex.py && ./scripts/py.sh scripts/build-meta.py",
+    "dev:fast": "node scripts/sync-archify.mjs && SKIP_API_BUILD=1 ./scripts/py.sh scripts/build-bibtex.py && ./scripts/py.sh scripts/build-meta.py && next dev",
+    "prebuild": "node scripts/sync-archify.mjs && ./scripts/py.sh scripts/build-api-data-cached.py && ./scripts/py.sh scripts/build-cross-links.py && ./scripts/py.sh scripts/build-usedby.py && ./scripts/py.sh scripts/link-citations.py && ./scripts/py.sh scripts/build-bibtex.py && ./scripts/py.sh scripts/build-meta.py",
     "citations": "./scripts/py.sh scripts/link-citations.py",
     "cross-links": "./scripts/py.sh scripts/build-cross-links.py",
     "usedby": "./scripts/py.sh scripts/build-usedby.py",

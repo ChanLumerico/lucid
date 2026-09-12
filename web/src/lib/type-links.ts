@@ -17,7 +17,9 @@ import { isApiClass, isApiClassModule, isApiModule } from "@/lib/types";
 // raw ``<a>`` into a ``dangerouslySetInnerHTML`` string, which Next does NOT
 // rewrite, so it must prepend the basePath manually (otherwise every linked
 // type in a code signature 404s on GitHub Pages, escaping the ``/lucid`` base).
-const BASE_PATH = process.env.NODE_ENV === "production" ? "/lucid" : "";
+// Exported for the other raw-URL consumers (e.g. the architecture viewer's
+// iframe ``src``), which Next doesn't rewrite either.
+export const BASE_PATH = process.env.NODE_ENV === "production" ? "/lucid" : "";
 
 /** Type name (basename, e.g. ``"Tensor"`` / ``"Module"``) → docs URL. */
 let _typeLinkCache: ReadonlyMap<string, string> | null = null;

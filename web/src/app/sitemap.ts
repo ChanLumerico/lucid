@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { getAllModuleSlugs, loadApiData } from "@/lib/api-loader";
 import { isApiModule, isApiClassModule } from "@/lib/types";
 import { getAllDocSlugs } from "@/lib/mdx-compile";
+import { getDiagrams } from "@/lib/architecture";
 
 // ``output: export`` (in next.config.ts) needs every route to be
 // explicitly static; pin ``dynamic = "force-static"`` so the static
@@ -28,8 +29,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${ORIGIN}/`,           lastModified: now, changeFrequency: "weekly",  priority: 1.0 },
     { url: `${ORIGIN}/api`,        lastModified: now, changeFrequency: "weekly",  priority: 0.9 },
     { url: `${ORIGIN}/docs`,       lastModified: now, changeFrequency: "weekly",  priority: 0.7 },
+    { url: `${ORIGIN}/architecture`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${ORIGIN}/changelog`,  lastModified: now, changeFrequency: "monthly", priority: 0.4 },
   ];
+
+  // Architecture diagram pages.
+  for (const d of getDiagrams()) {
+    entries.push({
+      url: `${ORIGIN}/architecture/${d.slug}`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.5,
+    });
+  }
 
   // API module + member pages.
   for (const slug of getAllModuleSlugs()) {

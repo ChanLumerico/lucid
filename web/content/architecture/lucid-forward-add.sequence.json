@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "a + b, End to End",
+    "locale": "en",
+    "legend": {
+      "entries": {
+        "security": { "label": "guard check" },
+        "dashed": { "label": "lazy or conditional" }
+      }
+    },
+    "viewBox": [1080, 620],
+    "column_fit": "spread",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "py-to-cpp", "label": "Python to C++", "focus": ["user", "py", "engine"], "note": "The injected __add__ finishes scalar coercion and dtype promotion, then hands off to pybind11." },
+      { "id": "guard", "label": "Validation and schema", "focus": ["kernel", "core"], "note": "BinaryKernel checks dtype, device and shape; SchemaGuard settles determinism and the AMP dtype." },
+      { "id": "streams", "label": "CPU and GPU compute", "focus": ["kernel", "backend", "apple"], "note": "Dispatcher picks the backend by Device. CPU computes now; GPU only adds a graph node." },
+      { "id": "record", "label": "Autograd recording", "focus": ["kernel", "core", "autograd"], "note": "The output TensorImpl is built, and an AddBackward node becomes its grad_fn only when needed." }
+    ]
+  },
+  "participants": [
+    { "id": "user", "type": "external", "label": "User", "sublabel": "c = a + b" },
+    { "id": "py", "type": "frontend", "label": "__add__", "sublabel": "Tensor · _dunders" },
+    { "id": "engine", "type": "messagebus", "label": "pybind11", "sublabel": "_C_engine.add" },
+    { "id": "kernel", "type": "backend", "label": "kernel", "sublabel": "AddBackward" },
+    { "id": "core", "type": "backend", "label": "core", "sublabel": "SchemaGuard" },
+    { "id": "backend", "type": "backend", "label": "backend", "sublabel": "Cpu/GpuBackend" },
+    { "id": "apple", "type": "external", "label": "Apple", "sublabel": "vDSP · MLX" },
+    { "id": "autograd", "type": "backend", "label": "autograd", "sublabel": "AutogradMeta" }
+  ],
+  "segments": [
+    { "from": 150, "to": 198, "label": "Python" },
+    { "from": 206, "to": 282, "label": "Validate" },
+    { "from": 296, "to": 400, "label": "Compute" },
+    { "from": 414, "to": 490, "label": "Record" },
+    { "from": 498, "to": 546, "label": "Return" }
+  ],
+  "messages": [
+    { "id": "call-add", "from": "user", "to": "py", "y": 160, "label": "c = a + b", "variant": "emphasis" },
+    { "id": "enter-engine", "from": "py", "to": "engine", "y": 188, "label": "_C_engine.add", "variant": "emphasis", "note": "_unwrap_or_scalar turns b into a TensorImpl and _maybe_promote aligns dtypes before the call" },
+    { "id": "enter-kernel", "from": "engine", "to": "kernel", "y": 216, "label": "forward(a, b)", "variant": "emphasis", "note": "add_op goes straight into BinaryKernel<AddBackward>::forward" },
+    { "id": "schema-guard", "from": "kernel", "to": "core", "y": 244, "label": "SchemaGuard", "variant": "security", "note": "Dtype and device mismatches are rejected first; then determinism is checked and AMP picks the autocast dtype" },
+    { "id": "effective-dtype", "from": "core", "to": "kernel", "y": 272, "label": "eff_dt", "variant": "return" },
+    { "id": "pick-backend", "from": "kernel", "to": "backend", "y": 306, "label": "for_device(dev)", "variant": "emphasis", "note": "Indexes an array by the Device enum; 'metal' maps to Device.GPU" },
+    { "id": "cpu-compute", "from": "backend", "to": "apple", "y": 334, "label": "CPU: vDSP_vadd", "note": "Takes the output buffer from the pool and computes synchronously" },
+    { "id": "gpu-compute", "from": "backend", "to": "apple", "y": 362, "label": "GPU: mlx add", "variant": "dashed", "note": "mlx::core::add only adds a graph node; the math runs at eval() or item()" },
+    { "id": "storage-back", "from": "backend", "to": "kernel", "y": 390, "label": "Storage", "variant": "return" },
+    { "id": "make-impl", "from": "kernel", "to": "core", "y": 424, "label": "new TensorImpl", "note": "Wraps the Storage with the broadcast shape; no AutogradMeta yet" },
+    { "id": "make-node", "from": "kernel", "to": "autograd", "y": 452, "label": "AddBackward node", "variant": "dashed", "note": "Only when GradMode is on and an input requires grad" },
+    { "id": "node-wired", "from": "autograd", "to": "kernel", "y": 480, "label": "set_grad_fn", "variant": "return", "note": "Also records next_edges and saved_versions" },
+    { "id": "impl-return", "from": "kernel", "to": "py", "y": 508, "label": "TensorImplPtr", "variant": "return", "note": "Crosses pybind11 as a shared_ptr, no copy" },
+    { "id": "wrap-return", "from": "py", "to": "user", "y": 536, "label": "_wrap → Tensor", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "py", "from": 160, "to": 542, "type": "frontend" },
+    { "participant": "engine", "from": 188, "to": 514, "type": "messagebus" },
+    { "participant": "kernel", "from": 216, "to": 514, "type": "backend" },
+    { "participant": "core", "from": 244, "to": 278, "type": "backend" },
+    { "participant": "backend", "from": 306, "to": 396, "type": "backend" },
+    { "participant": "apple", "from": 334, "to": 368, "type": "external" },
+    { "participant": "core", "from": 424, "to": 440, "type": "backend" },
+    { "participant": "autograd", "from": 452, "to": 486, "type": "backend" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One object, three roles",
+      "items": [
+        "AddBackward is the op, the BinaryKernel (CRTP) and the autograd node at once",
+        "a + b skips the _ops registry: the injected __add__ calls the engine directly"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "CPU vs GPU",
+      "items": [
+        "CPU: vDSP_vadd computes on the spot",
+        "GPU: mlx::core::add only adds a node; it runs at .item() or eval()"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Where it is rejected",
+      "items": [
+        "DtypeMismatch, DeviceMismatch, ShapeMismatch",
+        "C++ never promotes dtypes; Python aligns them first"
+      ]
+    }
+  ]
+}
