@@ -1,21 +1,15 @@
 """What the machine running the Core ML tests can and cannot do.
 
 A hosted CI runner is a virtual machine, and Core ML inside one is not
-Core ML on a device.  There is no Neural Engine, so every placement
-claim reads 0.0; and the paravirtual GPU computes some graphs far less
-accurately than a real one — ZFNet, the zoo's one model with local
-response normalisation, came back 1.7e-3 from eager there, against
-2.2e-6 on an M1 Pro's GPU and 1.7e-6 on its CPU.  Tests ask these
-questions directly rather than inferring the machine from the answers
-they are there to check.
+Core ML on a device: there is no Neural Engine, so every placement claim
+reads 0.0.  Tests ask these questions directly rather than inferring the
+machine from the answers they are there to check.
 """
 
 import functools
 import subprocess
 
 import pytest
-
-import lucid.coreml as cml
 
 
 @functools.cache
@@ -61,14 +55,3 @@ def has_neural_engine() -> bool:
 def require_neural_engine() -> None:
     if not has_neural_engine():
         pytest.skip("no Neural Engine on this machine; a hosted CI runner is a VM")
-
-
-def translation_units() -> cml.ComputeUnits:
-    """Where to run a package whose job is to show the translation holds.
-
-    ``ALL`` on hardware, so the GPU path a deployment takes is checked
-    too.  ``CPU_ONLY`` inside a virtual machine, whose GPU is not one any
-    deployment runs on: comparing against it measures the paravirtual
-    device, not the export.
-    """
-    return cml.ComputeUnits.CPU_ONLY if under_hypervisor() else cml.ComputeUnits.ALL
