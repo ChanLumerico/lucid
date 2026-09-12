@@ -13,6 +13,13 @@ name: Core ML VM probe
 # and prints the crash report macOS writes for each trap — the faulting
 # thread's frames are the only account of where it comes from.
 #
+# The second step asks which processor it is.  The first run put both
+# traps inside BNNS Graph — Core ML's CPU path — at prediction, not at
+# load; this reloads the same packages under CPU_ONLY, CPU_AND_GPU and
+# ALL, each in a fresh process, and compares each against eager.  On an
+# M1 Pro all nine agree to ~2e-6 (ALL takes the GPU for these float32
+# packages).
+#
 # Manual only.  It is a diagnosis, not a gate.
 
 on:
@@ -47,6 +54,8 @@ jobs:
         run: |
           sw_vers
           sysctl -n kern.hv_vmm_present machdep.cpu.brand_string hw.memsize
+          # The CPU features the guest is shown, to diff against hardware.
+          sysctl hw.optional | sort
           python - <<'PY'
           from lucid.test.unit.coreml._helpers import has_neural_engine, under_hypervisor
           print("under_hypervisor:", under_hypervisor(), "| neural engine:", has_neural_engine())
@@ -75,6 +84,7 @@ jobs:
           header, _, body = open(sys.argv[1]).read().partition("\n")
           report = json.loads(body)
           print("process:", json.loads(header).get("app_name"), "|", report.get("exception"))
+          print("termination:", report.get("termination"), "| asi:", report.get("asi"))
           images = report.get("usedImages", [])
           thread = report["threads"][report.get("faultingThread", 0)]
           for frame in thread.get("frames", [])[:40]:
@@ -105,5 +115,98 @@ jobs:
               echo "no crash report was written for this test"
             fi
             echo "::endgroup::"
+          done
+          exit 0
+
+      # Same packages, each compute-unit setting, each in a fresh process.
+      # A trap shows as exit 133 and its crash report's top frames; a
+      # package that runs is compared against eager, so zfnet's 1.7e-3
+      # shows here too if it follows the processor.
+      - name: Each package under each compute-unit setting
+        run: |
+          units="$RUNNER_TEMP/units"
+          mkdir -p "$units"
+          cat > "$units/make.py" <<'PY'
+          # Export each case once; save its inputs and the eager answers.
+          import sys
+
+          import numpy as np
+
+          import lucid
+          import lucid.coreml as cml
+          import lucid.models as M
+          from lucid.test.unit.coreml.test_family_export_smoke import _tensor_of
+
+          out = sys.argv[1]
+          CASES = {
+              "yolo_v3": ("yolo_v3", None, [(1, 3, 416, 416)]),
+              "unet_flex": ("unet", [(1, 1, 64, 64), (1, 1, 128, 128)], [(1, 1, 64, 64), (1, 1, 128, 128)]),
+              "zfnet": ("zfnet", None, [(1, 3, 224, 224)]),
+          }
+          for name, (factory, shapes, inputs) in CASES.items():
+              # Seeded as the family smoke test seeds: this zfnet is the one
+              # that measured 1.7e-3 on the runner.
+              lucid.manual_seed(0)
+              model = M.create_model(factory).eval()
+              xs = [lucid.randn(*shape) for shape in inputs]
+              extra = {"shapes": shapes} if shapes else {}
+              cml.export(
+                  model, xs[0], f"{out}/{name}.mlpackage",
+                  compute_units=cml.ComputeUnits.CPU_ONLY, **extra,
+              ).close()
+              for i, x in enumerate(xs):
+                  ref = model(x)
+                  if factory == "yolo_v3":
+                      fields = {f: getattr(ref, f) for f in ("logits", "pred_boxes", "objectness")}
+                  else:
+                      fields = {"out": _tensor_of(ref)}
+                  np.savez(f"{out}/{name}_{i}.npz", x=x.numpy(), **{k: v.numpy() for k, v in fields.items()})
+              print("exported", name, flush=True)
+          PY
+          cat > "$units/run.py" <<'PY'
+          # One case under one setting, in its own process: a trap kills it.
+          import glob
+          import sys
+
+          import numpy as np
+
+          import lucid
+          import lucid.coreml as cml
+
+          name, setting, d = sys.argv[1:4]
+          cm = cml.load(f"{d}/{name}.mlpackage", compute_units=getattr(cml.ComputeUnits, setting))
+          saved = sorted(glob.glob(f"{d}/{name}_*.npz"))
+          if not saved:
+              sys.exit(f"{name}: no saved inputs")
+          worst = 0.0
+          for path in saved:
+              z = np.load(path)
+              got = cm.predict(lucid.from_numpy(z["x"]))
+              for key in z.files:
+                  if key == "x":
+                      continue
+                  have = (got[key] if isinstance(got, dict) else got).numpy().reshape(z[key].shape)
+                  worst = max(worst, float(np.abs(have - z[key]).max() / np.abs(z[key]).max()))
+          cm.close()
+          print(f"{name:10s} {setting:12s} ok   rel={worst:.2e}", flush=True)
+          PY
+          python "$units/make.py" "$units" || { echo "export failed"; exit 0; }
+          set +e
+          for setting in CPU_ONLY CPU_AND_GPU ALL; do
+            for name in yolo_v3 unet_flex zfnet; do
+              touch "$units/marker"
+              python "$units/run.py" "$name" "$setting" "$units" 2>&1 | tail -3
+              code=${PIPESTATUS[0]}
+              [ "$code" = 0 ] && continue
+              echo "$name $setting -> exit $code"
+              report=""
+              for _ in 1 2 3 4 5 6; do
+                report=$(find ~/Library/Logs/DiagnosticReports -name '*.ips' -newer "$units/marker" 2>/dev/null | head -1)
+                [ -n "$report" ] && break
+                sleep 5
+              done
+              # frames.py was written by the step above.
+              [ -n "$report" ] && python "$RUNNER_TEMP/probe/frames.py" "$report" | head -16
+            done
           done
           exit 0
