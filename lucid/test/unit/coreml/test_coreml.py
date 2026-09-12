@@ -394,12 +394,14 @@ class TestSegmentationAndDetection:
         the model. Nothing about it looks wrong from the outside.
         """
         if under_hypervisor():
-            # On the hosted runner's virtual machine the whole process dies
-            # here with SIGTRAP (exit 133) and no traceback, taking the rest
-            # of the suite with it. It passes on hardware; the cause inside
-            # Core ML is not known yet. Run it with ``-s`` on a VM to see
-            # what Core ML prints before the trap — capture discards it.
-            pytest.skip("Core ML traps exporting YOLOv3 inside a VM; runs on hardware")
+            # Inside the hosted runner's virtual machine Core ML runs this
+            # package on BNNS's CPU path whatever compute units are asked
+            # for, and BNNS traps there at prediction — SIGTRAP, exit 133,
+            # nothing printed — taking the rest of the suite with it. It
+            # passes on hardware. The conftest would refuse the load anyway;
+            # skipping here saves building YOLOv3 first. Where the trap is:
+            # .github/workflows/coreml-vm-probe.yml.
+            pytest.skip("Core ML traps running YOLOv3 inside a VM; runs on hardware")
         model = M.create_model("yolo_v3").eval()
         x = lucid.randn(1, 3, 416, 416)
         reference = model(x)

@@ -100,10 +100,10 @@ class TestFlexibleBatch:
 class TestFlexibleResolution:
     def test_a_fully_convolutional_model_takes_both(self, tmp_path: object) -> None:
         if under_hypervisor():
-            # On the hosted runner's virtual machine the process dies here
-            # with SIGTRAP (exit 133) and no traceback, like the YOLOv3
-            # export in test_coreml.py. It passes on hardware; the gate's
-            # crash-report step shows where the trap comes from.
+            # The same trap as the YOLOv3 test in test_coreml.py: inside the
+            # hosted runner's virtual machine Core ML runs every package on
+            # BNNS's CPU path, and BNNS dies here at prediction with SIGTRAP
+            # (exit 133) and nothing printed. It passes on hardware.
             pytest.skip("Core ML traps running an enumerated-shape package in a VM")
         model = M.create_model("unet").eval()
         exported = cml.export(

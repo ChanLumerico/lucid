@@ -25,26 +25,19 @@ import lucid
 import lucid.coreml as cml
 import lucid.models as M
 from lucid._C import engine as _C_engine
-from lucid.test.unit.coreml._helpers import under_hypervisor
 
 pytestmark = pytest.mark.skipif(
     not hasattr(_C_engine, "coreml"),
     reason="the engine was built without the Core ML writer",
 )
 
-#: The bound every single-image family is held to, and the exceptions on
-#: the hosted runner — a macOS 26 virtual machine, where the hardware this
-#: was measured on runs macOS 27.
-#:
-#: ZFNet, the zoo's one model with local response normalisation, lands
-#: 1.7e-3 from eager there and 1.7e-6 on an M1 Pro.  The runner gives the
-#: same number to the last digit with ``ALL`` and with ``CPU_ONLY``, so it
-#: is not the virtual GPU; whether eager or the package is the side that
-#: moves has not been established.  The runner bound is loose enough for
-#: that and still catches a translation that lost the normalisation,
-#: which divides every activation by about 1.7.
+#: The bound every single-image family is held to.  There is no exception
+#: for the hosted runner: inside its virtual machine the conftest refuses
+#: to load any package, because Core ML there runs everything on BNNS's CPU
+#: path.  ZFNet, the zoo's one model with local response normalisation,
+#: landed 1.67e-3 from eager on that path under every compute-unit
+#: setting, against 1.7e-6 on an M1 Pro.
 _BOUND = 1e-4
-_RUNNER_BOUND = {"zfnet": 5e-3}
 
 #: One factory per family, with the input it takes: ``img`` for pixels
 #: and ``ids`` for token indices. Small on purpose — this is checking
@@ -313,8 +306,7 @@ def test_a_family_representative_exports_and_matches(factory, shape, tmp_path):
     try:
         got = exported.predict(x)
         assert tuple(got.shape) == tuple(reference.shape)
-        bound = _RUNNER_BOUND.get(factory, _BOUND) if under_hypervisor() else _BOUND
-        assert float((got - reference).abs().max().item()) / scale < bound
+        assert float((got - reference).abs().max().item()) / scale < _BOUND
     finally:
         exported.close()
 

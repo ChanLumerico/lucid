@@ -1,10 +1,16 @@
 """Core ML tests inside a virtual machine.
 
 A hosted CI runner is a macOS virtual machine, and the Core ML runtime
-inside it is not the one on a device: there is no Neural Engine, one
-comparison lands a thousand times further from eager than on hardware,
-and two unrelated packages killed the test process by SIGTRAP with
-nothing in the log.  So under a hypervisor, loading a package — the step
+inside it is not the one on a device.  There is no Neural Engine, and the
+GPU goes unused: the probe in ``.github/workflows/coreml-vm-probe.yml``
+got the same answer, to the last digit, from CPU_ONLY, CPU_AND_GPU and
+ALL — every package on BNNS's CPU path.  That path lands one comparison
+a thousand times further from eager than on hardware and traps at
+prediction on two unrelated packages: SIGTRAP, nothing in the log, and
+the rest of the suite gone with the process.  Other compute units do not
+route around it.
+
+So under a hypervisor, loading a package — the step
 every prediction, verification and compute plan goes through — skips the
 test instead.  Tracing and writing the package still run there; executing
 it is left to hardware.
