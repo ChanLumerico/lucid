@@ -52,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - an embedding with padding_idx or max_norm could not be trained
 
+- partial assignment under no_grad froze the tensor it wrote
+
 ### Added
 
 - quantization-aware models reach the exporter

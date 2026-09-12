@@ -106,3 +106,22 @@ def test_partial_full_slice_is_not_mistaken_for_the_whole_tensor() -> None:
     x = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
     x[:, 1] = 0.0
     assert np.allclose(x.numpy(), [[1.0, 0.0, 3.0], [4.0, 0.0, 6.0]])
+
+
+def test_partial_assignment_under_no_grad_keeps_a_parameter_trainable() -> None:
+    """``weight[pad] = 0`` in an initialiser used to freeze the parameter.
+
+    The general path assigned ``t._impl`` directly, and a scatter under
+    ``no_grad`` yields an impl that does not require grad — so the
+    parameter stayed a Parameter and a leaf and silently stopped training.
+    BERT's word table was frozen this way.
+    """
+    import lucid.nn as nn
+
+    p = nn.Parameter(lucid.randn(3, 4))
+    with lucid.no_grad():
+        p[0] = lucid.zeros((4,))
+    assert p.requires_grad and p.is_leaf
+    assert np.allclose(p[0].detach().numpy(), 0.0)
+    (p * 2.0).sum().backward()
+    assert p.grad is not None

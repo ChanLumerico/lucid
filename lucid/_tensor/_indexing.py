@@ -637,11 +637,12 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     """Swap a tensor's impl while keeping the flags that live on it.
 
     ``requires_grad`` is carried by the impl, so rebinding wholesale drops
-    it.  The general scatter path below never did — it writes *into* the
-    existing impl — which is why ``x[0] = v`` kept the flag and ``x[:] = v``
-    silently lost it.  A Parameter assigned that way stayed a Parameter,
-    stayed a leaf, stayed in ``parameters()`` and ``state_dict()``, and
-    simply never received a gradient again.
+    it.  A Parameter assigned that way stays a Parameter, stays a leaf,
+    stays in ``parameters()`` and ``state_dict()``, and simply never
+    receives a gradient again.  Both paths of ``_setitem`` come through
+    here.  The whole-tensor one lost the flag first (``x[:] = v``); the
+    general scatter path lost it later, once it was rewritten to assign
+    ``t._impl`` itself — which froze ``weight[pad] = 0`` under ``no_grad``.
     """
     keep = t._impl.requires_grad
     t._impl = impl.clone_with_grad(True) if keep and not impl.requires_grad else impl
@@ -745,7 +746,11 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
 
     flat_t = _C_engine.reshape(_C_engine.contiguous(t._impl), [total])
     flat_out = _C_engine.scatter(flat_t, 0, flat_idx_1d, flat_val)
-    t._impl = _C_engine.reshape(flat_out, shape)
+    # Through ``_rebind``, like the whole-tensor path above.  Assigning
+    # ``t._impl`` directly dropped ``requires_grad`` whenever the scatter ran
+    # under ``no_grad``, so ``weight[pad] = 0`` in an initialiser froze the
+    # parameter — BERT's word table never trained.
+    _rebind(t, _C_engine.reshape(flat_out, shape))
 
 
 # Legacy export used in tensor.py (kept for compatibility)
