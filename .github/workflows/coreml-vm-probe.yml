@@ -86,7 +86,12 @@ jobs:
           print("process:", json.loads(header).get("app_name"), "|", report.get("exception"))
           print("termination:", report.get("termination"), "| asi:", report.get("asi"))
           images = report.get("usedImages", [])
-          thread = report["threads"][report.get("faultingThread", 0)]
+          threads = report.get("threads")
+          if not threads:
+              # A JetsamEvent or similar: a report, but not of a crash.
+              print("not a crash report — no threads to unwind")
+              sys.exit(0)
+          thread = threads[report.get("faultingThread", 0)]
           for frame in thread.get("frames", [])[:40]:
               index = frame.get("imageIndex")
               image = images[index].get("name", "?") if index is not None and index < len(images) else "?"
