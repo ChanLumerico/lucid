@@ -328,29 +328,30 @@ def index_put(
     one per leading dimension; broadcasting between them follows the
     standard rules.
 
-    Currently restricted to the case where ``len(indices) ==
-    input.ndim`` and every index tensor broadcasts to a common shape —
-    partial advanced indexing (where trailing dims are implicitly
-    sliced) is filed as a follow-up.
+    Fewer index tensors than dimensions index the leading dimensions and
+    take the rest whole, as the reference does: ``index_put(x, (i,), v)``
+    on a ``(4, 3)`` tensor writes whole rows.
 
     Parameters
     ----------
     input : Tensor
         Destination tensor.
     indices : sequence of Tensors
-        One integer index tensor per dimension of ``input``.  All
-        broadcast to a common shape.
+        One integer index tensor per leading dimension of ``input``; the
+        dimensions after them are taken whole.  All broadcast to a common
+        shape.
     values : Tensor
-        Values to scatter, broadcastable to the common index shape.
+        Values to scatter, broadcastable to the common index shape
+        followed by the dimensions taken whole.
     accumulate : bool, default False
         If True, add at each position; otherwise overwrite.
     """
     if not isinstance(indices, (list, tuple)) or len(indices) == 0:
         raise ValueError("index_put: `indices` must be a non-empty sequence of Tensors")
-    if len(indices) != input.ndim:
-        raise NotImplementedError(
-            f"index_put: partial advanced indexing not supported — "
-            f"expected exactly {input.ndim} index tensors, got {len(indices)}"
+    if len(indices) > input.ndim:
+        raise IndexError(
+            f"index_put: too many indices for a {input.ndim}-D tensor: "
+            f"got {len(indices)}"
         )
 
     # Broadcast all index tensors to a common shape.
@@ -385,9 +386,21 @@ def index_put(
         flat_idx = contrib if flat_idx is None else flat_idx + contrib
     assert flat_idx is not None
 
-    # Broadcast values to common_shape if scalar/smaller.
-    if tuple(values.shape) != common_shape:
-        zero = lucid.zeros(common_shape, dtype=values.dtype, device=values.device)
+    # The dimensions after the indexed ones are taken whole.  They are
+    # contiguous in row-major order, so each index selects a run of flat
+    # positions: the block's start plus 0, 1, ..., block - 1.
+    block_shape = shape[len(indices) :]
+    block = 1
+    for extent in block_shape:
+        block *= extent
+    if block_shape:
+        offsets = lucid.arange(block, dtype=flat_idx.dtype, device=flat_idx.device)
+        flat_idx = flat_idx.reshape(*common_shape, 1) + offsets
+    target_shape = common_shape + block_shape
+
+    # Broadcast values to the indexed shape if scalar/smaller.
+    if tuple(values.shape) != target_shape:
+        zero = lucid.zeros(target_shape, dtype=values.dtype, device=values.device)
         values_b = values + zero
     else:
         values_b = values

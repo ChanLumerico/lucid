@@ -66,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - max_unpool's gradient is the derivative of what it computes
 
+- masks widen with appended keys; MHA and index_put fill gaps
+
 ### Added
 
 - quantization-aware models reach the exporter

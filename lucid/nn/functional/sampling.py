@@ -1066,8 +1066,8 @@ def multi_head_attention_forward(
         Optional learned bias vectors appended to ``K`` / ``V`` along
         the sequence axis.
     add_zero_attn : bool, optional
-        If ``True``, append a row of zeros to ``K`` / ``V`` — not yet
-        supported in Lucid (will raise ``NotImplementedError``).
+        If ``True``, append a row of zeros to ``K`` / ``V`` after any
+        ``bias_k`` / ``bias_v`` row, widening the masks to match.
     dropout_p : float, optional
         Dropout probability applied to attention weights during
         training.
@@ -1084,11 +1084,15 @@ def multi_head_attention_forward(
         Additional additive mask, e.g. a causal triangular mask.
     use_separate_proj_weight : bool, optional
         Use ``q_proj_weight`` / ``k_proj_weight`` / ``v_proj_weight``
-        instead of a fused ``in_proj_weight``.  Not yet supported.
+        instead of a fused ``in_proj_weight`` — how keys and values of
+        their own widths (``kdim`` / ``vdim``) are projected.
     q_proj_weight, k_proj_weight, v_proj_weight : Tensor, optional
-        Separate Q / K / V projection weights (unsupported).
+        Separate Q / K / V projection weights, ``(E, E)``, ``(E, kdim)``
+        and ``(E, vdim)``; all three are required with
+        ``use_separate_proj_weight``.
     static_k, static_v : Tensor, optional
-        Precomputed K / V to attend over (unsupported).
+        Keys and values already projected and split per head.  Not
+        supported: passing either raises ``NotImplementedError``.
     average_attn_weights : bool, optional
         If ``True``, the returned weight tensor is averaged across
         heads; otherwise per-head weights are returned.
@@ -1128,22 +1132,25 @@ def multi_head_attention_forward(
     """
     from lucid.nn.modules.attention import MultiheadAttention
 
-    # The unused-but-validated arguments below are kept on the signature for
-    # ``F.multi_head_attention_forward`` source-level compatibility.  Static
-    # K/V and zero-attn slots are advanced features the module path doesn't
-    # cover yet — they raise rather than silently misbehaving.
+    # Keys and values already projected and split per head replace the K/V
+    # projection inside the attention itself; the module has no seam for it.
     if static_k is not None or static_v is not None:
         raise NotImplementedError(
-            "multi_head_attention_forward: static_k/static_v unsupported"
+            "multi_head_attention_forward: static_k/static_v (keys and values "
+            "already projected and split per head) are not supported"
         )
-    if add_zero_attn:
-        raise NotImplementedError(
-            "multi_head_attention_forward: add_zero_attn unsupported"
-        )
+
+    # Separate Q/K/V weights are how keys and values of their own widths
+    # reach the attention; the module takes those widths as kdim / vdim.
+    kdim = vdim = int(embed_dim_to_check)
     if use_separate_proj_weight:
-        raise NotImplementedError(
-            "multi_head_attention_forward: use_separate_proj_weight unsupported"
-        )
+        if q_proj_weight is None or k_proj_weight is None or v_proj_weight is None:
+            raise ValueError(
+                "multi_head_attention_forward: use_separate_proj_weight=True "
+                "needs q_proj_weight, k_proj_weight and v_proj_weight"
+            )
+        kdim = int(k_proj_weight.shape[-1])
+        vdim = int(v_proj_weight.shape[-1])
 
     # Build a temporary module; bind external weights so the call mirrors the
     # functional contract exactly.
@@ -1153,6 +1160,9 @@ def multi_head_attention_forward(
         dropout=float(dropout_p),
         bias=in_proj_bias is not None or out_proj_bias is not None,
         add_bias_kv=bias_k is not None,
+        add_zero_attn=add_zero_attn,
+        kdim=kdim,
+        vdim=vdim,
         batch_first=False,
     )
     # The temporary module's parameters are created on the *default*
@@ -1162,7 +1172,21 @@ def multi_head_attention_forward(
     # device mismatch — so this entry point only worked on Metal if you
     # passed every weight there is.
     mha = mha.to(query.device)
-    if in_proj_weight is not None and mha.in_proj_weight is not None:
+    if use_separate_proj_weight:
+        assert q_proj_weight is not None
+        assert k_proj_weight is not None and v_proj_weight is not None
+        if mha.in_proj_weight is not None:
+            # Every width equals embed_dim, so the module fused the three
+            # projections; the separate weights stack into that one matrix.
+            stacked = _lucid.cat([q_proj_weight, k_proj_weight, v_proj_weight], 0)
+            mha.in_proj_weight._impl = _unwrap(stacked)
+        else:
+            assert mha.q_proj_weight is not None
+            assert mha.k_proj_weight is not None and mha.v_proj_weight is not None
+            mha.q_proj_weight._impl = _unwrap(q_proj_weight)
+            mha.k_proj_weight._impl = _unwrap(k_proj_weight)
+            mha.v_proj_weight._impl = _unwrap(v_proj_weight)
+    elif in_proj_weight is not None and mha.in_proj_weight is not None:
         mha.in_proj_weight._impl = _unwrap(in_proj_weight)
     if in_proj_bias is not None and mha.in_proj_bias is not None:
         mha.in_proj_bias._impl = _unwrap(in_proj_bias)

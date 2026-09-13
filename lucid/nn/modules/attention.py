@@ -30,6 +30,14 @@ from lucid.utils.cache import Cache
 _NEG_INF: float = float("-inf")
 
 
+def _pad_mask_columns(mask: Tensor | None, n: int) -> Tensor | None:
+    """Append ``n`` key columns every query may attend to (``0`` / ``False``)."""
+    if mask is None:
+        return None
+    pad = _lucid.zeros(*mask.shape[:-1], n, dtype=mask.dtype, device=mask.device)
+    return _lucid.cat([mask, pad], -1)
+
+
 def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
     """Convert a bool/byte mask (True = mask out) to an additive float mask
     (-inf where True, 0 where False).  Already-float masks pass through."""
@@ -657,6 +665,17 @@ class MultiheadAttention(Module):
                 )
                 k = _lucid.cat([k, zero_kv], 1)
                 v = _lucid.cat([v, zero_kv], 1)
+
+            # The rows appended above are keys every query may attend to.
+            # Widen the caller's masks to cover them, as the reference does:
+            # left alone, a mask no longer lines up with K, and the reshape in
+            # _build_attn_mask failed for every mask given with either option.
+            # Only what this call appended is padded, so a mask written
+            # against a KV cache keeps its meaning.
+            appended = int(self.bias_k is not None) + int(self.add_zero_attn)
+            if appended:
+                attn_mask = _pad_mask_columns(attn_mask, appended)
+                key_padding_mask = _pad_mask_columns(key_padding_mask, appended)
 
             Tk = k.shape[1]
             qh = self._split_heads(q, B, Tq)
