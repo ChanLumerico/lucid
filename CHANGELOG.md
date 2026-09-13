@@ -15,6 +15,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [3.11.3] — 2026-09-14
+
+A patch release that checks the model zoo against the checkpoints it
+publishes and fixes what that turned up, together with the
+preprocessing, pooling, attention and shared-memory gaps found on the
+way. 3.11.2 was never published; this follows 3.11.1 directly.
+
+- **Checkpoints are compared against the models they came from.** The
+  parity tool now covers 114 published checkpoints, transformers and
+  CLIP included, and the defects it found are fixed: se_resnet computed
+  a different function than its weights, cspnet activated at the wrong
+  slope, sknet and maskformer shipped weights their own builds rejected,
+  and BERT's `padding_idx` zeroed the trained vector it should only
+  freeze.
+- **Image preprocessing matches the reference pixel for pixel.** Resize
+  and centre crop sat a column off, and downscaling did not antialias;
+  a classifier's predictions on real photos now agree with the
+  reference's.
+- **Pooling and attention fill their gaps.** Max pooling returns
+  indices that `MaxUnpool` can use, `MultiheadAttention` accepts
+  `add_zero_attn`, separate projection weights, and masks alongside
+  appended keys, and `index_put` fills trailing dimensions.
+- **Shared Metal memory is shared.** `lucid.metal` shared tensors run
+  ordinary ops, `.to()` between CPU and Metal returns an alias of the
+  buffer instead of a copy, and a write through one alias shows through
+  the other.
+- **A compiled function no longer runs another call's executable.**
+  `lucid.compile` keyed its caches on shapes alone, so `f(x, x)` followed
+  by `f(a, b)` returned `a * a + 1`, silently. Both caches now key on how
+  the inputs are wired.
+- **Every public model method with parameters has a runnable example.**
+
+### Changed
+
+- The engine ABI version is 10. `TensorImpl`, `SharedStorage` and the
+  compile `CacheKey` changed layout, so an extension built against
+  3.11.1's headers refuses to load instead of misreading them.
+
 
 ### Fixed
 

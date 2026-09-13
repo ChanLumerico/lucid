@@ -65,7 +65,7 @@
 // Notes
 // -----
 // Resets to ``0`` whenever MAJOR or MINOR advances.
-#define LUCID_VERSION_PATCH 1
+#define LUCID_VERSION_PATCH 3
 
 // Human-readable version string embedded into the shared library.
 
@@ -77,7 +77,7 @@
 // optional pre-release tag (``-dev``, ``-rc1`` …) marks unstable
 // builds; release tarballs strip the tag.  Returned verbatim by
 // :func:`version_string`.
-#define LUCID_VERSION_STRING "0.11.1"
+#define LUCID_VERSION_STRING "0.11.3"
 
 // Monotonically increasing ABI generation counter.  Bump this whenever the
 // C++ binary interface changes in a way that makes old .so / .dylib objects
@@ -107,7 +107,7 @@
 // classes, new enumerators appended to the end of an enum) still
 // require a bump because their absence in an older library breaks
 // the new extension module.
-#define LUCID_ABI_VERSION 9
+#define LUCID_ABI_VERSION 10
 
 namespace lucid {
 
