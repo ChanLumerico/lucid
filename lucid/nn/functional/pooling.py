@@ -2,7 +2,9 @@
 nn.functional pooling operations.
 """
 
-from typing import Callable, TYPE_CHECKING
+import itertools
+import math
+from typing import Callable, Literal, TYPE_CHECKING, overload
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -17,18 +19,98 @@ def _int_or_tuple(v: int | tuple[int, ...], n: int) -> tuple[int, ...]:
     return (v,) * n if isinstance(v, int) else tuple(v)
 
 
-def _check_return_indices(return_indices: bool, op_name: str) -> None:
-    """Reject ``return_indices=True`` with a clear error.
+def _window_argmax_indices(
+    x: Tensor,
+    kernel: tuple[int, ...],
+    stride: tuple[int, ...],
+    padding: tuple[int, ...],
+    out_spatial: tuple[int, ...],
+) -> Tensor:
+    """Where each pooling window's maximum sits, as the reference reports it.
 
-    The engine pool ops do not yet emit per-window argmax indices, so
-    silently dropping the request would desync ``MaxUnpool`` and similar
-    consumers.  Surface the gap explicitly.
+    Per leading ``(N, C)`` slice, a flat index into the input's unpadded
+    spatial extent — the form :func:`max_unpool2d` and its siblings take.
+    Padding is ``-inf``, so it is never chosen, and a tie goes to the first
+    element of the window in row-major order, as the reference's does.
+    The values come from the engine kernel; this only locates them.
     """
-    if return_indices:
-        raise NotImplementedError(
-            f"{op_name}: return_indices=True is not supported yet. "
-            "Compute argmax-style indices manually if needed."
-        )
+    n = len(kernel)
+    lead = x.ndim - n
+    spatial = tuple(int(s) for s in x.shape[lead:])
+    pads: list[int] = []
+    for d in reversed(range(n)):
+        # Enough on the right to hold every window the engine produced,
+        # including the partial last one ``ceil_mode`` keeps.
+        right = (out_spatial[d] - 1) * stride[d] + kernel[d] - spatial[d] - padding[d]
+        pads += [padding[d], max(right, 0)]
+    windows = _lucid.nn.functional.pad(x, tuple(pads), value=float("-inf"))
+    for d in range(n):
+        windows = windows.unfold(lead + d, kernel[d], stride[d])
+    for d in range(n):
+        windows = windows.narrow(lead + d, 0, out_spatial[d])
+    flat_window = windows.reshape(*x.shape[:lead], *out_spatial, math.prod(kernel))
+    local = _lucid.argmax(flat_window, dim=-1)
+    index = None
+    for d in range(n):
+        offset = (local // math.prod(kernel[d + 1 :])) % kernel[d]
+        shape = [1] * n
+        shape[d] = out_spatial[d]
+        origin = _lucid.arange(out_spatial[d], dtype=_lucid.int64, device=x.device)
+        coord = offset + (origin * stride[d] - padding[d]).reshape(*shape)
+        index = coord if index is None else index * spatial[d] + coord
+    assert index is not None
+    return index
+
+
+def _unpool_default_size(
+    x: Tensor,
+    kernel_size: int | tuple[int, ...],
+    stride: int | tuple[int, ...] | None,
+    padding: int | tuple[int, ...],
+    n: int,
+) -> tuple[int, ...]:
+    """The reference's default ``output_size`` for ``max_unpool``.
+
+    The extent that pooling with these settings would have shrunk to
+    ``x``'s: ``(in - 1) * stride - 2 * padding + kernel`` per axis.
+    """
+    k = _int_or_tuple(kernel_size, n)
+    s = k if stride is None else _int_or_tuple(stride, n)
+    p = _int_or_tuple(padding, n)
+    extent = tuple(int(v) for v in x.shape[-n:])
+    return tuple((i - 1) * sd - 2 * pd + kd for i, kd, sd, pd in zip(extent, k, s, p))
+
+
+def _adaptive_ranges(n_in: int, n_out: int) -> list[tuple[int, int]]:
+    """The reference's adaptive windows: ``[floor(i·in/out), ceil((i+1)·in/out))``."""
+    return [((i * n_in) // n_out, -(-(i + 1) * n_in // n_out)) for i in range(n_out)]
+
+
+def _adaptive_argmax_indices(x: Tensor, out_spatial: tuple[int, ...]) -> Tensor:
+    """:func:`_window_argmax_indices` for adaptive pooling's uneven windows."""
+    n = len(out_spatial)
+    lead = x.ndim - n
+    spatial = tuple(int(s) for s in x.shape[lead:])
+    if all(i % o == 0 for i, o in zip(spatial, out_spatial)):
+        kernel = tuple(i // o for i, o in zip(spatial, out_spatial))
+        return _window_argmax_indices(x, kernel, kernel, (0,) * n, out_spatial)
+    cells = itertools.product(
+        *(_adaptive_ranges(i, o) for i, o in zip(spatial, out_spatial))
+    )
+    found: list[Tensor] = []
+    for cell in cells:
+        window = x
+        for d, (lo, hi) in enumerate(cell):
+            window = window.narrow(lead + d, lo, hi - lo)
+        extent = [hi - lo for lo, hi in cell]
+        local = _lucid.argmax(window.reshape(*x.shape[:lead], -1), dim=-1)
+        index = None
+        for d in range(n):
+            coord = (local // math.prod(extent[d + 1 :])) % extent[d] + cell[d][0]
+            index = coord if index is None else index * spatial[d] + coord
+        assert index is not None
+        found.append(index)
+    return _lucid.stack(found, dim=-1).reshape(*x.shape[:lead], *out_spatial)
 
 
 def _adaptive_pool_python(
@@ -127,6 +209,32 @@ def _adaptive_call(
     return _adaptive_pool_python(x, output_size, reduce)
 
 
+@overload
+def max_pool1d(
+    x: Tensor,
+    kernel_size: int | tuple[int, ...],
+    stride: int | tuple[int, ...] | None = None,
+    padding: int | tuple[int, ...] = 0,
+    dilation: int | tuple[int, ...] = 1,
+    return_indices: Literal[False] = False,
+    ceil_mode: bool = False,
+) -> Tensor: ...
+
+
+@overload
+def max_pool1d(
+    x: Tensor,
+    kernel_size: int | tuple[int, ...],
+    stride: int | tuple[int, ...] | None = None,
+    padding: int | tuple[int, ...] = 0,
+    dilation: int | tuple[int, ...] = 1,
+    *,
+    return_indices: Literal[True],
+    ceil_mode: bool = False,
+) -> tuple[Tensor, Tensor]: ...
+
+
+@overload
 def max_pool1d(
     x: Tensor,
     kernel_size: int | tuple[int, ...],
@@ -135,7 +243,18 @@ def max_pool1d(
     dilation: int | tuple[int, ...] = 1,
     return_indices: bool = False,
     ceil_mode: bool = False,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]: ...
+
+
+def max_pool1d(
+    x: Tensor,
+    kernel_size: int | tuple[int, ...],
+    stride: int | tuple[int, ...] | None = None,
+    padding: int | tuple[int, ...] = 0,
+    dilation: int | tuple[int, ...] = 1,
+    return_indices: bool = False,
+    ceil_mode: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""1-D max pooling over a sliding window.
 
     For each window, takes the maximum value — a translation-invariant
@@ -155,8 +274,9 @@ def max_pool1d(
     dilation : int or tuple of int, optional
         Spacing between window elements.  Default ``1``.
     return_indices : bool, optional
-        Currently must be ``False``; the engine pool op does not yet
-        emit per-window argmax indices.
+        Also return where each maximum came from: ``(output, indices)``,
+        ``indices`` holding each window's flat position in the unpadded
+        input — the form :func:`max_unpool1d` takes.
     ceil_mode : bool, optional
         When ``True``, use ceil instead of floor in the output-size
         formula.
@@ -197,12 +317,51 @@ def max_pool1d(
         dilation,
         detail="Only dilation=1 is supported.",
     )
-    _check_return_indices(return_indices, "max_pool1d")
     k = _int_or_tuple(kernel_size, 1)[0]
     s = k if stride is None else _int_or_tuple(stride, 1)[0]
     p = _int_or_tuple(padding, 1)[0]
     _int_or_tuple(dilation, 1)[0]
-    return _wrap(_C_engine.nn.max_pool1d(_unwrap(x), k, s, p, ceil_mode))
+    out = _wrap(_C_engine.nn.max_pool1d(_unwrap(x), k, s, p, ceil_mode))
+    if not return_indices:
+        return out
+    return out, _window_argmax_indices(x, (k,), (s,), (p,), (int(out.shape[-1]),))
+
+
+@overload
+def max_pool2d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int],
+    stride: int | tuple[int, int] | None = None,
+    padding: int | tuple[int, int] = 0,
+    dilation: int | tuple[int, int] = 1,
+    return_indices: Literal[False] = False,
+    ceil_mode: bool = False,
+) -> Tensor: ...
+
+
+@overload
+def max_pool2d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int],
+    stride: int | tuple[int, int] | None = None,
+    padding: int | tuple[int, int] = 0,
+    dilation: int | tuple[int, int] = 1,
+    *,
+    return_indices: Literal[True],
+    ceil_mode: bool = False,
+) -> tuple[Tensor, Tensor]: ...
+
+
+@overload
+def max_pool2d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int],
+    stride: int | tuple[int, int] | None = None,
+    padding: int | tuple[int, int] = 0,
+    dilation: int | tuple[int, int] = 1,
+    return_indices: bool = False,
+    ceil_mode: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]: ...
 
 
 def max_pool2d(
@@ -213,7 +372,7 @@ def max_pool2d(
     dilation: int | tuple[int, int] = 1,
     return_indices: bool = False,
     ceil_mode: bool = False,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""2-D max pooling over a sliding window.
 
     Aggregates each spatial neighbourhood into its maximum value.
@@ -234,7 +393,8 @@ def max_pool2d(
     dilation : int or (int, int), optional
         Spacing between window elements.  Default ``1``.
     return_indices : bool, optional
-        Must currently be ``False`` — see :func:`max_pool1d`.
+        Also return ``(output, indices)`` — see :func:`max_pool1d`; the
+        indices are what :func:`max_unpool2d` takes.
     ceil_mode : bool, optional
         Use ceil instead of floor in the output-size formula.
 
@@ -275,12 +435,15 @@ def max_pool2d(
         dilation,
         detail="Only dilation=1 is supported.",
     )
-    _check_return_indices(return_indices, "max_pool2d")
     kh, kw = _int_or_tuple(kernel_size, 2)
     sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 2)
     ph, pw = _int_or_tuple(padding, 2)
     dh, dw = _int_or_tuple(dilation, 2)
-    return _wrap(_C_engine.nn.max_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw, ceil_mode))
+    out = _wrap(_C_engine.nn.max_pool2d(_unwrap(x), kh, kw, sh, sw, ph, pw, ceil_mode))
+    if not return_indices:
+        return out
+    out_hw = (int(out.shape[-2]), int(out.shape[-1]))
+    return out, _window_argmax_indices(x, (kh, kw), (sh, sw), (ph, pw), out_hw)
 
 
 def avg_pool1d(
@@ -530,11 +693,35 @@ def adaptive_avg_pool2d(x: Tensor, output_size: int | tuple[int, int]) -> Tensor
     return _adaptive_call(x, (oh, ow), _C_engine.nn.adaptive_avg_pool2d, "mean")
 
 
+@overload
+def adaptive_max_pool2d(
+    x: Tensor,
+    output_size: int | tuple[int, int],
+    return_indices: Literal[False] = False,
+) -> Tensor: ...
+
+
+@overload
+def adaptive_max_pool2d(
+    x: Tensor,
+    output_size: int | tuple[int, int],
+    return_indices: Literal[True],
+) -> tuple[Tensor, Tensor]: ...
+
+
+@overload
 def adaptive_max_pool2d(
     x: Tensor,
     output_size: int | tuple[int, int],
     return_indices: bool = False,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]: ...
+
+
+def adaptive_max_pool2d(
+    x: Tensor,
+    output_size: int | tuple[int, int],
+    return_indices: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""2-D adaptive max pooling — fixed-shape ``(H, W)`` via per-cell max.
 
     Like :func:`adaptive_avg_pool2d` but takes the maximum over each
@@ -549,7 +736,8 @@ def adaptive_max_pool2d(
     output_size : int or (int, int)
         Desired spatial output shape.
     return_indices : bool, optional
-        Must currently be ``False``.
+        Also return ``(output, indices)``: each output cell's maximum as a
+        flat position in the input's spatial extent.
 
     Returns
     -------
@@ -576,16 +764,42 @@ def adaptive_max_pool2d(
     >>> y.shape
     (1, 64, 3, 3)
     """
-    _check_return_indices(return_indices, "adaptive_max_pool2d")
     oh, ow = _int_or_tuple(output_size, 2)
-    return _adaptive_call(x, (oh, ow), _C_engine.nn.adaptive_max_pool2d, "max")
+    out = _adaptive_call(x, (oh, ow), _C_engine.nn.adaptive_max_pool2d, "max")
+    if not return_indices:
+        return out
+    return out, _adaptive_argmax_indices(x, (oh, ow))
+
+
+@overload
+def adaptive_max_pool1d(
+    x: Tensor,
+    output_size: int | tuple[int, ...],
+    return_indices: Literal[False] = False,
+) -> Tensor: ...
+
+
+@overload
+def adaptive_max_pool1d(
+    x: Tensor,
+    output_size: int | tuple[int, ...],
+    return_indices: Literal[True],
+) -> tuple[Tensor, Tensor]: ...
+
+
+@overload
+def adaptive_max_pool1d(
+    x: Tensor,
+    output_size: int | tuple[int, ...],
+    return_indices: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]: ...
 
 
 def adaptive_max_pool1d(
     x: Tensor,
     output_size: int | tuple[int, ...],
     return_indices: bool = False,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""1-D adaptive max pooling — produces a fixed output length.
 
     Computes kernel / stride dynamically so the output length equals
@@ -600,7 +814,8 @@ def adaptive_max_pool1d(
     output_size : int or tuple of int
         Desired output length.
     return_indices : bool, optional
-        Must currently be ``False``.
+        Also return ``(output, indices)``: each output cell's maximum as a
+        flat position in the input's spatial extent.
 
     Returns
     -------
@@ -629,16 +844,42 @@ def adaptive_max_pool1d(
     >>> y.shape
     (2, 8, 4)
     """
-    _check_return_indices(return_indices, "adaptive_max_pool1d")
     sz: tuple[int, ...] = (_int_or_tuple(output_size, 1)[0],)
-    return _adaptive_call(x, sz, _C_engine.nn.adaptive_max_pool1d, "max")
+    out = _adaptive_call(x, sz, _C_engine.nn.adaptive_max_pool1d, "max")
+    if not return_indices:
+        return out
+    return out, _adaptive_argmax_indices(x, sz)
+
+
+@overload
+def adaptive_max_pool3d(
+    x: Tensor,
+    output_size: int | tuple[int, int, int],
+    return_indices: Literal[False] = False,
+) -> Tensor: ...
+
+
+@overload
+def adaptive_max_pool3d(
+    x: Tensor,
+    output_size: int | tuple[int, int, int],
+    return_indices: Literal[True],
+) -> tuple[Tensor, Tensor]: ...
+
+
+@overload
+def adaptive_max_pool3d(
+    x: Tensor,
+    output_size: int | tuple[int, int, int],
+    return_indices: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]: ...
 
 
 def adaptive_max_pool3d(
     x: Tensor,
     output_size: int | tuple[int, int, int],
     return_indices: bool = False,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""3-D adaptive max pooling — produces a fixed ``(D, H, W)``.
 
     Volumetric analogue of :func:`adaptive_max_pool2d`.  Computes
@@ -652,7 +893,8 @@ def adaptive_max_pool3d(
     output_size : int or (int, int, int)
         Desired output spatial shape.
     return_indices : bool, optional
-        Must currently be ``False``.
+        Also return ``(output, indices)``: each output cell's maximum as a
+        flat position in the input's spatial extent.
 
     Returns
     -------
@@ -679,9 +921,11 @@ def adaptive_max_pool3d(
     >>> y.shape
     (1, 8, 1, 1, 1)
     """
-    _check_return_indices(return_indices, "adaptive_max_pool3d")
     od, oh, ow = _int_or_tuple(output_size, 3)
-    return _adaptive_call(x, (od, oh, ow), _C_engine.nn.adaptive_max_pool3d, "max")
+    out = _adaptive_call(x, (od, oh, ow), _C_engine.nn.adaptive_max_pool3d, "max")
+    if not return_indices:
+        return out
+    return out, _adaptive_argmax_indices(x, (od, oh, ow))
 
 
 def adaptive_avg_pool3d(
@@ -734,6 +978,32 @@ def adaptive_avg_pool3d(
     return _adaptive_call(x, (od, oh, ow), _C_engine.nn.adaptive_avg_pool3d, "mean")
 
 
+@overload
+def max_pool3d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int, int],
+    stride: int | tuple[int, int, int] | None = None,
+    padding: int | tuple[int, int, int] = 0,
+    dilation: int | tuple[int, int, int] = 1,
+    return_indices: Literal[False] = False,
+    ceil_mode: bool = False,
+) -> Tensor: ...
+
+
+@overload
+def max_pool3d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int, int],
+    stride: int | tuple[int, int, int] | None = None,
+    padding: int | tuple[int, int, int] = 0,
+    dilation: int | tuple[int, int, int] = 1,
+    *,
+    return_indices: Literal[True],
+    ceil_mode: bool = False,
+) -> tuple[Tensor, Tensor]: ...
+
+
+@overload
 def max_pool3d(
     x: Tensor,
     kernel_size: int | tuple[int, int, int],
@@ -742,7 +1012,18 @@ def max_pool3d(
     dilation: int | tuple[int, int, int] = 1,
     return_indices: bool = False,
     ceil_mode: bool = False,
-) -> Tensor:
+) -> Tensor | tuple[Tensor, Tensor]: ...
+
+
+def max_pool3d(
+    x: Tensor,
+    kernel_size: int | tuple[int, int, int],
+    stride: int | tuple[int, int, int] | None = None,
+    padding: int | tuple[int, int, int] = 0,
+    dilation: int | tuple[int, int, int] = 1,
+    return_indices: bool = False,
+    ceil_mode: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]:
     r"""3-D max pooling over a sliding window.
 
     Volumetric downsampling primitive — extends :func:`max_pool2d` by
@@ -762,7 +1043,8 @@ def max_pool3d(
     dilation : int or (int, int, int), optional
         Spacing between window elements.  Default ``1``.
     return_indices : bool, optional
-        Must currently be ``False``.
+        Also return ``(output, indices)`` — see :func:`max_pool1d`; the
+        indices are what :func:`max_unpool3d` takes.
     ceil_mode : bool, optional
         Use ceil instead of floor in the output-size formula.
 
@@ -804,14 +1086,19 @@ def max_pool3d(
         dilation,
         detail="Only dilation=1 is supported.",
     )
-    _check_return_indices(return_indices, "max_pool3d")
     kd, kh, kw = _int_or_tuple(kernel_size, 3)
     sd, sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 3)
     pd, ph, pw = _int_or_tuple(padding, 3)
-    return _wrap(
+    out = _wrap(
         _C_engine.nn.max_pool3d(
             _unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw, ceil_mode
         )
+    )
+    if not return_indices:
+        return out
+    out_dhw = tuple(int(v) for v in out.shape[-3:])
+    return out, _window_argmax_indices(
+        x, (kd, kh, kw), (sd, sh, sw), (pd, ph, pw), out_dhw
     )
 
 
@@ -1128,8 +1415,9 @@ def _scatter_unpool(
     ``indices`` (the per-window argmax indices saved by the matching
     ``max_pool*d`` call) into a zero tensor whose spatial shape is
     ``output_spatial``.  Leading batch + channel dims are preserved.
-    Implemented via ``scatter_add`` over a flattened spatial axis;
-    ``scatter_add`` is differentiable (gradient flows back to ``x``).
+    Implemented via ``scatter_add`` over a flattened spatial axis, which
+    carries the gradient back to ``x``; an index that overlapping windows
+    repeat is written once, not summed, as the reference does.
     """
     if x.shape != indices.shape:
         raise ValueError(
@@ -1172,7 +1460,15 @@ def _scatter_unpool(
     x_flat = x.reshape(*leading, flat_count)
     idx_flat = indices.reshape(*leading, flat_count)
 
-    out = zeros.scatter_add(-1, idx_flat, x_flat)
+    summed = zeros.scatter_add(-1, idx_flat, x_flat)
+    # Overlapping windows can report the same element, so an index can
+    # repeat — and scatter_add adds the copies where the reference writes
+    # the value once.  Divide by how many copies landed: they are the same
+    # element, so this is exact for two and within an ulp for more.  The
+    # division is kept out of the gradient, because the reference hands
+    # every copy the full upstream gradient, which scatter_add already does.
+    count = zeros.scatter_add(-1, idx_flat, _lucid.ones_like(x_flat)).clamp(min=1.0)
+    out = summed - (summed - summed / count).detach()
     return out.reshape(*leading, *output_spatial)
 
 
@@ -1208,8 +1504,10 @@ def max_unpool1d(
     padding : int or tuple of int, optional
         Original padding.  Recorded for symmetry.
     output_size : tuple of int, optional
-        Required.  Target spatial shape — typically the length of the
-        tensor that was originally fed to :func:`max_pool1d`.
+        Target length — typically that of the tensor fed to
+        :func:`max_pool1d`.  Defaults, as the reference's does, to the
+        length pooling with these settings shrinks to ``x``'s:
+        ``(L - 1) * stride - 2 * padding + kernel_size``.
 
     Returns
     -------
@@ -1243,10 +1541,7 @@ def max_unpool1d(
     (1, 2, 8)
     """
     if output_size is None:
-        raise ValueError(
-            "max_unpool1d: output_size is required (engine return-indices "
-            "is not yet wired so we can't infer it)."
-        )
+        output_size = _unpool_default_size(x, kernel_size, stride, padding, 1)
     spatial = output_size[-1:] if len(output_size) > 1 else (output_size[0],)
     return _scatter_unpool(x, indices, tuple(int(s) for s in spatial), n_spatial=1)
 
@@ -1281,8 +1576,10 @@ def max_unpool2d(
     padding : int or (int, int), optional
         Original padding.
     output_size : tuple of int, optional
-        Required.  Target spatial shape ``(..., H_out, W_out)`` — the
-        original input shape to the matching max-pool.
+        Target spatial shape ``(..., H_out, W_out)`` — the original input
+        shape to the matching max-pool.  Defaults, as the reference's
+        does, to the shape pooling with these settings shrinks to ``x``'s,
+        ``(in - 1) * stride - 2 * padding + kernel_size`` per axis.
 
     Returns
     -------
@@ -1299,16 +1596,13 @@ def max_unpool2d(
     >>> import lucid
     >>> from lucid.nn.functional import max_unpool2d, max_pool2d
     >>> x = lucid.randn(1, 1, 4, 4)
-    >>> # forward pool (return_indices currently not supported by engine):
-    >>> # idx must be supplied by the user when round-tripping.
-    >>> pooled = max_pool2d(x, kernel_size=2)
-    >>> idx = lucid.zeros_like(pooled, dtype=lucid.int64)
+    >>> pooled, idx = max_pool2d(x, kernel_size=2, return_indices=True)
     >>> y = max_unpool2d(pooled, idx, kernel_size=2, output_size=(4, 4))
     >>> y.shape
     (1, 1, 4, 4)
     """
     if output_size is None:
-        raise ValueError("max_unpool2d: output_size is required.")
+        output_size = _unpool_default_size(x, kernel_size, stride, padding, 2)
     spatial = tuple(int(s) for s in output_size[-2:])
     return _scatter_unpool(x, indices, spatial, n_spatial=2)
 
@@ -1340,7 +1634,10 @@ def max_unpool3d(
     padding : int or (int, int, int), optional
         Original padding.
     output_size : tuple of int, optional
-        Required.  Target spatial shape ``(..., D_out, H_out, W_out)``.
+        Target spatial shape ``(..., D_out, H_out, W_out)``.  Defaults, as
+        the reference's does, to the shape pooling with these settings
+        shrinks to ``x``'s, ``(in - 1) * stride - 2 * padding +
+        kernel_size`` per axis.
 
     Returns
     -------
@@ -1357,15 +1654,15 @@ def max_unpool3d(
     Examples
     --------
     >>> import lucid
-    >>> from lucid.nn.functional import max_unpool3d
-    >>> x = lucid.randn(1, 1, 2, 2, 2)
-    >>> idx = lucid.zeros_like(x, dtype=lucid.int64)
-    >>> y = max_unpool3d(x, idx, kernel_size=2, output_size=(4, 4, 4))
+    >>> from lucid.nn.functional import max_pool3d, max_unpool3d
+    >>> x = lucid.randn(1, 1, 4, 4, 4)
+    >>> pooled, idx = max_pool3d(x, kernel_size=2, return_indices=True)
+    >>> y = max_unpool3d(pooled, idx, kernel_size=2, output_size=(4, 4, 4))
     >>> y.shape
     (1, 1, 4, 4, 4)
     """
     if output_size is None:
-        raise ValueError("max_unpool3d: output_size is required.")
+        output_size = _unpool_default_size(x, kernel_size, stride, padding, 3)
     spatial = tuple(int(s) for s in output_size[-3:])
     return _scatter_unpool(x, indices, spatial, n_spatial=3)
 

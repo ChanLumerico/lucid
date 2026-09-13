@@ -109,13 +109,13 @@ class MaxPool1d(Module):
     >>> y.shape
     (1, 4, 4)
 
-    Overlapping windows with explicit stride and dilation:
+    Keeping where each maximum came from, for
+    :class:`~lucid.nn.MaxUnpool1d`:
 
-    >>> pool = nn.MaxPool1d(kernel_size=3, stride=1, dilation=2)
-    >>> x = lucid.ones((2, 8, 16))
-    >>> y = pool(x)
-    >>> y.shape
-    (2, 8, 12)
+    >>> pool = nn.MaxPool1d(kernel_size=2, return_indices=True)
+    >>> y, idx = pool(lucid.randn(2, 8, 16))
+    >>> tuple(idx.shape), idx.dtype
+    ((2, 8, 8), lucid.int64)
     """
 
     def __init__(
@@ -129,10 +129,7 @@ class MaxPool1d(Module):
     ) -> None:
         """Initialise the MaxPool1d module. See the class docstring for parameter semantics."""
         super().__init__()
-        if return_indices:
-            raise NotImplementedError(
-                "MaxPool1d: return_indices=True is not supported yet."
-            )
+        self.return_indices = return_indices
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
@@ -140,7 +137,9 @@ class MaxPool1d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self, x: Tensor
+    ) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -151,8 +150,9 @@ class MaxPool1d(Module):
 
         Returns
         -------
-        Tensor
-            Pooled output tensor.
+        Tensor or tuple of Tensor
+            Pooled output tensor, or ``(output, indices)`` when the layer
+            was built with ``return_indices=True``.
         """
         return max_pool1d(
             x,
@@ -160,7 +160,7 @@ class MaxPool1d(Module):
             self.stride,
             self.padding,
             self.dilation,
-            False,
+            self.return_indices,
             self.ceil_mode,
         )
 
@@ -270,10 +270,7 @@ class MaxPool2d(Module):
     ) -> None:
         """Initialise the MaxPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
-        if return_indices:
-            raise NotImplementedError(
-                "MaxPool2d: return_indices=True is not supported yet."
-            )
+        self.return_indices = return_indices
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
@@ -281,7 +278,9 @@ class MaxPool2d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self, x: Tensor
+    ) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -292,8 +291,9 @@ class MaxPool2d(Module):
 
         Returns
         -------
-        Tensor
-            Pooled output tensor.
+        Tensor or tuple of Tensor
+            Pooled output tensor, or ``(output, indices)`` when the layer
+            was built with ``return_indices=True``.
         """
         return max_pool2d(
             x,
@@ -301,7 +301,7 @@ class MaxPool2d(Module):
             self.stride,
             self.padding,
             self.dilation,
-            False,
+            self.return_indices,
             self.ceil_mode,
         )
 
@@ -811,14 +811,13 @@ class AdaptiveMaxPool2d(Module):
     def __init__(self, output_size: _Size2d, return_indices: bool = False) -> None:
         """Initialise the AdaptiveMaxPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
-        if return_indices:
-            raise NotImplementedError(
-                "AdaptiveMaxPool2d: return_indices=True is not supported yet."
-            )
+        self.return_indices = return_indices
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self, x: Tensor
+    ) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -829,10 +828,11 @@ class AdaptiveMaxPool2d(Module):
 
         Returns
         -------
-        Tensor
-            Pooled output tensor.
+        Tensor or tuple of Tensor
+            Pooled output tensor, or ``(output, indices)`` when the layer
+            was built with ``return_indices=True``.
         """
-        return adaptive_max_pool2d(x, self.output_size)
+        return adaptive_max_pool2d(x, self.output_size, self.return_indices)
 
     @override
     def extra_repr(self) -> str:
@@ -940,10 +940,7 @@ class MaxPool3d(Module):
     ) -> None:
         """Initialise the MaxPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
-        if return_indices:
-            raise NotImplementedError(
-                "MaxPool3d: return_indices=True is not supported yet."
-            )
+        self.return_indices = return_indices
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
@@ -951,7 +948,9 @@ class MaxPool3d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self, x: Tensor
+    ) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -962,10 +961,21 @@ class MaxPool3d(Module):
 
         Returns
         -------
-        Tensor
-            Pooled output tensor.
+        Tensor or tuple of Tensor
+            Pooled output tensor, or ``(output, indices)`` when the layer
+            was built with ``return_indices=True``.
         """
-        return max_pool3d(x, self.kernel_size, self.stride, self.padding)
+        # dilation and ceil_mode used to be dropped here, so
+        # MaxPool3d(ceil_mode=True) silently pooled with floor.
+        return max_pool3d(
+            x,
+            self.kernel_size,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.return_indices,
+            self.ceil_mode,
+        )
 
     @override
     def extra_repr(self) -> str:
@@ -1266,14 +1276,13 @@ class AdaptiveMaxPool1d(Module):
     ) -> None:
         """Initialise the AdaptiveMaxPool1d module. See the class docstring for parameter semantics."""
         super().__init__()
-        if return_indices:
-            raise NotImplementedError(
-                "AdaptiveMaxPool1d: return_indices=True is not supported yet."
-            )
+        self.return_indices = return_indices
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self, x: Tensor
+    ) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1284,10 +1293,11 @@ class AdaptiveMaxPool1d(Module):
 
         Returns
         -------
-        Tensor
-            Pooled output tensor.
+        Tensor or tuple of Tensor
+            Pooled output tensor, or ``(output, indices)`` when the layer
+            was built with ``return_indices=True``.
         """
-        return adaptive_max_pool1d(x, self.output_size)
+        return adaptive_max_pool1d(x, self.output_size, self.return_indices)
 
     @override
     def extra_repr(self) -> str:
@@ -1360,14 +1370,13 @@ class AdaptiveMaxPool3d(Module):
     def __init__(self, output_size: _Size3d, return_indices: bool = False) -> None:
         """Initialise the AdaptiveMaxPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
-        if return_indices:
-            raise NotImplementedError(
-                "AdaptiveMaxPool3d: return_indices=True is not supported yet."
-            )
+        self.return_indices = return_indices
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self, x: Tensor
+    ) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1378,10 +1387,11 @@ class AdaptiveMaxPool3d(Module):
 
         Returns
         -------
-        Tensor
-            Pooled output tensor.
+        Tensor or tuple of Tensor
+            Pooled output tensor, or ``(output, indices)`` when the layer
+            was built with ``return_indices=True``.
         """
-        return adaptive_max_pool3d(x, self.output_size)
+        return adaptive_max_pool3d(x, self.output_size, self.return_indices)
 
     @override
     def extra_repr(self) -> str:

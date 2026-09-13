@@ -77,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - an Architecture tab with interactive diagrams of the runtime
 - the Architecture diagrams drop their toolbar and canvas box
 - shrink images the way the reference does, antialiased
+- max pooling returns its indices, and MaxUnpool can use them
 
 ---
 
