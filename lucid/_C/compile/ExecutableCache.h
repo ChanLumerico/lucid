@@ -49,6 +49,13 @@ namespace lucid::compile {
 // ----------
 // op_names : std::vector<std::string>
 //     Op-name sequence in dispatch order.  Compared element-wise.
+// op_inputs : std::vector<std::vector<std::int64_t>>
+//     Per-op input wiring: every tensor id renumbered by first appearance
+//     across the walk, so the numbers depend only on how the graph is
+//     connected and not on the ids a particular trace drew.  ``a * b``
+//     fed one tensor twice reads ``{0, 0}``, fed two tensors ``{0, 1}``.
+//     Without this both hashed alike and one caller ran the other's
+//     executable — one feed bound where two were passed.
 // output_shapes : std::vector<Shape>
 //     Per-op single-output shape.  Phase 1.2 supports one output per
 //     node; Phase 1.3+ may append entries for multi-output ops.
@@ -67,6 +74,7 @@ namespace lucid::compile {
 //     must agree on one device — Phase 1.2 builder enforces this).
 struct LUCID_API CacheKey {
     std::vector<std::string> op_names;
+    std::vector<std::vector<std::int64_t>> op_inputs;
     std::vector<Shape> output_shapes;
     std::vector<Dtype> output_dtypes;
     std::vector<std::vector<std::pair<std::string, AttributeValue>>> op_attrs;

@@ -145,6 +145,12 @@ class CacheKey:
     param_fingerprint : tuple of (str, str)
         Sorted ``(dtype, device)`` pairs across the model's parameters
         — flips when the user calls ``.half()`` / ``.to('cpu')``.
+    alias : tuple of int
+        For each argument (positional, then keyword by name), the index
+        of the first argument that is the same tensor, or ``-1`` for a
+        non-tensor.  ``f(x, x)`` traces to one feed read twice and
+        ``f(a, b)`` to two, at identical shapes — without this they
+        shared an entry and ``f(a, b)`` ran the one-feed executable.
 
     Examples
     --------
@@ -167,6 +173,30 @@ class CacheKey:
     # to walk every parameter on every call.  Captured as a sorted
     # tuple of ``(dtype, device)`` pairs (no name, no shape).
     param_fingerprint: tuple[tuple[str, str], ...] = field(default_factory=tuple)
+    # Which arguments are the same tensor; see ``alias`` above.
+    alias: tuple[int, ...] = field(default_factory=tuple)
+
+
+def _alias_pattern(
+    args: tuple[object, ...], kwargs: dict[str, object]
+) -> tuple[int, ...]:
+    """First-occurrence index of each argument's tensor, ``-1`` for the rest.
+
+    Identity is the ``TensorImpl`` — the test the feed binding in
+    ``CompiledModule._compile_for`` uses to map a trace's external feeds
+    back to argument slots, so two keys differ exactly when the binding
+    would.
+    """
+    from lucid._tensor.tensor import Tensor
+
+    seen: dict[int, int] = {}
+    pattern: list[int] = []
+    for i, value in enumerate([*args, *(v for _, v in sorted(kwargs.items()))]):
+        if isinstance(value, Tensor):
+            pattern.append(seen.setdefault(id(value._impl), i))
+        else:
+            pattern.append(-1)
+    return tuple(pattern)
 
 
 def _arg_sig(value: object, *, dynamic_batch: bool = False) -> object:
@@ -284,7 +314,8 @@ def signature_of(
     lucid.compile._entry.module.CompiledModule : the caller.
     """
 
-    arg_sigs = tuple(_arg_sig(a, dynamic_batch=dynamic) for a in args)
+    arg_list = tuple(args)
+    arg_sigs = tuple(_arg_sig(a, dynamic_batch=dynamic) for a in arg_list)
     kwarg_sigs = tuple(
         sorted((str(k), _arg_sig(v, dynamic_batch=dynamic)) for k, v in kwargs.items())
     )
@@ -299,4 +330,5 @@ def signature_of(
         training=bool(getattr(model, "training", False)),
         dynamic=bool(dynamic),
         param_fingerprint=fp,
+        alias=_alias_pattern(arg_list, kwargs),
     )

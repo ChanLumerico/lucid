@@ -15,7 +15,7 @@
 namespace lucid::compile {
 
 bool CacheKey::operator==(const CacheKey& other) const noexcept {
-    return device == other.device && op_names == other.op_names &&
+    return device == other.device && op_names == other.op_names && op_inputs == other.op_inputs &&
            output_shapes == other.output_shapes && output_dtypes == other.output_dtypes &&
            op_attrs == other.op_attrs;
 }
@@ -53,6 +53,12 @@ std::size_t CacheKeyHash::operator()(const CacheKey& key) const noexcept {
     std::size_t h = std::hash<std::uint8_t>{}(static_cast<std::uint8_t>(key.device));
     for (const auto& name : key.op_names)
         hash_combine(h, std::hash<std::string>{}(name));
+    // Wiring — a sentinel after each op keeps {0,1},{2} apart from {0},{1,2}.
+    for (const auto& inputs : key.op_inputs) {
+        for (auto i : inputs)
+            hash_combine(h, std::hash<std::int64_t>{}(i));
+        hash_combine(h, 0x5EEDF00DULL);
+    }
     for (const auto& shape : key.output_shapes) {
         for (auto d : shape)
             hash_combine(h, std::hash<std::int64_t>{}(d));
@@ -77,13 +83,28 @@ std::size_t CacheKeyHash::operator()(const CacheKey& key) const noexcept {
 CacheKey make_cache_key(const TraceGraph& graph) {
     CacheKey key;
     key.op_names.reserve(graph.ops.size());
+    key.op_inputs.reserve(graph.ops.size());
     key.output_shapes.reserve(graph.ops.size());
     key.output_dtypes.reserve(graph.ops.size());
     key.op_attrs.reserve(graph.ops.size());
 
+    // Tensor ids renumbered by first appearance, so the wiring compares
+    // across traces that drew different ids for the same graph.
+    std::unordered_map<std::int64_t, std::int64_t> canon;
+    auto canonical = [&canon](TensorId id) {
+        return canon.emplace(id.v, static_cast<std::int64_t>(canon.size())).first->second;
+    };
+
     Device device = Device::CPU;
     for (const auto& node : graph.ops) {
         key.op_names.push_back(node.name);
+        std::vector<std::int64_t> inputs;
+        inputs.reserve(node.inputs.size());
+        for (const auto& id : node.inputs)
+            inputs.push_back(canonical(id));
+        key.op_inputs.push_back(std::move(inputs));
+        for (const auto& out : node.outputs)
+            canonical(out.id);
         if (!node.outputs.empty()) {
             const auto& meta = node.outputs[0];
             key.output_shapes.push_back(meta.shape);

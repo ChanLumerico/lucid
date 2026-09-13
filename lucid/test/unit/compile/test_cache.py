@@ -58,6 +58,45 @@ def test_distinct_shapes_create_distinct_entries() -> None:
     assert info["entries"] == 4, info
 
 
+def _mul_add(a: lucid.Tensor, b: lucid.Tensor) -> lucid.Tensor:
+    return a * b + 1.0
+
+
+def test_aliased_and_distinct_inputs_get_their_own_executables() -> None:
+    """``f(x, x)`` reads one tensor twice; ``f(a, b)`` reads two.
+
+    Both trace to the same ops at the same shapes, and both caches keyed on
+    that alone.  A module compiled on ``(x, x)`` answered ``(a, b)`` with
+    ``a * a + 1`` from its own cache, and a fresh module compiled afterwards
+    got the same wrong answer from the session cache.
+    """
+    x, a, b = metal_tensor(2, 8), metal_tensor(2, 8), metal_tensor(2, 8)
+    want = (a * b + 1.0).to("cpu")
+
+    same = lucid.compile(_mul_add)
+    same(x, x)
+    assert bool(lucid.allclose(same(a, b).to("cpu"), want))
+    assert same.cache_info()["entries"] == 2
+
+    fresh = lucid.compile(_mul_add)
+    assert bool(lucid.allclose(fresh(a, b).to("cpu"), want))
+
+
+def test_distinct_then_aliased_inputs_both_compile() -> None:
+    """The other order fell back to eager for good.
+
+    The session cache handed the aliased trace a two-feed executable, the
+    feed binding refused it, and the signature was marked eager-only.
+    """
+    a, b, x = metal_tensor(2, 8), metal_tensor(2, 8), metal_tensor(2, 8)
+    lucid.compile(_mul_add)(a, b)
+    aliased = lucid.compile(_mul_add)
+    out = aliased(x, x)
+    assert bool(lucid.allclose(out.to("cpu"), (x * x + 1.0).to("cpu")))
+    info = aliased.cache_info()
+    assert info["entries"] == 1 and not info["eager_only"], info
+
+
 def test_train_eval_flip_clears_cache() -> None:
     """Toggling ``train()`` / ``eval()`` invalidates compiled graphs.
 

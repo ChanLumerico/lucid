@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - shared tensors run ops, and .to() shares the buffer it promised
 
+- an executable is cached on how its inputs are wired
+
 ### Added
 
 - quantization-aware models reach the exporter
