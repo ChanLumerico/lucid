@@ -66,8 +66,11 @@ def test_overlapping_windows_unpool_like_the_reference_forward_and_back(
     ref: Any,
 ) -> None:
     # Kernel 3, stride 2: neighbouring windows share an element and can
-    # both report it, so an index repeats.  The reference writes it once
-    # and hands each copy the full gradient.
+    # both report it, so an index repeats.  The forward writes it once, as
+    # the reference does.  The gradient deliberately differs there: Lucid
+    # gives each copy 1 / count, the derivative of that forward, where the
+    # reference gives each copy the whole gradient and so counts a shared
+    # maximum twice once pooling adds the copies back up.
     x = np.random.default_rng(3).standard_normal((1, 2, 9)).astype(np.float32)
     pooled, idx = F.max_pool1d(lucid.from_numpy(x.copy()), 3, 2, 1, return_indices=True)
     rpooled, ridx = ref.nn.functional.max_pool1d(
@@ -82,7 +85,11 @@ def test_overlapping_windows_unpool_like_the_reference_forward_and_back(
     (rout * ref.from_numpy(g)).sum().backward()
     np.testing.assert_array_equal(out.detach().numpy(), rout.detach().numpy())
     assert p.grad is not None
-    np.testing.assert_allclose(p.grad.numpy(), rp.grad.numpy(), rtol=0, atol=1e-6)
+    flat = idx.numpy().reshape(idx.shape[0] * idx.shape[1], -1)
+    copies = np.stack([np.bincount(row, minlength=9)[row] for row in flat])
+    expected = rp.grad.numpy() / copies.reshape(tuple(idx.shape))
+    assert (copies > 1).any(), "the case has to contain a shared maximum"
+    np.testing.assert_allclose(p.grad.numpy(), expected, rtol=0, atol=1e-6)
 
 
 @pytest.mark.parity

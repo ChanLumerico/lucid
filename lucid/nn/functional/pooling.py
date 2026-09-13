@@ -1464,12 +1464,16 @@ def _scatter_unpool(
     # Overlapping windows can report the same element, so an index can
     # repeat — and scatter_add adds the copies where the reference writes
     # the value once.  Divide by how many copies landed: they are the same
-    # element, so this is exact for two and within an ulp for more.  The
-    # division is kept out of the gradient, because the reference hands
-    # every copy the full upstream gradient, which scatter_add already does.
+    # element, so this is exact for two and within an ulp for more.
+    #
+    # The division stays in the gradient, which makes it the derivative of
+    # what the forward computes: each copy gets 1 / count.  The reference
+    # hands every copy the whole gradient instead, and pooling then adds
+    # those back up, so a maximum two windows share is counted twice.  The
+    # symbol audit checks gradients against finite differences and caught
+    # exactly that when the division was detached.
     count = zeros.scatter_add(-1, idx_flat, _lucid.ones_like(x_flat)).clamp(min=1.0)
-    out = summed - (summed - summed / count).detach()
-    return out.reshape(*leading, *output_spatial)
+    return (summed / count).reshape(*leading, *output_spatial)
 
 
 def max_unpool1d(

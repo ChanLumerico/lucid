@@ -66,6 +66,17 @@ def test_a_maximum_two_windows_share_is_unpooled_once() -> None:
     assert back.numpy().tolist() == [[[0.0, 9.0, 0.0, 3.0]]]
 
 
+def test_a_shared_maximum_gets_its_gradient_once() -> None:
+    # unpool(pool(x)) puts 9 back where it was, so d/dx there is 1.  Giving
+    # each of its two copies the whole gradient — the reference's rule —
+    # would make it 2.
+    x = lucid.tensor([[[1.0, 9.0, 2.0, 3.0]]], requires_grad=True)
+    out, idx = F.max_pool1d(x, 2, 1, return_indices=True)
+    F.max_unpool1d(out, idx, 2, 1, output_size=(4,)).sum().backward()
+    assert x.grad is not None
+    assert x.grad.numpy().tolist() == [[[0.0, 1.0, 0.0, 1.0]]]
+
+
 @pytest.mark.parametrize("n", [1, 2, 3])
 def test_unpooling_defaults_to_the_size_pooling_started_from(n: int) -> None:
     # output_size used to be required, with a message blaming the missing

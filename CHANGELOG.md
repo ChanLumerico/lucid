@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - stretch filters too, and is documented where it exists
 
+- max_unpool's gradient is the derivative of what it computes
+
 ### Added
 
 - quantization-aware models reach the exporter
