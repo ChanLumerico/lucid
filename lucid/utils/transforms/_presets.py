@@ -69,7 +69,7 @@ from lucid.utils.transforms._geometric import (
 from lucid.utils.transforms._crop import PadIfNeeded
 from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._photometric import ColorJitter, Normalize
-from lucid.utils.transforms.functional import resize_target
+from lucid.utils.transforms.functional import resize, resize_target
 
 # ── registry + auto-resolver ────────────────────────────────────────
 
@@ -300,14 +300,22 @@ class _ReferenceShorterSide(SmallestMaxSize):
     so an 876 x 1300 photo comes out 380 wide one way and 379 the other,
     and the centre crop after it lands a column apart.  The published
     checkpoints were evaluated the reference's way; the evaluation presets
-    that reproduce them resize that way, while
+    that reproduce them resize that way, and low-pass filter as they shrink
+    the way the reference does, while
     :class:`~lucid.utils.transforms.SmallestMaxSize` itself keeps the
-    Albumentations rule it documents.
+    Albumentations rules it documents.
     """
 
     @override
     def _target(self, h: int, w: int) -> tuple[int, int]:
         return resize_target(h, w, self.max_size)
+
+    @override
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        h, w = int(img.shape[-2]), int(img.shape[-1])
+        return resize(
+            img, self._target(h, w), interpolation=self.interpolation, antialias=True
+        )
 
 
 @_register_preset

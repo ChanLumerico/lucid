@@ -274,6 +274,7 @@ class RandomSizedCrop(GeometricTransform[CropBox]):
             params.width,
             (self.height, self.width),
             interpolation=self.interpolation,
+            antialias=False,  # Albumentations (OpenCV) does not low-pass filter
         )
 
     @override

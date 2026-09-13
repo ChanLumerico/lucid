@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - let a larger machine check the checkpoints over the cap
 - an Architecture tab with interactive diagrams of the runtime
 - the Architecture diagrams drop their toolbar and canvas box
+- shrink images the way the reference does, antialiased
 
 ---
 

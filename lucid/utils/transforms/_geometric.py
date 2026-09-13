@@ -92,7 +92,10 @@ class Resize(_NoParams, GeometricTransform[Empty]):
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return F.resize(
-            img, (self.height, self.width), interpolation=self.interpolation
+            img,
+            (self.height, self.width),
+            interpolation=self.interpolation,
+            antialias=False,
         )
 
     @override
@@ -133,7 +136,11 @@ class _MaxSizeResize(_NoParams, GeometricTransform[Empty]):
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         h, w = F._spatial_hw(img)
-        return F.resize(img, self._target(h, w), interpolation=self.interpolation)
+        # Albumentations resizes through OpenCV, which does not low-pass
+        # filter before shrinking; F.resize does unless told not to.
+        return F.resize(
+            img, self._target(h, w), interpolation=self.interpolation, antialias=False
+        )
 
     @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
@@ -527,6 +534,7 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
             params.width,
             (self.height, self.width),
             interpolation=self.interpolation,
+            antialias=False,  # Albumentations (OpenCV) does not low-pass filter
         )
 
     @override

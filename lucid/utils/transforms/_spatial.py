@@ -734,7 +734,10 @@ class RandomScale(GeometricTransform[ScaleParam]):
     @override
     def _apply_image(self, img: Tensor, params: ScaleParam) -> Tensor:
         return F.resize(
-            img, (params.new_h, params.new_w), interpolation=self.interpolation
+            img,
+            (params.new_h, params.new_w),
+            interpolation=self.interpolation,
+            antialias=False,  # Albumentations (OpenCV) does not low-pass filter
         )
 
     @override
