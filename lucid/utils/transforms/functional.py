@@ -52,8 +52,9 @@ def resize_target(h: int, w: int, size: int | tuple[int, int]) -> tuple[int, int
         Input image width in pixels.
     size : int or (int, int)
         If an ``int``, the **shorter** side is scaled to ``size`` with
-        the aspect ratio preserved.  If ``(h, w)``, the output shape is
-        returned verbatim.
+        the aspect ratio preserved and the longer side truncated to an
+        integer, as the reference does.  If ``(h, w)``, the output shape
+        is returned verbatim.
 
     Returns
     -------
@@ -61,9 +62,12 @@ def resize_target(h: int, w: int, size: int | tuple[int, int]) -> tuple[int, int
         Output ``(height, width)`` after applying the resize rule.
     """
     if isinstance(size, int):
+        # Truncated, not rounded: the reference sizes the longer side as
+        # int(size * long / short), and rounding put an 876 x 1300 photo at
+        # 380 columns where the reference has 379.
         if h <= w:
-            return size, int(round(w * size / h))
-        return int(round(h * size / w)), size
+            return size, int(w * size / h)
+        return int(h * size / w), size
     return int(size[0]), int(size[1])
 
 
@@ -149,8 +153,10 @@ def center_crop(img: Tensor, size: int | tuple[int, int]) -> Tensor:
     """
     crop_h, crop_w = (size, size) if isinstance(size, int) else (size[0], size[1])
     h, w = _spatial_hw(img)
-    top = max((h - crop_h) // 2, 0)
-    left = max((w - crop_w) // 2, 0)
+    # Rounded half to even, as the reference does: flooring put a 379-wide
+    # image's 224 crop one column left of the reference's.
+    top = max(int(round((h - crop_h) / 2.0)), 0)
+    left = max(int(round((w - crop_w) / 2.0)), 0)
     return crop(img, top, left, crop_h, crop_w)
 
 

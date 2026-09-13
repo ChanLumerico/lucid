@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the parity run removes what it downloads as it goes
 
+- resize and centre crop sat a column off the reference
+
 ### Added
 
 - quantization-aware models reach the exporter

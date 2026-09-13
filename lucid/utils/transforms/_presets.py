@@ -69,6 +69,7 @@ from lucid.utils.transforms._geometric import (
 from lucid.utils.transforms._crop import PadIfNeeded
 from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._photometric import ColorJitter, Normalize
+from lucid.utils.transforms.functional import resize_target
 
 # ── registry + auto-resolver ────────────────────────────────────────
 
@@ -292,11 +293,29 @@ class AutoTransformsPreset:
 # ── concrete presets ────────────────────────────────────────────────
 
 
+class _ReferenceShorterSide(SmallestMaxSize):
+    """``SmallestMaxSize`` sized the way the reference's ``Resize(int)`` is.
+
+    Albumentations rounds the longer side and the reference truncates it,
+    so an 876 x 1300 photo comes out 380 wide one way and 379 the other,
+    and the centre crop after it lands a column apart.  The published
+    checkpoints were evaluated the reference's way; the evaluation presets
+    that reproduce them resize that way, while
+    :class:`~lucid.utils.transforms.SmallestMaxSize` itself keeps the
+    Albumentations rule it documents.
+    """
+
+    @override
+    def _target(self, h: int, w: int) -> tuple[int, int]:
+        return resize_target(h, w, self.max_size)
+
+
 @_register_preset
 class ImageClassification(TransformsPreset):
     r"""Standard ImageNet classification *inference* preset.
 
-    Pipeline: ``SmallestMaxSize(resize_size)`` → ``CenterCrop(crop_size)``
+    Pipeline: shorter side to ``resize_size`` (the reference's rule: the
+    longer side truncated) → ``CenterCrop(crop_size)``
     → ``Normalize``, or — with ``stretch=True`` —
     ``Resize(resize_size, resize_size)`` → ``Normalize``, which is what an
     upstream processor configured with an explicit ``(height, width)``
@@ -350,7 +369,7 @@ class ImageClassification(TransformsPreset):
         self.interpolation = interpolation
         self._pipeline = Compose(
             [
-                SmallestMaxSize(resize_size, interpolation=interpolation),
+                _ReferenceShorterSide(resize_size, interpolation=interpolation),
                 CenterCrop(crop_size, crop_size),
                 Normalize(self.mean, self.std, max_pixel_value=1.0),
             ]
@@ -643,7 +662,8 @@ class Detection(TransformsPreset):
 class Segmentation(TransformsPreset):
     r"""Semantic-segmentation preset — image + mask share geometry.
 
-    Pipeline: ``SmallestMaxSize(resize_size)`` → ``CenterCrop(crop_size)``
+    Pipeline: shorter side to ``resize_size`` (the reference's rule: the
+    longer side truncated) → ``CenterCrop(crop_size)``
     → ``Normalize`` applied to the image only.  Mask travels through
     the geometric stages with nearest-neighbour interpolation (label
     preservation guaranteed by every
@@ -706,7 +726,7 @@ class Segmentation(TransformsPreset):
             # model a differently-framed image than it was evaluated on.
             stages = [Resize(resize_size, resize_size, interpolation=interpolation)]
         else:
-            stages = [SmallestMaxSize(resize_size, interpolation=interpolation)]
+            stages = [_ReferenceShorterSide(resize_size, interpolation=interpolation)]
             if crop_size is not None:
                 stages.append(CenterCrop(crop_size, crop_size))
         stages.append(Normalize(self.mean, self.std, max_pixel_value=1.0))

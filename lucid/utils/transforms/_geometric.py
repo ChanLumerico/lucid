@@ -298,7 +298,7 @@ class CenterCrop(_NoParams, GeometricTransform[Empty]):
     r"""Crop a centred ``height`` x ``width`` window (Albumentations ``CenterCrop``).
 
     Computes a deterministic crop centred on the input — top-left at
-    ``((H - height) // 2, (W - width) // 2)`` — and applies the same
+    ``(round((H - height) / 2), round((W - width) / 2))`` — and applies the same
     offsets to mask / boxes / keypoints so every target stays aligned.
 
     Parameters
@@ -333,7 +333,9 @@ class CenterCrop(_NoParams, GeometricTransform[Empty]):
 
     def _offsets(self, canvas: tuple[int, int]) -> tuple[int, int]:
         h, w = canvas
-        return max((h - self.height) // 2, 0), max((w - self.width) // 2, 0)
+        top = max(int(round((h - self.height) / 2.0)), 0)
+        left = max(int(round((w - self.width) / 2.0)), 0)
+        return top, left
 
     @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
