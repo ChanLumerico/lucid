@@ -68,6 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - masks widen with appended keys; MHA and index_put fill gaps
 
+- MaxUnpool's indices come from pooling the unpooled size
+
 ### Added
 
 - quantization-aware models reach the exporter

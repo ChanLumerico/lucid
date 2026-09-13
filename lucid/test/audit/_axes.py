@@ -3003,6 +3003,13 @@ def _unpool_indices(module: Any, shape: "tuple[int, ...]", rank: int) -> Any:
     return _probe.as_int(np.broadcast_to(flat, shape).copy())
 
 
+def _per_dim(value: Any, rank: int) -> "tuple[int, ...]":
+    """A pooling hyperparameter as one int per spatial dimension."""
+    if isinstance(value, (tuple, list)):
+        return tuple(int(v) for v in value)
+    return (int(value),) * rank
+
+
 def _forward_companion(
     name: str, module: Any, primary: Any, shape: "tuple[int, ...]", cast: Any
 ) -> "list[Any]":
@@ -3021,13 +3028,15 @@ def _forward_companion(
     had no form that could ever satisfy them.
     """
     if name == "indices":
-        # Preferably round-tripped through the pooling that produced
-        # them, so they are inside the output they address by
-        # construction.  ``max_pool{1,2,3}d(return_indices=True)`` is
-        # unimplemented at every rank, so that route does not exist —
-        # which means ``MaxUnpool1d``, ``MaxUnpool2d`` and ``MaxUnpool3d``
-        # cannot be reached through the framework's own API at all, and
-        # is recorded as a gap in its own right.
+        # Round-tripped through the pooling the layer pairs with, so they
+        # are inside the output they address by construction.  The probe
+        # input plays the *pooled* side, so the pooling runs on a tensor
+        # the size of the unpooled output: pooling the probe itself hands
+        # back indices smaller than the input they must match, and the
+        # layer rightly refuses them.  That went unnoticed while
+        # ``return_indices`` did not exist and the built indices below
+        # stood in; its first working run lost all three ``MaxUnpool``
+        # modules to the mismatch.
         rank = max(len(shape) - 2, 1)
         pool = {
             1: lucid.nn.functional.max_pool1d,
@@ -3036,8 +3045,23 @@ def _forward_companion(
         }.get(rank)
         if pool is not None:
             with contextlib.suppress(Exception):
-                _, indices = pool(primary, kernel_size=2, return_indices=True)
-                return [indices]
+                kernel = _per_dim(getattr(module, "kernel_size", 2), rank)
+                stride = _per_dim(getattr(module, "stride", None) or kernel, rank)
+                padding = _per_dim(getattr(module, "padding", 0), rank)
+                unpooled = tuple(
+                    (int(n) - 1) * s - 2 * p + k
+                    for n, k, s, p in zip(shape[-rank:], kernel, stride, padding)
+                )
+                source = cast(_probe.sample("moderate", (*shape[:-rank], *unpooled), 2))
+                _, indices = pool(
+                    source,
+                    kernel_size=kernel,
+                    stride=stride,
+                    padding=padding,
+                    return_indices=True,
+                )
+                if tuple(indices.shape) == tuple(shape):
+                    return [indices]
         return [_unpool_indices(module, shape, rank)]
     if name in ("input_lengths", "target_lengths"):
         batch = shape[1] if len(shape) > 1 else 1
@@ -3140,10 +3164,10 @@ def _forward_from_signature(
 
     primary = cast(_probe.sample("moderate", shape))
     candidates: "list[list[Any]]" = [[primary]]
-    # An optional parameter the layer then demands.  ``MaxUnpool`` takes
-    # ``output_size=None`` and raises "output_size is required" on the
-    # default, the same shape of problem as ``qconfig`` in the
-    # constructors — a default the author's own code rejects.
+    # An optional parameter worth passing.  ``MaxUnpool`` once took
+    # ``output_size=None`` and raised "output_size is required" on the
+    # default; it now infers the size, and the explicit form keeps the
+    # path that honours a caller's size reached as well.
     trailing: "list[Any]" = []
     if type(module).__name__.startswith("MaxUnpool") and any(
         p.name == "output_size" for p in parameters
