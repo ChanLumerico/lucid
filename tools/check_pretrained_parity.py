@@ -32,6 +32,11 @@ reported rather than loaded: both copies at once do not fit a 16 GB
 MacBook or a hosted runner.  ``--max-params`` raises the bound on a
 machine that can hold them.
 
+A full run otherwise keeps both sides of every checkpoint on disk until
+it ends — 81 GB on the hosted runner, leaving 13 of its 94 free.
+``--clean-downloads`` deletes what each comparison fetched as soon as it
+is done, and leaves anything that was already cached alone.
+
 Only sources whose reference package is installed can be checked; the
 rest are reported as unreachable rather than skipped silently.
 
@@ -55,6 +60,7 @@ import argparse
 import importlib
 import sys
 import warnings
+from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
@@ -64,6 +70,7 @@ import lucid
 import lucid.models  # noqa: F401 — populates the registry
 from lucid.models import create_model
 from lucid.models._registry import _REGISTRY
+from lucid.weights._hub import _cache_dir as _lucid_weight_cache
 from lucid.weights._registry import _WEIGHTS_BY_MODEL
 from lucid.test._fixtures.ref_framework import (
     ref_module,
@@ -350,6 +357,52 @@ def _compare_transformers(
     }
 
 
+def _download_roots() -> list[Path]:
+    """Every directory a comparison downloads into.
+
+    Lucid's own weight cache; the reference framework's hub directory,
+    where the reference vision package and older zoo-oracle checkpoints
+    land; and the Hugging Face cache, which holds transformers, CLIP and
+    most zoo-oracle checkpoints.
+    """
+    roots = [_lucid_weight_cache()]
+    ref = ref_module()
+    if ref is not None:
+        roots.append(Path(ref.hub.get_dir()))
+    try:
+        from huggingface_hub import constants
+    except ImportError:  # pragma: no cover - depends on the install
+        pass
+    else:
+        roots.append(Path(constants.HF_HUB_CACHE))
+    return roots
+
+
+def _files_under(roots: list[Path]) -> set[Path]:
+    found: set[Path] = set()
+    for root in roots:
+        if root.is_dir():
+            found.update(p for p in root.rglob("*") if p.is_file() or p.is_symlink())
+    return found
+
+
+def _remove_new(before: set[Path], roots: list[Path]) -> int:
+    """Delete what appeared under ``roots`` since ``before``; bytes freed.
+
+    Only files that were not there before the comparison started, so a
+    cache someone built up by hand is never touched.
+    """
+    freed = 0
+    for path in _files_under(roots) - before:
+        try:
+            if not path.is_symlink():
+                freed += path.stat().st_size
+            path.unlink()
+        except FileNotFoundError:
+            continue
+    return freed
+
+
 def _params_of(name: str, member: object) -> int | None:
     meta = getattr(getattr(member, "value", None), "meta", {}) or {}
     count = meta.get("num_params") or getattr(_REGISTRY.get(name), "params", None)
@@ -369,6 +422,14 @@ def main() -> int:
         help=(
             "report rather than load transformers models larger than this "
             f"(default {_MAX_PARAMS:.0e}; raise it where two copies fit)"
+        ),
+    )
+    parser.add_argument(
+        "--clean-downloads",
+        action="store_true",
+        help=(
+            "delete what each comparison downloaded once it is done; files "
+            "that were already cached are left alone"
         ),
     )
     args = parser.parse_args()
@@ -404,8 +465,12 @@ def main() -> int:
     unreachable = 0
     checked = 0
 
+    roots = _download_roots() if args.clean_downloads else []
+    freed = 0
     for index, (name, source, params) in enumerate(targets, 1):
+        before = _files_under(roots)
         report = _compare(name, source, (1, 3, 224, 224), params, args.max_params)
+        freed += _remove_new(before, roots)
         if "unreachable" in report:
             unreachable += 1
             print(f"  [{index}/{len(targets)}] {name:26s} — {report['unreachable']}")
@@ -439,6 +504,8 @@ def main() -> int:
             )
 
     print(f"\n{checked} compared, {unreachable} unreachable")
+    if args.clean_downloads:
+        print(f"removed {freed / 1e9:.2f} GB of downloads along the way")
     if bad:
         print(f"\n{len(bad)} problem(s):", file=sys.stderr)
         for line in bad:

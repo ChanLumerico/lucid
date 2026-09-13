@@ -58,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the compiled embedding backward trained the pad row
 
+- the parity run removes what it downloads as it goes
+
 ### Added
 
 - quantization-aware models reach the exporter

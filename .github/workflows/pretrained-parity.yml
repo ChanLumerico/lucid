@@ -89,9 +89,12 @@ jobs:
       - name: Disk before
         run: df -h / | tail -1
 
+      # --clean-downloads: a full run otherwise keeps both sides of every
+      # checkpoint until it ends — 81 GB on 2026-09-13, leaving 13 GB of
+      # the runner's 94 free. Each comparison now removes what it fetched.
       - name: Compare published checkpoints against their sources
         run: |
-          python -m tools.check_pretrained_parity \
+          python -m tools.check_pretrained_parity --clean-downloads \
             ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
 
       # Downloads are the cost here, and a run that quietly stopped
