@@ -17,8 +17,8 @@
 //
 // :class:`GpuStorage`
 //     Wraps an :class:`mlx::core::array` node in the MLX lazy graph.  The
-//     backing buffer is GPU-private; the CPU pointer is **not** dereferenceable
-//     before :func:`TensorImpl::eval`.
+//     buffer may not exist before :func:`TensorImpl::eval`; once evaluated
+//     it sits in unified memory and the CPU can read it in place.
 //
 // :class:`SharedStorage`
 //     Metal buffer allocated with ``MTLResourceStorageModeShared``, mapped
@@ -208,9 +208,9 @@ struct CpuStorage {
 //
 // The ``arr`` shared pointer keeps the MLX graph node alive for as long as
 // this :class:`GpuStorage` (and any :class:`TensorImpl` that holds it) is in
-// scope.  All GPU-stream operations dispatch through MLX; **never** cast the
-// MLX array's internal pointer to a CPU pointer — the buffer is GPU-private
-// until evaluated (see :func:`TensorImpl::eval`).
+// scope.  All GPU-stream operations dispatch through MLX.  Read the array's
+// data pointer from the CPU only after it is evaluated (see
+// :func:`TensorImpl::eval`) — before that the buffer may not exist.
 //
 // Attributes
 // ----------
@@ -272,6 +272,19 @@ struct GpuStorage {
 //     Lifetime token for the underlying Metal allocation.  The
 //     :func:`cpu_view` deleter captures a copy so the Metal buffer cannot
 //     be freed while a CPU view is alive.
+// gpu_alias : std::shared_ptr<mlx::core::array>
+//     The one MLX external array over the buffer, shared by every copy of
+//     this descriptor.  GPU aliases are copies of it, so MLX never sees an
+//     alias as the sole owner of the buffer and cannot donate the buffer to
+//     an op's output — which would write the result into memory the CPU
+//     side is still reading.  Set by :func:`gpu::pin_shared_storage` when a
+//     tensor first adopts the buffer.
+//
+// Notes
+// -----
+// A :class:`TensorImpl` never holds this variant at rest.  Its constructor
+// keeps the descriptor aside and stores the :func:`cpu_view` or the GPU alias
+// its device label calls for, so every op sees ordinary storage.
 //
 // See Also
 // --------
@@ -284,6 +297,8 @@ struct SharedStorage {
     std::shared_ptr<VersionCounter> version = std::make_shared<VersionCounter>(0);
     // Retains the underlying Metal allocation.
     std::shared_ptr<void> owner;
+    // Pins the buffer against MLX donation; see the attribute notes above.
+    std::shared_ptr<mlx::core::array> gpu_alias;
 
     // Atomically increments the shared version counter.
     void bump_version() const noexcept { version->fetch_add(1, std::memory_order_relaxed); }

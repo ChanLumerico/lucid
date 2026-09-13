@@ -191,6 +191,96 @@ TensorImpl::TensorImpl(Storage storage, Shape shape, Dtype dtype, Device device,
         autograd_.emplace();
         autograd_->requires_grad = true;
     }
+    // Ops read CpuStorage or GpuStorage and nothing else — the CPU kernels
+    // alone reach for ``std::get<CpuStorage>`` in over four hundred places,
+    // and a shared buffer arriving as itself raised ``bad_variant_access``
+    // from the first ``+``.  Adopt it as the view its device label calls for
+    // and keep the descriptor aside, for relabelling and custom kernels.
+    if (auto* sh = std::get_if<SharedStorage>(&storage_); sh && sh->cpu_ptr && sh->nbytes > 0) {
+        SharedStorage desc = std::move(*sh);
+        gpu::pin_shared_storage(desc, meta_.shape);
+        if (meta_.device == Device::GPU)
+            storage_ = Storage{gpu::shared_storage_to_gpu(desc, meta_.shape)};
+        else
+            storage_ = Storage{desc.cpu_view()};
+        shared_ = std::move(desc);
+    }
+}
+
+const SharedStorage* TensorImpl::metal_shared() const {
+    // Only a tensor that *is* the buffer — whole, contiguous, from its first
+    // byte, in its dtype — can be relabelled without a copy.  Anything else
+    // still carrying the descriptor (a view, or a tensor whose storage an op
+    // replaced) reads through it at most, and answers no.
+    if (!shared_ || offset_ != 0 || meta_.dtype != shared_->dtype || nbytes() != shared_->nbytes ||
+        !is_contiguous())
+        return nullptr;
+    if (const auto* cpu = std::get_if<CpuStorage>(&storage_))
+        return cpu->ptr.get() == shared_->cpu_ptr ? &*shared_ : nullptr;
+    if (const auto* gpu_st = std::get_if<GpuStorage>(&storage_)) {
+        const auto& pin = shared_->gpu_alias;
+        return gpu_st->arr && pin && gpu_st->arr->id() == pin->id() ? &*shared_ : nullptr;
+    }
+    return nullptr;
+}
+
+bool TensorImpl::write_into_shared(const TensorImpl& src) {
+    const SharedStorage* sh = metal_shared();
+    if (!sh || src.dtype() != meta_.dtype || src.shape() != meta_.shape ||
+        src.device() != meta_.device)
+        return false;
+    // Work already queued on the GPU may still be reading these bytes.
+    ::mlx::core::synchronize();
+    auto* dst = static_cast<std::byte*>(sh->cpu_ptr);
+    return std::visit(overloaded{
+                          [&](const CpuStorage& c) {
+                              if (!c.ptr || src.storage_offset() != 0 || !src.is_contiguous())
+                                  return false;
+                              if (c.ptr.get() != dst)
+                                  std::memmove(dst, c.ptr.get(), sh->nbytes);
+                              return true;
+                          },
+                          [&](const GpuStorage& g) {
+                              if (!g.arr)
+                                  return false;
+                              // data() ignores strides, so lay the result out first.
+                              ::mlx::core::array packed = ::mlx::core::contiguous(*g.arr);
+                              packed.eval();
+                              const auto* from =
+                                  reinterpret_cast<const std::byte*>(packed.data<std::uint8_t>());
+                              if (from != dst)
+                                  std::memcpy(dst, from, sh->nbytes);
+                              return true;
+                          },
+                          [&](const SharedStorage& s) {
+                              if (s.cpu_ptr != sh->cpu_ptr)
+                                  std::memcpy(dst, s.cpu_ptr, sh->nbytes);
+                              return true;
+                          },
+                      },
+                      src.storage());
+}
+
+void TensorImpl::take_storage_from(TensorImpl& out) {
+    // Write through only when ``out`` recorded no graph: a node that saved
+    // the pre-op input shares this buffer and would read the new values back
+    // — the ``cos(sin(x))`` failure :file:`ops/utils/InplaceGraph.h` records.
+    const bool graph = out.requires_grad() || out.grad_fn();
+    if (!graph && write_into_shared(out))
+        return;
+    storage_ = std::move(out.storage_);
+    drop_shared();
+}
+
+void TensorImpl::drop_shared() {
+    if (!shared_)
+        return;
+    // Fold the buffer's counter into this tensor's own, so version() carries
+    // on instead of dropping back: a saved snapshot that a later, smaller
+    // count happened to reach again would hide a mutation.
+    if (const auto carried = static_cast<std::int64_t>(shared_->get_version()); carried > 0)
+        ensure_autograd()->version += carried;
+    shared_.reset();
 }
 
 std::shared_ptr<TensorImpl>
@@ -1030,6 +1120,12 @@ void TensorImpl::copy_from(const TensorImpl& other) {
     if (other.shape() != shape()) {
         throw ShapeMismatch(meta_.shape, other.shape(), "copy_from");
     }
+    // A shared buffer is written in place so every alias sees the copy; the
+    // GPU branch below would hand this tensor a fresh array instead.
+    if (write_into_shared(other)) {
+        bump_version();
+        return;
+    }
 
     std::visit(overloaded{
                    [&](CpuStorage& dst, const CpuStorage& src) {
@@ -1145,6 +1241,10 @@ std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorIm
     // offset_ accumulates: a view of a view has the combined byte offset from
     // the original allocation's start.
     view->offset_ = base->offset_ + offset_bytes;
+    // A view of a shared buffer reads the same bytes, so it shares the
+    // buffer's version counter and keeps its MLX alias pinned.
+    // metal_shared() still answers no unless the view is the whole buffer.
+    view->shared_ = base->shared_;
 
     if (base->requires_grad()) {
         view->set_requires_grad(true);

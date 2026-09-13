@@ -219,7 +219,13 @@ PYBIND11_MODULE(engine, m) {
             for (const auto& t : inputs) {
                 if (!t)
                     throw std::invalid_argument("_run_metal_kernel: null input tensor");
-                in_storages.push_back(t->storage());
+                // A shared tensor hands over the buffer itself, which the
+                // runner binds without a copy; its storage is the CPU view or
+                // GPU alias, which the runner would copy.
+                if (const auto* sh = t->metal_shared())
+                    in_storages.push_back(lucid::Storage{*sh});
+                else
+                    in_storages.push_back(t->storage());
             }
 
             auto& be = lucid::backend::Dispatcher::for_device(lucid::Device::GPU);
@@ -227,10 +233,9 @@ PYBIND11_MODULE(engine, m) {
                 kernel_source, function_name, in_storages, out_shape, dt, grid, threads);
 
             // MetalKernelRunner returns SharedStorage, which lives in MTLResourceStorageModeShared
-            // memory — directly accessible from both the GPU and CPU without a copy.  We label
-            // the TensorImpl as Device::CPU so that the CPU backend handles subsequent ops
-            // (contiguous, numpy, etc.) via SharedStorage::cpu_view().  Users who need the
-            // result as a true GPU (MLX) tensor should call .to(device='metal') afterward.
+            // memory — directly accessible from both the GPU and CPU without a copy.  Labelled
+            // Device::CPU, the TensorImpl adopts it as a CPU view (see its constructor), so
+            // ordinary ops run on it, and .to(device='metal') relabels it without a copy.
             return std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, dt,
                                                        lucid::Device::CPU, false);
         },

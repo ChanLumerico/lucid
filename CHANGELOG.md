@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - MaxUnpool's indices come from pooling the unpooled size
 
+- shared tensors run ops, and .to() shares the buffer it promised
+
 ### Added
 
 - quantization-aware models reach the exporter

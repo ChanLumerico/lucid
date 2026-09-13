@@ -4,14 +4,13 @@ benchmarks/bench_transfer.py — CPU↔GPU device transfer latency.
 Measures .to("metal") and .to("cpu") at four tensor sizes:
   1 KB / 64 KB / 1 MB / 64 MB
 
-Also compares the two transfer paths for tensors ≥ 64 KB:
-  · SharedStorage path (lucid.metal.to_shared → .to("metal"))   — allocate once,
-    zero-copy thereafter (validates Phase 9.1/9.2 benefit)
-  · Direct .to("metal")                                          — current default
-    for tensors ≥ 64 KB (routes through SharedStorage internally)
+Also compares the two transfer paths:
+  · SharedStorage path (lucid.metal.to_shared → .to("metal"))   — allocate once;
+    every .to() after that relabels the same buffer, no copy
+  · Direct .to("metal")                                          — the default:
+    one copy into a GPU-private buffer, which later GPU ops read faster
 
-Note: tensors < 64 KB use the legacy data_as_python path internally;
-both "shared" and "direct" columns converge there.
+Every size takes the same path; there is no size threshold.
 """
 
 import sys

@@ -6,6 +6,8 @@ Verifies:
   * lucid.metal.is_shared()      — predicate
   * Tensor.is_shared             — property alias
   * transfer_storage fast path   — zero-copy .to("metal") / .to("cpu")
+  * the memory is shared         — a write through one alias shows through
+                                   the other, and nothing else writes it
   * .to() value correctness      — data survives cross-device round-trips
   * GPU op on shared-derived tensor
 """
@@ -166,13 +168,10 @@ class TestZeroCopyTransfer:
         xc = xg.to("cpu")
         np.testing.assert_array_equal(xc.numpy(), orig)
 
-    def test_write_cpu_read_via_metal(self) -> None:
-        """Write on CPU via shared buffer, read back from GPU path."""
-        metal.shared_tensor((4,))
-        # Write values on CPU (shared buffer is directly writable).
+    def test_to_shared_values_reach_metal(self) -> None:
+        # Values only; that a write crosses over is TestSharedMemoryIsShared.
         src = lucid.tensor([10.0, 20.0, 30.0, 40.0])
-        t_src = metal.to_shared(src)
-        tg = t_src.to("metal")
+        tg = metal.to_shared(src).to("metal")
         np.testing.assert_array_equal(tg.to("cpu").numpy(), [10.0, 20.0, 30.0, 40.0])
 
 
@@ -222,3 +221,89 @@ class TestGpuOpOnSharedTensor:
         bg = metal.to_shared(b).to("metal")
         out = ag + bg
         np.testing.assert_array_equal(out.to("cpu").numpy(), [5.0, 7.0, 9.0])
+
+
+# ── The memory is actually shared ────────────────────────────────────────────
+#
+# Everything above compares values, which a copy passes just as well.  These
+# write through one alias of a buffer and read through another.
+
+
+class TestSharedMemoryIsShared:
+    def test_ops_run_on_a_cpu_shared_tensor(self) -> None:
+        # Raised bad_variant_access from the first op: the tensor held the
+        # shared variant itself, and every CPU kernel expects CpuStorage.
+        s = metal.shared_tensor((4,))
+        assert (s + 1.0).tolist() == [1.0] * 4
+        assert s.sum().item() == 0.0
+
+    def test_ops_run_on_a_metal_shared_tensor(self) -> None:
+        g = metal.to_shared(lucid.ones(4, device="metal"))
+        assert g.is_metal and g.is_shared
+        assert (g + 1.0).tolist() == [2.0] * 4
+        assert g.sum().item() == 4.0
+
+    def test_to_metal_aliases_the_buffer(self) -> None:
+        s = metal.shared_tensor((4,))
+        g = s.to("metal")
+        assert g.is_metal and g.is_shared
+        s.copy_(lucid.arange(4).float())
+        assert g.tolist() == [0.0, 1.0, 2.0, 3.0]
+
+    def test_to_cpu_aliases_the_buffer(self) -> None:
+        g = metal.to_shared(lucid.zeros(3, device="metal"))
+        c = g.to("cpu")
+        assert not c.is_metal and c.is_shared
+        c.fill_(5.0)
+        assert g.tolist() == [5.0] * 3
+
+    def test_inplace_arithmetic_writes_through_both_ways(self) -> None:
+        s = metal.shared_tensor((3,))
+        g = s.to("metal")
+        s.add_(2.0)
+        s.mul_(3.0)
+        assert g.tolist() == [6.0] * 3
+        g.sub_(1.0)
+        assert s.tolist() == [5.0] * 3
+        assert s.is_shared and g.is_shared
+
+    def test_indexed_assignment_writes_through(self) -> None:
+        s = metal.shared_tensor((4,))
+        g = s.to("metal")
+        s[1] = 7.0
+        assert g.tolist() == [0.0, 7.0, 0.0, 0.0]
+
+    def test_a_temporary_alias_is_not_donated(self) -> None:
+        # MLX reuses an input buffer whose array has a single owner for the
+        # op's output.  An unpinned temporary alias was that owner, and the
+        # product would have landed in ``s``.
+        s = metal.to_shared(lucid.ones(4))
+        y = s.to("metal") * 2.0
+        assert y.tolist() == [2.0] * 4
+        assert s.tolist() == [1.0] * 4
+
+    def test_a_slice_is_not_shared(self) -> None:
+        # A slice covers part of the buffer at an offset, which no relabel
+        # can alias; it must not claim to be the buffer.
+        s = metal.shared_tensor((4,))
+        assert not s[1:].is_shared
+
+    def test_an_inplace_op_that_records_a_graph_takes_its_own_storage(self) -> None:
+        s = metal.shared_tensor((3,))
+        g = s.to("metal")
+        w = lucid.ones(3, requires_grad=True)
+        s.add_(w)  # w requires grad, so the op records a graph
+        assert not s.is_shared
+        assert s.tolist() == [1.0] * 3
+        assert g.tolist() == [0.0] * 3
+
+    def test_a_write_invalidates_the_other_alias_saved_for_backward(self) -> None:
+        from lucid._C import engine as _C_engine
+
+        s = metal.shared_tensor((3,))
+        g = s.to("metal")
+        w = lucid.ones(3, device="metal", requires_grad=True)
+        y = (g * w).sum()  # saves g to differentiate with respect to w
+        s.add_(1.0)
+        with pytest.raises(_C_engine.VersionMismatch):
+            y.backward()

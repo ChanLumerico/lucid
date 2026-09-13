@@ -130,13 +130,30 @@ LUCID_API GpuStorage upload_cpu_to_gpu(const CpuStorage& cpu, const Shape& shape
 // Returns
 // -------
 // GpuStorage
-//     A non-copying view participating in MemoryTracker accounting.
+//     A non-copying view participating in MemoryTracker accounting.  It
+//     shares ``sh.version`` with the CPU view.
 //
 // Notes
 // -----
-// This is the canonical fast path for results produced by
-// :func:`run_metal_kernel` that flow back into MLX-based ops.
+// When ``sh`` is pinned the result is a copy of ``sh.gpu_alias`` (reshaped
+// if ``shape`` differs), so MLX never sees it as the buffer's sole owner and
+// cannot donate the buffer to an op's output.  This is the canonical fast
+// path for results produced by :func:`run_metal_kernel` that flow back into
+// MLX-based ops.
 LUCID_API GpuStorage shared_storage_to_gpu(const SharedStorage& sh, const Shape& shape);
+
+// Give a shared buffer its one MLX external array (``sh.gpu_alias``).
+//
+// No-op when ``sh`` is already pinned or empty.  Every later copy of ``sh``
+// shares the array, which is what keeps GPU aliases from being donated.
+//
+// Parameters
+// ----------
+// sh : SharedStorage&
+//     Descriptor to pin.
+// shape : const Shape&
+//     Shape of the tensor adopting the buffer.
+LUCID_API void pin_shared_storage(SharedStorage& sh, const Shape& shape);
 
 // Download a GPU array to a freshly allocated CPU buffer.
 //

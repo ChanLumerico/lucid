@@ -221,22 +221,52 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
     return out;
 }
 
+namespace {
+
+// An MLX array over the shared buffer's own bytes.  The deleter holds the
+// Metal allocation, so the buffer outlives every array — and every graph
+// node — that reads it.
+::mlx::core::array external_over(const SharedStorage& sh, const Shape& shape) {
+    auto owner_tok = sh.owner;
+    return ::mlx::core::array(
+        sh.cpu_ptr, to_mlx_shape(shape), to_mlx_dtype(sh.dtype),
+        [owner_tok = std::move(owner_tok)](void*) mutable { owner_tok.reset(); });
+}
+
+}  // namespace
+
+void pin_shared_storage(SharedStorage& sh, const Shape& shape) {
+    // float64 and complex128 have no MLX dtype, so no GPU alias of them can
+    // exist to be donated — and building one would refuse a tensor that only
+    // ever lives on the CPU side.
+    if (sh.gpu_alias || !sh.cpu_ptr || sh.nbytes == 0 || sh.dtype == Dtype::F64 ||
+        sh.dtype == Dtype::C128)
+        return;
+    sh.gpu_alias = std::make_shared<::mlx::core::array>(external_over(sh, shape));
+}
+
 GpuStorage shared_storage_to_gpu(const SharedStorage& sh, const Shape& shape) {
     if (!sh.cpu_ptr || sh.nbytes == 0)
         ErrorBuilder("shared_storage_to_gpu").fail("SharedStorage is empty");
 
+    // A copy of the pinned alias shares its array descriptor, so no alias is
+    // ever the buffer's sole owner.  MLX donates an input whose descriptor
+    // has one owner, and a donated shared buffer receives the op's output:
+    // ``(s.to("metal") * 2)`` would have written the product into ``s``.
+    // A descriptor that never went through TensorImpl is not pinned and
+    // gets a fresh external array, as before.
+    ::mlx::core::array alias = sh.gpu_alias ? *sh.gpu_alias : external_over(sh, shape);
     auto mlx_shape = to_mlx_shape(shape);
-    auto mlx_dt = to_mlx_dtype(sh.dtype);
-
-    auto owner_tok = sh.owner;
-    ::mlx::core::array external(
-        sh.cpu_ptr, std::move(mlx_shape), mlx_dt,
-        [owner_tok = std::move(owner_tok)](void*) mutable { owner_tok.reset(); });
+    if (alias.shape() != mlx_shape)
+        alias = ::mlx::core::reshape(alias, std::move(mlx_shape));
 
     GpuStorage out;
     out.dtype = sh.dtype;
     out.nbytes = sh.nbytes;
-    out.arr = make_tracked(new ::mlx::core::array(std::move(external)), out.nbytes);
+    // The CPU view shares this counter too (``cpu_view``), so a write
+    // through either alias is seen by autograd on both.
+    out.version = sh.version;
+    out.arr = make_tracked(new ::mlx::core::array(std::move(alias)), out.nbytes);
     return out;
 }
 

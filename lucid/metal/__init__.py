@@ -193,9 +193,12 @@ class MetalStream:
     Examples
     --------
     >>> import lucid
+    >>> x = lucid.ones(4, device="metal")
     >>> with lucid.metal.MetalStream():
-    ...     y = model(x)             # all kernels submitted to this stream
+    ...     y = x * 2.0              # all kernels submitted to this stream
     ...                              # stream sync happens on block exit
+    >>> y.tolist()
+    [2.0, 2.0, 2.0, 2.0]
     """
 
     def __init__(self, priority: int = 0) -> None:
@@ -341,8 +344,9 @@ def run_kernel(
     ... }
     ... '''
     >>> x = lucid.tensor([-1.0, 2.0, -0.5, 3.0])
-    >>> y = lucid.metal.run_kernel(MSL, 'relu', [x], (4,))
-    >>> y   # tensor([0., 2., 0., 3.])
+    >>> y = lucid.metal.run_kernel(MSL, 'relu', [x], (4,), grid=(4, 1, 1))
+    >>> y.tolist()
+    [0.0, 2.0, 0.0, 3.0]
     """
     import lucid as _lucid
 
@@ -378,8 +382,16 @@ def shared_tensor(
     """Allocate a zero-filled tensor in Metal shared memory (no memcpy ever).
 
     The backing buffer is ``MTLResourceStorageModeShared`` — it is immediately
-    readable and writable from CPU, and transferable to GPU via ``.to("metal")``
-    with **zero memcpy** (the GPU reads the same physical pages).
+    readable and writable from CPU, and ``.to("metal")`` returns an alias of
+    the same physical pages rather than a copy.  A write through one alias is
+    seen through the others: ``copy_``, ``fill_``, indexed assignment, and
+    in-place arithmetic that records no autograd graph all write into the
+    buffer.  An in-place op that does record a graph gives the tensor storage
+    of its own, and ``is_shared`` turns ``False``.
+
+    GPU ops are lazy: evaluate a pending GPU result that reads the buffer
+    (``.eval()``, or read its values) before writing to the buffer from the
+    CPU, or the result may see the new values.
 
     Parameters
     ----------
@@ -397,10 +409,13 @@ def shared_tensor(
 
     Examples
     --------
-    >>> buf = lucid.metal.shared_tensor((1024,))
+    >>> buf = lucid.metal.shared_tensor((4,))
     >>> buf.is_shared
     True
-    >>> buf_gpu = buf.to("metal")   # zero-copy
+    >>> gpu = buf.to("metal")   # an alias, not a copy
+    >>> _ = buf.fill_(2.0)
+    >>> gpu.tolist()
+    [2.0, 2.0, 2.0, 2.0]
     """
     import lucid as _lucid
 

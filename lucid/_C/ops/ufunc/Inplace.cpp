@@ -59,7 +59,7 @@ TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* nam
     if (out->shape() != a->shape())
         throw ShapeMismatch(a->shape(), out->shape(),
                             std::string(name) + " (in-place: shape changed)");
-    a->mutable_storage() = std::move(out->mutable_storage());
+    a->take_storage_from(*out);
     a->set_dtype(out->dtype());
     a->set_device(out->device());
     const bool adopted = inplace::adopt_graph_position(a, out);
@@ -181,7 +181,7 @@ TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     // the original values stay alive and unmutated for as long as the node
     // needs them — and nothing is allocated when no graph is built.
     auto out = clip_op(inplace::snapshot(a), lo, hi);
-    a->mutable_storage() = std::move(out->mutable_storage());
+    a->take_storage_from(*out);
     a->set_dtype(out->dtype());
     a->set_device(out->device());
     const bool adopted = inplace::adopt_graph_position(a, out);

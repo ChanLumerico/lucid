@@ -136,8 +136,13 @@ def _inject_to(cls: type) -> None:
         if same and not copy:
             return self
 
+        # A shared tensor is already one whole contiguous buffer, and
+        # ``contiguous`` copied it into an ordinary one, so the relabel below
+        # was never reached and ``.to()`` of a shared tensor always copied.
+        # Keep the buffer unless a cast has to copy anyway.
+        relabel = self._impl.is_metal_shared and target_dtype == self._impl.dtype
+        impl = self._impl if relabel else _C_engine.contiguous(self._impl)
         # Dtype cast via C++ astype op (CPU: static_cast loop, GPU: mlx::core::astype).
-        impl = _C_engine.contiguous(self._impl)
         if target_dtype != impl.dtype:
             impl = _C_engine.astype(impl, target_dtype)
         # Device transfer.

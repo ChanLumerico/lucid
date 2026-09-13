@@ -185,6 +185,34 @@ public:
     //     variants do not currently report sharing through this hook).
     bool storage_is_shared() const noexcept;
 
+    // The Metal shared buffer this tensor still is, or ``nullptr``.
+    //
+    // Non-null only while the storage is the whole buffer, contiguous from
+    // its first byte in its own dtype — the one case a relabel to the other
+    // device can alias rather than copy.  ``nullptr`` for views that cover
+    // less, and once an op has replaced the storage.
+    //
+    // Returns
+    // -------
+    // const SharedStorage*
+    //     The descriptor, or ``nullptr``.
+    const SharedStorage* metal_shared() const;
+
+    // Take ``out``'s contents after an in-place op.
+    //
+    // Ordinarily a swap of the storage *slot* — see
+    // :file:`ops/utils/InplaceGraph.h` for why the slot and not the buffer.
+    // A tensor over a Metal shared buffer writes the new values into the
+    // buffer instead, so every alias of it sees them — but only when ``out``
+    // recorded no graph, since a node that saved the pre-op input shares the
+    // buffer.  Otherwise the swap happens and the tensor stops being shared.
+    //
+    // Parameters
+    // ----------
+    // out : TensorImpl&
+    //     The op's result; its storage is moved from.
+    void take_storage_from(TensorImpl& out);
+
     // Creates a new :class:`TensorImpl` that aliases ``base``'s
     // :class:`Storage` with a different shape, stride, and optional byte
     // offset.
@@ -263,13 +291,20 @@ public:
     //
     // Bumped by :func:`bump_version` on every in-place mutation; autograd
     // snapshots this at forward time and checks it at backward time to
-    // catch illegal mutations.
+    // catch illegal mutations.  A tensor over a Metal shared buffer adds the
+    // buffer's own counter, which every alias of the buffer bumps — so a
+    // write through the CPU view invalidates a GPU alias saved for backward,
+    // and the other way round.
     //
     // Returns
     // -------
     // std::int64_t
-    //     Current version.  ``0`` when no :class:`AutogradMeta` exists.
-    std::int64_t version() const noexcept { return autograd_ ? autograd_->version : 0; }
+    //     Current version.  ``0`` when no :class:`AutogradMeta` exists and no
+    //     shared buffer has been written.
+    std::int64_t version() const noexcept {
+        const std::int64_t own = autograd_ ? autograd_->version : 0;
+        return shared_ ? own + static_cast<std::int64_t>(shared_->get_version()) : own;
+    }
 
     // Returns the backward function pointer for this tensor.
     //
@@ -462,12 +497,15 @@ public:
     // Increments the autograd version counter.
     //
     // Called by every in-place op so autograd can detect mutations of
-    // tensors that were saved for backward.  No-op when no
-    // :class:`AutogradMeta` exists — i.e. the tensor has never participated
-    // in the autograd graph, so version tracking is unnecessary.
+    // tensors that were saved for backward.  The tensor's own count is left
+    // alone when no :class:`AutogradMeta` exists — it has never been in a
+    // graph — but a Metal shared buffer's counter always moves, because
+    // another alias of the same bytes may have been saved.
     void bump_version() noexcept {
         if (autograd_)
             ++autograd_->version;
+        if (shared_)
+            shared_->bump_version();
     }
 
     // ---------------------------------------------------------------------------
@@ -749,6 +787,18 @@ private:
     // Lazily constructed; nullptr-equivalent (std::nullopt) for inference-only
     // tensors to avoid the overhead of the heap allocation.
     std::optional<AutogradMeta> autograd_;
+    // The Metal shared buffer this tensor was built over, kept aside by the
+    // constructor while storage_ holds the CPU view or GPU alias; see
+    // metal_shared().  Views inherit it.
+    std::optional<SharedStorage> shared_;
+
+    // Writes ``src``'s values into the shared buffer.  False when this
+    // tensor no longer is the buffer or ``src`` does not match it.
+    bool write_into_shared(const TensorImpl& src);
+
+    // Stops tracking the shared buffer, folding its counter into this
+    // tensor's own so version() never moves backwards.
+    void drop_shared();
 
     // Returns a pointer to the AutogradMeta, constructing it in-place if it
     // does not yet exist.  The returned pointer is stable (optional stores

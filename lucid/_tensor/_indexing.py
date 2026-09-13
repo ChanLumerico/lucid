@@ -645,6 +645,20 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     ``t._impl`` itself — which froze ``weight[pad] = 0`` under ``no_grad``.
     """
     keep = t._impl.requires_grad
+    # A tensor over a Metal shared buffer takes the values into the buffer,
+    # so every alias of it sees the assignment; rebinding would leave them
+    # holding the old values.  Only outside a graph, as for the engine's
+    # in-place ops, since ``copy_from`` keeps no grad_fn.
+    if (
+        t._impl.is_metal_shared
+        and not keep
+        and not impl.requires_grad
+        and list(impl.shape) == list(t._impl.shape)
+        and impl.dtype == t._impl.dtype
+        and impl.device == t._impl.device
+    ):
+        t._impl.copy_from(impl)
+        return
     t._impl = impl.clone_with_grad(True) if keep and not impl.requires_grad else impl
 
 

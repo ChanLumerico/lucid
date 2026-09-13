@@ -486,7 +486,10 @@ class Tensor:
         Shared-memory tensors live in Apple Silicon unified DRAM and are
         simultaneously accessible from CPU and GPU without a ``memcpy``.
         Create them with ``lucid.metal.shared_tensor()`` or promote an
-        existing tensor with ``lucid.metal.to_shared()``.
+        existing tensor with ``lucid.metal.to_shared()``; ``.to()`` between
+        CPU and Metal then returns an alias of the same buffer.  A view that
+        covers only part of the buffer answers ``False``, and so does a tensor
+        whose storage an in-place op recording a graph has replaced.
 
         Returns
         -------
@@ -510,8 +513,10 @@ class Tensor:
         >>> x = lucid.zeros(3)
         >>> x.is_shared
         False
-        >>> y = lucid.metal.shared_tensor((3,))  # doctest: +SKIP
-        >>> y.is_shared  # doctest: +SKIP
+        >>> y = lucid.metal.shared_tensor((3,))
+        >>> y.is_shared
+        True
+        >>> y.to("metal").is_shared  # an alias of the same buffer
         True
         """
         return self._impl.is_metal_shared

@@ -9,7 +9,7 @@
     "",
     "Regenerate with:  lucid-audit --update-doctests"
   ],
-  "failed": 562,
+  "failed": 560,
   "attempted": 5600,
   "failing": {
     "lucid._factories.converters": 7,
@@ -49,7 +49,6 @@
     "lucid.fft": 3,
     "lucid.func": 6,
     "lucid.linalg": 3,
-    "lucid.metal": 2,
     "lucid.nn._shadow": 1,
     "lucid.nn.functional.activations": 31,
     "lucid.nn.functional.loss": 19,
