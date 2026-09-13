@@ -3,7 +3,7 @@
   "name": "dreamer_v2",
   "path": "lucid.models.generative.dreamer_v2",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/__init__.py#L1",
   "members": [
     {
       "name": "DreamerV2Config",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "DreamerV2Config(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'elu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 1024, hidden_size: int = 1024, cnn_depth: int = 48, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 0.0, kl_weight: float = 1.0, discrete: int = 32, kl_balance: float = 0.8, reward_hidden: int = 400, reward_layers: int = 4, actor_hidden: int = 400, actor_layers: int = 4, value_hidden: int = 400, value_layers: int = 4, horizon: int = 15, discount: float = 0.99, lambda_: float = 0.95, action_space: ActionSpace = 'continuous', actor_grad: ActorGradient = 'auto', actor_grad_mix: float = 0.1, actor_entropy: float = 0.002, actor_min_std: float = 0.1, slow_target_update: int = 100, slow_target_fraction: float = 1.0, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 4)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_config.py#L35",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_config.py#L35",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "resolved_actor_grad: ActorGradient",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_config.py#L301",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_config.py#L301",
           "summary": "`actor_grad` with `\"auto\"` settled against the action space.",
           "extended": null,
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "stoch_width: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_config.py#L316",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_config.py#L316",
           "summary": "Flattened width of the stochastic latent — `stoch_size * discrete`.",
           "extended": null,
           "parameters": [],
@@ -72,7 +72,7 @@
             "property"
           ],
           "signature": "latent_size: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_config.py#L322",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_config.py#L322",
           "summary": "Width of `[h; s]`, with `s` the flattened categorical grid.",
           "extended": null,
           "parameters": [],
@@ -93,7 +93,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = WORLD_MODEL_IMAGE_SIZE, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'elu', action_dim: int = 1, stoch_size: int = 32, deter_size: int = 1024, hidden_size: int = 1024, cnn_depth: int = 48, min_std: float = 0.1, mean_only: bool = False, free_nats: float = 0.0, kl_weight: float = 1.0, discrete: int = 32, kl_balance: float = 0.8, reward_hidden: int = 400, reward_layers: int = 4, actor_hidden: int = 400, actor_layers: int = 4, value_hidden: int = 400, value_layers: int = 4, horizon: int = 15, discount: float = 0.99, lambda_: float = 0.95, action_space: ActionSpace = 'continuous', actor_grad: ActorGradient = 'auto', actor_grad_mix: float = 0.1, actor_entropy: float = 0.002, actor_min_std: float = 0.1, slow_target_update: int = 100, slow_target_fraction: float = 1.0, pcont: bool = True, pcont_scale: float = 1.0, pcont_layers: int = 4)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -304,7 +304,7 @@
       ],
       "labels": [],
       "signature": "DreamerV2BehaviorOutput(actor_loss: Tensor, value_loss: Tensor, lambda_return: Tensor, entropy: Tensor, imagined_reward: Tensor, imagined_value: Tensor, imagined_action: Tensor, imagined_discount: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L49",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L49",
       "subcategory": "model",
       "methods": [
         {
@@ -313,7 +313,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(actor_loss: Tensor, value_loss: Tensor, lambda_return: Tensor, entropy: Tensor, imagined_reward: Tensor, imagined_value: Tensor, imagined_action: Tensor, imagined_discount: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -384,7 +384,7 @@
       ],
       "labels": [],
       "signature": "DreamerV2ForWorldModeling(config: DreamerV2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L514",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L626",
       "subcategory": "model",
       "methods": [
         {
@@ -393,7 +393,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DreamerV2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L559",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L671",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -415,7 +415,7 @@
           "kind": "function",
           "labels": [],
           "signature": "world_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L578",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L690",
           "subcategory": "model",
           "summary": "Everything the world-model loss trains.",
           "extended": null,
@@ -437,7 +437,7 @@
           "kind": "function",
           "labels": [],
           "signature": "actor_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L598",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L710",
           "subcategory": "model",
           "summary": "The actor's parameters.",
           "extended": null,
@@ -459,7 +459,7 @@
           "kind": "function",
           "labels": [],
           "signature": "value_parameters()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L608",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L720",
           "subcategory": "model",
           "summary": "The learning critic's parameters — *not* the target copy.",
           "extended": null,
@@ -481,7 +481,7 @@
           "kind": "function",
           "labels": [],
           "signature": "update_slow_target()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L620",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L732",
           "subcategory": "model",
           "summary": "Refresh the target critic, on the paper's schedule.",
           "extended": null,
@@ -505,7 +505,7 @@
           "kind": "function",
           "labels": [],
           "signature": "backward(output: DreamerV2Output)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L796",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L908",
           "subcategory": "model",
           "summary": "Give every parameter group the gradient of its own loss.",
           "extended": null,
@@ -527,7 +527,9 @@
               "description": "If `output` carries no losses."
             }
           ],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> import lucid.optim as optim\n>>> from lucid.models import dreamer_v2_world_model\n>>> model = dreamer_v2_world_model(action_dim=2, cnn_depth=2,\n...     stoch_size=3, discrete=4, deter_size=8, hidden_size=8,\n...     actor_hidden=8, value_hidden=8, reward_hidden=8, horizon=3,\n...     pcont=False)\n>>> groups = (model.world_parameters(), model.actor_parameters(),\n...           model.value_parameters())\n>>> opts = [optim.Adam(g, lr=1e-4) for g in groups]\n>>> out = model(lucid.randn((1, 3, 3, 64, 64)),\n...             lucid.randn((1, 3, 2)), lucid.randn((1, 3)))\n>>> model.backward(out)\n>>> [all(p.grad is not None for p in g) for g in groups]\n[True, True, True]\nThe target critic is no optimiser's to move — it holds no gradient,\nand follows the learner through update_slow_target, called\nonce per step:\n>>> target = model.dreamer_v2.target_value_head.parameters()\n>>> any(p.grad is not None for p in target)\nFalse\n>>> for opt in opts:\n...     opt.step()\n>>> model.update_slow_target()"
+          ],
           "notes": [
             "Identical in shape to Dreamer's, and identical in motivation: the\nthree losses share one graph, so backpropagating them by hand\neither lets the actor's gradient descend the world model or raises\non a parameter the imagination's graph still needed."
           ],
@@ -541,7 +543,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor, rewards: Tensor, discounts: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L842",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L983",
           "subcategory": "model",
           "summary": "Train the world model and the behaviour on one batch.",
           "extended": null,
@@ -620,7 +622,7 @@
       ],
       "labels": [],
       "signature": "DreamerV2Model(config: DreamerV2Config)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L240",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L240",
       "subcategory": "model",
       "methods": [
         {
@@ -629,7 +631,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DreamerV2Config)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L275",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L275",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -651,7 +653,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(observations: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L334",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L334",
           "subcategory": "model",
           "summary": "Embed a frame sequence — `(B, T, C, 64, 64) -> (B, T, embed_size)`.",
           "extended": null,
@@ -673,7 +675,7 @@
           "kind": "function",
           "labels": [],
           "signature": "observe(observations: Tensor, actions: Tensor, state: RSSMState | None = None, sample: bool | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L338",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L338",
           "subcategory": "model",
           "summary": "Filter a trajectory into posterior states.",
           "extended": null,
@@ -708,7 +710,9 @@
             "description": "`(B, T, ·)` each, carrying categorical logits."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models import dreamer_v2\n>>> model = dreamer_v2(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,\n...     deter_size=8, hidden_size=8, actor_hidden=8, value_hidden=8,\n...     reward_hidden=8)\n>>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2))\n>>> priors, posteriors = model.observe(obs, act)\n>>> posteriors.stoch.shape, posteriors.logits.shape, posteriors.mean\n((1, 3, 12), (1, 3, 3, 4), None)\nThe latent is stoch_size one-hot draws over discrete classes,\nflattened, so each group of four holds a single 1:\n>>> posteriors.stoch.reshape(1, 3, 3, 4).sum(dim=-1).tolist()\n[[[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]]"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -720,7 +724,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L367",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L385",
           "subcategory": "model",
           "summary": "Reconstruct frames from a state — `(B, T, C, 64, 64)`.",
           "extended": null,
@@ -742,7 +746,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_reward(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L371",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L389",
           "subcategory": "model",
           "summary": "Predict reward from a state — `(B, T)`.",
           "extended": null,
@@ -764,7 +768,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_value(state: RSSMState, target: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L375",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L393",
           "subcategory": "model",
           "summary": "Estimate a state's value — `(B, T)`.",
           "extended": null,
@@ -787,7 +791,9 @@
             "description": "Value estimates."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models import dreamer_v2_world_model\n>>> wrapper = dreamer_v2_world_model(action_dim=2, cnn_depth=2,\n...     stoch_size=3, discrete=4, deter_size=8, hidden_size=8,\n...     actor_hidden=8, value_hidden=8, reward_hidden=8)\n>>> model = wrapper.dreamer_v2\n>>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),\n...                               lucid.randn((1, 3, 2)))\n>>> value = model.predict_value(posteriors)\n>>> value.shape\n(1, 3)\nThe target copy starts from its own initialisation, and only\nDreamerV2ForWorldModeling.update_slow_target moves it —\nthe first call copies the learner outright:\n>>> target = model.predict_value(posteriors, target=True)\n>>> bool((value == target).all())\nFalse\n>>> wrapper.update_slow_target()\n>>> bool((value == model.predict_value(posteriors, target=True)).all())\nTrue"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -799,7 +805,7 @@
           "kind": "function",
           "labels": [],
           "signature": "predict_pcont(state: RSSMState)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L395",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L438",
           "subcategory": "model",
           "summary": "Predict the discount at a state — logits, `(B, T)`.",
           "extended": null,
@@ -821,7 +827,9 @@
               "description": "If the model was configured without `pcont`."
             }
           ],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models import dreamer_v2\n>>> model = dreamer_v2(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,\n...     deter_size=8, hidden_size=8, actor_hidden=8, value_hidden=8,\n...     reward_hidden=8)\n>>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),\n...                               lucid.randn((1, 3, 2)))\n>>> logits = model.predict_pcont(posteriors)\n>>> logits.shape\n(1, 3)\nThe head is on by default in this family; sigmoid gives the\nprobability of continuing that imagination discounts by:\n>>> model.config.pcont\nTrue\n>>> keep = lucid.sigmoid(logits)\n>>> bool(((keep > 0) & (keep < 1)).all())\nTrue"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -833,7 +841,7 @@
           "kind": "function",
           "labels": [],
           "signature": "act(state: RSSMState, sample: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L420",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L485",
           "subcategory": "model",
           "summary": "Propose actions — `(B, T, action_dim)` or `(B, action_dim)`.",
           "extended": null,
@@ -853,10 +861,12 @@
           ],
           "returns": {
             "annotation": "Tensor",
-            "description": "Actions inside `(-1, 1)`."
+            "description": "Actions inside `(-1, 1)`, or one-hot when discrete."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models import dreamer_v2\n>>> kwargs = dict(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,\n...               deter_size=8, hidden_size=8, actor_hidden=8,\n...               value_hidden=8, reward_hidden=8)\n>>> model = dreamer_v2(**kwargs)\n>>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2))\n>>> _, posteriors = model.observe(obs, act)\n>>> last = posteriors.map(lambda t: t[:, -1])\n>>> model.act(posteriors).shape, model.act(last).shape\n((1, 3, 2), (1, 2))\n>>> bool((model.act(last).abs() < 1).all())\nTrue\nA discrete action space picks one alternative instead, as a one-hot:\n>>> game = dreamer_v2(action_space=\"discrete\", **kwargs)\n>>> _, beliefs = game.observe(obs, act)\n>>> choice = game.act(beliefs.map(lambda t: t[:, -1]))\n>>> choice.shape, choice.sum(dim=-1).tolist()\n((1, 2), [1.0])"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -868,7 +878,7 @@
           "kind": "function",
           "labels": [],
           "signature": "imagine(state: RSSMState, horizon: int, sample: bool | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L437",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L526",
           "subcategory": "model",
           "summary": "Roll the dynamics forward under the actor's own policy.",
           "extended": null,
@@ -897,7 +907,9 @@
             "description": "The imagined states including the start, `(N, horizon + 1, ·)`."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models import dreamer_v2\n>>> model = dreamer_v2(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,\n...     deter_size=8, hidden_size=8, actor_hidden=8, value_hidden=8,\n...     reward_hidden=8)\n>>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),\n...                               lucid.randn((1, 3, 2)))\nEvery filtered step becomes an imagination start:\n>>> start = posteriors.map(lambda t: t.reshape(3, *t.shape[2:]))\n>>> states, actions = model.imagine(start, horizon=5)\n>>> states.stoch.shape, states.logits.shape, actions.shape\n((3, 6, 12), (3, 6, 3, 4), (3, 5, 2))\nThe start is kept as the first state, which is why there is one more\nstate than action:\n>>> bool((states.stoch[:, 0] == start.stoch).all())\nTrue"
+          ],
           "notes": [
             "The state the actor reads is detached, as the released\nimplementation does — the gradient still reaches the policy\nthrough each action, and still travels back through the dynamics\nfrom the return."
           ],
@@ -911,7 +923,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(observations: Tensor, actions: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L493",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L605",
           "subcategory": "model",
           "summary": "Train the world model and the behaviour on one batch.",
           "extended": null,
@@ -990,7 +1002,7 @@
       ],
       "labels": [],
       "signature": "DreamerV2Output(observation: Tensor, reward: Tensor, value: Tensor, posterior_stoch: Tensor, posterior_logits: Tensor, prior_logits: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, pcont_loss: Tensor | None = None, behavior: DreamerV2BehaviorOutput | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L94",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L94",
       "subcategory": "model",
       "methods": [
         {
@@ -999,7 +1011,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(observation: Tensor, reward: Tensor, value: Tensor, posterior_stoch: Tensor, posterior_logits: Tensor, prior_logits: Tensor, deter: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, reward_loss: Tensor | None = None, kl_loss: Tensor | None = None, pcont_loss: Tensor | None = None, behavior: DreamerV2BehaviorOutput | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_model.py#L1",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -1071,7 +1083,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_pretrained.py#L50",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_pretrained.py#L50",
       "subcategory": "pretrained",
       "summary": "Construct DreamerV2's world model, actor and critic — no objectives.",
       "extended": "Dreamer's architecture with a categorical latent: 32 variables of 32\nclasses, sampled as one-hots and carried as a 1024-wide sparse binary\nvector.  Four-layer 400-unit ELU heads for reward, value and policy,\nplus a frozen copy of the critic to compute returns against.",
@@ -1358,7 +1370,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v2_atari(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_pretrained.py#L179",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_pretrained.py#L179",
       "subcategory": "pretrained",
       "summary": "Construct DreamerV2 as the paper configures it for Atari.",
       "extended": "A 600-unit deterministic state, a divergence scaled to 0.1, a discount\nof 0.999 weighted five times over, and a **discrete** policy — a\none-hot over the game's buttons rather than a box.\n\nThe discount is the one number here the paper and the released\nconfiguration disagree on: Table D.1 prints 0.995, the released\n`atari` config uses 0.999, and the table's own note recommends\nsearching $\\gamma \\in \\{0.99, 0.999\\}$.  The released value\nis followed, because it is the one that produced the reported Atari\nresults.",
@@ -1651,7 +1663,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v2_atari_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_pretrained.py#L233",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_pretrained.py#L233",
       "subcategory": "pretrained",
       "summary": "Construct the Atari configuration with all three objectives.",
       "extended": null,
@@ -1952,7 +1964,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v2_dmc(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_pretrained.py#L278",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_pretrained.py#L278",
       "subcategory": "pretrained",
       "summary": "Construct DreamerV2 as the paper configures it for the Control Suite.",
       "extended": "A 200-unit deterministic state, the full divergence floored at one\nfree nat, a continuous policy, and **no discount head** — these\nepisodes end on a clock rather than on a failure, and there is\nnothing for one to predict.",
@@ -2245,7 +2257,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v2_dmc_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_pretrained.py#L328",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_pretrained.py#L328",
       "subcategory": "pretrained",
       "summary": "Construct the Control Suite configuration with all three objectives.",
       "extended": null,
@@ -2546,7 +2558,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dreamer_v2_world_model(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/dreamer_v2/_pretrained.py#L95",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/dreamer_v2/_pretrained.py#L95",
       "subcategory": "pretrained",
       "summary": "Construct DreamerV2 with all three of its objectives.",
       "extended": "Same trunk as `dreamer_v2`, wrapped with the world-model bound\nunder a **balanced** divergence, an actor maximising imagined\n$V_\\lambda$ with an entropy bonus, and a critic regressing onto\na target copy of itself.",

@@ -3,7 +3,7 @@
   "name": "flow_matching",
   "path": "lucid.models.generative.flow_matching",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/__init__.py#L1",
   "members": [
     {
       "name": "FlowMatchingConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "FlowMatchingConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', base_channels: int = 128, channel_mult: tuple[int, ...] = (lambda: (1, 2, 2, 2))(), num_res_blocks: int = 2, attention_resolutions: tuple[int, ...] = (lambda: (32, 16, 8))(), num_head_channels: int = 64, dropout: float = 0.0, resnet_groups: int = 32, path: ProbabilityPath = 'ot', sigma_min: float = 0.0001, beta_min: float = 0.1, beta_max: float = 20.0, solver: str = 'dopri5', rtol: float = 1e-05, atol: float = 1e-05, trace_method: TraceMethod | None = None, trace_noise: TraceNoise = 'rademacher', exact_trace_max_dim: int = 32)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_config.py#L32",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_config.py#L32",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "data_dim: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_config.py#L218",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_config.py#L218",
           "summary": "int: Flattened width of one sample.",
           "extended": null,
           "parameters": [],
@@ -49,7 +49,7 @@
             "property"
           ],
           "signature": "resolved_trace_method: TraceMethod",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_config.py#L225",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_config.py#L225",
           "summary": "TraceMethod: `trace_method`, or the one implied by the dimension.",
           "extended": null,
           "parameters": [],
@@ -70,7 +70,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', base_channels: int = 128, channel_mult: tuple[int, ...] = (lambda: (1, 2, 2, 2))(), num_res_blocks: int = 2, attention_resolutions: tuple[int, ...] = (lambda: (32, 16, 8))(), num_head_channels: int = 64, dropout: float = 0.0, resnet_groups: int = 32, path: ProbabilityPath = 'ot', sigma_min: float = 0.0001, beta_min: float = 0.1, beta_max: float = 20.0, solver: str = 'dopri5', rtol: float = 1e-05, atol: float = 1e-05, trace_method: TraceMethod | None = None, trace_noise: TraceNoise = 'rademacher', exact_trace_max_dim: int = 32)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_config.py#L1",
           "subcategory": "config",
           "summary": null,
           "extended": null,
@@ -239,7 +239,7 @@
       ],
       "labels": [],
       "signature": "FlowMatchingForImageGeneration(config: FlowMatchingConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L977",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L1078",
       "subcategory": "model",
       "methods": [
         {
@@ -248,7 +248,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: FlowMatchingConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L1022",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L1123",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -272,7 +272,7 @@
             "property"
           ],
           "signature": "nfe: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L1027",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L1128",
           "summary": "int: Field evaluations spent by the most recent solve.",
           "extended": null,
           "parameters": [],
@@ -293,7 +293,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L1031",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L1132",
           "subcategory": "model",
           "summary": "Evaluate the velocity field.",
           "extended": null,
@@ -328,7 +328,7 @@
           "kind": "function",
           "labels": [],
           "signature": "generate(n_samples: int = 1, steps: int | None = None, device: str | None = None, noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L1036",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L1137",
           "subcategory": "model",
           "summary": "Sample by integrating the field from `t = 0` to `t = 1`.",
           "extended": null,
@@ -348,7 +348,7 @@
             {
               "name": "device",
               "annotation": "str",
-              "description": "Where to allocate the prior draw.  Default `\"cpu\"`.",
+              "description": "Where to allocate the prior draw.  Defaults to the device the\nmodel's parameters are on.",
               "default": "None"
             },
             {
@@ -363,7 +363,9 @@
             "description": "`samples` of shape `(n_samples, C, H, W)`."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.flow_matching import (\n...     FlowMatchingConfig, FlowMatchingForImageGeneration,\n... )\n>>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,\n...                          channel_mult=(1, 2), num_res_blocks=1,\n...                          attention_resolutions=(), resnet_groups=8)\n>>> model = FlowMatchingForImageGeneration(cfg).eval()\n>>> model.generate(n_samples=3, steps=2).samples.shape\n(3, 3, 8, 8)\n>>> model.nfe  # a fixed budget: two steps, two field evaluations\n2\n>>> noise = lucid.randn((1, 3, 8, 8))\n>>> model.generate(noise=noise, steps=2).samples.shape  # batch follows noise\n(1, 3, 8, 8)"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -408,7 +410,7 @@
       ],
       "labels": [],
       "signature": "FlowMatchingModel(config: FlowMatchingConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L612",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L612",
       "subcategory": "model",
       "methods": [
         {
@@ -417,7 +419,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: FlowMatchingConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L669",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L669",
           "subcategory": "model",
           "summary": null,
           "extended": null,
@@ -441,7 +443,7 @@
             "property"
           ],
           "signature": "input_dim: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L689",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L689",
           "summary": "int: Flattened width `D` of one sample.",
           "extended": null,
           "parameters": [],
@@ -464,7 +466,7 @@
             "property"
           ],
           "signature": "path: str",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L694",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L694",
           "summary": "str: Which conditional probability path the target comes from.",
           "extended": null,
           "parameters": [],
@@ -487,7 +489,7 @@
             "property"
           ],
           "signature": "trace_method: str",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L699",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L699",
           "summary": "str: How the divergence is obtained when scoring likelihood.",
           "extended": null,
           "parameters": [],
@@ -510,9 +512,9 @@
             "property"
           ],
           "signature": "nfe: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L704",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L704",
           "summary": "int: Field evaluations spent by the most recent solve.",
-          "extended": "Zero after training steps — nothing is solved there.  The number\nthe paper cares about: straighter paths need fewer.",
+          "extended": "A training step solves nothing and leaves the count where the last\nsolve put it.  The number the paper cares about: straighter paths\nneed fewer.",
           "parameters": [],
           "returns": {
             "annotation": "int",
@@ -531,7 +533,7 @@
           "kind": "function",
           "labels": [],
           "signature": "coefficients(t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L724",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L725",
           "subcategory": "model",
           "summary": "`(a_t, sigma_t, a_t', sigma_t')` for the configured path.",
           "extended": "Exposed because it is the only place the two paths differ, and\nbecause checking a schedule's derivative against a difference\nquotient is the cheapest way to know a new one is right.",
@@ -553,7 +555,7 @@
           "kind": "function",
           "labels": [],
           "signature": "path_sample(x1: Tensor, x0: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L739",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L740",
           "subcategory": "model",
           "summary": "Draw $x_t \\sim p_t(\\cdot \\mid x_1)$, given the noise `x0`.",
           "extended": null,
@@ -582,7 +584,9 @@
             "description": "`(B, C, H, W)` point on the conditional path.  For the\noptimal-transport path this is the straight-line interpolation\nof paper eq. (22)."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.flow_matching import (\n...     FlowMatchingConfig, FlowMatchingModel,\n... )\n>>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,\n...                          channel_mult=(1, 2), num_res_blocks=1,\n...                          attention_resolutions=(), resnet_groups=8)\n>>> model = FlowMatchingModel(cfg).eval()\n>>> x1, x0 = lucid.randn((2, 3, 8, 8)), lucid.randn((2, 3, 8, 8))\n>>> model.path_sample(x1, x0, lucid.tensor([0.25, 0.75])).shape\n(2, 3, 8, 8)\n>>> bool(lucid.allclose(model.path_sample(x1, x0, lucid.zeros(2)), x0))\nTrue\n>>> end = model.path_sample(x1, x0, lucid.ones(2))\n>>> bool(lucid.allclose(end, x1 + cfg.sigma_min * x0))  # still sigma_min wide\nTrue"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -594,7 +598,7 @@
           "kind": "function",
           "labels": [],
           "signature": "conditional_target(x1: Tensor, x0: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L761",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L781",
           "subcategory": "model",
           "summary": "The field $u_t(x \\mid x_1)$ that generates the path.",
           "extended": "Theorem 3 states it as\n$(\\sigma_t'/\\sigma_t)(x - a_t x_1) + a_t' x_1$.  Since\n$x - a_t x_1 = \\sigma_t x_0$ for the sample actually drawn,\nthat reduces to $\\sigma_t' x_0 + a_t' x_1$ — the same\nquantity with **no division by** $\\sigma_t$, which matters\nbecause $\\sigma_t \\to 0$ at `t = 1` on the diffusion path.\nFor the optimal-transport path it collapses further, to the\n$t$-independent $x_1 - (1 - \\sigma_{\\min}) x_0$ of\npaper eq. (23).",
@@ -623,7 +627,9 @@
             "description": "`(B, C, H, W)` regression target."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.flow_matching import (\n...     FlowMatchingConfig, FlowMatchingModel,\n... )\n>>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,\n...                          channel_mult=(1, 2), num_res_blocks=1,\n...                          attention_resolutions=(), resnet_groups=8)\n>>> model = FlowMatchingModel(cfg).eval()\n>>> x1, x0 = lucid.randn((2, 3, 8, 8)), lucid.randn((2, 3, 8, 8))\n>>> t = lucid.tensor([0.3, 0.6])\n>>> target = model.conditional_target(x1, x0, t)\n>>> target.shape\n(2, 3, 8, 8)\n>>> step = 1e-2  # the target is the time derivative of the path\n>>> ahead = model.path_sample(x1, x0, t + step)\n>>> slope = (ahead - model.path_sample(x1, x0, t)) / step\n>>> bool(lucid.allclose(slope, target, atol=1e-3))\nTrue\n>>> bool(lucid.allclose(target, x1 - (1 - cfg.sigma_min) * x0))  # eq. (23)\nTrue"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -635,7 +641,7 @@
           "kind": "function",
           "labels": [],
           "signature": "flow_matching_loss(x1: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L789",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L832",
           "subcategory": "model",
           "summary": "One Conditional Flow Matching step — no ODE is solved.",
           "extended": null,
@@ -652,7 +658,9 @@
             "description": "`(loss, prediction, target)` — the scalar mean squared\nerror, the field's output at the sampled points, and what it\nwas regressed against."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.flow_matching import (\n...     FlowMatchingConfig, FlowMatchingModel,\n... )\n>>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,\n...                          channel_mult=(1, 2), num_res_blocks=1,\n...                          attention_resolutions=(), resnet_groups=8)\n>>> model = FlowMatchingModel(cfg).eval()\n>>> loss, prediction, target = model.flow_matching_loss(\n...     lucid.randn((2, 3, 8, 8)))\n>>> loss.shape, prediction.shape, target.shape\n((), (2, 3, 8, 8), (2, 3, 8, 8))\n>>> bool(lucid.allclose(loss, ((prediction - target) ** 2).mean()))\nTrue"
+          ],
           "notes": [
             "`t` is drawn uniformly per sample, which is the estimator the\nobjective is written as an expectation over.  Sharing one `t`\nacross the batch would still be unbiased but noisier."
           ],
@@ -666,7 +674,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sample(n_samples: int = 1, steps: int | None = None, device: str | None = None, noise: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L842",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L902",
           "subcategory": "model",
           "summary": "Generate by integrating the field from noise to data.",
           "extended": null,
@@ -686,7 +694,7 @@
             {
               "name": "device",
               "annotation": "str",
-              "description": "Where to allocate the prior draw.  Default `\"cpu\"`.",
+              "description": "Where to allocate the prior draw.  Defaults to the device the\nmodel's parameters are on.",
               "default": "None"
             },
             {
@@ -701,7 +709,9 @@
             "description": "`(N, C, H, W)` samples at `t = 1`."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.flow_matching import (\n...     FlowMatchingConfig, FlowMatchingModel,\n... )\n>>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,\n...                          channel_mult=(1, 2), num_res_blocks=1,\n...                          attention_resolutions=(), resnet_groups=8)\n>>> model = FlowMatchingModel(cfg).eval()\n>>> model.sample(n_samples=2, steps=4).shape\n(2, 3, 8, 8)\n>>> model.nfe  # the adaptive default falls back to Euler: one call a step\n4\n>>> noise = lucid.randn((3, 3, 8, 8))\n>>> model.sample(noise=noise, steps=4).shape  # the batch follows noise\n(3, 3, 8, 8)"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -713,7 +723,7 @@
           "kind": "function",
           "labels": [],
           "signature": "log_prob(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L918",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L997",
           "subcategory": "model",
           "summary": "Exact per-sample $\\log p_1(x)$ in nats.",
           "extended": "Integrates the field from `t = 1` back to `t = 0` alongside the\naccumulated divergence, then scores the arrival against the\nstandard normal the path starts from.",
@@ -730,7 +740,9 @@
             "description": "`(B,)` log-likelihood."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import math\n>>> import lucid\n>>> from lucid.models.generative.flow_matching import (\n...     FlowMatchingConfig, FlowMatchingModel,\n... )\n>>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,\n...                          channel_mult=(1, 2), num_res_blocks=1,\n...                          attention_resolutions=(), resnet_groups=8)\n>>> model = FlowMatchingModel(cfg).eval()\n>>> x = lucid.randn((2, 3, 8, 8))\n>>> log_p = model.log_prob(x)\n>>> log_p.shape\n(2,)\n>>> # A fresh field is exactly zero (its output layer starts at zero),\n>>> # so the flow is the identity and x is scored as N(0, I) itself.\n>>> const = 0.5 * model.input_dim * math.log(2 * math.pi)\n>>> gauss = -0.5 * (x.reshape(2, -1) ** 2).sum(dim=-1) - const\n>>> bool(lucid.allclose(log_p, gauss, atol=1e-3))\nTrue"
+          ],
           "notes": [
             "With `trace_method` resolving to `\"hutchinson\"` — which it does\nat any image size — this is an unbiased *estimate*, and two calls\non the same input will not agree.  That is the same estimator the\npaper reports bits/dim with."
           ],
@@ -744,7 +756,7 @@
           "kind": "function",
           "labels": [],
           "signature": "bits_per_dim(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L962",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L1063",
           "subcategory": "model",
           "summary": "Per-sample negative log-likelihood in bits per dimension.",
           "extended": null,
@@ -766,7 +778,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(sample: Tensor, t: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_model.py#L966",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_model.py#L1067",
           "subcategory": "model",
           "summary": "Evaluate the velocity field at `(t, sample)`.",
           "extended": null,
@@ -817,7 +829,7 @@
       "kind": "function",
       "labels": [],
       "signature": "flow_matching_cifar(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_pretrained.py#L96",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_pretrained.py#L96",
       "subcategory": "pretrained",
       "summary": "Flow Matching velocity field for the CIFAR-10 setup.",
       "extended": "Trained by regressing onto the optimal-transport conditional field —\nno ODE is solved during training, which is the method's whole point.\nThe solver appears only when sampling or scoring likelihood.",
@@ -1713,7 +1725,7 @@
       "kind": "function",
       "labels": [],
       "signature": "flow_matching_cifar_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_pretrained.py#L276",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_pretrained.py#L276",
       "subcategory": "pretrained",
       "summary": "Flow Matching generator for CIFAR-10 `32 x 32`.",
       "extended": "Same field as `flow_matching_cifar`, wrapped with the\nConditional Flow Matching objective and the sampler.",
@@ -2617,7 +2629,7 @@
       "kind": "function",
       "labels": [],
       "signature": "flow_matching_imagenet32(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_pretrained.py#L149",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_pretrained.py#L149",
       "subcategory": "pretrained",
       "summary": "Flow Matching velocity field for ImageNet `32 x 32`.",
       "extended": null,
@@ -3513,7 +3525,7 @@
       "kind": "function",
       "labels": [],
       "signature": "flow_matching_imagenet32_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_pretrained.py#L323",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_pretrained.py#L323",
       "subcategory": "pretrained",
       "summary": "Flow Matching generator for ImageNet `32 x 32`.",
       "extended": null,
@@ -4417,7 +4429,7 @@
       "kind": "function",
       "labels": [],
       "signature": "flow_matching_imagenet64(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_pretrained.py#L190",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_pretrained.py#L190",
       "subcategory": "pretrained",
       "summary": "Flow Matching velocity field for ImageNet `64 x 64`.",
       "extended": null,
@@ -5985,7 +5997,7 @@
       "kind": "function",
       "labels": [],
       "signature": "flow_matching_imagenet64_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_pretrained.py#L365",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_pretrained.py#L365",
       "subcategory": "pretrained",
       "summary": "Flow Matching generator for ImageNet `64 x 64`.",
       "extended": null,
@@ -7561,7 +7573,7 @@
       "kind": "function",
       "labels": [],
       "signature": "flow_matching_imagenet128(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_pretrained.py#L231",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_pretrained.py#L231",
       "subcategory": "pretrained",
       "summary": "Flow Matching velocity field for ImageNet `128 x 128`.",
       "extended": null,
@@ -9145,7 +9157,7 @@
       "kind": "function",
       "labels": [],
       "signature": "flow_matching_imagenet128_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/flow_matching/_pretrained.py#L407",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/flow_matching/_pretrained.py#L407",
       "subcategory": "pretrained",
       "summary": "Flow Matching generator for ImageNet `128 x 128`.",
       "extended": null,

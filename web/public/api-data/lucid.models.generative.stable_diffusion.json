@@ -3,7 +3,7 @@
   "name": "stable_diffusion",
   "path": "lucid.models.generative.stable_diffusion",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/__init__.py#L1",
   "members": [
     {
       "name": "AutoencoderKL",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "AutoencoderKL(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L314",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L314",
       "subcategory": "autoencoder",
       "methods": [
         {
@@ -24,7 +24,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L348",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L348",
           "subcategory": "autoencoder",
           "summary": "Initialise the autoencoder. See the class docstring.",
           "extended": null,
@@ -46,7 +46,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode(x: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L399",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L399",
           "subcategory": "autoencoder",
           "summary": "Map an image to its posterior over latents.",
           "extended": null,
@@ -63,7 +63,9 @@
             "description": "Mean and log-variance, each `(B, latent_channels, H/f, W/f)`."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     AutoencoderKL, StableDiffusionConfig)\n>>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,\n...                                vae_block_out_channels=(32, 64, 64),\n...                                unet_block_out_channels=(32, 64),\n...                                norm_num_groups=32)\n>>> vae = AutoencoderKL(config).eval()\n>>> posterior = vae.encode(lucid.randn((2, 3, 32, 32)))\n>>> posterior.mean.shape, posterior.logvar.shape\n((2, 4, 8, 8), (2, 4, 8, 8))\nA distribution rather than a tensor, so the caller chooses: the mode\nis the mean and repeats, while a sample draws fresh noise.\n>>> bool((posterior.mode() == posterior.mean).all())\nTrue\n>>> bool((posterior.sample() == posterior.mode()).all())\nFalse"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -75,7 +77,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode(z: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L426",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L448",
           "subcategory": "autoencoder",
           "summary": "Map a latent back to an image.",
           "extended": null,
@@ -92,7 +94,9 @@
             "description": "`(B, out_channels, h*f, w*f)`."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     AutoencoderKL, StableDiffusionConfig)\n>>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,\n...                                vae_block_out_channels=(32, 64, 64),\n...                                unet_block_out_channels=(32, 64),\n...                                norm_num_groups=32)\n>>> vae = AutoencoderKL(config).eval()\n>>> images = lucid.randn((1, 3, 32, 32))\n>>> vae.decode(vae.encode(images).mode()).shape\n(1, 3, 32, 32)\nNothing in the decoder is tied to a size — it is convolutions and\none attention over positions — so any latent decodes, each side\nscaled by f (4 here) on its own.\n>>> vae.decode(lucid.randn((1, 4, 4, 6))).shape\n(1, 3, 16, 24)"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -104,7 +108,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(x: Tensor, sample: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L452",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L495",
           "subcategory": "autoencoder",
           "summary": "Encode, take a latent, and decode it back.",
           "extended": null,
@@ -166,7 +170,7 @@
       ],
       "labels": [],
       "signature": "AutoencoderKLOutput(reconstruction: Tensor, latent: Tensor, kl: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L276",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L276",
       "subcategory": "autoencoder",
       "methods": [
         {
@@ -175,7 +179,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(reconstruction: Tensor, latent: Tensor, kl: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L1",
           "subcategory": "autoencoder",
           "summary": "Hold the posterior. See the class docstring for parameters.",
           "extended": null,
@@ -229,7 +233,7 @@
       "bases": [],
       "labels": [],
       "signature": "DiagonalGaussian(mean: Tensor, logvar: Tensor)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L45",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L45",
       "subcategory": "autoencoder",
       "methods": [
         {
@@ -238,7 +242,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(mean: Tensor, logvar: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L79",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L79",
           "subcategory": "autoencoder",
           "summary": "Hold the posterior. See the class docstring for parameters.",
           "extended": null,
@@ -260,7 +264,7 @@
           "kind": "function",
           "labels": [],
           "signature": "sample()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L85",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L85",
           "subcategory": "autoencoder",
           "summary": "Draw a reparameterised sample.",
           "extended": null,
@@ -282,7 +286,7 @@
           "kind": "function",
           "labels": [],
           "signature": "mode()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L100",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L100",
           "subcategory": "autoencoder",
           "summary": "Return the distribution's mode, which for a Gaussian is its mean.",
           "extended": null,
@@ -304,7 +308,7 @@
           "kind": "function",
           "labels": [],
           "signature": "kl()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_autoencoder.py#L110",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_autoencoder.py#L110",
           "subcategory": "autoencoder",
           "summary": "KL against $\\mathcal{N}(0, I)$, averaged over the batch.",
           "extended": null,
@@ -361,7 +365,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionConfig(sample_size: int = 512, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_train_timesteps: int = 1000, beta_start: float = 0.00085, beta_end: float = 0.012, beta_schedule: BetaSchedule = 'scaled_linear', prediction_type: Literal['epsilon', 'sample', 'v_prediction'] = 'epsilon', latent_channels: int = 4, downsample_factor: int = 8, vae_block_out_channels: tuple[int, ...] = (128, 256, 512, 512), vae_layers_per_block: int = 2, unet_block_out_channels: tuple[int, ...] = (320, 640, 1280, 1280), unet_layers_per_block: int = 2, attention_head_dim: int = 8, cross_attention_dim: int = 768, context_length: int = 77, steps_offset: int = 1, set_alpha_to_one: bool = False, norm_num_groups: int = 32)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_config.py#L12",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_config.py#L12",
       "subcategory": "config",
       "methods": [
         {
@@ -372,7 +376,7 @@
             "property"
           ],
           "signature": "latent_size: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_config.py#L177",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_config.py#L177",
           "summary": "Side of the square latent the U-Net operates on.",
           "extended": null,
           "parameters": [],
@@ -393,7 +397,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int = 512, in_channels: int = 3, out_channels: int = 3, act_fn: GenerativeActivation = 'silu', num_train_timesteps: int = 1000, beta_start: float = 0.00085, beta_end: float = 0.012, beta_schedule: BetaSchedule = 'scaled_linear', prediction_type: Literal['epsilon', 'sample', 'v_prediction'] = 'epsilon', latent_channels: int = 4, downsample_factor: int = 8, vae_block_out_channels: tuple[int, ...] = (128, 256, 512, 512), vae_layers_per_block: int = 2, unet_block_out_channels: tuple[int, ...] = (320, 640, 1280, 1280), unet_layers_per_block: int = 2, attention_head_dim: int = 8, cross_attention_dim: int = 768, context_length: int = 77, steps_offset: int = 1, set_alpha_to_one: bool = False, norm_num_groups: int = 32)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_config.py#L1",
           "subcategory": "config",
           "summary": "Hold the posterior. See the class docstring for parameters.",
           "extended": null,
@@ -538,7 +542,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionForImageGeneration(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L252",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L301",
       "subcategory": "model",
       "methods": [
         {
@@ -547,7 +551,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L289",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L338",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -569,7 +573,7 @@
           "kind": "function",
           "labels": [],
           "signature": "generate(context: Tensor, uncond_context: Tensor | None = None, num_inference_steps: int = 50, guidance_scale: float = 7.5, eta: float = 0.0, latent: Tensor | None = None, sampler: str = 'pndm')",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L294",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L343",
           "subcategory": "model",
           "summary": "Sample an image from the conditioning.",
           "extended": null,
@@ -627,7 +631,9 @@
               "description": "If `guidance_scale` is negative, or the two conditioning\nsequences disagree in shape."
             }
           ],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     StableDiffusionConfig, StableDiffusionForImageGeneration)\n>>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,\n...                                vae_block_out_channels=(32, 64, 64),\n...                                unet_block_out_channels=(32, 64),\n...                                attention_head_dim=32,\n...                                cross_attention_dim=16, context_length=4)\n>>> model = StableDiffusionForImageGeneration(config).eval()\n>>> context = lucid.randn((1, 4, 16))\n>>> start = lucid.randn((1, 4, 8, 8))\n>>> image = model.generate(context, num_inference_steps=2, latent=start)\n>>> image.shape\n(1, 3, 32, 32)\nPNDM draws no noise of its own, so the starting latent is the whole\nseed: pass the same one and the same image comes back.\n>>> again = model.generate(context, num_inference_steps=2, latent=start)\n>>> bool((again == image).all())\nTrue\nAt guidance_scale=1 the extrapolation is the conditional\nprediction itself, so an unconditional sequence changes nothing; at\nthe default 7.5 it does.\n>>> uncond = lucid.randn((1, 4, 16))  # stands in for the empty caption\n>>> unguided = model.generate(context, uncond, num_inference_steps=2,\n...                           guidance_scale=1.0, latent=start)\n>>> bool((unguided == image).all())\nTrue\n>>> guided = model.generate(context, uncond, num_inference_steps=2,\n...                         latent=start)\n>>> bool((guided == image).all())\nFalse"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -639,7 +645,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(context: Tensor, num_inference_steps: int = 50)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L396",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L483",
           "subcategory": "model",
           "summary": "Alias for `generate` with default guidance disabled.",
           "extended": null,
@@ -701,7 +707,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionModel(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L102",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L102",
       "subcategory": "model",
       "methods": [
         {
@@ -710,7 +716,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L154",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L154",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -732,7 +738,7 @@
           "kind": "function",
           "labels": [],
           "signature": "encode_image(images: Tensor, sample: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L162",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L162",
           "subcategory": "model",
           "summary": "Image to scaled latent.",
           "extended": null,
@@ -755,7 +761,9 @@
             "description": "`(B, latent_channels, H/f, W/f)`, already scaled for the\ndiffusion process."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     StableDiffusionConfig, StableDiffusionModel)\n>>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,\n...                                vae_block_out_channels=(32, 64, 64),\n...                                unet_block_out_channels=(32, 64),\n...                                attention_head_dim=32,\n...                                cross_attention_dim=16, context_length=4)\n>>> model = StableDiffusionModel(config).eval()\n>>> images = lucid.randn((1, 3, 32, 32))\n>>> latent = model.encode_image(images, sample=False)\n>>> latent.shape\n(1, 4, 8, 8)\nWhat this adds over the autoencoder is the scaling constant: the\nlatent is the posterior's mode times 0.18215, the released first\nstage's inverse standard deviation.\n>>> raw = model.vae.encode(images).mode()\n>>> bool(lucid.allclose(latent, raw * 0.18215))\nTrue"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -767,7 +775,7 @@
           "kind": "function",
           "labels": [],
           "signature": "decode_latent(latent: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L182",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L206",
           "subcategory": "model",
           "summary": "Scaled latent back to an image.",
           "extended": null,
@@ -784,7 +792,9 @@
             "description": "`(B, out_channels, h*f, w*f)`."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     StableDiffusionConfig, StableDiffusionModel)\n>>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,\n...                                vae_block_out_channels=(32, 64, 64),\n...                                unet_block_out_channels=(32, 64),\n...                                attention_head_dim=32,\n...                                cross_attention_dim=16, context_length=4)\n>>> model = StableDiffusionModel(config).eval()\n>>> images = lucid.randn((1, 3, 32, 32))\n>>> latent = model.encode_image(images, sample=False)\n>>> model.decode_latent(latent).shape\n(1, 3, 32, 32)\nThe scale is divided back out before decoding, so this undoes the\nscaling encode_image applied: it matches decoding the\nunscaled mode directly.\n>>> raw = model.vae.encode(images).mode()\n>>> bool(lucid.allclose(model.decode_latent(latent),\n...                     model.vae.decode(raw), atol=1e-5))\nTrue"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -796,7 +806,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(images: Tensor, context: Tensor, timestep: Tensor | None = None, return_loss: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L197",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L246",
           "subcategory": "model",
           "summary": "One training step's worth of the denoising objective.",
           "extended": null,
@@ -886,7 +896,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionOutput(noise_pred: Tensor, latent: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L65",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L65",
       "subcategory": "model",
       "methods": [
         {
@@ -895,7 +905,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(noise_pred: Tensor, latent: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -947,7 +957,7 @@
       "kind": "function",
       "labels": [],
       "signature": "stable_diffusion(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_pretrained.py#L57",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_pretrained.py#L57",
       "subcategory": "pretrained",
       "summary": "Construct the v1 architecture — 512 pixels, CLIP ViT-L/14 width.",
       "extended": null,
@@ -3663,7 +3673,7 @@
       "kind": "function",
       "labels": [],
       "signature": "stable_diffusion_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_pretrained.py#L112",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_pretrained.py#L112",
       "subcategory": "pretrained",
       "summary": "v1 posed as a sampler.",
       "extended": null,
@@ -6389,7 +6399,7 @@
       "bases": [],
       "labels": [],
       "signature": "DDIMScheduler(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L58",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L58",
       "subcategory": "scheduler",
       "methods": [
         {
@@ -6398,7 +6408,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L97",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L97",
           "subcategory": "scheduler",
           "summary": "Build the schedule. See the class docstring for parameters.",
           "extended": null,
@@ -6420,7 +6430,7 @@
           "kind": "function",
           "labels": [],
           "signature": "timesteps(num_inference_steps: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L112",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L112",
           "subcategory": "scheduler",
           "summary": "The decreasing subsequence to sample over.",
           "extended": null,
@@ -6442,7 +6452,9 @@
               "description": "If more steps are requested than the schedule has."
             }
           ],
-          "examples": [],
+          "examples": [
+            ">>> from lucid.models.generative.stable_diffusion import (\n...     DDIMScheduler, StableDiffusionConfig)\n>>> scheduler = DDIMScheduler(StableDiffusionConfig())\n>>> scheduler.timesteps(4)\n[751, 501, 251, 1]\nEvenly strided by 1000 // 4 and shifted by steps_offset, so\nthe last step is 1 rather than 0.  Asking for more steps than the\nschedule was trained with is an error, not a clamp.\n>>> scheduler.timesteps(1001)\nTraceback (most recent call last):\n    ...\nValueError: num_inference_steps must be in [1, 1000], got 1001"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -6454,7 +6466,7 @@
           "kind": "function",
           "labels": [],
           "signature": "add_noise(latent: Tensor, noise: Tensor, timestep: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L147",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L164",
           "subcategory": "scheduler",
           "summary": "The forward process — $z_t$ from $z_0$.",
           "extended": null,
@@ -6483,7 +6495,9 @@
             "description": "$\\sqrt{\\bar\\alpha_t} z_0 + \\sqrt{1-\\bar\\alpha_t}\\epsilon$."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     DDIMScheduler, StableDiffusionConfig)\n>>> scheduler = DDIMScheduler(StableDiffusionConfig())\n>>> ones, zeros = lucid.ones((1, 4, 8, 8)), lucid.zeros((1, 4, 8, 8))\n>>> scheduler.add_noise(ones, zeros, 500).shape\n(1, 4, 8, 8)\nA clean latent of ones with no noise reads off the signal\ncoefficient \\sqrt{\\bar\\alpha_t}, and swapping the two reads\noff the noise one.  At the first step the latent is almost\nuntouched; by the last it is almost all noise.\n>>> def coefficients(t):\n...     signal = scheduler.add_noise(ones, zeros, t)[0, 0, 0, 0].item()\n...     noise = scheduler.add_noise(zeros, ones, t)[0, 0, 0, 0].item()\n...     return signal, noise\n>>> [round(c, 4) for c in coefficients(0) + coefficients(999)]\n[0.9996, 0.0292, 0.0683, 0.9977]\nThe squares sum to one at every step, which is what keeps a\nunit-variance latent at unit variance as the noise replaces it.\n>>> signal, noise = coefficients(500)\n>>> round(signal**2 + noise**2, 6)\n1.0"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -6495,7 +6509,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(model_output: Tensor, timestep: int, previous_timestep: int, latent: Tensor, eta: float = 0.0)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L167",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L213",
           "subcategory": "scheduler",
           "summary": "One reverse step.",
           "extended": null,
@@ -6541,7 +6555,9 @@
               "description": "If `eta` is outside `[0, 1]`."
             }
           ],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     DDIMScheduler, StableDiffusionConfig)\n>>> scheduler = DDIMScheduler(StableDiffusionConfig())\n>>> lucid.manual_seed(0)\n>>> clean = lucid.randn((1, 4, 8, 8))\n>>> noise = lucid.randn((1, 4, 8, 8))\n>>> noised = scheduler.add_noise(clean, noise, 501)\nHanded the noise that was actually added — a perfect\n\\epsilon_\\theta — the step recovers \\hat z_0 = z_0,\nso going from 501 to 251 lands on the forward process at 251.\n>>> stepped = scheduler.step(noise, 501, 251, noised)\n>>> target = scheduler.add_noise(clean, noise, 251)\n>>> bool(lucid.allclose(stepped, target, atol=1e-5))\nTrue\nAt eta=0 that is the whole update, so it repeats exactly; any\npositive eta adds fresh noise on top.\n>>> bool((scheduler.step(noise, 501, 251, noised) == stepped).all())\nTrue\n>>> bool((scheduler.step(noise, 501, 251, noised, eta=1.0) == stepped).all())\nFalse"
+          ],
           "notes": [],
           "attributes": [],
           "warns": [],
@@ -6584,7 +6600,7 @@
       "bases": [],
       "labels": [],
       "signature": "PNDMScheduler(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L237",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L311",
       "subcategory": "scheduler",
       "methods": [
         {
@@ -6593,7 +6609,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L293",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L367",
           "subcategory": "scheduler",
           "summary": "Build the schedule. See the class docstring for parameters.",
           "extended": null,
@@ -6615,7 +6631,7 @@
           "kind": "function",
           "labels": [],
           "signature": "reset()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L301",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L375",
           "subcategory": "scheduler",
           "summary": "Clear the history so a new trajectory starts clean.",
           "extended": null,
@@ -6637,7 +6653,7 @@
           "kind": "function",
           "labels": [],
           "signature": "timesteps(num_inference_steps: int)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L309",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L383",
           "subcategory": "scheduler",
           "summary": "The decreasing subsequence to sample over.",
           "extended": null,
@@ -6654,7 +6670,9 @@
             "description": "Descending indices, **one longer than requested**: the\n*second* time is visited twice."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     PNDMScheduler, StableDiffusionConfig)\n>>> scheduler = PNDMScheduler(StableDiffusionConfig())\n>>> scheduler.timesteps(4)\n[751, 501, 501, 251, 1]\nFour intervals, five evaluations — the second time repeats for the\nopener.  Asking again starts a new sample, so the counter a previous\ntrajectory advanced is cleared.\n>>> latent = lucid.randn((1, 4, 8, 8))\n>>> _ = scheduler.step(lucid.zeros((1, 4, 8, 8)), 751, latent)\n>>> scheduler.counter\n1\n>>> _ = scheduler.timesteps(4)\n>>> scheduler.counter\n0"
+          ],
           "notes": [
             "Calling this starts a sample — it clears the history, the counter\nand the saved opener sample.\n\nThe repeat is the trapezoidal opener, and the reference puts it\nin the list rather than in the step.  Its slices —\n`[t[:-1], t[-2:-1], t[-1:]]` — are taken on the *ascending*\narray before reversal, so the duplicated entry lands **second**\nin the descending order: 901, 801, 801, 701, and not\n…, 101, 101, 1.  Reading those slices as descending puts the\nopener at the end, where it is the wrong rule at the wrong time."
           ],
@@ -6668,7 +6686,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(model_output: Tensor, timestep: int, latent: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_scheduler.py#L349",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_scheduler.py#L444",
           "subcategory": "scheduler",
           "summary": "One reverse step, using the history.",
           "extended": null,
@@ -6697,7 +6715,9 @@
             "description": "$z_{t-1}$."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models.generative.stable_diffusion import (\n...     DDIMScheduler, PNDMScheduler, StableDiffusionConfig)\n>>> config = StableDiffusionConfig()\n>>> scheduler, ddim = PNDMScheduler(config), DDIMScheduler(config)\n>>> lucid.manual_seed(0)\n>>> clean = lucid.randn((1, 4, 8, 8))\n>>> noise = lucid.randn((1, 4, 8, 8))\nEvery rule's weights sum to one, so a prediction that is exactly\nright at every step combines to itself and each step lands back on\nthe forward process.  A whole trajectory run that way ends where\nDDIMScheduler noises the clean latent to timestep 0.\n>>> steps = scheduler.timesteps(4)\n>>> latent = ddim.add_noise(clean, noise, steps[0])\n>>> for t in steps:\n...     latent = scheduler.step(noise, t, latent)\n>>> bool(lucid.allclose(latent, ddim.add_noise(clean, noise, 0), atol=1e-5))\nTrue\nThe position is checked on every call: a fresh trajectory has to\nstart at 751, and anything else raises rather than apply the wrong\norder of correction.\n>>> _ = scheduler.timesteps(4)\n>>> scheduler.step(noise, 501, latent)\nTraceback (most recent call last):\n    ...\nRuntimeError: expected timestep 751 at position 0 of the trajectory ..."
+          ],
           "notes": [
             "The previous timestep is derived from the stride rather than\npassed, because the multistep rule is only valid on the uniform\ngrid `timesteps` produces.  Call that first; this raises\notherwise rather than assuming a stride."
           ],
@@ -6738,7 +6758,7 @@
       ],
       "labels": [],
       "signature": "UNet2DConditionModel(config: StableDiffusionConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_unet.py#L339",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_unet.py#L339",
       "subcategory": "unet",
       "methods": [
         {
@@ -6747,7 +6767,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: StableDiffusionConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_unet.py#L379",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_unet.py#L379",
           "subcategory": "unet",
           "summary": "Initialise the U-Net. See the class docstring for parameters.",
           "extended": null,
@@ -6769,7 +6789,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(latent: Tensor, timestep: Tensor, context: Tensor)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_unet.py#L457",
+          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_unet.py#L457",
           "subcategory": "unet",
           "summary": "Predict the noise in `latent` at `timestep`.",
           "extended": null,
@@ -6837,7 +6857,7 @@
       ],
       "labels": [],
       "signature": "StableDiffusionWeights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c8c1c4c/lucid/models/generative/stable_diffusion/_weights.py#L62",
+      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/generative/stable_diffusion/_weights.py#L62",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.stable_diffusion`.",
