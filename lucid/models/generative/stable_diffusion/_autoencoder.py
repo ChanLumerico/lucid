@@ -408,6 +408,28 @@ class AutoencoderKL(nn.Module):
         -------
         DiagonalGaussian
             Mean and log-variance, each ``(B, latent_channels, H/f, W/f)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     AutoencoderKL, StableDiffusionConfig)
+        >>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,
+        ...                                vae_block_out_channels=(32, 64, 64),
+        ...                                unet_block_out_channels=(32, 64),
+        ...                                norm_num_groups=32)
+        >>> vae = AutoencoderKL(config).eval()
+        >>> posterior = vae.encode(lucid.randn((2, 3, 32, 32)))
+        >>> posterior.mean.shape, posterior.logvar.shape
+        ((2, 4, 8, 8), (2, 4, 8, 8))
+
+        A distribution rather than a tensor, so the caller chooses: the mode
+        is the mean and repeats, while a sample draws fresh noise.
+
+        >>> bool((posterior.mode() == posterior.mean).all())
+        True
+        >>> bool((posterior.sample() == posterior.mode()).all())
+        False
         """
         h = cast(Tensor, self.conv_in(x))
         for block in self.down:
@@ -435,6 +457,27 @@ class AutoencoderKL(nn.Module):
         -------
         Tensor
             ``(B, out_channels, h*f, w*f)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     AutoencoderKL, StableDiffusionConfig)
+        >>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,
+        ...                                vae_block_out_channels=(32, 64, 64),
+        ...                                unet_block_out_channels=(32, 64),
+        ...                                norm_num_groups=32)
+        >>> vae = AutoencoderKL(config).eval()
+        >>> images = lucid.randn((1, 3, 32, 32))
+        >>> vae.decode(vae.encode(images).mode()).shape
+        (1, 3, 32, 32)
+
+        Nothing in the decoder is tied to a size — it is convolutions and
+        one attention over positions — so any latent decodes, each side
+        scaled by ``f`` (4 here) on its own.
+
+        >>> vae.decode(lucid.randn((1, 4, 4, 6))).shape
+        (1, 3, 16, 24)
         """
         h = cast(Tensor, self.decoder_conv_in(cast(Tensor, self.post_quant_conv(z))))
         h = cast(Tensor, self.decoder_mid_block_1(h))

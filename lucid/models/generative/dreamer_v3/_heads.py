@@ -146,6 +146,22 @@ class TwoHotHead(nn.Module):
         -------
         Tensor
             ``symexp`` of the grid's expectation, in the target's units.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.dreamer_v3._heads import TwoHotHead
+        >>> head = TwoHotHead(8, 16, 2, num_bins=41)
+        >>> head.predict(lucid.randn((2, 3, 8))).shape
+        (2, 3)
+
+        A zero-initialised head is uniform over a grid symmetric about zero,
+        so it predicts exactly ``symexp(0) = 0`` — which is how the critic
+        starts:
+
+        >>> critic = TwoHotHead(8, 16, 2, num_bins=41, zero_init=True)
+        >>> float(critic.predict(lucid.randn((2, 3, 8))).abs().max().item())
+        0.0
         """
         probabilities = F.softmax(self._logits(feature), dim=-1)
         return F.symexp((probabilities * self.grid).sum(dim=-1))
@@ -175,6 +191,25 @@ class TwoHotHead(nn.Module):
         own target would fit nothing.  The encoding is a soft label rather
         than a class index, so this is a cross-entropy over a distribution
         and not a classification.
+
+        Examples
+        --------
+        >>> import math
+        >>> import lucid
+        >>> from lucid.models.generative.dreamer_v3._heads import TwoHotHead
+        >>> head = TwoHotHead(8, 16, 2, num_bins=41, zero_init=True)
+        >>> target = lucid.tensor([[0.0, 1.0, -5.0], [1e4, 0.5, 2.0]])
+        >>> per_step = head.cross_entropy(lucid.randn((2, 3, 8)), target)
+        >>> per_step.shape
+        (2, 3)
+
+        An untrained head is uniform over the bins, so every target costs
+        ``log(num_bins)`` — a reward of 10000 no more than one of 0.5:
+
+        >>> sorted({round(v, 4) for v in per_step.reshape(-1).tolist()})
+        [3.7136]
+        >>> round(math.log(41), 4)
+        3.7136
         """
         encoded = F.two_hot(F.symlog(target.detach()), self.grid)
         logits = F.log_softmax(self._logits(feature), dim=-1)
@@ -194,5 +229,25 @@ class TwoHotHead(nn.Module):
         -------
         Tensor
             A scalar, averaged over the batch and time.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.dreamer_v3._heads import TwoHotHead
+        >>> head = TwoHotHead(8, 16, 2, num_bins=41)
+        >>> feature = lucid.randn((2, 3, 8))
+        >>> target = lucid.randn((2, 3), requires_grad=True)
+        >>> loss = head.loss(feature, target)
+        >>> loss.shape
+        ()
+        >>> loss.item() == head.cross_entropy(feature, target).mean().item()
+        True
+
+        The target is data, so it is detached: the gradient reaches the head
+        and stops there.
+
+        >>> loss.backward()
+        >>> head.trunk.out.weight.grad.shape, target.grad is None
+        ((41, 16), True)
         """
         return self.cross_entropy(feature, target).mean()

@@ -547,6 +547,38 @@ class PretrainedModel(nn.Module):
         -----
         Companion to :meth:`get_input_embeddings`.  Subclasses that
         override one should override the other.
+
+        Examples
+        --------
+        A text trunk hands its table over, so a larger one can be swapped
+        in — here to make room for twenty token ids the original 100-row
+        table could not look up.
+
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> from lucid.models import create_model
+        >>> model = create_model("gpt", vocab_size=100, hidden_size=16,
+        ...                      num_hidden_layers=1, num_attention_heads=2,
+        ...                      intermediate_size=32,
+        ...                      max_position_embeddings=8).eval()
+        >>> bigger = nn.Embedding(120, 16)
+        >>> model.set_input_embeddings(bigger)
+        >>> model.get_input_embeddings() is bigger
+        True
+        >>> ids = lucid.tensor([[110, 3]], dtype=lucid.int64)
+        >>> model(ids).last_hidden_state.shape
+        (1, 2, 16)
+
+        A model with no embedding table keeps this base implementation and
+        refuses, rather than attach a module that nothing would read.
+
+        >>> lenet = create_model("lenet_5")
+        >>> lenet.get_input_embeddings() is None
+        True
+        >>> lenet.set_input_embeddings(nn.Embedding(10, 4))
+        Traceback (most recent call last):
+            ...
+        NotImplementedError: LeNet does not support set_input_embeddings
         """
         raise NotImplementedError(
             f"{type(self).__name__} does not support set_input_embeddings"

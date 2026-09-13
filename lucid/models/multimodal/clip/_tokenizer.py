@@ -252,6 +252,27 @@ class CLIPTokenizer(BPETokenizer):
         default. Framing belongs to :meth:`tokenize`, which also pads —
         adding them in both places is how a caption ends up with two
         ``[SOS]`` and the model reads its feature one position early.
+
+        Examples
+        --------
+        >>> from lucid.models.multimodal.clip import CLIPTokenizer
+        >>> vocab = {"a": 0, "b</w>": 1, "ab</w>": 2,
+        ...          "<|startoftext|>": 3, "<|endoftext|>": 4}
+        >>> tok = CLIPTokenizer(vocab=vocab, merges=[("a", "b</w>")])
+
+        The caption is cleaned before it is split — lowercased, whitespace
+        runs collapsed — and comes back bare unless the sentinels are
+        asked for.
+
+        >>> tok.encode("AB   ab")
+        [2, 2]
+        >>> tok.encode("ab", add_special_tokens=True)
+        [3, 2, 4]
+
+        So decoding returns the cleaned text, not the original.
+
+        >>> tok.decode(tok.encode("AB   ab"))
+        'ab ab'
         """
         return super().encode(
             _whitespace_clean(_basic_clean(text)).lower(),

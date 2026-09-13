@@ -180,6 +180,18 @@ class RSSMState(NamedTuple):
         has no ``logits``, a categorical one has no ``mean`` — so the
         obvious ``RSSMState(*(fn(x) for x in state))`` fails on whichever
         half is missing.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._rssm import RSSMState
+        >>> unroll = RSSMState(lucid.zeros((2, 5, 4)), lucid.zeros((2, 5, 6)),
+        ...                    logits=lucid.zeros((2, 5, 3, 2)))
+        >>> last = unroll.map(lambda t: t[:, -1])  # the final step of the unroll
+        >>> last.deter.shape, last.logits.shape
+        ((2, 4), (2, 3, 2))
+        >>> last.mean is None
+        True
         """
 
         def apply(t: Tensor | None) -> Tensor | None:
@@ -763,6 +775,23 @@ class RSSM(nn.Module):
         seen.  The Gaussian start instead carries zero mean and zero
         standard deviation — degenerate, but nothing reads it: the first
         step overwrites both.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._rssm import RSSM
+        >>> rssm = RSSM(stoch_size=4, deter_size=8, hidden_size=8,
+        ...             action_dim=2, embed_size=6)
+        >>> start = rssm.initial(3)
+        >>> start.deter.shape, start.stoch.shape
+        ((3, 8), (3, 4))
+        >>> bool((start.feature == 0).all().item())
+        True
+        >>> grid = RSSM(stoch_size=4, deter_size=8, hidden_size=8,
+        ...             action_dim=2, embed_size=6, discrete=5)
+        >>> start = grid.initial(3)
+        >>> start.stoch.shape, start.logits.shape  # 4 variables of 5 classes
+        ((3, 20), (3, 4, 5))
         """
         deter = lucid.zeros(batch_size, self.deter_size, device=device)
         stoch = lucid.zeros(batch_size, self.stoch_width, device=device)
@@ -792,6 +821,20 @@ class RSSM(nn.Module):
         -------
         RSSMState
             The predicted state, ``(B, ·)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._rssm import RSSM
+        >>> rssm = RSSM(stoch_size=4, deter_size=8, hidden_size=8,
+        ...             action_dim=2, embed_size=6).eval()
+        >>> start, action = rssm.initial(2), lucid.zeros((2, 2))
+        >>> state = rssm.prior_step(start, action)
+        >>> state.deter.shape, state.stoch.shape
+        ((2, 8), (2, 4))
+        >>> guess = rssm.prior_step(start, action, sample=False)
+        >>> bool(lucid.allclose(guess.stoch, guess.mean))  # the mean, not a draw
+        True
         """
         deter = self._recurrent(state.stoch, action, state.deter)
         latent = self._latent(self.prior_head, deter, sample)
@@ -831,6 +874,21 @@ class RSSM(nn.Module):
         about :math:`s_t`, it does not change the path that led there.
         The pair is returned together because the KL term needs both, and
         computing them apart would mean running the recurrence twice.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._rssm import RSSM
+        >>> rssm = RSSM(stoch_size=4, deter_size=8, hidden_size=8,
+        ...             action_dim=2, embed_size=6).eval()
+        >>> prior, posterior = rssm.posterior_step(
+        ...     rssm.initial(2), lucid.zeros((2, 2)), lucid.randn((2, 6)))
+        >>> posterior.stoch.shape
+        (2, 4)
+        >>> bool((prior.deter == posterior.deter).all().item())  # one shared path
+        True
+        >>> bool((prior.mean == posterior.mean).all().item())  # the frame moved it
+        False
         """
         prior = self.prior_step(state, action, sample=sample)
         x = lucid.cat([prior.deter, embed], dim=-1)
@@ -895,6 +953,23 @@ class RSSM(nn.Module):
             The dynamics' predictions, ``(B, T, ...)``.
         posteriors : RSSMState
             The beliefs after seeing each observation, ``(B, T, ...)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._rssm import RSSM
+        >>> rssm = RSSM(stoch_size=4, deter_size=8, hidden_size=8,
+        ...             action_dim=2, embed_size=6).eval()
+        >>> embed, actions = lucid.randn((2, 5, 6)), lucid.randn((2, 5, 2))
+        >>> priors, posteriors = rssm.observe(embed, actions)
+        >>> priors.mean.shape, posteriors.mean.shape
+        ((2, 5, 4), (2, 5, 4))
+        >>> _, full = rssm.observe(embed, actions, sample=False)
+        >>> _, head = rssm.observe(embed[:, :3], actions[:, :3], sample=False)
+        >>> carry = head.map(lambda t: t[:, -1])
+        >>> _, tail = rssm.observe(embed[:, 3:], actions[:, 3:], carry, sample=False)
+        >>> bool(lucid.allclose(tail.stoch, full.stoch[:, 3:]))  # chunked == one pass
+        True
         """
         if embed.ndim != 3 or actions.ndim != 3:
             raise ValueError(
@@ -944,6 +1019,23 @@ class RSSM(nn.Module):
         -------
         RSSMState
             The imagined prior states, ``(B, T, ...)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._rssm import RSSM
+        >>> rssm = RSSM(stoch_size=4, deter_size=8, hidden_size=8,
+        ...             action_dim=2, embed_size=6).eval()
+        >>> _, posteriors = rssm.observe(lucid.randn((2, 5, 6)),
+        ...                              lucid.randn((2, 5, 2)))
+        >>> start = posteriors.map(lambda t: t[:, -1])
+        >>> plan = lucid.zeros((2, 7, 2))  # seven steps, past the observed five
+        >>> dream = rssm.imagine(start, plan, sample=False)
+        >>> dream.deter.shape, dream.stoch.shape
+        ((2, 7, 8), (2, 7, 4))
+        >>> again = rssm.imagine(start, plan, sample=False)
+        >>> bool(lucid.allclose(dream.stoch, again.stoch))  # start + actions only
+        True
         """
         if actions.ndim != 3:
             raise ValueError(f"imagine expects (B, T, ·) actions, got {actions.shape}")

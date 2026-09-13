@@ -161,6 +161,18 @@ class TruncatedNormal:
         -------
         Tensor
             Elementwise log density.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._dists import TruncatedNormal
+        >>> dist = TruncatedNormal(lucid.tensor([0.5]), lucid.tensor([0.3]))
+        >>> grid = lucid.linspace(-1.0, 1.0, 2001)
+        >>> density = dist.log_prob(grid).exp()
+        >>> density.shape
+        (2001,)
+        >>> round(float(density.sum().item()) * 0.001, 3)  # mass on [-1, 1]
+        1.0
         """
         standard = (value - self.loc) / self.scale
         return (
@@ -298,6 +310,21 @@ class OneHotCategorical:
             ``(...)`` — the event axis is summed away, because a one-hot
             action is a single event rather than a vector of independent
             ones.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._dists import OneHotCategorical
+        >>> dist = OneHotCategorical(lucid.zeros((2, 4)))
+        >>> action = lucid.tensor([[0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]])
+        >>> dist.log_prob(action).shape
+        (2,)
+        >>> round(float(dist.log_prob(action)[0].item()), 4)  # log(1 / 4)
+        -1.3863
+        >>> mixed = OneHotCategorical(lucid.tensor([[2.0, 0.0, -1.0]]), unimix=0.01)
+        >>> every_action = lucid.eye(3)  # one row per one-hot choice
+        >>> round(float(mixed.log_prob(every_action).exp().sum().item()), 5)
+        1.0
         """
         return (value * self.log_probs).sum(dim=-1)
 

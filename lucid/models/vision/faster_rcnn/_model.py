@@ -640,6 +640,42 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
         list of dict
             One dict per image with ``"boxes"`` ``(D, 4)``, ``"scores"``
             ``(D,)``, ``"labels"`` ``(D,)`` int64.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import create_model
+        >>> lucid.manual_seed(0)
+        >>> model = create_model(
+        ...     "faster_rcnn_resnet50_fpn", num_classes=3,
+        ...     backbone_layers=(1, 1, 1, 1), fpn_out_channels=32,
+        ...     roi_representation_size=64, rpn_post_nms_top_n=10,
+        ... ).eval()
+        >>> out = model(lucid.randn((1, 3, 64, 64)))
+        >>> det = model.postprocess(out)[0]
+        >>> sorted(det)
+        ['boxes', 'labels', 'scores']
+
+        The background slot never comes back, and detections are ranked by
+        score.
+
+        >>> bool((det["labels"] >= 1).all())
+        True
+        >>> scores = det["scores"]
+        >>> bool((scores[:-1] >= scores[1:]).all())
+        True
+
+        Decoding clips to the 64-pixel canvas the batch ran on.  Say the
+        real image is 48 tall and 40 wide — as it would be inside a padded
+        batch — and boxes that reached into the padding are pulled back.
+
+        >>> xs = det["boxes"][:, 0::2]  # x1 and x2 of each xyxy box
+        >>> bool((xs <= 40).all())
+        False
+        >>> clipped = model.postprocess(out, image_sizes=[(48, 40)])[0]["boxes"]
+        >>> xs, ys = clipped[:, 0::2], clipped[:, 1::2]
+        >>> bool((xs <= 40).all()), bool((ys <= 48).all())
+        (True, True)
         """
         if proposals is None:
             if output.proposals is None:

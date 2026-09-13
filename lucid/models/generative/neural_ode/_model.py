@@ -522,6 +522,29 @@ class NeuralODEModel(PretrainedModel):
         ``log_det`` is an unbiased *estimate*, not the exact value; its
         expectation is right, which is what a maximum-likelihood gradient
         needs, but two calls on the same input will not agree.
+
+        Examples
+        --------
+        >>> import math
+        >>> import lucid
+        >>> from lucid.models.generative.neural_ode import (
+        ...     NeuralODEConfig, NeuralODEModel,
+        ... )
+        >>> cfg = NeuralODEConfig(sample_size=2, in_channels=1, out_channels=1,
+        ...                       hidden_dim=8, num_blocks=1)
+        >>> model = NeuralODEModel(cfg).eval()
+        >>> x = lucid.rand((2, 1, 2, 2))
+        >>> z, log_det = model.encode(x)
+        >>> z.shape, log_det.shape
+        ((2, 4), (2,))
+        >>> model.trace_method  # D = 4 is small enough for the exact trace
+        'exact'
+        >>> const = 0.5 * model.input_dim * math.log(2 * math.pi)
+        >>> log_pz = -0.5 * (z**2).sum(dim=-1) - const  # the Gaussian prior
+        >>> bool(lucid.allclose(model.log_prob(x), log_pz + log_det))
+        True
+        >>> bool(lucid.allclose(model.decode(z), x, atol=1e-4))  # solve it backwards
+        True
         """
         self._check_image(x)
         batch = int(x.shape[0])
@@ -711,7 +734,8 @@ class NeuralODEForImageGeneration(ImageGenerationModel):
             trades diversity for typicality — a standard trick for flows,
             not part of the paper.
         device : str, optional
-            Where to allocate the prior sample.  Default ``"cpu"``.
+            Where to allocate the prior sample.  Defaults to the device the
+            model's parameters are on.
 
         Returns
         -------
@@ -722,6 +746,24 @@ class NeuralODEForImageGeneration(ImageGenerationModel):
         -----
         Costs one solve, not one per step: the reverse direction carries no
         density term, so it is the cheaper of the two passes.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.neural_ode import (
+        ...     NeuralODEConfig, NeuralODEForImageGeneration,
+        ... )
+        >>> cfg = NeuralODEConfig(sample_size=2, in_channels=1, out_channels=1,
+        ...                       hidden_dim=8, num_blocks=1)
+        >>> model = NeuralODEForImageGeneration(cfg).eval()
+        >>> model.generate(n_samples=3).samples.shape
+        (3, 1, 2, 2)
+        >>> lucid.manual_seed(0)
+        >>> cool = model.generate(n_samples=2, temperature=0.5).samples
+        >>> lucid.manual_seed(0)
+        >>> z = lucid.randn((2, 4))  # the same standard-normal prior draw
+        >>> bool(lucid.allclose(cool, model.neural_ode.decode(z * 0.5)))
+        True
         """
         device = resolve_generation_device(self, device)
         if temperature <= 0.0:

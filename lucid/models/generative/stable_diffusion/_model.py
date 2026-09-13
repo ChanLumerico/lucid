@@ -174,6 +174,30 @@ class StableDiffusionModel(PretrainedModel):
         Tensor
             ``(B, latent_channels, H/f, W/f)``, already scaled for the
             diffusion process.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     StableDiffusionConfig, StableDiffusionModel)
+        >>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,
+        ...                                vae_block_out_channels=(32, 64, 64),
+        ...                                unet_block_out_channels=(32, 64),
+        ...                                attention_head_dim=32,
+        ...                                cross_attention_dim=16, context_length=4)
+        >>> model = StableDiffusionModel(config).eval()
+        >>> images = lucid.randn((1, 3, 32, 32))
+        >>> latent = model.encode_image(images, sample=False)
+        >>> latent.shape
+        (1, 4, 8, 8)
+
+        What this adds over the autoencoder is the scaling constant: the
+        latent is the posterior's mode times 0.18215, the released first
+        stage's inverse standard deviation.
+
+        >>> raw = model.vae.encode(images).mode()
+        >>> bool(lucid.allclose(latent, raw * 0.18215))
+        True
         """
         posterior = self.vae.encode(images)
         latent = posterior.sample() if sample else posterior.mode()
@@ -191,6 +215,31 @@ class StableDiffusionModel(PretrainedModel):
         -------
         Tensor
             ``(B, out_channels, h*f, w*f)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     StableDiffusionConfig, StableDiffusionModel)
+        >>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,
+        ...                                vae_block_out_channels=(32, 64, 64),
+        ...                                unet_block_out_channels=(32, 64),
+        ...                                attention_head_dim=32,
+        ...                                cross_attention_dim=16, context_length=4)
+        >>> model = StableDiffusionModel(config).eval()
+        >>> images = lucid.randn((1, 3, 32, 32))
+        >>> latent = model.encode_image(images, sample=False)
+        >>> model.decode_latent(latent).shape
+        (1, 3, 32, 32)
+
+        The scale is divided back out before decoding, so this undoes the
+        scaling :meth:`encode_image` applied: it matches decoding the
+        unscaled mode directly.
+
+        >>> raw = model.vae.encode(images).mode()
+        >>> bool(lucid.allclose(model.decode_latent(latent),
+        ...                     model.vae.decode(raw), atol=1e-5))
+        True
         """
         return self.vae.decode(latent / _LATENT_SCALE)
 
@@ -336,6 +385,44 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
         ValueError
             If ``guidance_scale`` is negative, or the two conditioning
             sequences disagree in shape.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     StableDiffusionConfig, StableDiffusionForImageGeneration)
+        >>> config = StableDiffusionConfig(sample_size=32, downsample_factor=4,
+        ...                                vae_block_out_channels=(32, 64, 64),
+        ...                                unet_block_out_channels=(32, 64),
+        ...                                attention_head_dim=32,
+        ...                                cross_attention_dim=16, context_length=4)
+        >>> model = StableDiffusionForImageGeneration(config).eval()
+        >>> context = lucid.randn((1, 4, 16))
+        >>> start = lucid.randn((1, 4, 8, 8))
+        >>> image = model.generate(context, num_inference_steps=2, latent=start)
+        >>> image.shape
+        (1, 3, 32, 32)
+
+        PNDM draws no noise of its own, so the starting latent is the whole
+        seed: pass the same one and the same image comes back.
+
+        >>> again = model.generate(context, num_inference_steps=2, latent=start)
+        >>> bool((again == image).all())
+        True
+
+        At ``guidance_scale=1`` the extrapolation is the conditional
+        prediction itself, so an unconditional sequence changes nothing; at
+        the default 7.5 it does.
+
+        >>> uncond = lucid.randn((1, 4, 16))  # stands in for the empty caption
+        >>> unguided = model.generate(context, uncond, num_inference_steps=2,
+        ...                           guidance_scale=1.0, latent=start)
+        >>> bool((unguided == image).all())
+        True
+        >>> guided = model.generate(context, uncond, num_inference_steps=2,
+        ...                         latent=start)
+        >>> bool((guided == image).all())
+        False
         """
         if guidance_scale < 0.0:
             raise ValueError(

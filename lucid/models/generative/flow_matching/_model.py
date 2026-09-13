@@ -704,8 +704,9 @@ class FlowMatchingModel(PretrainedModel):
     def nfe(self) -> int:
         """int: Field evaluations spent by the most recent solve.
 
-        Zero after training steps — nothing is solved there.  The number
-        the paper cares about: straighter paths need fewer.
+        A training step solves nothing and leaves the count where the last
+        solve put it.  The number the paper cares about: straighter paths
+        need fewer.
         """
         return self.dynamics.nfe
 
@@ -754,6 +755,25 @@ class FlowMatchingModel(PretrainedModel):
             ``(B, C, H, W)`` point on the conditional path.  For the
             optimal-transport path this is the straight-line interpolation
             of paper eq. (22).
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.flow_matching import (
+        ...     FlowMatchingConfig, FlowMatchingModel,
+        ... )
+        >>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,
+        ...                          channel_mult=(1, 2), num_res_blocks=1,
+        ...                          attention_resolutions=(), resnet_groups=8)
+        >>> model = FlowMatchingModel(cfg).eval()
+        >>> x1, x0 = lucid.randn((2, 3, 8, 8)), lucid.randn((2, 3, 8, 8))
+        >>> model.path_sample(x1, x0, lucid.tensor([0.25, 0.75])).shape
+        (2, 3, 8, 8)
+        >>> bool(lucid.allclose(model.path_sample(x1, x0, lucid.zeros(2)), x0))
+        True
+        >>> end = model.path_sample(x1, x0, lucid.ones(2))
+        >>> bool(lucid.allclose(end, x1 + cfg.sigma_min * x0))  # still sigma_min wide
+        True
         """
         a, sigma, _, _ = self.coefficients(t.reshape(-1, 1, 1, 1))
         return a * x1 + sigma * x0
@@ -782,6 +802,29 @@ class FlowMatchingModel(PretrainedModel):
         -------
         Tensor
             ``(B, C, H, W)`` regression target.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.flow_matching import (
+        ...     FlowMatchingConfig, FlowMatchingModel,
+        ... )
+        >>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,
+        ...                          channel_mult=(1, 2), num_res_blocks=1,
+        ...                          attention_resolutions=(), resnet_groups=8)
+        >>> model = FlowMatchingModel(cfg).eval()
+        >>> x1, x0 = lucid.randn((2, 3, 8, 8)), lucid.randn((2, 3, 8, 8))
+        >>> t = lucid.tensor([0.3, 0.6])
+        >>> target = model.conditional_target(x1, x0, t)
+        >>> target.shape
+        (2, 3, 8, 8)
+        >>> step = 1e-2  # the target is the time derivative of the path
+        >>> ahead = model.path_sample(x1, x0, t + step)
+        >>> slope = (ahead - model.path_sample(x1, x0, t)) / step
+        >>> bool(lucid.allclose(slope, target, atol=1e-3))
+        True
+        >>> bool(lucid.allclose(target, x1 - (1 - cfg.sigma_min) * x0))  # eq. (23)
+        True
         """
         _, _, a_dot, sigma_dot = self.coefficients(t.reshape(-1, 1, 1, 1))
         return a_dot * x1 + sigma_dot * x0
@@ -806,6 +849,23 @@ class FlowMatchingModel(PretrainedModel):
         ``t`` is drawn uniformly per sample, which is the estimator the
         objective is written as an expectation over.  Sharing one ``t``
         across the batch would still be unbiased but noisier.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.flow_matching import (
+        ...     FlowMatchingConfig, FlowMatchingModel,
+        ... )
+        >>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,
+        ...                          channel_mult=(1, 2), num_res_blocks=1,
+        ...                          attention_resolutions=(), resnet_groups=8)
+        >>> model = FlowMatchingModel(cfg).eval()
+        >>> loss, prediction, target = model.flow_matching_loss(
+        ...     lucid.randn((2, 3, 8, 8)))
+        >>> loss.shape, prediction.shape, target.shape
+        ((), (2, 3, 8, 8), (2, 3, 8, 8))
+        >>> bool(lucid.allclose(loss, ((prediction - target) ** 2).mean()))
+        True
         """
         self._check_image(x1)
         batch = int(x1.shape[0])
@@ -860,7 +920,8 @@ class FlowMatchingModel(PretrainedModel):
             few-evaluation sampling the straight paths are supposed to
             allow: fix the budget rather than the tolerance.
         device : str, optional
-            Where to allocate the prior draw.  Default ``"cpu"``.
+            Where to allocate the prior draw.  Defaults to the device the
+            model's parameters are on.
         noise : Tensor, optional
             ``(N, C, H, W)`` starting point, in place of a fresh
             standard-normal draw — pass the same tensor to two models to
@@ -870,6 +931,24 @@ class FlowMatchingModel(PretrainedModel):
         -------
         Tensor
             ``(N, C, H, W)`` samples at ``t = 1``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.flow_matching import (
+        ...     FlowMatchingConfig, FlowMatchingModel,
+        ... )
+        >>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,
+        ...                          channel_mult=(1, 2), num_res_blocks=1,
+        ...                          attention_resolutions=(), resnet_groups=8)
+        >>> model = FlowMatchingModel(cfg).eval()
+        >>> model.sample(n_samples=2, steps=4).shape
+        (2, 3, 8, 8)
+        >>> model.nfe  # the adaptive default falls back to Euler: one call a step
+        4
+        >>> noise = lucid.randn((3, 3, 8, 8))
+        >>> model.sample(noise=noise, steps=4).shape  # the batch follows noise
+        (3, 3, 8, 8)
         """
         device = resolve_generation_device(self, device)
         if noise is None:
@@ -938,6 +1017,28 @@ class FlowMatchingModel(PretrainedModel):
         at any image size — this is an unbiased *estimate*, and two calls
         on the same input will not agree.  That is the same estimator the
         paper reports bits/dim with.
+
+        Examples
+        --------
+        >>> import math
+        >>> import lucid
+        >>> from lucid.models.generative.flow_matching import (
+        ...     FlowMatchingConfig, FlowMatchingModel,
+        ... )
+        >>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,
+        ...                          channel_mult=(1, 2), num_res_blocks=1,
+        ...                          attention_resolutions=(), resnet_groups=8)
+        >>> model = FlowMatchingModel(cfg).eval()
+        >>> x = lucid.randn((2, 3, 8, 8))
+        >>> log_p = model.log_prob(x)
+        >>> log_p.shape
+        (2,)
+        >>> # A fresh field is exactly zero (its output layer starts at zero),
+        >>> # so the flow is the identity and x is scored as N(0, I) itself.
+        >>> const = 0.5 * model.input_dim * math.log(2 * math.pi)
+        >>> gauss = -0.5 * (x.reshape(2, -1) ** 2).sum(dim=-1) - const
+        >>> bool(lucid.allclose(log_p, gauss, atol=1e-3))
+        True
         """
         self._check_image(x)
         batch = int(x.shape[0])
@@ -1052,7 +1153,8 @@ class FlowMatchingForImageGeneration(ImageGenerationModel):
             Fixed evaluation budget instead of an adaptive solve — the
             regime in which straighter paths pay off.
         device : str, optional
-            Where to allocate the prior draw.  Default ``"cpu"``.
+            Where to allocate the prior draw.  Defaults to the device the
+            model's parameters are on.
         noise : Tensor, optional
             Starting point in place of a fresh draw.
 
@@ -1060,6 +1162,24 @@ class FlowMatchingForImageGeneration(ImageGenerationModel):
         -------
         GenerationOutput
             ``samples`` of shape ``(n_samples, C, H, W)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.flow_matching import (
+        ...     FlowMatchingConfig, FlowMatchingForImageGeneration,
+        ... )
+        >>> cfg = FlowMatchingConfig(sample_size=8, base_channels=16,
+        ...                          channel_mult=(1, 2), num_res_blocks=1,
+        ...                          attention_resolutions=(), resnet_groups=8)
+        >>> model = FlowMatchingForImageGeneration(cfg).eval()
+        >>> model.generate(n_samples=3, steps=2).samples.shape
+        (3, 3, 8, 8)
+        >>> model.nfe  # a fixed budget: two steps, two field evaluations
+        2
+        >>> noise = lucid.randn((1, 3, 8, 8))
+        >>> model.generate(noise=noise, steps=2).samples.shape  # batch follows noise
+        (1, 3, 8, 8)
         """
         device = resolve_generation_device(self, device)
         return GenerationOutput(

@@ -1201,6 +1201,33 @@ class DIAMONDModel(PretrainedModel):
         (Tensor, Tensor, tuple of Tensor)
             Reward class logits ``(B, 3)``, termination class logits
             ``(B, 2)``, and the new state.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.diamond import DIAMONDConfig, DIAMONDModel
+        >>> config = DIAMONDConfig(
+        ...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+        ...     reward_channels=(8, 8), reward_layers=(1, 1),
+        ...     actor_channels=(8, 8), actor_layers=(1, 1),
+        ...     cond_dim=16, reward_cond_dim=8,
+        ...     reward_lstm_dim=16, actor_lstm_dim=16, num_actions=4)
+        >>> model = DIAMONDModel(config).eval()
+        >>> frame, after = lucid.randn((2, 3, 16, 16)), lucid.randn((2, 3, 16, 16))
+        >>> action = lucid.tensor([0, 3], dtype=lucid.int64)
+        >>> with lucid.no_grad():
+        ...     reward, end, state = model.step_reward_end(frame, after, action)
+        >>> reward.shape, end.shape, [s.shape for s in state]
+        ((2, 3), (2, 2), [(2, 16), (2, 16)])
+
+        The three reward classes are the clipped signs ``-1, 0, +1``, in
+        that order, so their probabilities give an expected reward in
+        ``[-1, 1]``:
+
+        >>> probs = lucid.softmax(reward, dim=-1)
+        >>> expected = probs[:, 2] - probs[:, 0]
+        >>> bool((expected.abs() <= 1).all())
+        True
         """
         pair = lucid.cat([frame, next_frame], dim=1)
         return cast(_RewardEndCall, self.reward_end)(pair, action, state)
@@ -1221,6 +1248,30 @@ class DIAMONDModel(PretrainedModel):
         -------
         (Tensor, Tensor, tuple of Tensor)
             Action logits, state value, and the new state.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.diamond import DIAMONDConfig, DIAMONDModel
+        >>> config = DIAMONDConfig(
+        ...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+        ...     reward_channels=(8, 8), reward_layers=(1, 1),
+        ...     actor_channels=(8, 8), actor_layers=(1, 1),
+        ...     cond_dim=16, reward_cond_dim=8,
+        ...     reward_lstm_dim=16, actor_lstm_dim=16, num_actions=4)
+        >>> model = DIAMONDModel(config).eval()
+        >>> frame = lucid.randn((2, 3, 16, 16))
+        >>> with lucid.no_grad():
+        ...     logits, value, state = model.step_actor_critic(frame)
+        ...     carried, _, _ = model.step_actor_critic(frame, state)
+        >>> logits.shape, value.shape, state[0].shape
+        ((2, 4), (2,), (2, 16))
+
+        The policy has a memory: the same frame read with the carried state
+        gives different logits than it did from a blank one.
+
+        >>> bool((carried == logits).all())
+        False
         """
         return cast(_ActorCriticCall, self.actor_critic)(frame, state)
 
@@ -1242,6 +1293,36 @@ class DIAMONDModel(PretrainedModel):
         -----
         Reference: Alonso et al., arXiv:2405.12399, Appendix C,
         equations 9-12, with :math:`\sigma_{\text{data}} = 0.5`.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.diamond import DIAMONDConfig, DIAMONDModel
+        >>> config = DIAMONDConfig(
+        ...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+        ...     reward_channels=(8, 8), reward_layers=(1, 1),
+        ...     actor_channels=(8, 8), actor_layers=(1, 1),
+        ...     cond_dim=16, reward_cond_dim=8,
+        ...     reward_lstm_dim=16, actor_lstm_dim=16, num_actions=4)
+        >>> model = DIAMONDModel(config)
+        >>> c_in, c_out, c_skip, c_noise = model.preconditioners(
+        ...     lucid.tensor([0.002, 0.5, 5.0]))
+        >>> c_in.shape, c_noise.shape
+        ((3, 1, 1, 1), (3,))
+
+        The skip hands over to the network as the noise grows, until the
+        network is asked for the clean frame rather than for the noise:
+
+        >>> [round(v, 3) for v in c_skip.reshape(-1).tolist()]
+        [0.735, 0.424, 0.01]
+
+        The low end stops short of 1 because the offset noise is folded
+        into every level first, so even a clean level is scaled as if it
+        carried ``sigma_offset_noise``:
+
+        >>> data, offset = config.sigma_data, config.sigma_offset_noise
+        >>> round(data**2 / (data**2 + offset**2), 3)
+        0.735
         """
         # The offset noise folds into sigma *before* anything else, so a
         # step at sigma=2e-3 is really operating at 0.1 for CS:GO.  Every
@@ -1290,6 +1371,32 @@ class DIAMONDModel(PretrainedModel):
         -------
         Tensor
             ``(B, C, H, W)`` estimate of the clean next frame.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.diamond import DIAMONDConfig, DIAMONDModel
+        >>> config = DIAMONDConfig(
+        ...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+        ...     reward_channels=(8, 8), reward_layers=(1, 1),
+        ...     actor_channels=(8, 8), actor_layers=(1, 1),
+        ...     cond_dim=16, reward_cond_dim=8,
+        ...     reward_lstm_dim=16, actor_lstm_dim=16, num_actions=4)
+        >>> model = DIAMONDModel(config).eval()
+        >>> frames = lucid.randn((2, 4, 3, 16, 16))
+        >>> actions = lucid.tensor([[0, 1, 2, 3], [1, 1, 0, 2]], dtype=lucid.int64)
+        >>> noised, sigma = lucid.randn((2, 3, 16, 16)), lucid.tensor([0.5, 2.0])
+        >>> clean = model.denoise(noised, sigma, frames, actions)
+        >>> clean.shape
+        (2, 3, 16, 16)
+
+        By default the estimate is put back on the 8-bit grid of ``[-1, 1]``,
+        which has no gradient; training asks for the raw estimate instead:
+
+        >>> bool(clean.min() >= -1.0), bool(clean.max() <= 1.0), clean.requires_grad
+        (True, True, False)
+        >>> model.denoise(noised, sigma, frames, actions, quantize=False).requires_grad
+        True
         """
         c_in, c_out, c_skip, c_noise = self.preconditioners(sigma)
         if self.config.noise_previous_obs and cond_sigma is not None:
@@ -1331,6 +1438,26 @@ class DIAMONDModel(PretrainedModel):
         :math:`\sigma_{\min}`, :math:`\sigma_{\max}` or :math:`\rho`, so
         those come from EDM itself and are the one place here where a
         number is inherited rather than cited.
+
+        Examples
+        --------
+        >>> from lucid.models.generative.diamond import DIAMONDConfig, DIAMONDModel
+        >>> config = DIAMONDConfig(
+        ...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+        ...     reward_channels=(8, 8), reward_layers=(1, 1),
+        ...     actor_channels=(8, 8), actor_layers=(1, 1),
+        ...     cond_dim=16, reward_cond_dim=8,
+        ...     reward_lstm_dim=16, actor_lstm_dim=16, num_actions=4)
+        >>> model = DIAMONDModel(config)
+        >>> schedule = model.sigma_schedule(3, "cpu")
+        >>> schedule.shape
+        (4,)
+
+        EDM's ``sigma_max`` down to its ``sigma_min``, then an exact zero, so
+        the last Euler step lands on the denoiser's own estimate:
+
+        >>> [round(v, 4) for v in schedule.tolist()]
+        [5.0, 0.2831, 0.002, 0.0]
         """
         rho = 7.0
         sigma_min, sigma_max = 2e-3, 5.0
@@ -1379,6 +1506,29 @@ class DIAMONDModel(PretrainedModel):
         ------
         ValueError
             If this configuration has no upsampler.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import diamond_csgo
+        >>> model = diamond_csgo(
+        ...     unet_channels=(8, 8), unet_layers=(1, 1), cond_dim=16,
+        ...     attn_depths=(0, 0), upsampler_channels=(4, 4),
+        ...     upsampler_layers=(1, 1), upsampler_attn_depths=(0, 0),
+        ...     num_actions=4).eval()
+        >>> low = lucid.randn((1, 3, 30, 56))
+        >>> noised = lucid.randn((1, 3, 150, 280))
+        >>> previous = lucid.randn((1, 3, 150, 280))
+        >>> with lucid.no_grad():
+        ...     full = model.upsample(noised, lucid.tensor([1.0]), low, previous)
+        >>> full.shape
+        (1, 3, 150, 280)
+
+        One denoiser evaluation at one noise level — :meth:`upsample_frame`
+        walks it down a schedule — quantised back onto ``[-1, 1]``:
+
+        >>> bool(full.abs().max() <= 1.0)
+        True
         """
         if self.upsampler is None:
             raise ValueError(
@@ -1527,6 +1677,33 @@ class DIAMONDModel(PretrainedModel):
         Each step moves along :math:`\mathrm{d}x/\mathrm{d}\sigma =
         (x - D_\theta(x, \sigma)) / \sigma`, which is the probability-flow
         ODE written in EDM's variables.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.diamond import DIAMONDConfig, DIAMONDModel
+        >>> config = DIAMONDConfig(
+        ...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+        ...     reward_channels=(8, 8), reward_layers=(1, 1),
+        ...     actor_channels=(8, 8), actor_layers=(1, 1),
+        ...     cond_dim=16, reward_cond_dim=8,
+        ...     reward_lstm_dim=16, actor_lstm_dim=16, num_actions=4)
+        >>> model = DIAMONDModel(config).eval()
+        >>> frames = lucid.randn((2, 4, 3, 16, 16))
+        >>> actions = lucid.tensor([[0, 1, 2, 3], [1, 1, 0, 2]], dtype=lucid.int64)
+        >>> noise = lucid.randn((2, 3, 16, 16))
+        >>> with lucid.no_grad():
+        ...     first = model.imagine_frame(frames, actions, noise=noise)
+        ...     again = model.imagine_frame(frames, actions, noise=noise)
+        ...     single = model.imagine_frame(frames, actions, noise=noise, steps=1)
+        >>> first.shape
+        (2, 3, 16, 16)
+
+        The sampler solves an ODE, so the starting noise fixes the frame and
+        a rollout can be reproduced; the number of steps changes it:
+
+        >>> bool((first == again).all()), bool((first == single).all())
+        (True, False)
         """
         steps = self.config.denoise_steps if steps is None else steps
         if steps < 1:
@@ -1699,6 +1876,29 @@ class DIAMONDForWorldModeling(WorldModelingModel):
         -------
         Tensor
             ``(B,)`` action indices.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.diamond import (
+        ...     DIAMONDConfig, DIAMONDForWorldModeling)
+        >>> config = DIAMONDConfig(
+        ...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+        ...     reward_channels=(8, 8), reward_layers=(1, 1),
+        ...     actor_channels=(8, 8), actor_layers=(1, 1),
+        ...     cond_dim=16, reward_cond_dim=8, reward_lstm_dim=16,
+        ...     actor_lstm_dim=16, num_actions=4)
+        >>> model = DIAMONDForWorldModeling(config).eval()
+        >>> with lucid.no_grad():
+        ...     action = model.act(lucid.randn((2, 3, 16, 16)))
+        >>> action.shape, action.dtype
+        ((2,), lucid.int64)
+
+        A draw from the policy rather than its argmax, but always a valid
+        index into the action set:
+
+        >>> bool(action.min() >= 0), bool(action.max() < config.num_actions)
+        (True, True)
         """
         logits, _value, _state = self.diamond.step_actor_critic(frame, state)
         return lucid.multinomial(lucid.softmax(logits, dim=-1), num_samples=1).reshape(
@@ -1854,6 +2054,34 @@ class DIAMONDForWorldModeling(WorldModelingModel):
         -------
         DIAMONDOutput
             Loss, denoised frame, and the noise levels used.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.diamond import (
+        ...     DIAMONDConfig, DIAMONDForWorldModeling)
+        >>> config = DIAMONDConfig(
+        ...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+        ...     reward_channels=(8, 8), reward_layers=(1, 1),
+        ...     actor_channels=(8, 8), actor_layers=(1, 1),
+        ...     cond_dim=16, reward_cond_dim=8, reward_lstm_dim=16,
+        ...     actor_lstm_dim=16, num_actions=4)
+        >>> model = DIAMONDForWorldModeling(config)
+        >>> frames = lucid.randn((2, 4, 3, 16, 16))
+        >>> actions = lucid.tensor([[0, 1, 2, 3], [1, 1, 0, 2]], dtype=lucid.int64)
+        >>> target = lucid.randn((2, 3, 16, 16))
+        >>> out = model.world_model_loss(frames, actions, target)
+        >>> out.loss.shape, out.prediction.shape, out.sigma.shape
+        ((), (2, 3, 16, 16), (2,))
+
+        Only the denoiser learns from it — the reward model and the
+        actor-critic are trained by losses of their own:
+
+        >>> out.loss.backward()
+        >>> any(p.grad is not None for p in model.diamond.denoiser.parameters())
+        True
+        >>> any(p.grad is not None for p in model.diamond.reward_end.parameters())
+        False
         """
         return cast(DIAMONDOutput, self.diamond(frames, actions, next_frame))
 
@@ -1879,6 +2107,33 @@ class DIAMONDForWorldModeling(WorldModelingModel):
         -------
         Tensor
             Scalar, the two cross-entropies summed.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.diamond import (
+        ...     DIAMONDConfig, DIAMONDForWorldModeling)
+        >>> config = DIAMONDConfig(
+        ...     sample_size=16, unet_channels=(8, 8), unet_layers=(1, 1),
+        ...     reward_channels=(8, 8), reward_layers=(1, 1),
+        ...     actor_channels=(8, 8), actor_layers=(1, 1),
+        ...     cond_dim=16, reward_cond_dim=8, reward_lstm_dim=16,
+        ...     actor_lstm_dim=16, num_actions=4)
+        >>> model = DIAMONDForWorldModeling(config)
+        >>> frames = lucid.randn((2, 4, 3, 16, 16))
+        >>> actions = lucid.tensor([[0, 1, 2, 3], [1, 1, 0, 2]], dtype=lucid.int64)
+        >>> rewards = lucid.tensor([[0.0, 1.0, -2.0, 0.0], [5.0, 0.0, 0.0, 0.0]])
+        >>> ends = lucid.tensor([[0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 0.0]])
+        >>> loss = model.reward_end_loss(frames, actions, rewards, ends)
+        >>> loss.shape
+        ()
+
+        Only the sign of a reward is a target, so rescaling the rewards
+        leaves the loss exactly where it was:
+
+        >>> scaled = model.reward_end_loss(frames, actions, rewards * 10.0, ends)
+        >>> scaled.item() == loss.item()
+        True
         """
         state: tuple[Tensor, Tensor] | None = None
         reward_loss = lucid.zeros(())

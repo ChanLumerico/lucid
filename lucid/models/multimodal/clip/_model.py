@@ -432,6 +432,26 @@ class CLIPModel(PretrainedModel):
         -------
         Tensor
             ``(B, embed_dim)`` with unit rows.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.multimodal.clip import CLIPConfig, CLIPModel
+        >>> config = CLIPConfig(image_size=32, patch_size=16, vision_layers=1,
+        ...                     vision_width=32, vision_heads=2, context_length=8,
+        ...                     vocab_size=64, text_width=32, text_heads=2,
+        ...                     text_layers=1, embed_dim=16)
+        >>> model = CLIPModel(config).eval()
+        >>> embeds = model.encode_image(lucid.randn((3, 3, 32, 32)))
+        >>> embeds.shape
+        (3, 16)
+
+        The rows are unit length, so the Gram matrix is already cosine
+        similarity — each image scores exactly 1 against itself.
+
+        >>> gram = embeds @ embeds.T
+        >>> [round(gram[i, i].item(), 4) for i in range(3)]
+        [1.0, 1.0, 1.0]
         """
         return _l2_normalise(cast(Tensor, self.visual(pixel_values)))
 
@@ -447,6 +467,37 @@ class CLIPModel(PretrainedModel):
         -------
         Tensor
             ``(B, embed_dim)`` with unit rows.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.multimodal.clip import CLIPConfig, CLIPModel
+        >>> config = CLIPConfig(image_size=32, patch_size=16, vision_layers=1,
+        ...                     vision_width=32, vision_heads=2, context_length=8,
+        ...                     vocab_size=64, text_width=32, text_heads=2,
+        ...                     text_layers=1, embed_dim=16)
+        >>> model = CLIPModel(config).eval()
+
+        The feature is read at ``[EOS]`` — the highest id, 63 in this
+        64-token vocabulary — through a causal tower, so nothing after the
+        sentinel can move it.  These two captions differ only there.
+
+        >>> ids = lucid.tensor([[62, 5, 7, 63, 0, 0, 0, 0],
+        ...                     [62, 5, 7, 63, 9, 9, 9, 9]], dtype=lucid.int64)
+        >>> embeds = model.encode_text(ids)
+        >>> embeds.shape
+        (2, 16)
+        >>> bool(lucid.allclose(embeds[0], embeds[1], atol=1e-6))
+        True
+
+        Scoring against images is a dot product and the temperature, which
+        is all :meth:`forward` does with the two embeddings.
+
+        >>> images = lucid.randn((2, 3, 32, 32))
+        >>> sims = model.encode_image(images) @ embeds.T
+        >>> out = model(images, ids)
+        >>> bool(lucid.allclose(out.logits_per_image, model.scale * sims, atol=1e-5))
+        True
         """
         return _l2_normalise(cast(Tensor, self.textual(input_ids)))
 

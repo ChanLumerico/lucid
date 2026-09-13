@@ -753,7 +753,8 @@ class RealNVPForImageGeneration(ImageGenerationModel):
             ``1`` trade diversity for typicality — a standard trick for
             flows, not part of the paper.
         device : str, optional
-            Where to allocate the prior sample.  Default ``"cpu"``.
+            Where to allocate the prior sample.  Defaults to the device
+            the model's parameters are on.
 
         Returns
         -------
@@ -762,6 +763,27 @@ class RealNVPForImageGeneration(ImageGenerationModel):
             the logit stage is undone on the way out.  The squash is not
             saturating, so values land just outside ``[0, 1]`` (within
             ``±(1 - c) / 2c``); clip before display.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.realnvp import (
+        ...     RealNVPConfig, RealNVPForImageGeneration,
+        ... )
+        >>> cfg = RealNVPConfig(sample_size=8, num_scales=2, residual_blocks=1,
+        ...                     base_dim=8)
+        >>> model = RealNVPForImageGeneration(cfg).eval()
+        >>> samples = model.generate(n_samples=3).samples
+        >>> samples.shape
+        (3, 3, 8, 8)
+        >>> c = cfg.data_constraint
+        >>> pad = (1 - c) / (2 * c)
+        >>> bool(((samples >= -pad) & (samples <= 1 + pad)).all().item())
+        True
+        >>> model.generate(temperature=0.0)
+        Traceback (most recent call last):
+            ...
+        ValueError: temperature must be positive, got 0.0
         """
         device = resolve_generation_device(self, device)
         if temperature <= 0.0:

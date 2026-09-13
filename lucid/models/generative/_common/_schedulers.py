@@ -66,6 +66,17 @@ class DiffusionScheduler(ABC):
         device : str, optional
             Placement of the materialised :attr:`timesteps` tensor.
             Default ``"cpu"``.
+
+        Examples
+        --------
+        >>> from lucid.models.generative._common._schedulers import DDPMScheduler
+        >>> scheduler = DDPMScheduler(num_train_timesteps=10)
+        >>> scheduler.set_timesteps(4)
+        >>> scheduler.timesteps.tolist()
+        [6, 4, 2, 0]
+        >>> scheduler.set_timesteps(3)  # 3 does not divide 10; still ends at 0
+        >>> scheduler.timesteps.tolist()
+        [6, 3, 0]
         """
 
     @abstractmethod
@@ -269,7 +280,8 @@ class DDPMScheduler(DiffusionScheduler):
 
         if prev_t < 0:
             return mean
-        # Add Gaussian noise scaled by posterior variance σ_t² = β_t (fixed-small).
+        # Add Gaussian noise with variance σ_t² = β_t — the upper-bound
+        # ("fixed-large") choice the class docstring describes.
         sigma = beta_t**0.5
         z = lucid.randn(sample.shape, device=sample.device.type)
         out: Tensor = mean + sigma * z

@@ -340,6 +340,25 @@ class DreamerV3Model(PretrainedModel):
         priors, posteriors : RSSMState
             ``(B, T, ·)`` each, carrying categorical logits already mixed
             with ``unimix``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import dreamer_v3_12m
+        >>> model = dreamer_v3_12m(action_dim=2, cnn_depth=2, stoch_size=3,
+        ...     discrete=4, deter_size=8, hidden_size=8, actor_hidden=8,
+        ...     value_hidden=8, reward_hidden=8, num_bins=5)
+        >>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2))
+        >>> priors, posteriors = model.observe(obs, act)
+        >>> posteriors.stoch.shape, posteriors.logits.shape
+        ((1, 3, 12), (1, 3, 3, 4))
+
+        ``unimix`` is already folded in: every class keeps at least
+        ``unimix / discrete`` of the mass, so no outcome is ever ruled out:
+
+        >>> floor = model.config.unimix / model.config.discrete
+        >>> bool((lucid.softmax(posteriors.logits, dim=-1) >= floor).all())
+        True
         """
         draw = self._sample if sample is None else sample
         return self.rssm.observe(self.encode(observations), actions, state, sample=draw)
@@ -376,6 +395,26 @@ class DreamerV3Model(PretrainedModel):
         -------
         Tensor
             Value estimates, in return units.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import dreamer_v3_12m
+        >>> model = dreamer_v3_12m(action_dim=2, cnn_depth=2, stoch_size=3,
+        ...     discrete=4, deter_size=8, hidden_size=8, actor_hidden=8,
+        ...     value_hidden=8, reward_hidden=8, num_bins=5)
+        >>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),
+        ...                               lucid.randn((1, 3, 2)))
+        >>> value = model.predict_value(posteriors)
+        >>> value.shape
+        (1, 3)
+
+        Both critics are zero-initialised, so an untrained critic asserts no
+        return for the actor to chase, and the slow copy agrees with it:
+
+        >>> slow = model.predict_value(posteriors, slow=True)
+        >>> float(value.abs().max().item()), float(slow.abs().max().item())
+        (0.0, 0.0)
         """
         head = self.slow_value_head if slow else self.value_head
         return head.predict(state.feature)
@@ -397,6 +436,28 @@ class DreamerV3Model(PretrainedModel):
         ------
         ValueError
             If the model was configured without ``pcont``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import dreamer_v3_12m
+        >>> model = dreamer_v3_12m(action_dim=2, cnn_depth=2, stoch_size=3,
+        ...     discrete=4, deter_size=8, hidden_size=8, actor_hidden=8,
+        ...     value_hidden=8, reward_hidden=8, num_bins=5)
+        >>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),
+        ...                               lucid.randn((1, 3, 2)))
+        >>> logits = model.predict_pcont(posteriors)
+        >>> logits.shape
+        (1, 3)
+
+        The head is on by default in this family; ``sigmoid`` gives the
+        probability of continuing that imagination discounts by:
+
+        >>> model.config.pcont
+        True
+        >>> keep = lucid.sigmoid(logits)
+        >>> bool(((keep > 0) & (keep < 1)).all())
+        True
         """
         if self.pcont_head is None:
             raise ValueError(
@@ -419,6 +480,30 @@ class DreamerV3Model(PretrainedModel):
         -------
         Tensor
             Actions inside ``(-1, 1)``, or one-hot when discrete.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import dreamer_v3_12m
+        >>> kwargs = dict(action_dim=2, cnn_depth=2, stoch_size=3, discrete=4,
+        ...               deter_size=8, hidden_size=8, actor_hidden=8,
+        ...               value_hidden=8, reward_hidden=8, num_bins=5)
+        >>> model = dreamer_v3_12m(**kwargs)
+        >>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2))
+        >>> _, posteriors = model.observe(obs, act)
+        >>> last = posteriors.map(lambda t: t[:, -1])
+        >>> model.act(posteriors).shape, model.act(last).shape
+        ((1, 3, 2), (1, 2))
+        >>> bool((model.act(last).abs() < 1).all())
+        True
+
+        A discrete action space picks one alternative instead, as a one-hot:
+
+        >>> game = dreamer_v3_12m(action_space="discrete", **kwargs)
+        >>> _, beliefs = game.observe(obs, act)
+        >>> choice = game.act(beliefs.map(lambda t: t[:, -1]))
+        >>> choice.shape, choice.sum(dim=-1).tolist()
+        ((1, 2), [1.0])
         """
         return cast(Tensor, self.actor(state.feature, sample=sample))
 
@@ -450,6 +535,29 @@ class DreamerV3Model(PretrainedModel):
         families this costs nothing: DreamerV3's actor is trained purely
         by the score function, so no gradient was ever going to travel
         back through the dynamics from the return.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import dreamer_v3_12m
+        >>> model = dreamer_v3_12m(action_dim=2, cnn_depth=2, stoch_size=3,
+        ...     discrete=4, deter_size=8, hidden_size=8, actor_hidden=8,
+        ...     value_hidden=8, reward_hidden=8, num_bins=5)
+        >>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),
+        ...                               lucid.randn((1, 3, 2)))
+
+        Every filtered step becomes an imagination start:
+
+        >>> start = posteriors.map(lambda t: t.reshape(3, *t.shape[2:]))
+        >>> states, actions = model.imagine(start, horizon=5)
+        >>> states.stoch.shape, states.logits.shape, actions.shape
+        ((3, 6, 12), (3, 6, 3, 4), (3, 5, 2))
+
+        Reward along the trajectory is decoded from its bins in reward
+        units — one per state, the start included:
+
+        >>> model.predict_reward(states).shape
+        (3, 6)
         """
         if horizon < 1:
             raise ValueError(f"horizon must be at least 1, got {horizon}")
@@ -936,6 +1044,35 @@ class DreamerV3ForWorldModeling(WorldModelingModel):
         them by hand either lets the actor's gradient descend the world
         model or raises on a parameter the imagination's graph still
         needed.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> import lucid.optim as optim
+        >>> from lucid.models import dreamer_v3_12m_world_model
+        >>> model = dreamer_v3_12m_world_model(action_dim=2, cnn_depth=2,
+        ...     stoch_size=3, discrete=4, deter_size=8, hidden_size=8,
+        ...     actor_hidden=8, value_hidden=8, reward_hidden=8, num_bins=5,
+        ...     horizon=3, pcont=False)
+        >>> groups = (model.world_parameters(), model.actor_parameters(),
+        ...           model.value_parameters())
+        >>> opts = [optim.Adam(g, lr=1e-4) for g in groups]
+        >>> out = model(lucid.randn((1, 3, 3, 64, 64)),
+        ...             lucid.randn((1, 3, 2)), lucid.randn((1, 3)))
+        >>> model.backward(out)
+        >>> [all(p.grad is not None for p in g) for g in groups]
+        [True, True, True]
+
+        The slow critic is no optimiser's to move — it holds no gradient,
+        and is pulled toward the learner by :meth:`update_slow_critic`,
+        called once per step:
+
+        >>> slow = model.dreamer_v3.slow_value_head.parameters()
+        >>> any(p.grad is not None for p in slow)
+        False
+        >>> for opt in opts:
+        ...     opt.step()
+        >>> model.update_slow_critic()
         """
         behavior = output.behavior
         if output.loss is None or behavior is None:

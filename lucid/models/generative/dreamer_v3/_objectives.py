@@ -251,6 +251,27 @@ class ReturnNormaliser:
         -------
         float
             The divisor after the update — ``max(floor, spread)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.dreamer_v3._objectives import (
+        ...     ReturnNormaliser)
+        >>> norm = ReturnNormaliser()
+        >>> returns = lucid.tensor([float(i) for i in range(101)])
+        >>> norm.update(returns)
+        1.0
+
+        This batch's 5th-to-95th percentile spread is 90, but one update
+        moves the estimate only ``1 - decay`` of the way there, and the
+        floor holds the divisor at 1 until the estimate passes it:
+
+        >>> round(norm.spread, 4)
+        0.9
+        >>> for _ in range(99):
+        ...     scale = norm.update(returns)
+        >>> round(scale, 2)
+        57.06
         """
         observed = float(
             (percentile(returns, self.high) - percentile(returns, self.low)).item()

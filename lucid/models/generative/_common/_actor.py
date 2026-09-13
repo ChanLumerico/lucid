@@ -103,6 +103,24 @@ class Actor(nn.Module):
             A truncated Gaussian over ``[-1, 1]^action_dim`` for a
             continuous action space, a one-hot over ``action_dim``
             alternatives for a discrete one.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._actor import Actor
+        >>> feature = lucid.randn((2, 4, 8))
+        >>> box = Actor(8, 16, 2, 3, "silu", 0.1)
+        >>> policy = box.distribution(feature)
+        >>> type(policy).__name__, policy.mode.shape
+        ('TruncatedNormal', (2, 4, 3))
+        >>> bool((policy.mean.abs() <= 1.0).all().item())  # inside the box
+        True
+        >>> buttons = Actor(8, 16, 2, 3, "silu", 0.1, discrete=True)
+        >>> choice = buttons.distribution(feature)
+        >>> type(choice).__name__, choice.probs.shape
+        ('OneHotCategorical', (2, 4, 3))
+        >>> bool(((choice.probs.sum(dim=-1) - 1.0).abs() < 1e-5).all().item())
+        True
         """
         out = cast(Tensor, self.head(feature))
         if self.discrete:
@@ -130,6 +148,25 @@ class Actor(nn.Module):
             caller, because what counts as one event differs: a
             continuous action is ``action_dim`` independent draws, a
             one-hot is a single choice.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative._common._actor import Actor
+        >>> feature = lucid.randn((2, 4, 8))
+        >>> box = Actor(8, 16, 2, 3, "silu", 0.1)
+        >>> action = box(feature)
+        >>> summed = box.log_prob(feature, action)
+        >>> summed.shape
+        (2, 4)
+        >>> per_dim = box.distribution(feature).log_prob(action)  # (2, 4, 3)
+        >>> bool(lucid.allclose(per_dim.sum(dim=-1), summed))
+        True
+        >>> buttons = Actor(8, 16, 2, 3, "silu", 0.1, discrete=True)
+        >>> choices = [lucid.eye(3)[k] * lucid.ones((2, 4, 1)) for k in range(3)]
+        >>> total = sum(buttons.log_prob(feature, c).exp() for c in choices)
+        >>> bool(((total - 1.0).abs() < 1e-5).all().item())  # one event, not three
+        True
         """
         policy = self.distribution(feature)
         value = policy.log_prob(action)
@@ -147,6 +184,22 @@ class Actor(nn.Module):
         -------
         Tensor
             ``(B, T)``.
+
+        Examples
+        --------
+        >>> import math
+        >>> import lucid
+        >>> from lucid.models.generative._common._actor import Actor
+        >>> feature = lucid.randn((2, 4, 8))
+        >>> box = Actor(8, 16, 2, 3, "silu", 0.1)
+        >>> entropy = box.entropy(feature)
+        >>> entropy.shape
+        (2, 4)
+        >>> bool((entropy <= 3 * math.log(2.0)).all().item())  # at most the uniform's
+        True
+        >>> buttons = Actor(8, 16, 2, 5, "silu", 0.1, discrete=True)
+        >>> bool((buttons.entropy(feature) <= math.log(5) + 1e-6).all().item())
+        True
         """
         value = self.distribution(feature).entropy()
         return value if self.discrete else value.sum(dim=-1)

@@ -277,6 +277,24 @@ class NICEModel(PretrainedModel):
             permutation contributes exactly zero to ``log_det``, so it is
             the diagonal scaling's :math:`\sum_i s_i` broadcast across the
             batch.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> from lucid.models.generative.nice import NICEConfig, NICEModel
+        >>> cfg = NICEConfig(input_dim=64, num_coupling_layers=2,
+        ...                  num_hidden_layers=1, hidden_dim=16)
+        >>> model = NICEModel(cfg).eval()
+        >>> _ = nn.init.normal_(model.scaling.log_scale, std=0.1)  # s = 0 at init
+        >>> x = lucid.rand((2, 64))
+        >>> h, log_det = model.encode(x)
+        >>> h.shape, log_det.shape
+        ((2, 64), (2,))
+        >>> bool((log_det == model.scaling.log_scale.sum()).all().item())
+        True
+        >>> bool(lucid.allclose(model.decode(h), x, atol=1e-5))  # exact inverse
+        True
         """
         self._check_shape(x, "samples")
         h = x
@@ -416,7 +434,8 @@ class NICEForImageGeneration(ImageGenerationModel):
         n_samples : int, default=1
             Number of samples to draw.
         device : str, optional
-            Where to allocate the prior sample.  Default ``"cpu"``.
+            Where to allocate the prior sample.  Defaults to the device the
+            model's parameters are on.
 
         Returns
         -------
@@ -425,6 +444,26 @@ class NICEForImageGeneration(ImageGenerationModel):
             (dequantised, possibly whitened) space the model was trained
             on — no squashing is applied.  Reshape to the dataset's image
             grid for display.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.nice import (
+        ...     NICEConfig, NICEForImageGeneration,
+        ... )
+        >>> cfg = NICEConfig(input_dim=64, num_coupling_layers=2,
+        ...                  num_hidden_layers=1, hidden_dim=16)
+        >>> model = NICEForImageGeneration(cfg).eval()
+        >>> samples = model.generate(n_samples=3).samples
+        >>> samples.shape  # flat, like the training data
+        (3, 64)
+        >>> samples.reshape(3, 1, 8, 8).shape  # onto an 8x8 grid for display
+        (3, 1, 8, 8)
+        >>> lucid.manual_seed(0)
+        >>> first = model.generate(n_samples=2).samples
+        >>> lucid.manual_seed(0)  # the prior draw is the only randomness
+        >>> bool(lucid.allclose(first, model.generate(n_samples=2).samples))
+        True
         """
         device = resolve_generation_device(self, device)
         h = flow_prior_sample(self._prior, (n_samples, self._input_dim), device=device)

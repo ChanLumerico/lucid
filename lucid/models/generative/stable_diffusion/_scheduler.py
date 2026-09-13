@@ -126,6 +126,23 @@ class DDIMScheduler:
         ------
         ValueError
             If more steps are requested than the schedule has.
+
+        Examples
+        --------
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     DDIMScheduler, StableDiffusionConfig)
+        >>> scheduler = DDIMScheduler(StableDiffusionConfig())
+        >>> scheduler.timesteps(4)
+        [751, 501, 251, 1]
+
+        Evenly strided by ``1000 // 4`` and shifted by ``steps_offset``, so
+        the last step is 1 rather than 0.  Asking for more steps than the
+        schedule was trained with is an error, not a clamp.
+
+        >>> scheduler.timesteps(1001)
+        Traceback (most recent call last):
+            ...
+        ValueError: num_inference_steps must be in [1, 1000], got 1001
         """
         total = self.config.num_train_timesteps
         if not 1 <= num_inference_steps <= total:
@@ -160,6 +177,35 @@ class DDIMScheduler:
         -------
         Tensor
             :math:`\sqrt{\bar\alpha_t} z_0 + \sqrt{1-\bar\alpha_t}\epsilon`.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     DDIMScheduler, StableDiffusionConfig)
+        >>> scheduler = DDIMScheduler(StableDiffusionConfig())
+        >>> ones, zeros = lucid.ones((1, 4, 8, 8)), lucid.zeros((1, 4, 8, 8))
+        >>> scheduler.add_noise(ones, zeros, 500).shape
+        (1, 4, 8, 8)
+
+        A clean latent of ones with no noise reads off the signal
+        coefficient :math:`\sqrt{\bar\alpha_t}`, and swapping the two reads
+        off the noise one.  At the first step the latent is almost
+        untouched; by the last it is almost all noise.
+
+        >>> def coefficients(t):
+        ...     signal = scheduler.add_noise(ones, zeros, t)[0, 0, 0, 0].item()
+        ...     noise = scheduler.add_noise(zeros, ones, t)[0, 0, 0, 0].item()
+        ...     return signal, noise
+        >>> [round(c, 4) for c in coefficients(0) + coefficients(999)]
+        [0.9996, 0.0292, 0.0683, 0.9977]
+
+        The squares sum to one at every step, which is what keeps a
+        unit-variance latent at unit variance as the noise replaces it.
+
+        >>> signal, noise = coefficients(500)
+        >>> round(signal**2 + noise**2, 6)
+        1.0
         """
         alpha = float(self.alphas_cumprod[timestep].item())
         return cast(Tensor, alpha**0.5 * latent + (1.0 - alpha) ** 0.5 * noise)
@@ -198,6 +244,34 @@ class DDIMScheduler:
         ------
         ValueError
             If ``eta`` is outside ``[0, 1]``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     DDIMScheduler, StableDiffusionConfig)
+        >>> scheduler = DDIMScheduler(StableDiffusionConfig())
+        >>> lucid.manual_seed(0)
+        >>> clean = lucid.randn((1, 4, 8, 8))
+        >>> noise = lucid.randn((1, 4, 8, 8))
+        >>> noised = scheduler.add_noise(clean, noise, 501)
+
+        Handed the noise that was actually added — a perfect
+        :math:`\epsilon_\theta` — the step recovers :math:`\hat z_0 = z_0`,
+        so going from 501 to 251 lands on the forward process at 251.
+
+        >>> stepped = scheduler.step(noise, 501, 251, noised)
+        >>> target = scheduler.add_noise(clean, noise, 251)
+        >>> bool(lucid.allclose(stepped, target, atol=1e-5))
+        True
+
+        At ``eta=0`` that is the whole update, so it repeats exactly; any
+        positive ``eta`` adds fresh noise on top.
+
+        >>> bool((scheduler.step(noise, 501, 251, noised) == stepped).all())
+        True
+        >>> bool((scheduler.step(noise, 501, 251, noised, eta=1.0) == stepped).all())
+        False
         """
         if not 0.0 <= eta <= 1.0:
             raise ValueError(f"eta must lie in [0, 1], got {eta}")
@@ -334,6 +408,27 @@ class PNDMScheduler:
         in the descending order: 901, 801, 801, 701, and not
         …, 101, 101, 1.  Reading those slices as descending puts the
         opener at the end, where it is the wrong rule at the wrong time.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     PNDMScheduler, StableDiffusionConfig)
+        >>> scheduler = PNDMScheduler(StableDiffusionConfig())
+        >>> scheduler.timesteps(4)
+        [751, 501, 501, 251, 1]
+
+        Four intervals, five evaluations — the second time repeats for the
+        opener.  Asking again starts a new sample, so the counter a previous
+        trajectory advanced is cleared.
+
+        >>> latent = lucid.randn((1, 4, 8, 8))
+        >>> _ = scheduler.step(lucid.zeros((1, 4, 8, 8)), 751, latent)
+        >>> scheduler.counter
+        1
+        >>> _ = scheduler.timesteps(4)
+        >>> scheduler.counter
+        0
         """
         # Asking for a trajectory is the start of a sample, so the
         # history goes with it.  Carrying it over is the silent failure
@@ -369,6 +464,39 @@ class PNDMScheduler:
         passed, because the multistep rule is only valid on the uniform
         grid :meth:`timesteps` produces.  Call that first; this raises
         otherwise rather than assuming a stride.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.stable_diffusion import (
+        ...     DDIMScheduler, PNDMScheduler, StableDiffusionConfig)
+        >>> config = StableDiffusionConfig()
+        >>> scheduler, ddim = PNDMScheduler(config), DDIMScheduler(config)
+        >>> lucid.manual_seed(0)
+        >>> clean = lucid.randn((1, 4, 8, 8))
+        >>> noise = lucid.randn((1, 4, 8, 8))
+
+        Every rule's weights sum to one, so a prediction that is exactly
+        right at every step combines to itself and each step lands back on
+        the forward process.  A whole trajectory run that way ends where
+        :class:`DDIMScheduler` noises the clean latent to timestep 0.
+
+        >>> steps = scheduler.timesteps(4)
+        >>> latent = ddim.add_noise(clean, noise, steps[0])
+        >>> for t in steps:
+        ...     latent = scheduler.step(noise, t, latent)
+        >>> bool(lucid.allclose(latent, ddim.add_noise(clean, noise, 0), atol=1e-5))
+        True
+
+        The position is checked on every call: a fresh trajectory has to
+        start at 751, and anything else raises rather than apply the wrong
+        order of correction.
+
+        >>> _ = scheduler.timesteps(4)
+        >>> scheduler.step(noise, 501, latent)
+        Traceback (most recent call last):
+            ...
+        RuntimeError: expected timestep 751 at position 0 of the trajectory ...
         """
         if not hasattr(self, "_stride"):
             raise RuntimeError(

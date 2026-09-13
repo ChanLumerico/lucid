@@ -948,8 +948,9 @@ class RectifiedFlowModel(PretrainedModel):
     def nfe(self) -> int:
         """int: Field evaluations spent by the most recent solve.
 
-        Zero after a training step — nothing is solved there.  The number
-        the paper is about: a straight flow needs one.
+        A training step solves nothing and leaves the count where the last
+        solve put it.  The number the paper is about: a straight flow needs
+        one.
         """
         return self.dynamics.nfe
 
@@ -989,6 +990,26 @@ class RectifiedFlowModel(PretrainedModel):
         -------
         Tensor
             ``(batch,)`` times in ``[time_eps, 1]``.
+
+        Examples
+        --------
+        >>> import dataclasses
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowModel,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowModel(cfg).eval()
+        >>> t = model.sample_times(6)
+        >>> t.shape
+        (6,)
+        >>> bool(((t >= cfg.time_eps) & (t <= 1.0)).all().item())
+        True
+        >>> # k = 2: only the two times a two-step Euler sampler visits.
+        >>> two_step = RectifiedFlowModel(dataclasses.replace(cfg, t_schedule=2))
+        >>> sorted({round(v, 4) for v in two_step.sample_times(64).tolist()})
+        [0.001, 0.5005]
         """
         eps = self._time_eps
         span = 1.0 - eps
@@ -1025,6 +1046,27 @@ class RectifiedFlowModel(PretrainedModel):
         Tensor
             ``(B, C, H, W)`` interpolation.  This is Flow Matching's
             optimal-transport path at :math:`\sigma_{\min} = 0`.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowModel,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowModel(cfg).eval()
+        >>> x1, x0 = lucid.randn((2, 3, 8, 8)), lucid.randn((2, 3, 8, 8))
+        >>> model.path_sample(x1, x0, lucid.tensor([0.25, 0.75])).shape
+        (2, 3, 8, 8)
+        >>> bool(lucid.allclose(model.path_sample(x1, x0, lucid.zeros(2)), x0))
+        True
+        >>> bool(lucid.allclose(model.path_sample(x1, x0, lucid.ones(2)), x1))
+        True
+        >>> half = model.path_sample(x1, x0, lucid.full((2,), 0.5))
+        >>> bool(lucid.allclose(half, (x0 + x1) / 2))  # the chord's midpoint
+        True
         """
         t_ = t.reshape(-1, 1, 1, 1)
         return t_ * x1 + (1.0 - t_) * x0
@@ -1049,6 +1091,25 @@ class RectifiedFlowModel(PretrainedModel):
         -------
         Tensor
             ``(B, C, H, W)`` regression target.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowModel,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowModel(cfg).eval()
+        >>> x1, x0 = lucid.randn((2, 3, 8, 8)), lucid.randn((2, 3, 8, 8))
+        >>> target = model.conditional_target(x1, x0, lucid.tensor([0.2, 0.7]))
+        >>> target.shape
+        (2, 3, 8, 8)
+        >>> chord = (model.path_sample(x1, x0, lucid.ones(2))
+        ...          - model.path_sample(x1, x0, lucid.zeros(2)))
+        >>> bool(lucid.allclose(target, chord))  # one velocity for the whole line
+        True
         """
         del t
         return x1 - x0
@@ -1082,6 +1143,31 @@ class RectifiedFlowModel(PretrainedModel):
             meaningful against the coupling a previous flow produced;
             independent draws there would train the field to predict the
             mean of the data, and would do so silently.
+
+        Examples
+        --------
+        >>> import dataclasses
+        >>> import lucid
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowModel,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowModel(cfg).eval()
+        >>> x1, z0 = lucid.randn((2, 3, 8, 8)), lucid.randn((2, 3, 8, 8))
+        >>> loss, prediction, target = model.rectified_flow_loss(x1, noise=z0)
+        >>> loss.shape, prediction.shape
+        ((), (2, 3, 8, 8))
+        >>> bool(lucid.allclose(target, x1 - z0))  # the pairing sets the target
+        True
+        >>> bool(lucid.allclose(loss, ((prediction - target) ** 2).mean()))
+        True
+        >>> distil = RectifiedFlowModel(dataclasses.replace(cfg, t_schedule="t0"))
+        >>> distil.rectified_flow_loss(x1)  # a pinned time needs paired noise
+        Traceback (most recent call last):
+            ...
+        ValueError: t_schedule='t0' pins the time, ...
         """
         self._check_image(x1)
         if noise is None:
@@ -1171,6 +1257,26 @@ class RectifiedFlowModel(PretrainedModel):
         method on purpose: the paper's claim is about the error a *single
         first-order step* makes, and a Runge–Kutta step would hide it by
         spending four evaluations per step.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowModel,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowModel(cfg).eval()
+        >>> model.sample(n_samples=2, steps=1).shape
+        (2, 3, 8, 8)
+        >>> model.nfe  # steps=1: a single field evaluation
+        1
+        >>> noise = lucid.randn((3, 3, 8, 8))
+        >>> model.sample(noise=noise, steps=4).shape  # the batch follows noise
+        (3, 3, 8, 8)
+        >>> model.nfe  # Euler, so the budget is exactly the step count
+        4
         """
         if noise is None:
             if n_samples <= 0:
@@ -1254,6 +1360,26 @@ class RectifiedFlowModel(PretrainedModel):
         This is the expensive half of the method.  The paper generates on
         the order of a million pairs before each reflow round, and it is
         the only place a solve appears in training at all.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowModel,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowModel(cfg).eval()
+        >>> noise = lucid.randn((2, 3, 8, 8))
+        >>> z0, z1 = model.reflow_pairs(noise=noise, steps=2)
+        >>> z0 is noise, z1.shape
+        (True, (2, 3, 8, 8))
+        >>> bool(lucid.allclose(z1, model.sample(noise=z0, steps=2)))  # z0's endpoint
+        True
+        >>> _, _, target = model.rectified_flow_loss(z1, noise=z0)
+        >>> bool(lucid.allclose(target, z1 - z0))  # the next round's target
+        True
         """
         if noise is None:
             if n_samples <= 0:
@@ -1281,6 +1407,26 @@ class RectifiedFlowModel(PretrainedModel):
         -------
         Tensor
             ``(N, C, H, W)`` one-step generations.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowModel,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowModel(cfg).eval()
+        >>> # The output layer starts near zero; give it weights so the check bites.
+        >>> _ = nn.init.normal_(model.field.conv_out.weight, std=0.05)
+        >>> noise = lucid.randn((2, 3, 8, 8))
+        >>> out = model.one_step(noise)
+        >>> out.shape, model.nfe
+        ((2, 3, 8, 8), 1)
+        >>> bool(lucid.allclose(out, model.sample(noise=noise, steps=1)))
+        True
         """
         self._check_image(noise)
         self.dynamics.reset()
@@ -1328,6 +1474,27 @@ class RectifiedFlowModel(PretrainedModel):
         -----
         Reported per-dimension (a mean, not a sum), so the number is
         comparable across resolutions.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowModel,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowModel(cfg).eval()
+        >>> noise = lucid.randn((2, 3, 8, 8))
+        >>> s = model.straightness(noise, steps=4)
+        >>> s.shape, model.nfe
+        ((), 4)
+        >>> bool(s.item() < 1e-8)  # a fresh field barely moves, so nothing bends
+        True
+        >>> _ = nn.init.normal_(model.field.conv_out.weight, std=0.05)
+        >>> bool(model.straightness(noise, steps=4).item() > 0.0)
+        True
         """
         if steps <= 0:
             raise ValueError(f"steps must be positive, got {steps}")
@@ -1391,6 +1558,27 @@ class RectifiedFlowModel(PretrainedModel):
         number of times, not integrated, so its density is not the one it
         generates from; this method does not refuse it, but the number
         means less than it appears to.
+
+        Examples
+        --------
+        >>> import math
+        >>> import lucid
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowModel,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowModel(cfg).eval()
+        >>> x = lucid.randn((2, 3, 8, 8))
+        >>> log_p = model.log_prob(x)
+        >>> log_p.shape
+        (2,)
+        >>> # A fresh field is effectively zero, so x is scored as N(0, I) itself.
+        >>> const = 0.5 * model.input_dim * math.log(2 * math.pi)
+        >>> gauss = -0.5 * (x.reshape(2, -1) ** 2).sum(dim=-1) - const
+        >>> bool(lucid.allclose(log_p, gauss, atol=1e-2))
+        True
         """
         self._check_image(x)
         batch = int(x.shape[0])
@@ -1536,6 +1724,24 @@ class RectifiedFlowForImageGeneration(ImageGenerationModel):
         -------
         GenerationOutput
             ``samples`` of shape ``(n_samples, C, H, W)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.rectified_flow import (
+        ...     RectifiedFlowConfig, RectifiedFlowForImageGeneration,
+        ... )
+        >>> cfg = RectifiedFlowConfig(sample_size=8, base_channels=16,
+        ...                           channel_mult=(1, 2), num_res_blocks=1,
+        ...                           attention_resolutions=())
+        >>> model = RectifiedFlowForImageGeneration(cfg).eval()
+        >>> model.generate(n_samples=3, steps=1).samples.shape
+        (3, 3, 8, 8)
+        >>> model.nfe  # one step, one field evaluation: the regime it is for
+        1
+        >>> noise = lucid.randn((1, 3, 8, 8))
+        >>> model.generate(noise=noise, steps=2).samples.shape  # batch follows noise
+        (1, 3, 8, 8)
         """
         return GenerationOutput(
             samples=self.rectified_flow.sample(

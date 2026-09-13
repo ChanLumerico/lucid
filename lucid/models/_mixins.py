@@ -130,6 +130,23 @@ class BackboneMixin(ABC):
             Feature map at the deepest stage.  Concrete subclasses may
             additionally stash earlier stages on the instance so
             multi-stage consumers can fetch them.
+
+        Examples
+        --------
+        The map returned is the one :attr:`feature_info` lists last, so a
+        neck can size itself from that entry without running the model.
+
+        >>> import lucid
+        >>> from lucid.models import create_model
+        >>> backbone = create_model("resnet_18").eval()
+        >>> last = backbone.feature_info[-1]
+        >>> last.num_channels, last.reduction
+        (512, 32)
+        >>> backbone.forward_features(lucid.randn((1, 3, 64, 96))).shape
+        (1, 512, 2, 3)
+
+        Each side is divided by the advertised ``reduction`` on its own, so
+        a non-square input keeps its aspect ratio.
         """
         ...
 

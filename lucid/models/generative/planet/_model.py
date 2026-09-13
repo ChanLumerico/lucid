@@ -248,6 +248,33 @@ class PlaNetModel(PretrainedModel):
             What the dynamics predicted, ``(B, T, ·)``.
         posteriors : RSSMState
             What they believed after seeing each frame, ``(B, T, ·)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.planet import PlaNetConfig, PlaNetModel
+        >>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,
+        ...                    hidden_size=8, cnn_depth=4, reward_hidden=8)
+        >>> model = PlaNetModel(cfg).eval()
+        >>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)
+        >>> priors, posteriors = model.observe(obs, act)
+        >>> posteriors.mean.shape, posteriors.std.shape
+        ((1, 3, 4), (1, 3, 4))
+
+        The frame refines the latent, not the path that led to it, so prior
+        and posterior share one deterministic state — and ``min_std``
+        floors every scale:
+
+        >>> bool((priors.deter == posteriors.deter).all())
+        True
+        >>> bool((posteriors.std >= cfg.min_std).all())
+        True
+
+        A long episode is filtered in chunks by carrying the last belief in:
+
+        >>> last = posteriors.map(lambda t: t[:, -1])
+        >>> model.observe(obs, act, last)[1].deter.shape
+        (1, 3, 8)
         """
         draw = self._sample if sample is None else sample
         return self.rssm.observe(self.encode(observations), actions, state, sample=draw)
@@ -271,6 +298,35 @@ class PlaNetModel(PretrainedModel):
         -------
         RSSMState
             The imagined prior states, ``(B, T, ·)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.planet import PlaNetConfig, PlaNetModel
+        >>> cfg = PlaNetConfig(action_dim=2, stoch_size=4, deter_size=8,
+        ...                    hidden_size=8, cnn_depth=4, reward_hidden=8)
+        >>> model = PlaNetModel(cfg).eval()
+        >>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.zeros(1, 3, 2)
+        >>> _, posteriors = model.observe(obs, act)
+        >>> belief = posteriors.map(lambda t: t[:, -1])
+
+        Score four five-step plans from that one belief — the part of a
+        planner that belongs to the model:
+
+        >>> plans = lucid.randn((4, 5, 2)).clip(-1, 1)
+        >>> starts = belief.map(lambda t: lucid.cat([t] * 4))
+        >>> imagined = model.imagine(starts, plans, sample=False)
+        >>> imagined.stoch.shape
+        (4, 5, 4)
+        >>> model.predict_reward(imagined).sum(dim=1).shape
+        (4,)
+
+        Planning takes the mean: a search that re-sampled each candidate
+        would rank its own noise instead of the actions.
+
+        >>> again = model.imagine(starts, plans, sample=False)
+        >>> bool((imagined.stoch == again.stoch).all())
+        True
         """
         draw = self._sample if sample is None else sample
         return self.rssm.imagine(state, actions, sample=draw)

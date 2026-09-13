@@ -178,6 +178,25 @@ class ScoreSDEModel(PretrainedModel):
         -------
         Tensor
             The score, same shape as ``x``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> from lucid.models import score_sde_vp
+        >>> model = score_sde_vp(sample_size=8, base_channels=8,
+        ...     channel_mult=(1,), num_res_blocks=1, resnet_groups=4,
+        ...     attention_resolutions=()).eval()
+        >>> # The output layer starts at zero; give it weights so the check bites.
+        >>> _ = nn.init.normal_(model.unet.conv_out.weight, std=0.05)
+        >>> x, t = lucid.randn((2, 3, 8, 8)), lucid.tensor([0.05, 0.9])
+        >>> score = model.score(x, t)
+        >>> score.shape
+        (2, 3, 8, 8)
+        >>> _, std = model.sde.marginal_prob(x, t)
+        >>> noise = model.predict_noise(x, t)
+        >>> bool(lucid.allclose(score * std.reshape(2, 1, 1, 1), -noise, atol=1e-5))
+        True
         """
         _, std = self.sde.marginal_prob(x, t)
         noise = self.predict_noise(x, t)
@@ -401,6 +420,21 @@ class ScoreSDEForImageGeneration(ImageGenerationModel):
         ------
         ValueError
             If ``method`` is not one of the three.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import score_sde_vp_gen
+        >>> model = score_sde_vp_gen(sample_size=8, base_channels=8,
+        ...     channel_mult=(1,), num_res_blocks=1, resnet_groups=4,
+        ...     attention_resolutions=()).eval()
+        >>> [model.generate(n_samples=2, method=m, steps=2).samples.shape
+        ...  for m in ("euler", "pc", "ode")]
+        [(2, 3, 8, 8), (2, 3, 8, 8), (2, 3, 8, 8)]
+        >>> model.generate(method="ddim")
+        Traceback (most recent call last):
+            ...
+        ValueError: method must be 'pc', 'euler' or 'ode', got 'ddim'
         """
         if method not in ("pc", "euler", "ode"):
             raise ValueError(f"method must be 'pc', 'euler' or 'ode', got {method!r}")

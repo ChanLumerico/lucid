@@ -298,7 +298,7 @@ class _Actor(nn.Module):
         Returns
         -------
         Tensor
-            Actions bounded to ``(-1, 1)``.
+            Actions bounded to ``(-1, 1)``, or one-hot rows when discrete.
         """
         if self.discrete:
             policy = OneHotCategorical(self.logits(feature))
@@ -471,6 +471,32 @@ class DreamerModel(PretrainedModel):
             What the dynamics predicted, ``(B, T, ·)``.
         posteriors : RSSMState
             What they believed after seeing each frame, ``(B, T, ·)``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.dreamer import DreamerConfig, DreamerModel
+        >>> cfg = DreamerConfig(action_dim=2, cnn_depth=2, stoch_size=4,
+        ...                     deter_size=8, hidden_size=8, actor_hidden=8,
+        ...                     value_hidden=8, reward_hidden=8)
+        >>> model = DreamerModel(cfg)
+        >>> obs, act = lucid.randn((1, 3, 3, 64, 64)), lucid.randn((1, 3, 2))
+        >>> priors, posteriors = model.observe(obs, act)
+        >>> posteriors.deter.shape, posteriors.stoch.shape, posteriors.std.shape
+        ((1, 3, 8), (1, 3, 4), (1, 3, 4))
+
+        Prior and posterior share one deterministic path — the frame refines
+        the belief about the latent, not the history that led to it:
+
+        >>> bool((priors.deter == posteriors.deter).all())
+        True
+
+        ``sample=False`` takes each latent's mean, so filtering repeats
+        exactly:
+
+        >>> first = model.observe(obs, act, sample=False)[1].stoch
+        >>> bool((first == model.observe(obs, act, sample=False)[1].stoch).all())
+        True
         """
         draw = self._sample if sample is None else sample
         return self.rssm.observe(self.encode(observations), actions, state, sample=draw)
@@ -512,6 +538,36 @@ class DreamerModel(PretrainedModel):
         ------
         ValueError
             If the model was configured without ``pcont``.
+
+        Examples
+        --------
+        >>> import dataclasses
+        >>> import lucid
+        >>> from lucid.models.generative.dreamer import DreamerConfig, DreamerModel
+        >>> cfg = DreamerConfig(action_dim=2, cnn_depth=2, stoch_size=4,
+        ...                     deter_size=8, hidden_size=8, actor_hidden=8,
+        ...                     value_hidden=8, reward_hidden=8, pcont=True)
+        >>> model = DreamerModel(cfg)
+        >>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),
+        ...                               lucid.randn((1, 3, 2)))
+        >>> logits = model.predict_pcont(posteriors)
+        >>> logits.shape
+        (1, 3)
+
+        ``sigmoid`` turns the logits into the probability of continuing,
+        which is what imagination then discounts by:
+
+        >>> keep = lucid.sigmoid(logits)
+        >>> bool(((keep > 0) & (keep < 1)).all())
+        True
+
+        The head exists only when the configuration asks for it:
+
+        >>> plain = DreamerModel(dataclasses.replace(cfg, pcont=False))
+        >>> plain.predict_pcont(posteriors)
+        Traceback (most recent call last):
+            ...
+        ValueError: this model has no discount head...
         """
         if self.pcont_head is None:
             raise ValueError(
@@ -521,7 +577,7 @@ class DreamerModel(PretrainedModel):
         return cast(Tensor, self.pcont_head(state.feature))
 
     def act(self, state: RSSMState, *, sample: bool = True) -> Tensor:
-        """Propose actions for a state, bounded to ``(-1, 1)``.
+        """Propose actions for a state — in ``(-1, 1)``, or one-hot if discrete.
 
         Parameters
         ----------
@@ -536,7 +592,8 @@ class DreamerModel(PretrainedModel):
         -------
         Tensor
             ``(B, T, action_dim)`` for a sequence, ``(B, action_dim)`` for
-            a single step — the rank that went in.
+            a single step — the rank that went in.  A discrete action
+            space gives one-hot rows rather than values in ``(-1, 1)``.
 
         Notes
         -----
@@ -545,6 +602,33 @@ class DreamerModel(PretrainedModel):
         sequence of them.  Demanding a length-1 time axis at the call site
         would be an artifact of how the heads are batched, and every
         caller would strip it again immediately.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.dreamer import DreamerConfig, DreamerModel
+        >>> cfg = DreamerConfig(action_dim=2, cnn_depth=2, stoch_size=4,
+        ...                     deter_size=8, hidden_size=8, actor_hidden=8,
+        ...                     value_hidden=8, reward_hidden=8)
+        >>> model = DreamerModel(cfg)
+        >>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),
+        ...                               lucid.randn((1, 3, 2)))
+        >>> model.act(posteriors).shape
+        (1, 3, 2)
+
+        One belief per batch element gives one action each, squashed inside
+        ``(-1, 1)``:
+
+        >>> last = posteriors.map(lambda t: t[:, -1])
+        >>> action = model.act(last)
+        >>> action.shape, bool((action.abs() < 1).all())
+        ((1, 2), True)
+
+        ``sample=False`` is the squashed mean — the same action every time:
+
+        >>> mode = model.act(last, sample=False)
+        >>> bool((mode == model.act(last, sample=False)).all())
+        True
         """
         feature = state.feature
         stepwise = feature.ndim == 2
@@ -596,6 +680,33 @@ class DreamerModel(PretrainedModel):
         It does not stop the actor learning: the gradient still arrives
         through each action it produced.  What it drops are the terms in
         which a return depends on the policy through the state it read.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.dreamer import DreamerConfig, DreamerModel
+        >>> cfg = DreamerConfig(action_dim=2, cnn_depth=2, stoch_size=4,
+        ...                     deter_size=8, hidden_size=8, actor_hidden=8,
+        ...                     value_hidden=8, reward_hidden=8)
+        >>> model = DreamerModel(cfg)
+        >>> _, posteriors = model.observe(lucid.randn((1, 3, 3, 64, 64)),
+        ...                               lucid.randn((1, 3, 2)))
+
+        Every filtered step becomes an independent start, as the training
+        objective uses them:
+
+        >>> start = posteriors.map(lambda t: t.reshape(3, -1))
+        >>> states, actions = model.imagine(start, horizon=5)
+        >>> states.deter.shape, actions.shape
+        ((3, 6, 8), (3, 5, 2))
+
+        The start is kept as the first imagined state — one more state than
+        action — and the heads score every one of them:
+
+        >>> bool((states.deter[:, 0] == start.deter).all())
+        True
+        >>> model.predict_reward(states).shape
+        (3, 6)
         """
         if horizon < 1:
             raise ValueError(f"horizon must be at least 1, got {horizon}")

@@ -598,22 +598,59 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         output : InstanceSegmentationOutput
             Raw RoI-head outputs from :meth:`forward`.
         image_sizes : list of (H, W), optional
-            Unused (boxes are already clipped); accepted for API symmetry.
+            Per-image extent.  When given, each detection's mask is pasted
+            onto its box in an ``H x W`` canvas and binarised at
+            ``config.mask_thresh``; when omitted, masks stay ``28 x 28``
+            probabilities in RoI coordinates.  Boxes are not re-clipped to
+            it.
         proposals : list of Tensor, optional
-            Per-image proposals the RoI features were sampled from
-            (required — pass the same list :meth:`forward` used).
+            Per-image proposals the RoI features were sampled from; falls
+            back to ``output.proposals``, which :meth:`forward` fills in.
         features : list of Tensor, optional
             Multi-scale FPN feature maps; accepted for API symmetry with
-            the detector-stage post-processor but not consumed here (mask
-            logits are already gathered onto the proposals).
+            the detector-stage post-processor but not consumed here — the
+            re-alignment on the final boxes reads ``output.hidden_states``.
 
         Returns
         -------
         list of dict
             One dict per image with ``"boxes"`` ``(D, 4)``, ``"scores"``
-            ``(D,)``, ``"labels"`` ``(D,)`` int64, and ``"masks"``
-            ``(D, 1, 28, 28)`` sigmoid mask probabilities (the channel of
-            each detection's predicted class).
+            ``(D,)``, ``"labels"`` ``(D,)`` int64, and ``"masks"`` — the
+            channel of each detection's predicted class, as
+            ``(D, 1, 28, 28)`` sigmoid probabilities or, with
+            ``image_sizes``, as ``(D, 1, H, W)`` binary masks.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models import create_model
+        >>> lucid.manual_seed(0)
+        >>> model = create_model(
+        ...     "mask_rcnn_resnet50_fpn", num_classes=3,
+        ...     backbone_layers=(1, 1, 1, 1), fpn_out_channels=32,
+        ...     roi_representation=64, mask_hidden_channels=16,
+        ...     mask_num_convs=1, mask_predictor_hidden=16,
+        ...     rpn_post_nms_top_n=10,
+        ... ).eval()
+        >>> out = model(lucid.randn((1, 3, 64, 64)))
+
+        Without ``image_sizes`` there is one mask per box, each a 28 x 28
+        grid of probabilities in that box's own frame.
+
+        >>> det = model.postprocess(out)[0]
+        >>> det["masks"].shape[0] == det["boxes"].shape[0]
+        True
+        >>> det["masks"].shape[1:]
+        (1, 28, 28)
+
+        With it, each grid is stretched onto its box inside an image-sized
+        canvas and thresholded, so it can be laid over the picture as is.
+
+        >>> masks = model.postprocess(out, image_sizes=[(64, 64)])[0]["masks"]
+        >>> masks.shape[1:]
+        (1, 64, 64)
+        >>> bool(((masks == 0) | (masks == 1)).all())
+        True
         """
         # ``forward`` carries its own proposals out, mirroring Faster R-CNN,
         # so the documented ``model.postprocess(model(x))`` flow works without
