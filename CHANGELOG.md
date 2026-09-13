@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - resize and centre crop sat a column off the reference
 
+- stretch filters too, and is documented where it exists
+
 ### Added
 
 - quantization-aware models reach the exporter

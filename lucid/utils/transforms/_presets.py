@@ -318,19 +318,34 @@ class _ReferenceShorterSide(SmallestMaxSize):
         )
 
 
+class _ReferenceStretch(Resize):
+    """``Resize`` that low-pass filters as it shrinks.
+
+    For the presets that reproduce an upstream processor configured with an
+    explicit ``(height, width)``: those resize through PIL, which always
+    filters, where :class:`~lucid.utils.transforms.Resize` keeps the
+    Albumentations (OpenCV) behaviour of not filtering.
+    """
+
+    @override
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        return resize(
+            img,
+            (self.height, self.width),
+            interpolation=self.interpolation,
+            antialias=True,
+        )
+
+
 @_register_preset
 class ImageClassification(TransformsPreset):
     r"""Standard ImageNet classification *inference* preset.
 
     Pipeline: shorter side to ``resize_size`` (the reference's rule: the
-    longer side truncated) → ``CenterCrop(crop_size)``
-    → ``Normalize``, or — with ``stretch=True`` —
-    ``Resize(resize_size, resize_size)`` → ``Normalize``, which is what an
-    upstream processor configured with an explicit ``(height, width)``
-    pair does.
-    → ``Normalize(mean, std)``.  This is the reference_vision /
-    Albumentations canonical eval pipeline shipped with most
-    pretrained image-classification weights.
+    longer side truncated, and low-pass filtered as it shrinks) →
+    ``CenterCrop(crop_size)`` → ``Normalize(mean, std)``.  This is the
+    reference_vision evaluation pipeline shipped with most pretrained
+    image-classification weights.
 
     Parameters
     ----------
@@ -672,7 +687,11 @@ class Segmentation(TransformsPreset):
 
     Pipeline: shorter side to ``resize_size`` (the reference's rule: the
     longer side truncated) → ``CenterCrop(crop_size)``
-    → ``Normalize`` applied to the image only.  Mask travels through
+    → ``Normalize`` applied to the image only, or — with ``stretch=True``
+    — ``Resize(resize_size, resize_size)`` → ``Normalize``, which is what
+    an upstream processor configured with an explicit ``(height, width)``
+    pair does.  The image is low-pass filtered as it shrinks, either way.
+    Mask travels through
     the geometric stages with nearest-neighbour interpolation (label
     preservation guaranteed by every
     :class:`~lucid.utils.transforms._base.GeometricTransform`'s
@@ -689,6 +708,12 @@ class Segmentation(TransformsPreset):
         Per-channel normalization stats; default ImageNet.
     interpolation : str or Interpolation, optional, default="bilinear"
         Image resize interpolation.  Masks always use nearest.
+    stretch : bool, optional, default=False
+        Resize to exactly ``resize_size`` x ``resize_size`` and skip the
+        crop, distorting the aspect ratio — for checkpoints whose upstream
+        processor names an explicit ``(height, width)``.  Reproducing
+        those with shortest-edge and centre-crop frames the image
+        differently from how the model was evaluated.
 
     Examples
     --------
@@ -732,7 +757,9 @@ class Segmentation(TransformsPreset):
             # exactly that shape -- aspect ratio distorted, nothing cropped.
             # Reproducing them with shortest-edge + centre-crop feeds the
             # model a differently-framed image than it was evaluated on.
-            stages = [Resize(resize_size, resize_size, interpolation=interpolation)]
+            stages = [
+                _ReferenceStretch(resize_size, resize_size, interpolation=interpolation)
+            ]
         else:
             stages = [_ReferenceShorterSide(resize_size, interpolation=interpolation)]
             if crop_size is not None:

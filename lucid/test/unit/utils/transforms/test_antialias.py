@@ -49,6 +49,17 @@ def test_growing_an_image_is_unchanged_by_the_flag() -> None:
     assert float((filtered - sampled).abs().max().item()) == 0.0
 
 
+def test_the_stretching_segmentation_preset_filters_too() -> None:
+    # stretch=True reproduces processors that resize through PIL, which
+    # always filters; the Albumentations Resize it used to reuse does not.
+    img = lucid.rand(3, 200, 300)
+    got = T.Segmentation(resize_size=64, stretch=True)(T.Image(img)).data
+    mean = lucid.tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1)
+    std = lucid.tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)
+    want = (F.resize(img, (64, 64)) - mean) / std
+    assert float((got - want).abs().max().item()) < 1e-5
+
+
 def test_the_albumentations_resizers_still_sample_without_filtering() -> None:
     # SmallestMaxSize documents the Albumentations (OpenCV) behaviour, which
     # does not low-pass filter; only the reference presets do.
