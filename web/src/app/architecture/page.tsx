@@ -6,14 +6,12 @@ import { Footer } from "@/components/layout/Footer";
 import { FadeIn, FadeInStagger } from "@/components/motion/FadeIn";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/Card";
-import { SectionHeading } from "@/components/ui/SectionHeading";
 import {
   DIAGRAM_KIND_LABEL,
-  getDiagramGroups,
+  getDiagrams,
   type Diagram,
   type DiagramKind,
 } from "@/lib/architecture";
-import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Architecture",
@@ -28,38 +26,34 @@ const KIND_ICON: Record<DiagramKind, LucideIcon> = {
   lifecycle: GitCommitHorizontal,
 };
 
-const ACCENT = "var(--color-lucid-primary)";
-
+/** Every card has the same rows — heading, summary, footer — so a grid row lines up. */
 function DiagramCard({ diagram }: { diagram: Diagram }) {
   const Icon = KIND_ICON[diagram.kind];
   return (
-    <Card href={`/architecture/${diagram.slug}`}>
-      <div className="px-5 pt-4 pb-4 flex items-start gap-3">
-        <span
-          className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border"
-          style={{
-            backgroundColor: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-            borderColor: `color-mix(in srgb, ${ACCENT} 38%, transparent)`,
-            color: ACCENT,
-          }}
-          aria-hidden
-        >
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h3 className="text-sm font-semibold text-lucid-text-high transition-colors group-hover:text-lucid-primary">
+    <Card href={`/architecture/${diagram.slug}`} className="h-full">
+      <div className="flex h-full flex-col p-5">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-lucid-primary/30 bg-lucid-primary/10 text-lucid-primary"
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-lucid-text-disabled">
+              {diagram.ordinal} · {diagram.group}
+            </p>
+            <h2 className="text-base font-semibold leading-snug text-lucid-text-high transition-colors group-hover:text-lucid-primary">
               {diagram.title}
-            </h3>
-            <Badge variant="secondary" className="font-mono text-[10px]">
-              {DIAGRAM_KIND_LABEL[diagram.kind]}
-            </Badge>
+            </h2>
           </div>
-          <p className="mt-1 text-xs text-lucid-text-low leading-relaxed">{diagram.summary}</p>
-          <p className="mt-2 font-mono text-[10px] text-lucid-text-disabled">
-            {diagram.extent} · {diagram.chapters.length} chapters
-            {diagram.sourceLinks > 0 && ` · ${diagram.sourceLinks} source links`}
-          </p>
+        </div>
+        <p className="mt-3 flex-1 text-sm leading-relaxed text-lucid-text-mid">{diagram.summary}</p>
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-lucid-border pt-3">
+          <Badge variant="secondary" className="font-mono text-[10px]">
+            {DIAGRAM_KIND_LABEL[diagram.kind]}
+          </Badge>
+          <span className="truncate font-mono text-xs text-lucid-text-low">{diagram.extent}</span>
         </div>
       </div>
     </Card>
@@ -67,21 +61,19 @@ function DiagramCard({ diagram }: { diagram: Diagram }) {
 }
 
 export default function ArchitecturePage() {
-  const groups = getDiagramGroups();
+  const diagrams = getDiagrams();
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />
       <main id="main-content" tabIndex={-1} className="flex-1 pt-14 focus:outline-none">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 py-12">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 py-12">
           <FadeIn>
-            <header className="mb-12">
-              <div className="flex flex-wrap items-center gap-3 mb-3">
-                <span className="text-xs font-semibold tracking-widest uppercase text-lucid-text-disabled">
-                  Architecture
-                </span>
-                <h1 className="text-3xl font-bold text-lucid-text-high">How Lucid works</h1>
-              </div>
-              <p className="max-w-3xl text-base text-lucid-text-mid leading-relaxed">
+            <header className="mb-10">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-lucid-text-disabled">
+                Architecture
+              </p>
+              <h1 className="text-3xl font-bold text-lucid-text-high">How Lucid works</h1>
+              <p className="mt-3 max-w-3xl text-base leading-relaxed text-lucid-text-mid">
                 Six diagrams traced from the source rather than drawn from memory — how a call
                 reaches a kernel, what backward really does, where tensor bytes live. Each opens
                 in a full interactive viewer: guided chapters, search, focus, route tracing, and
@@ -89,24 +81,15 @@ export default function ArchitecturePage() {
               </p>
             </header>
 
-            <div className="space-y-10">
-              {groups.map(([group, diagrams]) => (
-                <section key={group}>
-                  <SectionHeading>{group}</SectionHeading>
-                  <FadeInStagger
-                    staggerDelay={0.04}
-                    className={cn(
-                      "grid gap-3",
-                      diagrams.length === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2",
-                    )}
-                  >
-                    {diagrams.map((d) => (
-                      <DiagramCard key={d.slug} diagram={d} />
-                    ))}
-                  </FadeInStagger>
-                </section>
+            {/* One grid in reading order, equal rows — the numbers carry the sequence. */}
+            <FadeInStagger
+              staggerDelay={0.04}
+              className="grid grid-cols-1 gap-4 sm:auto-rows-fr sm:grid-cols-2"
+            >
+              {diagrams.map((d) => (
+                <DiagramCard key={d.slug} diagram={d} />
               ))}
-            </div>
+            </FadeInStagger>
           </FadeIn>
         </div>
       </main>

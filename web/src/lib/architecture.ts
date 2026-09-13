@@ -14,7 +14,7 @@ import { BASE_PATH } from "@/lib/type-links";
  * Everything the pages show about a diagram comes from its spec — title,
  * diagram type, guided chapters, key-fact cards.  The catalog holds only what
  * a spec cannot say: the URL slug, a short nav label, the reading order and
- * grouping, and a one-line summary for the overview cards.
+ * group, and a one-line summary for the overview cards.
  */
 
 export type DiagramKind = "architecture" | "sequence" | "workflow" | "dataflow" | "lifecycle";
@@ -35,6 +35,8 @@ export interface DiagramFacts {
 
 export interface Diagram {
   slug: string;
+  /** Two-digit reading-order number, "01" first — shared by every listing. */
+  ordinal: string;
   label: string;
   group: string;
   summary: string;
@@ -185,10 +187,11 @@ let cache: Diagram[] | null = null;
 
 export function getDiagrams(): Diagram[] {
   if (cache) return cache;
-  cache = CATALOG.map((entry) => {
+  cache = CATALOG.map((entry, i) => {
     const spec = readSpec(entry.file);
     return {
       slug: entry.slug,
+      ordinal: String(i + 1).padStart(2, "0"),
       label: entry.label,
       group: entry.group,
       summary: entry.summary,
@@ -203,7 +206,8 @@ export function getDiagrams(): Diagram[] {
       })),
       sourceRevision: spec.meta.repository?.revision ?? null,
       sourceLinks: (spec.components ?? []).reduce((n, c) => n + (c.sources?.length ?? 0), 0),
-      viewerSrc: `${BASE_PATH}/archify/${entry.file}.html`,
+      // archify's stage layout: the canvas fills the frame.
+      viewerSrc: `${BASE_PATH}/archify/${entry.file}.html?present=1`,
     };
   });
   return cache;
@@ -211,15 +215,4 @@ export function getDiagrams(): Diagram[] {
 
 export function getDiagram(slug: string): Diagram | undefined {
   return getDiagrams().find((d) => d.slug === slug);
-}
-
-/** Groups in first-appearance order, catalog order within each group. */
-export function getDiagramGroups(): [string, Diagram[]][] {
-  const groups = new Map<string, Diagram[]>();
-  for (const d of getDiagrams()) {
-    const list = groups.get(d.group) ?? [];
-    list.push(d);
-    groups.set(d.group, list);
-  }
-  return [...groups];
 }

@@ -1,19 +1,99 @@
 /*
  * Host mode for archify viewers embedded in the Lucid docs site — see
  * host.js, which sets html[data-lucid-host] only inside the site's iframe.
- * The page renders the diagram's title and key-fact cards with the site's
- * own components, so the viewer's copies are dropped here.
+ * The iframe opens the viewer's stage layout (?present=1); this sheet takes
+ * away what the page or the site already owns and lays the diagram straight
+ * onto the page, with no canvas box of its own.
+ * It loads after archify's own styles, so a specificity tie goes to it.
  */
 
-/* Hidden rather than removed: the row keeps its height, which is what the
-   viewer's fixed toolbar sits beside. */
-html[data-lucid-host] .header-row,
-html[data-lucid-host] .header .subtitle {
-  visibility: hidden;
-}
-
+/* The page renders the title and key-fact cards with site components. */
+html[data-lucid-host] .header,
 html[data-lucid-host] .cards {
   display: none;
+}
+
+/* No toolbar: the theme follows the site toggle, the palette is the site's,
+   the stage is the only layout, and the embed offers no export — host.js
+   drops the matching shortcuts (T, S, F, E). */
+html[data-lucid-host] .toolbar,
+html[data-lucid-host] .diagram-guide-action[data-guide-action="present"] {
+  display: none;
+}
+
+/* Chapter chips drop their focus-delta tallies (each chip's title and
+   aria-label still carry them), so chapter titles fit instead of truncating. */
+html[data-lucid-host] .guided-view-chapter-delta {
+  display: none;
+}
+
+/* The rail's "Guided views 0 / 4" line stays one line in a narrow caption
+   column; its decorative progress bar gives way first. */
+html[data-lucid-host] .guided-view-meta {
+  white-space: nowrap;
+}
+
+html[data-lucid-host] .guided-view-meta .guided-view-progress {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A narrow frame leaves the idle rail (no chapter open) too little room for
+   four chapter titles, so it drops the static "Explore this system" caption;
+   the page's Guided chapters section names every chapter anyway.  Opening a
+   chapter switches archify to its stacked rail, where the caption returns
+   with the chapter's own label.  At 720px and below archify stacks it itself. */
+@media (min-width: 721px) and (max-width: 1100px) {
+  html[data-lucid-host] .guided-views[data-active-view="all"] {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  html[data-lucid-host] .guided-views[data-active-view="all"] .guided-view-copy {
+    display: none;
+  }
+
+  html[data-lucid-host] .guided-views[data-active-view="all"] .guided-view-actions {
+    grid-column: 1;
+  }
+
+  html[data-lucid-host] .guided-views[data-active-view="all"] .guided-view-index {
+    grid-column: 2;
+  }
+}
+
+/* The diagram sits on the page itself: the stage has no padding, the rail
+   spans the content width, and the canvas drops its panel, border and radius
+   (host.js clears the grid).  The bottom padding stays archify's — it keeps
+   the zoom dock off the diagram. */
+html[data-lucid-host][data-present="true"] body {
+  padding: 0;
+}
+
+html[data-lucid-host][data-present="true"] .container {
+  gap: 0.75rem;
+  height: 100dvh;
+}
+
+/* On the bare page archify's floating shadows read as smudges (in light mode
+   the rail's cast a grey band across the diagram); the site's surfaces are
+   flat, so the rail and the zoom dock keep only their borders. */
+html[data-lucid-host][data-present="true"] .guided-views {
+  margin: 0;
+  background: var(--toolbar-bg);
+  box-shadow: none;
+}
+
+html[data-lucid-host][data-present="true"] .diagram-nav {
+  box-shadow: none;
+}
+
+html[data-lucid-host][data-present="true"] .diagram-container {
+  padding-top: 0;
+  padding-inline: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* The site's surfaces are flat; drop the viewer's decorative glow. */

@@ -1,19 +1,11 @@
-"use client";
-
-import * as React from "react";
-import { useTheme } from "@/components/layout/ThemeProvider";
 import { cn } from "@/lib/utils";
 
-/** Posted by ``public/archify/host.js`` when the viewer's own theme toggle
- *  is used, so the page follows it.  The opposite direction needs no
- *  message: the bridge watches this document's ``data-theme`` directly. */
-const THEME_MESSAGE = "lucid:archify-theme";
-
 /**
- * Same-origin iframe around an archify viewer.  The full viewer stays live —
- * toolbar, guided chapters, finder, focus, route probe, export — while
- * ``host.js`` repaints it with the site's tokens and hides the title and fact
- * cards the page already renders natively.
+ * Same-origin iframe around an archify viewer, with no frame of its own: the
+ * viewer opens in its stage layout, and ``public/archify/host.js`` lays the
+ * diagram straight onto the page — no canvas box, no toolbar — repaints it
+ * with the site's tokens and holds it to the site's theme.  Guided chapters,
+ * finder, focus, route probe, lens and zoom stay live.
  */
 export function DiagramViewer({
   src,
@@ -24,28 +16,8 @@ export function DiagramViewer({
   title: string;
   className?: string;
 }) {
-  const frameRef = React.useRef<HTMLIFrameElement>(null);
-  const { setTheme } = useTheme();
-
-  React.useEffect(() => {
-    function onMessage(e: MessageEvent) {
-      if (e.origin !== window.location.origin) return;
-      if (e.source !== frameRef.current?.contentWindow) return;
-      const data = e.data as { type?: unknown; theme?: unknown } | null;
-      if (data?.type !== THEME_MESSAGE) return;
-      if (data.theme === "light" || data.theme === "dark") setTheme(data.theme);
-    }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [setTheme]);
-
   return (
-    <div
-      className={cn(
-        "relative overflow-hidden rounded-xl border border-lucid-border bg-lucid-bg",
-        className,
-      )}
-    >
+    <div className={cn("relative", className)}>
       {/* Sits under the (transparent until painted) iframe while it loads. */}
       <div
         aria-hidden
@@ -54,11 +26,9 @@ export function DiagramViewer({
         Loading diagram…
       </div>
       <iframe
-        ref={frameRef}
         src={src}
         title={title}
-        allow="fullscreen; clipboard-read; clipboard-write"
-        allowFullScreen
+        allow="clipboard-read; clipboard-write"
         className="relative block h-full w-full border-0"
       />
     </div>

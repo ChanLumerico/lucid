@@ -30,9 +30,36 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   return diagram ? { title: diagram.title, description: diagram.summary } : {};
 }
 
-function DiagramSwitcher({ current, all }: { current: Diagram; all: Diagram[] }) {
+/** Columns per item count that never leave a card alone on a row. */
+const BALANCED_COLS: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-1 sm:grid-cols-2",
+  3: "grid-cols-1 lg:grid-cols-3",
+  4: "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4",
+};
+
+function balancedCols(n: number): string {
+  return BALANCED_COLS[n] ?? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+}
+
+/** Equal segments, one per diagram — the same slots on every diagram page. */
+function DiagramSwitcher({
+  current,
+  all,
+  className,
+}: {
+  current: Diagram;
+  all: Diagram[];
+  className?: string;
+}) {
   return (
-    <nav aria-label="Diagrams" className="flex flex-wrap gap-1.5">
+    <nav
+      aria-label="Diagrams"
+      className={cn(
+        "grid grid-cols-3 gap-1 rounded-xl border border-lucid-border bg-lucid-surface/40 p-1 md:grid-cols-6",
+        className,
+      )}
+    >
       {all.map((d) => {
         const active = d.slug === current.slug;
         return (
@@ -41,10 +68,10 @@ function DiagramSwitcher({ current, all }: { current: Diagram; all: Diagram[] })
             href={`/architecture/${d.slug}`}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+              "truncate rounded-lg px-3 py-1.5 text-center text-xs font-medium transition-colors",
               active
-                ? "border-lucid-primary/30 bg-lucid-primary/10 text-lucid-primary"
-                : "border-lucid-border text-lucid-text-mid hover:border-lucid-primary/40 hover:text-lucid-text-high",
+                ? "bg-lucid-primary/10 text-lucid-primary ring-1 ring-inset ring-lucid-primary/30"
+                : "text-lucid-text-mid hover:bg-lucid-surface hover:text-lucid-text-high",
             )}
           >
             {d.label}
@@ -55,26 +82,30 @@ function DiagramSwitcher({ current, all }: { current: Diagram; all: Diagram[] })
   );
 }
 
-function NeighbourCard({ diagram, direction }: { diagram: Diagram; direction: "previous" | "next" }) {
+function NeighbourCard({
+  href,
+  label,
+  title,
+  direction,
+}: {
+  href: string;
+  label: string;
+  title: string;
+  direction: "previous" | "next";
+}) {
   const next = direction === "next";
   return (
-    <Card
-      href={`/architecture/${diagram.slug}`}
-      className={cn("px-5 py-4", next && "text-right sm:col-start-2")}
-    >
-      <span
-        className={cn(
-          "flex items-center gap-1.5 text-xs text-lucid-text-low",
-          next && "justify-end",
-        )}
-      >
-        {!next && <ArrowLeft className="h-3.5 w-3.5" aria-hidden />}
-        {next ? "Next" : "Previous"}
-        {next && <ArrowRight className="h-3.5 w-3.5" aria-hidden />}
-      </span>
-      <span className="mt-1 block text-sm font-semibold text-lucid-text-high transition-colors group-hover:text-lucid-primary">
-        {diagram.title}
-      </span>
+    <Card href={href} className="h-full">
+      <div className={cn("flex h-full flex-col px-5 py-4", next && "items-end text-right")}>
+        <span className="flex items-center gap-1.5 text-xs text-lucid-text-low">
+          {!next && <ArrowLeft className="h-3.5 w-3.5" aria-hidden />}
+          {label}
+          {next && <ArrowRight className="h-3.5 w-3.5" aria-hidden />}
+        </span>
+        <span className="mt-1 text-sm font-semibold text-lucid-text-high transition-colors group-hover:text-lucid-primary">
+          {title}
+        </span>
+      </div>
     </Card>
   );
 }
@@ -93,78 +124,88 @@ export default async function DiagramPage({ params }: { params: Params }) {
       <Header />
       <main id="main-content" tabIndex={-1} className="flex-1 pt-14 focus:outline-none">
         <div className="mx-auto max-w-screen-2xl px-4 sm:px-6">
-          <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 pt-8 pb-5">
-            <div className="min-w-0">
-              <nav
-                aria-label="Breadcrumb"
-                className="mb-2 flex items-center gap-1.5 text-xs text-lucid-text-low"
-              >
-                <Link href="/architecture" className="transition-colors hover:text-lucid-text-high">
-                  Architecture
-                </Link>
-                <span aria-hidden className="text-lucid-text-disabled">
-                  /
-                </span>
-                <span className="text-lucid-text-mid">{diagram.group}</span>
-              </nav>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-bold text-lucid-text-high">{diagram.title}</h1>
-                <Badge variant="secondary" className="font-mono text-[10px]">
-                  {DIAGRAM_KIND_LABEL[diagram.kind]}
-                </Badge>
-              </div>
-              <p className="mt-3 max-w-3xl text-base text-lucid-text-mid leading-relaxed">
-                {diagram.summary}
-              </p>
+          {/* The switcher closes the header, right above the viewer; from xl it
+              moves up beside the title, so the viewer starts as high as it can. */}
+          <header className="grid grid-cols-1 pt-6 pb-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center xl:gap-x-8">
+            <nav
+              aria-label="Breadcrumb"
+              className="mb-2 flex items-center gap-1.5 text-xs text-lucid-text-low xl:col-span-2"
+            >
+              <Link href="/architecture" className="transition-colors hover:text-lucid-text-high">
+                Architecture
+              </Link>
+              <span aria-hidden className="text-lucid-text-disabled">
+                /
+              </span>
+              <span className="text-lucid-text-mid">{diagram.group}</span>
+            </nav>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 xl:col-start-1 xl:row-start-2">
+              <h1 className="text-3xl font-bold text-lucid-text-high">{diagram.title}</h1>
+              <Badge variant="secondary" className="font-mono text-[10px]">
+                {DIAGRAM_KIND_LABEL[diagram.kind]}
+              </Badge>
             </div>
-            <DiagramSwitcher current={diagram} all={all} />
+            {/* Two lines reserved, so moving between diagrams never shifts the viewer. */}
+            <p className="mt-3 max-w-3xl text-base leading-relaxed text-lucid-text-mid md:min-h-[3.25rem] xl:col-span-2 xl:row-start-3">
+              {diagram.summary}
+            </p>
+            <DiagramSwitcher
+              current={diagram}
+              all={all}
+              className="mt-5 xl:col-start-2 xl:row-start-2 xl:mt-0"
+            />
           </header>
 
           <DiagramViewer
             src={diagram.viewerSrc}
             title={`${diagram.title} — interactive diagram`}
-            className="h-[75dvh] min-h-[560px] lg:h-[calc(100dvh-15rem)]"
+            className="h-[75dvh] min-h-[560px] lg:h-[calc(100dvh-18.5rem)] xl:h-[calc(100dvh-15rem)]"
           />
-          <p className="mt-2 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px] text-lucid-text-disabled">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-xs text-lucid-text-low">
             <span>
               {diagram.extent} · {diagram.chapters.length} guided chapters
-              {diagram.sourceRevision && (
-                <>
-                  {" · "}
-                  {diagram.sourceLinks} source links pinned to{" "}
-                  <a
-                    href={`https://github.com/ChanLumerico/lucid/tree/${diagram.sourceRevision}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-lucid-text-low transition-colors hover:text-lucid-primary"
-                  >
-                    {diagram.sourceRevision.slice(0, 7)}
-                  </a>
-                </>
-              )}
             </span>
-          </p>
+            {diagram.sourceRevision && (
+              <span>
+                {diagram.sourceLinks} source links pinned to{" "}
+                <a
+                  href={`https://github.com/ChanLumerico/lucid/tree/${diagram.sourceRevision}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-lucid-text-mid transition-colors hover:text-lucid-primary"
+                >
+                  {diagram.sourceRevision.slice(0, 7)}
+                </a>
+              </span>
+            )}
+          </div>
 
-          <div className="mx-auto max-w-5xl space-y-12 py-12">
+          <div className="space-y-12 pt-12 pb-16">
             {diagram.facts.length > 0 && (
               <section>
                 <SectionHeading>Key facts</SectionHeading>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <div className={cn("grid gap-4", balancedCols(diagram.facts.length))}>
                   {diagram.facts.map((fact) => (
                     <div
                       key={fact.title}
-                      className="rounded-xl border border-lucid-border bg-lucid-surface/40 px-5 py-4"
+                      className="rounded-xl border border-lucid-border bg-lucid-surface/40 p-5"
                     >
-                      <div className="mb-2 flex items-center gap-2">
+                      <div className="mb-3 flex items-center gap-2">
                         <span
                           aria-hidden
-                          className={cn("h-1.5 w-1.5 shrink-0 rounded-full", FACT_TONE_DOT[fact.tone])}
+                          className={cn("h-2 w-2 shrink-0 rounded-full", FACT_TONE_DOT[fact.tone])}
                         />
                         <h3 className="text-sm font-semibold text-lucid-text-high">{fact.title}</h3>
                       </div>
-                      <ul className="space-y-1.5 text-sm leading-relaxed text-lucid-text-mid">
+                      <ul className="space-y-2 text-sm leading-relaxed text-lucid-text-mid">
                         {fact.items.map((item) => (
-                          <li key={item}>{item}</li>
+                          <li key={item} className="flex gap-2.5">
+                            <span
+                              aria-hidden
+                              className="mt-[0.6875rem] h-1 w-1 shrink-0 rounded-full bg-lucid-text-disabled"
+                            />
+                            <span>{item}</span>
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -176,35 +217,44 @@ export default async function DiagramPage({ params }: { params: Params }) {
             {diagram.chapters.length > 0 && (
               <section>
                 <SectionHeading>Guided chapters</SectionHeading>
-                <ol className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <ol className={cn("grid gap-4", balancedCols(diagram.chapters.length))}>
                   {diagram.chapters.map((chapter, n) => (
                     <li
                       key={chapter.id}
-                      className="flex gap-3 rounded-xl border border-lucid-border bg-lucid-surface/40 px-4 py-3"
+                      className="rounded-xl border border-lucid-border bg-lucid-surface/40 p-5"
                     >
-                      <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-lucid-primary/30 bg-lucid-primary/10 font-mono text-[10px] font-semibold text-lucid-primary">
-                        {n + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-lucid-text-high">{chapter.label}</p>
-                        {chapter.note && (
-                          <p className="mt-0.5 text-xs leading-relaxed text-lucid-text-low">
-                            {chapter.note}
-                          </p>
-                        )}
+                      <div className="flex items-center gap-2.5">
+                        <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-lucid-primary/30 bg-lucid-primary/10 px-1 font-mono text-[11px] font-semibold text-lucid-primary">
+                          {String(n + 1).padStart(2, "0")}
+                        </span>
+                        <h3 className="text-sm font-semibold text-lucid-text-high">{chapter.label}</h3>
                       </div>
+                      {chapter.note && (
+                        <p className="mt-3 text-sm leading-relaxed text-lucid-text-mid">
+                          {chapter.note}
+                        </p>
+                      )}
                     </li>
                   ))}
                 </ol>
               </section>
             )}
 
-            {(previous || next) && (
-              <nav aria-label="More diagrams" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {previous && <NeighbourCard diagram={previous} direction="previous" />}
-                {next && <NeighbourCard diagram={next} direction="next" />}
-              </nav>
-            )}
+            {/* Both ends always filled: the first and last diagram lead back to the overview. */}
+            <nav aria-label="More diagrams" className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <NeighbourCard
+                direction="previous"
+                href={previous ? `/architecture/${previous.slug}` : "/architecture"}
+                label={previous ? "Previous" : "Overview"}
+                title={previous ? previous.title : "All diagrams"}
+              />
+              <NeighbourCard
+                direction="next"
+                href={next ? `/architecture/${next.slug}` : "/architecture"}
+                label={next ? "Next" : "Overview"}
+                title={next ? next.title : "All diagrams"}
+              />
+            </nav>
           </div>
         </div>
       </main>
