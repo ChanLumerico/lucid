@@ -135,8 +135,9 @@ def save_compiled(cm: object, path: str) -> bool:
     >>> import lucid
     >>> import lucid.compile as lc
     >>> cm = lc.compile(lambda a, b: a * b + 1.0)
-    >>> x = lucid.randn(2, 8).to("metal")
-    >>> _ = cm(x, x)                             # populate cache
+    >>> a = lucid.randn(2, 8).to("metal")
+    >>> b = lucid.randn(2, 8).to("metal")
+    >>> _ = cm(a, b)                             # populate cache
     >>> lc.save_compiled(cm, "/tmp/my_graph")    # writes .mpsgraphpackage + .meta
     True
 
@@ -204,10 +205,18 @@ def load_compiled(path: str) -> object:
     --------
     >>> import lucid
     >>> import lucid.compile as lc
-    >>> step = lc.load_compiled("/tmp/my_linear")
-    >>> step.num_inputs                 # doctest: +SKIP
-    3                                    # e.g. (W, b, x)
-    >>> out = step(W, b, x)             # all feeds in order  # doctest: +SKIP
+    >>> cm = lc.compile(lambda a, b: a * b + 1.0)
+    >>> a = lucid.randn(2, 8).to("metal")
+    >>> b = lucid.randn(2, 8).to("metal")
+    >>> _ = cm(a, b)                              # populate cache
+    >>> lc.save_compiled(cm, "/tmp/my_graph")
+    True
+    >>> step = lc.load_compiled("/tmp/my_graph")
+    >>> step.num_inputs                           # a and b, in first-read order
+    2
+    >>> out = step(a, b)
+    >>> bool(lucid.allclose(out.to("cpu"), (a * b + 1.0).to("cpu")))
+    True
 
     See Also
     --------

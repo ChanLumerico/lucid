@@ -9,8 +9,8 @@
     "",
     "Regenerate with:  lucid-audit --update-doctests"
   ],
-  "failed": 560,
-  "attempted": 5600,
+  "failed": 614,
+  "attempted": 5956,
   "failing": {
     "lucid._factories.converters": 7,
     "lucid._factories.creation": 10,
@@ -29,6 +29,11 @@
     "lucid.compile._core.signature": 5,
     "lucid.compile._debug.trace_dump": 3,
     "lucid.compile._entry.module": 7,
+    "lucid.coreml": 18,
+    "lucid.coreml._build": 4,
+    "lucid.coreml._model": 9,
+    "lucid.coreml._optimize": 5,
+    "lucid.coreml._spec": 27,
     "lucid.distributions.bernoulli": 20,
     "lucid.distributions.categorical": 1,
     "lucid.distributions.continuous_extra": 4,
@@ -64,7 +69,6 @@
     "lucid.nn.modules.linear": 1,
     "lucid.nn.modules.normalization": 1,
     "lucid.nn.modules.padding": 3,
-    "lucid.nn.modules.pooling": 8,
     "lucid.nn.modules.upsampling": 1,
     "lucid.nn.qat.conv": 6,
     "lucid.nn.qat.linear": 2,
@@ -94,7 +98,6 @@
     "lucid.utils.data.sampler": 13,
     "lucid.utils.tokenizer._wordpiece": 3,
     "lucid.utils.transforms": 1,
-    "lucid.utils.transforms._base": 1,
     "lucid.weights._base": 4,
     "lucid.weights._registry": 3
   }

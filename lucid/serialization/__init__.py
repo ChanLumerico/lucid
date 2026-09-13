@@ -205,7 +205,10 @@ def load(
     Examples
     --------
     >>> import lucid
+    >>> lucid.serialization.save({"w": lucid.ones(3)}, "/tmp/ckpt.lucid")
     >>> sd = lucid.serialization.load("/tmp/ckpt.lucid")
+    >>> sd["w"].tolist()
+    [1.0, 1.0, 1.0]
     """
     if isinstance(f, (str, bytes)):
         path_str = f.decode() if isinstance(f, bytes) else str(f)
@@ -463,7 +466,10 @@ def load_sharded(
     Examples
     --------
     >>> import lucid
+    >>> lucid.serialization.save_sharded({"w": lucid.ones(3)}, "/tmp/ckpt_dir")
     >>> sd = lucid.serialization.load_sharded("/tmp/ckpt_dir")
+    >>> sd["w"].tolist()
+    [1.0, 1.0, 1.0]
     """
     import json
     import os
@@ -633,7 +639,11 @@ def load_safetensors(
     Examples
     --------
     >>> import lucid
-    >>> sd = lucid.serialization.load_safetensors("/tmp/weights.safetensors")
+    >>> sd = {"w": lucid.ones(3)}
+    >>> lucid.serialization.save_safetensors(sd, "/tmp/weights.safetensors")
+    >>> loaded = lucid.serialization.load_safetensors("/tmp/weights.safetensors")
+    >>> loaded["w"].tolist()
+    [1.0, 1.0, 1.0]
     """
     from safetensors import safe_open as _safe_open
     from lucid._factories.converters import from_numpy as _from_numpy
