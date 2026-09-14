@@ -35,6 +35,7 @@ from lucid.models.generative.rectified_flow._model import (
     _FIRResample,
     _VelocityField,
 )
+from lucid.test._fixtures.devices import metal_available
 
 
 def _cfg(**overrides: object) -> RectifiedFlowConfig:
@@ -377,6 +378,65 @@ def test_sample_rejects_bad_budgets(bad: dict[str, int]) -> None:
     model = RectifiedFlowModel(_cfg()).eval()
     with pytest.raises(ValueError):
         model.sample(**bad)  # type: ignore[arg-type]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Device
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Built through the registered factories, since ``create_model(...)`` then
+# ``.to("metal")`` is the path a user takes.
+_SMALL: dict[str, object] = {
+    "sample_size": 8,
+    "base_channels": 16,
+    "channel_mult": (1, 2),
+    "num_res_blocks": 1,
+    "attention_resolutions": (),
+    "resnet_groups": 8,
+    "init_scale": 1.0,
+}
+_METAL = "device('metal')"
+_needs_metal = pytest.mark.skipif(not metal_available(), reason="metal unavailable")
+
+
+def _on_metal(name: str) -> object:
+    return create_model(name, **_SMALL).eval().to("metal")
+
+
+@_needs_metal
+def test_every_draw_follows_the_model_to_metal() -> None:
+    """A model moved to the accelerator samples there without being told.
+
+    Every default used to be ``"cpu"`` — and ``straightness`` passed no
+    device at all — so ``.to("metal")`` followed by a default call drew its
+    noise on the CPU and the first field evaluation raised a device
+    mismatch.  Each entry point draws separately, so each is exercised.
+    """
+    model = _on_metal("rectified_flow_cifar")
+    assert isinstance(model, RectifiedFlowModel)
+    assert str(model.sample(n_samples=2, steps=2).device) == _METAL
+    z0, z1 = model.reflow_pairs(n_samples=2, steps=2)
+    assert (str(z0.device), str(z1.device)) == (_METAL, _METAL)
+    assert str(model.straightness(n_samples=2, steps=2).device) == _METAL
+    assert str(model.sample_times(3).device) == _METAL
+
+
+@_needs_metal
+def test_the_generator_follows_the_model_to_metal() -> None:
+    model = _on_metal("rectified_flow_cifar_gen")
+    assert isinstance(model, RectifiedFlowForImageGeneration)
+    assert str(model.generate(n_samples=2, steps=1).samples.device) == _METAL
+    z0, z1 = model.reflow_pairs(n_samples=2, steps=2)
+    assert (str(z0.device), str(z1.device)) == (_METAL, _METAL)
+
+
+@_needs_metal
+def test_an_explicit_device_still_wins() -> None:
+    """Following the model is the default, not an override of the caller."""
+    model = _on_metal("rectified_flow_cifar")
+    assert isinstance(model, RectifiedFlowModel)
+    assert str(model.sample_times(3, device="cpu").device) == "device('cpu')"
+    assert str(model.sample(n_samples=1, steps=1, device="metal").device) == _METAL
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Fixed
+
+- Rectified Flow draws where the model is; DIAMOND's act keeps its memory
+
 ---
 
 ## [3.11.3] — 2026-09-14

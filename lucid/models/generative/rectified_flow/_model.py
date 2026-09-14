@@ -43,6 +43,7 @@ from lucid.models._utils._generative import (
     exact_divergence,
     generative_activation,
     hutchinson_divergence,
+    resolve_generation_device,
     trace_probe,
 )
 from lucid.models.generative.rectified_flow._config import (
@@ -966,7 +967,7 @@ class RectifiedFlowModel(PretrainedModel):
                 f"got shape {tuple(x.shape)}"
             )
 
-    def sample_times(self, batch: int, device: str = "cpu") -> Tensor:
+    def sample_times(self, batch: int, device: str | None = None) -> Tensor:
         r"""Draw the times the objective is evaluated at.
 
         Four behaviours, one per ``t_schedule``:
@@ -984,7 +985,8 @@ class RectifiedFlowModel(PretrainedModel):
         batch : int
             How many times to draw.
         device : str, optional
-            Where to allocate them.  Default ``"cpu"``.
+            Where to allocate them.  Defaults to the device the model's
+            parameters are on; an explicit value wins.
 
         Returns
         -------
@@ -1011,6 +1013,7 @@ class RectifiedFlowModel(PretrainedModel):
         >>> sorted({round(v, 4) for v in two_step.sample_times(64).tolist()})
         [0.001, 0.5005]
         """
+        device = resolve_generation_device(self, device)
         eps = self._time_eps
         span = 1.0 - eps
         schedule = self._t_schedule
@@ -1225,7 +1228,7 @@ class RectifiedFlowModel(PretrainedModel):
         n_samples: int = 1,
         *,
         steps: int | None = None,
-        device: str = "cpu",
+        device: str | None = None,
         noise: Tensor | None = None,
     ) -> Tensor:
         r"""Generate by integrating the field from noise to data.
@@ -1241,7 +1244,8 @@ class RectifiedFlowModel(PretrainedModel):
             measures straightness directly.  Left ``None``, an adaptive
             solve runs instead and spends whatever the tolerance demands.
         device : str, optional
-            Where to allocate the prior draw.  Default ``"cpu"``.
+            Where to allocate the prior draw.  Defaults to the device the
+            model's parameters are on; an explicit value wins.
         noise : Tensor, optional
             ``(N, C, H, W)`` starting point in place of a fresh draw.
             Keeping it is what makes a reflow pair.
@@ -1278,6 +1282,7 @@ class RectifiedFlowModel(PretrainedModel):
         >>> model.nfe  # Euler, so the budget is exactly the step count
         4
         """
+        device = resolve_generation_device(self, device)
         if noise is None:
             if n_samples <= 0:
                 raise ValueError(f"n_samples must be positive, got {n_samples}")
@@ -1327,7 +1332,7 @@ class RectifiedFlowModel(PretrainedModel):
         n_samples: int = 1,
         *,
         steps: int | None = None,
-        device: str = "cpu",
+        device: str | None = None,
         noise: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
         r"""Couplings :math:`(Z_0, Z_1)` for the next rectified flow.
@@ -1345,7 +1350,8 @@ class RectifiedFlowModel(PretrainedModel):
         steps : int, optional
             Fixed Euler budget instead of an adaptive solve.
         device : str, optional
-            Where to allocate the prior draw.  Default ``"cpu"``.
+            Where to allocate the prior draw.  Defaults to the device the
+            model's parameters are on; an explicit value wins.
         noise : Tensor, optional
             Sources to use in place of a fresh draw.
 
@@ -1381,6 +1387,7 @@ class RectifiedFlowModel(PretrainedModel):
         >>> bool(lucid.allclose(target, z1 - z0))  # the next round's target
         True
         """
+        device = resolve_generation_device(self, device)
         if noise is None:
             if n_samples <= 0:
                 raise ValueError(f"n_samples must be positive, got {n_samples}")
@@ -1438,7 +1445,12 @@ class RectifiedFlowModel(PretrainedModel):
 
     @lucid.no_grad()
     def straightness(
-        self, noise: Tensor | None = None, *, n_samples: int = 1, steps: int = 32
+        self,
+        noise: Tensor | None = None,
+        *,
+        n_samples: int = 1,
+        steps: int = 32,
+        device: str | None = None,
     ) -> Tensor:
         r"""The measure :math:`S(\mathbf{Z})` of paper eq. (3).
 
@@ -1464,6 +1476,10 @@ class RectifiedFlowModel(PretrainedModel):
             How many paths to average over when ``noise`` is not given.
         steps : int, default=32
             Grid resolution for both the solve and the quadrature.
+        device : str, optional
+            Where to draw the paths when ``noise`` is not given.  Defaults
+            to the device the model's parameters are on; an explicit value
+            wins.
 
         Returns
         -------
@@ -1501,7 +1517,8 @@ class RectifiedFlowModel(PretrainedModel):
         if noise is None:
             if n_samples <= 0:
                 raise ValueError(f"n_samples must be positive, got {n_samples}")
-            noise = lucid.randn((n_samples, *self._image_shape))
+            device = resolve_generation_device(self, device)
+            noise = lucid.randn((n_samples, *self._image_shape), device=device)
         else:
             self._check_image(noise)
 
@@ -1686,10 +1703,32 @@ class RectifiedFlowForImageGeneration(ImageGenerationModel):
         n_samples: int = 1,
         *,
         steps: int | None = None,
-        device: str = "cpu",
+        device: str | None = None,
         noise: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
-        """Couplings for the next round — see :meth:`RectifiedFlowModel.reflow_pairs`."""
+        """Couplings for the next round, from the wrapped flow.
+
+        See :meth:`RectifiedFlowModel.reflow_pairs` for why these pairs are
+        what the next round trains on.
+
+        Parameters
+        ----------
+        n_samples : int, default=1
+            How many pairs to generate.  Ignored when ``noise`` is given.
+        steps : int, optional
+            Fixed Euler budget instead of an adaptive solve.
+        device : str, optional
+            Where to allocate the prior draw.  Defaults to the device the
+            model's parameters are on; an explicit value wins.
+        noise : Tensor, optional
+            Sources to use in place of a fresh draw.
+
+        Returns
+        -------
+        tuple[Tensor, Tensor]
+            ``(z0, z1)``, both ``(N, C, H, W)``.
+        """
+        device = resolve_generation_device(self, device)
         return cast(
             tuple[Tensor, Tensor],
             self.rectified_flow.reflow_pairs(
@@ -1703,7 +1742,7 @@ class RectifiedFlowForImageGeneration(ImageGenerationModel):
         n_samples: int = 1,
         *,
         steps: int | None = None,
-        device: str = "cpu",
+        device: str | None = None,
         noise: Tensor | None = None,
     ) -> GenerationOutput:
         """Sample by integrating the field from ``t = 0`` to ``t = 1``.
@@ -1716,7 +1755,8 @@ class RectifiedFlowForImageGeneration(ImageGenerationModel):
             Fixed Euler budget instead of an adaptive solve.  ``steps=1``
             is the regime the method exists for.
         device : str, optional
-            Where to allocate the prior draw.  Default ``"cpu"``.
+            Where to allocate the prior draw.  Defaults to the device the
+            model's parameters are on; an explicit value wins.
         noise : Tensor, optional
             Starting point in place of a fresh draw.
 
@@ -1743,6 +1783,7 @@ class RectifiedFlowForImageGeneration(ImageGenerationModel):
         >>> model.generate(noise=noise, steps=2).samples.shape  # batch follows noise
         (1, 3, 8, 8)
         """
+        device = resolve_generation_device(self, device)
         return GenerationOutput(
             samples=self.rectified_flow.sample(
                 n_samples, steps=steps, device=device, noise=noise

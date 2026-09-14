@@ -24,7 +24,7 @@ REINFORCE.  Nothing would be shared by fusing them but a checkpoint.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, ClassVar, cast, override
+from typing import Callable, ClassVar, Literal, cast, overload, override
 
 import lucid
 import lucid.nn as nn
@@ -1862,7 +1862,40 @@ class DIAMONDForWorldModeling(WorldModelingModel):
         self.config: DIAMONDConfig = config
         self.diamond = DIAMONDModel(config)
 
-    def act(self, frame: Tensor, state: tuple[Tensor, Tensor] | None = None) -> Tensor:
+    @overload
+    def act(
+        self,
+        frame: Tensor,
+        state: tuple[Tensor, Tensor] | None = None,
+        *,
+        return_state: Literal[False] = False,
+    ) -> Tensor: ...
+
+    @overload
+    def act(
+        self,
+        frame: Tensor,
+        state: tuple[Tensor, Tensor] | None = None,
+        *,
+        return_state: Literal[True],
+    ) -> tuple[Tensor, tuple[Tensor, Tensor]]: ...
+
+    @overload
+    def act(
+        self,
+        frame: Tensor,
+        state: tuple[Tensor, Tensor] | None = None,
+        *,
+        return_state: bool = False,
+    ) -> Tensor | tuple[Tensor, tuple[Tensor, Tensor]]: ...
+
+    def act(
+        self,
+        frame: Tensor,
+        state: tuple[Tensor, Tensor] | None = None,
+        *,
+        return_state: bool = False,
+    ) -> Tensor | tuple[Tensor, tuple[Tensor, Tensor]]:
         """Sample an action from the policy.
 
         Parameters
@@ -1870,12 +1903,21 @@ class DIAMONDForWorldModeling(WorldModelingModel):
         frame : Tensor
             ``(B, C, H, W)``.
         state : tuple of Tensor or None, optional
-            Carried actor-critic LSTM state.
+            Carried actor-critic LSTM ``(hidden, cell)``.  ``None`` reads
+            ``frame`` from a blank memory, as at the start of an episode.
+        return_state : bool, default=False, keyword-only
+            Also return the LSTM state after reading ``frame``.  The policy
+            is recurrent, so an agent loop must pass this back as the next
+            call's ``state``; without it every frame is read from a blank
+            memory and the policy remembers nothing.
 
         Returns
         -------
-        Tensor
-            ``(B,)`` action indices.
+        Tensor or (Tensor, tuple of Tensor)
+            ``(B,)`` action indices.  With ``return_state=True``, the pair
+            ``(action, state)``, where ``state`` is the one
+            :meth:`DIAMONDModel.step_actor_critic` returns for the same
+            frame and carried state.
 
         Examples
         --------
@@ -1899,11 +1941,31 @@ class DIAMONDForWorldModeling(WorldModelingModel):
 
         >>> bool(action.min() >= 0), bool(action.max() < config.num_actions)
         (True, True)
+
+        The policy is recurrent, so an agent loop asks for the state back
+        and hands it to the next call — that is what gives it a memory:
+
+        >>> frames = lucid.randn((2, 5, 3, 16, 16))
+        >>> state = None
+        >>> with lucid.no_grad():
+        ...     for t in range(5):
+        ...         action, state = model.act(frames[:, t], state, return_state=True)
+        ...     _, blank = model.act(frames[:, -1], return_state=True)
+        >>> action.shape, [s.shape for s in state]
+        ((2,), [(2, 16), (2, 16)])
+
+        The last frame, read after the four before it, leaves a different
+        memory than the same frame read cold:
+
+        >>> bool((state[0] == blank[0]).all())
+        False
         """
-        logits, _value, _state = self.diamond.step_actor_critic(frame, state)
-        return lucid.multinomial(lucid.softmax(logits, dim=-1), num_samples=1).reshape(
-            -1
-        )
+        logits, _value, new_state = self.diamond.step_actor_critic(frame, state)
+        probs = lucid.softmax(logits, dim=-1)
+        action = lucid.multinomial(probs, num_samples=1).reshape(-1)
+        if return_state:
+            return action, new_state
+        return action
 
     @override
     def forward(  # type: ignore[override]
@@ -2093,20 +2155,33 @@ class DIAMONDForWorldModeling(WorldModelingModel):
         Parameters
         ----------
         frames : Tensor
-            ``(B, T, C, H, W)``.
+            ``(B, T, C, H, W)``, with ``T >= 2``.
         actions : Tensor
-            ``(B, T)``.
+            ``(B, T)``; ``actions[:, t]`` is the action taken at frame ``t``.
         rewards : Tensor
-            ``(B, T)`` real rewards.  Only their sign is predicted —
-            Algorithm 1 writes ``CE(r_hat, sign(r))``, which is all the
-            environment's clipping to :math:`\{-1, 0, 1\}` leaves.
+            ``(B, T)`` real rewards; ``rewards[:, t]`` is the reward for the
+            step from frame ``t`` to frame ``t + 1``.  Only their sign is
+            predicted — Algorithm 1 writes ``CE(r_hat, sign(r))``, which is
+            all the environment's clipping to :math:`\{-1, 0, 1\}` leaves.
         ends : Tensor
-            ``(B, T)`` termination flags in ``{0, 1}``.
+            ``(B, T)`` termination flags in ``{0, 1}``, aligned the same
+            way: ``ends[:, t]`` marks the step out of frame ``t``.
 
         Returns
         -------
         Tensor
-            Scalar, the two cross-entropies summed.
+            Scalar, the two cross-entropies summed, averaged over the
+            ``T - 1`` transitions.
+
+        Notes
+        -----
+        The reward model reads *transitions*, so ``T`` frames give
+        ``T - 1`` of them: step ``t`` pairs ``frames[:, t]`` with
+        ``frames[:, t + 1]`` and ``actions[:, t]``, and scores
+        ``rewards[:, t]`` and ``ends[:, t]``.  The last column of
+        ``actions``, ``rewards`` and ``ends`` has no next frame to pair
+        with and is ignored — so each column must hold what the step *out
+        of* its frame earned, not what was observed on arriving there.
 
         Examples
         --------
@@ -2134,10 +2209,19 @@ class DIAMONDForWorldModeling(WorldModelingModel):
         >>> scaled = model.reward_end_loss(frames, actions, rewards * 10.0, ends)
         >>> scaled.item() == loss.item()
         True
+
+        The last column pairs with no next frame, so it is never scored:
+
+        >>> moved = lucid.cat([rewards[:, :-1], lucid.tensor([[-1.0], [1.0]])], dim=1)
+        >>> model.reward_end_loss(frames, actions, moved, ends).item() == loss.item()
+        True
         """
         state: tuple[Tensor, Tensor] | None = None
-        reward_loss = lucid.zeros(())
-        end_loss = lucid.zeros(())
+        # The accumulators live with the frames: a CPU zero refuses to add the
+        # first loss of a model that has been moved to another device.
+        device = frames.device.type
+        reward_loss = lucid.zeros((), device=device)
+        end_loss = lucid.zeros((), device=device)
         steps = int(frames.shape[1]) - 1
         if steps < 1:
             raise ValueError(

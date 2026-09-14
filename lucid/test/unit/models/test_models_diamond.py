@@ -21,6 +21,7 @@ from lucid.models.generative.diamond import (
     DIAMONDModel,
 )
 from lucid.models.generative.diamond._model import _SelfAttention2d
+from lucid.test._fixtures.devices import metal_available
 
 
 def _tiny(**overrides: object) -> DIAMONDConfig:
@@ -441,6 +442,83 @@ class TestImagination:
         actor = model.diamond.actor_critic
         assert any(p.grad is not None for p in actor.actor_linear.parameters())
         assert any(p.grad is not None for p in actor.critic_linear.parameters())
+
+
+class TestActing:
+    """``act`` is what an agent loop calls, so it must be able to remember."""
+
+    def test_by_default_only_the_action_comes_back(self) -> None:
+        """Existing callers take a bare tensor; the opt-in must not change it."""
+        model = DIAMONDForWorldModeling(_tiny()).eval()
+        with lucid.no_grad():
+            action = model.act(lucid.randn((2, 3, 16, 16)))
+        assert isinstance(action, lucid.Tensor)
+        assert action.shape == (2,)
+
+    def test_the_carried_state_is_the_actor_critic_s_own(self) -> None:
+        """``act`` used to discard the updated LSTM state.
+
+        An agent loop that only called ``act`` then read every frame from a
+        blank memory: a recurrent policy with the recurrence cut.  What it
+        hands back now must be exactly what ``step_actor_critic`` produces,
+        frame after frame, or a loop carrying it would drift from the
+        rollout the policy is trained in.
+        """
+        model = DIAMONDForWorldModeling(_tiny()).eval()
+        first, second = lucid.randn((2, 3, 16, 16)), lucid.randn((2, 3, 16, 16))
+        with lucid.no_grad():
+            action, state = model.act(first, return_state=True)
+            _, _, expected = model.diamond.step_actor_critic(first)
+            _, carried = model.act(second, state, return_state=True)
+            _, _, expected_next = model.diamond.step_actor_critic(second, expected)
+        assert action.shape == (2,)
+        for got, want in [*zip(state, expected), *zip(carried, expected_next)]:
+            assert float((got - want).abs().max().item()) == 0.0
+
+    def test_acting_with_memory_differs_from_acting_cold(self) -> None:
+        """The same frame, read after another one, is read differently.
+
+        If the carried state changed nothing, threading it through would be
+        a no-op and the test above would pass vacuously.  Both the memory
+        the second frame leaves and the logits its action is drawn from
+        must differ from reading that frame from a fresh state.
+        """
+        model = DIAMONDForWorldModeling(_tiny()).eval()
+        first, second = lucid.randn((2, 3, 16, 16)), lucid.randn((2, 3, 16, 16))
+        with lucid.no_grad():
+            _, state = model.act(first, return_state=True)
+            _, carried = model.act(second, state, return_state=True)
+            _, fresh = model.act(second, return_state=True)
+            warm, _, _ = model.diamond.step_actor_critic(second, state)
+            cold, _, _ = model.diamond.step_actor_critic(second)
+        for with_memory, without in zip(carried, fresh):
+            assert float((with_memory - without).abs().max().item()) > 0.0
+        assert float((warm - cold).abs().max().item()) > 0.0
+
+
+@pytest.mark.skipif(not metal_available(), reason="metal unavailable")
+class TestOnMetal:
+    """The recurrent paths keep their tensors where the model is."""
+
+    def test_the_carried_state_stays_on_metal(self) -> None:
+        model = DIAMONDForWorldModeling(_tiny()).eval().to("metal")
+        frame = lucid.randn((2, 3, 16, 16)).to("metal")
+        with lucid.no_grad():
+            _, state = model.act(frame, return_state=True)
+            _, state = model.act(frame, state, return_state=True)
+        assert [str(s.device) for s in state] == ["device('metal')"] * 2
+
+    def test_reward_end_loss_runs_on_metal(self) -> None:
+        """Its accumulators used to be CPU zeros, which refuse a Metal loss."""
+        config = _tiny()
+        model = DIAMONDForWorldModeling(config).to("metal")
+        loss = model.reward_end_loss(
+            _history(config=config).to("metal"),
+            _actions(config=config).to("metal"),
+            lucid.tensor([[-5.0, 0.0, 3.0, 1.0], [0.0, 0.0, -1.0, 2.0]]).to("metal"),
+            lucid.zeros((2, config.conditioning_frames)).to("metal"),
+        )
+        assert str(loss.device) == "device('metal')"
 
 
 class TestObjectives:
