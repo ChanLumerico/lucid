@@ -25,6 +25,7 @@ from typing import Callable, Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _unwrap_or_scalar
+from lucid._dtype import to_engine_dtype
 from lucid._types import Scalar, TensorOrScalar
 
 if TYPE_CHECKING:
@@ -67,6 +68,8 @@ def _arith_result_dtype(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.D
 
 def _make_arith_adapter(
     engine_fn: Callable[[_Impl, _Impl], _Impl],
+    *,
+    floating: bool = False,
 ) -> Callable[[_Impl, _Impl], _Impl]:
     """Wrap an arithmetic binary engine function with scalars and dtype promotion.
 
@@ -91,6 +94,9 @@ def _make_arith_adapter(
     matmul/dot/inner/outer deliberately bypass it: a scalar operand is
     meaningless there, and they have their own dtype constraints that the
     engine enforces.
+
+    ``floating`` adds true division's rule on top: a common dtype that is
+    integral or bool becomes the default float dtype, as it does for ``/``.
     """
 
     def _adapter(a: _Impl, b: _Impl) -> _Impl:
@@ -105,6 +111,10 @@ def _make_arith_adapter(
                 a = _C_engine.astype(a, tgt)
             if db != tgt:
                 b = _C_engine.astype(b, tgt)
+        if floating and _ARITH_DTYPE_KIND_WIDTH.get(a.dtype, (2, 32))[0] < 2:
+            tgt = to_engine_dtype(None)
+            a = _C_engine.astype(a, tgt)
+            b = _C_engine.astype(b, tgt)
         return engine_fn(a, b)
 
     # Preserve the pybind11 docstring (contains the canonical signature line)

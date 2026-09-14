@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - load_state_dict copies into the tensors a module holds
 
+- true division of integers gives floats
+
 ### Added
 
 - CPU reshapes are views that see each other's writes

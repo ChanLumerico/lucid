@@ -8,6 +8,7 @@ the Tensor class by _inject_dunders() at module import time.
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap_or_scalar, _wrap
+from lucid._dtype import to_engine_dtype
 from lucid._tensor._indexing import _adopt_inplace, _getitem, _setitem
 
 if TYPE_CHECKING:
@@ -55,6 +56,30 @@ def _maybe_promote(
     if da != tgt:
         a_impl = _C_engine.astype(a_impl, tgt)
     if db != tgt:
+        b_impl = _C_engine.astype(b_impl, tgt)
+    return a_impl, b_impl
+
+
+def _is_integral(d: _C_engine.Dtype) -> bool:
+    """Whether ``d`` is an integer or bool dtype."""
+    return _DTYPE_KIND_WIDTH.get(d, (2, 32))[0] < 2
+
+
+def _true_div_operands(
+    a_impl: _C_engine.TensorImpl, b_impl: _C_engine.TensorImpl
+) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
+    """The operands of ``/`` at their common dtype, made floating if it is not.
+
+    The engine's ``div`` keeps an integer dtype when both operands have one,
+    so ``tensor([7, 8]) / 2`` came back ``[3, 4]``.  True division promotes
+    as every other arithmetic op does, and only then, if the common dtype is
+    integral, moves both to the default float dtype — so a half-precision
+    operand still decides the result's precision.
+    """
+    a_impl, b_impl = _maybe_promote(a_impl, b_impl)
+    if _is_integral(a_impl.dtype):
+        tgt = to_engine_dtype(None)
+        a_impl = _C_engine.astype(a_impl, tgt)
         b_impl = _C_engine.astype(b_impl, tgt)
     return a_impl, b_impl
 
@@ -449,11 +474,13 @@ def _inject_dunders(cls: type) -> None:
         >>> a = lucid.tensor([10.0, 20.0, 30.0])
         >>> b = lucid.tensor([2.0, 4.0, 5.0])
         >>> a / b
-        Tensor([5., 5., 6.])
+        tensor([5., 5., 6.])
         >>> a / 10
-        Tensor([1., 2., 3.])
+        tensor([1., 2., 3.])
+        >>> lucid.tensor([7, 8], dtype=lucid.int64) / 2
+        tensor([3.5000, 4.0000])
         """
-        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        a, b = _true_div_operands(self._impl, _unwrap_or_scalar(other, self._impl))
         return _wrap(_C_engine.div(a, b))
 
     def __rtruediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -485,9 +512,9 @@ def _inject_dunders(cls: type) -> None:
         >>> import lucid
         >>> a = lucid.tensor([2.0, 4.0, 5.0])
         >>> 20 / a
-        Tensor([10., 5., 4.])
+        tensor([10.,  5.,  4.])
         """
-        a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
+        a, b = _true_div_operands(_unwrap_or_scalar(other, self._impl), self._impl)
         return _wrap(_C_engine.div(a, b))
 
     def __itruediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -525,6 +552,13 @@ def _inject_dunders(cls: type) -> None:
         >>> a
         Tensor([1., 2., 3.])
         """
+        # The quotient is floating, and an integer tensor cannot hold it in
+        # place — the reference refuses the same, rather than truncate.
+        if _is_integral(self._impl.dtype):
+            raise RuntimeError(
+                f"/=: true division gives a floating result, which cannot be "
+                f"written in place into a {self.dtype} tensor — use / instead"
+            )
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         return _adopt_inplace(self, _C_engine.div_(a, b), "/=")
 

@@ -147,7 +147,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("add",      A._make_arith_adapter(_R.add),      2, method_name="add",      free_fn_name="add"),
     OpEntry("sub",      A._make_arith_adapter(_R.sub),      2, method_name="sub",      free_fn_name="sub"),
     OpEntry("mul",      A._make_arith_adapter(_R.mul),      2, method_name="mul",      free_fn_name="mul"),
-    OpEntry("div",      A._make_arith_adapter(_R.div),      2, method_name="div",      free_fn_name="div"),
+    OpEntry("div",      A._make_arith_adapter(_R.div, floating=True), 2, method_name="div",      free_fn_name="div"),
     OpEntry("pow",      A._make_arith_adapter(_R.pow),      2, method_name="pow",      free_fn_name="pow"),
     OpEntry("maximum",  A._make_arith_adapter(_R.maximum),  2, method_name="maximum",  free_fn_name="maximum"),
     OpEntry("minimum",  A._make_arith_adapter(_R.minimum),  2, method_name="minimum",  free_fn_name="minimum"),
