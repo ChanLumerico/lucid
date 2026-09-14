@@ -69,15 +69,15 @@ class Flatten(Module):
     >>>
     >>> flat = nn.Flatten()           # start_dim=1, end_dim=-1
     >>> x = lucid.zeros(8, 3, 32, 32)
-    >>> flat(x).shape
-    (8, 3072)                         # 3*32*32 = 3072
+    >>> flat(x).shape                 # 3*32*32 = 3072
+    (8, 3072)
 
     **Flatten only the spatial dimensions, keeping channels separate:**
 
     >>> flat_hw = nn.Flatten(start_dim=2, end_dim=3)
     >>> x = lucid.zeros(8, 16, 14, 14)
-    >>> flat_hw(x).shape
-    (8, 16, 196)                      # 14*14 = 196
+    >>> flat_hw(x).shape              # 14*14 = 196
+    (8, 16, 196)
 
     **Inside a Sequential pipeline:**
 
@@ -294,8 +294,8 @@ class Unfold(Module):
     >>> unfold = nn.Unfold(kernel_size=patch_size, stride=patch_size)
     >>> x = lucid.zeros(2, 3, 224, 224)
     >>> patches = unfold(x)
-    >>> patches.shape
-    (2, 768, 196)   # 768 = 3*16*16, 196 = (224//16)^2
+    >>> patches.shape   # 768 = 3*16*16, 196 = (224//16)^2
+    (2, 768, 196)
 
     **Im2col for manual convolution:**
 
@@ -305,8 +305,8 @@ class Unfold(Module):
     >>> unfold = nn.Unfold(kernel_size=3, padding=1)
     >>> x = lucid.randn(1, 1, 5, 5)
     >>> cols = unfold(x)
-    >>> cols.shape
-    (1, 9, 25)   # 9 = 1*3*3, 25 = 5*5 windows (stride=1, pad=1)
+    >>> cols.shape   # 9 = 1*3*3, 25 = 5*5 windows (stride=1, pad=1)
+    (1, 9, 25)
     """
 
     def __init__(

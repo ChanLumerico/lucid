@@ -42,8 +42,10 @@ class OpEvent:
     >>> import lucid
     >>> with lucid.profiler.profile() as prof:
     ...     y = lucid.randn(64, 64) @ lucid.randn(64, 64)
-    >>> for ev in prof.events():
-    ...     print(ev.name, ev.time_us)
+    >>> [ev.name for ev in prof.events()]
+    ['randn', 'randn', 'matmul']
+    >>> all(ev.time_us >= 0.0 for ev in prof.events())   # timings vary run to run
+    True
     """
 
     def __init__(self, impl: _C_engine.OpEvent) -> None:
@@ -126,8 +128,8 @@ class ProfileSummary:
     >>> with lucid.profiler.profile() as prof:
     ...     for _ in range(10):
     ...         y = lucid.randn(64, 64) @ lucid.randn(64, 64)
-    >>> for summary in prof.key_averages()[:3]:
-    ...     print(summary)
+    >>> sorted((s.name, s.count) for s in prof.key_averages())
+    [('matmul', 10), ('randn', 20)]
     """
 
     def __init__(self, name: str, events: list[OpEvent]) -> None:
@@ -189,7 +191,8 @@ class MemoryStats:
     >>> with lucid.profiler.profile() as prof:
     ...     _ = lucid.randn(1024, 1024)
     >>> stats = prof.memory_stats()
-    >>> stats and stats.peak_bytes
+    >>> stats is None or stats.peak_bytes > 0     # byte counts vary per process
+    True
     """
 
     def __init__(self, impl: _C_engine.MemoryStats) -> None:
@@ -379,8 +382,8 @@ def profile(
     >>> import lucid
     >>> with lucid.profiler.profile() as prof:
     ...     out = lucid.randn(128, 128) @ lucid.randn(128, 128)
-    >>> for row in prof.key_averages():
-    ...     print(row)
+    >>> sorted((row.name, row.count, row.total_flops) for row in prof.key_averages())
+    [('matmul', 1, 4194304), ('randn', 2, 0)]
     """
     prof = Profiler(with_memory=with_memory)
     with prof:

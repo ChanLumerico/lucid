@@ -182,7 +182,10 @@ def remove_weight_norm(module: Module, name: str = "weight") -> Module:
 
     Examples
     --------
-    >>> remove_weight_norm(layer)
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils import weight_norm, remove_weight_norm
+    >>> layer = weight_norm(nn.Linear(128, 64))
+    >>> _ = remove_weight_norm(layer)
     >>> "weight_g" in dict(layer.named_parameters())
     False
     """

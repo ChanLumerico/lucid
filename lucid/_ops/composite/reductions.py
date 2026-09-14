@@ -57,7 +57,7 @@ def nansum(
     >>> import math
     >>> x = lucid.tensor([1.0, math.nan, 3.0])
     >>> lucid.nansum(x)
-    Tensor(4.)
+    tensor(4.)
     """
     safe = lucid.where(lucid.isnan(x), lucid.full_like(x, 0.0), x)
     if dim is None:
@@ -113,7 +113,7 @@ def nanmean(
     >>> import math
     >>> x = lucid.tensor([1.0, math.nan, 3.0])
     >>> lucid.nanmean(x)
-    Tensor(2.)
+    tensor(2.)
     """
     mask = lucid.isnan(x)
     safe = lucid.where(mask, lucid.full_like(x, 0.0), x)
@@ -176,7 +176,7 @@ def nanmedian(
     >>> import math
     >>> x = lucid.tensor([1.0, math.nan, 3.0, 5.0])
     >>> lucid.nanmedian(x)
-    Tensor(3.)
+    tensor(3.)
     """
     big = lucid.full_like(x, math.inf)
     safe = lucid.where(lucid.isnan(x), big, x)

@@ -59,7 +59,7 @@ def angle(input: Tensor) -> Tensor:
     >>> import lucid
     >>> z = lucid.tensor([1+0j, 1+1j, 0+1j, -1+0j])
     >>> lucid.angle(z)
-    Tensor([0.0000, 0.7854, 1.5708, 3.1416])
+    tensor([0., 0.7854, 1.571, 3.142])
     """
     return lucid.atan2(lucid.imag(input), lucid.real(input))
 
@@ -105,9 +105,9 @@ def polar(abs: TensorOrScalar, angle: TensorOrScalar) -> Tensor:
     >>> import lucid
     >>> import math
     >>> r = lucid.tensor([1.0, 2.0])
-    >>> th = lucid.tensor([0.0, math.pi / 2])
+    >>> th = lucid.tensor([0.0, math.pi / 3])
     >>> lucid.polar(r, th)
-    Tensor([1.+0.j, 0.+2.j])
+    tensor([(1.+0.j), (1.+1.732j)], dtype=lucid.complex64)
     """
     abs, angle = _promote_pair(abs, angle)
     return lucid.complex(abs * lucid.cos(angle), abs * lucid.sin(angle))
@@ -149,8 +149,7 @@ def view_as_real(input: Tensor) -> Tensor:
     >>> import lucid
     >>> z = lucid.tensor([1+2j, 3+4j])
     >>> lucid.view_as_real(z)
-    Tensor([[1., 2.],
-            [3., 4.]])
+    tensor([[1., 2.], [3., 4.]])
     """
     return lucid.stack([lucid.real(input), lucid.imag(input)], dim=-1)
 
@@ -194,7 +193,7 @@ def view_as_complex(input: Tensor) -> Tensor:
     >>> import lucid
     >>> r = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
     >>> lucid.view_as_complex(r)
-    Tensor([1.+2.j, 3.+4.j])
+    tensor([(1.+2.j), (3.+4.j)], dtype=lucid.complex64)
     """
     if input.ndim < 1 or int(input.shape[-1]) != 2:
         raise ValueError(

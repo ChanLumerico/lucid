@@ -383,8 +383,10 @@ def convert(model: nn.Module, inplace: bool = False) -> nn.Module:
     >>> for _ in range(8):                       # calibrate before converting
     ...     _ = prepared(lucid.randn(32, 128))
     >>> qmodel = Q.convert(prepared)
-    >>> type(qmodel[0]).__name__
-    'Linear'
+    >>> type(qmodel[0]).__name__ == (            # which layer depends on the backend
+    ...     "QuantizedLinearMLX" if lucid.backends.quantized.use_mlx() else "Linear"
+    ... )
+    True
 
     The common mistake — converting straight after ``prepare`` with **no**
     calibration — silently produces a model with meaningless activation qparams:
@@ -496,8 +498,10 @@ def quantize_dynamic(
     >>> import lucid.quantization as Q
     >>> mlp = nn.Sequential(nn.Linear(512, 512), nn.ReLU(), nn.Linear(512, 10))
     >>> qmlp = Q.quantize_dynamic(mlp)          # no calibration needed
-    >>> type(qmlp[0]).__name__
-    'Linear'
+    >>> type(qmlp[0]).__name__ == (             # which layer depends on the backend
+    ...     "QuantizedLinearMLX" if lucid.backends.quantized.use_mlx() else "Linear"
+    ... )
+    True
     >>> qmlp(lucid.randn(1, 512)).shape
     (1, 10)
 

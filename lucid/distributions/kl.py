@@ -69,8 +69,8 @@ def register_kl[F: Callable[..., Tensor]](p_cls: type, q_cls: type) -> Callable[
     ...             + (p.variance + (p.loc - q.loc) ** 2) / (2.0 * q.variance)
     ...             - 0.5)
     >>> p = Normal(0.0, 1.0); q = Normal(0.0, 2.0)
-    >>> kl_divergence(p, q)
-    Tensor(...)
+    >>> kl_divergence(p, q)  # log(2) + 1/8 - 1/2
+    tensor(0.3181)
     """
 
     def _decorator(fn: F) -> F:
@@ -152,8 +152,8 @@ def kl_divergence(p: Distribution, q: Distribution) -> Tensor:
     >>> from lucid.distributions.kl import kl_divergence
     >>> p = Normal(loc=0.0, scale=1.0)
     >>> q = Normal(loc=1.0, scale=2.0)
-    >>> kl_divergence(p, q)
-    Tensor(...)
+    >>> kl_divergence(p, q)  # log(2) + (1 + 1)/8 - 1/2
+    tensor(0.4431)
     """
     key = (type(p), type(q))
     if key in _KL_REGISTRY:

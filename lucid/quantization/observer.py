@@ -746,10 +746,13 @@ class HistogramObserver(ObserverBase):
     True
 
     On a heavy-tailed input the search clips the rare extreme, so the chosen range is
-    *narrower* than the raw min/max the histogram spans:
+    *narrower* than the raw min/max the histogram spans.  It does so only when the bulk
+    is large enough that the finer grid outweighs the outlier's clipping error — at
+    ``1e5`` values, keeping the outlier is the lower-error choice; at ``1e6`` it is not:
 
     >>> import lucid
-    >>> x = lucid.randn(1, 100000)
+    >>> lucid.manual_seed(0)
+    >>> x = lucid.randn(1, 1_000_000)
     >>> x[0, 0] = 50.0                           # a single far outlier
     >>> obs = Q.HistogramObserver(bins=2048)
     >>> _ = obs(x)

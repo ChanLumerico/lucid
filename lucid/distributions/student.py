@@ -149,7 +149,7 @@ class StudentT(Distribution):
         >>> from lucid.distributions import StudentT
         >>> d = StudentT(df=5.0, loc=2.0, scale=0.5)
         >>> d.mean
-        Tensor(2.0)
+        tensor(2.)
         """
         self.df = _as_tensor(df)
         self.loc = _as_tensor(loc)
@@ -187,7 +187,7 @@ class StudentT(Distribution):
         Examples
         --------
         >>> StudentT(df=5.0, loc=3.0).mean
-        Tensor(3.0)
+        tensor(3.)
         """
         # Defined for df > 1 — we follow the reference framework and
         # return ``loc`` regardless.
@@ -218,7 +218,7 @@ class StudentT(Distribution):
         Examples
         --------
         >>> StudentT(df=4.0, scale=1.0).variance  # 4/(4-2) = 2.0
-        Tensor(2.0)
+        tensor(2.)
         """
         # Defined for df > 2:  scale² · df / (df − 2).
         # The closed form is only the answer above ν = 2.  Below it the
@@ -303,7 +303,7 @@ class StudentT(Distribution):
         --------
         >>> d = StudentT(df=1.0, loc=0.0, scale=1.0)  # Cauchy
         >>> d.log_prob(lucid.tensor(0.0))  # -log(π) ≈ -1.145
-        Tensor(-1.1447)
+        tensor(-1.145)
         """
         z = (value - self.loc) / self.scale
         log_density = (
@@ -342,7 +342,7 @@ class StudentT(Distribution):
         Examples
         --------
         >>> StudentT(df=1.0, loc=0.0, scale=1.0).entropy()  # Cauchy: log(4π) ≈ 2.531
-        Tensor(2.5310)
+        tensor(2.531)
         """
         # H = log(scale·sqrt(df)·B(0.5, df/2)) + (df+1)/2 · (digamma((df+1)/2) − digamma(df/2)).
         half = lucid.tensor(0.5) + 0 * self.df  # broadcast 0.5 → df-shape.

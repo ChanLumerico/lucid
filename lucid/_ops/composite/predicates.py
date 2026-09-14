@@ -286,7 +286,7 @@ def isin(
     >>> e = lucid.tensor([1, 2, 3, 4])
     >>> t = lucid.tensor([2, 4])
     >>> lucid.isin(e, t)
-    Tensor([False,  True, False,  True])
+    tensor([False, True, False, True], dtype=lucid.bool)
     """
     if not _is_tensor(elements):
         elements = lucid.tensor(elements)
@@ -337,7 +337,7 @@ def isneginf(x: Tensor) -> Tensor:
     >>> import math
     >>> x = lucid.tensor([-math.inf, -1.0, 0.0, math.inf])
     >>> lucid.isneginf(x)
-    Tensor([ True, False, False, False])
+    tensor([True, False, False, False], dtype=lucid.bool)
     """
     return lucid.logical_and(lucid.isinf(x), x < 0.0)
 
@@ -376,7 +376,7 @@ def isposinf(x: Tensor) -> Tensor:
     >>> import math
     >>> x = lucid.tensor([-math.inf, -1.0, 0.0, math.inf])
     >>> lucid.isposinf(x)
-    Tensor([False, False, False,  True])
+    tensor([False, False, False, True], dtype=lucid.bool)
     """
     return lucid.logical_and(lucid.isinf(x), x > 0.0)
 
@@ -418,7 +418,7 @@ def isreal(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([1.0, float('nan'), float('inf')])
     >>> lucid.isreal(x)
-    Tensor([ True,  True,  True])
+    tensor([True, True, True], dtype=lucid.bool)
     """
     return lucid.isfinite(x) | lucid.isnan(x) | lucid.isinf(x)
 
@@ -462,7 +462,7 @@ def conj_physical(x: Tensor) -> Tensor:
     >>> import lucid
     >>> z = lucid.tensor([1+2j, 3-4j])
     >>> lucid.conj_physical(z)
-    Tensor([1.-2.j, 3.+4.j])
+    tensor([(1.-2.j), (3.+4.j)], dtype=lucid.complex64)
     """
     return lucid.conj(x)
 

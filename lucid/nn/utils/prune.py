@@ -91,8 +91,10 @@ def identity(module: Module, name: str = "weight") -> Module:
 
     Examples
     --------
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils import prune
-    >>> prune.identity(layer)
+    >>> layer = nn.Linear(4, 3)
+    >>> _ = prune.identity(layer)
     >>> prune.is_pruned(layer)
     True
     """
@@ -141,7 +143,15 @@ def random_unstructured(
 
     Examples
     --------
-    >>> prune.random_unstructured(layer, amount=0.3)
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils import prune
+    >>> lucid.manual_seed(0)
+    >>> layer = nn.Linear(100, 100)
+    >>> _ = prune.random_unstructured(layer, amount=0.3)
+    >>> kept = float(layer.weight_mask.mean())
+    >>> abs(kept - 0.7) < 0.05                   # ≈ 30 % of the weights dropped
+    True
     """
     if not 0.0 <= amount <= 1.0:
         raise ValueError(f"amount must be in [0, 1], got {amount}")
@@ -200,7 +210,12 @@ def l1_unstructured(
 
     Examples
     --------
-    >>> prune.l1_unstructured(layer, amount=0.7)
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils import prune
+    >>> layer = nn.Linear(10, 10)
+    >>> _ = prune.l1_unstructured(layer, amount=0.7)
+    >>> int((layer.weight_mask == 0).sum().item())   # the 70 smallest |w| go
+    70
     """
     if not 0.0 <= amount <= 1.0:
         raise ValueError(f"amount must be in [0, 1], got {amount}")
@@ -261,8 +276,11 @@ def remove(module: Module, name: str = "weight") -> Module:
 
     Examples
     --------
-    >>> prune.l1_unstructured(layer, amount=0.5)
-    >>> prune.remove(layer)
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils import prune
+    >>> layer = nn.Linear(4, 3)
+    >>> _ = prune.l1_unstructured(layer, amount=0.5)
+    >>> _ = prune.remove(layer)
     >>> prune.is_pruned(layer)
     False
     """
@@ -316,9 +334,12 @@ def is_pruned(module: Module) -> bool:
 
     Examples
     --------
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils import prune
+    >>> layer = nn.Linear(4, 3)
     >>> prune.is_pruned(layer)
     False
-    >>> prune.l1_unstructured(layer, amount=0.2)
+    >>> _ = prune.l1_unstructured(layer, amount=0.2)
     >>> prune.is_pruned(layer)
     True
     """

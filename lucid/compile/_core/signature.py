@@ -55,7 +55,7 @@ class TensorSig:
         construction, ``shape[0]`` is ``-1`` to wildcard the batch
         dim.
     dtype : str
-        Stringified dtype (``"float32"``, ``"int64"``, …).
+        Stringified dtype (``"lucid.float32"``, ``"lucid.int64"``, …).
     device : str
         Device kind (``"cpu"`` / ``"metal"``).  Index is intentionally
         dropped — Lucid currently runs a single device per kind.
@@ -68,7 +68,7 @@ class TensorSig:
     >>> from lucid.compile._core.signature import TensorSig
     >>> sig = TensorSig.of(lucid.randn(4, 8))
     >>> sig.shape, sig.dtype, sig.device
-    ((4, 8), 'float32', 'cpu')
+    ((4, 8), 'lucid.float32', 'cpu')
 
     See Also
     --------
@@ -154,9 +154,18 @@ class CacheKey:
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.compile._core.signature import signature_of
+    >>> model = nn.Linear(8, 4).to("metal")
+    >>> x = lucid.randn(2, 8, device="metal")
+    >>> compiled = lucid.compile(model)
     >>> key = signature_of(model, (x,), {}, dynamic=False)
     >>> key in compiled._cache               # is this signature compiled yet?
+    False
+    >>> _ = compiled(x)
+    >>> key in compiled._cache
+    True
 
     See Also
     --------
@@ -303,9 +312,21 @@ def signature_of(
     Examples
     --------
     >>> # ``CompiledModule.__call__`` uses this to pick the cache slot.
-    >>> key = signature_of(model, (x,), {}, dynamic=False)
-    >>> if key not in cache:
-    ...     cache[key] = compile_trace(model, (x,), {})
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(8, 4)
+    >>> key = signature_of(model, (lucid.randn(2, 8),), {}, dynamic=False)
+    >>> key == signature_of(model, (lucid.randn(2, 8),), {}, dynamic=False)
+    True
+    >>> key == signature_of(model, (lucid.randn(5, 8),), {}, dynamic=False)
+    False
+
+    With ``dynamic=True`` the batch axis is wildcarded, so both calls
+    share one slot:
+
+    >>> a = signature_of(model, (lucid.randn(2, 8),), {}, dynamic=True)
+    >>> a == signature_of(model, (lucid.randn(5, 8),), {}, dynamic=True)
+    True
 
     See Also
     --------

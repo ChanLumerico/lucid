@@ -79,7 +79,7 @@ class Dropout(Module):
 
     >>> import lucid, lucid.nn as nn
     >>> drop = nn.Dropout(p=0.3)
-    >>> drop.train()
+    >>> _ = drop.train()
     >>> x = lucid.ones(4, 8)
     >>> y = drop(x)
     >>> # Approximately 30 % of elements are zero; rest scaled by 1/0.7
@@ -88,7 +88,7 @@ class Dropout(Module):
 
     Disabled in eval mode:
 
-    >>> drop.eval()
+    >>> _ = drop.eval()
     >>> y_eval = drop(lucid.ones(4, 8))
     >>> # All elements equal 1.0 — no masking
     >>> float(y_eval.sum()) == 32.0
@@ -183,7 +183,7 @@ class Dropout1d(Module):
 
     >>> import lucid, lucid.nn as nn
     >>> drop1d = nn.Dropout1d(p=0.2)
-    >>> drop1d.train()
+    >>> _ = drop1d.train()
     >>> x = lucid.ones(2, 8, 16)    # (N=2, C=8, L=16)
     >>> y = drop1d(x)
     >>> y.shape
@@ -192,7 +192,7 @@ class Dropout1d(Module):
 
     Verify pass-through in eval mode:
 
-    >>> drop1d.eval()
+    >>> _ = drop1d.eval()
     >>> y_eval = drop1d(lucid.ones(2, 8, 16))
     >>> float(y_eval.sum()) == 256.0
     True
@@ -288,7 +288,7 @@ class Dropout2d(Module):
 
     >>> import lucid, lucid.nn as nn
     >>> drop2d = nn.Dropout2d(p=0.25)
-    >>> drop2d.train()
+    >>> _ = drop2d.train()
     >>> x = lucid.ones(2, 16, 8, 8)    # (N=2, C=16, H=8, W=8)
     >>> y = drop2d(x)
     >>> y.shape
@@ -297,7 +297,7 @@ class Dropout2d(Module):
 
     No-op in eval mode:
 
-    >>> drop2d.eval()
+    >>> _ = drop2d.eval()
     >>> y_eval = drop2d(lucid.ones(2, 4, 4, 4))
     >>> float(y_eval.sum()) == 128.0
     True
@@ -407,7 +407,7 @@ class AlphaDropout(Module):
     ...     nn.AlphaDropout(p=0.05),
     ...     nn.Linear(64, 10),
     ... )
-    >>> mlp.train()
+    >>> _ = mlp.train()
     >>> y = mlp(lucid.randn(8, 32))
     >>> y.shape
     (8, 10)
@@ -415,7 +415,7 @@ class AlphaDropout(Module):
     Verify that eval mode is a no-op:
 
     >>> drop = nn.AlphaDropout(p=0.5)
-    >>> drop.eval()
+    >>> _ = drop.eval()
     >>> x = lucid.randn(4, 16)
     >>> import lucid.linalg
     >>> # Output should equal input exactly in eval mode
@@ -509,7 +509,7 @@ class Dropout3d(Module):
 
     >>> import lucid, lucid.nn as nn
     >>> drop3d = nn.Dropout3d(p=0.1)
-    >>> drop3d.train()
+    >>> _ = drop3d.train()
     >>> x = lucid.ones(2, 8, 4, 4, 4)    # (N=2, C=8, D=4, H=4, W=4)
     >>> y = drop3d(x)
     >>> y.shape
@@ -517,7 +517,7 @@ class Dropout3d(Module):
 
     No-op in eval mode:
 
-    >>> drop3d.eval()
+    >>> _ = drop3d.eval()
     >>> y_eval = drop3d(lucid.ones(1, 4, 2, 2, 2))
     >>> float(y_eval.sum()) == 32.0
     True
@@ -630,7 +630,7 @@ class FeatureAlphaDropout(Module):
     ...     nn.SELU(),
     ...     nn.FeatureAlphaDropout(p=0.05),
     ... )
-    >>> block.train()
+    >>> _ = block.train()
     >>> y = block(lucid.randn(2, 16, 8, 8))
     >>> y.shape
     (2, 32, 8, 8)
@@ -638,7 +638,7 @@ class FeatureAlphaDropout(Module):
     Compare channel mask vs. element mask for SELU conv features:
 
     >>> fad = nn.FeatureAlphaDropout(p=0.3)
-    >>> fad.train()
+    >>> _ = fad.train()
     >>> x = lucid.randn(4, 8, 6, 6)
     >>> out = fad(x)
     >>> out.shape

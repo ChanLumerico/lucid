@@ -205,9 +205,19 @@ class WeightsEnum(enum.Enum):
 
         Examples
         --------
+        >>> import lucid
+        >>> import lucid.models              # registers the zoo's weights enums
+        >>> import lucid.weights as W
+        >>> ResNet18Weights = W.weights_for("resnet_18_cls")
         >>> weights = ResNet18Weights.IMAGENET1K_V1
         >>> preprocess = weights.transforms()
+        >>> image = lucid.rand(3, 300, 400)
         >>> x = preprocess(image)        # image: lucid.Tensor (C, H, W)
-        >>> logits = model(x[None])
+        >>> x.shape
+        (3, 224, 224)
+        >>> model = lucid.models.resnet_18_cls().eval()
+        >>> logits = model(x[None]).logits
+        >>> logits.shape
+        (1, 1000)
         """
         return self.entry.transforms

@@ -16,6 +16,16 @@ class TestErfcx:
         # erfcx(0) = exp(0)·erfc(0) = 1.0.
         assert abs(lucid.special.erfcx(lucid.tensor([0.0])).item() - 1.0) < 1e-5
 
+    def test_between_two_and_four(self) -> None:
+        # The continued fraction used to take over only at x = 4, leaving
+        # [2, 4) to exp(x²)·erfc(x) — where float32 erfc has lost its
+        # relative precision, so erfcx(3.9) came back as 0.240, not 0.140.
+        xs = [2.0, 2.5, 3.0, 3.5, 3.9]
+        got = lucid.special.erfcx(lucid.tensor(xs)).tolist()
+        for x, g in zip(xs, got):
+            ref = math.exp(x * x) * math.erfc(x)
+            assert abs(g - ref) / ref < 1e-5, (x, g, ref)
+
 
 class TestI0e:
     def test_at_zero(self) -> None:
@@ -60,6 +70,26 @@ class TestLogNdtr:
         # log Φ(0) = log 0.5 = -log 2.
         v = lucid.special.log_ndtr(lucid.tensor([0.0])).item()
         assert abs(v - (-math.log(2.0))) < 1e-5
+
+    def test_deep_left_tail(self) -> None:
+        # The tail branch was log(½·erfc(-x/√2)), and float32 erfc is 0
+        # well before x = -10: log_ndtr(-10) was -inf, not -53.23.
+        xs = [-40.0, -10.0, -5.5]
+        refs = [-804.60844, -53.231285, -17.779379]
+        got = lucid.special.log_ndtr(lucid.tensor(xs)).tolist()
+        for x, g, r in zip(xs, got, refs):
+            assert abs(g - r) / abs(r) < 1e-5, (x, g, r)
+
+    def test_gradient_finite_on_both_sides_of_the_cut(self) -> None:
+        # ``where`` evaluates both branches; a -inf in the losing one
+        # would surface as a NaN gradient.
+        x = lucid.tensor([-40.0, -10.0, -1.0, 0.0, 10.0], requires_grad=True)
+        lucid.special.log_ndtr(x).sum().backward()
+        assert x.grad is not None
+        g = x.grad.tolist()
+        assert all(math.isfinite(v) for v in g)
+        # d/dx log Φ(x) = φ(x)/Φ(x), which tends to -x as x → -∞.
+        assert abs(g[0] - 40.02498) < 1e-3
 
 
 class TestXlog1py:

@@ -82,11 +82,15 @@ def fuse_conv_bn_eval(conv: object, bn: object) -> object:
 
     Examples
     --------
+    >>> import lucid
     >>> import lucid.nn as nn
     >>> from lucid.nn.utils import fuse_conv_bn_eval
     >>> conv = nn.Conv2d(3, 16, 3); bn = nn.BatchNorm2d(16)
-    >>> conv.eval(); bn.eval()
+    >>> _ = conv.eval(); _ = bn.eval()
     >>> fused = fuse_conv_bn_eval(conv, bn)
+    >>> x = lucid.randn(1, 3, 8, 8)
+    >>> (fused(x) - bn(conv(x))).abs().max().item() < 1e-4
+    True
     """
     if not isinstance(conv, _CONV_TYPES):
         raise TypeError(
@@ -191,12 +195,16 @@ def fuse_conv_bn_weights(
 
     Examples
     --------
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils import fuse_conv_bn_weights
+    >>> conv = nn.Conv2d(3, 16, 3); bn = nn.BatchNorm2d(16)
     >>> W, b = fuse_conv_bn_weights(
     ...     conv.weight, conv.bias,
     ...     bn.running_mean, bn.running_var, bn.eps,
     ...     bn.weight, bn.bias,
     ... )
+    >>> W.shape, b.shape
+    ((16, 3, 3, 3), (16,))
     """
     out_channels = int(conv_w.shape[0])
     inv_std = (bn_rv + bn_eps).rsqrt()
@@ -252,10 +260,15 @@ def fuse_linear_bn_eval(linear: object, bn: object) -> object:
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils import fuse_linear_bn_eval
     >>> linear = nn.Linear(128, 64); bn = nn.BatchNorm1d(64)
-    >>> linear.eval(); bn.eval()
+    >>> _ = linear.eval(); _ = bn.eval()
     >>> fused = fuse_linear_bn_eval(linear, bn)
+    >>> x = lucid.randn(4, 128)
+    >>> (fused(x) - bn(linear(x))).abs().max().item() < 1e-4
+    True
     """
     if not isinstance(linear, Linear):
         raise TypeError(
@@ -335,11 +348,15 @@ def fuse_linear_bn_weights(
 
     Examples
     --------
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils import fuse_linear_bn_weights
+    >>> linear = nn.Linear(128, 64); bn = nn.BatchNorm1d(64)
     >>> W, b = fuse_linear_bn_weights(
     ...     linear.weight, linear.bias,
     ...     bn.running_mean, bn.running_var, bn.eps,
     ...     bn.weight, bn.bias,
     ... )
+    >>> W.shape, b.shape
+    ((64, 128), (64,))
     """
     return fuse_conv_bn_weights(linear_w, linear_b, bn_rm, bn_rv, bn_eps, bn_w, bn_b)

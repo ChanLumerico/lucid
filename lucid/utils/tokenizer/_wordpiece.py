@@ -140,8 +140,13 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
 
     Examples
     --------
-    >>> tok = WordPieceTokenizer.from_pretrained("bert-base-uncased-dir")
+    >>> import pathlib, tempfile
+    >>> with tempfile.TemporaryDirectory() as vocab_dir:   # holds a vocab.txt
+    ...     _ = pathlib.Path(vocab_dir, "vocab.txt").write_text("[UNK]\nhello\nworld\n")
+    ...     tok = WordPieceTokenizer.from_pretrained(vocab_dir)
     >>> ids = tok.encode("hello world")
+    >>> ids
+    [1, 2]
     >>> tok.decode(ids)
     'hello world'
 

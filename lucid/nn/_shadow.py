@@ -335,8 +335,9 @@ def shadow_alloc() -> Iterator[None]:
     >>> with shadow_alloc():
     ...     model = resnet_152()  # constructs without GB of RAM
     >>> # Only structural metadata is meaningful afterwards:
-    >>> sum(p.shape.numel() if hasattr(p.shape, 'numel') else 1
-    ...     for p in model.parameters())  # works
+    >>> import math
+    >>> sum(math.prod(p.shape) for p in model.parameters())  # counted from shapes
+    58143808
     """
     global _SHADOW_ENABLED
     if _SHADOW_ENABLED:

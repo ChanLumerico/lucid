@@ -60,6 +60,20 @@ class TestGradAndValue:
         assert lucid.allclose(g, x * 2)
         assert abs(float(v.item()) - 14.0) < 1e-5
 
+    def test_value_is_detached(self) -> None:
+        # The backward that produced the gradient has already consumed the
+        # graph behind the value; a value still claiming requires_grad
+        # could only fail later, on a second backward.
+        f = lambda x: (x**2).sum()
+        _, v = func.grad_and_value(f)(lucid.tensor([1.0, 2.0, 3.0]))
+        assert not v.requires_grad
+
+    def test_value_is_detached_with_aux(self) -> None:
+        f = lambda x: ((x**2).sum(), x * 10)
+        _, (v, _aux) = func.grad_and_value(f, has_aux=True)(lucid.tensor([1.0, 2.0]))
+        assert not v.requires_grad
+        assert abs(float(v.item()) - 5.0) < 1e-5
+
 
 # ── func.vjp ─────────────────────────────────────────────────────────────────
 

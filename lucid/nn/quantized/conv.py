@@ -10,7 +10,7 @@ conv resolves per input, so the quantized one carries the spec rather than
 a baked-in number.
 """
 
-from typing import TYPE_CHECKING, Protocol, cast, override
+from typing import TYPE_CHECKING, ClassVar, Protocol, cast, override
 
 import lucid
 import lucid.nn as nn
@@ -72,6 +72,9 @@ class _QuantizedConvNd(nn.Module):
     scale: Tensor
     zero_point: Tensor
 
+    #: Spatial rank of the convolution (1, 2 or 3), set by each subclass.
+    _rank: ClassVar[int]
+
     def __init__(
         self,
         in_channels: int,
@@ -99,8 +102,9 @@ class _QuantizedConvNd(nn.Module):
         self.weight_ch_axis = 0
         self.out_qdtype: QDtype = quint8
         # ``nn.Conv1d`` stores ``kernel_size`` as a bare int; the 2d/3d convs
-        # store tuples.  Normalise so the weight buffer is built for any rank.
-        ks = (kernel_size,) if isinstance(kernel_size, int) else kernel_size
+        # store tuples, and a direct constructor call may pass either.  Expand
+        # to this conv's rank so the weight buffer has every spatial axis.
+        ks = _as_tuple(kernel_size, self._rank)
         weight_shape = (out_channels, in_channels // groups, *ks)
         self.register_buffer("weight_int8", lucid.zeros(weight_shape, dtype=lucid.int8))
         self.register_buffer("weight_scale", lucid.ones(out_channels))
@@ -380,6 +384,8 @@ class Conv1d(_QuantizedConvNd):
     lucid.quantization.convert : Installs this layer from a calibrated float model.
     """
 
+    _rank = 1
+
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
         return self._conv_with_mode(x, weight, 1, F.conv1d)
@@ -537,6 +543,8 @@ class Conv2d(_QuantizedConvNd):
     lucid.quantization.convert : Installs this layer from a calibrated float model.
     """
 
+    _rank = 2
+
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:
         return self._conv_with_mode(x, weight, 2, F.conv2d)
@@ -693,6 +701,8 @@ class Conv3d(_QuantizedConvNd):
     lucid.nn.quantized.ConvReLU3d : Quantized 3-D conv with a fused ReLU.
     lucid.quantization.convert : Installs this layer from a calibrated float model.
     """
+
+    _rank = 3
 
     @override
     def _conv_forward(self, x: Tensor, weight: Tensor) -> Tensor:

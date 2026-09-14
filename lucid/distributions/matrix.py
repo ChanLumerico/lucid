@@ -105,8 +105,8 @@ class Wishart(Distribution):
     >>> from lucid.distributions import Wishart
     >>> Sigma = lucid.tensor([[2.0, 0.5], [0.5, 1.0]])
     >>> d = Wishart(df=5.0, covariance_matrix=Sigma)
-    >>> d.sample((4,))
-    Tensor([...])
+    >>> d.sample((4,)).shape
+    (4, 2, 2)
     """
 
     arg_constraints = {"df": positive}
@@ -350,7 +350,7 @@ class LKJCholesky(Distribution):
     >>> L = dist.sample()           # (4, 4) lower-triangular Cholesky factor
     >>> R = L @ L.T                 # implied correlation matrix
     >>> R.diagonal()                # diagonal of R is all 1's
-    Tensor([1., 1., 1., 1.])
+    tensor([1., 1., 1., 1.])
 
     Use as a Bayesian prior over correlation structure:
 

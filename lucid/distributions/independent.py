@@ -89,7 +89,10 @@ class Independent(Distribution):
     >>> x = dist.rsample()
     >>> x.shape  # (4,)
     (4,)
-    >>> dist.log_prob(x)  # scalar — sum of 4 log-probs
+    >>> dist.log_prob(x).shape  # scalar — sum of 4 log-probs
+    ()
+    >>> dist.log_prob(lucid.zeros(4))  # 4 * log N(0 | 0, 1)
+    tensor(-3.676)
     """
 
     def __init__(

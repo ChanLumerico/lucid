@@ -62,7 +62,7 @@ def absolute(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([-1.5, 0.0, 2.0])
     >>> lucid.absolute(x)
-    Tensor([1.5, 0., 2.])
+    tensor([1.5, 0., 2.])
     """
     return lucid.abs(x)
 
@@ -99,7 +99,7 @@ def negative(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([1.0, -2.0, 3.5])
     >>> lucid.negative(x)
-    Tensor([-1.,  2., -3.5])
+    tensor([-1., 2., -3.5])
     """
     return lucid.neg(x)
 
@@ -182,7 +182,7 @@ def subtract(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
     >>> a = lucid.tensor([4.0, 5.0])
     >>> b = lucid.tensor([1.0, 2.0])
     >>> lucid.subtract(a, b, alpha=2.0)
-    Tensor([2., 1.])
+    tensor([2., 1.])
     """
     if alpha == 1.0:
         return a - b
@@ -223,7 +223,7 @@ def multiply(a: Tensor, b: Tensor | Scalar) -> Tensor:
     >>> import lucid
     >>> a = lucid.tensor([1.0, 2.0, 3.0])
     >>> lucid.multiply(a, 2.0)
-    Tensor([2., 4., 6.])
+    tensor([2., 4., 6.])
     """
     return a * b
 
@@ -266,7 +266,7 @@ def divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
     >>> import lucid
     >>> a = lucid.tensor([6.0, 9.0])
     >>> lucid.divide(a, 3.0)
-    Tensor([2., 3.])
+    tensor([2., 3.])
     """
     return a / b
 
@@ -307,7 +307,7 @@ def true_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
     >>> import lucid
     >>> a = lucid.tensor([7, 8], dtype=lucid.int32)
     >>> lucid.true_divide(a, 2)
-    Tensor([3.5, 4.])
+    tensor([3.5, 4.])
     """
     return a / b
 
@@ -349,7 +349,7 @@ def rsub(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
     >>> import lucid
     >>> a = lucid.tensor([1.0, 2.0])
     >>> lucid.rsub(a, 10.0)
-    Tensor([9., 8.])
+    tensor([9., 8.])
     """
     if alpha == 1.0:
         return b - a
@@ -403,7 +403,7 @@ def arctan2(y: Tensor, x: Tensor) -> Tensor:
     >>> y = lucid.tensor([1.0,  1.0, -1.0, -1.0])
     >>> x = lucid.tensor([1.0, -1.0, -1.0,  1.0])
     >>> lucid.arctan2(y, x)
-    Tensor([ 0.7854,  2.3562, -2.3562, -0.7854])
+    tensor([0.7854, 2.356, -2.356, -0.7854])
     """
     return lucid.atan2(y, x)
 
@@ -449,7 +449,7 @@ def arccosh(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([1.0, 2.0, 10.0])
     >>> lucid.arccosh(x)
-    Tensor([0.    , 1.3170, 2.9932])
+    tensor([0., 1.317, 2.993])
     """
     return lucid.log(x + lucid.sqrt(x * x - 1.0))
 
@@ -487,7 +487,7 @@ def acosh(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([1.0, 2.0, 10.0])
     >>> lucid.acosh(x)
-    Tensor([0.    , 1.3170, 2.9932])
+    tensor([0., 1.317, 2.993])
     """
     return arccosh(x)
 
@@ -527,7 +527,7 @@ def arcsinh(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([-1.0, 0.0, 1.0])
     >>> lucid.arcsinh(x)
-    Tensor([-0.8814,  0.    ,  0.8814])
+    tensor([-0.8814, 0., 0.8814])
     """
     return lucid.log(x + lucid.sqrt(x * x + 1.0))
 
@@ -563,7 +563,7 @@ def asinh(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([-1.0, 0.0, 1.0])
     >>> lucid.asinh(x)
-    Tensor([-0.8814,  0.    ,  0.8814])
+    tensor([-0.8814, 0., 0.8814])
     """
     return arcsinh(x)
 
@@ -606,7 +606,7 @@ def arctanh(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([-0.5, 0.0, 0.5])
     >>> lucid.arctanh(x)
-    Tensor([-0.5493,  0.    ,  0.5493])
+    tensor([-0.5493, 0., 0.5493])
     """
     return lucid.log((1.0 + x) / (1.0 - x)) * 0.5
 
@@ -645,7 +645,7 @@ def atanh(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([-0.5, 0.0, 0.5])
     >>> lucid.atanh(x)
-    Tensor([-0.5493,  0.    ,  0.5493])
+    tensor([-0.5493, 0., 0.5493])
     """
     return arctanh(x)
 
@@ -688,7 +688,7 @@ def expm1(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([0.0, 1.0, 2.0])
     >>> lucid.expm1(x)
-    Tensor([0.    , 1.71828, 6.38906])
+    tensor([0., 1.718, 6.389])
     """
     return lucid.exp(x) - 1.0
 
@@ -729,9 +729,9 @@ def sinc(x: Tensor) -> Tensor:
     Examples
     --------
     >>> import lucid
-    >>> x = lucid.tensor([0.0, 0.5, 1.0])
+    >>> x = lucid.tensor([0.0, 0.5, 1.5])
     >>> lucid.sinc(x)
-    Tensor([1.    , 0.6366, 0.    ])
+    tensor([1., 0.6366, -0.2122])
     """
     px = x * math.pi
     is_zero = x == 0.0
@@ -781,7 +781,7 @@ def heaviside(x: Tensor, values: Tensor | Scalar) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([-1.0, 0.0, 1.0])
     >>> lucid.heaviside(x, 0.5)
-    Tensor([0. , 0.5, 1. ])
+    tensor([0., 0.5, 1.])
     """
     if not _is_tensor(values):
         values = lucid.full_like(x, float(cast(float, values)))
@@ -833,7 +833,7 @@ def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     >>> x = lucid.tensor([0.0, 1.0, 2.0])
     >>> y = lucid.tensor([0.0, 2.0, 3.0])
     >>> lucid.xlogy(x, y)
-    Tensor([0.    , 0.6931, 2.1972])
+    tensor([0., 0.6931, 2.197])
     """
     if not _is_tensor(x):
         x = lucid.tensor(float(cast(float, x)))
@@ -884,7 +884,7 @@ def logit(x: Tensor, eps: float | None = None) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([0.1, 0.5, 0.9])
     >>> lucid.logit(x)
-    Tensor([-2.1972,  0.    ,  2.1972])
+    tensor([-2.197, 0., 2.197])
     """
     if eps is not None:
         x = lucid.clamp(x, eps, 1.0 - eps)
@@ -929,7 +929,7 @@ def signbit(x: Tensor) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([-1.0, 0.0, 1.0])
     >>> lucid.signbit(x)
-    Tensor([ True, False, False])
+    tensor([True, False, False], dtype=lucid.bool)
     """
     return x < 0.0
 
@@ -1043,7 +1043,7 @@ def fmax(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
     >>> a = lucid.tensor([1.0, math.nan, 3.0])
     >>> b = lucid.tensor([2.0, 2.0, math.nan])
     >>> lucid.fmax(a, b)
-    Tensor([2., 2., 3.])
+    tensor([2., 2., 3.])
     """
     a, b = _promote_pair(a, b)
     a_is_nan = lucid.isnan(a)
@@ -1095,7 +1095,7 @@ def fmin(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
     >>> a = lucid.tensor([1.0, math.nan, 3.0])
     >>> b = lucid.tensor([2.0, 2.0, math.nan])
     >>> lucid.fmin(a, b)
-    Tensor([1., 2., 3.])
+    tensor([1., 2., 3.])
     """
     a, b = _promote_pair(a, b)
     a_is_nan = lucid.isnan(a)

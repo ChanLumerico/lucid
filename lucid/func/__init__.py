@@ -431,7 +431,7 @@ def grad(
     >>> f = lambda x: (x ** 3).sum()
     >>> df = grad(f)
     >>> df(lucid.tensor([1.0, 2.0, 3.0]))  # 3 * x ** 2
-    Tensor([ 3., 12., 27.])
+    tensor([3., 12., 27.])
     """
     _argnums: tuple[int, ...] = (
         (argnums,) if isinstance(argnums, int) else tuple(argnums)
@@ -518,6 +518,11 @@ def grad_and_value(
     a single forward + backward sweep, saving redundant work compared to
     calling ``func`` and ``grad(func)`` separately.
 
+    The value comes back detached, like the gradients: the backward pass
+    that produced them has already consumed the graph behind it, so a
+    value that still claimed ``requires_grad`` would only fail later, on
+    a second ``backward``.
+
     Examples
     --------
     >>> import lucid
@@ -526,7 +531,7 @@ def grad_and_value(
     >>> gv = grad_and_value(f)
     >>> grads, value = gv(lucid.tensor([1.0, 2.0, 3.0]))
     >>> value  # 14.0
-    Tensor(14.)
+    tensor(14.)
     """
     _argnums: tuple[int, ...] = (
         (argnums,) if isinstance(argnums, int) else tuple(argnums)
@@ -572,8 +577,8 @@ def grad_and_value(
             grads[0] if len(_argnums) == 1 else tuple(grads)
         )
         if has_aux:
-            return g, (loss, aux)
-        return g, loss  # type: ignore[return-value]
+            return g, (loss.detach(), aux)
+        return g, loss.detach()  # type: ignore[return-value]
 
     return gv_fn
 
@@ -885,6 +890,7 @@ def linearize(
     >>> x = lucid.tensor([1.0, 2.0, 3.0])
     >>> y, lin = linearize(f, x)
     >>> lin(lucid.ones_like(x))  # 2 * x
+    tensor([2., 4., 6.])
     """
     primals_out, _ = vjp(func, *primals)
 
@@ -954,6 +960,7 @@ def jacrev(
     >>> from lucid.func import jacrev
     >>> f = lambda x: lucid.stack([x.sum(), (x ** 2).sum()])
     >>> jacrev(f)(lucid.tensor([1.0, 2.0, 3.0]))  # shape (2, 3)
+    tensor([[1., 1., 1.], [2., 4., 6.]])
     """
     _argnums: tuple[int, ...] = (
         (argnums,) if isinstance(argnums, int) else tuple(argnums)
@@ -1108,6 +1115,7 @@ def jacfwd(
     >>> from lucid.func import jacfwd
     >>> f = lambda x: lucid.stack([x.sum(), (x ** 2).sum()])
     >>> jacfwd(f)(lucid.tensor([1.0, 2.0, 3.0]))  # shape (2, 3)
+    tensor([[1., 1., 1.], [2., 4., 6.]])
     """
     _argnums: tuple[int, ...] = (
         (argnums,) if isinstance(argnums, int) else tuple(argnums)
@@ -1247,6 +1255,7 @@ def hessian(
     >>> from lucid.func import hessian
     >>> f = lambda x: (x ** 3).sum()  # H = diag(6 * x)
     >>> hessian(f)(lucid.tensor([1.0, 2.0, 3.0]))
+    tensor([[6., 0., 0.], [0., 12., 0.], [0., 0., 18.]])
     """
     from lucid.autograd._functional import hessian as _hessian
 

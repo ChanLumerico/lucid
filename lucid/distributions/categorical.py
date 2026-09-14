@@ -389,6 +389,7 @@ class OneHotCategorical(Distribution):
     >>> sample.shape  # (3,) — one-hot
     (3,)
     >>> sample.sum()  # always 1
+    tensor(1.)
     """
 
     arg_constraints = {"probs": simplex, "logits": real}

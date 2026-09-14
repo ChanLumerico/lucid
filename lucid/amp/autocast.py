@@ -43,23 +43,33 @@ class autocast:
     Context-manager form (typical training loop):
 
     >>> import lucid
+    >>> import lucid.nn as nn
+    >>> model = nn.Linear(4, 2).to("metal")
+    >>> x = lucid.randn(8, 4, device="metal")
     >>> with lucid.amp.autocast():
-    ...     output = model(input)        # ops cast to float16 inside
-    ...     loss = criterion(output, target)
+    ...     output = model(x)            # ops cast to float16 inside
+    >>> output.dtype
+    lucid.float16
 
     Decorator form (every call wraps itself in a fresh scope):
 
     >>> @lucid.amp.autocast()
     ... def predict(x):
     ...     return model(x)
+    >>> predict(x).dtype
+    lucid.float16
 
     Nested scopes restore the outer dtype on exit:
 
+    >>> a = lucid.randn(2, 2, device="metal")
     >>> with lucid.amp.autocast(dtype=lucid.float16):
-    ...     ...  # fp16 here
+    ...     print((a @ a).dtype)  # fp16 here
     ...     with lucid.amp.autocast(dtype=lucid.bfloat16):
-    ...         ...  # bf16 here
-    ...     ...  # back to fp16 — prior guard reinstalled
+    ...         print((a @ a).dtype)  # bf16 here
+    ...     print((a @ a).dtype)  # back to fp16 — prior guard reinstalled
+    lucid.float16
+    lucid.bfloat16
+    lucid.float16
 
     See Also
     --------

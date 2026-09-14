@@ -71,11 +71,11 @@ class Exponential(ExponentialFamily):
     >>> from lucid.distributions import Exponential
     >>> d = Exponential(rate=2.0)
     >>> d.mean  # 1/rate
-    Tensor(0.5)
-    >>> d.rsample((4,))
-    Tensor([...])
+    tensor(0.5)
+    >>> d.rsample((4,)).shape
+    (4,)
     >>> d.log_prob(lucid.tensor(1.0))
-    Tensor(-1.3069)
+    tensor(-1.307)
     """
 
     arg_constraints = {"rate": positive}
@@ -113,7 +113,7 @@ class Exponential(ExponentialFamily):
         >>> from lucid.distributions import Exponential
         >>> d = Exponential(rate=2.0)
         >>> d.mean  # 1/rate = 0.5
-        Tensor(0.5)
+        tensor(0.5)
         """
         self.rate = _as_tensor(rate)
         super().__init__(
@@ -139,7 +139,7 @@ class Exponential(ExponentialFamily):
         Examples
         --------
         >>> Exponential(rate=4.0).mean
-        Tensor(0.25)
+        tensor(0.25)
         """
         return 1.0 / self.rate
 
@@ -164,7 +164,7 @@ class Exponential(ExponentialFamily):
         Examples
         --------
         >>> Exponential(rate=5.0).mode
-        Tensor(0.0)
+        tensor(0.)
         """
         return lucid.zeros_like(self.rate)
 
@@ -185,7 +185,7 @@ class Exponential(ExponentialFamily):
         Examples
         --------
         >>> Exponential(rate=2.0).variance
-        Tensor(0.25)
+        tensor(0.25)
         """
         return 1.0 / (self.rate * self.rate)
 
@@ -216,9 +216,13 @@ class Exponential(ExponentialFamily):
 
         Examples
         --------
+        >>> lucid.manual_seed(0)
         >>> d = Exponential(rate=1.0)
         >>> x = d.rsample((500,))
-        >>> x.mean()  # approximately 1.0
+        >>> x.shape
+        (500,)
+        >>> bool((x.mean() - 1.0).abs() < 0.15)  # the sample mean approaches 1/rate
+        True
         """
         # Inverse CDF sampling via U ~ Uniform(0, 1):  x = -log(1 - U) / rate.
         # Subtract from 1 to keep U away from 0 (which would give -inf).
@@ -248,7 +252,7 @@ class Exponential(ExponentialFamily):
         --------
         >>> d = Exponential(rate=1.0)
         >>> d.log_prob(lucid.tensor(1.0))  # -1.0
-        Tensor(-1.0)
+        tensor(-1.)
         """
         if self._validate_args:
             self._validate_sample(value)
@@ -275,9 +279,9 @@ class Exponential(ExponentialFamily):
         Examples
         --------
         >>> Exponential(rate=1.0).cdf(lucid.tensor(1.0))  # 1 - e^-1 ≈ 0.632
-        Tensor(0.6321)
+        tensor(0.6321)
         >>> Exponential(rate=1.0).cdf(lucid.tensor(-1.0))  # below the support
-        Tensor(0.)
+        tensor(0.)
 
         Notes
         -----
@@ -313,7 +317,7 @@ class Exponential(ExponentialFamily):
         Examples
         --------
         >>> Exponential(rate=1.0).icdf(lucid.tensor(0.5))  # log(2) ≈ 0.693
-        Tensor(0.6931)
+        tensor(0.6931)
         """
         return -(1.0 - value).log() / self.rate
 
@@ -336,7 +340,7 @@ class Exponential(ExponentialFamily):
         Examples
         --------
         >>> Exponential(rate=1.0).entropy()  # 1 - log(1) = 1.0
-        Tensor(1.0)
+        tensor(1.)
         """
         return 1.0 - self.rate.log()
 
@@ -396,11 +400,11 @@ class Laplace(Distribution):
     >>> from lucid.distributions import Laplace
     >>> d = Laplace(loc=0.0, scale=1.0)
     >>> d.mean
-    Tensor(0.0)
-    >>> d.rsample((4,))
-    Tensor([...])
+    tensor(0.)
+    >>> d.rsample((4,)).shape
+    (4,)
     >>> d.log_prob(lucid.tensor(0.0))
-    Tensor(-0.6931)
+    tensor(-0.6931)
     """
 
     arg_constraints = {"loc": real, "scale": positive}
@@ -443,7 +447,7 @@ class Laplace(Distribution):
         >>> from lucid.distributions import Laplace
         >>> d = Laplace(loc=0.0, scale=1.0)
         >>> d.mean
-        Tensor(0.0)
+        tensor(0.)
         """
         self.loc = _as_tensor(loc)
         self.scale = _as_tensor(scale)
@@ -471,7 +475,7 @@ class Laplace(Distribution):
         Examples
         --------
         >>> Laplace(loc=3.0, scale=1.0).mean
-        Tensor(3.0)
+        tensor(3.)
         """
         return self.loc
 
@@ -492,7 +496,7 @@ class Laplace(Distribution):
         Examples
         --------
         >>> Laplace(loc=0.0, scale=1.0).variance
-        Tensor(2.0)
+        tensor(2.)
         """
         return 2.0 * self.scale * self.scale
 
@@ -552,7 +556,7 @@ class Laplace(Distribution):
         Examples
         --------
         >>> Laplace(loc=0.0, scale=1.0).log_prob(lucid.tensor(0.0))
-        Tensor(-0.6931)
+        tensor(-0.6931)
         """
         if self._validate_args:
             self._validate_sample(value)
@@ -606,7 +610,7 @@ class Laplace(Distribution):
         Examples
         --------
         >>> Laplace(loc=0.0, scale=1.0).entropy()  # 1 + log(2) ≈ 1.693
-        Tensor(1.6931)
+        tensor(1.693)
         """
         return 1.0 + (2.0 * self.scale).log()
 
@@ -668,10 +672,10 @@ class Cauchy(Distribution):
     >>> import lucid
     >>> from lucid.distributions import Cauchy
     >>> d = Cauchy(loc=0.0, scale=1.0)
-    >>> d.rsample((4,))
-    Tensor([...])
+    >>> d.rsample((4,)).shape
+    (4,)
     >>> d.log_prob(lucid.tensor(0.0))
-    Tensor(-1.1447)
+    tensor(-1.145)
     """
 
     arg_constraints = {"loc": real, "scale": positive}
@@ -779,7 +783,7 @@ class Cauchy(Distribution):
         Examples
         --------
         >>> Cauchy(loc=0.0, scale=1.0).log_prob(lucid.tensor(0.0))
-        Tensor(-1.1447)
+        tensor(-1.145)
         """
         z = (value - self.loc) / self.scale
         return -math.log(math.pi) - self.scale.log() - (1.0 + z * z).log()
@@ -822,7 +826,7 @@ class Cauchy(Distribution):
         Examples
         --------
         >>> Cauchy(loc=0.0, scale=1.0).entropy()  # log(4π) ≈ 2.531
-        Tensor(2.5310)
+        tensor(2.531)
         """
         return math.log(4.0 * math.pi) + self.scale.log()
 

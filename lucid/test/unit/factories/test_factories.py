@@ -244,6 +244,22 @@ class TestAsTensor:
         # Same object (no copy when no conversion needed).
         assert_close(out, src)
 
+    def test_returns_the_same_object_when_nothing_converts(self, device: str) -> None:
+        # A Tensor that already has the requested dtype and device comes
+        # back as-is — the object, not a new wrapper around its storage —
+        # whether the request is implicit (``None``) or spelled out.
+        src = lucid.tensor([1.0, 2.0], device=device)
+        assert lucid.as_tensor(src) is src
+        assert lucid.as_tensor(src, dtype=src.dtype, device=src.device) is src
+        assert lucid.as_tensor(src, dtype=lucid.float32, device=device) is src
+
+    def test_passthrough_keeps_the_autograd_graph(self, device: str) -> None:
+        src = lucid.tensor([1.0, 2.0], device=device, requires_grad=True)
+        out = lucid.as_tensor(src)
+        (out * 3.0).sum().backward()
+        assert src.grad is not None
+        assert_close(src.grad, np.array([3.0, 3.0]))
+
 
 class TestFromNumpy:
     def test_basic(self) -> None:

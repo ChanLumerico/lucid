@@ -18,13 +18,17 @@ Two entry points:
 Presets (:class:`ImageClassification`) bundle a task's canonical
 inference pipeline; pretrained weights ship preprocessing this way.
 
+>>> import lucid
 >>> import lucid.utils.transforms as T
 >>> tf = T.Compose([
 ...     T.SmallestMaxSize(256),
 ...     T.CenterCrop(224, 224),
 ...     T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
 ... ])
+>>> image = lucid.rand(3, 300, 400)             # (C, H, W)
 >>> y = tf(image)
+>>> y.shape
+(3, 224, 224)
 """
 
 from lucid.utils.transforms import functional

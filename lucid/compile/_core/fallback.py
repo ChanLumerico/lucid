@@ -73,11 +73,19 @@ class EagerFallbackSet:
 
     Examples
     --------
-    >>> from lucid.compile._core.fallback import EagerFallbackSet
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> from lucid.compile._core.fallback import EagerFallbackSet, run_eager
+    >>> from lucid.compile._core.signature import signature_of
+    >>> model = nn.Linear(8, 4)
+    >>> x = lucid.randn(2, 8)
+    >>> key = signature_of(model, (x,), {}, dynamic=False)
     >>> blacklist = EagerFallbackSet()
     >>> blacklist.add(key)
     >>> if key in blacklist:                 # fast-path skip
-    ...     return run_eager(model, args, kwargs)
+    ...     out = run_eager(model, (x,), {})
+    >>> out.shape
+    (2, 4)
 
     See Also
     --------

@@ -92,10 +92,12 @@ class RelaxedBernoulli(Distribution):
     --------
     >>> import lucid
     >>> from lucid.distributions import RelaxedBernoulli
+    >>> lucid.manual_seed(0)
     >>> dist = RelaxedBernoulli(temperature=0.5, probs=0.7)
     >>> samples = dist.rsample((100,))
     >>> # Samples are in (0, 1)
-    >>> ((samples > 0) & (samples < 1)).all()
+    >>> bool(((samples > 0) & (samples < 1)).all())
+    True
     """
 
     # The relaxation temperature divides the logits, so zero is not a
@@ -306,7 +308,8 @@ class RelaxedOneHotCategorical(Distribution):
     >>> samples = dist.rsample((50,))
     >>> samples.shape  # (50, 3) — lies on the open simplex
     (50, 3)
-    >>> samples.sum(dim=-1)  # each row sums to ~1
+    >>> bool(((samples.sum(dim=-1) - 1.0).abs() < 1e-5).all())  # each row sums to ~1
+    True
     """
 
     # The relaxation temperature divides the logits, so zero is not a

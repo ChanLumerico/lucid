@@ -537,7 +537,7 @@ class ConvBnReLU1d(_ConvBnNd):
     ... )
     >>> loss = (cbr(lucid.randn(2, 3, 8)) ** 2).mean()
     >>> loss.backward()                    # STE trains conv weight AND BN params
-    >>> cbr.eval()
+    >>> _ = cbr.eval()
     >>> from lucid.nn.intrinsic.qat.modules import convbnrelu2d_to_quantized
     >>> qc = convbnrelu2d_to_quantized(cbr)     # rank-generic bake
     >>> type(qc).__name__
@@ -653,7 +653,7 @@ class ConvBnReLU2d(_ConvBnNd):
     ... )
     >>> loss = (cbr(lucid.randn(2, 3, 8, 8)) ** 2).mean()
     >>> loss.backward()                    # STE trains conv weight AND BN params
-    >>> cbr.eval()
+    >>> _ = cbr.eval()
     >>> from lucid.nn.intrinsic.qat.modules import convbnrelu2d_to_quantized
     >>> qc = convbnrelu2d_to_quantized(cbr)     # BN folded + baked to int8
     >>> type(qc).__name__
@@ -769,7 +769,7 @@ class ConvBnReLU3d(_ConvBnNd):
     ... )
     >>> loss = (cbr(lucid.randn(2, 3, 4, 4, 4)) ** 2).mean()
     >>> loss.backward()                    # STE trains conv weight AND BN params
-    >>> cbr.eval()
+    >>> _ = cbr.eval()
     >>> from lucid.nn.intrinsic.qat.modules import convbnrelu2d_to_quantized
     >>> qc = convbnrelu2d_to_quantized(cbr)     # rank-generic bake
     >>> type(qc).__name__

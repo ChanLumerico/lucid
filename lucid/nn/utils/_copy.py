@@ -35,10 +35,14 @@ def copy_parameters_and_buffers(source: Module, dest: Module) -> None:
     Examples
     --------
     >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils import copy_parameters_and_buffers
-    >>> src = MyModel()
-    >>> dst = MyModel()
+    >>> src = nn.BatchNorm1d(4)        # parameters and running-stat buffers
+    >>> dst = nn.BatchNorm1d(4)
+    >>> _ = src(lucid.randn(8, 4))     # a training step moves src's running stats
     >>> copy_parameters_and_buffers(src, dst)   # dst now mirrors src's weights + buffers
+    >>> bool((dst.running_mean == src.running_mean).all())
+    True
     """
     src_params = dict(source.named_parameters())
     dst_params = dict(dest.named_parameters())

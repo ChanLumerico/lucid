@@ -144,11 +144,11 @@ class Gamma(ExponentialFamily):
     >>> from lucid.distributions import Gamma
     >>> d = Gamma(concentration=2.0, rate=1.0)
     >>> d.mean  # α/β
-    Tensor(2.0)
-    >>> d.sample((4,))
-    Tensor([...])
-    >>> d.log_prob(lucid.tensor(1.5))
-    Tensor(...)
+    tensor(2.)
+    >>> d.sample((4,)).shape
+    (4,)
+    >>> d.log_prob(lucid.tensor(1.5))  # log(1.5) - 1.5
+    tensor(-1.095)
     """
 
     arg_constraints = {"concentration": positive, "rate": positive}
@@ -197,7 +197,7 @@ class Gamma(ExponentialFamily):
         >>> from lucid.distributions import Gamma
         >>> d = Gamma(concentration=2.0, rate=1.0)
         >>> d.mean  # α/β = 2.0
-        Tensor(2.0)
+        tensor(2.)
         """
         self.concentration = _as_tensor(concentration)
         self.rate = _as_tensor(rate)
@@ -225,7 +225,7 @@ class Gamma(ExponentialFamily):
         Examples
         --------
         >>> Gamma(concentration=3.0, rate=2.0).mean
-        Tensor(1.5)
+        tensor(1.5)
         """
         return self.concentration / self.rate
 
@@ -250,7 +250,7 @@ class Gamma(ExponentialFamily):
         Examples
         --------
         >>> Gamma(concentration=3.0, rate=1.0).mode
-        Tensor(2.0)
+        tensor(2.)
         """
         return ((self.concentration - 1.0).clip(0.0, float("inf"))) / self.rate
 
@@ -271,7 +271,7 @@ class Gamma(ExponentialFamily):
         Examples
         --------
         >>> Gamma(concentration=4.0, rate=2.0).variance
-        Tensor(1.0)
+        tensor(1.)
         """
         return self.concentration / (self.rate * self.rate)
 
@@ -296,9 +296,13 @@ class Gamma(ExponentialFamily):
 
         Examples
         --------
+        >>> lucid.manual_seed(0)
         >>> d = Gamma(concentration=2.0, rate=1.0)
         >>> x = d.sample((500,))
-        >>> x.mean()  # approximately 2.0
+        >>> x.shape
+        (500,)
+        >>> bool((x.mean() - 2.0).abs() < 0.2)  # the sample mean approaches α/β
+        True
         """
         std = _sample_standard_gamma(self.concentration, sample_shape)
         return (std / self.rate).detach()
@@ -325,7 +329,7 @@ class Gamma(ExponentialFamily):
         Examples
         --------
         >>> Gamma(concentration=1.0, rate=1.0).log_prob(lucid.tensor(1.0))
-        Tensor(-1.0)
+        tensor(-1.)
         """
         return (
             self.concentration * self.rate.log()
@@ -353,7 +357,7 @@ class Gamma(ExponentialFamily):
         Examples
         --------
         >>> Gamma(concentration=1.0, rate=1.0).entropy()  # Exp(1): H = 1
-        Tensor(1.0)
+        tensor(1.)
         """
         return (
             self.concentration
@@ -415,9 +419,9 @@ class Chi2(Gamma):
     >>> from lucid.distributions import Chi2
     >>> d = Chi2(df=4.0)
     >>> d.mean
-    Tensor(4.0)
-    >>> d.sample((4,))
-    Tensor([...])
+    tensor(4.)
+    >>> d.sample((4,)).shape
+    (4,)
     """
 
     arg_constraints = {"df": positive}
@@ -454,7 +458,7 @@ class Chi2(Gamma):
         >>> from lucid.distributions import Chi2
         >>> d = Chi2(df=4.0)
         >>> d.mean  # k = 4
-        Tensor(4.0)
+        tensor(4.)
         """
         self.df = _as_tensor(df)
         super().__init__(
@@ -530,11 +534,11 @@ class Beta(ExponentialFamily):
     >>> from lucid.distributions import Beta
     >>> d = Beta(concentration1=2.0, concentration0=5.0)
     >>> d.mean  # 2/(2+5) ≈ 0.2857
-    Tensor(0.2857)
-    >>> d.sample((4,))
-    Tensor([...])
-    >>> d.log_prob(lucid.tensor(0.3))
-    Tensor(...)
+    tensor(0.2857)
+    >>> d.sample((4,)).shape
+    (4,)
+    >>> d.log_prob(lucid.tensor(0.3))  # log(30 * 0.3 * 0.7**4)
+    tensor(0.7705)
     """
 
     arg_constraints = {"concentration1": positive, "concentration0": positive}
@@ -579,7 +583,7 @@ class Beta(ExponentialFamily):
         >>> from lucid.distributions import Beta
         >>> d = Beta(concentration1=2.0, concentration0=5.0)
         >>> d.mean  # α/(α+β) = 2/7 ≈ 0.286
-        Tensor(0.2857)
+        tensor(0.2857)
         """
         self.concentration1 = _as_tensor(concentration1)
         self.concentration0 = _as_tensor(concentration0)
@@ -609,7 +613,7 @@ class Beta(ExponentialFamily):
         Examples
         --------
         >>> Beta(concentration1=1.0, concentration0=1.0).mean
-        Tensor(0.5)
+        tensor(0.5)
         """
         return self.concentration1 / (self.concentration1 + self.concentration0)
 
@@ -631,7 +635,7 @@ class Beta(ExponentialFamily):
         Examples
         --------
         >>> Beta(concentration1=2.0, concentration0=2.0).variance
-        Tensor(0.05)
+        tensor(0.05)
         """
         a = self.concentration1
         b = self.concentration0
@@ -665,9 +669,13 @@ class Beta(ExponentialFamily):
 
         Examples
         --------
+        >>> lucid.manual_seed(0)
         >>> d = Beta(concentration1=2.0, concentration0=5.0)
         >>> x = d.sample((500,))
-        >>> x.mean()  # approximately 2/7 ≈ 0.286
+        >>> x.shape
+        (500,)
+        >>> bool((x.mean() - 2 / 7).abs() < 0.03)  # the sample mean approaches 2/7
+        True
         """
         # Beta(α, β) = X / (X + Y) with X ~ Gamma(α, 1), Y ~ Gamma(β, 1).
         x = _sample_standard_gamma(self.concentration1, sample_shape)
@@ -804,9 +812,9 @@ class Dirichlet(ExponentialFamily):
     >>> from lucid.distributions import Dirichlet
     >>> d = Dirichlet(lucid.tensor([1.0, 2.0, 3.0]))
     >>> d.mean  # α / Σ α
-    Tensor([0.1667, 0.3333, 0.5000])
-    >>> d.sample((4,))
-    Tensor([...])
+    tensor([0.1667, 0.3333, 0.5])
+    >>> d.sample((4,)).shape
+    (4, 3)
     """
 
     arg_constraints = {"concentration": positive}
@@ -853,7 +861,7 @@ class Dirichlet(ExponentialFamily):
         >>> from lucid.distributions import Dirichlet
         >>> d = Dirichlet(lucid.tensor([1.0, 2.0, 3.0]))
         >>> d.mean  # proportional to concentration
-        Tensor([0.1667, 0.3333, 0.5000])
+        tensor([0.1667, 0.3333, 0.5])
         """
         self.concentration = _as_tensor(concentration)
         shape = tuple(self.concentration.shape)
@@ -882,7 +890,7 @@ class Dirichlet(ExponentialFamily):
         Examples
         --------
         >>> Dirichlet(lucid.tensor([2.0, 2.0])).mean
-        Tensor([0.5, 0.5])
+        tensor([0.5, 0.5])
         """
         s = self.concentration.sum(dim=-1, keepdim=True)
         return self.concentration / s
@@ -937,7 +945,10 @@ class Dirichlet(ExponentialFamily):
         --------
         >>> d = Dirichlet(lucid.tensor([1.0, 1.0, 1.0]))
         >>> x = d.sample((100,))
-        >>> x.sum(dim=-1)  # all ones
+        >>> x.shape
+        (100, 3)
+        >>> bool(((x.sum(dim=-1) - 1.0).abs() < 1e-5).all())  # every row sums to one
+        True
         """
         gammas = _sample_standard_gamma(self.concentration, sample_shape)
         return (gammas / gammas.sum(dim=-1, keepdim=True)).detach()

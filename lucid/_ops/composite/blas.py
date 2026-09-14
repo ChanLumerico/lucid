@@ -61,8 +61,7 @@ def addmm(
     >>> a = lucid.tensor([[1., 2.], [3., 4.]])
     >>> b = lucid.tensor([[5., 6.], [7., 8.]])
     >>> lucid.addmm(M, a, b, beta=0.0, alpha=1.0)
-    Tensor([[19., 22.],
-            [43., 50.]])
+    tensor([[19., 22.], [43., 50.]])
     """
     return input * beta + lucid.matmul(mat1, mat2) * alpha
 
@@ -120,8 +119,7 @@ def addbmm(
     >>> b2 = lucid.ones((3, 4, 2))
     >>> M = lucid.zeros((2, 2))
     >>> lucid.addbmm(M, b1, b2)
-    Tensor([[12., 12.],
-            [12., 12.]])
+    tensor([[12., 12.], [12., 12.]])
     """
     return input * beta + lucid.sum(lucid.bmm(batch1, batch2), 0) * alpha
 
@@ -234,7 +232,7 @@ def addmv(
     >>> A = lucid.tensor([[1., 2.], [3., 4.]])
     >>> v = lucid.tensor([5., 6.])
     >>> lucid.addmv(M, A, v)
-    Tensor([17., 39.])
+    tensor([17., 39.])
     """
     mv_out = lucid.matmul(mat, vec.unsqueeze(-1)).squeeze(-1)
     return input * beta + mv_out * alpha
@@ -292,8 +290,7 @@ def addr(
     >>> u = lucid.tensor([1., 2.])
     >>> v = lucid.tensor([3., 4., 5.])
     >>> lucid.addr(M, u, v)
-    Tensor([[ 3.,  4.,  5.],
-            [ 6.,  8., 10.]])
+    tensor([[3., 4., 5.], [6., 8., 10.]])
     """
     out = lucid.matmul(vec1.unsqueeze(-1), vec2.unsqueeze(0))
     return input * beta + out * alpha
@@ -354,7 +351,7 @@ def addcmul(
     >>> b = lucid.tensor([4.0, 5.0, 6.0])
     >>> c = lucid.tensor([0.5, 0.5, 0.5])
     >>> lucid.addcmul(a, b, c, value=2.0)
-    Tensor([5., 7., 9.])
+    tensor([5., 7., 9.])
     """
     return input + (t1 * t2) * value
 
@@ -407,7 +404,7 @@ def addcdiv(
     >>> t1 = lucid.tensor([4.0, 9.0])
     >>> t2 = lucid.tensor([2.0, 3.0])
     >>> lucid.addcdiv(a, t1, t2, value=0.5)
-    Tensor([2. , 3.5])
+    tensor([2., 3.5])
     """
     return input + (t1 / t2) * value
 
@@ -449,7 +446,7 @@ def mv(mat: Tensor, vec: Tensor) -> Tensor:
     >>> M = lucid.tensor([[1., 2.], [3., 4.]])
     >>> v = lucid.tensor([5., 6.])
     >>> lucid.mv(M, v)
-    Tensor([17., 39.])
+    tensor([17., 39.])
     """
     return lucid.matmul(mat, vec.unsqueeze(-1)).squeeze(-1)
 
@@ -489,9 +486,7 @@ def ger(vec1: Tensor, vec2: Tensor) -> Tensor:
     >>> u = lucid.tensor([1., 2., 3.])
     >>> v = lucid.tensor([4., 5.])
     >>> lucid.ger(u, v)
-    Tensor([[ 4.,  5.],
-            [ 8., 10.],
-            [12., 15.]])
+    tensor([[4., 5.], [8., 10.], [12., 15.]])
     """
     return lucid.linalg.outer(vec1, vec2)
 
@@ -532,7 +527,7 @@ def vdot(a: Tensor, b: Tensor) -> Tensor:
     >>> a = lucid.tensor([1., 2., 3.])
     >>> b = lucid.tensor([4., 5., 6.])
     >>> lucid.vdot(a, b)
-    Tensor(32.)
+    tensor(32.)
     """
     return lucid.linalg.dot(a, b)
 
@@ -579,9 +574,7 @@ def block_diag(*tensors: Tensor) -> Tensor:
     >>> A = lucid.tensor([[1., 2.], [3., 4.]])
     >>> B = lucid.tensor([[5.]])
     >>> lucid.block_diag(A, B)
-    Tensor([[1., 2., 0.],
-            [3., 4., 0.],
-            [0., 0., 5.]])
+    tensor([[1., 2., 0.], [3., 4., 0.], [0., 0., 5.]])
     """
     if not tensors:
         return lucid.zeros(0, 0)

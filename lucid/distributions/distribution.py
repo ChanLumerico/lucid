@@ -598,7 +598,7 @@ class ExponentialFamily(Distribution):
     >>> isinstance(d, lucid.distributions.distribution.ExponentialFamily)
     True
     >>> d.entropy()
-    Tensor(...)
+    tensor(0.6109)
     """
 
     @property

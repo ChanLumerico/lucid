@@ -117,11 +117,11 @@ class Bernoulli(ExponentialFamily):
     >>> from lucid.distributions import Bernoulli
     >>> d = Bernoulli(probs=0.7)
     >>> d.mean
-    Tensor(0.7)
-    >>> d.sample((4,))
-    Tensor([...])
+    tensor(0.7)
+    >>> d.sample((4,)).shape
+    (4,)
     >>> d.log_prob(lucid.tensor(1.0))
-    Tensor(-0.3567)
+    tensor(-0.3567)
     """
 
     arg_constraints = {"probs": unit_interval, "logits": real}
@@ -161,10 +161,10 @@ class Bernoulli(ExponentialFamily):
         >>> from lucid.distributions import Bernoulli
         >>> d = Bernoulli(probs=0.7)
         >>> d.mean
-        Tensor(0.7)
-        >>> d2 = Bernoulli(logits=0.0)  # p = 0.5
-        >>> d2.probs  # derived lazily
-        Tensor(0.5)
+        tensor(0.7)
+        >>> d2 = Bernoulli(logits=0.0)
+        >>> d2.mean  # p = sigmoid(0), derived from the logits on demand
+        tensor(0.5)
         """
         if (probs is None) == (logits is None):
             raise ValueError("Bernoulli: pass exactly one of `probs` or `logits`.")
@@ -198,7 +198,7 @@ class Bernoulli(ExponentialFamily):
         --------
         >>> d = Bernoulli(probs=0.3)
         >>> d.param  # returns self.probs
-        Tensor(0.3)
+        tensor(0.3)
         """
         return self.logits if self._is_logits else self.probs
 
@@ -240,7 +240,7 @@ class Bernoulli(ExponentialFamily):
         Examples
         --------
         >>> Bernoulli(probs=0.3).mean
-        Tensor(0.3)
+        tensor(0.3)
         """
         return self._probs
 
@@ -267,7 +267,7 @@ class Bernoulli(ExponentialFamily):
         Examples
         --------
         >>> Bernoulli(probs=0.5).variance
-        Tensor(0.25)
+        tensor(0.25)
         """
         p = self._probs
         return p * (1.0 - p)
@@ -299,9 +299,13 @@ class Bernoulli(ExponentialFamily):
 
         Examples
         --------
+        >>> lucid.manual_seed(0)
         >>> d = Bernoulli(probs=0.6)
         >>> x = d.sample((1000,))
-        >>> x.mean()  # approximately 0.6
+        >>> x.shape
+        (1000,)
+        >>> bool((x.mean() - 0.6).abs() < 0.05)  # the sample mean approaches p
+        True
         """
         shape = self._extended_shape(sample_shape)
         u = lucid.rand(*shape, dtype=self._probs.dtype, device=self._probs.device)
@@ -340,7 +344,7 @@ class Bernoulli(ExponentialFamily):
         --------
         >>> d = Bernoulli(probs=0.7)
         >>> d.log_prob(lucid.tensor(1.0))  # log(0.7)
-        Tensor(-0.3567)
+        tensor(-0.3567)
         """
         # Numerically stable form via logits + softplus identity:
         #   log p(x | l) = x · l − softplus(l)
@@ -373,7 +377,7 @@ class Bernoulli(ExponentialFamily):
         Examples
         --------
         >>> Bernoulli(probs=0.5).entropy()  # log(2) ≈ 0.693
-        Tensor(0.6931)
+        tensor(0.6931)
         """
         # H = − p log p − (1−p) log(1−p), guarded by softplus form.
         l = self._logits
@@ -435,11 +439,11 @@ class Geometric(Distribution):
     >>> from lucid.distributions import Geometric
     >>> d = Geometric(probs=0.25)
     >>> d.mean  # (1 - p)/p = 3.0
-    Tensor(3.0)
-    >>> d.sample((4,))
-    Tensor([...])
-    >>> d.log_prob(lucid.tensor(2.0))
-    Tensor(...)
+    tensor(3.)
+    >>> d.sample((4,)).shape
+    (4,)
+    >>> d.log_prob(lucid.tensor(2.0))  # 2 log(0.75) + log(0.25)
+    tensor(-1.962)
     """
 
     arg_constraints = {"probs": open_unit_interval, "logits": real}
@@ -488,7 +492,7 @@ class Geometric(Distribution):
         >>> from lucid.distributions import Geometric
         >>> d = Geometric(probs=0.25)
         >>> d.mean  # E[X] = (1-p)/p = 3
-        Tensor(3.0)
+        tensor(3.)
         """
         if (probs is None) == (logits is None):
             raise ValueError("Geometric: pass exactly one of `probs` or `logits`.")
@@ -519,7 +523,7 @@ class Geometric(Distribution):
         Examples
         --------
         >>> Geometric(probs=0.5).mean
-        Tensor(1.0)
+        tensor(1.)
         """
         return (1.0 - self.probs) / self.probs
 
@@ -540,7 +544,7 @@ class Geometric(Distribution):
         Examples
         --------
         >>> Geometric(probs=0.5).variance
-        Tensor(2.0)
+        tensor(2.)
         """
         return (1.0 - self.probs) / (self.probs * self.probs)
 
@@ -571,9 +575,13 @@ class Geometric(Distribution):
 
         Examples
         --------
+        >>> lucid.manual_seed(0)
         >>> d = Geometric(probs=0.5)
         >>> x = d.sample((1000,))
-        >>> x.mean()  # approximately 1.0
+        >>> x.shape
+        (1000,)
+        >>> bool((x.mean() - 1.0).abs() < 0.2)  # the sample mean approaches (1-p)/p
+        True
         """
         # icdf-trick: floor(log(U) / log(1 - p)).  Detached — discrete.
         shape = self._extended_shape(sample_shape)
@@ -605,7 +613,7 @@ class Geometric(Distribution):
         --------
         >>> d = Geometric(probs=0.5)
         >>> d.log_prob(lucid.tensor(0.0))  # log(0.5) ≈ -0.693
-        Tensor(-0.6931)
+        tensor(-0.6931)
         """
         return value * (1.0 - self.probs).log() + self.probs.log()
 
@@ -628,8 +636,8 @@ class Geometric(Distribution):
 
         Examples
         --------
-        >>> Geometric(probs=0.5).entropy()
-        Tensor(1.3863)
+        >>> Geometric(probs=0.5).entropy()  # 2 log(2)
+        tensor(1.386)
         """
         p = self.probs
         return -((1.0 - p) * (1.0 - p).log() + p * p.log()) / p

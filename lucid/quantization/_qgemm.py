@@ -51,11 +51,13 @@ def is_available() -> bool:
 
     Examples
     --------
+    >>> import lucid
     >>> from lucid.quantization import _qgemm
+    >>> w = lucid.randn(64, 128, device="metal")
     >>> if _qgemm.is_available():
     ...     packed, scales, biases = _qgemm.quantize(w)      # real fast path
     ... else:
-    ...     ...                                              # dequantize-to-float fallback
+    ...     w_ref = w                                        # dequantize-to-float fallback
 
     See Also
     --------

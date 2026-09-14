@@ -174,6 +174,15 @@ class TestPoissonBinomial:
         v = D.NegativeBinomial(5.0, probs=0.5).mean.item()
         assert abs(v - 5.0) < 1e-6
 
+    def test_negbin_sample_shape(self) -> None:
+        # The Gamma draw was handed ``sample_shape`` on top of a rate that
+        # already carried it, so ``sample((100,))`` came back (100, 100).
+        scalar = D.NegativeBinomial(5.0, probs=0.4)
+        assert scalar.sample((100,)).shape == (100,)
+        assert scalar.sample().shape == ()
+        batched = D.NegativeBinomial(5.0, probs=lucid.tensor([0.2, 0.4, 0.6]))
+        assert batched.sample((4, 2)).shape == (4, 2, 3)
+
 
 # ── multivariate / wrappers ─────────────────────────────────────────────
 

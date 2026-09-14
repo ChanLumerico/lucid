@@ -138,6 +138,7 @@ def seed() -> int:
 
     >>> s = lucid.seed()
     >>> print(f"Run seed: {s}")
+    Run seed: ...
     >>> # Later, to reproduce:
     >>> lucid.manual_seed(s)
     """
@@ -391,7 +392,8 @@ def rand(
     >>> n = 1_000_000
     >>> pts = lucid.rand(n, 2)
     >>> inside = ((pts ** 2).sum(dim=-1) < 1.0).float().mean()
-    >>> float(inside) * 4   # ≈ 3.1416
+    >>> abs(float(inside) * 4 - 3.1416) < 0.01
+    True
     """
     _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
@@ -558,8 +560,11 @@ def randint(
     --------
     >>> import lucid
     >>> lucid.manual_seed(0)
-    >>> lucid.randint(0, 10, (5,)).tolist()
-    [3, 6, 7, 9, 6]
+    >>> x = lucid.randint(0, 10, (5,))
+    >>> x.shape, x.dtype
+    ((5,), lucid.int64)
+    >>> bool(((x >= 0) & (x < 10)).all())
+    True
 
     Shuffle indices for a dataset of 1024 examples:
 
@@ -639,8 +644,11 @@ def bernoulli(
     --------
     >>> import lucid
     >>> lucid.manual_seed(0)
-    >>> lucid.bernoulli(0.3, size=(10,)).tolist()   # ≈ 30 % ones
-    [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+    >>> x = lucid.bernoulli(0.3, size=(10_000,))
+    >>> sorted(set(x.tolist()))                      # only zeros and ones
+    [0.0, 1.0]
+    >>> abs(float(x.mean()) - 0.3) < 0.02            # ≈ 30 % ones
+    True
 
     Dropout mask for a hidden layer:
 
@@ -785,7 +793,7 @@ def rand_like(
     >>> x = lucid.zeros(3, 4, device="metal")
     >>> noise = lucid.rand_like(x)
     >>> noise.shape, noise.device
-    ((3, 4), lucid.device('metal'))
+    ((3, 4), device('metal'))
 
     Notes
     -----
@@ -863,7 +871,7 @@ def randn_like(
     >>> w = lucid.zeros(256, 512, dtype=lucid.float16, device="metal")
     >>> noise = lucid.randn_like(w)
     >>> noise.shape, noise.dtype, noise.device
-    ((256, 512), lucid.float16, lucid.device('metal'))
+    ((256, 512), lucid.float16, device('metal'))
     """
     _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(
@@ -941,13 +949,16 @@ def randperm(
     --------
     >>> import lucid
     >>> lucid.manual_seed(0)
-    >>> lucid.randperm(5).tolist()
-    [2, 4, 3, 1, 0]
+    >>> sorted(lucid.randperm(5).tolist())   # every index exactly once
+    [0, 1, 2, 3, 4]
 
     Shuffle a dataset of 1024 examples in one line:
 
+    >>> data = lucid.randn(1024, 16)
     >>> idx = lucid.randperm(1024)
     >>> shuffled = data[idx]
+    >>> shuffled.shape
+    (1024, 16)
 
     Edge cases:
 

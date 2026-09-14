@@ -70,6 +70,9 @@ class SequentialSampler(Sampler):
 
     Examples
     --------
+    >>> import lucid
+    >>> from lucid.utils.data import SequentialSampler, TensorDataset
+    >>> my_dataset = TensorDataset(lucid.randn(10, 3))
     >>> sampler = SequentialSampler(my_dataset)
     >>> list(sampler)[:5]
     [0, 1, 2, 3, 4]
@@ -126,9 +129,14 @@ class RandomSampler(Sampler):
 
     Examples
     --------
+    >>> import lucid
+    >>> from lucid.utils.data import RandomSampler, TensorDataset
+    >>> my_dataset = TensorDataset(lucid.randn(10, 3))
     >>> sampler = RandomSampler(my_dataset)
     >>> for idx in sampler:
     ...     x = my_dataset[idx]
+    >>> sorted(sampler) == list(range(10))       # a permutation of the indices
+    True
     """
 
     def __init__(
@@ -301,10 +309,19 @@ class WeightedRandomSampler(Sampler):
     Examples
     --------
     >>> # 3 classes, counts [900, 90, 10]; upweight rare classes
+    >>> import lucid
+    >>> from lucid.utils.data import TensorDataset, WeightedRandomSampler
+    >>> labels = [0] * 900 + [1] * 90 + [2] * 10
+    >>> my_dataset = TensorDataset(lucid.randn(1000, 4), lucid.tensor(labels))
     >>> weights = [1/900]*900 + [1/90]*90 + [1/10]*10
-    >>> sampler = WeightedRandomSampler(weights, num_samples=1000)
+    >>> sampler = WeightedRandomSampler(weights, num_samples=1000, generator=0)
     >>> for idx in sampler:
     ...     x, y = my_dataset[idx]
+    >>> counts = [0, 0, 0]
+    >>> for idx in sampler:
+    ...     counts[labels[idx]] += 1
+    >>> all(250 < c < 420 for c in counts)       # the classes now arrive evenly
+    True
     """
 
     def __init__(
@@ -439,6 +456,9 @@ class BatchSampler(Sampler):
 
     Examples
     --------
+    >>> import lucid
+    >>> from lucid.utils.data import BatchSampler, SequentialSampler, TensorDataset
+    >>> my_dataset = TensorDataset(lucid.randn(10, 3))
     >>> inner = SequentialSampler(my_dataset)   # 10 items
     >>> bs = BatchSampler(inner, batch_size=4, drop_last=False)
     >>> [b for b in bs]
@@ -526,11 +546,17 @@ class DistributedSampler(Sampler):
 
     Examples
     --------
+    >>> import lucid
+    >>> from lucid.utils.data import DistributedSampler, TensorDataset
+    >>> my_dataset = TensorDataset(lucid.randn(10, 3))
     >>> sampler = DistributedSampler(my_dataset, num_replicas=4, rank=2)
+    >>> num_epochs = 2
     >>> for epoch in range(num_epochs):
     ...     sampler.set_epoch(epoch)
     ...     for idx in sampler:
     ...         x = my_dataset[idx]
+    >>> len(sampler)                      # ceil(10 / 4) indices for this rank
+    3
     """
 
     def __init__(
@@ -678,12 +704,16 @@ class RASampler(Sampler):
 
     Examples
     --------
-    >>> from lucid.utils.data import RASampler, DataLoader
+    >>> import lucid
+    >>> from lucid.utils.data import RASampler, DataLoader, TensorDataset
+    >>> dataset = TensorDataset(lucid.randn(12, 3), lucid.randint(0, 2, (12,)))
     >>> sampler = RASampler(dataset, num_repeats=3, shuffle=True, seed=0)
-    >>> loader = DataLoader(dataset, batch_size=64, sampler=sampler)
+    >>> loader = DataLoader(dataset, batch_size=4, sampler=sampler)
     >>> for x, y in loader:                      # each batch may contain
-    ...     ...                                  # ≤3 augmented views of
+    ...     pass                                 # ≤3 augmented views of
     ...     # ...train step...                   # the same underlying image
+    >>> len(sampler)                             # an un-repeated pass per epoch
+    12
     """
 
     def __init__(

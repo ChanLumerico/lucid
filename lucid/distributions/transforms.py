@@ -82,8 +82,8 @@ class Transform:
     >>> T = ComposeTransform([AffineTransform(loc=1.0, scale=2.0), ExpTransform()])
     >>> x = lucid.tensor(0.0)
     >>> y = T(x)
-    >>> T.log_abs_det_jacobian(x, y)
-    Tensor(...)
+    >>> T.log_abs_det_jacobian(x, y)  # log(2) + (2x + 1) at x = 0
+    tensor(1.693)
     """
 
     bijective: bool = True
@@ -229,7 +229,7 @@ class ExpTransform(Transform):
     >>> x = lucid.tensor(0.0)
     >>> y = T(x)
     >>> T.log_abs_det_jacobian(x, y)
-    Tensor(0.0)
+    tensor(0.)
     """
 
     @override
@@ -294,8 +294,8 @@ class SigmoidTransform(Transform):
     >>> import lucid
     >>> from lucid.distributions.transforms import SigmoidTransform
     >>> T = SigmoidTransform()
-    >>> y = T(lucid.tensor(0.0))  # σ(0) = 0.5
-    Tensor(0.5)
+    >>> T(lucid.tensor(0.0))  # σ(0) = 0.5
+    tensor(0.5)
     """
 
     @override
@@ -363,7 +363,7 @@ class TanhTransform(Transform):
     >>> from lucid.distributions.transforms import TanhTransform
     >>> T = TanhTransform()
     >>> T(lucid.tensor(0.0))  # tanh(0) = 0
-    Tensor(0.0)
+    tensor(0.)
     """
 
     @override
@@ -443,7 +443,7 @@ class AffineTransform(Transform):
     >>> from lucid.distributions.transforms import AffineTransform
     >>> T = AffineTransform(loc=1.0, scale=2.0)
     >>> T(lucid.tensor(3.0))
-    Tensor(7.0)
+    tensor(7.)
     """
 
     def __init__(self, loc: Tensor | float, scale: Tensor | float) -> None:
@@ -533,7 +533,7 @@ class PowerTransform(Transform):
     >>> from lucid.distributions.transforms import PowerTransform
     >>> T = PowerTransform(exponent=2.0)
     >>> T(lucid.tensor(3.0))  # 3² = 9
-    Tensor(9.0)
+    tensor(9.)
     """
 
     def __init__(self, exponent: Tensor | float) -> None:
@@ -621,7 +621,7 @@ class SoftmaxTransform(Transform):
     >>> from lucid.distributions.transforms import SoftmaxTransform
     >>> T = SoftmaxTransform()
     >>> T(lucid.tensor([0.0, 1.0, 2.0]))
-    Tensor([...])
+    tensor([0.09003, 0.2447, 0.6652])
     """
 
     event_dim: int = 1
@@ -717,7 +717,7 @@ class StickBreakingTransform(Transform):
     >>> T = StickBreakingTransform()
     >>> y = T(lucid.tensor([0.0, 0.0]))  # maps to a Dirichlet(1,1,1) sample
     >>> y.sum()
-    Tensor(1.0)
+    tensor(1.)
     """
 
     event_dim: int = 1
@@ -1022,7 +1022,7 @@ class AbsTransform(Transform):
     >>> from lucid.distributions.transforms import AbsTransform
     >>> T = AbsTransform()
     >>> T(lucid.tensor(-3.0))
-    Tensor(3.0)
+    tensor(3.)
     """
 
     bijective: bool = False
@@ -1086,7 +1086,7 @@ class IndependentTransform(Transform):
     >>> from lucid.distributions.transforms import ExpTransform, IndependentTransform
     >>> T = IndependentTransform(ExpTransform(), reinterpreted_batch_ndims=1)
     >>> T(lucid.tensor([0.0, 1.0, 2.0]))
-    Tensor([1.0, 2.7183, 7.3891])
+    tensor([1., 2.718, 7.389])
     """
 
     def __init__(
@@ -1529,7 +1529,7 @@ class CumulativeDistributionTransform(Transform):
     >>> from lucid.distributions.transforms import CumulativeDistributionTransform
     >>> T = CumulativeDistributionTransform(Normal(loc=0.0, scale=1.0))
     >>> T(lucid.tensor(0.0))  # F(0) = 0.5
-    Tensor(0.5)
+    tensor(0.5)
     """
 
     event_dim: int = 0
@@ -1608,7 +1608,7 @@ class StackTransform(Transform):
     >>> from lucid.distributions.transforms import ExpTransform, TanhTransform, StackTransform
     >>> T = StackTransform([ExpTransform(), TanhTransform()], dim=-1)
     >>> T(lucid.tensor([0.0, 0.0]))  # (exp(0), tanh(0)) = (1, 0)
-    Tensor([1.0, 0.0])
+    tensor([1., 0.])
     """
 
     def __init__(self, transforms: list[Transform], dim: int = 0) -> None:
@@ -1846,7 +1846,7 @@ class ComposeTransform(Transform):
     >>> # Log-normal-like: y = exp(loc + scale * x)
     >>> T = ComposeTransform([AffineTransform(loc=0.0, scale=1.0), ExpTransform()])
     >>> T(lucid.tensor(0.0))
-    Tensor(1.0)
+    tensor(1.)
     """
 
     def __init__(self, parts: list[Transform]) -> None:
@@ -1972,10 +1972,10 @@ class TransformedDistribution(Distribution):
     ...     ExpTransform, TransformedDistribution)
     >>> # LogNormal = ExpTransform(Normal(0, 1))
     >>> log_normal = TransformedDistribution(Normal(loc=0.0, scale=1.0), [ExpTransform()])
-    >>> log_normal.rsample((4,))
-    Tensor([...])
-    >>> log_normal.log_prob(lucid.tensor(1.0))
-    Tensor(...)
+    >>> log_normal.rsample((4,)).shape
+    (4,)
+    >>> log_normal.log_prob(lucid.tensor(1.0))  # log N(0 | 0, 1) - log(1)
+    tensor(-0.9189)
     """
 
     def __init__(

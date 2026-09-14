@@ -139,11 +139,15 @@ def register_parametrization(
 
     Examples
     --------
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils.parametrize import register_parametrization
     >>> class Symmetric(nn.Module):
     ...     def forward(self, X):
     ...         return 0.5 * (X + X.mT)
-    >>> register_parametrization(layer, "weight", Symmetric())
+    >>> layer = nn.Linear(3, 3)
+    >>> _ = register_parametrization(layer, "weight", Symmetric())
+    >>> bool((layer.weight == layer.weight.mT).all())
+    True
     """
     if not hasattr(module, tensor_name):
         raise AttributeError(f"module has no parameter '{tensor_name}'")
@@ -240,7 +244,16 @@ def is_parametrized(module: Module, tensor_name: str | None = None) -> bool:
 
     Examples
     --------
-    >>> register_parametrization(m, "weight", Symmetric())
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils.parametrize import (
+    ...     is_parametrized,
+    ...     register_parametrization,
+    ... )
+    >>> class Symmetric(nn.Module):
+    ...     def forward(self, X):
+    ...         return 0.5 * (X + X.mT)
+    >>> m = nn.Linear(3, 3)
+    >>> _ = register_parametrization(m, "weight", Symmetric())
     >>> is_parametrized(m)
     True
     >>> is_parametrized(m, "bias")
@@ -299,7 +312,18 @@ def remove_parametrizations(
 
     Examples
     --------
-    >>> remove_parametrizations(layer, "weight")
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils.parametrize import (
+    ...     is_parametrized,
+    ...     register_parametrization,
+    ...     remove_parametrizations,
+    ... )
+    >>> class Symmetric(nn.Module):
+    ...     def forward(self, X):
+    ...         return 0.5 * (X + X.mT)
+    >>> layer = nn.Linear(3, 3)
+    >>> _ = register_parametrization(layer, "weight", Symmetric())
+    >>> _ = remove_parametrizations(layer, "weight")
     >>> is_parametrized(layer, "weight")
     False
     """

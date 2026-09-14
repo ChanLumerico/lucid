@@ -118,7 +118,7 @@ class Linear(nn.Linear):
     'Linear'
     >>> loss = (qat(lucid.randn(8, 16)) ** 2).mean()
     >>> loss.backward()                         # STE routes grads to the float weight
-    >>> qat.eval()
+    >>> _ = qat.eval()
     >>> qmodel = Q.convert(qat)                 # qat.Linear -> quantized.Linear (int8)
     >>> type(qmodel[0]).__name__
     'Linear'
@@ -264,7 +264,7 @@ class LinearReLU(Linear):
     True
     >>> loss = (qat(lucid.randn(8, 32)) ** 2).mean()
     >>> loss.backward()                                 # STE trains the fused float weight
-    >>> qat.eval()
+    >>> _ = qat.eval()
     >>> qc = Q.convert(qat)                             # -> quantized.LinearReLU
     >>> type(qc[0]).__name__
     'LinearReLU'

@@ -92,11 +92,19 @@ class PackedSequence(NamedTuple):
 
     Examples
     --------
+    >>> import lucid
     >>> from lucid.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
     >>> # padded (B=3, T=4, F=5), sorted-by-length [4, 3, 2]
+    >>> x_padded = lucid.randn(3, 4, 5)
     >>> packed = pack_padded_sequence(x_padded, lengths=[4, 3, 2], batch_first=True)
+    >>> packed.data.shape                   # 4 + 3 + 2 real time-steps
+    (9, 5)
+    >>> packed.batch_sizes.tolist()         # sequences alive at each step
+    [3, 3, 2, 1]
     >>> # ... feed to RNN ...
     >>> unpacked, lengths = pad_packed_sequence(packed, batch_first=True)
+    >>> unpacked.shape, lengths.tolist()
+    ((3, 4, 5), [4, 3, 2])
     """
 
     data: Tensor
@@ -153,8 +161,12 @@ def pack_padded_sequence(
 
     Examples
     --------
+    >>> import lucid
     >>> from lucid.nn.utils.rnn import pack_padded_sequence
+    >>> x = lucid.randn(5, 3, 8)                 # (T=5, B=3, F=8)
     >>> packed = pack_padded_sequence(x, lengths=[5, 3, 2], batch_first=False)
+    >>> packed.data.shape                        # 5 + 3 + 2 real time-steps
+    (10, 8)
     """
     if batch_first:
         input = input.permute(1, 0, *range(2, input.ndim))
@@ -261,8 +273,13 @@ def pad_packed_sequence(
 
     Examples
     --------
-    >>> from lucid.nn.utils.rnn import pad_packed_sequence
+    >>> import lucid
+    >>> from lucid.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+    >>> x = lucid.randn(3, 4, 5)                 # (B=3, T=4, F=5)
+    >>> packed = pack_padded_sequence(x, lengths=[4, 3, 2], batch_first=True)
     >>> padded, lens = pad_packed_sequence(packed, batch_first=True)
+    >>> padded.shape, lens.tolist()
+    ((3, 4, 5), [4, 3, 2])
     """
     data = sequence.data
     # batch_sizes is a small 1-D int tensor — extract as Python list (metadata).
@@ -368,8 +385,12 @@ def pad_sequence(
 
     Examples
     --------
+    >>> import lucid
     >>> from lucid.nn.utils.rnn import pad_sequence
+    >>> a, b, c = lucid.ones(5, 3), lucid.ones(3, 3), lucid.ones(2, 3)
     >>> batch = pad_sequence([a, b, c], batch_first=True)
+    >>> batch.shape                              # (B, T_max, F)
+    (3, 5, 3)
     """
     if not sequences:
         raise ValueError("pad_sequence: empty input list")
@@ -440,8 +461,14 @@ def pack_sequence(
 
     Examples
     --------
+    >>> import lucid
     >>> from lucid.nn.utils.rnn import pack_sequence
+    >>> long_seq = lucid.ones(4, 2)
+    >>> mid_seq = lucid.ones(3, 2)
+    >>> short_seq = lucid.ones(1, 2)
     >>> packed = pack_sequence([long_seq, mid_seq, short_seq])
+    >>> packed.batch_sizes.tolist()              # sequences alive at each step
+    [3, 2, 2, 1]
     """
     if not sequences:
         raise ValueError("pack_sequence: empty input list")

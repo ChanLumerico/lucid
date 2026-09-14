@@ -210,10 +210,10 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
     >>> from lucid.nn.functional import one_hot
     >>> idx = lucid.tensor([0, 2, 1, 2], dtype=lucid.int64)
     >>> one_hot(idx, num_classes=3)
-    Tensor([[1, 0, 0],
+    tensor([[1, 0, 0],
             [0, 0, 1],
             [0, 1, 0],
-            [0, 0, 1]])
+            [0, 0, 1]], dtype=lucid.int8)
     """
     return _wrap(_C_engine.nn.one_hot(_unwrap(tensor), num_classes))
 

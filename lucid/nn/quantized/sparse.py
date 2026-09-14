@@ -100,7 +100,7 @@ class Embedding(nn.Module):
     >>> emb = nn.Embedding(1000, 64)
     >>> qemb = nn.quantized.Embedding.from_float(emb)   # per-row int8 table
     >>> qemb.weight_int8.dtype
-    int8
+    lucid.int8
     >>> qemb(lucid.tensor([1, 5, 999])).shape           # dequantize-on-lookup
     (3, 64)
 

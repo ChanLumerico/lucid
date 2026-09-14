@@ -75,13 +75,18 @@ def get_worker_info() -> WorkerInfo | None:
 
     Examples
     --------
+    >>> from lucid.utils.data import IterableDataset, get_worker_info
     >>> class ShardedStream(IterableDataset):
+    ...     def __init__(self, n):
+    ...         self.n = n
     ...     def __iter__(self):
     ...         info = get_worker_info()
     ...         if info is None:
-    ...             yield from self._all()
+    ...             yield from range(self.n)
     ...         else:
-    ...             yield from self._slice(info.id, info.num_workers)
+    ...             yield from range(info.id, self.n, info.num_workers)
+    >>> list(ShardedStream(5))        # main process: no worker info, whole stream
+    [0, 1, 2, 3, 4]
     """
     return getattr(_worker_local, "info", None)
 

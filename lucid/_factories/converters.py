@@ -447,14 +447,14 @@ def tensor(
     --------
     >>> import lucid
     >>> lucid.tensor([1.0, 2.0, 3.0])
-    Tensor([1., 2., 3.])
+    tensor([1., 2., 3.])
     >>> lucid.tensor([[1, 2], [3, 4]], dtype=lucid.float32)
-    Tensor([[1., 2.],
+    tensor([[1., 2.],
             [3., 4.]])
     >>> import numpy as np
     >>> lucid.tensor(np.arange(6).reshape(2, 3))
-    Tensor([[0, 1, 2],
-            [3, 4, 5]])
+    tensor([[0, 1, 2],
+            [3, 4, 5]], dtype=lucid.int64)
     """
     from lucid._tensor.tensor import Tensor
 
@@ -514,6 +514,17 @@ def as_tensor(
     >>> lucid.as_tensor(x) is x              # already a Tensor, returned as-is
     True
     """
+    from lucid._tensor.tensor import Tensor
+
+    if isinstance(data, Tensor):
+        # Nothing to convert: hand back the object itself, so identity,
+        # storage and the autograd graph all carry over unchanged.
+        _dt, _dev, _ = normalize_factory_kwargs(
+            dtype if dtype is not None else data.dtype,
+            device if device is not None else data.device,
+        )
+        if data._impl.dtype == _dt and data._impl.device == _dev:
+            return data
     return tensor(data, dtype=dtype, device=device)
 
 
@@ -560,7 +571,7 @@ def from_numpy(arr: np.ndarray) -> Tensor:
     >>> arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
     >>> t = lucid.from_numpy(arr)
     >>> t.dtype
-    float32
+    lucid.float32
     >>> arr[0, 0] = 99.0          # mutate the source
     >>> t[0, 0].item()            # change visible in the tensor
     99.0

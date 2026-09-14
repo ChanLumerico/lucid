@@ -153,7 +153,7 @@ class LeakyReLU(Module):
     >>> m = nn.LeakyReLU(negative_slope=0.1)
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-0.2, -0.1,  0. ,  1. ,  2. ])
+    tensor([-0.2, -0.1, 0., 1., 2.])
 
     >>> # Default slope 0.01 — very small leak
     >>> m = nn.LeakyReLU()
@@ -228,7 +228,7 @@ class ELU(Module):
     >>> m = nn.ELU(alpha=1.0)
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-0.8647, -0.6321,  0.    ,  1.    ,  2.    ])
+    tensor([-0.8647, -0.6321, 0., 1., 2.])
 
     >>> # Custom alpha shifts the negative saturation floor
     >>> m = nn.ELU(alpha=0.5)
@@ -311,7 +311,7 @@ class SELU(Module):
     >>> m = nn.SELU()
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-1.5202, -1.1113,  0.    ,  1.0507,  2.1014])
+    tensor([-1.52, -1.111, 0., 1.051, 2.101])
 
     >>> # Suitable for deep fully-connected architectures
     >>> layers = nn.Sequential(nn.Linear(128, 64), nn.SELU(), nn.Linear(64, 10))
@@ -396,7 +396,7 @@ class GELU(Module):
     >>> m = nn.GELU()
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-0.0454, -0.1587,  0.    ,  0.8413,  1.9545])
+    tensor([-0.0455, -0.1587, 0., 0.8413, 1.954])
 
     >>> # Fast tanh approximation — nearly identical for most inputs
     >>> m_approx = nn.GELU(approximate="tanh")
@@ -471,7 +471,7 @@ class SiLU(Module):
     >>> m = nn.SiLU()
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-0.2384, -0.2689,  0.    ,  0.7311,  1.7616])
+    tensor([-0.2384, -0.2689, 0., 0.7311, 1.762])
 
     >>> # Common backbone activation — shape-preserving
     >>> x = lucid.randn(8, 256)
@@ -534,7 +534,7 @@ class Mish(Module):
     >>> m = nn.Mish()
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-0.1876, -0.3034,  0.    ,  0.8651,  1.9440])
+    tensor([-0.2525, -0.3034, 0., 0.8651, 1.944])
 
     >>> # Drop-in for SiLU in detection backbones
     >>> x = lucid.randn(4, 128, 7, 7)
@@ -603,7 +603,7 @@ class Softplus(Module):
     >>> m = nn.Softplus()
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([0.1269, 0.3133, 0.6931, 1.3133, 2.1269])
+    tensor([0.1269, 0.3133, 0.6931, 1.313, 2.127])
 
     >>> # Sharper approximation with beta=5
     >>> m_sharp = nn.Softplus(beta=5.0)
@@ -680,7 +680,7 @@ class Hardswish(Module):
     >>> m = nn.Hardswish()
     >>> x = lucid.tensor([-4.0, -1.5, 0.0, 1.5, 4.0])
     >>> m(x)
-    tensor([0.    , -0.375,  0.    ,  1.125,  4.    ])
+    tensor([-0., -0.375, 0., 1.125, 4.])
 
     >>> # Efficient mobile backbone activation
     >>> x = lucid.randn(1, 96, 28, 28)
@@ -732,7 +732,7 @@ class Hardsigmoid(Module):
     >>> m = nn.Hardsigmoid()
     >>> x = lucid.tensor([-4.0, -3.0, 0.0, 3.0, 4.0])
     >>> m(x)
-    tensor([0.  , 0.  , 0.5 , 1.  , 1.  ])
+    tensor([0., 0., 0.5, 1., 1.])
 
     >>> # Lightweight gating in mobile attention heads
     >>> x = lucid.randn(2, 32)
@@ -788,7 +788,7 @@ class Sigmoid(Module):
     >>> m = nn.Sigmoid()
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([0.1192, 0.2689, 0.5   , 0.7311, 0.8808])
+    tensor([0.1192, 0.2689, 0.5, 0.7311, 0.8808])
 
     >>> # Binary classification output layer
     >>> x = lucid.randn(16, 1)
@@ -845,7 +845,7 @@ class Tanh(Module):
     >>> m = nn.Tanh()
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-0.9640, -0.7616,  0.    ,  0.7616,  0.9640])
+    tensor([-0.964, -0.7616, 0., 0.7616, 0.964])
 
     >>> # Hidden state output in a simple recurrent cell
     >>> h = lucid.randn(32, 128)
@@ -910,7 +910,7 @@ class Softmax(Module):
     >>> m = nn.Softmax(dim=-1)
     >>> x = lucid.tensor([[1.0, 2.0, 3.0]])
     >>> m(x)
-    tensor([[0.0900, 0.2447, 0.6652]])
+    tensor([[0.09003, 0.2447, 0.6652]])
 
     >>> # Attention weight normalisation over sequence length
     >>> scores = lucid.randn(4, 8, 64)   # (batch, heads, seq_len)
@@ -982,7 +982,7 @@ class LogSoftmax(Module):
     >>> m = nn.LogSoftmax(dim=-1)
     >>> x = lucid.tensor([[1.0, 2.0, 3.0]])
     >>> m(x)
-    tensor([[-2.4076, -1.4076, -0.4076]])
+    tensor([[-2.408, -1.408, -0.4076]])
 
     >>> # Classifier output layer — pair with NLLLoss
     >>> logits = lucid.randn(32, 10)
@@ -1130,7 +1130,7 @@ class RReLU(Module):
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> out_train = m(x)          # slope sampled from U(0.1, 0.3)
 
-    >>> m.eval()
+    >>> _ = m.eval()
     >>> out_eval = m(x)           # slope fixed at 0.2
     >>> out_eval.shape
     (5,)
@@ -1291,7 +1291,7 @@ class PReLU(Module):
     >>> m = nn.PReLU(num_parameters=1, init=0.25)
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-0.5, -0.25,  0.  ,  1.  ,  2.  ])
+    tensor([-0.5, -0.25, 0., 1., 2.], requires_grad=True)
 
     >>> # Per-channel slopes for a feature map with 64 channels
     >>> m = nn.PReLU(num_parameters=64)
@@ -1376,7 +1376,7 @@ class Threshold(Module):
     >>> m = nn.Threshold(threshold=1.0, value=-1.0)
     >>> x = lucid.tensor([0.5, 1.0, 1.5, 2.0])
     >>> m(x)
-    tensor([-1. , -1. ,  1.5,  2. ])
+    tensor([-1., -1., 1.5, 2.])
 
     >>> # Use as a generalised ReLU with a non-zero floor
     >>> m = nn.Threshold(threshold=0.0, value=0.0)
@@ -1464,7 +1464,7 @@ class Hardtanh(Module):
     >>> m = nn.Hardtanh(min_val=-1.0, max_val=1.0)
     >>> x = lucid.tensor([-3.0, -0.5, 0.0, 0.5, 3.0])
     >>> m(x)
-    tensor([-1. , -0.5,  0. ,  0.5,  1. ])
+    tensor([-1., -0.5, 0., 0.5, 1.])
 
     >>> # Custom range for output normalisation
     >>> m = nn.Hardtanh(min_val=0.0, max_val=6.0)
@@ -1539,7 +1539,7 @@ class LogSigmoid(Module):
     >>> m = nn.LogSigmoid()
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-2.1269, -1.3133, -0.6931, -0.3133, -0.1269])
+    tensor([-2.127, -1.313, -0.6931, -0.3133, -0.1269])
 
     >>> # Log-probability output for binary classification
     >>> x = lucid.randn(32, 1)
@@ -1597,7 +1597,7 @@ class Softsign(Module):
     >>> m = nn.Softsign()
     >>> x = lucid.tensor([-4.0, -1.0, 0.0, 1.0, 4.0])
     >>> m(x)
-    tensor([-0.8   , -0.5   ,  0.    ,  0.5   ,  0.8   ])
+    tensor([-0.8, -0.5, 0., 0.5, 0.8])
 
     >>> # Slower saturation compared to tanh
     >>> x = lucid.randn(8, 64)
@@ -1660,7 +1660,7 @@ class Softmin(Module):
     >>> m = nn.Softmin(dim=-1)
     >>> x = lucid.tensor([[1.0, 2.0, 3.0]])
     >>> m(x)
-    tensor([[0.6652, 0.2447, 0.0900]])
+    tensor([[0.6652, 0.2447, 0.09003]])
 
     >>> # Lowest-cost option gets the highest weight
     >>> costs = lucid.tensor([[0.1, 0.5, 0.9]])
@@ -1738,7 +1738,7 @@ class GLU(Module):
     >>> m = nn.GLU(dim=-1)
     >>> x = lucid.tensor([[1.0, 2.0, 3.0, 4.0]])   # split into [1,2] and [3,4]
     >>> m(x)
-    tensor([[0.9526, 1.9640]])
+    tensor([[0.9526, 1.964]])
 
     >>> # Feed-forward block with GLU gating
     >>> ff = nn.Sequential(nn.Linear(256, 512), nn.GLU(dim=-1))
@@ -1812,7 +1812,7 @@ class CELU(Module):
     >>> m = nn.CELU(alpha=1.0)
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-0.8647, -0.6321,  0.    ,  1.    ,  2.    ])
+    tensor([-0.8647, -0.6321, 0., 1., 2.])
 
     >>> # Smoother negative branch than ELU for gradient-sensitive architectures
     >>> m = nn.CELU(alpha=0.5)
@@ -1953,7 +1953,7 @@ class Tanhshrink(Module):
     >>> m = nn.Tanhshrink()
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> m(x)
-    tensor([-1.0360, -0.2384,  0.    ,  0.2384,  1.0360])
+    tensor([-1.036, -0.2384, 0., 0.2384, 1.036])
 
     >>> # Smooth sparse regularisation in an encoder
     >>> x = lucid.randn(4, 256)
@@ -2021,7 +2021,7 @@ class Softshrink(Module):
     >>> m = nn.Softshrink(lambd=0.5)
     >>> x = lucid.tensor([-1.5, -0.3, 0.0, 0.3, 1.5])
     >>> m(x)
-    tensor([-1. ,  0. ,  0. ,  0. ,  1. ])
+    tensor([-1., 0., 0., 0., 1.])
 
     >>> # L1-proximal layer in an unrolled ISTA network
     >>> m = nn.Softshrink(lambd=0.1)
@@ -2184,7 +2184,7 @@ class PairwiseDistance(Module):
     >>> x1 = lucid.tensor([[1.0, 0.0], [0.0, 1.0]])
     >>> x2 = lucid.tensor([[0.0, 0.0], [0.0, 0.0]])
     >>> m(x1, x2)
-    tensor([1.0000, 1.0000])
+    tensor([1., 1.])
 
     >>> # Euclidean distance for embedding comparison in a Siamese network
     >>> emb1 = lucid.randn(64, 128)

@@ -76,11 +76,23 @@ class GradScaler:
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> from lucid.amp import GradScaler, autocast
+    >>> model = nn.Linear(4, 1).to("metal")
+    >>> optimizer = optim.SGD(model.parameters(), lr=0.01)
+    >>> loss_fn = nn.MSELoss()
+    >>> dataloader = [
+    ...     (lucid.randn(8, 4, device="metal"), lucid.randn(8, 1, device="metal"))
+    ...     for _ in range(3)
+    ... ]
     >>> scaler = GradScaler()
     >>> for x, y in dataloader:
+    ...     optimizer.zero_grad()
     ...     with autocast():
     ...         out = model(x)
-    ...         loss = loss_fn(out, y)
+    ...     loss = loss_fn(out.float(), y)
     ...     scaler.scale(loss).backward()
     ...     scaler.step(optimizer)
     ...     scaler.update()

@@ -107,7 +107,7 @@ def erfcx(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import erfcx
     >>> erfcx(lucid.tensor([0.0, 1.0, 5.0]))
-    Tensor([1.0000, 0.4276, 0.1107])
+    tensor([1., 0.4276, 0.1107])
     """
     return _erfcx_stable(x)
 
@@ -130,21 +130,27 @@ def erfcx(x: Tensor) -> Tensor:
 def _erfcx_stable(x: Tensor) -> Tensor:
     """``exp(x²) erfc(x)``, without ever forming ``exp(x²)``.
 
-    For large positive x the product is evaluated through the continued
-    fraction
+    From x = 2 on the product is evaluated through the continued fraction
 
         erfcx(x) = 1/√π · 1/(x + ½/(x + 1/(x + 3/2/(x + 2/(x + …)))))
 
-    which converges quickly past x ≈ 4 and never leaves the interval the
-    answer lives in.  Below that the direct form is both accurate and
-    safe, since ``exp(16)`` is an ordinary number.
+    which at 24 terms is already good to about 1e-10 at x = 2, and never
+    leaves the interval the answer lives in.  Below that the direct form
+    is used; ``exp(4)`` is an ordinary number.
+
+    The switch used to sit at x = 4, which left ``[2, 4)`` to the direct
+    form — and there ``erfc`` has lost its relative precision: its answer
+    is a small multiple of float32's spacing below 1 (``erfc(3.9)`` comes
+    back as 6.0e-8, where the true value is 3.5e-8), so ``erfcx(3.9)``
+    was 0.240 instead of 0.140.  At x = 2 the direct form still holds to
+    about 5e-6.
 
     Both branches are evaluated — ``where`` selects, it does not
     short-circuit — so each is clamped onto its own domain first.  An inf
     or a NaN in the branch that loses is still a NaN in the *gradient*,
     which is how a where-guarded formula usually goes wrong.
     """
-    cutoff = 4.0
+    cutoff = 2.0
     small = lucid.exp(lucid.minimum(x, lucid.full_like(x, cutoff)) ** 2) * lucid.erfc(
         lucid.minimum(x, lucid.full_like(x, cutoff))
     )
@@ -200,7 +206,7 @@ def i0e(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import i0e
     >>> i0e(lucid.tensor([0.0, 1.0, 5.0, 20.0]))
-    Tensor([1.0000, 0.4658, 0.1835, 0.0897])
+    tensor([1., 0.4658, 0.1835, 0.08978])
     """
     ax = lucid.abs(x)
     # ``i0``'s own large branch is ``P(3.75/|x|) · exp(|x|) / √|x|``, so the
@@ -283,7 +289,7 @@ def i1(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import i1
     >>> i1(lucid.tensor([0.0, 1.0, 5.0]))
-    Tensor([0.0000, 0.5652, 24.3356])
+    tensor([0., 0.5652, 24.34])
     """
     ax = lucid.abs(x)
     ax_safe = lucid.where(ax == lucid.zeros_like(ax), lucid.full_like(ax, 1.0), ax)
@@ -348,7 +354,7 @@ def i1e(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import i1e
     >>> i1e(lucid.tensor([0.0, 1.0, 5.0]))
-    Tensor([0.0000, 0.2079, 0.1640])
+    tensor([0., 0.2079, 0.164])
     """
     ax = lucid.abs(x)
     small = lucid.exp(-lucid.minimum(ax, lucid.full_like(ax, 3.75))) * i1(
@@ -408,7 +414,7 @@ def ndtr(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import ndtr
     >>> ndtr(lucid.tensor([-3.0, -1.0, 0.0, 1.0, 3.0]))
-    Tensor([0.0013, 0.1587, 0.5000, 0.8413, 0.9987])
+    tensor([0.00135, 0.1587, 0.5, 0.8413, 0.9987])
     """
     return 0.5 * (1.0 + lucid.erf(x * _INV_SQRT2))
 
@@ -435,33 +441,39 @@ def log_ndtr(x: Tensor) -> Tensor:
     Notes
     -----
     The implementation switches strategies on a branch boundary at
-    ``x = -1``:
+    ``x = -1``; with :math:`t = -x/\sqrt{2}`,
 
     .. math::
 
         \log \Phi(x) = \begin{cases}
             \log \Phi(x), & x \ge -1 \\[2pt]
-            \log\!\left(\tfrac{1}{2}\,
-                  \mathrm{erfc}(-x/\sqrt{2})\right), & x < -1.
+            \log\!\left(\tfrac{1}{2}\,\mathrm{erfcx}(t)\right) - t^2,
+                & x < -1.
         \end{cases}
 
     For :math:`x \ge -1` we have :math:`\Phi(x) \gtrsim 0.16` so the
     direct ``log(ndtr(x))`` is safe.  Below :math:`x = -1` the identity
-    :math:`\Phi(x) = \tfrac{1}{2}\,\mathrm{erfc}(-x/\sqrt{2})` is used,
-    sidestepping the catastrophic cancellation in
-    :math:`1 + \mathrm{erf}(x/\sqrt{2})`.
+    :math:`\Phi(x) = \tfrac{1}{2}\,\mathrm{erfc}(t)
+    = \tfrac{1}{2}\,\mathrm{erfcx}(t)\, e^{-t^2}` is used: ``erfc(t)``
+    itself underflows to zero near :math:`x = -13` in float32 (and loses
+    its relative precision well before that), while ``erfcx`` stays
+    bounded and the Gaussian factor comes out exactly as :math:`-t^2`.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.special import log_ndtr
     >>> log_ndtr(lucid.tensor([-10.0, -1.0, 0.0, 1.0]))
-    Tensor([-52.6651, -1.8410, -0.6931, -0.1727])
+    tensor([-53.23, -1.841, -0.6931, -0.1728])
     """
     x = _real(x)
-    direct = lucid.log(ndtr(x))
-    asymp = lucid.log(0.5 * lucid.erfc(-x * _INV_SQRT2))
-    return lucid.where(x >= lucid.full_like(x, -1.0), direct, asymp)
+    cut = lucid.full_like(x, -1.0)
+    # Each branch sees only its own side of the cut: ``where`` evaluates
+    # both, and a -inf in the branch that loses is a NaN in the gradient.
+    direct = lucid.log(ndtr(lucid.maximum(x, cut)))
+    t = -lucid.minimum(x, cut) * _INV_SQRT2
+    tail = lucid.log(0.5 * _erfcx_stable(t)) - t * t
+    return lucid.where(x >= cut, direct, tail)
 
 
 # Beasley-Springer-Moro coefficients for the inverse normal CDF.  Hosted as
@@ -546,7 +558,7 @@ def ndtri(p: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import ndtri
     >>> ndtri(lucid.tensor([0.025, 0.5, 0.975]))
-    Tensor([-1.9600, 0.0000, 1.9600])
+    tensor([-1.96, 0., 1.96])
     """
     plow = 0.02425
     phigh = 1.0 - plow
@@ -651,7 +663,7 @@ def xlog1py(x: Tensor, y: Tensor) -> Tensor:
     >>> x = lucid.tensor([0.0, 1.0, 2.0])
     >>> y = lucid.tensor([0.0, 1.0, 3.0])
     >>> xlog1py(x, y)
-    Tensor([0.0000, 0.6931, 2.7726])
+    tensor([0., 0.6931, 2.773])
     """
     safe_y = lucid.where(y == lucid.zeros_like(y), lucid.full_like(y, 0.0), y)
     out = x * lucid.log1p(safe_y)
@@ -700,7 +712,7 @@ def entr(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import entr
     >>> entr(lucid.tensor([0.0, 0.5, 1.0, 2.0]))
-    Tensor([0.0000, 0.3466, 0.0000, -1.3863])
+    tensor([0., 0.3466, -0., -1.386])
     """
     x = _real(x)
     zero = lucid.zeros_like(x)
@@ -765,7 +777,7 @@ def multigammaln(a: Tensor, p: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import multigammaln
     >>> multigammaln(lucid.tensor([3.0, 5.0]), p=2)
-    Tensor([1.7918, 5.4538])
+    tensor([1.55, 6.204])
     """
     if int(p) < 1:
         raise ValueError(f"multigammaln requires p >= 1, got {p}")
@@ -853,7 +865,7 @@ def polygamma(n: int, x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import polygamma
     >>> polygamma(1, lucid.tensor([1.0, 2.0, 5.0]))
-    Tensor([1.6449, 0.6449, 0.2213])
+    tensor([1.645, 0.6449, 0.2213])
     """
     n = int(n)
     if n < 0:
@@ -950,8 +962,8 @@ def spherical_bessel_j0(x: Tensor) -> Tensor:
     --------
     >>> import lucid
     >>> from lucid.special import spherical_bessel_j0
-    >>> spherical_bessel_j0(lucid.tensor([0.0, 1.0, 3.14159265]))
-    Tensor([1.0000, 0.8415, 0.0000])
+    >>> spherical_bessel_j0(lucid.tensor([0.0, 1.0, 2.0]))
+    tensor([1., 0.8415, 0.4546])
     """
     is_zero = x == lucid.zeros_like(x)
     safe_x = lucid.where(is_zero, lucid.full_like(x, 1.0), x)
@@ -1036,7 +1048,7 @@ def chebyshev_polynomial_t(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import chebyshev_polynomial_t
     >>> chebyshev_polynomial_t(lucid.tensor([-1.0, 0.0, 0.5, 1.0]), n=3)
-    Tensor([-1.0000, 0.0000, -0.5000, 1.0000])
+    tensor([-1., -0., -1., 1.])
     """
     p0 = lucid.ones_like(x)
     p1 = x
@@ -1081,7 +1093,7 @@ def chebyshev_polynomial_u(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import chebyshev_polynomial_u
     >>> chebyshev_polynomial_u(lucid.tensor([-1.0, 0.0, 0.5, 1.0]), n=3)
-    Tensor([-4.0000, 0.0000, 0.0000, 4.0000])
+    tensor([-4., -0., -1., 4.])
     """
     p0 = lucid.ones_like(x)
     p1 = 2 * x
@@ -1130,7 +1142,7 @@ def chebyshev_polynomial_v(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import chebyshev_polynomial_v
     >>> chebyshev_polynomial_v(lucid.tensor([-1.0, 0.0, 1.0]), n=2)
-    Tensor([-3.0000, -1.0000, 1.0000])
+    tensor([5., -1., 1.])
     """
     p0 = lucid.ones_like(x)
     p1 = 2 * x - 1
@@ -1180,7 +1192,7 @@ def chebyshev_polynomial_w(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import chebyshev_polynomial_w
     >>> chebyshev_polynomial_w(lucid.tensor([-1.0, 0.0, 1.0]), n=2)
-    Tensor([1.0000, -1.0000, 3.0000])
+    tensor([1., -1., 5.])
     """
     p0 = lucid.ones_like(x)
     p1 = 2 * x + 1
@@ -1219,7 +1231,7 @@ def shifted_chebyshev_polynomial_t(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import shifted_chebyshev_polynomial_t
     >>> shifted_chebyshev_polynomial_t(lucid.tensor([0.0, 0.5, 1.0]), n=2)
-    Tensor([1.0000, -1.0000, 1.0000])
+    tensor([1., -1., 1.])
     """
     return chebyshev_polynomial_t(2 * x - 1, n)
 
@@ -1252,7 +1264,7 @@ def shifted_chebyshev_polynomial_u(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import shifted_chebyshev_polynomial_u
     >>> shifted_chebyshev_polynomial_u(lucid.tensor([0.0, 0.5, 1.0]), n=2)
-    Tensor([1.0000, -1.0000, 1.0000])
+    tensor([3., -1., 3.])
     """
     return chebyshev_polynomial_u(2 * x - 1, n)
 
@@ -1285,7 +1297,7 @@ def shifted_chebyshev_polynomial_v(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import shifted_chebyshev_polynomial_v
     >>> shifted_chebyshev_polynomial_v(lucid.tensor([0.0, 1.0]), n=1)
-    Tensor([-3.0000, 1.0000])
+    tensor([-3., 1.])
     """
     return chebyshev_polynomial_v(2 * x - 1, n)
 
@@ -1317,7 +1329,7 @@ def shifted_chebyshev_polynomial_w(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import shifted_chebyshev_polynomial_w
     >>> shifted_chebyshev_polynomial_w(lucid.tensor([0.0, 1.0]), n=1)
-    Tensor([-1.0000, 3.0000])
+    tensor([-1., 3.])
     """
     return chebyshev_polynomial_w(2 * x - 1, n)
 
@@ -1361,7 +1373,7 @@ def hermite_polynomial_h(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import hermite_polynomial_h
     >>> hermite_polynomial_h(lucid.tensor([-1.0, 0.0, 1.0]), n=3)
-    Tensor([4.0000, 0.0000, -4.0000])
+    tensor([4., -0., -4.])
     """
     p0 = lucid.ones_like(x)
     p1 = 2 * x
@@ -1414,7 +1426,7 @@ def hermite_polynomial_he(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import hermite_polynomial_he
     >>> hermite_polynomial_he(lucid.tensor([-1.0, 0.0, 1.0]), n=3)
-    Tensor([2.0000, 0.0000, -2.0000])
+    tensor([2., -0., -2.])
     """
     p0 = lucid.ones_like(x)
     p1 = x
@@ -1466,7 +1478,7 @@ def legendre_polynomial_p(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import legendre_polynomial_p
     >>> legendre_polynomial_p(lucid.tensor([-1.0, 0.0, 0.5, 1.0]), n=3)
-    Tensor([-1.0000, 0.0000, -0.4375, 1.0000])
+    tensor([-1., -0., -0.4375, 1.])
     """
     p0 = lucid.ones_like(x)
     p1 = x
@@ -1519,7 +1531,7 @@ def laguerre_polynomial_l(x: Tensor, n: int) -> Tensor:
     >>> import lucid
     >>> from lucid.special import laguerre_polynomial_l
     >>> laguerre_polynomial_l(lucid.tensor([0.0, 1.0, 2.0]), n=2)
-    Tensor([1.0000, -0.5000, -1.0000])
+    tensor([1., -0.5, -1.])
     """
     p0 = lucid.ones_like(x)
     p1 = 1 - x
@@ -1679,8 +1691,10 @@ def bessel_j0(x: Tensor) -> Tensor:
     --------
     >>> import lucid
     >>> from lucid.special import bessel_j0
-    >>> bessel_j0(lucid.tensor([0.0, 1.0, 2.4048, 5.0]))
-    Tensor([1.0000, 0.7652, 0.0000, -0.1776])
+    >>> bessel_j0(lucid.tensor([0.0, 1.0, 5.0]))
+    tensor([1., 0.7652, -0.1776])
+    >>> bool(bessel_j0(lucid.tensor(2.4048)).abs() < 1e-4)  # the first zero
+    True
     """
     return _split(x, 3.0, _bessel_j0_small, _bessel_j0_large)
 
@@ -1763,8 +1777,10 @@ def bessel_j1(x: Tensor) -> Tensor:
     --------
     >>> import lucid
     >>> from lucid.special import bessel_j1
-    >>> bessel_j1(lucid.tensor([0.0, 1.0, 3.8317]))
-    Tensor([0.0000, 0.4401, 0.0000])
+    >>> bessel_j1(lucid.tensor([0.0, 1.0, 5.0]))
+    tensor([0., 0.4401, -0.3276])
+    >>> bool(bessel_j1(lucid.tensor(3.8317)).abs() < 1e-4)  # the first zero
+    True
     """
     return _split(x, 3.0, _bessel_j1_small, _bessel_j1_large)
 
@@ -1851,7 +1867,7 @@ def bessel_y0(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import bessel_y0
     >>> bessel_y0(lucid.tensor([1.0, 5.0, 10.0]))
-    Tensor([0.0883, -0.3085, 0.0557])
+    tensor([0.08826, -0.3085, 0.05567])
     """
     return _split(x, 8.0, _bessel_y0_small, _bessel_y0_large)
 
@@ -1938,7 +1954,7 @@ def bessel_y1(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import bessel_y1
     >>> bessel_y1(lucid.tensor([1.0, 5.0, 10.0]))
-    Tensor([-0.7812, 0.1479, 0.2490])
+    tensor([-0.7812, 0.1479, 0.249])
     """
     return _split(x, 8.0, _bessel_y1_small, _bessel_y1_large)
 
@@ -2014,7 +2030,7 @@ def modified_bessel_k0(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import modified_bessel_k0
     >>> modified_bessel_k0(lucid.tensor([0.5, 1.0, 5.0]))
-    Tensor([0.9244, 0.4210, 0.0037])
+    tensor([0.9244, 0.421, 0.003691])
     """
     return _split(x, 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large)
 
@@ -2048,7 +2064,7 @@ def scaled_modified_bessel_k0(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import scaled_modified_bessel_k0
     >>> scaled_modified_bessel_k0(lucid.tensor([1.0, 5.0, 20.0]))
-    Tensor([1.1445, 0.5478, 0.2745])
+    tensor([1.144, 0.5478, 0.2785])
     """
     # ``_modified_bessel_k0_large`` is ``poly(2/x) · exp(-x) / √x``, so the
     # scaled value is the polynomial over the square root.  Under the
@@ -2129,7 +2145,7 @@ def modified_bessel_k1(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import modified_bessel_k1
     >>> modified_bessel_k1(lucid.tensor([0.5, 1.0, 5.0]))
-    Tensor([1.6564, 0.6019, 0.0040])
+    tensor([1.656, 0.6019, 0.004045])
     """
     return _split(x, 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large)
 
@@ -2161,7 +2177,7 @@ def scaled_modified_bessel_k1(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import scaled_modified_bessel_k1
     >>> scaled_modified_bessel_k1(lucid.tensor([1.0, 5.0, 20.0]))
-    Tensor([1.6362, 0.6001, 0.2820])
+    tensor([1.636, 0.6003, 0.2854])
     """
     # ``_modified_bessel_k1_large`` is ``poly(2/x) · exp(-x) / √x``, so the
     # scaled value is the polynomial over the square root.  Under the
@@ -2232,7 +2248,7 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
     >>> x = lucid.tensor([2.0, 3.0])
     >>> q = lucid.tensor([1.0, 1.0])
     >>> zeta(x, q)
-    Tensor([1.6449, 1.2021])
+    tensor([1.645, 1.202])
     """
     x, q = _real(x), _real(q)
 
@@ -2319,7 +2335,7 @@ def gammaln(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import gammaln
     >>> gammaln(lucid.tensor([1.0, 5.0, 100.0]))
-    Tensor([0.0000, 3.1781, 359.1342])
+    tensor([0., 3.178, 359.1])
     """
     return lucid.lgamma(x)
 
@@ -2362,7 +2378,7 @@ def psi(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import psi
     >>> psi(lucid.tensor([1.0, 2.0, 10.0]))
-    Tensor([-0.5772, 0.4228, 2.2517])
+    tensor([-0.5772, 0.4228, 2.252])
     """
     return lucid.digamma(x)
 
@@ -2403,7 +2419,7 @@ def expit(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import expit
     >>> expit(lucid.tensor([-2.0, 0.0, 2.0]))
-    Tensor([0.1192, 0.5000, 0.8808])
+    tensor([0.1192, 0.5, 0.8808])
     """
     return lucid.sigmoid(x)
 
@@ -2443,7 +2459,7 @@ def modified_bessel_i0(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import modified_bessel_i0
     >>> modified_bessel_i0(lucid.tensor([0.0, 1.0, 3.0]))
-    Tensor([1.0000, 1.2661, 4.8808])
+    tensor([1., 1.266, 4.881])
     """
     return lucid.i0(x)
 
@@ -2483,7 +2499,7 @@ def modified_bessel_i1(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.special import modified_bessel_i1
     >>> modified_bessel_i1(lucid.tensor([0.0, 1.0, 3.0]))
-    Tensor([0.0000, 0.5652, 3.9534])
+    tensor([0., 0.5652, 3.953])
     """
     return i1(x)
 

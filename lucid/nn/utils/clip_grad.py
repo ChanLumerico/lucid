@@ -71,9 +71,16 @@ def clip_grad_norm_(
     Examples
     --------
     >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils import clip_grad_norm_
-    >>> # after loss.backward() ...
+    >>> model = nn.Linear(4, 2)
+    >>> (model(lucid.randn(8, 4)) * 100.0).sum().backward()
     >>> total_norm = clip_grad_norm_(model.parameters(), max_norm=1.0)
+    >>> float(total_norm) > 1.0                 # the norm before clipping
+    True
+    >>> after = clip_grad_norm_(model.parameters(), max_norm=1.0)
+    >>> abs(float(after) - 1.0) < 1e-3          # and after it
+    True
     """
     params = list(parameters)
     params_with_grad = [p for p in params if p.grad is not None]
@@ -170,9 +177,14 @@ def clip_grad_value_(
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils import clip_grad_value_
-    >>> # after loss.backward() ...
+    >>> model = nn.Linear(4, 2)
+    >>> (model(lucid.randn(8, 4)) * 100.0).sum().backward()
     >>> clip_grad_value_(model.parameters(), clip_value=0.5)
+    >>> max(float(p.grad.abs().max()) for p in model.parameters()) <= 0.5
+    True
     """
     for p in parameters:
         if p.grad is not None:
@@ -227,8 +239,14 @@ def get_total_norm(
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils.clip_grad import get_total_norm
+    >>> model = nn.Linear(4, 2)
+    >>> model(lucid.randn(8, 4)).sum().backward()
     >>> g_norm = get_total_norm(model.parameters())
+    >>> float(g_norm) > 0.0
+    True
     """
     params = list(parameters)
     params_with_grad = [p for p in params if p.grad is not None]

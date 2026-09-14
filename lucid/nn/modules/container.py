@@ -102,8 +102,10 @@ class Sequential(Module):
     ...     ("conv2", nn.Conv2d(32, 64, 3, padding=1)),
     ...     ("pool",  nn.MaxPool2d(2)),
     ... ]))
-    >>> # Access by name:
-    >>> conv = model["conv1"]       # __getitem__ via integer works too: model[0]
+    >>> # Access by attribute name, or by position:
+    >>> conv = model.conv1
+    >>> model[0] is conv
+    True
 
     **Dynamic construction and mutation:**
 
@@ -470,16 +472,21 @@ class ModuleDict(Module):
     ...         return self.heads[task](feat)
     >>>
     >>> model = MultiTaskModel(shared_dim=512)
+    >>> x = lucid.randn(4, 512)
     >>> # Dispatch dynamically at runtime:
     >>> logits = model(x, task="classification")
+    >>> logits.shape
+    (4, 10)
 
     **Conditional gating — adding/removing branches at runtime:**
 
     >>> router = nn.ModuleDict({"low": nn.Linear(64, 32)})
     >>> router["high"] = nn.Linear(64, 128)   # register a new branch
     >>> router.pop("low")                      # remove old branch
+    Linear(in_features=64, out_features=32, bias=True)
     >>> for name, branch in router.items():
     ...     print(name, branch)
+    high Linear(in_features=64, out_features=128, bias=True)
     """
 
     def __init__(self, modules: dict[str, Module] | None = None) -> None:
@@ -801,8 +808,11 @@ class ParameterDict(Module):
     >>> bias_bank = nn.ParameterDict()
     >>> for name in ["low_freq", "mid_freq", "high_freq"]:
     ...     bias_bank[name] = nn.Parameter(lucid.zeros(64))
-    >>> bias_bank["low_freq"]  # retrieve by name
-    >>> bias_bank.pop("mid_freq")  # remove dynamically
+    >>> bias_bank["low_freq"].shape  # retrieve by name
+    (64,)
+    >>> _ = bias_bank.pop("mid_freq")  # remove dynamically
+    >>> list(bias_bank.keys())
+    ['low_freq', 'high_freq']
     """
 
     def __init__(self, parameters: dict[str, Parameter] | None = None) -> None:

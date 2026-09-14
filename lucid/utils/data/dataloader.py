@@ -75,7 +75,7 @@ def default_convert(data: object) -> object:
     Examples
     --------
     >>> default_convert({"x": 1.5, "y": [1, 2]})
-    {'x': <Tensor ...>, 'y': [<Tensor ...>, <Tensor ...>]}
+    {'x': tensor(1.5), 'y': [tensor(1, dtype=lucid.int64), tensor(2, dtype=lucid.int64)]}
     """
     if isinstance(data, Tensor):
         return data
@@ -131,8 +131,22 @@ def collate(
 
     Examples
     --------
-    >>> loader = DataLoader(ds, collate_fn=lambda b: collate(
+    >>> import lucid
+    >>> from dataclasses import dataclass
+    >>> from lucid.utils.data import DataLoader
+    >>> from lucid.utils.data.dataloader import collate
+    >>> @dataclass
+    ... class MyRecord:
+    ...     text: str
+    ...     score: float
+    >>> def my_record_collate(batch, *, collate_fn_map=None):
+    ...     return [r.text for r in batch], lucid.tensor([r.score for r in batch])
+    >>> ds = [MyRecord("a", 0.5), MyRecord("b", 1.5), MyRecord("c", 2.5)]
+    >>> loader = DataLoader(ds, batch_size=3, collate_fn=lambda b: collate(
     ...     b, collate_fn_map={MyRecord: my_record_collate}))
+    >>> texts, scores = next(iter(loader))
+    >>> texts, scores.tolist()
+    (['a', 'b', 'c'], [0.5, 1.5, 2.5])
     """
     elem = batch[0]
     if collate_fn_map is not None:
@@ -178,8 +192,12 @@ def default_collate(
 
     Examples
     --------
-    >>> default_collate([(t1, 0), (t2, 1), (t3, 2)])
-    (<Tensor shape=(3, ...)>, <Tensor shape=(3,)>)
+    >>> import lucid
+    >>> from lucid.utils.data.dataloader import default_collate
+    >>> t1, t2, t3 = lucid.zeros(4), lucid.ones(4), lucid.ones(4)
+    >>> xs, ys = default_collate([(t1, 0), (t2, 1), (t3, 2)])
+    >>> xs.shape, ys.tolist()
+    ((3, 4), [0, 1, 2])
     """
     elem = batch[0]
 
@@ -552,9 +570,14 @@ class DataLoader:
 
     Examples
     --------
-    >>> dl = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
+    >>> import lucid
+    >>> from lucid.utils.data import DataLoader, TensorDataset
+    >>> dataset = TensorDataset(lucid.randn(100, 8), lucid.randint(0, 10, (100,)))
+    >>> dl = DataLoader(dataset, batch_size=32, shuffle=True)  # num_workers=4 to parallelise
     >>> for batch in dl:
-    ...     ...
+    ...     x, y = batch
+    >>> x.shape, y.shape                     # the last, short batch: 100 = 3 * 32 + 4
+    ((4, 8), (4,))
     """
 
     def __init__(

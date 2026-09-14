@@ -555,8 +555,12 @@ class CompiledModule[**P, R]:
 
         Examples
         --------
+        >>> import lucid.nn as nn
+        >>> model = nn.Linear(8, 4).to("metal")
         >>> compiled = lucid.compile(model)
-        >>> compiled(x1); compiled(x2)
+        >>> x1 = lucid.randn(2, 8, device="metal")
+        >>> x2 = lucid.randn(5, 8, device="metal")
+        >>> _ = compiled(x1); _ = compiled(x2)
         >>> info = compiled.cache_info()
         >>> info["entries"]                 # one slot per unique signature
         2
@@ -671,8 +675,14 @@ class CompiledModule[**P, R]:
 
         Examples
         --------
-        >>> cm = lucid.compile(model)
+        >>> import lucid.nn as nn
+        >>> import lucid.nn.functional as F
+        >>> cm = lucid.compile(nn.Linear(8, 3).to("metal"))
         >>> opt = lucid.optim.SGD(cm.parameters(), lr=0.1)
+        >>> loader = [
+        ...     (lucid.randn(4, 8, device="metal"), lucid.randint(0, 3, (4,), device="metal"))
+        ...     for _ in range(2)
+        ... ]
         >>> for x, t in loader:
         ...     opt.zero_grad()
         ...     loss = cm.step(x, t, loss_fn=F.cross_entropy)

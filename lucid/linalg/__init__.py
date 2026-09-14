@@ -413,7 +413,7 @@ def norm(
     >>> norm(A, ord=1)          # max absolute column sum
     tensor(9.)
     >>> norm(A, ord=1, dim=1)   # per-row vector 1-norm
-    tensor([ 6., 15.])
+    tensor([6., 15.])
     """
     # Dispatch, which is what the docstring above has always promised and
     # what this function did not do.  Every argument used to go straight
@@ -1233,7 +1233,7 @@ def eig(x: Tensor) -> tuple[Tensor, Tensor]:
     >>> A = lucid.tensor([[2.0, 0.0], [0.0, 3.0]])
     >>> w, V = eig(A)
     >>> w
-    tensor([2., 3.])
+    tensor([(2.+0.j), (3.+0.j)], dtype=lucid.complex64)
     """
     vals, vecs = _la.eig(_unwrap(x))
     return _wrap(vals), _wrap(vecs)
@@ -1268,7 +1268,7 @@ def eigvals(x: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.linalg import eigvals
     >>> eigvals(lucid.tensor([[2.0, 0.0], [0.0, 3.0]]))
-    tensor([2., 3.])
+    tensor([(2.+0.j), (3.+0.j)], dtype=lucid.complex64)
     """
     vals, _ = _la.eig(_unwrap(x))
     return _wrap(vals)

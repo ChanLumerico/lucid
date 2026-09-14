@@ -141,10 +141,13 @@ class Linear(nn.Module):
     >>> model.qconfig = Q.get_default_qconfig()
     >>> prepared = Q.prepare(model)          # insert activation/weight observers
     >>> _ = prepared(lucid.randn(32, 128))   # calibrate on representative data
-    >>> qmodel = Q.convert(prepared)         # float Linear -> quantized Linear
-    >>> type(qmodel[0]).__name__
+    >>> qmodel = Q.convert(prepared)         # float Linear -> quantized layer
+    >>> type(qmodel[0]).__name__             # MLX kernels built in: the int8 GEMM
+    'QuantizedLinearMLX'
+    >>> qlin = nn.quantized.Linear.from_float(prepared[0])   # this layer, explicitly
+    >>> type(qlin).__name__
     'Linear'
-    >>> y = qmodel(lucid.randn(1, 128))      # int8-weight inference
+    >>> y = qlin(lucid.randn(1, 128))        # int8-weight inference
     >>> y.shape
     (1, 64)
 

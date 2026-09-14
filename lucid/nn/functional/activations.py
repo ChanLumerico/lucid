@@ -61,7 +61,7 @@ def relu(x: Tensor, inplace: bool = False) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.functional import relu
     >>> relu(lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0]))
-    Tensor([0., 0., 0., 1., 2.])
+    tensor([0., 0., 0., 1., 2.])
     """
     return _wrap(_C_engine.relu(_unwrap(x)))
 
@@ -110,7 +110,7 @@ def leaky_relu(
     >>> from lucid.nn.functional import leaky_relu
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0])
     >>> leaky_relu(x, negative_slope=0.1)
-    Tensor([-0.2000, -0.1000,  0.0000,  1.0000])
+    tensor([-0.2, -0.1, 0., 1.])
     """
     return _wrap(_C_engine.leaky_relu(_unwrap(x), negative_slope))
 
@@ -159,7 +159,7 @@ def elu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     >>> from lucid.nn.functional import elu
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0])
     >>> elu(x)
-    Tensor([-0.8647, -0.6321,  0.0000,  1.0000])
+    tensor([-0.8647, -0.6321, 0., 1.])
     """
     return _wrap(_C_engine.elu(_unwrap(x), alpha))
 
@@ -211,7 +211,7 @@ def selu(x: Tensor, inplace: bool = False) -> Tensor:
     >>> from lucid.nn.functional import selu
     >>> x = lucid.tensor([-1.0, 0.0, 1.0])
     >>> selu(x)
-    Tensor([-1.1113,  0.0000,  1.0507])
+    tensor([-1.111, 0., 1.051])
     """
     return _wrap(_C_engine.selu(_unwrap(x)))
 
@@ -265,7 +265,7 @@ def gelu(x: Tensor, approximate: GeluApproximate = "none") -> Tensor:
     >>> from lucid.nn.functional import gelu
     >>> x = lucid.tensor([-1.0, 0.0, 1.0, 2.0])
     >>> gelu(x)
-    Tensor([-0.1587,  0.0000,  0.8413,  1.9545])
+    tensor([-0.1587, 0., 0.8413, 1.954])
     """
     xi = _unwrap(x)
     if approximate == "tanh":
@@ -316,7 +316,7 @@ def silu(x: Tensor, inplace: bool = False) -> Tensor:
     >>> from lucid.nn.functional import silu
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> silu(x)
-    Tensor([-0.2384, -0.2689,  0.0000,  0.7311,  1.7616])
+    tensor([-0.2384, -0.2689, 0., 0.7311, 1.762])
     """
     return _wrap(_C_engine.silu(_unwrap(x)))
 
@@ -357,7 +357,7 @@ def mish(x: Tensor) -> Tensor:
     >>> from lucid.nn.functional import mish
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> mish(x)
-    Tensor([-0.2525, -0.3034,  0.0000,  0.8651,  1.9440])
+    tensor([-0.2525, -0.3034, 0., 0.8651, 1.944])
     """
     return _wrap(_C_engine.mish(_unwrap(x)))
 
@@ -401,7 +401,7 @@ def hardswish(x: Tensor) -> Tensor:
     >>> from lucid.nn.functional import hardswish
     >>> x = lucid.tensor([-4.0, -1.0, 0.0, 1.0, 4.0])
     >>> hardswish(x)
-    Tensor([ 0.0000, -0.3333,  0.0000,  0.6667,  4.0000])
+    tensor([-0., -0.3333, 0., 0.6667, 4.])
     """
     return _wrap(_C_engine.hard_swish(_unwrap(x)))
 
@@ -444,7 +444,7 @@ def hardsigmoid(x: Tensor) -> Tensor:
     >>> from lucid.nn.functional import hardsigmoid
     >>> x = lucid.tensor([-4.0, -1.0, 0.0, 1.0, 4.0])
     >>> hardsigmoid(x)
-    Tensor([0.0000, 0.3333, 0.5000, 0.6667, 1.0000])
+    tensor([0., 0.3333, 0.5, 0.6667, 1.])
     """
     return _wrap(_C_engine.hard_sigmoid(_unwrap(x)))
 
@@ -486,7 +486,7 @@ def sigmoid(x: Tensor) -> Tensor:
     >>> from lucid.nn.functional import sigmoid
     >>> x = lucid.tensor([-2.0, 0.0, 2.0])
     >>> sigmoid(x)
-    Tensor([0.1192, 0.5000, 0.8808])
+    tensor([0.1192, 0.5, 0.8808])
     """
     return _wrap(_C_engine.sigmoid(_unwrap(x)))
 
@@ -528,7 +528,7 @@ def tanh(x: Tensor) -> Tensor:
     >>> from lucid.nn.functional import tanh
     >>> x = lucid.tensor([-2.0, 0.0, 2.0])
     >>> tanh(x)
-    Tensor([-0.9640,  0.0000,  0.9640])
+    tensor([-0.964, 0., 0.964])
     """
     return _wrap(_C_engine.tanh(_unwrap(x)))
 
@@ -581,9 +581,9 @@ def softmax(x: Tensor, dim: int | None = None) -> Tensor:
     >>> logits = lucid.tensor([[1.0, 2.0, 3.0]])
     >>> p = softmax(logits, dim=1)
     >>> p
-    Tensor([[0.0900, 0.2447, 0.6652]])
+    tensor([[0.09003, 0.2447, 0.6652]])
     >>> p.sum(dim=1)
-    Tensor([1.0000])
+    tensor([1.])
     """
     axis = dim if dim is not None else -1
     return _wrap(_C_engine.softmax(_unwrap(x), axis))
@@ -631,7 +631,7 @@ def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
     >>> from lucid.nn.functional import log_softmax
     >>> logits = lucid.tensor([[1.0, 2.0, 3.0]])
     >>> log_softmax(logits, dim=1)
-    Tensor([[-2.4076, -1.4076, -0.4076]])
+    tensor([[-2.408, -1.408, -0.4076]])
     """
     axis = dim if dim is not None else -1
     # Route through the engine's dedicated log_softmax kernel, which computes
@@ -689,7 +689,7 @@ def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
     >>> from lucid.nn.functional import softplus
     >>> x = lucid.tensor([-2.0, 0.0, 2.0])
     >>> softplus(x)
-    Tensor([0.1269, 0.6931, 2.1269])
+    tensor([0.1269, 0.6931, 2.127])
     """
     if beta == 1.0 and threshold >= 50.0:
         # Hot-path: the bare engine kernel is already correct here.
@@ -745,7 +745,7 @@ def relu6(x: Tensor, inplace: bool = False) -> Tensor:
     >>> from lucid.nn.functional import relu6
     >>> x = lucid.tensor([-1.0, 0.0, 3.0, 7.0])
     >>> relu6(x)
-    Tensor([0.0000, 0.0000, 3.0000, 6.0000])
+    tensor([0., 0., 3., 6.])
     """
     return _wrap(_C_engine.relu6(_unwrap(x)))
 
@@ -786,7 +786,7 @@ def softmin(x: Tensor, dim: int | None = None) -> Tensor:
     >>> from lucid.nn.functional import softmin
     >>> x = lucid.tensor([[1.0, 2.0, 3.0]])
     >>> softmin(x, dim=1)
-    Tensor([[0.6652, 0.2447, 0.0900]])
+    tensor([[0.6652, 0.2447, 0.09003]])
     """
     axis = dim if dim is not None else -1
     return _wrap(_C_engine.softmax(_C_engine.neg(_unwrap(x)), axis))
@@ -832,7 +832,7 @@ def glu(x: Tensor, dim: int = -1) -> Tensor:
     >>> from lucid.nn.functional import glu
     >>> x = lucid.tensor([[1.0, 2.0, 0.0, 1.0]])  # split → a=[1,2], b=[0,1]
     >>> glu(x, dim=-1)
-    Tensor([[0.5000, 1.4621]])
+    tensor([[0.5, 1.462]])
     """
     impl = _unwrap(x)
     n = impl.shape[dim] // 2
@@ -882,10 +882,15 @@ def prelu(x: Tensor, weight: Tensor) -> Tensor:
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0])
     >>> w = lucid.tensor(0.25)
     >>> prelu(x, w)
-    Tensor([-0.5000, -0.2500,  0.0000,  1.0000])
+    tensor([-0.5, -0.25, 0., 1.])
     """
     xi = _unwrap(x)
     wi = _unwrap(weight)
+    # A per-channel ``(C,)`` slope belongs to dim 1 of an ``(N, C, *)`` input.
+    # Left as a bare vector it would broadcast against the *last* dim instead,
+    # which fails on a feature map (or mixes up channels when that dim is C).
+    if len(wi.shape) == 1 and wi.shape[0] > 1 and len(xi.shape) > 2:
+        wi = _C_engine.reshape(wi, [wi.shape[0]] + [1] * (len(xi.shape) - 2))
     pos = _C_engine.relu(xi)
     neg_part = _C_engine.mul(
         wi, _C_engine.minimum(_C_engine.zeros(xi.shape, xi.dtype, xi.device), xi)
@@ -932,7 +937,7 @@ def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     >>> from lucid.nn.functional import celu
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0])
     >>> celu(x, alpha=1.0)
-    Tensor([-0.8647, -0.6321,  0.0000,  1.0000])
+    tensor([-0.8647, -0.6321, 0., 1.])
     """
     xi = _unwrap(x)
     pos = _C_engine.relu(xi)
@@ -988,7 +993,7 @@ def hardshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
     >>> from lucid.nn.functional import hardshrink
     >>> x = lucid.tensor([-1.0, -0.3, 0.0, 0.3, 1.0])
     >>> hardshrink(x, lambd=0.5)
-    Tensor([-1.0000,  0.0000,  0.0000,  0.0000,  1.0000])
+    tensor([-1., 0., 0., 0., 1.])
     """
     xi = _unwrap(x)
     lam = _C_engine.full(xi.shape, lambd, xi.dtype, xi.device)
@@ -1037,7 +1042,7 @@ def tanhshrink(x: Tensor) -> Tensor:
     >>> from lucid.nn.functional import tanhshrink
     >>> x = lucid.tensor([-2.0, -0.5, 0.0, 0.5, 2.0])
     >>> tanhshrink(x)
-    Tensor([-1.0360, -0.0379,  0.0000,  0.0379,  1.0360])
+    tensor([-1.036, -0.03788, 0., 0.03788, 1.036])
     """
     xi = _unwrap(x)
     return _wrap(_C_engine.sub(xi, _C_engine.tanh(xi)))
@@ -1069,6 +1074,7 @@ def normalize(
 
     Examples
     --------
+    >>> import lucid.nn.functional as F
     >>> x = lucid.tensor([[3.0, 4.0]])
     >>> F.normalize(x, p=2, dim=1)
     tensor([[0.6, 0.8]])
@@ -1136,7 +1142,7 @@ def cosine_similarity(
     >>> a = lucid.tensor([[1.0, 0.0]])
     >>> b = lucid.tensor([[1.0, 1.0]])
     >>> cosine_similarity(a, b, dim=1)
-    Tensor([0.7071])
+    tensor([0.7071])
     """
     x1n = normalize(x1, p=2.0, dim=dim, eps=eps)
     x2n = normalize(x2, p=2.0, dim=dim, eps=eps)
@@ -1196,7 +1202,7 @@ def pairwise_distance(
     >>> a = lucid.tensor([[1.0, 2.0]])
     >>> b = lucid.tensor([[4.0, 6.0]])
     >>> pairwise_distance(a, b, p=2.0)
-    Tensor([5.0000])
+    tensor([5.])
     """
     diff = _C_engine.sub(_unwrap(x1), _unwrap(x2))
     # |diff|_p = (sum |diff|^p)^(1/p)
@@ -1259,7 +1265,7 @@ def softshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
     >>> from lucid.nn.functional import softshrink
     >>> x = lucid.tensor([-1.0, -0.3, 0.0, 0.3, 1.0])
     >>> softshrink(x, lambd=0.5)
-    Tensor([-0.5000,  0.0000,  0.0000,  0.0000,  0.5000])
+    tensor([-0.5, 0., 0., 0., 0.5])
     """
     xi = _unwrap(x)
     lam = _C_engine.full(xi.shape, lambd, xi.dtype, xi.device)
@@ -1326,7 +1332,7 @@ def hardtanh(
     >>> from lucid.nn.functional import hardtanh
     >>> x = lucid.tensor([-2.0, -0.5, 0.0, 0.5, 2.0])
     >>> hardtanh(x)
-    Tensor([-1.0000, -0.5000,  0.0000,  0.5000,  1.0000])
+    tensor([-1., -0.5, 0., 0.5, 1.])
     """
     return _l.clamp(x, min_val, max_val)
 
@@ -1366,7 +1372,7 @@ def logsigmoid(x: Tensor) -> Tensor:
     >>> from lucid.nn.functional import logsigmoid
     >>> x = lucid.tensor([-10.0, 0.0, 10.0])
     >>> logsigmoid(x)
-    Tensor([-10.0000,  -0.6931,  -0.0000])
+    tensor([-10., -0.6931, -4.54e-05])
     """
     return -softplus(-x)
 
@@ -1407,7 +1413,7 @@ def softsign(x: Tensor) -> Tensor:
     >>> from lucid.nn.functional import softsign
     >>> x = lucid.tensor([-2.0, -1.0, 0.0, 1.0, 2.0])
     >>> softsign(x)
-    Tensor([-0.6667, -0.5000,  0.0000,  0.5000,  0.6667])
+    tensor([-0.6667, -0.5, 0., 0.5, 0.6667])
     """
     return x / (1.0 + _l.abs(x))
 
@@ -1461,7 +1467,7 @@ def threshold(
     >>> from lucid.nn.functional import threshold
     >>> x = lucid.tensor([-1.0, 0.0, 0.5, 1.0])
     >>> threshold(x, threshold=0.5, value=-99.0)
-    Tensor([-99.0000, -99.0000, -99.0000,   1.0000])
+    tensor([-99., -99., -99., 1.])
     """
     # ``x <= t ? v : x``, not ``x > t ? x : v``.  The two are the same
     # function everywhere except at NaN, where *both* comparisons are
@@ -1673,7 +1679,7 @@ def rrelu(
     >>> from lucid.nn.functional import rrelu
     >>> x = lucid.tensor([-1.0, 0.0, 1.0])
     >>> rrelu(x, training=False)
-    Tensor([-0.2292,  0.0000,  1.0000])
+    tensor([-0.2292, 0., 1.])
     """
     if training:
         # Per-element uniform slope, only applied where x < 0.

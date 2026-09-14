@@ -81,7 +81,7 @@ def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor
     >>> pred = lucid.tensor([1.0, 2.0, 3.0])
     >>> target = lucid.tensor([1.5, 2.5, 2.5])
     >>> mse_loss(pred, target)
-    Tensor(0.25)
+    tensor(0.25)
     """
     _validate_reduction(reduction)
     red: int = _REDUCTION_MAP[reduction]
@@ -134,7 +134,7 @@ def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     >>> pred = lucid.tensor([1.0, 2.0, 3.0])
     >>> target = lucid.tensor([1.5, 2.5, 2.5])
     >>> l1_loss(pred, target)
-    Tensor(0.5)
+    tensor(0.5)
     """
     _validate_reduction(reduction)
     diff: _C_engine.TensorImpl = _C_engine.abs(
@@ -205,7 +205,7 @@ def smooth_l1_loss(
     >>> pred = lucid.tensor([0.0, 2.0])
     >>> target = lucid.tensor([0.5, 5.0])
     >>> smooth_l1_loss(pred, target, beta=1.0)
-    Tensor(1.3125)
+    tensor(1.312)
     """
     # ``huber_loss`` alone is the wrong function: Huber's quadratic region
     # is ``0.5 x²`` where smooth L1's is ``0.5 x² / beta``, and its linear
@@ -277,7 +277,7 @@ def huber_loss(
     >>> pred = lucid.tensor([0.0, 5.0])
     >>> target = lucid.tensor([0.5, 0.0])
     >>> huber_loss(pred, target, delta=1.0)
-    Tensor(2.3125)
+    tensor(2.312)
     """
     _validate_reduction(reduction)
     red: int = _REDUCTION_MAP[reduction]
@@ -360,7 +360,7 @@ def cross_entropy(
     >>> logits = lucid.tensor([[2.0, 0.5, 0.1], [0.0, 1.5, 0.2]])
     >>> target = lucid.tensor([0, 1])
     >>> cross_entropy(logits, target)
-    Tensor(0.3490...)
+    tensor(0.3597)
     """
     _validate_reduction(reduction)
     from lucid.nn.functional.activations import log_softmax as _log_softmax
@@ -499,7 +499,7 @@ def nll_loss(
     >>> logits = lucid.tensor([[2.0, 0.5, 0.1], [0.0, 1.5, 0.2]])
     >>> target = lucid.tensor([0, 1])
     >>> nll_loss(log_softmax(logits, dim=1), target)
-    Tensor(0.3490...)
+    tensor(0.3597)
     """
     _validate_reduction(reduction)
     target_long: Tensor = target.to(dtype=_lucid.int32)
@@ -594,7 +594,7 @@ def binary_cross_entropy(
     >>> p = lucid.tensor([0.9, 0.2, 0.7])
     >>> y = lucid.tensor([1.0, 0.0, 1.0])
     >>> binary_cross_entropy(p, y)
-    Tensor(0.2284...)
+    tensor(0.2284)
     """
     _validate_reduction(reduction)
     eps: float = 1e-12
@@ -676,7 +676,7 @@ def binary_cross_entropy_with_logits(
     >>> logits = lucid.tensor([2.0, -1.0, 0.5])
     >>> target = lucid.tensor([1.0, 0.0, 1.0])
     >>> binary_cross_entropy_with_logits(logits, target)
-    Tensor(0.3567...)
+    tensor(0.3048)
     """
     _validate_reduction(reduction)
     one: Tensor = _lucid.ones((), dtype=x.dtype, device=x.device)
@@ -776,7 +776,7 @@ def kl_div(
     >>> log_q = log_softmax(lucid.tensor([[2.0, 0.5, 0.1]]), dim=1)
     >>> p = lucid.tensor([[0.8, 0.15, 0.05]])
     >>> kl_div(log_q, p, reduction="batchmean")
-    Tensor(0.0641...)
+    tensor(0.02391)
     """
     _validate_reduction(reduction, allow_batchmean=True)
     # `x` is log_q (log of predicted probability) per the standard contract.
@@ -887,7 +887,7 @@ def triplet_margin_loss(
     >>> p = lucid.tensor([[1.0, 0.1]])
     >>> n = lucid.tensor([[0.0, 1.0]])
     >>> triplet_margin_loss(a, p, n, margin=1.0)
-    Tensor(0.6862...)
+    tensor(0.)
     """
     from lucid.nn.functional.activations import pairwise_distance
 
@@ -972,7 +972,7 @@ def triplet_margin_with_distance_loss(
     >>> p = lucid.tensor([[1.0, 0.1]])
     >>> n = lucid.tensor([[0.0, 1.0]])
     >>> triplet_margin_with_distance_loss(a, p, n, distance_function=manhattan)
-    Tensor(0.2)
+    tensor(0.)
     """
     from lucid.nn.functional.activations import pairwise_distance
 
@@ -1060,7 +1060,7 @@ def cosine_embedding_loss(
     >>> x2 = lucid.tensor([[0.5, 0.5]])
     >>> y = lucid.tensor([1.0])
     >>> cosine_embedding_loss(x1, x2, y)
-    Tensor(0.2928...)
+    tensor(0.2929)
     """
     from lucid.nn.functional.activations import cosine_similarity
 
@@ -1133,7 +1133,7 @@ def margin_ranking_loss(
     >>> s2 = lucid.tensor([1.0, 1.0])
     >>> y = lucid.tensor([1.0, 1.0])
     >>> margin_ranking_loss(s1, s2, y, margin=1.0)
-    Tensor(0.75)
+    tensor(0.75)
     """
     diff = _C_engine.sub(_unwrap(x1), _unwrap(x2))
     margin_t = _C_engine.full(diff.shape, margin, diff.dtype, diff.device)
@@ -1197,7 +1197,7 @@ def hinge_embedding_loss(
     >>> dist = lucid.tensor([0.2, 0.8])
     >>> y = lucid.tensor([1.0, -1.0])
     >>> hinge_embedding_loss(dist, y, margin=1.0)
-    Tensor(0.2)
+    tensor(0.2)
     """
     xi = _unwrap(x)
     yi = _unwrap(y)
@@ -1280,7 +1280,7 @@ def poisson_nll_loss(
     >>> log_lam = lucid.tensor([0.0, 1.0, 2.0])
     >>> y = lucid.tensor([1.0, 2.0, 5.0])
     >>> poisson_nll_loss(log_lam, y, log_input=True)
-    Tensor(0.7299...)
+    tensor(-0.2976)
     """
     xi = _unwrap(x)
     ti = _unwrap(target)
@@ -1394,7 +1394,7 @@ def gaussian_nll_loss(
     >>> y = lucid.tensor([0.5, 1.0])
     >>> var = lucid.tensor([1.0, 0.25])
     >>> gaussian_nll_loss(mu, y, var)
-    Tensor(-0.2218...)
+    tensor(-0.2841)
     """
     xi = _unwrap(x)
     ti = _unwrap(target)
@@ -1595,7 +1595,7 @@ def multi_margin_loss(
     >>> scores = lucid.tensor([[2.0, 0.5, 0.1]])
     >>> target = lucid.tensor([0], dtype=lucid.int32)
     >>> multi_margin_loss(scores, target)
-    Tensor(0.0)
+    tensor(0.)
     """
     xi = _unwrap(x)
     ti = _unwrap(target)
@@ -1834,7 +1834,7 @@ def soft_margin_loss(
     >>> x = lucid.tensor([2.0, -1.0])
     >>> y = lucid.tensor([1.0, -1.0])
     >>> soft_margin_loss(x, y)
-    Tensor(0.2284...)
+    tensor(0.2201)
     """
     raw = _lucid.nn.functional.softplus(-target * input)
     if reduction == "mean":
@@ -1906,7 +1906,7 @@ def multilabel_soft_margin_loss(
     >>> logits = lucid.tensor([[2.0, -1.0, 0.5]])
     >>> target = lucid.tensor([[1.0, 0.0, 1.0]])
     >>> multilabel_soft_margin_loss(logits, target)
-    Tensor(0.3567...)
+    tensor(0.3048)
     """
     # logσ(x)   = -softplus(-x);  log(1-σ(x)) = -softplus(x).  Both forms
     # are numerically stable for large |x|.

@@ -138,7 +138,7 @@ class Conv1d(nn.Conv1d):
     True
     >>> loss = (qat(lucid.randn(2, 3, 8)) ** 2).mean()
     >>> loss.backward()                         # STE routes grads to the float kernel
-    >>> qat.eval()
+    >>> _ = qat.eval()
     >>> qc = Q.convert(qat)                     # -> quantized.Conv1d (int8 weight)
     >>> type(qc[0]).__name__
     'Conv1d'
@@ -279,7 +279,7 @@ class Conv2d(nn.Conv2d):
     True
     >>> loss = (qat(lucid.randn(2, 3, 8, 8)) ** 2).mean()
     >>> loss.backward()                         # STE routes grads to the float kernel
-    >>> qat.eval()
+    >>> _ = qat.eval()
     >>> qc = Q.convert(qat)                     # -> quantized.Conv2d (int8 weight)
     >>> type(qc[0]).__name__
     'Conv2d'
@@ -420,7 +420,7 @@ class Conv3d(nn.Conv3d):
     True
     >>> loss = (qat(lucid.randn(2, 3, 4, 4, 4)) ** 2).mean()
     >>> loss.backward()                         # STE routes grads to the float kernel
-    >>> qat.eval()
+    >>> _ = qat.eval()
     >>> qc = Q.convert(qat)                     # -> quantized.Conv3d (int8 weight)
     >>> type(qc[0]).__name__
     'Conv3d'
@@ -556,7 +556,7 @@ class ConvReLU1d(Conv1d):
     True
     >>> loss = (qat(lucid.randn(2, 3, 8)) ** 2).mean()
     >>> loss.backward()                                 # STE trains the fused float kernel
-    >>> qat.eval()
+    >>> _ = qat.eval()
     >>> qc = Q.convert(qat)                             # -> quantized.ConvReLU1d
     >>> type(qc[0]).__name__
     'ConvReLU1d'
@@ -667,7 +667,7 @@ class ConvReLU2d(Conv2d):
     True
     >>> loss = (qat(lucid.randn(2, 3, 8, 8)) ** 2).mean()
     >>> loss.backward()                                 # STE trains the fused float kernel
-    >>> qat.eval()
+    >>> _ = qat.eval()
     >>> qc = Q.convert(qat)                             # -> quantized.ConvReLU2d
     >>> type(qc[0]).__name__
     'ConvReLU2d'
@@ -777,7 +777,7 @@ class ConvReLU3d(Conv3d):
     True
     >>> loss = (qat(lucid.randn(2, 3, 4, 4, 4)) ** 2).mean()
     >>> loss.backward()                                 # STE trains the fused float kernel
-    >>> qat.eval()
+    >>> _ = qat.eval()
     >>> qc = Q.convert(qat)                             # -> quantized.ConvReLU3d
     >>> type(qc[0]).__name__
     'ConvReLU3d'

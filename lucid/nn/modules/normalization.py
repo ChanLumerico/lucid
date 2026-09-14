@@ -1036,7 +1036,7 @@ class BatchNorm2d(_BatchNormBase):
     (8, 64, 32, 32)
 
     >>> # Eval mode uses running statistics (no batch dependence)
-    >>> bn.eval()
+    >>> _ = bn.eval()
     >>> with lucid.no_grad():
     ...     out = bn(x)
     """

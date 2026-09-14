@@ -91,6 +91,25 @@ class TestPReLU:
         out = m(lucid.tensor([-1.0, 0.0, 1.0]))
         assert out.shape == (3,)
 
+    def test_per_channel_slopes_follow_dim_1(self) -> None:
+        # ``num_parameters=C`` gives each channel of an ``(N, C, *)`` input its
+        # own slope, so the weight broadcasts along dim 1 — not the last dim,
+        # which is where a bare ``(C,)`` vector would land.
+        slopes = [0.1, 0.2, 0.3]
+        w = lucid.tensor(slopes, requires_grad=True)
+        out = nn.functional.prelu(-lucid.ones(2, 3, 4, 5), w)
+        assert out.shape == (2, 3, 4, 5)
+        for c, slope in enumerate(slopes):
+            np.testing.assert_allclose(out.numpy()[:, c], -slope, atol=1e-6)
+        out.sum().backward()
+        # d/dw_c of sum(w_c * min(0, x)) over the 2*4*5 entries of channel c.
+        assert w.grad is not None
+        np.testing.assert_allclose(w.grad.numpy(), [-40.0] * 3, atol=1e-5)
+
+    def test_module_per_channel_on_feature_map(self) -> None:
+        m = nn.PReLU(num_parameters=64)
+        assert m(lucid.randn(8, 64, 16, 16)).shape == (8, 64, 16, 16)
+
 
 class TestCosineSimilarityModule:
     def test_orthogonal(self) -> None:

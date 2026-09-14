@@ -467,8 +467,8 @@ class PixelUnshuffle(Module):
     >>>
     >>> pus = nn.PixelUnshuffle(downscale_factor=2)
     >>> x = lucid.zeros(1, 3, 112, 112)
-    >>> pus(x).shape
-    (1, 12, 56, 56)    # 12 = 3 * 2^2
+    >>> pus(x).shape    # 12 = 3 * 2^2
+    (1, 12, 56, 56)
 
     **Round-trip with PixelShuffle:**
 

@@ -1965,7 +1965,7 @@ def fftfreq(
     Frequencies for a length-8 DFT at sample spacing 1:
 
     >>> lucid.fft.fftfreq(8)
-    # [ 0.,   0.125,  0.25,  0.375, -0.5,  -0.375, -0.25, -0.125]
+    tensor([0., 0.125, 0.25, 0.375, -0.5, -0.375, -0.25, -0.125])
 
     Frequencies in Hz for a 1 kHz sample rate:
 
@@ -2051,7 +2051,7 @@ def rfftfreq(
     Frequencies for a length-8 real DFT:
 
     >>> lucid.fft.rfftfreq(8)
-    # [0., 0.125, 0.25, 0.375, 0.5]   — shape (5,)
+    tensor([0., 0.125, 0.25, 0.375, 0.5])
 
     Frequencies in Hz at 44100 Hz sample rate:
 

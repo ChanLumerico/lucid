@@ -278,6 +278,11 @@ class ConcatDataset(Dataset):
 
     Examples
     --------
+    >>> import lucid
+    >>> from lucid.utils.data import ConcatDataset, TensorDataset
+    >>> ds_a = TensorDataset(lucid.zeros(3, 2))
+    >>> ds_b = TensorDataset(lucid.ones(4, 2))
+    >>> ds_c = TensorDataset(lucid.ones(5, 2))
     >>> combined = ConcatDataset([ds_a, ds_b, ds_c])
     >>> len(combined) == len(ds_a) + len(ds_b) + len(ds_c)
     True
@@ -357,9 +362,14 @@ class Subset(Dataset):
 
     Examples
     --------
+    >>> import lucid
+    >>> from lucid.utils.data import Subset, TensorDataset
+    >>> X, y = lucid.randn(100, 4), lucid.zeros(100)
     >>> full = TensorDataset(X, y)
     >>> train = Subset(full, list(range(0, 80)))
     >>> val = Subset(full, list(range(80, 100)))
+    >>> len(train), len(val)
+    (80, 20)
 
     Notes
     -----
@@ -435,6 +445,9 @@ def random_split(
 
     Examples
     --------
+    >>> import lucid
+    >>> from lucid.utils.data import TensorDataset, random_split
+    >>> X, y = lucid.randn(100, 4), lucid.zeros(100)
     >>> full = TensorDataset(X, y)
     >>> train, val, test = random_split(full, [0.8, 0.1, 0.1])
     >>> len(train), len(val), len(test)
@@ -510,6 +523,12 @@ class ChainDataset(IterableDataset):
 
     Examples
     --------
+    >>> from lucid.utils.data import ChainDataset, IterableDataset
+    >>> class CountUp(IterableDataset):
+    ...     def __init__(self, n):
+    ...         self.n = n
+    ...     def __iter__(self):
+    ...         yield from range(self.n)
     >>> a = CountUp(3)              # yields 0, 1, 2
     >>> b = CountUp(2)              # yields 0, 1
     >>> chain = ChainDataset([a, b])
@@ -583,6 +602,9 @@ class StackDataset(Dataset):
 
     Examples
     --------
+    >>> import lucid
+    >>> from lucid.utils.data import StackDataset, TensorDataset
+    >>> X_img, y_lbl = lucid.randn(8, 3, 4, 4), lucid.randint(0, 10, (8,))
     >>> images = TensorDataset(X_img)
     >>> labels = TensorDataset(y_lbl)
     >>> ds = StackDataset(image=images, label=labels)

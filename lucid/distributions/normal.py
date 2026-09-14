@@ -98,9 +98,9 @@ class Normal(ExponentialFamily):
     >>> import lucid.distributions as dist
     >>> d = dist.Normal(loc=0.0, scale=1.0)
     >>> d.mean
-    Tensor(0.)
+    tensor(0.)
     >>> d.variance
-    Tensor(1.)
+    tensor(1.)
     >>> x = d.rsample((5,))   # 5 standard-Normal draws
     >>> lp = d.log_prob(x)    # evaluate log-density at those points
     """
@@ -396,8 +396,8 @@ class LogNormal(Distribution):
     >>> import lucid.distributions as dist
     >>> d = dist.LogNormal(loc=0.0, scale=1.0)
     >>> x = d.rsample((100,))
-    >>> (x > 0).all()   # support is strictly positive
-    Tensor(True)
+    >>> bool((x > 0).all())  # support is strictly positive
+    True
     """
 
     arg_constraints = {"loc": real, "scale": positive}

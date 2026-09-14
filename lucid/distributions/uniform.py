@@ -80,11 +80,11 @@ class Uniform(Distribution):
     >>> from lucid.distributions import Uniform
     >>> d = Uniform(low=0.0, high=1.0)
     >>> d.mean
-    Tensor(0.5)
-    >>> d.rsample((4,))
-    Tensor([...])
+    tensor(0.5)
+    >>> d.rsample((4,)).shape
+    (4,)
     >>> d.log_prob(lucid.tensor(0.5))
-    Tensor(0.0)
+    tensor(0.)
     """
 
     arg_constraints = {"low": real, "high": real}
@@ -125,7 +125,7 @@ class Uniform(Distribution):
         >>> from lucid.distributions import Uniform
         >>> d = Uniform(low=0.0, high=1.0)
         >>> d.mean
-        Tensor(0.5)
+        tensor(0.5)
         """
         self.low = _as_tensor(low)
         self.high = _as_tensor(high)
@@ -172,7 +172,7 @@ class Uniform(Distribution):
         Examples
         --------
         >>> Uniform(low=2.0, high=8.0).mean
-        Tensor(5.0)
+        tensor(5.)
         """
         return 0.5 * (self.low + self.high)
 
@@ -193,7 +193,7 @@ class Uniform(Distribution):
         Examples
         --------
         >>> Uniform(low=0.0, high=1.0).variance  # 1/12 ≈ 0.0833
-        Tensor(0.0833)
+        tensor(0.08333)
         """
         d = self.high - self.low
         return d * d / 12.0
@@ -222,7 +222,7 @@ class Uniform(Distribution):
         --------
         >>> d = Uniform(low=-1.0, high=1.0)
         >>> x = d.rsample((100,))
-        >>> (x >= -1.0).all() and (x < 1.0).all()
+        >>> bool(((x >= -1.0) & (x < 1.0)).all())
         True
         """
         shape = self._extended_shape(sample_shape)
@@ -256,7 +256,7 @@ class Uniform(Distribution):
         Examples
         --------
         >>> Uniform(low=0.0, high=2.0).log_prob(lucid.tensor(1.0))
-        Tensor(-0.6931)
+        tensor(-0.6931)
         """
         # log(1 / (high - low)) inside support, -inf outside.
         log_density = -(self.high - self.low).log()
@@ -296,7 +296,7 @@ class Uniform(Distribution):
         Examples
         --------
         >>> Uniform(low=0.0, high=4.0).cdf(lucid.tensor(1.0))
-        Tensor(0.25)
+        tensor(0.25)
         """
         return ((value - self.low) / (self.high - self.low)).clip(0.0, 1.0)
 
@@ -321,7 +321,7 @@ class Uniform(Distribution):
         Examples
         --------
         >>> Uniform(low=0.0, high=10.0).icdf(lucid.tensor(0.5))
-        Tensor(5.0)
+        tensor(5.)
         """
         return self.low + value * (self.high - self.low)
 
@@ -344,6 +344,6 @@ class Uniform(Distribution):
         Examples
         --------
         >>> Uniform(low=0.0, high=1.0).entropy()  # log(1) = 0.0
-        Tensor(0.0)
+        tensor(0.)
         """
         return (self.high - self.low).log()

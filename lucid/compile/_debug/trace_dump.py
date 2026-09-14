@@ -85,9 +85,12 @@ def trace_to_dict(graph: TraceGraph) -> dict[str, object]:
 
     Examples
     --------
+    >>> import lucid
     >>> from lucid.compile import _tracing
     >>> from lucid.compile._debug.trace_dump import trace_to_dict
-    >>> with _tracing() as tracer:                # doctest: +SKIP
+    >>> model = lucid.nn.Linear(8, 4).to("metal")
+    >>> x = lucid.randn(2, 8, device="metal")
+    >>> with _tracing() as tracer:
     ...     out = model(x)
     >>> payload = trace_to_dict(tracer.graph)
     >>> payload["format"]
@@ -124,9 +127,12 @@ def trace_to_json(graph: TraceGraph, *, indent: int = 2) -> str:
 
     Examples
     --------
+    >>> import lucid
     >>> from lucid.compile import _tracing
     >>> from lucid.compile._debug.trace_dump import trace_to_json
-    >>> with _tracing() as tracer:                # doctest: +SKIP
+    >>> model = lucid.nn.Linear(8, 4).to("metal")
+    >>> x = lucid.randn(2, 8, device="metal")
+    >>> with _tracing() as tracer:
     ...     out = model(x)
     >>> print(trace_to_json(tracer.graph)[:120])
     {

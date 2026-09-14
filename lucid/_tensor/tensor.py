@@ -207,7 +207,7 @@ class Tensor:
         --------
         >>> import lucid
         >>> from lucid._C import engine as _C_engine
-        >>> impl = _C_engine.zeros([3], _C_engine.Dtype.Float32, _C_engine.Device.CPU)
+        >>> impl = _C_engine.zeros([3], _C_engine.Dtype.F32, _C_engine.Device.CPU)
         >>> t = lucid.Tensor.__new_from_impl__(impl)
         >>> t.shape
         (3,)
@@ -353,9 +353,9 @@ class Tensor:
         >>> import lucid
         >>> x = lucid.zeros(3)
         >>> x.device
-        device(type='cpu')
+        device('cpu')
         >>> x.metal().device
-        device(type='metal')
+        device('metal')
         """
         return _device_from_engine(self._impl.device)  # type: ignore[return-value]
 
@@ -1039,7 +1039,8 @@ class Tensor:
         >>> grads = []
         >>> h = x.register_hook(lambda g: grads.append(g.clone()))
         >>> (x * 2).sum().backward()
-        >>> grads[0]          # tensor([2., 2., 2.])
+        >>> grads[0]
+        tensor([2., 2., 2.])
         >>> h.remove()        # de-register
         """
         if not self.requires_grad:
@@ -1401,7 +1402,7 @@ class Tensor:
         >>> import lucid
         >>> x = lucid.tensor([0.5, 1.5, 2.5])
         >>> x.clamp_max_(2.0)
-        tensor([0.5, 1.5, 2. ])
+        tensor([0.5, 1.5, 2.])
 
         Notes
         -----
@@ -1783,8 +1784,8 @@ class Tensor:
         >>> import lucid
         >>> lucid.tensor([[1, 2], [3, 4]]).tolist()
         [[1, 2], [3, 4]]
-        >>> lucid.tensor(3.14).tolist()
-        3.14
+        >>> lucid.tensor(3.14).tolist()   # the float32 value, widened exactly
+        3.140000104904175
 
         Notes
         -----
@@ -2043,6 +2044,7 @@ class Tensor:
         True
         >>> bool(lucid.tensor(0))
         False
+
         Mathematically: defined only when :math:`\prod_i s_i = 1`. The
         single element :math:`x` maps to :math:`\text{bool}(x) = (x \neq 0)`.
 
@@ -2111,7 +2113,7 @@ class Tensor:
         Examples
         --------
         >>> import lucid
-        >>> for row in lucid.arange(6).reshape(3, 2):
+        >>> for row in lucid.arange(6, dtype=lucid.int64).reshape(3, 2):
         ...     print(row.tolist())
         [0, 1]
         [2, 3]
@@ -2254,7 +2256,7 @@ class Tensor:
         >>> x.new_zeros(3, 3)
         tensor([[0, 0, 0],
                 [0, 0, 0],
-                [0, 0, 0]])
+                [0, 0, 0]], dtype=lucid.int32)
 
         Notes
         -----
@@ -2305,7 +2307,7 @@ class Tensor:
         >>> x = lucid.zeros(2, dtype=lucid.float16)
         >>> x.new_ones(2, 4)
         tensor([[1., 1., 1., 1.],
-                [1., 1., 1., 1.]])
+                [1., 1., 1., 1.]], dtype=lucid.float16)
 
         Notes
         -----

@@ -81,6 +81,7 @@ class Poisson(ExponentialFamily):
     (100,)
     >>> # log-probability at k=4
     >>> dist.log_prob(lucid.tensor(4.0))
+    tensor(-1.667)
     """
 
     arg_constraints = {"rate": positive}
@@ -287,6 +288,7 @@ class Binomial(Distribution):
     (50,)
     >>> # PMF at k=3
     >>> dist.log_prob(lucid.tensor(3.0)).exp()
+    tensor(0.2668)
     """
 
     arg_constraints = {
@@ -615,7 +617,8 @@ class NegativeBinomial(Distribution):
     >>> samples = dist.sample((100,))
     >>> samples.shape
     (100,)
-    >>> dist.mean
+    >>> dist.mean  # r p / (1 - p) = 5 * 0.4 / 0.6
+    tensor(3.333)
     """
 
     arg_constraints = {
@@ -754,7 +757,9 @@ class NegativeBinomial(Distribution):
         # Gamma(r, rate=(1−p)/p) — sample standard Gamma(r) then divide
         # by the rate.
         rate: Tensor = (1.0 - p) / p
-        std_gamma: Tensor = _sample_standard_gamma(r, sample_shape)
+        # ``r`` already carries ``sample_shape`` in front; passing it again
+        # would prepend it twice and hand back ``sample_shape * 2``.
+        std_gamma: Tensor = _sample_standard_gamma(r, ())
         lam: Tensor = std_gamma / rate
         return lucid.poisson(lam).detach()
 

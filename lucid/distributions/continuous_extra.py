@@ -84,7 +84,8 @@ class Pareto(Distribution):
     >>> from lucid.distributions import Pareto
     >>> dist = Pareto(scale=1.0, alpha=2.0)
     >>> samples = dist.rsample((200,))
-    >>> samples.min()  # always >= scale
+    >>> bool(samples.min() >= 1.0)  # always >= scale
+    True
     """
 
     arg_constraints = {"scale": positive, "alpha": positive}
@@ -520,7 +521,8 @@ class HalfNormal(Distribution):
     >>> from lucid.distributions import HalfNormal
     >>> dist = HalfNormal(scale=1.0)
     >>> samples = dist.rsample((300,))
-    >>> (samples >= 0.0).all()
+    >>> bool((samples >= 0.0).all())
+    True
     """
 
     arg_constraints = {"scale": positive}
@@ -690,7 +692,8 @@ class HalfCauchy(Distribution):
     >>> from lucid.distributions import HalfCauchy
     >>> dist = HalfCauchy(scale=1.0)
     >>> samples = dist.rsample((200,))
-    >>> (samples >= 0.0).all()
+    >>> bool((samples >= 0.0).all())
+    True
     """
 
     arg_constraints = {"scale": positive}
@@ -867,6 +870,7 @@ class FisherSnedecor(Distribution):
     >>> dist = FisherSnedecor(df1=5.0, df2=10.0)
     >>> samples = dist.sample((100,))
     >>> dist.mean  # d2/(d2-2) = 10/8 = 1.25
+    tensor(1.25)
     """
 
     arg_constraints = {"df1": positive, "df2": positive}

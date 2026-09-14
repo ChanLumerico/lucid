@@ -207,9 +207,7 @@ def adjoint(x: Tensor) -> Tensor:
     >>> import lucid
     >>> A = lucid.tensor([[1., 2., 3.], [4., 5., 6.]])
     >>> lucid.adjoint(A)
-    Tensor([[1., 4.],
-            [2., 5.],
-            [3., 6.]])
+    tensor([[1., 4.], [2., 5.], [3., 6.]])
     """
     if x.ndim < 2:
         raise ValueError("adjoint requires at least 2 dimensions")
@@ -308,9 +306,7 @@ def column_stack(tensors: Sequence[Tensor]) -> Tensor:
     >>> a = lucid.tensor([1., 2., 3.])
     >>> b = lucid.tensor([4., 5., 6.])
     >>> lucid.column_stack([a, b])
-    Tensor([[1., 4.],
-            [2., 5.],
-            [3., 6.]])
+    tensor([[1., 4.], [2., 5.], [3., 6.]])
     """
     fixed = [t_i.unsqueeze(1) if t_i.ndim == 1 else t_i for t_i in tensors]
     return lucid.cat(fixed, 1)
@@ -351,8 +347,7 @@ def row_stack(tensors: Sequence[Tensor]) -> Tensor:
     >>> a = lucid.tensor([1., 2., 3.])
     >>> b = lucid.tensor([4., 5., 6.])
     >>> lucid.row_stack([a, b])
-    Tensor([[1., 2., 3.],
-            [4., 5., 6.]])
+    tensor([[1., 2., 3.], [4., 5., 6.]])
     """
     return lucid.vstack(list(tensors))
 
@@ -835,8 +830,7 @@ def take_along_dim(x: Tensor, indices: Tensor, dim: int) -> Tensor:
     ...                   [4.0, 5.0, 6.0]])
     >>> idx = lucid.tensor([[2, 0], [1, 2]])
     >>> lucid.take_along_dim(x, idx, dim=1)
-    Tensor([[3., 1.],
-            [5., 6.]])
+    tensor([[3., 1.], [5., 6.]])
     """
     return lucid.gather(x, indices, dim)
 
@@ -1028,8 +1022,7 @@ def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     >>> import lucid
     >>> x = lucid.tensor([[1., 2.], [3., 4.]])
     >>> lucid.rot90(x)
-    Tensor([[2., 4.],
-            [1., 3.]])
+    tensor([[2., 4.], [1., 3.]])
     """
     d0, d1 = dims[0], dims[1]
     k = k % 4

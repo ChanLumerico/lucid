@@ -35,10 +35,25 @@ def register_weights(
 
     Examples
     --------
-    >>> @register_weights("resnet_18")
-    ... class ResNet18Weights(WeightsEnum):
-    ...     IMAGENET1K_V1 = WeightEntry(...)
+    >>> from lucid.utils.transforms import ImageClassification
+    >>> from lucid.weights import (
+    ...     WeightEntry,
+    ...     WeightsEnum,
+    ...     register_weights,
+    ...     weights_for,
+    ... )
+    >>> @register_weights("my_net_cls")
+    ... class MyNetWeights(WeightsEnum):
+    ...     IMAGENET1K_V1 = WeightEntry(
+    ...         url="https://example.com/my-net/IMAGENET1K_V1/model.safetensors",
+    ...         sha256="0" * 64,
+    ...         num_classes=1000,
+    ...         transforms=ImageClassification(crop_size=224, resize_size=256),
+    ...         meta={"tag": "IMAGENET1K_V1"},
+    ...     )
     ...     DEFAULT = IMAGENET1K_V1
+    >>> weights_for("my_net_cls") is MyNetWeights
+    True
     """
 
     def _decorator(cls: type[WeightsEnum]) -> type[WeightsEnum]:
@@ -66,8 +81,9 @@ def weights_for(model_name: str) -> type[WeightsEnum] | None:
 
     Examples
     --------
+    >>> import lucid.models              # registers the zoo's weights enums
     >>> import lucid.weights as W
-    >>> W.weights_for("resnet_18")
+    >>> W.weights_for("resnet_18_cls")
     <enum 'ResNet18Weights'>
     """
     return _WEIGHTS_BY_MODEL.get(model_name)
@@ -91,8 +107,9 @@ def list_pretrained(model_name: str) -> list[str]:
 
     Examples
     --------
+    >>> import lucid.models              # registers the zoo's weights enums
     >>> import lucid.weights as W
-    >>> W.list_pretrained("resnet_18")
+    >>> W.list_pretrained("resnet_18_cls")
     ['IMAGENET1K_V1']
     """
     cls = _WEIGHTS_BY_MODEL.get(model_name)
@@ -123,6 +140,7 @@ def get_weight(name: str) -> WeightsEnum:
 
     Examples
     --------
+    >>> import lucid.models              # registers the zoo's weights enums
     >>> import lucid.weights as W
     >>> w = W.get_weight("ResNet18Weights.IMAGENET1K_V1")
     >>> w.num_classes

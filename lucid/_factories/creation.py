@@ -148,8 +148,8 @@ def ones(
     [1.0, 1.0, 1.0, 1.0]
 
     >>> lucid.ones(2, 2, dtype=lucid.int8)
-    Tensor([[1, 1],
-            [1, 1]], dtype=int8)
+    tensor([[1, 1],
+            [1, 1]], dtype=lucid.int8)
 
     Row-sum via matrix-vector product:
 
@@ -225,7 +225,9 @@ def empty(
     Safe usage — always overwrite before reading:
 
     >>> buf = lucid.empty(5)
-    >>> buf[:] = lucid.arange(5).astype(lucid.float32)
+    >>> buf[:] = lucid.arange(5.0)
+    >>> buf.tolist()
+    [0.0, 1.0, 2.0, 3.0, 4.0]
     """
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = _size_to_list(*size)
@@ -370,21 +372,21 @@ def eye(
     --------
     >>> import lucid
     >>> lucid.eye(3)
-    Tensor([[1., 0., 0.],
+    tensor([[1., 0., 0.],
             [0., 1., 0.],
             [0., 0., 1.]])
 
     Rectangular variant:
 
     >>> lucid.eye(2, 4)
-    Tensor([[1., 0., 0., 0.],
+    tensor([[1., 0., 0., 0.],
             [0., 1., 0., 0.]])
 
     Verify $I A = A$:
 
     >>> A = lucid.tensor([[1., 2.], [3., 4.]])
     >>> (lucid.eye(2) @ A - A).abs().max()
-    Tensor(0.)
+    tensor(0.)
     """
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     _m = m if m is not None else n
@@ -619,7 +621,7 @@ def zeros_like(
     >>> w = lucid.randn(3, 4, dtype=lucid.float16, device="metal")
     >>> g = lucid.zeros_like(w)
     >>> g.shape, g.dtype, g.device
-    ((3, 4), lucid.float16, lucid.device('metal'))
+    ((3, 4), lucid.float16, device('metal'))
 
     Override dtype on-the-fly:
 

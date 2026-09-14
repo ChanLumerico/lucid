@@ -103,7 +103,7 @@ class Embedding(nn.Embedding):
     >>> isinstance(qat[0], nnqat.Embedding)
     True
     >>> _ = qat(lucid.tensor([[1, 5, 9]], dtype=lucid.int64))   # fake-quant + gather
-    >>> qat.eval()
+    >>> _ = qat.eval()
     >>> qc = Q.convert(qat)                                     # -> quantized.Embedding
     >>> type(qc[0]).__name__
     'Embedding'

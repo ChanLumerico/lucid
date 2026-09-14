@@ -83,7 +83,9 @@ def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import uniform_
     >>> w = lucid.empty(4, 4)
-    >>> uniform_(w, -0.1, 0.1)
+    >>> _ = uniform_(w, -0.1, 0.1)
+    >>> bool(((w >= -0.1) & (w <= 0.1)).all().item())
+    True
     """
     return _fill_from_impl(
         tensor,
@@ -135,7 +137,10 @@ def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import normal_
     >>> w = lucid.empty(64, 32)
-    >>> normal_(w, mean=0.0, std=0.02)
+    >>> lucid.manual_seed(0)
+    >>> _ = normal_(w, mean=0.0, std=0.02)
+    >>> abs(w.std().item() - 0.02) < 0.002       # sample std close to the target
+    True
     """
     return _fill_from_impl(
         tensor,
@@ -175,7 +180,9 @@ def constant_(tensor: Tensor, val: float) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import constant_
     >>> b = lucid.empty(128)
-    >>> constant_(b, 0.0)
+    >>> _ = constant_(b, 0.0)
+    >>> bool((b == 0.0).all().item())
+    True
     """
     return _fill_from_impl(
         tensor,
@@ -212,7 +219,9 @@ def ones_(tensor: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import ones_
     >>> gamma = lucid.empty(64)
-    >>> ones_(gamma)
+    >>> _ = ones_(gamma)
+    >>> float(gamma.sum().item())
+    64.0
     """
     return _fill_from_impl(
         tensor,
@@ -248,7 +257,9 @@ def zeros_(tensor: Tensor) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import zeros_
     >>> bias = lucid.empty(128)
-    >>> zeros_(bias)
+    >>> _ = zeros_(bias)
+    >>> bool((bias == 0.0).all().item())
+    True
     """
     return _fill_from_impl(
         tensor,
@@ -292,6 +303,10 @@ def eye_(tensor: Tensor) -> Tensor:
     >>> from lucid.nn.init import eye_
     >>> w = lucid.empty(4, 4)
     >>> eye_(w)
+    tensor([[1., 0., 0., 0.],
+            [0., 1., 0., 0.],
+            [0., 0., 1., 0.],
+            [0., 0., 0., 1.]])
     """
     if tensor.ndim != 2:
         raise ValueError("eye_() requires a 2D tensor")
@@ -351,7 +366,10 @@ def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import xavier_uniform_, calculate_gain
     >>> w = lucid.empty(64, 32)
-    >>> xavier_uniform_(w, gain=calculate_gain('tanh'))
+    >>> _ = xavier_uniform_(w, gain=calculate_gain('tanh'))
+    >>> bound = calculate_gain('tanh') * (6 / (32 + 64)) ** 0.5
+    >>> bool((w.abs() <= bound).all().item())
+    True
     """
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(2.0 / (fan_in + fan_out))
@@ -401,7 +419,11 @@ def xavier_normal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import xavier_normal_, calculate_gain
     >>> w = lucid.empty(64, 32)
-    >>> xavier_normal_(w, gain=calculate_gain('tanh'))
+    >>> lucid.manual_seed(0)
+    >>> _ = xavier_normal_(w, gain=calculate_gain('tanh'))
+    >>> std = calculate_gain('tanh') * (2 / (32 + 64)) ** 0.5
+    >>> abs(w.std().item() - std) < 0.1 * std
+    True
     """
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(2.0 / (fan_in + fan_out))
@@ -464,7 +486,10 @@ def kaiming_uniform_(
     >>> import lucid
     >>> from lucid.nn.init import kaiming_uniform_
     >>> w = lucid.empty(64, 32)
-    >>> kaiming_uniform_(w, nonlinearity='relu')
+    >>> _ = kaiming_uniform_(w, nonlinearity='relu')
+    >>> bound = 2.0**0.5 * (3 / 32) ** 0.5   # gain * sqrt(3 / fan_in)
+    >>> bool((w.abs() <= bound).all().item())
+    True
     """
     fan = _calculate_correct_fan(tensor, mode)
     gain = calculate_gain(nonlinearity, a)
@@ -520,7 +545,11 @@ def kaiming_normal_(
     >>> import lucid
     >>> from lucid.nn.init import kaiming_normal_
     >>> w = lucid.empty(64, 32)
-    >>> kaiming_normal_(w, nonlinearity='relu')
+    >>> lucid.manual_seed(0)
+    >>> _ = kaiming_normal_(w, nonlinearity='relu')
+    >>> std = 2.0**0.5 / 32**0.5                 # gain / sqrt(fan_in) = 0.25
+    >>> abs(w.std().item() - std) < 0.1 * std
+    True
     """
     fan = _calculate_correct_fan(tensor, mode)
     gain = calculate_gain(nonlinearity, a)
@@ -582,7 +611,9 @@ def trunc_normal_(
     >>> import lucid
     >>> from lucid.nn.init import trunc_normal_
     >>> w = lucid.empty(64, 32)
-    >>> trunc_normal_(w, mean=0.0, std=0.02, a=-0.04, b=0.04)
+    >>> _ = trunc_normal_(w, mean=0.0, std=0.02, a=-0.04, b=0.04)
+    >>> bool(((w >= -0.04) & (w <= 0.04)).all().item())
+    True
     """
     shape = list(tensor.shape) if tensor.shape else [1]
     total = 1
@@ -659,7 +690,9 @@ def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import orthogonal_
     >>> w = lucid.empty(64, 64)
-    >>> orthogonal_(w, gain=1.0)
+    >>> _ = orthogonal_(w, gain=1.0)
+    >>> bool(lucid.allclose(w.mT @ w, lucid.eye(64), atol=1e-4))
+    True
     """
     if tensor.ndim < 2:
         raise ValueError("orthogonal_() requires at least a 2D tensor")
@@ -728,7 +761,9 @@ def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import sparse_
     >>> w = lucid.empty(256, 256)
-    >>> sparse_(w, sparsity=0.9, std=0.01)
+    >>> _ = sparse_(w, sparsity=0.9, std=0.01)
+    >>> int((w == 0).sum().item())   # floor(0.9 * 256) = 230 zeros in each column
+    58880
     """
     if tensor.ndim != 2:
         raise ValueError("sparse_() requires a 2D tensor")
@@ -799,7 +834,11 @@ def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
     >>> import lucid
     >>> from lucid.nn.init import dirac_
     >>> w = lucid.empty(16, 16, 3, 3)  # (out, in, kH, kW)
-    >>> dirac_(w)
+    >>> _ = dirac_(w)
+    >>> bool((w[:, :, 1, 1] == lucid.eye(16)).all().item())   # a 1 at each centre
+    True
+    >>> float(w.sum().item())
+    16.0
     """
     if tensor.ndim not in (3, 4, 5):
         raise ValueError(f"dirac_() expects a 3/4/5-D tensor; got ndim={tensor.ndim}")

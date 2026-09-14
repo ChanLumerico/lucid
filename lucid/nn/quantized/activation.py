@@ -381,11 +381,15 @@ class ELU(_QuantizedActivation):
 
     Examples
     --------
-    >>> import lucid.nn as nn
-    >>> src = nn.ELU(alpha=1.5)
-    >>> qelu = nn.quantized.ELU.from_float(src)   # (needs a calibrated observer)
-    >>> qelu.alpha
-    1.5
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> model = nn.Sequential(nn.ELU(alpha=1.5))
+    >>> model.qconfig = Q.get_default_qconfig()
+    >>> prepared = Q.prepare(model)               # attach the output observer
+    >>> _ = prepared(lucid.randn(32, 8))          # calibrate its range
+    >>> qelu = Q.convert(prepared)[0]             # from_float reads the observer
+    >>> type(qelu).__name__, qelu.alpha
+    ('ELU', 1.5)
 
     See Also
     --------
@@ -462,11 +466,15 @@ class LeakyReLU(_QuantizedActivation):
 
     Examples
     --------
-    >>> import lucid.nn as nn
-    >>> src = nn.LeakyReLU(negative_slope=0.2)
-    >>> qlr = nn.quantized.LeakyReLU.from_float(src)   # (needs a calibrated obs.)
-    >>> qlr.negative_slope
-    0.2
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.quantization as Q
+    >>> model = nn.Sequential(nn.LeakyReLU(negative_slope=0.2))
+    >>> model.qconfig = Q.get_default_qconfig()
+    >>> prepared = Q.prepare(model)               # attach the output observer
+    >>> _ = prepared(lucid.randn(32, 8))          # calibrate its range
+    >>> qlr = Q.convert(prepared)[0]              # from_float reads the observer
+    >>> type(qlr).__name__, qlr.negative_slope
+    ('LeakyReLU', 0.2)
 
     See Also
     --------

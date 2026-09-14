@@ -845,7 +845,7 @@ def pad(
     --------
     >>> import lucid
     >>> from lucid.nn.functional import pad
-    >>> x = lucid.arange(6).reshape(1, 1, 2, 3).astype(lucid.float32)
+    >>> x = lucid.arange(6, dtype=lucid.float32).reshape(1, 1, 2, 3)
     >>> y = pad(x, (1, 1, 0, 0), mode="reflect")
     >>> y.shape                    # last dim grows by 2
     (1, 1, 2, 5)
@@ -1263,10 +1263,12 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
     --------
     >>> import lucid
     >>> from lucid.nn.functional import channel_shuffle
-    >>> x = lucid.arange(24).reshape(1, 6, 2, 2).astype(lucid.float32)
+    >>> x = lucid.arange(24, dtype=lucid.float32).reshape(1, 6, 2, 2)
     >>> y = channel_shuffle(x, groups=3)
     >>> y.shape
     (1, 6, 2, 2)
+    >>> y[0, :, 0, 0]              # channels 0..5 reordered as 0, 2, 4, 1, 3, 5
+    tensor([0., 8., 16., 4., 12., 20.])
     """
     if x.ndim < 2:
         raise ValueError(
@@ -1334,7 +1336,7 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
     >>> from lucid.nn.functional import pdist
     >>> x = lucid.tensor([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
     >>> pdist(x, p=2)
-    Tensor([1.0000, 1.0000, 1.4142])
+    tensor([1., 1., 1.414])
     """
     if x.ndim != 2:
         raise ValueError(f"pdist: expected a 2-D input, got shape {tuple(x.shape)}")

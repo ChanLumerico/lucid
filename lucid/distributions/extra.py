@@ -91,10 +91,10 @@ class Gumbel(Distribution):
     >>> import lucid
     >>> from lucid.distributions import Gumbel
     >>> d = Gumbel(loc=0.0, scale=1.0)
-    >>> d.rsample((4,))
-    Tensor([...])
-    >>> d.log_prob(lucid.tensor(0.0))
-    Tensor(-1.0)
+    >>> d.rsample((4,)).shape
+    (4,)
+    >>> d.log_prob(lucid.tensor(0.0))  # -(0 + e^0)
+    tensor(-1.)
     """
 
     arg_constraints = {"loc": real, "scale": positive}
@@ -245,9 +245,9 @@ class InverseGamma(Distribution):
     >>> from lucid.distributions import InverseGamma
     >>> d = InverseGamma(concentration=3.0, rate=2.0)
     >>> d.mean  # β / (α - 1) = 1.0
-    Tensor(1.0)
-    >>> d.sample((4,))
-    Tensor([...])
+    tensor(1.)
+    >>> d.sample((4,)).shape
+    (4,)
     """
 
     arg_constraints = {"concentration": positive, "rate": positive}
@@ -402,10 +402,10 @@ class Kumaraswamy(Distribution):
     >>> import lucid
     >>> from lucid.distributions import Kumaraswamy
     >>> d = Kumaraswamy(concentration1=2.0, concentration0=5.0)
-    >>> d.rsample((4,))
-    Tensor([...])
-    >>> d.log_prob(lucid.tensor(0.3))
-    Tensor(...)
+    >>> d.rsample((4,)).shape
+    (4,)
+    >>> d.log_prob(lucid.tensor(0.3))  # log(2 * 5 * 0.3 * (1 - 0.3**2)**4)
+    tensor(0.7214)
     """
 
     arg_constraints = {"concentration1": positive, "concentration0": positive}
@@ -588,9 +588,12 @@ class Multinomial(Distribution):
     >>> from lucid.distributions import Multinomial
     >>> d = Multinomial(total_count=10, probs=lucid.tensor([0.2, 0.3, 0.5]))
     >>> d.mean  # n * p
-    Tensor([2., 3., 5.])
-    >>> d.sample((4,))
-    Tensor([...])
+    tensor([2., 3., 5.])
+    >>> x = d.sample((4,))
+    >>> x.shape
+    (4, 3)
+    >>> bool((x.sum(dim=-1) == 10).all())  # every draw places all n trials
+    True
     """
 
     arg_constraints = {
@@ -818,10 +821,10 @@ class ContinuousBernoulli(Distribution):
     >>> import lucid
     >>> from lucid.distributions import ContinuousBernoulli
     >>> d = ContinuousBernoulli(probs=0.7)
-    >>> d.rsample((4,))
-    Tensor([...])
+    >>> d.rsample((4,)).shape
+    (4,)
     >>> d.log_prob(lucid.tensor(0.5))
-    Tensor(...)
+    tensor(-0.02974)
     """
 
     arg_constraints = {"probs": unit_interval, "logits": real}

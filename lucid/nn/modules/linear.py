@@ -649,7 +649,7 @@ class LazyLinear(Module):
     >>> lazy = nn.LazyLinear(64)
     >>> lazy.in_features is None
     True
-    >>> lazy.load_state_dict(ckpt)  # materializes to (64, 512) from ckpt shape
+    >>> _ = lazy.load_state_dict(ckpt)  # materializes to (64, 512) from ckpt shape
     >>> lazy.in_features
     512
     """

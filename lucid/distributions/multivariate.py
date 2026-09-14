@@ -103,8 +103,9 @@ class MultivariateNormal(Distribution):
     >>> samples = dist.rsample((50,))
     >>> samples.shape  # (50, 2)
     (50, 2)
-    >>> # Log-prob at the mean (maximum)
+    >>> # Log-prob at the mean (maximum): -log(2π)
     >>> dist.log_prob(lucid.zeros(2))
+    tensor(-1.838)
     """
 
     arg_constraints = {"loc": real}

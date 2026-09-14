@@ -20,10 +20,18 @@ This subpackage exposes two cooperating tools:
 Examples
 --------
 >>> import lucid
+>>> import lucid.nn as nn
+>>> import lucid.optim as optim
 >>> from lucid.amp import autocast, GradScaler
+>>> model = nn.Linear(4, 2).to("metal")
+>>> optimizer = optim.SGD(model.parameters(), lr=0.1)
+>>> x = lucid.randn(8, 4, device="metal")
 >>> scaler = GradScaler()
 >>> with autocast(device_type="metal", dtype=lucid.float16):
-...     loss = ...  # forward pass
+...     out = model(x)  # forward pass, in float16
+>>> out.dtype
+lucid.float16
+>>> loss = out.float().pow(2).mean()
 >>> scaler.scale(loss).backward()
 >>> scaler.step(optimizer)
 >>> scaler.update()

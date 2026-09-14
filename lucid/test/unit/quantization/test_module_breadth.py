@@ -101,3 +101,17 @@ class TestQuantizedEmbeddingBag:
             assert qm[0].weight_int8.dtype is lucid.int8
             yq = qm[0](idx, off).numpy()
             assert np.abs(yf - yq).max() / (np.abs(yf).max() + 1e-9) < 0.05
+
+
+_QCONV = {1: nnq.Conv1d, 2: nnq.Conv2d, 3: nnq.Conv3d}
+
+
+@pytest.mark.parametrize("rank", [1, 2, 3])
+def test_direct_conv_int_kernel_size_spans_every_spatial_axis(rank: int) -> None:
+    # An int ``kernel_size`` is a cube kernel of the conv's own rank.  The
+    # weight buffer used to be built as ``(out, in, k)`` whatever the rank,
+    # so a directly constructed 2-D / 3-D quantized conv could not run.
+    q = _QCONV[rank](2, 4, 3, 1, 1, 1, 1, True)
+    assert tuple(q.weight_int8.shape) == (4, 2) + (3,) * rank
+    x = lucid.randn(1, 2, *([6] * rank))
+    assert tuple(q(x).shape) == (1, 4) + (6,) * rank

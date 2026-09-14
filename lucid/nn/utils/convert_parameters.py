@@ -53,10 +53,12 @@ def parameters_to_vector(parameters: Iterable[Parameter]) -> Tensor:
     Examples
     --------
     >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils import parameters_to_vector
+    >>> model = nn.Linear(4, 2)                 # 4 * 2 weights + 2 biases
     >>> vec = parameters_to_vector(model.parameters())
     >>> vec.shape
-    (n_params,)
+    (10,)
     """
     flats: list[Tensor] = []
     target_device: str | None = None
@@ -124,10 +126,17 @@ def vector_to_parameters(vec: Tensor, parameters: Iterable[Parameter]) -> None:
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> from lucid.nn.utils import parameters_to_vector, vector_to_parameters
+    >>> model = nn.Linear(4, 2)
+    >>> lr = 0.1
     >>> v = parameters_to_vector(model.parameters())
+    >>> search_direction = lucid.ones(v.shape[0])
     >>> v = v + lr * search_direction
     >>> vector_to_parameters(v, model.parameters())
+    >>> bool((parameters_to_vector(model.parameters()) == v).all())
+    True
     """
     if len(vec.shape) != 1:
         raise ValueError(f"vec must be 1-D, got shape {tuple(vec.shape)}")

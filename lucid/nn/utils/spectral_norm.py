@@ -242,7 +242,12 @@ def remove_spectral_norm(module: Module, name: str = "weight") -> Module:
 
     Examples
     --------
-    >>> remove_spectral_norm(disc)
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils import spectral_norm, remove_spectral_norm
+    >>> disc = spectral_norm(nn.Linear(16, 1))
+    >>> _ = remove_spectral_norm(disc)
+    >>> sorted(name for name, _ in disc.named_parameters())
+    ['bias', 'weight']
     """
     hooks: dict[str, object] = getattr(module, _SN_HOOK_ATTR, {})
     if name not in hooks:

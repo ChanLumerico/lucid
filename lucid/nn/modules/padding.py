@@ -186,8 +186,8 @@ class ConstantPad2d(_ConstantPadNd):
 
     >>> pad = nn.ConstantPad2d(padding=(1, 2, 0, 3), value=-999.0)
     >>> x = lucid.zeros(2, 16, 10, 10)
-    >>> pad(x).shape
-    (2, 16, 13, 13)    # H: 10+0+3=13,  W: 10+1+2=13
+    >>> pad(x).shape    # H: 10+0+3=13,  W: 10+1+2=13
+    (2, 16, 13, 13)
     """
 
     _dims = 4
@@ -569,8 +569,8 @@ class ReflectionPad2d(Module):
     >>> pad = nn.ReflectionPad2d(padding=3)
     >>> conv = nn.Conv2d(3, 64, kernel_size=7)
     >>> x = lucid.zeros(1, 3, 256, 256)
-    >>> conv(pad(x)).shape
-    (1, 64, 256, 256)    # 256 + 2*3 - 6 = 256 (same-size output)
+    >>> conv(pad(x)).shape    # 256 + 2*3 - 6 = 256 (same-size output)
+    (1, 64, 256, 256)
 
     **Asymmetric reflection:**
 
@@ -746,8 +746,8 @@ class ReplicationPad2d(Module):
     >>> pad = nn.ReplicationPad2d(padding=2)
     >>> conv = nn.Conv2d(3, 32, kernel_size=5)
     >>> x = lucid.zeros(1, 3, 64, 64)
-    >>> conv(pad(x)).shape
-    (1, 32, 64, 64)    # same-size output
+    >>> conv(pad(x)).shape    # same-size output
+    (1, 32, 64, 64)
 
     **Asymmetric replication:**
 

@@ -132,7 +132,7 @@ def bartlett(
     --------
     >>> from lucid.signal.windows import bartlett
     >>> bartlett(5)
-    Tensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])
+    tensor([0., 0.5, 1., 0.5, 0.])
     """
     degenerate = _degenerate(M, dtype, device)
     if degenerate is not None:
@@ -190,7 +190,7 @@ def cosine(
     --------
     >>> from lucid.signal.windows import cosine
     >>> cosine(4)
-    Tensor([0.3827, 0.9239, 0.9239, 0.3827])
+    tensor([0.3827, 0.9239, 0.9239, 0.3827])
     """
     degenerate = _degenerate(M, dtype, device)
     if degenerate is not None:
@@ -248,9 +248,11 @@ def hann(
 
     Examples
     --------
+    >>> import lucid
     >>> from lucid.signal.windows import hann
-    >>> hann(5)
-    Tensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])
+    >>> w = hann(5)  # the endpoints are zero up to float32 round-off
+    >>> lucid.allclose(w, lucid.tensor([0.0, 0.5, 1.0, 0.5, 0.0]), atol=1e-6)
+    True
     """
     return general_hamming(M, alpha=0.5, sym=sym, dtype=dtype, device=device)
 
@@ -302,7 +304,7 @@ def hamming(
     --------
     >>> from lucid.signal.windows import hamming
     >>> hamming(5)
-    Tensor([0.0800, 0.5400, 1.0000, 0.5400, 0.0800])
+    tensor([0.08, 0.54, 1., 0.54, 0.08])
     """
     return general_hamming(M, alpha=0.54, sym=sym, dtype=dtype, device=device)
 
@@ -358,8 +360,8 @@ def general_hamming(
     Examples
     --------
     >>> from lucid.signal.windows import general_hamming
-    >>> general_hamming(5, alpha=0.5)
-    Tensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])
+    >>> general_hamming(5, alpha=0.54)  # the classic Hamming window
+    tensor([0.08, 0.54, 1., 0.54, 0.08])
     """
     degenerate = _degenerate(M, dtype, device)
     if degenerate is not None:
@@ -428,8 +430,8 @@ def general_cosine(
     Examples
     --------
     >>> from lucid.signal.windows import general_cosine
-    >>> general_cosine(5, [0.5, 0.5])
-    Tensor([0.0000, 0.5000, 1.0000, 0.5000, 0.0000])
+    >>> general_cosine(5, [0.54, 0.46])  # Hamming, as a two-term cosine sum
+    tensor([0.08, 0.54, 1., 0.54, 0.08])
     """
     degenerate = _degenerate(M, dtype, device)
     if degenerate is not None:
@@ -493,9 +495,11 @@ def blackman(
 
     Examples
     --------
+    >>> import lucid
     >>> from lucid.signal.windows import blackman
-    >>> blackman(5)
-    Tensor([0.0000, 0.3400, 1.0000, 0.3400, 0.0000])
+    >>> w = blackman(5)  # the endpoints are zero up to float32 round-off
+    >>> lucid.allclose(w, lucid.tensor([0.0, 0.34, 1.0, 0.34, 0.0]), atol=1e-6)
+    True
     """
     return general_cosine(M, [0.42, 0.50, 0.08], sym=sym, dtype=dtype, device=device)
 
@@ -549,7 +553,7 @@ def nuttall(
     --------
     >>> from lucid.signal.windows import nuttall
     >>> nuttall(5)
-    Tensor([0.0004, 0.2270, 1.0000, 0.2270, 0.0004])
+    tensor([0.0003628, 0.227, 1., 0.227, 0.0003628])
     """
     return general_cosine(
         M,
@@ -618,7 +622,7 @@ def gaussian(
     --------
     >>> from lucid.signal.windows import gaussian
     >>> gaussian(5, std=1.0)
-    Tensor([0.1353, 0.6065, 1.0000, 0.6065, 0.1353])
+    tensor([0.1353, 0.6065, 1., 0.6065, 0.1353])
     """
     degenerate = _degenerate(M, dtype, device)
     if degenerate is not None:
@@ -686,7 +690,7 @@ def general_gaussian(
     --------
     >>> from lucid.signal.windows import general_gaussian
     >>> general_gaussian(5, p=2.0, sig=1.5)
-    Tensor([0.4111, 0.9023, 1.0000, 0.9023, 0.4111])
+    tensor([0.2059, 0.906, 1., 0.906, 0.2059])
     """
     degenerate = _degenerate(M, dtype, device)
     if degenerate is not None:
@@ -758,7 +762,7 @@ def exponential(
     --------
     >>> from lucid.signal.windows import exponential
     >>> exponential(5, tau=2.0)
-    Tensor([0.3679, 0.6065, 1.0000, 0.6065, 0.3679])
+    tensor([0.3679, 0.6065, 1., 0.6065, 0.3679])
     """
     degenerate = _degenerate(M, dtype, device)
     if degenerate is not None:
@@ -838,7 +842,7 @@ def kaiser(
     --------
     >>> from lucid.signal.windows import kaiser
     >>> kaiser(5, beta=8.0)
-    Tensor([0.0046, 0.3464, 1.0000, 0.3464, 0.0046])
+    tensor([0.002339, 0.369, 1., 0.369, 0.002339])
     """
     degenerate = _degenerate(M, dtype, device)
     if degenerate is not None:

@@ -162,6 +162,50 @@ class TestIntegerRemainder:
         )
 
 
+_TRUE_DIVISIONS = pytest.mark.parametrize(
+    "fn", [lucid.divide, lucid.true_divide], ids=["divide", "true_divide"]
+)
+
+
+class TestTrueDivisionOfIntegers:
+    """``divide`` / ``true_divide`` return a float for integer operands.
+
+    The engine's ``div`` keeps the integer dtype (``[7, 8] / 2`` is
+    ``[3, 4]``), so the two composites promote the numerator themselves —
+    which is what both document, and what the reference framework does.
+    """
+
+    @_TRUE_DIVISIONS
+    def test_int_by_int(self, fn: Callable, device: str) -> None:
+        a = lucid.tensor([7, 8], dtype=lucid.int32, device=device)
+        b = lucid.tensor([2, 2], dtype=lucid.int32, device=device)
+        out = fn(a, b)
+        assert out.dtype == lucid.float32
+        np.testing.assert_array_equal(out.numpy(), [3.5, 4.0])
+
+    @_TRUE_DIVISIONS
+    def test_int_by_scalar(self, fn: Callable, device: str) -> None:
+        a = lucid.tensor([7, 8], dtype=lucid.int32, device=device)
+        out = fn(a, 2)
+        assert out.dtype == lucid.float32
+        np.testing.assert_array_equal(out.numpy(), [3.5, 4.0])
+
+    @_TRUE_DIVISIONS
+    def test_bool_by_bool(self, fn: Callable) -> None:
+        a = lucid.tensor([True, False])
+        b = lucid.tensor([True, True])
+        out = fn(a, b)
+        assert out.dtype == lucid.float32
+        np.testing.assert_array_equal(out.numpy(), [1.0, 0.0])
+
+    def test_wider_float_denominator_wins(self) -> None:
+        a = lucid.tensor([7, 8], dtype=lucid.int64)
+        b = lucid.tensor([2.0, 2.0], dtype=lucid.float64)
+        out = lucid.true_divide(a, b)
+        assert out.dtype == lucid.float64
+        np.testing.assert_array_equal(out.numpy(), [3.5, 4.0])
+
+
 # ── backward sanity ──────────────────────────────────────────────────────
 
 

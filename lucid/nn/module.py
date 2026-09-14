@@ -80,6 +80,8 @@ class Module:
 
     Examples
     --------
+    >>> import lucid
+    >>> import lucid.nn as nn
     >>> class MLP(nn.Module):
     ...     def __init__(self):
     ...         super().__init__()
