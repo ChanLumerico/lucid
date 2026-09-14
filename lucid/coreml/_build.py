@@ -75,11 +75,18 @@ class UnsupportedRank(NotImplementedError):
 
     Examples
     --------
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> class Tall(nn.Module):
+    ...     def forward(self, x):
+    ...         return x.reshape(1, 4, 2, 4, 2, 3).sum(dim=5)
+    >>> room = tempfile.mkdtemp()
     >>> try:
-    ...     cml.export(model, x, "m.mlpackage")
+    ...     cml.export(Tall().eval(), lucid.randn(1, 8, 8, 3), f"{room}/m.mlpackage")
     ... except cml.UnsupportedRank as refusal:
     ...     print(refusal)
-    lucid.coreml: reshape produces a rank-6 tensor ...
+    lucid.coreml: op 'reshape' produces a rank-6 tensor (1, 4, 2, 4, 2, 3), ...
+    >>> shutil.rmtree(room)
     """
 
     def __init__(self, op_name: str, shape: tuple[int, ...]) -> None:
@@ -112,11 +119,22 @@ class UnsupportedOp(NotImplementedError):
 
     Examples
     --------
+    A matrix inverse, which Core ML's program dialect has no operation for:
+
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> class Inverts(nn.Module):
+    ...     def forward(self, x):
+    ...         return lucid.linalg.inv(x)
+    >>> room = tempfile.mkdtemp()
     >>> try:
-    ...     cml.export(model, x, "m.mlpackage")
+    ...     cml.export(
+    ...         Inverts().eval(), lucid.eye(4).reshape(1, 4, 4), f"{room}/m.mlpackage"
+    ...     )
     ... except cml.UnsupportedOp as refusal:
     ...     print(refusal)
-    lucid.coreml: no Core ML translation for Lucid op 'rk_combine' ...
+    lucid.coreml: no Core ML translation for Lucid op 'inv'. Mapped ops: ...
+    >>> shutil.rmtree(room)
     """
 
     def __init__(self, op_name: str, reason: str | None = None) -> None:
@@ -2343,11 +2361,22 @@ class ShapeNotFlexible(NotImplementedError):
 
     Examples
     --------
+    A range of resolutions, since that is what an adaptive pool's kernel
+    is taken from — a range of batch sizes leaves it alone:
+
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(
+    ...     nn.Conv2d(3, 8, 3, padding=1), nn.AdaptiveAvgPool2d(1), nn.Flatten()
+    ... ).eval()
+    >>> room = tempfile.mkdtemp()
     >>> try:
-    ...     cml.export(model, x, "m.mlpackage", shape_range={0: (1, 16)})
+    ...     cml.export(model, lucid.randn(1, 3, 16, 16), f"{room}/m.mlpackage",
+    ...                shape_range={2: (16, 32), 3: (16, 32)})
     ... except cml.ShapeNotFlexible as refusal:
     ...     print(refusal)
     lucid.coreml: operation 'avg_pool2d' cannot take a flexible shape ...
+    >>> shutil.rmtree(room)
     """
 
     def __init__(self, op_name: str, detail: str) -> None:
@@ -2373,11 +2402,22 @@ class StatefulModel(NotImplementedError):
 
     Examples
     --------
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> class Counts(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.register_buffer("total", lucid.zeros(1, 4))
+    ...     def forward(self, x):
+    ...         self.total += x
+    ...         return self.total + x
+    >>> room = tempfile.mkdtemp()
     >>> try:
-    ...     cml.export(model, x, "m.mlpackage")
+    ...     cml.export(Counts().eval(), lucid.ones(1, 4), f"{room}/m.mlpackage")
     ... except cml.StatefulModel as refusal:
     ...     print(refusal)
-    lucid.coreml: this model writes to its own buffers while running ...
+    lucid.coreml: tracing changed total, so this model is not a pure function ...
+    >>> shutil.rmtree(room)
     """
 
     def __init__(self, names: list[str]) -> None:

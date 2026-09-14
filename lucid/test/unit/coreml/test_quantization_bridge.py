@@ -58,7 +58,9 @@ def _net() -> nn.Module:
 
 
 def _prepared(x: lucid.Tensor) -> nn.Module:
-    model = q.prepare_qat(_net(), q.get_default_qat_qconfig_mapping(), (x,))
+    # No example input: the third positional parameter is ``inplace``, and a
+    # non-empty tuple there quietly prepared the model in place.
+    model = q.prepare_qat(_net(), q.get_default_qat_qconfig_mapping())
     model.eval()
     model(x)  # let the observers see one batch, as a caller would
     return model
@@ -172,7 +174,7 @@ class TestAConvertedModelCrossesToo:
         if recipe == "dynamic":
             model = q.quantize_dynamic(_net())
         else:
-            prepared = q.prepare(_net(), q.get_default_qconfig_mapping(), (x,))
+            prepared = q.prepare(_net(), q.get_default_qconfig_mapping())
             prepared.eval()
             prepared(x)
             model = q.convert(prepared)

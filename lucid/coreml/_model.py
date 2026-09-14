@@ -108,11 +108,30 @@ class PlacementSummary:
 
     Examples
     --------
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU()).eval()
+    >>> x, room = lucid.randn(1, 3, 32, 32), tempfile.mkdtemp()
+    >>> package = cml.export(model, x, f"{room}/half.mlpackage",
+    ...                      precision=cml.Precision.FLOAT16)
     >>> plan = package.compute_plan()
-    >>> plan.compute
-    {'CPU': 2, 'ANE': 69}
+    >>> plan.constants > 0 and plan.total_compute > 0   # counted apart
+    True
     >>> plan.note                      # empty unless something is worth saying
     ''
+
+    A float32 program asked for the Neural Engine is the case it speaks up
+    for, since that device does not run float32:
+
+    >>> single = cml.export(model, x, f"{room}/single.mlpackage",
+    ...                     compute_units=cml.ComputeUnits.CPU_AND_NE)
+    >>> single.compute_plan().ane_fraction
+    0.0
+    >>> print(single.compute_plan().note)
+    no operation reached the Neural Engine because the program is float32, ...
+    >>> package.close()
+    >>> single.close()
+    >>> shutil.rmtree(room)
     """
 
     def __init__(
@@ -194,10 +213,22 @@ class Latency(NamedTuple):
 
     Examples
     --------
+    >>> import shutil, statistics, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU()).eval()
+    >>> x, room = lucid.randn(1, 3, 32, 32), tempfile.mkdtemp()
+    >>> package = cml.export(model, x, f"{room}/m.mlpackage",
+    ...                      precision=cml.Precision.FLOAT16,
+    ...                      compute_units=cml.ComputeUnits.CPU_AND_NE)
     >>> package.benchmark(x)          # the first call after an export
-    Latency(median=1.66ms, best=1.58ms, n=30, CPU_AND_NE, FLOAT16)
-    >>> package.benchmark(x).median_ms   # and again, once it has settled
-    0.94
+    Latency(median=...ms, best=...ms, n=30, CPU_AND_NE, FLOAT16)
+    >>> settled = statistics.median(   # and again, once it has settled
+    ...     package.benchmark(x).median_ms for _ in range(3)
+    ... )
+    >>> settled > 0.0
+    True
+    >>> package.close()
+    >>> shutil.rmtree(room)
 
     A package is slower on its first measured runs than it will be after
     a few — Core ML is still warming its own caches — so a single reading
@@ -259,16 +290,27 @@ class CoreMLModel:
 
     Examples
     --------
-    >>> import lucid, lucid.coreml as cml
-    >>> package = cml.export(model, x, "m.mlpackage")
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(
+    ...     nn.Conv2d(3, 16, 3, padding=1), nn.ReLU(),
+    ...     nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(16, 10),
+    ... ).eval()
+    >>> x, room = lucid.randn(1, 3, 32, 32), tempfile.mkdtemp()
+    >>> package = cml.export(model, x, f"{room}/m.mlpackage")
     >>> package.predict(x).shape
-    (1, 1000)
-    >>> package.verify(model, x)          # against the eager model
-    2.4e-06        # float32; a float16 package is nearer 1e-3
+    (1, 10)
+    >>> package.verify(model, x) < 1e-5   # float32; a float16 package is nearer 1e-3
+    True
     >>> package.close()
 
     A handle owns a compiled model, so close it — or use it as a context
     manager if you only need it for one call.
+
+    >>> with cml.load(f"{room}/m.mlpackage") as reopened:
+    ...     print(reopened.predict(x).shape)
+    (1, 10)
+    >>> shutil.rmtree(room)
     """
 
     def __init__(

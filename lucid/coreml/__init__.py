@@ -63,7 +63,7 @@ Examples
                     precision=cml.Precision.FLOAT16,
                     compute_units=cml.ComputeUnits.CPU_AND_NE)
     cm.verify(model, x)        # max|coreml - eager|
-    cm.compute_plan()          # PlacementSummary(ANE=69, CPU=2, ane=97%)
+    cm.compute_plan()          # PlacementSummary(ANE=69, CPU=2, constants=..., ane=97%)
     y = cm.predict(x)
 """
 
@@ -194,7 +194,7 @@ def export(
         Precision of the program body. ``FLOAT32`` keeps the export
         faithful to the model it came from; ``FLOAT16`` is what the
         Neural Engine runs. Inputs and outputs stay float32 either way.
-    weights : WeightPrecision, optional, keyword-only, default=FLOAT
+    weights : WeightPrecision or Palettize or Sparsify, optional, keyword-only, default=WeightPrecision.FLOAT
         How weights are stored. ``INT8`` keeps eight bits per weight plus
         one scale per output channel and lets Core ML dequantize on the
         way in — the package halves against float16 and the accelerator
@@ -266,59 +266,112 @@ def export(
         The model is in training mode.
     UnsupportedOp
         The trace contains an operation with no MIL translation.
+
     Examples
     --------
     The whole of it, for a classifier that should run on the accelerator:
 
-    >>> import lucid, lucid.models as M, lucid.coreml as cml
-    >>> model = M.create_model("resnet_18_cls").eval()
-    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.models as M, lucid.coreml as cml
+    >>> model = M.create_model(
+    ...     "resnet_18_cls", num_classes=10,
+    ...     stem_channels=8, hidden_sizes=(8, 16, 32, 64),   # narrowed, to be quick
+    ... ).eval()
+    >>> x, room = lucid.randn(1, 3, 32, 32), tempfile.mkdtemp()
     >>> package = cml.export(
-    ...     model, x, "resnet18.mlpackage",
+    ...     model, x, f"{room}/resnet18.mlpackage",
     ...     precision=cml.Precision.FLOAT16,
     ...     compute_units=cml.ComputeUnits.CPU_AND_NE,
     ... )
-    >>> package.verify(model, x, relative=True)
-    0.000476
-    >>> package.benchmark(x).median_ms       # once it has settled
-    0.94
+    >>> package.verify(model, x, relative=True) < 1e-2
+    True
+    >>> package.benchmark(x).median_ms > 0.0       # once it has settled
+    True
 
     A model of several inputs is given them the way its ``forward``
     takes them — a tuple positionally, a mapping by name:
 
-    >>> cml.export(clip, (pixels, tokens), "clip.mlpackage")
-    >>> cml.export(decoder, {"x": token, "cache": cache}, "dec.mlpackage")
+    >>> class Pair(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.image = nn.Linear(16, 4)
+    ...         self.text = nn.Linear(8, 4)
+    ...     def forward(self, image, text):
+    ...         return self.image(image) + self.text(text)
+    >>> pair, image, text = Pair().eval(), lucid.randn(1, 16), lucid.randn(1, 8)
+    >>> with cml.export(pair, (image, text), f"{room}/pair.mlpackage") as two:
+    ...     print(two.input_names, two.predict((image, text)).shape)
+    ['input_0', 'input_1'] (1, 4)
+    >>> feed = {"image": image, "text": text}
+    >>> with cml.export(pair, feed, f"{room}/named.mlpackage") as two:
+    ...     print(two.input_names, two.predict(feed).shape)
+    ['image', 'text'] (1, 4)
 
     Smaller on disk, at a cost worth measuring before shipping it:
 
-    >>> cml.export(model, x, "int8.mlpackage",
-    ...            weights=cml.WeightPrecision.INT8)
+    >>> with cml.export(model, x, f"{room}/int8.mlpackage",
+    ...                 weights=cml.WeightPrecision.INT8) as small:
+    ...     print(small.verify(model, x, relative=True) < 1e-2)
+    True
 
     Pixels in and labels out:
 
-    >>> cml.export(model, pixels, "cls.mlpackage",
-    ...            image_input=cml.ImageInput(scale=1 / 255.0),
-    ...            classifier=cml.Classifier(labels=names))
+    >>> pixels = (lucid.rand(1, 3, 32, 32) * 255).round()
+    >>> names = tuple(f"class_{i}" for i in range(10))
+    >>> with cml.export(model, pixels, f"{room}/cls.mlpackage",
+    ...                 image_input=cml.ImageInput(scale=1 / 255.0),
+    ...                 classifier=cml.Classifier(labels=names)) as labelled:
+    ...     label, scores = labelled.classify(pixels)
+    >>> label in names, len(scores)
+    (True, 10)
 
     A batch axis the caller may vary, and a model that samples:
 
-    >>> cml.export(model, x, "flex.mlpackage", shape_range={0: (1, 16)})
-    >>> cml.export(vae, x, "vae.mlpackage", draws=cml.Draws.AS_INPUT)
+    >>> with cml.export(model, x, f"{room}/flex.mlpackage",
+    ...                 shape_range={0: (1, 16)}) as flexible:
+    ...     print(flexible.predict(lucid.randn(4, 3, 32, 32)).shape)
+    (4, 10)
+    >>> class Encoder(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.mu = nn.Linear(8, 4)
+    ...         self.logvar = nn.Linear(8, 4)
+    ...     def forward(self, h):
+    ...         mu, logvar = self.mu(h), self.logvar(h)
+    ...         return mu + (logvar * 0.5).exp() * lucid.randn(1, 4)
+    >>> with cml.export(Encoder().eval(), lucid.randn(1, 8), f"{room}/vae.mlpackage",
+    ...                 draws=cml.Draws.AS_INPUT) as vae:
+    ...     print(vae.noise_inputs)
+    [('noise_0', (1, 4))]
 
     A model that came out of ``lucid.quantization`` needs nothing said
     about it — the export recognises what it is carrying:
 
-    >>> aware = q.prepare_qat(model, q.get_default_qat_qconfig_mapping(), (x,))
-    >>> ...                                       # fine-tune, then
-    >>> cml.export(aware.eval(), x, "qat.mlpackage",
-    ...            weights=cml.WeightPrecision.INT8,
-    ...            activations=cml.Activations.DROPPED)
+    >>> import lucid.quantization as q
+    >>> def small_net():
+    ...     return nn.Sequential(
+    ...         nn.Conv2d(3, 32, 3, padding=1), nn.ReLU(),
+    ...         nn.Conv2d(32, 32, 3, padding=1), nn.ReLU(),
+    ...         nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(32, 10),
+    ...     )
+    >>> aware = q.prepare_qat(small_net(), q.get_default_qat_qconfig_mapping())
+    >>> _ = aware(x)                              # fine-tune, then
+    >>> with cml.export(aware.eval(), x, f"{room}/qat.mlpackage",
+    ...                 weights=cml.WeightPrecision.INT8,
+    ...                 activations=cml.Activations.DROPPED) as qat:
+    ...     print(qat.predict(x).shape)
+    (1, 10)
 
     Leave a converted model's weights alone, though. They already sit on
     MLX's grid, and asking for another stacks two of them — 3.8e-06
     against the quantized model becomes 3.4e-02:
 
-    >>> cml.export(q.quantize_dynamic(model), x, "dynamic.mlpackage")
+    >>> dynamic = q.quantize_dynamic(small_net().eval())
+    >>> with cml.export(dynamic, x, f"{room}/dynamic.mlpackage") as converted:
+    ...     print(converted.verify(dynamic, x, relative=True) < 1e-4)
+    True
+    >>> package.close()
+    >>> shutil.rmtree(room)
 
     """
     if getattr(model, "training", False):
@@ -514,7 +567,7 @@ def export_functions(
         Entry point a caller gets without asking. The first, if unnamed.
     precision : Precision, optional, keyword-only, default=FLOAT32
         Body precision, for every function.
-    weights : WeightPrecision, optional, keyword-only, default=FLOAT
+    weights : WeightPrecision or Palettize or Sparsify, optional, keyword-only, default=WeightPrecision.FLOAT
         Weight storage, for every function.
     metadata : Metadata or None, optional, keyword-only, default=None
         What the package says about itself. One package, one set.
@@ -530,24 +583,39 @@ def export_functions(
     ------
     ValueError
         No functions, or ``default`` names one that is not there.
+
     Examples
     --------
     A decoder wants two entry points: one that reads a whole prompt and
     one that reads a single token. They are the same network, so the
     weights are written once and both point at the same bytes.
 
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> class Decoder(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.embed = nn.Embedding(100, 16)
+    ...         self.head = nn.Linear(16, 100)
+    ...     def forward(self, ids):
+    ...         return self.head(self.embed(ids))
+    >>> model, room = Decoder().eval(), tempfile.mkdtemp()
     >>> handles = cml.export_functions(
     ...     {
-    ...         "prompt": (model, lucid.zeros(1, 128).to(lucid.int64)),
+    ...         "prompt": (model, lucid.zeros(1, 8).to(lucid.int64)),
     ...         "step": (model, lucid.zeros(1, 1).to(lucid.int64)),
     ...     },
-    ...     "decoder.mlpackage",
+    ...     f"{room}/decoder.mlpackage",
     ...     default="step",
     ... )
+    >>> prompt_ids = lucid.randint(0, 100, (1, 8))
     >>> handles["prompt"].predict(prompt_ids).shape
-    (1, 128, 32000)
+    (1, 8, 100)
+    >>> handles["step"].predict(prompt_ids[:, -1:]).shape
+    (1, 1, 100)
     >>> for handle in handles.values():
     ...     handle.close()
+    >>> shutil.rmtree(room)
 
     """
     if not functions:
@@ -664,8 +732,12 @@ def precision_cost(
 
     Examples
     --------
-    >>> cost = lucid.coreml.precision_cost(model, x)  # doctest: +SKIP
-    >>> cost["float16"] < 1e-2  # doctest: +SKIP
+    >>> import lucid, lucid.coreml, lucid.nn as nn
+    >>> model = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU()).eval()
+    >>> cost = lucid.coreml.precision_cost(model, lucid.randn(1, 3, 32, 32))
+    >>> sorted(cost)
+    ['float16', 'float32']
+    >>> cost["float16"] < 1e-2
     True
     """
     import tempfile
@@ -720,18 +792,38 @@ def load(
     RuntimeError
         Core ML could not compile or load the package; its own message
         names the offending layer.
+
     Examples
     --------
-    >>> package = cml.load("resnet18.mlpackage")
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(
+    ...     nn.Conv2d(3, 16, 3, padding=1), nn.ReLU(),
+    ...     nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(16, 10),
+    ... ).eval()
+    >>> x, room = lucid.randn(1, 3, 32, 32), tempfile.mkdtemp()
+    >>> cml.export(model, x, f"{room}/model.mlpackage").close()
+    >>> package = cml.load(f"{room}/model.mlpackage")
     >>> package.predict(x).shape
-    (1, 1000)
+    (1, 10)
+    >>> package.close()
 
     The handle recovers what the export knew — that an input is a
     picture, that the outputs are labels, which inputs stand in for a
     draw — because the package declares all of it:
 
-    >>> cml.load("cls.mlpackage").classify(pixels)[0]
-    'tabby cat'
+    >>> brightest = nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten()).eval()
+    >>> red = lucid.zeros(1, 3, 8, 8)
+    >>> red[:, 0] = 255.0
+    >>> cml.export(brightest, red, f"{room}/cls.mlpackage",
+    ...            image_input=cml.ImageInput(scale=1 / 255.0),
+    ...            classifier=cml.Classifier(labels=("red", "green", "blue")),
+    ...            ).close()
+    >>> reopened = cml.load(f"{room}/cls.mlpackage")
+    >>> reopened.classify(red)[0]
+    'red'
+    >>> reopened.close()
+    >>> shutil.rmtree(room)
 
     """
     from lucid._C import engine as _C_engine

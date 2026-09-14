@@ -40,12 +40,19 @@ class ComputeUnits(enum.Enum):
 
     Examples
     --------
-    >>> import lucid.coreml as cml
-    >>> package = cml.export(model, x, "m.mlpackage",
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU()).eval()
+    >>> x, room = lucid.randn(1, 3, 32, 32), tempfile.mkdtemp()
+    >>> package = cml.export(model, x, f"{room}/m.mlpackage",
     ...                      precision=cml.Precision.FLOAT16,
     ...                      compute_units=cml.ComputeUnits.CPU_AND_NE)
-    >>> package.compute_plan().compute
-    {'CPU': 2, 'ANE': 69}
+    >>> package.compute_units
+    <ComputeUnits.CPU_AND_NE: 'CPU_AND_NE'>
+    >>> set(package.compute_plan().compute) <= {"CPU", "ANE"}   # never the GPU
+    True
+    >>> package.close()
+    >>> shutil.rmtree(room)
     """
 
     ALL = "ALL"
@@ -64,8 +71,15 @@ class Precision(enum.Enum):
 
     Examples
     --------
-    >>> import lucid.coreml as cml
-    >>> cml.export(model, x, "half.mlpackage", precision=cml.Precision.FLOAT16)
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU()).eval()
+    >>> x, room = lucid.randn(1, 3, 32, 32), tempfile.mkdtemp()
+    >>> with cml.export(model, x, f"{room}/half.mlpackage",
+    ...                 precision=cml.Precision.FLOAT16) as package:
+    ...     print(package.precision, package.verify(model, x, relative=True) < 1e-2)
+    FLOAT16 True
+    >>> shutil.rmtree(room)
     """
 
     FLOAT32 = "FLOAT32"
@@ -110,10 +124,35 @@ class Activations(enum.Enum):
 
     Examples
     --------
-    >>> import lucid.coreml as cml
-    >>> cml.export(qat_model, x, "small.mlpackage",
-    ...            weights=cml.WeightPrecision.INT8,
-    ...            activations=cml.Activations.DROPPED)
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> import lucid.quantization as q
+    >>> lucid.manual_seed(0)
+    >>> x = lucid.randn(1, 3, 16, 16)
+    >>> float_model = nn.Sequential(
+    ...     nn.Conv2d(3, 32, 3, padding=1), nn.ReLU(),
+    ...     nn.Conv2d(32, 32, 3, padding=1), nn.ReLU(),
+    ...     nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(32, 10),
+    ... )
+    >>> qat_model = q.prepare_qat(float_model, q.get_default_qat_qconfig_mapping())
+    >>> _ = qat_model(x)                 # fine-tune here; this only calibrates
+    >>> qat_model = qat_model.eval()
+    >>> room = tempfile.mkdtemp()
+    >>> simulated = cml.export(qat_model, x, f"{room}/simulated.mlpackage",
+    ...                        weights=cml.WeightPrecision.INT8)
+    >>> small = cml.export(qat_model, x, f"{room}/small.mlpackage",
+    ...                    weights=cml.WeightPrecision.INT8,
+    ...                    activations=cml.Activations.DROPPED)
+    >>> simulated.verify(qat_model, x, relative=True) < 1e-5   # the model, exactly
+    True
+    >>> small.verify(qat_model, x, relative=True) < 1e-2       # close to it
+    True
+    >>> ops = [p.compute_plan().total_compute for p in (simulated, small)]
+    >>> ops[1] < ops[0]                 # and the simulation's work is gone
+    True
+    >>> simulated.close()
+    >>> small.close()
+    >>> shutil.rmtree(room)
     """
 
     SIMULATED = "SIMULATED"
@@ -143,7 +182,18 @@ class Draws(enum.Enum):
 
     Examples
     --------
-    >>> package = cml.export(vae, x, "vae.mlpackage",
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> class Encoder(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.mu = nn.Linear(8, 4)
+    ...         self.logvar = nn.Linear(8, 4)
+    ...     def forward(self, x):
+    ...         mu, logvar = self.mu(x), self.logvar(x)
+    ...         return mu + (logvar * 0.5).exp() * lucid.randn(1, 4)
+    >>> vae, x, room = Encoder().eval(), lucid.randn(1, 8), tempfile.mkdtemp()
+    >>> package = cml.export(vae, x, f"{room}/vae.mlpackage",
     ...                      draws=cml.Draws.AS_INPUT)
     >>> package.noise_inputs
     [('noise_0', (1, 4))]
@@ -161,6 +211,8 @@ class Draws(enum.Enum):
     >>> b = package.predict({"input": x, "noise_0": eps})
     >>> float((a - b).abs().max())
     0.0
+    >>> package.close()
+    >>> shutil.rmtree(room)
     """
 
     REFUSED = "REFUSED"
@@ -198,17 +250,25 @@ class DeploymentTarget(enum.Enum):
     --------
     Read back what the package ended up needing:
 
-    >>> package = cml.export(model, x, "m.mlpackage")
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(
+    ...     nn.Conv2d(3, 64, 3, padding=1), nn.ReLU(), nn.Conv2d(64, 64, 3, padding=1)
+    ... ).eval()
+    >>> x, room = lucid.randn(1, 3, 16, 16), tempfile.mkdtemp()
+    >>> package = cml.export(model, x, f"{room}/m.mlpackage")
     >>> package.deployment_target
     <DeploymentTarget.IOS17: 'CoreML7'>
+    >>> package.close()
 
     Or refuse a floor the package cannot meet, while it is still a
     Python call rather than a device:
 
-    >>> cml.export(model, x, "m.mlpackage", weights=cml.Palettize(bits=4),
+    >>> cml.export(model, x, f"{room}/p.mlpackage", weights=cml.Palettize(bits=4),
     ...            minimum_deployment_target=cml.DeploymentTarget.IOS17)
     Traceback (most recent call last):
-    ValueError: ... palettization ... needs IOS18
+    ValueError: lucid.coreml: IOS17 was asked for, ... palettization ... only from IOS18...
+    >>> shutil.rmtree(room)
     """
 
     IOS17 = "CoreML7"
@@ -246,9 +306,17 @@ class WeightPrecision(enum.Enum):
 
     Examples
     --------
-    >>> import lucid.coreml as cml
-    >>> cml.export(model, x, "int8.mlpackage",
-    ...            weights=cml.WeightPrecision.INT8)
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(
+    ...     nn.Conv2d(3, 64, 3, padding=1), nn.ReLU(), nn.Conv2d(64, 64, 3, padding=1)
+    ... ).eval()
+    >>> x, room = lucid.randn(1, 3, 16, 16), tempfile.mkdtemp()
+    >>> with cml.export(model, x, f"{room}/int8.mlpackage",
+    ...                 weights=cml.WeightPrecision.INT8) as package:
+    ...     print(package.verify(model, x, relative=True) < 1e-2)   # by how much
+    True
+    >>> shutil.rmtree(room)
     """
 
     FLOAT = "FLOAT"
@@ -287,12 +355,24 @@ class Palettize:
 
     Examples
     --------
-    >>> cml.export(model, x, "6bit.mlpackage", weights=cml.Palettize(bits=6))
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(
+    ...     nn.Conv2d(3, 64, 3, padding=1), nn.ReLU(), nn.Conv2d(64, 64, 3, padding=1)
+    ... ).eval()
+    >>> x, room = lucid.randn(1, 3, 16, 16), tempfile.mkdtemp()
+    >>> with cml.export(model, x, f"{room}/6bit.mlpackage",
+    ...                 weights=cml.Palettize(bits=6)) as package:
+    ...     print(package.palettized, package.deployment_target)
+    True DeploymentTarget.IOS18
+    >>> shutil.rmtree(room)
 
     Below six bits, fit the palette during a fine-tune rather than
     afterwards — see :class:`~lucid.coreml.CompressionAware`:
 
     >>> aware = cml.CompressionAware(model, weights=cml.Palettize(bits=2))
+    >>> aware.covered              # the first layer is too small to palettize
+    ['2.weight']
     """
 
     bits: int = 4
@@ -327,8 +407,18 @@ class Sparsify:
 
     Examples
     --------
-    >>> cml.export(model, x, "sparse.mlpackage",
-    ...            weights=cml.Sparsify(ratio=0.3))
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(
+    ...     nn.Conv2d(3, 64, 3, padding=1), nn.ReLU(), nn.Conv2d(64, 64, 3, padding=1)
+    ... ).eval()
+    >>> x, room = lucid.randn(1, 3, 16, 16), tempfile.mkdtemp()
+    >>> with cml.export(model, x, f"{room}/sparse.mlpackage",
+    ...                 weights=cml.Sparsify(ratio=0.5)) as package:
+    ...     cost = package.verify(model, x, relative=True)
+    >>> cost > 1e-3                 # pruned and not retrained: not free
+    True
+    >>> shutil.rmtree(room)
     """
 
     ratio: float = 0.5
@@ -351,8 +441,19 @@ class ColorSpace(enum.Enum):
 
     Examples
     --------
-    >>> import lucid.coreml as cml
-    >>> cml.ImageInput(color=cml.ColorSpace.GRAYSCALE, scale=1 / 255.0)
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> gray = cml.ImageInput(color=cml.ColorSpace.GRAYSCALE, scale=1 / 255.0)
+    >>> gray.color
+    <ColorSpace.GRAYSCALE: 'GRAYSCALE'>
+    >>> model = nn.Sequential(nn.Conv2d(1, 4, 3, padding=1), nn.ReLU()).eval()
+    >>> pixels = (lucid.rand(1, 1, 16, 16) * 255).round()     # one channel
+    >>> room = tempfile.mkdtemp()
+    >>> with cml.export(model, pixels, f"{room}/gray.mlpackage",
+    ...                 image_input=gray) as package:
+    ...     print(package.predict(pixels).shape)
+    (1, 4, 16, 16)
+    >>> shutil.rmtree(room)
     """
 
     GRAYSCALE = "GRAYSCALE"
@@ -389,11 +490,22 @@ class ImageInput:
     Pixels are whole numbers in ``[0, 255]``; the scale is applied inside
     the package, so the caller feeds pixels and not normalised values:
 
-    >>> pixels = (lucid.rand(1, 3, 224, 224) * 255).round()
-    >>> package = cml.export(model, pixels, "img.mlpackage",
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(
+    ...     nn.Conv2d(3, 16, 3, padding=1), nn.ReLU(),
+    ...     nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(16, 10),
+    ... ).eval()
+    >>> pixels = (lucid.rand(1, 3, 32, 32) * 255).round()
+    >>> room = tempfile.mkdtemp()
+    >>> package = cml.export(model, pixels, f"{room}/img.mlpackage",
     ...                      image_input=cml.ImageInput(scale=1 / 255.0))
     >>> package.predict(pixels).shape
-    (1, 1000)
+    (1, 10)
+    >>> package.verify(model, pixels) < 1e-4   # the eager side is scaled to match
+    True
+    >>> package.close()
+    >>> shutil.rmtree(room)
     """
 
     scale: float = 1.0
@@ -430,13 +542,25 @@ class Classifier:
 
     Examples
     --------
+    A linear layer that passes its input through, so the scores are the
+    input itself:
+
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Linear(2, 2).eval()
+    >>> _ = nn.init.eye_(model.weight), nn.init.zeros_(model.bias)
+    >>> x, room = lucid.tensor([[3.0, 1.0]]), tempfile.mkdtemp()
     >>> package = cml.export(
-    ...     model, x, "cls.mlpackage",
-    ...     classifier=cml.Classifier(labels=["cat", "dog"]),
+    ...     model, x, f"{room}/cls.mlpackage",
+    ...     classifier=cml.Classifier(labels=("cat", "dog")),
     ... )
     >>> label, probabilities = package.classify(x)
     >>> label
     'cat'
+    >>> sorted(probabilities.items())      # the raw scores, not normalised
+    [('cat', 3.0), ('dog', 1.0)]
+    >>> package.close()
+    >>> shutil.rmtree(room)
     """
 
     labels: tuple[str, ...]
@@ -474,14 +598,27 @@ class State:
     The cache stops being an input the caller passes; Core ML keeps it
     and each prediction sees what the last one wrote:
 
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> class Decoder(nn.Module):
+    ...     def forward(self, x, cache):
+    ...         cache = cache + x          # what this step writes back
+    ...         return cache, cache * 2.0
+    >>> token, room = lucid.ones(1, 4) * 3.0, tempfile.mkdtemp()
     >>> package = cml.export(
-    ...     decoder, {"x": token, "cache": lucid.zeros(1, 64)},
-    ...     "decoder.mlpackage", precision=cml.Precision.FLOAT16,
+    ...     Decoder().eval(), {"x": token, "cache": lucid.zeros(1, 4)},
+    ...     f"{room}/decoder.mlpackage", precision=cml.Precision.FLOAT16,
     ...     state=[cml.State(input="cache", output="output_0")],
     ... )
     >>> package.input_names
     ['x']
+    >>> package.predict(token).tolist(), package.predict(token).tolist()
+    ([[6.0, 6.0, 6.0, 6.0]], [[12.0, 12.0, 12.0, 12.0]])
     >>> package.reset_state()      # start a fresh sequence
+    >>> package.predict(token).tolist()
+    [[6.0, 6.0, 6.0, 6.0]]
+    >>> package.close()
+    >>> shutil.rmtree(room)
     """
 
     input: str
@@ -497,10 +634,16 @@ class Metadata:
 
     Examples
     --------
-    >>> cml.export(model, x, "m.mlpackage", metadata=cml.Metadata(
-    ...     description="ResNet-18 trained on ImageNet",
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.coreml as cml
+    >>> model = nn.Sequential(nn.Conv2d(3, 16, 3, padding=1), nn.ReLU()).eval()
+    >>> x, room = lucid.randn(1, 3, 32, 32), tempfile.mkdtemp()
+    >>> package = cml.export(model, x, f"{room}/m.mlpackage", metadata=cml.Metadata(
+    ...     description="One convolution, for the example",
     ...     author="me", license="MIT", version="1.0",
     ... ))
+    >>> package.close()
+    >>> shutil.rmtree(room)
     """
 
     description: str = ""

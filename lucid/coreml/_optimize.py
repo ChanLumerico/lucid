@@ -175,15 +175,34 @@ class CompressionAware(Module):
 
     Examples
     --------
+    >>> import shutil, tempfile
+    >>> import lucid, lucid.nn as nn, lucid.nn.functional as F
+    >>> import lucid.coreml as cml
+    >>> model = nn.Sequential(
+    ...     nn.Conv2d(3, 32, 3, padding=1), nn.ReLU(),
+    ...     nn.Conv2d(32, 32, 3, padding=1), nn.ReLU(),
+    ...     nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(32, 10),
+    ... )
+    >>> loader = [
+    ...     (lucid.randn(4, 3, 16, 16), lucid.randint(0, 10, (4,))) for _ in range(3)
+    ... ]
     >>> aware = cml.CompressionAware(model, weights=cml.Palettize(bits=4))
+    >>> aware.covered               # the one weight big enough to compress
+    ['2.weight']
+    >>> optimizer = lucid.optim.SGD(aware.parameters(), lr=0.01)
     >>> for x, y in loader:
-    ...     loss = criterion(aware(x), y)
+    ...     loss = F.cross_entropy(aware(x), y)
     ...     loss.backward()
     ...     optimizer.step()
     ...     optimizer.zero_grad()
     >>> aware.refit()               # follow the weights as they move
-    >>> settled = aware.settle()
-    >>> cml.export(settled, x, path, weights=cml.Palettize(bits=4))
+    >>> settled = aware.settle().eval()
+    >>> x, room = lucid.randn(1, 3, 16, 16), tempfile.mkdtemp()
+    >>> with cml.export(settled, x, f"{room}/aware.mlpackage",
+    ...                 weights=cml.Palettize(bits=4)) as package:
+    ...     print(package.verify(settled, x, relative=True) < 1e-5)
+    True
+    >>> shutil.rmtree(room)
 
     Notes
     -----
