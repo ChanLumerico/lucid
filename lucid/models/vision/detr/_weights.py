@@ -7,15 +7,20 @@ reference checkpoints: :class:`DETRResNet50Weights` and
 
 Each checkpoint is the COCO detector at ``num_classes = 91`` (91
 foreground + 1 no-object) and uses the reference DETR eval pipeline:
-longest-side 1333 resize + square pad / bilinear interpolation /
-ImageNet normalisation, with bounding boxes riding along the geometric
-stages (the :class:`~lucid.utils.transforms.Detection` preset).
+longest-side 1333 resize + square pad on the bottom and right /
+bilinear interpolation / ImageNet normalisation, with bounding boxes
+riding along the geometric stages (the
+:class:`~lucid.utils.transforms.Detection` preset).
 """
 
 from lucid.utils.transforms import Detection
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-_PRESET = Detection(max_size=1333)
+# DETR's reference pads each image on the bottom and right, leaving it in the
+# top-left corner -- the frame ``postprocess`` scales normalised boxes into --
+# and does not round its canvas to a stride multiple, so DETR keeps the 1333
+# square it was converted and checked on rather than the R-CNNs' 1344.
+_PRESET = Detection(max_size=1333, size_divisible=1, pad_position="top_left")
 
 
 @register_weights("detr_resnet50")

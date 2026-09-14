@@ -128,10 +128,15 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
     Parameters
     ----------
     min_height, min_width : int
-        Minimum output size; smaller inputs are centered and padded.
+        Minimum output size; smaller inputs are padded up to it.
     border_mode : int, optional, default=4
     value, mask_value : float, optional, default=0.0
     p : float, optional, default=1.0
+    position : str, optional, default="center"
+        Where a smaller input sits on the padded canvas: ``"center"``,
+        ``"top_left"``, ``"top_right"``, ``"bottom_left"`` or
+        ``"bottom_right"`` (the Albumentations names).  Boxes, masks and
+        keypoints move with it.
 
     Examples
     --------
@@ -141,7 +146,13 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
     (3, 64, 64)
 
     Pads only what is short of the target; an image already large
-    enough comes back untouched.
+    enough comes back untouched.  ``position="top_left"`` pads on the
+    bottom and right only, so the input keeps its origin.
+
+    >>> tl = T.PadIfNeeded(64, 64, position="top_left")
+    >>> img = lucid.rand(3, 32, 32)
+    >>> bool((tl(T.Image(img)).data[:, :32, :32] == img).all())
+    True
     """
 
     def __init__(
@@ -152,18 +163,30 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
         value: float = 0.0,
         mask_value: float = 0.0,
         p: float = 1.0,
+        position: str = "center",
     ) -> None:
+        positions = ("center", "top_left", "top_right", "bottom_left", "bottom_right")
+        if position not in positions:
+            raise ValueError(
+                f"PadIfNeeded: position must be one of {positions}, got {position!r}"
+            )
         super().__init__(p=p)
         self.min_height = min_height
         self.min_width = min_width
         self.border_mode = border_mode
         self.value = value
         self.mask_value = mask_value
+        self.position = position
 
     def _pads(self, h: int, w: int) -> tuple[int, int, int, int]:
         dh = max(self.min_height - h, 0)
         dw = max(self.min_width - w, 0)
-        top, left = dh // 2, dw // 2
+        if self.position == "center":
+            top, left = dh // 2, dw // 2
+        else:
+            vertical, horizontal = self.position.split("_")
+            top = 0 if vertical == "top" else dh
+            left = 0 if horizontal == "left" else dw
         return left, dw - left, top, dh - top  # (l, r, t, b)
 
     @override
@@ -190,9 +213,10 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
 
     @override
     def __repr__(self) -> str:
+        where = "" if self.position == "center" else f", position={self.position!r}"
         return (
             f"PadIfNeeded(min_height={self.min_height}, "
-            f"min_width={self.min_width}, p={self.p})"
+            f"min_width={self.min_width}{where}, p={self.p})"
         )
 
 

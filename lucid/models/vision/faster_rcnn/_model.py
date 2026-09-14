@@ -68,6 +68,21 @@ from lucid.models._utils._detection import (
 )
 from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
 
+
+def _level_strides(image_height: int, features: list[Tensor]) -> list[int]:
+    """Stride of each pyramid level as ``image_height // level_height``.
+
+    The reference anchor generator spaces its grid the same way.  The
+    quotients are the real strides for P2 to P5 on a canvas that is a
+    multiple of 32, and for the pool level too on a multiple of 64; on
+    1333 they fall short (3, 7, 15, 31 and 63), which is why the R-CNN
+    weights' :class:`~lucid.utils.transforms.Detection` presets round their
+    canvas up to 1344.  Mask R-CNN imports this, so the RPN and box branch
+    the two detectors share derive identical strides.
+    """
+    return [max(1, image_height // int(f.shape[2])) for f in features]
+
+
 # ---------------------------------------------------------------------------
 # Backbone with FPN  (key prefix: ``backbone.body.*`` / ``backbone.fpn.*``)
 # ---------------------------------------------------------------------------
@@ -512,7 +527,7 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
         # divisible all the way down; anywhere else the real ratio differs and
         # both the anchor grid and the RoI-Align scales silently drift off the
         # feature map they are addressing.
-        strides = [max(1, iH // int(f.shape[2])) for f in features]
+        strides = _level_strides(iH, features)
 
         # 2. RPN → per-image proposals (when not supplied)
         rpn_obj_loss: Tensor | None = None

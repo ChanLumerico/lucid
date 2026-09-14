@@ -257,5 +257,103 @@ class TestImageClassificationAugmentStrong:
         assert cfg["init_kwargs"]["random_erasing"] == 0.0
 
 
+class TestDetectionCanvas:
+    """Canvas size and placement.
+
+    The defaults reproduce what a config saved before either option existed
+    did (pad to exactly ``max_size``, image centred); the R-CNN weights opt
+    in to the reference's rounding to 32 and top-left placement.
+    """
+
+    def test_an_old_config_keeps_its_canvas_and_placement(self) -> None:
+        # The init_kwargs a Detection preset serialised before this change.
+        old = {
+            "preprocessor_type": "Detection",
+            "init_kwargs": {
+                "max_size": 1333,
+                "min_size": None,
+                "min_area": 1.0,
+                "min_visibility": 0.0,
+                "mean": [0.485, 0.456, 0.406],
+                "std": [0.229, 0.224, 0.225],
+                "interpolation": "bilinear",
+            },
+        }
+        tf = T.AutoTransformsPreset.from_dict(old)
+        assert isinstance(tf, T.Detection)
+        assert tf.canvas_size == 1333
+        assert tf.pad_position == "center"
+
+    def test_default_pads_to_exactly_max_size(self) -> None:
+        tf = T.Detection()
+        assert tf.canvas_size == 1333
+        out = tf(T.Image(lucid.rand(3, 32, 32)))
+        assert tuple(out.data.shape) == (3, 1333, 1333)  # type: ignore[union-attr]
+
+    @pytest.mark.parametrize(
+        "max_size, canvas", [(1333, 1344), (1344, 1344), (800, 800), (1000, 1024)]
+    )
+    def test_size_divisible_rounds_the_canvas_up(
+        self, max_size: int, canvas: int
+    ) -> None:
+        tf = T.Detection(max_size=max_size, size_divisible=32)
+        assert tf.canvas_size == canvas
+        # A non-square image still lands on the square canvas.
+        out = tf(T.Image(lucid.rand(3, 24, 32)))
+        assert tuple(out.data.shape) == (3, canvas, canvas)  # type: ignore[union-attr]
+
+    def test_top_left_placement_leaves_the_image_at_the_origin(self) -> None:
+        from lucid.utils.transforms._datatypes import to_xyxy
+
+        tf = T.Detection(size_divisible=32, pad_position="top_left")
+        boxes = T.BoundingBoxes(
+            lucid.tensor([[50.0, 50.0, 250.0, 250.0]]),
+            "xyxy",
+            (400, 600),
+            labels=lucid.tensor([1.0]),
+        )
+        # A flat image stays flat through the resize, so image and padding
+        # are told apart by value after normalisation.
+        sample = {"image": T.Image(lucid.ones(3, 400, 600)), "boxes": boxes}
+        out = tf(sample)
+        h, w = tf.image_size(400, 600)
+        assert (h, w) == (889, 1333)
+        img = out["image"].data
+        inside = (1.0 - 0.485) / 0.229
+        pad = (0.0 - 0.485) / 0.229
+        for (row, col), want in [
+            ((0, 0), inside),
+            ((h - 1, w - 1), inside),
+            ((h, 0), pad),
+            ((0, w), pad),
+            ((1343, 1343), pad),
+        ]:
+            assert float(img[0, row, col].item()) == pytest.approx(want, abs=1e-4)
+        # Boxes are only scaled -- each axis by the size the resize gave it,
+        # which is what ``image_size`` reports -- and never shifted.
+        sx, sy = w / 600, h / 400
+        got = to_xyxy(out["boxes"]).numpy().reshape(-1).tolist()
+        assert got == pytest.approx([50 * sx, 50 * sy, 250 * sx, 250 * sy])
+
+    def test_image_size_follows_the_resize_rule(self) -> None:
+        # Shortest side to 800 unless the longest would pass 1333.
+        tf = T.Detection(min_size=800, max_size=1333)
+        assert tf.image_size(480, 640) == (800, 1067)
+        assert tf.image_size(300, 900) == (444, 1333)
+
+    def test_options_are_serialised(self) -> None:
+        tf = T.Detection(size_divisible=32, pad_position="top_left")
+        kwargs = tf.to_dict()["init_kwargs"]
+        assert kwargs["size_divisible"] == 32
+        assert kwargs["pad_position"] == "top_left"
+        _round_trip(tf)
+
+    def test_bad_options_are_refused(self) -> None:
+        with pytest.raises(ValueError, match="size_divisible"):
+            T.Detection(size_divisible=0)
+        with pytest.raises(ValueError, match="position"):
+            T.Detection(pad_position="middle")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

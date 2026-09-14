@@ -123,9 +123,11 @@ class DETRArch(Architecture):
 
         from lucid.utils.transforms import Detection
 
-        # Reference DETR eval pipeline: longest-side 1333 resize + pad,
-        # ImageNet normalisation (boxes ride with the image).
-        preset = Detection(max_size=1333)
+        # Reference DETR eval pipeline: longest-side 1333 resize, padded on the
+        # bottom and right (the image stays top-left) without rounding the
+        # canvas to a stride multiple; ImageNet normalisation (boxes ride with
+        # the image).  Matches detr/_weights.py.
+        preset = Detection(max_size=1333, size_divisible=1, pad_position="top_left")
         preprocessing = preset.to_dict()
 
         meta = {

@@ -15,6 +15,7 @@ the CPU (Accelerate) and Metal (MLX) compute streams.
 
 import os
 import unittest
+from typing import Any
 
 import pytest
 
@@ -630,6 +631,288 @@ class TestMaskRCNN:
         assert int(out.logits.shape[0]) == int(out.pred_masks.shape[0])
         assert int(out.logits.shape[0]) == int(out.pred_boxes.shape[0])
         assert out.loss is None
+
+
+class TestMaskRCNNPostprocessAndStrides:
+    """``postprocess`` clips as Faster R-CNN does, empty results keep the mask
+    shape, and ``forward`` derives its strides the way Faster R-CNN does."""
+
+    # Parts shared with Faster R-CNN, then the mask branch -- the smallest
+    # real configuration, built through the registered factory.
+    _SHARED: dict[str, object] = {
+        "num_classes": 3,
+        "backbone_layers": (1, 1, 1, 1),
+        "fpn_out_channels": 32,
+        "rpn_post_nms_top_n": 10,
+    }
+    _MASK: dict[str, object] = {
+        "roi_representation": 64,
+        "mask_hidden_channels": 16,
+        "mask_num_convs": 1,
+        "mask_predictor_hidden": 16,
+    }
+
+    @classmethod
+    def _model(cls, **overrides: object) -> Any:
+        from lucid.models import create_model
+
+        lucid.manual_seed(0)
+        kw = {**cls._SHARED, **cls._MASK, **overrides}
+        return create_model("mask_rcnn_resnet50_fpn", **kw).eval()
+
+    def test_boxes_are_clipped_to_image_sizes(self) -> None:
+        model = self._model()
+        with lucid.no_grad():
+            out = model(_img("cpu", 64, 64))
+            loose = model.postprocess(out)[0]["boxes"]
+            det = model.postprocess(out, image_sizes=[(48, 40)])[0]
+        # Decoding clipped only to the 64-pixel canvas, so a box reaches into
+        # what would be padding around a 48 x 40 image.
+        assert bool((loose[:, 0::2] > 40).any())
+        boxes = det["boxes"]
+        assert int(boxes.shape[0]) == int(loose.shape[0]) > 0
+        assert bool((boxes[:, 0::2] <= 40).all())
+        assert bool((boxes[:, 1::2] <= 48).all())
+        assert bool((boxes >= 0).all())
+        assert tuple(det["masks"].shape) == (int(boxes.shape[0]), 1, 48, 40)
+
+    def test_empty_results_keep_the_mask_shape(self) -> None:
+        # No class clears a 0.99 score threshold, so the image comes back
+        # empty through the post-NMS branch; precomputed empty proposals
+        # reach the other empty branch.
+        model = self._model(score_thresh=0.99)
+        with lucid.no_grad():
+            out = model(_img("cpu", 64, 64))
+            no_props = model(_img("cpu", 64, 64), proposals=[lucid.zeros((0, 4))])
+            for o in (out, no_props):
+                pasted = model.postprocess(o, image_sizes=[(48, 40)])[0]
+                raw = model.postprocess(o)[0]
+                assert int(pasted["boxes"].shape[0]) == 0
+                assert tuple(pasted["masks"].shape) == (0, 1, 48, 40)
+                assert tuple(raw["masks"].shape) == (0, 1, 28, 28)
+
+    def test_empty_roi_masks_follow_the_configured_size(self) -> None:
+        model = self._model(score_thresh=0.99, roi_mask_size=7)
+        with lucid.no_grad():
+            raw = model.postprocess(model(_img("cpu", 64, 64)))[0]
+        assert tuple(raw["masks"].shape) == (0, 1, 14, 14)
+
+    def test_anchor_strides_come_from_the_feature_maps(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """96 is a multiple of 32 but not of 64: the pool level is 2 wide, so
+        its stride is 96 // 2 = 48 where the fixed table said 64."""
+        model = self._model()
+        seen: list[list[int]] = []
+        real = model._anchor_gen.forward
+
+        def spy(features: list[Tensor], strides: list[int]) -> list[Tensor]:
+            seen.append(list(strides))
+            return real(features, strides)
+
+        monkeypatch.setattr(model._anchor_gen, "forward", spy)
+        with lucid.no_grad():
+            model(_img("cpu", 96, 96))
+        assert seen == [[4, 8, 16, 32, 48]]
+
+    def test_box_branch_matches_faster_rcnn_off_the_stride_grid(self) -> None:
+        """At 100 x 100 no level divides evenly (strides 4, 7, 14, 25, 50).
+        The RPN and box branch are Faster R-CNN's, so with the same weights
+        the proposals, logits and boxes must come out identical."""
+        from lucid.models import create_model
+
+        mask = self._model()
+        lucid.manual_seed(0)
+        faster = create_model(
+            "faster_rcnn_resnet50_fpn", **self._SHARED, roi_representation_size=64
+        ).eval()
+        mask.load_state_dict(faster.state_dict(), strict=False)
+        x = _img("cpu", 100, 100)
+        with lucid.no_grad():
+            got = mask(x)
+            want = faster(x)
+        assert len(got.proposals) == len(want.proposals) == 1
+        assert tuple(got.proposals[0].shape) == tuple(want.proposals[0].shape)
+        assert bool((got.proposals[0] == want.proposals[0]).all())
+        assert bool((got.logits == want.logits).all())
+        assert bool((got.pred_boxes == want.pred_boxes).all())
+
+    def test_postprocess_realigns_with_the_strides_forward_used(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """99 is not a multiple of 4.  P2 has 25 rows, as it would at 100, but
+        forward's strides are 3, 7, 14, 24 rather than 4, 7, 14, 25 -- only
+        the input size the output carries tells the two apart."""
+        import lucid.models.vision.mask_rcnn._model as mask_module
+
+        model = self._model()
+        scales: list[list[float]] = []
+        real = mask_module.multiscale_roi_align
+
+        def spy(*args: Any, **kwargs: Any) -> Tensor:
+            scales.append(list(kwargs["spatial_scales"]))
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(mask_module, "multiscale_roi_align", spy)
+        with lucid.no_grad():
+            out = model(_img("cpu", 99, 99))
+            det = model.postprocess(out)[0]
+        assert out.input_size == (99, 99)
+        assert int(det["boxes"].shape[0]) > 0  # so the re-alignment ran
+        box_crop, mask_crop, realign = scales
+        expected = [1.0 / float(s) for s in (3, 7, 14, 24)]
+        assert box_crop == mask_crop == realign == expected
+
+
+class TestDetectionPresetCanvas:
+    """Both R-CNN presets put the image in the top-left corner of a 1344
+    canvas: where ``image_sizes`` clipping measures from, and where the
+    strides the detectors derive are the network's own."""
+
+    @staticmethod
+    def _presets() -> list[Any]:
+        from lucid.models.vision.faster_rcnn import FasterRCNNResNet50FPNWeights
+        from lucid.models.vision.mask_rcnn import MaskRCNNResNet50FPNWeights
+
+        return [
+            FasterRCNNResNet50FPNWeights.COCO_V1.transforms(),
+            MaskRCNNResNet50FPNWeights.COCO_V1.transforms(),
+        ]
+
+    def test_canvas_is_a_multiple_of_32(self) -> None:
+        import lucid.utils.transforms as T
+
+        for tf in self._presets():
+            assert tf.canvas_size == 1344
+            assert tf.pad_position == "top_left"
+            out = tf(T.Image(lucid.rand(3, 30, 40)))
+            assert tuple(out.data.shape) == (3, 1344, 1344)
+
+    @staticmethod
+    def _far_corner(tf: Any) -> tuple[list[float], tuple[int, int]]:
+        """A box in the far corner of a 300 x 500 image, after ``tf``, and
+        the image's extent on the canvas as ``postprocess`` wants it."""
+        import lucid.utils.transforms as T
+        from lucid.utils.transforms._datatypes import to_xyxy
+
+        boxes = T.BoundingBoxes(
+            lucid.tensor([[450.0, 250.0, 500.0, 300.0]]),
+            "xyxy",
+            (300, 500),
+            labels=lucid.tensor([1.0]),
+        )
+        out = tf({"image": T.Image(lucid.rand(3, 300, 500)), "boxes": boxes})
+        box = [float(v) for v in to_xyxy(out["boxes"]).numpy().reshape(-1)]
+        return box, tf.image_size(300, 500)
+
+    def _survives_clipping(self, model: Any, tf: Any, masks: bool) -> None:
+        box, (h, w) = self._far_corner(tf)
+        # The box ends where the image does, inside the clipping extent.
+        assert w - 2 < box[2] <= w and h - 2 < box[3] <= h
+        k = 3
+        logits = lucid.tensor([[-10.0, 10.0, -10.0]])  # class 1, surely
+        pred_boxes = lucid.tensor([[box] * k])
+        proposals = (lucid.tensor([box]),)
+        out: Any
+        if masks:
+            out = InstanceSegmentationOutput(
+                logits=logits,
+                pred_boxes=pred_boxes,
+                pred_masks=lucid.zeros((1, k, 28, 28)),
+                proposals=proposals,
+            )
+        else:
+            out = ObjectDetectionOutput(
+                logits=logits, pred_boxes=pred_boxes, proposals=proposals
+            )
+        det = model.postprocess(out, image_sizes=[(h, w)])[0]
+        assert int(det["boxes"].shape[0]) == 1
+        got = [float(v) for v in det["boxes"].numpy().reshape(-1)]
+        assert got == pytest.approx(box, abs=1e-3)
+        if masks:
+            assert tuple(det["masks"].shape) == (1, 1, h, w)
+
+    def test_a_far_corner_box_survives_faster_rcnn_clipping(self) -> None:
+        from lucid.models import create_model
+
+        model = create_model(
+            "faster_rcnn_resnet50_fpn",
+            **TestMaskRCNNPostprocessAndStrides._SHARED,
+            roi_representation_size=64,
+        ).eval()
+        self._survives_clipping(model, self._presets()[0], masks=False)
+
+    def test_a_far_corner_box_survives_mask_rcnn_clipping(self) -> None:
+        model = TestMaskRCNNPostprocessAndStrides._model()
+        self._survives_clipping(model, self._presets()[1], masks=True)
+
+    def test_a_centred_image_is_where_clipping_went_wrong(self) -> None:
+        """The same box on the old centred canvas sits 272 rows below where
+        ``image_sizes`` ends, so clipping flattened it."""
+        import lucid.utils.transforms as T
+
+        centred = T.Detection(min_size=800, max_size=1333, size_divisible=32)
+        box, (h, _) = self._far_corner(centred)
+        assert box[1] >= h
+
+    def test_both_detectors_derive_strides_one_way(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Mask R-CNN imports Faster R-CNN's backbone and stride rule, and
+        Faster R-CNN's own forward applies that rule: at 96 the pool level is
+        2 wide, a stride of 48."""
+        import lucid.models.vision.faster_rcnn._model as faster_module
+        import lucid.models.vision.mask_rcnn._model as mask_module
+        from lucid.models import create_model
+
+        assert mask_module._level_strides is faster_module._level_strides
+        assert mask_module._BackboneWithFPN is faster_module._BackboneWithFPN
+        lucid.manual_seed(0)
+        faster = create_model(
+            "faster_rcnn_resnet50_fpn",
+            **TestMaskRCNNPostprocessAndStrides._SHARED,
+            roi_representation_size=64,
+        ).eval()
+        seen: list[list[int]] = []
+        real = faster._anchor_gen.forward
+
+        def spy(features: list[Tensor], strides: list[int]) -> list[Tensor]:
+            seen.append(list(strides))
+            return real(features, strides)
+
+        monkeypatch.setattr(faster._anchor_gen, "forward", spy)
+        with lucid.no_grad():
+            faster(_img("cpu", 96, 96))
+        assert seen == [[4, 8, 16, 32, 48]]
+
+    @pytest.mark.slow
+    def test_strides_are_exact_on_the_preset_canvas(self) -> None:
+        """The real backbone on the preset's canvas: every level's stride is
+        the network's own and the P2 anchors reach the far edge.  On the old
+        1333 canvas the strides were 3, 7, 15, 31, 63 and the P2 anchors
+        stopped at pixel 1022."""
+        from lucid.models import create_model
+        from lucid.models.vision.faster_rcnn._model import _level_strides
+
+        side = int(self._presets()[0].canvas_size)
+        lucid.manual_seed(0)
+        model = create_model(
+            "faster_rcnn_resnet50_fpn",
+            num_classes=3,
+            backbone_layers=(1, 1, 1, 1),
+            fpn_out_channels=8,
+            roi_representation_size=16,
+        ).eval()
+        with lucid.no_grad():
+            feats = model.backbone(lucid.zeros((1, 3, side, side)))
+            strides = _level_strides(side, feats)
+            p2 = model._anchor_gen.forward(feats, strides)[0]
+        assert strides == [4, 8, 16, 32, 64]
+        # The last P2 anchor centre sits one stride inside the edge, and the
+        # widest P2 anchor spans past it.
+        assert (int(feats[0].shape[3]) - 1) * strides[0] == side - strides[0]
+        assert float(p2[:, 2].max().item()) >= side
+        assert float(p2[:, 3].max().item()) >= side
 
 
 class TestMaskRCNNTopology:

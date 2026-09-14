@@ -343,6 +343,12 @@ class InstanceSegmentationOutput(ModelOutput):
         proposal boxes to map rows of ``pred_boxes`` / ``pred_masks`` back
         to images, and when ``forward`` generated the proposals itself the
         caller has no other way to supply them.
+    input_size : tuple[int, int] or None, optional
+        ``(H, W)`` of the image batch ``forward`` ran on.  Mask R-CNN
+        derives its pyramid strides from it, and ``postprocess`` must use
+        the same ones to re-align masks on the final boxes; the feature
+        maps alone do not pin it down (every height from 97 to 100 gives
+        a 25-row P2, and the strides differ across them).
 
     Notes
     -----
@@ -368,6 +374,7 @@ class InstanceSegmentationOutput(ModelOutput):
     loss: Tensor | None = None
     hidden_states: tuple[Tensor, ...] | None = None
     proposals: tuple[Tensor, ...] | None = None
+    input_size: tuple[int, int] | None = None
 
 
 @dataclass(slots=True)

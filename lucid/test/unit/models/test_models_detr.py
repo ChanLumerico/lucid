@@ -127,6 +127,11 @@ class TestDETRWeightsEnums(unittest.TestCase):
             # Detection preset round-trips to a Detection-typed config.
             self.assertEqual(tf.to_dict()["preprocessor_type"], "Detection")
             self.assertEqual(tf.max_size, 1333)
+            # Unlike the R-CNN presets, DETR's canvas is not rounded up.
+            self.assertEqual(tf.canvas_size, 1333)
+            # Its reference pads on the bottom and right: the image stays in
+            # the top-left corner, the frame ``postprocess`` scales boxes into.
+            self.assertEqual(tf.pad_position, "top_left")
 
     def test_registry_discoverable(self) -> None:
         from lucid.weights import list_pretrained

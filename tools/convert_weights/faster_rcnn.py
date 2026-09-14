@@ -82,9 +82,13 @@ class FasterRCNNArch(Architecture):
 
         from lucid.utils.transforms import Detection
 
-        # Reference detection eval pipeline: longest-side 1333 resize + pad,
-        # ImageNet normalisation (boxes ride with the image).
-        preset = Detection(max_size=1333)
+        # The preset the weights module ships (faster_rcnn/_weights.py):
+        # shortest side 800, longest capped at 1333, the image in the top-left
+        # corner of a 1344 square (a multiple of 32, as the reference pads its
+        # batches), ImageNet normalisation (boxes ride with the image).
+        preset = Detection(
+            min_size=800, max_size=1333, size_divisible=32, pad_position="top_left"
+        )
         preprocessing = preset.to_dict()
 
         tv_meta = dict(self._tv_weights.meta)

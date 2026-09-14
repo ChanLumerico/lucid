@@ -60,6 +60,7 @@ from lucid.models._utils._detection import (
     paste_masks_in_image,
     remove_small_boxes,
     _ReferenceAnchorGenerator,
+    clip_boxes_to_image,
     fastrcnn_loss,
     maskrcnn_loss,
     multiscale_roi_align,
@@ -73,6 +74,7 @@ from lucid.models.vision.faster_rcnn._model import (
     _FastRCNNPredictor,
     _RegionProposalNetwork,
     _TwoMLPHead,
+    _level_strides,
 )
 from lucid.models.vision.faster_rcnn._model import (
     FasterRCNNForObjectDetection as _FasterRCNNForObjectDetection,
@@ -268,7 +270,9 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
     config_class: ClassVar[type[MaskRCNNConfig]] = MaskRCNNConfig
     base_model_prefix: ClassVar[str] = "mask_rcnn"
 
-    # FPN level strides: P2..P5 then the pool level.
+    # Nominal FPN level strides (P2..P5 then the pool level) for a size that
+    # divides evenly.  ``forward`` derives the real ones from the feature maps
+    # rather than trusting these.
     _strides: ClassVar[tuple[int, ...]] = (4, 8, 16, 32, 64)
 
     def __init__(self, config: MaskRCNNConfig) -> None:
@@ -464,12 +468,17 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         # 1. Backbone + FPN → [P2, P3, P4, P5, pool]
         features = cast(list[Tensor], self.backbone(x))
 
+        # Level strides come from the maps the backbone produced, as in Faster
+        # R-CNN.  The nominal ``_strides`` hold only for sizes divisible all
+        # the way down: at 96 the pool level is 2 wide, a stride of 48.
+        strides = _level_strides(iH, features)
+
         # 2. RPN → per-image proposals (when not supplied)
         rpn_obj_loss: Tensor | None = None
         rpn_reg_loss: Tensor | None = None
         if proposals is None:
             logits, deltas = self.rpn.head.forward(features)
-            anchors = self._anchor_gen.forward(features, list(self._strides))
+            anchors = self._anchor_gen.forward(features, strides)
             proposals = self._rpn_proposals(logits, deltas, anchors, (iH, iW))
             if targets is not None:
                 rpn_obj_loss, rpn_reg_loss = self._rpn_loss(
@@ -500,7 +509,7 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
 
         # 3. MultiScale RoI Align over the four FPN detection levels (P2-P5).
         det_feats = features[:4]
-        det_scales = [1.0 / float(s) for s in self._strides[:4]]
+        det_scales = [1.0 / float(s) for s in strides[:4]]
         roi_feats = multiscale_roi_align(
             det_feats,
             proposals,
@@ -559,6 +568,7 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
             loss=loss,
             proposals=tuple(proposals),
             hidden_states=tuple(det_feats),
+            input_size=(iH, iW),
         )
 
     def _decode_per_class(
@@ -598,11 +608,13 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         output : InstanceSegmentationOutput
             Raw RoI-head outputs from :meth:`forward`.
         image_sizes : list of (H, W), optional
-            Per-image extent.  When given, each detection's mask is pasted
-            onto its box in an ``H x W`` canvas and binarised at
-            ``config.mask_thresh``; when omitted, masks stay ``28 x 28``
-            probabilities in RoI coordinates.  Boxes are not re-clipped to
-            it.
+            Per-image extent.  When given, image ``i``'s boxes are re-clipped
+            to ``image_sizes[i]``, as in Faster R-CNN (decoding clips only to
+            the padded batch canvas), and each detection's mask is pasted
+            onto its clipped box in an ``H x W`` canvas and binarised at
+            ``config.mask_thresh``.  When omitted, masks stay
+            ``2 * roi_mask_size``-square (28 x 28 by default) probabilities
+            in RoI coordinates.
         proposals : list of Tensor, optional
             Per-image proposals the RoI features were sampled from; falls
             back to ``output.proposals``, which :meth:`forward` fills in.
@@ -618,7 +630,8 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
             ``(D,)``, ``"labels"`` ``(D,)`` int64, and ``"masks"`` — the
             channel of each detection's predicted class, as
             ``(D, 1, 28, 28)`` sigmoid probabilities or, with
-            ``image_sizes``, as ``(D, 1, H, W)`` binary masks.
+            ``image_sizes``, as ``(D, 1, H, W)`` binary masks.  An image
+            with no detections has ``D = 0`` and the same mask shape.
 
         Examples
         --------
@@ -651,6 +664,17 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         (1, 64, 64)
         >>> bool(((masks == 0) | (masks == 1)).all())
         True
+
+        Inside a padded batch an image's own extent is smaller than the
+        canvas.  For one 48 tall and 40 wide the boxes are clipped to it,
+        and the masks come back on its 48 x 40 frame.
+
+        >>> det = model.postprocess(out, image_sizes=[(48, 40)])[0]
+        >>> xs, ys = det["boxes"][:, 0::2], det["boxes"][:, 1::2]
+        >>> bool((xs <= 40).all()), bool((ys <= 48).all())
+        (True, True)
+        >>> det["masks"].shape[1:]
+        (1, 48, 40)
         """
         # ``forward`` carries its own proposals out, mirroring Faster R-CNN,
         # so the documented ``model.postprocess(model(x))`` flow works without
@@ -667,6 +691,8 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         pred_masks = output.pred_masks  # (N, K, 28, 28)
         cfg = self._cfg
         dev = logits.device.type
+        # Mask side in RoI space: the deconv doubles ``roi_mask_size``.
+        roi_hw = (2 * cfg.roi_mask_size, 2 * cfg.roi_mask_size)
         results: list[dict[str, Tensor]] = []
         offset = 0
 
@@ -676,9 +702,18 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
             bx_i = pred_boxes[offset : offset + N_i]
             mk_i = pred_masks[offset : offset + N_i]  # (N_i, K, 28, 28)
             offset += N_i
+            # As in Faster R-CNN, an image past the end of ``image_sizes``
+            # keeps the canvas it was decoded on.
+            size_i = (
+                image_sizes[idx]
+                if image_sizes is not None and idx < len(image_sizes)
+                else None
+            )
+            # An empty result carries the mask shape a non-empty one would.
+            mask_hw = size_i if size_i is not None else roi_hw
 
             if N_i == 0:
-                results.append(self._empty_det(dev))
+                results.append(self._empty_det(dev, mask_hw))
                 continue
 
             scores_i = F.softmax(lg_i, dim=-1)  # (N_i, K)
@@ -720,7 +755,7 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
                 keep_masks.append(mk_c[keep].unsqueeze(1))  # (k, 1, 28, 28)
 
             if not keep_boxes:
-                results.append(self._empty_det(dev))
+                results.append(self._empty_det(dev, mask_hw))
                 continue
 
             all_b = lucid.cat(keep_boxes, dim=0)
@@ -732,6 +767,11 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
             det_s = all_s[order]
             det_l = all_l[order].long()
             det_m = all_m[order]
+            if size_i is not None:
+                # Decoding clipped to the padded batch canvas; the image's own
+                # extent can be smaller.  Clipping before the masks are
+                # re-aligned and pasted keeps each mask on the box returned.
+                det_b = clip_boxes_to_image(det_b, size_i)
 
             # Paper §3.1 (Inference): "The mask branch is then applied to the
             # highest scoring 100 detection boxes ... it speeds up inference and
@@ -743,9 +783,21 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
             # boxes when the feature levels came along with the output.
             feats = output.hidden_states
             if feats is not None and int(det_b.shape[0]) > 0:
-                scales = [1.0 / float(st) for st in self._strides[:4]]
+                # Re-align with the strides ``forward`` derived, from the
+                # input height it recorded; the feature maps alone do not pin
+                # that down.  An output built without it falls back to four
+                # times the P2 height (the stem halves the input twice,
+                # rounding up), which is the input height whenever that is a
+                # multiple of four.
+                levels = list(feats)
+                if output.input_size is not None:
+                    canvas_h = output.input_size[0]
+                else:
+                    canvas_h = 4 * int(levels[0].shape[2])
+                strides = _level_strides(canvas_h, levels)
+                scales = [1.0 / float(s) for s in strides]
                 m_feats = multiscale_roi_align(
-                    list(feats),
+                    levels,
                     [det_b],
                     output_size=cfg.roi_mask_size,
                     spatial_scales=scales,
@@ -765,11 +817,11 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
             # the image the instance is -- and ``mask_thresh`` had nothing to
             # act on.  ``image_sizes`` is what makes the canvas known; without
             # it the RoI-space probabilities are returned unchanged.
-            if image_sizes is not None and int(det_b.shape[0]) > 0:
+            if size_i is not None and int(det_b.shape[0]) > 0:
                 det_m = paste_masks_in_image(
                     det_m,
                     det_b,
-                    image_sizes[idx],
+                    size_i,
                     threshold=cfg.mask_thresh,
                 )
 
@@ -784,10 +836,12 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         return results
 
     @staticmethod
-    def _empty_det(dev: str) -> dict[str, Tensor]:
+    def _empty_det(dev: str, mask_hw: tuple[int, int]) -> dict[str, Tensor]:
+        """No detections, with ``masks`` shaped as a non-empty result is."""
+        h, w = mask_hw
         return {
             "boxes": lucid.zeros((0, 4), device=dev),
             "scores": lucid.zeros((0,), device=dev),
             "labels": lucid.zeros((0,), device=dev).long(),
-            "masks": lucid.zeros((0, 1, 28, 28), device=dev),
+            "masks": lucid.zeros((0, 1, h, w), device=dev),
         }

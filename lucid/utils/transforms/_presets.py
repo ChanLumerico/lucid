@@ -590,8 +590,10 @@ class ImageClassificationAugment(TransformsPreset):
 class Detection(TransformsPreset):
     r"""Object-detection preset — coordinates ride with the image.
 
-    Pipeline: ``LongestMaxSize(max_size)`` → ``PadIfNeeded(max_size,
-    max_size)`` → ``Normalize(mean, std)`` plus a
+    Pipeline: ``LongestMaxSize(max_size)`` (``ResizeShortestEdge(min_size,
+    max_size)`` when ``min_size`` is given) → ``PadIfNeeded`` onto a
+    square of side :attr:`canvas_size`, the image placed per
+    ``pad_position`` → ``Normalize(mean, std)`` plus a
     :class:`BboxParams(min_area, min_visibility)` policy on the
     enclosing :class:`Compose` so out-of-frame boxes (and their
     labels) drop automatically after the pipeline runs.
@@ -600,8 +602,26 @@ class Detection(TransformsPreset):
     ----------
     max_size : int, optional, default=1333
         Longest-side target after resize; canonical detection
-        recipes use ``800 / 1333``.  ``PadIfNeeded`` then squares the
-        canvas to ``(max_size, max_size)`` so batching works.
+        recipes use ``800 / 1333``.
+    min_size : int or None, optional, default=None
+        Shortest-side target.  When given, the longest side is still
+        capped at ``max_size``.
+    size_divisible : int, optional, default=1
+        The square's side is ``max_size`` rounded up to a multiple of
+        this.  The R-CNN weights pass 32, as the reference detection
+        transform rounds its batches: an R-CNN derives each pyramid
+        level's stride as canvas height over level height, and on a
+        canvas that does not divide by the strides those quotients fall
+        short (1333 gives 3, 7, 15, 31 and 63 instead of 4 to 64).  The
+        default pads to exactly ``max_size``, as a config saved before
+        this option existed did.
+    pad_position : str, optional, default="center"
+        Where the resized image sits on the canvas — one of the
+        :class:`PadIfNeeded` positions.  The R-CNN and DETR references
+        leave it in the top-left corner (``"top_left"``), the frame a
+        detector's ``image_sizes`` is measured in; darknet letterboxes it
+        centred.  The default is the placement a config saved before this
+        option existed had.
     min_area : float, optional, default=1.0
         Drop post-pipeline boxes whose absolute pixel area is below
         this — see :class:`BboxParams`.
@@ -621,7 +641,13 @@ class Detection(TransformsPreset):
 
     A preset, not a single transform: it resizes so the longest side
     is at most ``max_size`` and pads to a square, which is what a
-    detector's backbone expects to batch.
+    detector's backbone expects to batch.  The R-CNN weights round the
+    square up to a multiple of 32 and keep the image in its top-left
+    corner, where :meth:`image_size` says it ends.
+
+    >>> rcnn = T.Detection(size_divisible=32, pad_position="top_left")
+    >>> rcnn.canvas_size, rcnn.image_size(300, 500)
+    (1344, (800, 1333))
     """
 
     preset_type: ClassVar[str] = "Detection"
@@ -631,14 +657,22 @@ class Detection(TransformsPreset):
         *,
         max_size: int = 1333,
         min_size: int | None = None,
+        size_divisible: int = 1,
+        pad_position: str = "center",
         min_area: float = 1.0,
         min_visibility: float = 0.0,
         mean: tuple[float, ...] | None = None,
         std: tuple[float, ...] | None = None,
         interpolation: str | Interpolation = Interpolation.BILINEAR,
     ) -> None:
+        if size_divisible < 1:
+            raise ValueError(
+                f"Detection: size_divisible must be at least 1, got {size_divisible}"
+            )
         self.max_size = max_size
         self.min_size = min_size
+        self.size_divisible = size_divisible
+        self.pad_position = pad_position
         self.min_area = min_area
         self.min_visibility = min_visibility
         self.mean = mean if mean is not None else _IMAGENET_MEAN
@@ -651,19 +685,66 @@ class Detection(TransformsPreset):
         # a systematically different scale (~25% larger for a 4:3 image), which
         # shifts FPN level assignment and anchor matching for a checkpoint
         # trained the other way.  Composing the two caps reproduces the rule.
-        stages: list[TransformLike] = []
+        self._resize: LongestMaxSize | ResizeShortestEdge
         if min_size is not None:
-            stages.append(
-                ResizeShortestEdge(min_size, max_size, interpolation=interpolation)
+            self._resize = ResizeShortestEdge(
+                min_size, max_size, interpolation=interpolation
             )
         else:
-            stages.append(LongestMaxSize(max_size, interpolation=interpolation))
-        stages.append(PadIfNeeded(max_size, max_size, value=0.0))
-        stages.append(Normalize(self.mean, self.std, max_pixel_value=1.0))
+            self._resize = LongestMaxSize(max_size, interpolation=interpolation)
+        side = self.canvas_size
+        stages: list[TransformLike] = [
+            self._resize,
+            PadIfNeeded(side, side, value=0.0, position=pad_position),
+            Normalize(self.mean, self.std, max_pixel_value=1.0),
+        ]
         self._pipeline = Compose(
             stages,
             bbox_params=BboxParams(min_area=min_area, min_visibility=min_visibility),
         )
+
+    @property
+    def canvas_size(self) -> int:
+        r"""Side of the square canvas the image is padded onto.
+
+        ``max_size`` rounded up to a multiple of ``size_divisible``.
+
+        Examples
+        --------
+        >>> import lucid.utils.transforms as T
+        >>> T.Detection().canvas_size
+        1333
+        >>> T.Detection(size_divisible=32).canvas_size
+        1344
+        """
+        step = self.size_divisible
+        return -(-self.max_size // step) * step
+
+    def image_size(self, height: int, width: int) -> tuple[int, int]:
+        r"""``(H, W)`` an image of this size has on the canvas, before padding.
+
+        With ``pad_position="top_left"`` the image fills rows ``[0, H)`` and
+        columns ``[0, W)`` of the canvas, so this is that image's entry in a
+        detector's ``postprocess(image_sizes=...)``.
+
+        Parameters
+        ----------
+        height, width : int
+            Size of the image the preset is applied to.
+
+        Returns
+        -------
+        tuple of int
+            The size the resize stage gives it — the same rule it applies
+            to the image and its boxes.
+
+        Examples
+        --------
+        >>> import lucid.utils.transforms as T
+        >>> T.Detection(min_size=800, max_size=1333).image_size(480, 640)
+        (800, 1067)
+        """
+        return self._resize._target(height, width)
 
     @override
     def _init_kwargs(self) -> dict[str, object]:
@@ -671,6 +752,8 @@ class Detection(TransformsPreset):
         return {
             "max_size": self.max_size,
             "min_size": self.min_size,
+            "size_divisible": self.size_divisible,
+            "pad_position": self.pad_position,
             "min_area": self.min_area,
             "min_visibility": self.min_visibility,
             "mean": list(self.mean),

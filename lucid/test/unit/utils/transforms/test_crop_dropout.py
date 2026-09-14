@@ -50,6 +50,36 @@ class TestCropPad:
             40.0,
         ]
 
+    @pytest.mark.parametrize(
+        "position, dx, dy",
+        [
+            ("center", 5, 5),
+            ("top_left", 0, 0),
+            ("top_right", 10, 0),
+            ("bottom_left", 0, 10),
+            ("bottom_right", 10, 10),
+        ],
+    )
+    def test_pad_position_moves_image_and_targets_together(
+        self, position: str, dx: int, dy: int
+    ) -> None:
+        img = lucid.rand(3, 40, 40)
+        sample = _sample()
+        sample["image"] = T.Image(img)
+        out = T.PadIfNeeded(50, 50, position=position)(sample)
+        assert to_xyxy(out["boxes"]).numpy().reshape(-1).tolist() == [
+            5.0 + dx,
+            5.0 + dy,
+            35.0 + dx,
+            35.0 + dy,
+        ]
+        placed = out["image"].data[:, dy : dy + 40, dx : dx + 40]
+        assert bool((placed == img).all())
+
+    def test_pad_position_is_validated(self) -> None:
+        with pytest.raises(ValueError, match="position"):
+            T.PadIfNeeded(50, 50, position="middle")
+
 
 class TestDropout:
     def test_coarse_dropout_blanks(self) -> None:

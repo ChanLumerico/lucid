@@ -8,15 +8,22 @@ reference ``MaskRCNN_ResNet50_FPN_Weights.COCO_V1``:
 
 The checkpoint is the COCO detector at ``num_classes = 91`` (90
 categories + background slot 0) and uses the reference detection eval
-pipeline: longest-side 1333 resize + square pad / bilinear interpolation /
-ImageNet normalisation (the :class:`~lucid.utils.transforms.Detection`
-preset).
+pipeline: longest-side 1333 resize, the image copied into the top-left
+corner of a 1344 square (1333 rounded up to a multiple of 32, as the
+reference pads its batches) / bilinear interpolation / ImageNet
+normalisation (the :class:`~lucid.utils.transforms.Detection` preset).
+``weights.transforms().image_size(h, w)`` is the ``image_sizes`` entry
+:meth:`~lucid.models.vision.mask_rcnn.MaskRCNNForObjectDetection.postprocess`
+clips boxes and pastes masks to.
 """
 
 from lucid.utils.transforms import Detection
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-_PRESET = Detection(max_size=1333)
+# The reference transform copies each image into the top-left of a canvas
+# rounded up to a multiple of 32, which is where ``postprocess`` measures
+# ``image_sizes`` from.
+_PRESET = Detection(max_size=1333, size_divisible=32, pad_position="top_left")
 
 
 @register_weights("mask_rcnn")

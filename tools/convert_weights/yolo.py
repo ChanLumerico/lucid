@@ -465,10 +465,12 @@ class DarknetYOLOArch(Architecture):
             for k, v in dataclasses.asdict(model.config).items()
         }
 
-        # Darknet letterboxes to a square canvas and feeds raw [0, 1] pixels —
-        # no dataset mean/std is subtracted anywhere in its pipeline.
+        # Darknet letterboxes to a square canvas (image centred) and feeds raw
+        # [0, 1] pixels — no dataset mean/std is subtracted anywhere in its
+        # pipeline.  Matches yolo/_weights.py.
         preprocessing = Detection(
             max_size=src.image_size,
+            pad_position="center",
             mean=(0.0, 0.0, 0.0),
             std=(1.0, 1.0, 1.0),
         ).to_dict()
