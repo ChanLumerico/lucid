@@ -14,6 +14,7 @@
 
 #include "BatchNorm.h"
 
+#include <cstring>
 #include <memory>
 #include <vector>
 
@@ -47,6 +48,30 @@
 #include "../ops/utils/View.h"
 
 namespace lucid {
+
+namespace {
+
+// Takes a running statistic's new values.  A buffer with live views takes
+// them into its own storage, so the views see the update, and every
+// member's version moves; one without views has its storage slot replaced,
+// as it always has.  A plain copy rather than write_through: the op's own
+// input storage (``into_stat``) still holds the buffer here, and no node
+// saves the running statistics — they are not inputs of the graph.
+void take_running_stat(const TensorImplPtr& stat, Storage fresh) {
+    if (stat->is_aliased() && stat->is_dense()) {
+        auto* dst = std::get_if<CpuStorage>(&stat->mutable_storage());
+        const auto* src = std::get_if<CpuStorage>(&fresh);
+        if (dst && src && dst->nbytes == src->nbytes) {
+            if (src->nbytes > 0)
+                std::memcpy(dst->ptr.get(), src->ptr.get(), src->nbytes);
+            stat->bump_version();
+            return;
+        }
+    }
+    stat->mutable_storage() = std::move(fresh);
+}
+
+}  // namespace
 
 template <>
 const OpSchema BatchNorm1dBackward::schema_v1{"batch_norm1d", 1, AmpPolicy::ForceFP32, true};
@@ -254,8 +279,8 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
             new_rv_t = std::make_shared<TensorImpl>(std::move(rv_copy), stat_shape, buf_dt,
                                                     x_eff->device(), false);
         } else {
-            running_mean->mutable_storage() = std::move(new_rm);
-            running_var->mutable_storage() = std::move(new_rv);
+            take_running_stat(running_mean, std::move(new_rm));
+            take_running_stat(running_var, std::move(new_rv));
 
             if (x_eff->device() == Device::GPU) {
                 std::vector<mlx::core::array> arrs;
@@ -481,9 +506,10 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
 
     // In-place storage replacement.  Matches the Python pattern
     // ``self._buffers["running_mean"] = new_rm`` — the TensorImpl identity
-    // is preserved; only its underlying storage is swapped.
-    running_mean->mutable_storage() = std::move(new_rm);
-    running_var->mutable_storage() = std::move(new_rv);
+    // is preserved; only its underlying storage is swapped — or, for a buffer
+    // with live views, its values are written into it.
+    take_running_stat(running_mean, std::move(new_rm));
+    take_running_stat(running_var, std::move(new_rv));
 
     // GPU: break the MLX lazy expression chain so subsequent training steps
     // don't carry an ever-growing parent graph through running_mean's lineage.

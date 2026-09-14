@@ -1215,12 +1215,18 @@ class Tensor:
         constant by subsequent operations — gradients will not flow through it.
 
         Unlike :meth:`detach_`, this method does **not** modify ``self``; it
-        returns a new view (made contiguous if necessary).
+        returns a new tensor over the same storage.
+
+        On the CPU the result is one of ``self``'s views: an in-place write
+        to either reaches the other, untracked by autograd, and the two share
+        a version counter, so a write to a tensor saved for backward is still
+        caught.  A metal result shares the array too, but metal tensors keep
+        copy semantics: an in-place op gives it an array of its own.
 
         Returns
         -------
         Tensor
-            A detached, contiguous tensor with the same data.
+            A detached tensor over ``self``'s storage.
 
         Notes
         -----
@@ -1250,12 +1256,15 @@ class Tensor:
         False
         >>> z.grad_fn is None
         True
+
+        The storage is shared, so a write through the result reaches ``self``:
+
+        >>> w = lucid.zeros(3)
+        >>> _ = w.detach().add_(1.0)
+        >>> w.tolist()
+        [1.0, 1.0, 1.0]
         """
-        return Tensor.__new_from_impl__(
-            _impl_with_grad(  # type: ignore[return-value]
-                _C_engine.contiguous(self._impl), False
-            )
-        )
+        return Tensor.__new_from_impl__(self._impl.data_alias())  # type: ignore[return-value]
 
     def detach_(self) -> Self:
         r"""Detach this tensor from the autograd graph in-place.

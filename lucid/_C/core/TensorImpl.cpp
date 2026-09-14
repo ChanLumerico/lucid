@@ -319,6 +319,18 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
     if (!is_dense())
         ErrorBuilder(name).not_implemented(
             "writing through a view at an offset or with strides is not supported yet");
+    // After a recorded write the other members are re-derived from this one
+    // (inplace::rebase_views), which only a full-buffer reshape can be.  A
+    // slice would need the reference's CopySlices, which is not here yet.
+    if ((src.requires_grad() || src.grad_fn()) && family_) {
+        bool slice = nbytes() != family_->nbytes;
+        for (const auto& m : live_views())
+            slice = slice || m->nbytes() != family_->nbytes;
+        if (slice)
+            ErrorBuilder(name).not_implemented(
+                "an in-place write that autograd records, on a tensor that shares its buffer "
+                "with a slice, is not supported yet — clone() first, or write under no_grad()");
+    }
     // A leaf's values are where its gradient accumulates.  A write through
     // one of its views moves them as surely as a write to the leaf itself,
     // which refuse_on_leaf refuses while autograd records.  is_leaf(), not
@@ -1389,15 +1401,39 @@ std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorIm
     // metal_shared() still answers no unless the view is the whole buffer.
     view->shared_ = base->shared_;
 
-    if (join_family && storage_is_cpu(base->storage_)) {
-        if (!base->family_) {
-            base->family_ = std::make_shared<ViewFamily>();
-            base->family_->members.push_back(base);
-        }
-        view->family_ = base->family_;
-        std::lock_guard<std::mutex> lock(view->family_->mu);
-        view->family_->members.push_back(view);
+    if (join_family && storage_is_cpu(base->storage_))
+        add_to_family(base, view);
+    return view;
+}
+
+void TensorImpl::add_to_family(const std::shared_ptr<TensorImpl>& base,
+                               const std::shared_ptr<TensorImpl>& view) {
+    if (!base->family_) {
+        base->family_ = std::make_shared<ViewFamily>();
+        base->family_->nbytes = storage_nbytes(base->storage_);
+        base->family_->members.push_back(base);
     }
+    view->family_ = base->family_;
+    std::lock_guard<std::mutex> lock(view->family_->mu);
+    view->family_->members.push_back(view);
+}
+
+std::shared_ptr<TensorImpl> TensorImpl::make_block_view(const std::shared_ptr<TensorImpl>& base,
+                                                        Shape shape,
+                                                        std::size_t byte_offset) {
+    const auto& src = std::get<CpuStorage>(base->storage_);
+    const std::size_t nbytes = shape_numel(shape) * dtype_size(base->meta_.dtype);
+    if (byte_offset + nbytes > src.nbytes)
+        ErrorBuilder("make_block_view").fail("the run reaches past the end of the buffer");
+    // The aliasing constructor shares ``src.ptr``'s ownership but points at
+    // the run, so the buffer lives as long as any view of it and every
+    // holder is counted together.
+    CpuStorage block(std::shared_ptr<std::byte[]>(src.ptr, src.ptr.get() + byte_offset), nbytes,
+                     src.dtype);
+    block.version = src.version;
+    auto view = std::make_shared<TensorImpl>(Storage{std::move(block)}, std::move(shape),
+                                             base->meta_.dtype, base->meta_.device, false);
+    add_to_family(base, view);
     return view;
 }
 

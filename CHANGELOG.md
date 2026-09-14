@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - CPU reshapes are views that see each other's writes
+- dim-0 slices and detach() share the tensor's buffer
 
 ---
 

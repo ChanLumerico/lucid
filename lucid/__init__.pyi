@@ -2659,7 +2659,8 @@ def chunk(input: Tensor, chunks: _int, dim: DimLike = ...) -> Tensor:
     Returns
     -------
     list of Tensor
-        Up to ``chunks`` pieces of ``input``, each a copy.
+        Up to ``chunks`` pieces of ``input`` — views of its buffer along dim 0
+        of a dense CPU tensor, copies otherwise.
     
     Notes
     -----
@@ -2678,8 +2679,9 @@ def unbind(input: Tensor, dim: DimLike = ...) -> Tensor:
     r"""    Remove ``dim`` and return the slices along it.
     
     Equivalent to ``[x.select(dim, i) for i in range(x.size(dim))]`` but
-    implemented as a single op.  Each slice is a copy: writing to one
-    does not change ``x``.
+    implemented as a single op.  Along dim 0 of a dense CPU tensor each
+    slice is a view of ``x``'s buffer, so writing to one changes ``x``;
+    otherwise each slice is a copy.
     
     Parameters
     ----------
@@ -3862,7 +3864,8 @@ def narrow(input: Tensor, dim: _int, start: _int, length: _int) -> Tensor:
     r"""    Return a contiguous slice of ``input`` along ``dim``.
     
     Equivalent to ``input[..., start:start+length, ...]`` with the slice
-    applied at position ``dim``.  The slice is a copy.
+    applied at position ``dim``.  Along dim 0 of a dense CPU tensor the
+    slice is a view of ``input``'s buffer; otherwise it is a copy.
     
     Parameters
     ----------
@@ -3879,7 +3882,7 @@ def narrow(input: Tensor, dim: _int, start: _int, length: _int) -> Tensor:
     Returns
     -------
     Tensor
-        Copy of the slice, of size ``length`` along ``dim``.
+        The slice, of size ``length`` along ``dim``.
     
     Notes
     -----
@@ -5367,7 +5370,8 @@ def split(x: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -
     Returns
     -------
     list of Tensor
-        The pieces of ``x``, each a copy.
+        The pieces of ``x`` — views of its buffer along dim 0 of a dense CPU
+        tensor, copies otherwise.
     
     Notes
     -----

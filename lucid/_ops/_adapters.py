@@ -159,8 +159,8 @@ def _bessel_correct(
 
 
 def _detach_adapter(impl: _Impl) -> _Impl:
-    """detach(x): deep-copy without gradient tracking."""
-    return _C_engine.contiguous(impl).clone_with_grad(False)
+    """detach(x): the same storage, cut from the graph (see Tensor.detach)."""
+    return impl.data_alias()
 
 
 def _scatter_add_adapter(

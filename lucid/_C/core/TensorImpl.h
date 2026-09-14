@@ -84,6 +84,9 @@ class TensorImpl;
 // tensors.
 struct ViewFamily {
     VersionCounter version{0};
+    // The whole buffer's size.  A member that reads fewer bytes is a slice
+    // (make_block_view) rather than a full-buffer reshape.
+    std::size_t nbytes = 0;
     std::mutex mu;
     std::vector<std::weak_ptr<TensorImpl>> members;
 };
@@ -332,6 +335,31 @@ public:
                                                  Stride stride,
                                                  std::size_t offset_bytes = 0,
                                                  bool join_family = true);
+
+    // A view of a contiguous run of ``base``'s buffer: ``byte_offset`` bytes
+    // in, ``shape``'s elements long — what a leading-dimension slice reads.
+    //
+    // Its storage points at the run itself (an aliasing ``shared_ptr`` into
+    // ``base``'s buffer, sharing its ownership), so the view is dense and
+    // every op reads it from its first byte, as it reads any tensor.  It
+    // joins ``base``'s :class:`ViewFamily`.  ``base`` must be a dense CPU
+    // tensor and the run must lie inside its buffer.
+    //
+    // Parameters
+    // ----------
+    // base : std::shared_ptr<TensorImpl>
+    //     Dense CPU tensor whose buffer the view reads.
+    // shape : Shape
+    //     Shape of the view; its elements are the run's, in order.
+    // byte_offset : std::size_t
+    //     Where the run starts in ``base``'s storage.
+    //
+    // Returns
+    // -------
+    // std::shared_ptr<TensorImpl>
+    //     The view, with no autograd state of its own.
+    static std::shared_ptr<TensorImpl>
+    make_block_view(const std::shared_ptr<TensorImpl>& base, Shape shape, std::size_t byte_offset);
 
     // ---------------------------------------------------------------------------
     // Metadata accessors
@@ -908,6 +936,11 @@ private:
     // Writes ``src``'s values into the shared buffer.  False when this
     // tensor no longer is the buffer or ``src`` does not match it.
     bool write_into_shared(const TensorImpl& src);
+
+    // Puts ``view`` into ``base``'s view family, making one if ``base`` has
+    // none yet.
+    static void add_to_family(const std::shared_ptr<TensorImpl>& base,
+                              const std::shared_ptr<TensorImpl>& view);
 
     // Stops tracking the shared buffer, folding its counter into this
     // tensor's own so version() never moves backwards.

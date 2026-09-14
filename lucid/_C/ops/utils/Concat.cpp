@@ -234,6 +234,13 @@ public:
     // must restore it before calling insert_axis_slice.
     bool squeeze_axis_ = false;
 
+    // Nothing to validate: the backward places the gradient by shape and
+    // offset and never reads the input's values.  A piece can be a view of
+    // the input (make_block_view), so a write through either moves the
+    // input's version, and checking it turned that write into a
+    // VersionMismatch.
+    void validate_versions() override {}
+
     std::vector<Storage> apply(Storage grad_out) override {
         Storage slice_grad = std::move(grad_out);
         if (squeeze_axis_) {
@@ -374,6 +381,20 @@ TensorImplPtr attach_split_grad(const TensorImplPtr& a,
     return out;
 }
 
+// Along axis 0 a dense CPU tensor's pieces are runs of its buffer, so each
+// is a block view (TensorImpl::make_block_view) reading the same bytes
+// rather than a copy of them.  Any other axis, layout or device keeps
+// copying — an MLX array cannot see a write made through another.
+bool pieces_are_views(const TensorImplPtr& a, int ax) {
+    return ax == 0 && a->device() == Device::CPU && a->is_dense() && !a->shape().empty();
+}
+
+// Bytes in one step along axis 0.
+std::size_t row_bytes(const TensorImplPtr& a) {
+    const auto rows = static_cast<std::size_t>(a->shape()[0]);
+    return rows == 0 ? 0 : a->nbytes() / rows;
+}
+
 LUCID_REGISTER_OP(ConcatBackward)
 LUCID_REGISTER_OP(StackBackward)
 LUCID_REGISTER_OP(SplitSliceBackward)
@@ -503,6 +524,18 @@ std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_spl
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     scope.set_attr("piece", piece);
     scope.set_attr("num_splits", num_splits);
+    if (pieces_are_views(a, ax)) {
+        const std::size_t step = row_bytes(a);
+        std::vector<TensorImplPtr> views;
+        views.reserve(static_cast<std::size_t>(num_splits));
+        for (std::int64_t k = 0; k < num_splits; ++k) {
+            const std::int64_t from = k * piece;
+            auto view =
+                TensorImpl::make_block_view(a, piece_shape, static_cast<std::size_t>(from) * step);
+            views.push_back(attach_split_grad(a, std::move(view), piece_shape, ax, from, false));
+        }
+        return views;
+    }
     auto pieces = backend::Dispatcher::for_device(device).split_equal(a->storage(), a->shape(), ax,
                                                                       num_splits, dt);
     std::vector<TensorImplPtr> out;
@@ -547,6 +580,22 @@ split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices, int axis)
     // emitter can rebuild the N piece slices via MPSGraph sliceTensor.
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     scope.set_attr("indices", indices);
+    if (pieces_are_views(a, ax)) {
+        const std::size_t step = row_bytes(a);
+        std::vector<TensorImplPtr> views;
+        views.reserve(indices.size() + 1);
+        std::int64_t from = 0;
+        for (std::size_t i = 0; i <= indices.size(); ++i) {
+            const std::int64_t to = i < indices.size() ? indices[i] : extent;
+            Shape piece_shape = a->shape();
+            piece_shape[0] = to - from;
+            auto view =
+                TensorImpl::make_block_view(a, piece_shape, static_cast<std::size_t>(from) * step);
+            views.push_back(attach_split_grad(a, std::move(view), piece_shape, ax, from, false));
+            from = to;
+        }
+        return views;
+    }
     auto pieces =
         backend::Dispatcher::for_device(device).split_at(a->storage(), a->shape(), ax, indices, dt);
     std::vector<TensorImplPtr> out;
@@ -594,6 +643,16 @@ std::vector<TensorImplPtr> unbind_op(const TensorImplPtr& a, int axis) {
     slice_shape[static_cast<std::size_t>(ax)] = 1;
     Shape out_shape = slice_shape;
     out_shape.erase(out_shape.begin() + ax);
+
+    if (pieces_are_views(a, ax)) {
+        const std::size_t step = row_bytes(a);
+        for (std::int64_t k = 0; k < a->shape()[ax]; ++k) {
+            auto view =
+                TensorImpl::make_block_view(a, out_shape, static_cast<std::size_t>(k) * step);
+            out.push_back(attach_split_grad(a, std::move(view), slice_shape, ax, k, true));
+        }
+        return out;
+    }
 
     for (std::int64_t k = 0; k < a->shape()[ax]; ++k) {
         auto piece = slice_axis_storage(a->storage(), a->shape(), slice_shape, ax, k, a->dtype(),

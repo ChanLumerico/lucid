@@ -272,3 +272,95 @@ def test_a_write_through_dot_data_leaves_the_views_graphs_alone() -> None:
     assert _flat(v) == [2.0, 4.0, 6.0]
     v.sum().backward()
     assert _flat(w.grad) == [1.0] * 3
+
+
+def test_a_view_of_a_batch_norm_running_stat_sees_the_update() -> None:
+    # The running statistics' storage slot was replaced on every training
+    # step, so a view taken of them kept the values it started with.
+    bn = lucid.nn.BatchNorm1d(3)
+    view = bn.running_mean.reshape(1, 3)
+    bn.train()
+    bn(lucid.randn(4, 3))
+    assert _flat(bn.running_mean) != [0.0, 0.0, 0.0]
+    assert _flat(view) == _flat(bn.running_mean)
+
+
+def test_detach_shares_the_tensor_s_storage() -> None:
+    # detach() copied, where the reference and its own docstring share.
+    w = lucid.zeros(3)
+    d = w.detach()
+    d.add_(1.0)
+    assert _flat(w) == [1.0] * 3
+    lucid.detach(w).mul_(2.0)
+    assert _flat(w) == [2.0] * 3
+    assert not d.requires_grad and d.grad_fn is None
+
+
+# ── leading-dim slices are views on the CPU ───────────────────────────────────
+
+
+@pytest.fixture
+def grid() -> lucid.Tensor:
+    return lucid.arange(12).float().reshape(4, 3)
+
+
+@pytest.mark.parametrize(
+    ("take", "rows"),
+    [
+        (lambda t: t[1], [1]),
+        (lambda t: t[1:3], [1, 2]),
+        (lambda t: lucid.narrow(t, 0, 1, 2), [1, 2]),
+        (lambda t: lucid.chunk(t, 2)[1], [2, 3]),
+        (lambda t: lucid.unbind(t, 0)[1], [1]),
+    ],
+    ids=["int", "slice", "narrow", "chunk", "unbind"],
+)
+def test_a_leading_dim_slice_is_a_view(
+    grid: lucid.Tensor, take: Callable[[lucid.Tensor], lucid.Tensor], rows: list[int]
+) -> None:
+    piece = take(grid)
+    assert piece._impl.is_aliased()
+    piece.mul_(10.0)
+    for r in range(4):
+        scale = 10.0 if r in rows else 1.0
+        assert _flat(grid)[3 * r : 3 * r + 3] == [scale * (3 * r + c) for c in range(3)]
+
+
+def test_a_slice_along_another_dim_is_still_a_copy(grid: lucid.Tensor) -> None:
+    column = grid[:, 1]
+    column.add_(100.0)
+    assert _flat(grid) == [float(v) for v in range(12)]
+
+
+def test_writes_reach_between_a_tensor_and_its_slices(grid: lucid.Tensor) -> None:
+    row = grid[2]
+    grid[2] = 7.0
+    assert _flat(row) == [7.0, 7.0, 7.0]
+    row[0] = 5.0
+    assert _flat(grid)[6:9] == [5.0, 7.0, 7.0]
+
+
+def test_gradients_flow_through_a_slice_view() -> None:
+    w = lucid.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], requires_grad=True)
+    (w[1:3] * 2.0).sum().backward()
+    assert w.grad.tolist() == [[0.0, 0.0], [2.0, 2.0], [2.0, 2.0]]
+
+
+def test_a_recorded_write_beside_a_slice_is_refused() -> None:
+    # A slice would need its graph re-derived as a slice of the written
+    # tensor, which is not supported yet; refusing beats a wrong gradient.
+    w = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
+    h = w * 1.0
+    s = h[1]
+    with pytest.raises(_C_engine.NotImplementedError, match="slice"):
+        h.mul_(2.0)
+    with pytest.raises(_C_engine.NotImplementedError, match="slice"):
+        s.mul_(2.0)
+    with lucid.no_grad():
+        s.mul_(2.0)
+    assert _flat(h) == [1.0, 2.0, 6.0, 8.0]
+
+
+def test_a_slice_keeps_its_buffer_alive() -> None:
+    row = lucid.arange(12).float().reshape(4, 3)[3]
+    assert _flat(row) == [9.0, 10.0, 11.0]
