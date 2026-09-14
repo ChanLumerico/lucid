@@ -12,7 +12,7 @@
     "Regenerate with:  lucid-audit --update-coverage",
     "Do that only when the new state is the intended one."
   ],
-  "cells": 8149,
+  "cells": 8150,
   "answered": {
     "broadcast::F.gumbel_softmax": "pass",
     "broadcast::F.straight_through": "pass",
@@ -446,6 +446,7 @@
     "creategraph::lucid.arcsinh": "pass",
     "creategraph::lucid.arctan": "pass",
     "creategraph::lucid.arctanh": "pass",
+    "creategraph::lucid.as_tensor": "pass",
     "creategraph::lucid.asin": "pass",
     "creategraph::lucid.asinh": "pass",
     "creategraph::lucid.atan": "pass",

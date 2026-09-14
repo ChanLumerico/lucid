@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the docstring examples run, and the bugs they turned up
 
+- a float cast to int64 saturates, as it does on the CPU
+
 ### Added
 
 - CPU reshapes are views that see each other's writes
