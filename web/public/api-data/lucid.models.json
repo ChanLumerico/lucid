@@ -3,7 +3,7 @@
   "name": "models",
   "path": "lucid.models",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/__init__.py#L1",
   "members": [
     {
       "name": "AutoConfig",
@@ -13,7 +13,7 @@
       "bases": [],
       "labels": [],
       "signature": "AutoConfig()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L247",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L247",
       "subcategory": "auto",
       "methods": [
         {
@@ -22,7 +22,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L281",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L281",
           "subcategory": "auto",
           "summary": null,
           "extended": null,
@@ -46,7 +46,7 @@
             "classmethod"
           ],
           "signature": "from_pretrained(name_or_path: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L286",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L286",
           "subcategory": "auto",
           "summary": "Return the `ModelConfig` for `name_or_path`.",
           "extended": null,
@@ -108,7 +108,7 @@
       ],
       "labels": [],
       "signature": "AutoModel()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L416",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L416",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads the *backbone* of any family.",
@@ -136,7 +136,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForImageClassification()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L463",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L463",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a registered image classifier.",
@@ -164,7 +164,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForImageGeneration()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L627",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L627",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads an image-generation model.",
@@ -192,7 +192,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForLanguageModeling()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L549",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L549",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a language model.",
@@ -220,7 +220,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForObjectDetection()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L499",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L499",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a registered object detector.",
@@ -248,7 +248,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForSemanticSegmentation()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L525",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L525",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a semantic-segmentation model.",
@@ -276,7 +276,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForSequenceClassification()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L579",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L579",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a sentence-level classifier.",
@@ -304,7 +304,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForTokenClassification()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L603",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L603",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a per-token classifier.",
@@ -332,7 +332,7 @@
       ],
       "labels": [],
       "signature": "AutoModelForWorldModeling()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_auto.py#L652",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_auto.py#L652",
       "subcategory": "auto",
       "methods": [],
       "summary": "Auto-dispatching wrapper that loads a world model.",
@@ -360,7 +360,7 @@
       ],
       "labels": [],
       "signature": "ModelConfig()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L15",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L15",
       "subcategory": "base",
       "methods": [
         {
@@ -369,7 +369,7 @@
           "kind": "function",
           "labels": [],
           "signature": "to_dict()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L109",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L109",
           "subcategory": "base",
           "summary": "Serialise the config (including `model_type`) to a plain dict.",
           "extended": null,
@@ -400,7 +400,7 @@
             "classmethod"
           ],
           "signature": "from_dict(d: dict[str, object])",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L136",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L136",
           "subcategory": "base",
           "summary": "Reconstruct a config from a plain dict (inverse of `to_dict`).",
           "extended": null,
@@ -441,7 +441,7 @@
           "kind": "function",
           "labels": [],
           "signature": "save(path: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L191",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L191",
           "subcategory": "base",
           "summary": "Write the config as pretty-printed JSON to `path`.",
           "extended": null,
@@ -474,7 +474,7 @@
             "classmethod"
           ],
           "signature": "load(path: str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L207",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L207",
           "subcategory": "base",
           "summary": "Load a config from a JSON file (inverse of `save`).",
           "extended": null,
@@ -557,7 +557,7 @@
       ],
       "labels": [],
       "signature": "PretrainedModel(config: ModelConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L237",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L237",
       "subcategory": "base",
       "methods": [
         {
@@ -566,7 +566,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: ModelConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L302",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L302",
           "subcategory": "base",
           "summary": "Initialise the module and validate the supplied config.",
           "extended": null,
@@ -602,7 +602,7 @@
             "classmethod"
           ],
           "signature": "from_pretrained(name_or_path: str, strict: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L332",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L332",
           "subcategory": "base",
           "summary": "Load a model from a registered name or a local directory.",
           "extended": "Two modes are supported:\n\n1. **Registered name** (`\"resnet_50\"` / `\"resnet-50\"`) —\n   looked up in the global registry; the factory is invoked with\n   `pretrained=True`.  The factory result is validated to be an\n   instance of `cls` (so subclass calls like\n   `ResNet.from_pretrained(\"vit_base_16\")` raise rather than\n   silently returning the wrong family).\n2. **Local directory** containing `config.json` plus either\n   `model.safetensors` (preferred) or `weights.lucid`.  The\n   config is restored via `cls.config_class.load` and the\n   weights are loaded with `lucid.load`.",
@@ -654,7 +654,7 @@
           "kind": "function",
           "labels": [],
           "signature": "save_pretrained(path: str, safe_serialization: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L435",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L435",
           "subcategory": "base",
           "summary": "Write `config.json` and weights to `path`.",
           "extended": null,
@@ -693,7 +693,7 @@
           "kind": "function",
           "labels": [],
           "signature": "num_parameters(only_trainable: bool = False)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L481",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L481",
           "subcategory": "base",
           "summary": "Return the total number of elements across all parameters.",
           "extended": null,
@@ -724,7 +724,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_input_embeddings()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L516",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L531",
           "subcategory": "base",
           "summary": "Return the input-embedding submodule, or `None` if not applicable.",
           "extended": null,
@@ -734,9 +734,11 @@
             "description": "The embedding layer for text / token-id models (BERT, GPT,\n…); `None` for vision and other non-embedding models."
           },
           "raises": [],
-          "examples": [],
+          "examples": [
+            ">>> from lucid.models import create_model\n>>> lm = create_model(\"gpt_lm\", vocab_size=100, hidden_size=16,\n...                   num_hidden_layers=1, num_attention_heads=2,\n...                   intermediate_size=32, max_position_embeddings=8)\n>>> lm.get_input_embeddings() is lm.transformer.tokens_embed\nTrue"
+          ],
           "notes": [
-            "Override in subclasses that have an embedding table.  Used by\ntools that need to resize / share / introspect token embeddings\nwithout coupling to family-specific attribute names."
+            "Trunks with an embedding table override this.  A task wrapper does\nnot need to: this implementation hands the call to the trunk stored\nunder `base_model_prefix`, so a wrapper reports the same table\nas the trunk inside it.  Used by tools that need to resize / share /\nintrospect token embeddings without coupling to family-specific\nattribute names."
           ],
           "attributes": [],
           "warns": [],
@@ -748,7 +750,7 @@
           "kind": "function",
           "labels": [],
           "signature": "set_input_embeddings(value: nn.Module)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_base.py#L533",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_base.py#L561",
           "subcategory": "base",
           "summary": "Replace the input-embedding submodule.",
           "extended": null,
@@ -767,14 +769,14 @@
           "raises": [
             {
               "annotation": "NotImplementedError",
-              "description": "On the base class — subclasses with embeddings must override."
+              "description": "When the model has no embedding table to replace — neither an\noverride of its own nor a trunk under `base_model_prefix`."
             }
           ],
           "examples": [
-            "A text trunk hands its table over, so a larger one can be swapped\nin — here to make room for twenty token ids the original 100-row\ntable could not look up.\n>>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.models import create_model\n>>> model = create_model(\"gpt\", vocab_size=100, hidden_size=16,\n...                      num_hidden_layers=1, num_attention_heads=2,\n...                      intermediate_size=32,\n...                      max_position_embeddings=8).eval()\n>>> bigger = nn.Embedding(120, 16)\n>>> model.set_input_embeddings(bigger)\n>>> model.get_input_embeddings() is bigger\nTrue\n>>> ids = lucid.tensor([[110, 3]], dtype=lucid.int64)\n>>> model(ids).last_hidden_state.shape\n(1, 2, 16)\nA model with no embedding table keeps this base implementation and\nrefuses, rather than attach a module that nothing would read.\n>>> lenet = create_model(\"lenet_5\")\n>>> lenet.get_input_embeddings() is None\nTrue\n>>> lenet.set_input_embeddings(nn.Embedding(10, 4))\nTraceback (most recent call last):\n    ...\nNotImplementedError: LeNet does not support set_input_embeddings"
+            "A text trunk hands its table over, so a larger one can be swapped\nin — here to make room for twenty token ids the original 100-row\ntable could not look up.\n>>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.models import create_model\n>>> model = create_model(\"gpt\", vocab_size=100, hidden_size=16,\n...                      num_hidden_layers=1, num_attention_heads=2,\n...                      intermediate_size=32,\n...                      max_position_embeddings=8).eval()\n>>> bigger = nn.Embedding(120, 16)\n>>> model.set_input_embeddings(bigger)\n>>> model.get_input_embeddings() is bigger\nTrue\n>>> ids = lucid.tensor([[110, 3]], dtype=lucid.int64)\n>>> model(ids).last_hidden_state.shape\n(1, 2, 16)\nA task wrapper makes the same swap on its trunk.  Its LM head is tied\nto the table, so the head follows and the logits widen to the new\nvocabulary, rather than keep scoring the table it replaced.\n>>> lm = create_model(\"gpt_lm\", vocab_size=100, hidden_size=16,\n...                   num_hidden_layers=1, num_attention_heads=2,\n...                   intermediate_size=32,\n...                   max_position_embeddings=8).eval()\n>>> lm.set_input_embeddings(nn.Embedding(120, 16))\n>>> lm.lm_head.weight is lm.get_input_embeddings().weight\nTrue\n>>> lm(ids).logits.shape\n(1, 2, 120)\nA model with no embedding table keeps this base implementation and\nrefuses, rather than attach a module that nothing would read.\n>>> lenet = create_model(\"lenet_5\")\n>>> lenet.get_input_embeddings() is None\nTrue\n>>> lenet.set_input_embeddings(nn.Embedding(10, 4))\nTraceback (most recent call last):\n    ...\nNotImplementedError: LeNet does not support set_input_embeddings"
           ],
           "notes": [
-            "Companion to `get_input_embeddings`.  Subclasses that\noverride one should override the other."
+            "Companion to `get_input_embeddings`.  Trunks with a table\noverride both; a task wrapper inherits this implementation, which\nmakes the swap on its trunk.\n\nWhen the wrapper ties an output head to the table\n(`config.tie_word_embeddings`), the head is re-bound to the new\ntable's weight, so the two stay one matrix and the head scores the\nnew vocabulary.  A head bias sized to the vocabulary is resized with\nit: existing entries are kept and new ones start at zero.  An untied\nhead is left as it is.  Either way `config` is frozen and keeps\nits original `vocab_size`."
           ],
           "attributes": [],
           "warns": [],
@@ -820,7 +822,7 @@
       "bases": [],
       "labels": [],
       "signature": "ModelOutput()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L18",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L18",
       "subcategory": "output",
       "methods": [
         {
@@ -829,7 +831,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__iter__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L50",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L50",
           "subcategory": "output",
           "summary": "Yield each non-`None` field value in declaration order.",
           "extended": null,
@@ -851,7 +853,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__getitem__(idx: int | str)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L57",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L57",
           "subcategory": "output",
           "summary": "Look up a field by name (`str`) or position (`int`).",
           "extended": null,
@@ -889,7 +891,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__len__()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L85",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L85",
           "subcategory": "output",
           "summary": "Return the number of non-`None` fields.",
           "extended": null,
@@ -911,7 +913,7 @@
           "kind": "function",
           "labels": [],
           "signature": "to_tuple()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L99",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L99",
           "subcategory": "output",
           "summary": "Return a tuple of non-`None` field values in declaration order.",
           "extended": null,
@@ -935,7 +937,7 @@
           "kind": "function",
           "labels": [],
           "signature": "keys()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L110",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L110",
           "subcategory": "output",
           "summary": "Names of fields whose value is not `None`, in declaration order.",
           "extended": null,
@@ -957,7 +959,7 @@
           "kind": "function",
           "labels": [],
           "signature": "values()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L118",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L118",
           "subcategory": "output",
           "summary": "Values of non-`None` fields, in declaration order.",
           "extended": null,
@@ -979,7 +981,7 @@
           "kind": "function",
           "labels": [],
           "signature": "items()",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L122",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L122",
           "subcategory": "output",
           "summary": "`(name, value)` pairs of non-`None` fields.",
           "extended": null,
@@ -1021,7 +1023,7 @@
       ],
       "labels": [],
       "signature": "BaseModelOutput(last_hidden_state: Tensor, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L127",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L127",
       "subcategory": "output",
       "methods": [
         {
@@ -1030,7 +1032,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(last_hidden_state: Tensor, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": "Wrap `model` for cached graph-capture execution.",
           "extended": null,
@@ -1101,7 +1103,7 @@
       ],
       "labels": [],
       "signature": "BaseModelOutputWithPooling(last_hidden_state: Tensor, pooler_output: Tensor, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L172",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L172",
       "subcategory": "output",
       "methods": [
         {
@@ -1110,7 +1112,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(last_hidden_state: Tensor, pooler_output: Tensor, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1173,7 +1175,7 @@
       ],
       "labels": [],
       "signature": "ImageClassificationOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L215",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L215",
       "subcategory": "output",
       "methods": [
         {
@@ -1182,7 +1184,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1245,7 +1247,7 @@
       ],
       "labels": [],
       "signature": "ObjectDetectionOutput(logits: Tensor, pred_boxes: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None, objectness: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L258",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L258",
       "subcategory": "output",
       "methods": [
         {
@@ -1254,7 +1256,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, pred_boxes: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None, objectness: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1326,8 +1328,8 @@
         "ModelOutput"
       ],
       "labels": [],
-      "signature": "InstanceSegmentationOutput(logits: Tensor, pred_boxes: Tensor, pred_masks: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L322",
+      "signature": "InstanceSegmentationOutput(logits: Tensor, pred_boxes: Tensor, pred_masks: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None, input_size: tuple[int, int] | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L322",
       "subcategory": "output",
       "methods": [
         {
@@ -1335,8 +1337,8 @@
           "path": "lucid.models._output.InstanceSegmentationOutput.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(logits: Tensor, pred_boxes: Tensor, pred_masks: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "signature": "__init__(logits: Tensor, pred_boxes: Tensor, pred_masks: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, proposals: tuple[Tensor, ...] | None = None, input_size: tuple[int, int] | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1394,6 +1396,11 @@
           "name": "proposals",
           "annotation": "(tuple[Tensor, ...] or None, optional)",
           "description": "Per-image RoI proposals used by `forward`.  Carried out for the\nsame reason Faster R-CNN carries them: `postprocess` needs the\nproposal boxes to map rows of `pred_boxes` / `pred_masks` back\nto images, and when `forward` generated the proposals itself the\ncaller has no other way to supply them."
+        },
+        {
+          "name": "input_size",
+          "annotation": "(tuple[int, int] or None, optional)",
+          "description": "`(H, W)` of the image batch `forward` ran on.  Mask R-CNN\nderives its pyramid strides from it, and `postprocess` must use\nthe same ones to re-align masks on the final boxes; the feature\nmaps alone do not pin it down (every height from 97 to 100 gives\na 25-row P2, and the strides differ across them)."
         }
       ],
       "warns": [],
@@ -1409,7 +1416,7 @@
       ],
       "labels": [],
       "signature": "SemanticSegmentationOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L373",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L380",
       "subcategory": "output",
       "methods": [
         {
@@ -1418,7 +1425,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1476,7 +1483,7 @@
       ],
       "labels": [],
       "signature": "CausalLMOutput(logits: Tensor, loss: Tensor | None = None, past_key_values: Cache | tuple[tuple[Tensor, Tensor], ...] | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L409",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L416",
       "subcategory": "output",
       "methods": [
         {
@@ -1485,7 +1492,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, past_key_values: Cache | tuple[tuple[Tensor, Tensor], ...] | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1553,7 +1560,7 @@
       ],
       "labels": [],
       "signature": "MaskedLMOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L458",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L465",
       "subcategory": "output",
       "methods": [
         {
@@ -1562,7 +1569,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1625,7 +1632,7 @@
       ],
       "labels": [],
       "signature": "Seq2SeqLMOutput(logits: Tensor, loss: Tensor | None = None, past_key_values: EncoderDecoderCache | tuple[tuple[Tensor, Tensor], ...] | None = None, decoder_hidden_states: tuple[Tensor, ...] | None = None, decoder_attentions: tuple[Tensor, ...] | None = None, encoder_last_hidden_state: Tensor | None = None, encoder_hidden_states: tuple[Tensor, ...] | None = None, encoder_attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L495",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L502",
       "subcategory": "output",
       "methods": [
         {
@@ -1634,7 +1641,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, past_key_values: EncoderDecoderCache | tuple[tuple[Tensor, Tensor], ...] | None = None, decoder_hidden_states: tuple[Tensor, ...] | None = None, decoder_attentions: tuple[Tensor, ...] | None = None, encoder_last_hidden_state: Tensor | None = None, encoder_hidden_states: tuple[Tensor, ...] | None = None, encoder_attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1717,7 +1724,7 @@
       ],
       "labels": [],
       "signature": "SequenceClassificationOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L754",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L761",
       "subcategory": "output",
       "methods": [
         {
@@ -1726,7 +1733,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1789,7 +1796,7 @@
       ],
       "labels": [],
       "signature": "TokenClassificationOutput(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L793",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L800",
       "subcategory": "output",
       "methods": [
         {
@@ -1798,7 +1805,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1861,7 +1868,7 @@
       ],
       "labels": [],
       "signature": "QuestionAnsweringOutput(start_logits: Tensor, end_logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L830",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L837",
       "subcategory": "output",
       "methods": [
         {
@@ -1870,7 +1877,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(start_logits: Tensor, end_logits: Tensor, loss: Tensor | None = None, hidden_states: tuple[Tensor, ...] | None = None, attentions: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -1938,7 +1945,7 @@
       ],
       "labels": [],
       "signature": "DiffusionModelOutput(sample: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L562",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L569",
       "subcategory": "output",
       "methods": [
         {
@@ -1947,7 +1954,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2000,7 +2007,7 @@
       ],
       "labels": [],
       "signature": "VAEOutput(sample: Tensor, latent: Tensor, mu: Tensor, logvar: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, kl_loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L600",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L607",
       "subcategory": "output",
       "methods": [
         {
@@ -2009,7 +2016,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample: Tensor, latent: Tensor, mu: Tensor, logvar: Tensor, loss: Tensor | None = None, recon_loss: Tensor | None = None, kl_loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2087,7 +2094,7 @@
       ],
       "labels": [],
       "signature": "NormalizingFlowOutput(latent: Tensor, log_det_jacobian: Tensor, log_prob: Tensor, loss: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L658",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L665",
       "subcategory": "output",
       "methods": [
         {
@@ -2096,7 +2103,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(latent: Tensor, log_det_jacobian: Tensor, log_prob: Tensor, loss: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": null,
           "extended": null,
@@ -2159,7 +2166,7 @@
       ],
       "labels": [],
       "signature": "GenerationOutput(samples: Tensor, intermediates: tuple[Tensor, ...] | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L713",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L720",
       "subcategory": "output",
       "methods": [
         {
@@ -2168,7 +2175,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(samples: Tensor, intermediates: tuple[Tensor, ...] | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_output.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_output.py#L1",
           "subcategory": "output",
           "summary": "Initialise the block. See the class docstring for parameters.",
           "extended": null,
@@ -2217,7 +2224,7 @@
       "kind": "function",
       "labels": [],
       "signature": "create_model(name: str, pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_registry.py#L396",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_registry.py#L396",
       "subcategory": "registry",
       "summary": "Look up `name` and call its factory — the timm-style entry point.",
       "extended": null,
@@ -2267,7 +2274,7 @@
       "kind": "function",
       "labels": [],
       "signature": "is_model(name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_registry.py#L331",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_registry.py#L331",
       "subcategory": "registry",
       "summary": "Return whether `name` is registered (case / separator insensitive).",
       "extended": null,
@@ -2298,7 +2305,7 @@
       "kind": "function",
       "labels": [],
       "signature": "list_models(task: str | None = None, family: str | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_registry.py#L282",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_registry.py#L282",
       "subcategory": "registry",
       "summary": "List all registered model names, optionally filtered by task / family.",
       "extended": null,
@@ -2337,7 +2344,7 @@
       "kind": "function",
       "labels": [],
       "signature": "model_entrypoint(name: str)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_registry.py#L357",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_registry.py#L357",
       "subcategory": "registry",
       "summary": "Return the registered factory callable for `name`.",
       "extended": null,
@@ -2375,7 +2382,7 @@
       "kind": "function",
       "labels": [],
       "signature": "register_model(task: str = 'base', family: str | None = None, model_type: str | None = None, model_class: type[PretrainedModel] | None = None, default_config: ModelConfig | None = None, params: int | None = None, summary: object = 'auto')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/models/_registry.py#L159",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/models/_registry.py#L159",
       "subcategory": "registry",
       "summary": "Decorator that registers a factory function under its `__name__`.",
       "extended": "The global registry is the single source of truth for which models\nLucid exposes.  Every public factory in `lucid/models/**/_pretrained.py`\nis decorated with `@register_model` so it becomes discoverable via\n`create_model`, `list_models`, and the `AutoModelFor*`\nfamily.",

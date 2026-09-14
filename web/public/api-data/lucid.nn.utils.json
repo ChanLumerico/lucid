@@ -3,7 +3,7 @@
   "name": "utils",
   "path": "lucid.nn.utils",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/__init__.py#L1",
   "members": [
     {
       "name": "clip_grad_norm_",
@@ -11,7 +11,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_grad_norm_(parameters: Iterable[Parameter], max_norm: float, norm_type: float = 2.0, error_if_nonfinite: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/clip_grad.py#L17",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/clip_grad.py#L17",
       "subcategory": "clip_grad",
       "summary": "Clip the global gradient norm of `parameters` in place.",
       "extended": "Rescales every gradient so that the total $\\ell_p$ norm —\ncomputed across all parameters jointly, as if they were one long\nconcatenated vector — is at most `max_norm`.  A staple of stable\nTransformer / RNN training: prevents the occasional huge gradient\nfrom derailing optimisation.",
@@ -47,7 +47,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.nn.utils import clip_grad_norm_\n>>> # after loss.backward() ...\n>>> total_norm = clip_grad_norm_(model.parameters(), max_norm=1.0)"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.nn.utils import clip_grad_norm_\n>>> model = nn.Linear(4, 2)\n>>> (model(lucid.randn(8, 4)) * 100.0).sum().backward()\n>>> total_norm = clip_grad_norm_(model.parameters(), max_norm=1.0)\n>>> float(total_norm) > 1.0                 # the norm before clipping\nTrue\n>>> after = clip_grad_norm_(model.parameters(), max_norm=1.0)\n>>> abs(float(after) - 1.0) < 1e-3          # and after it\nTrue"
       ],
       "notes": [
         "With combined norm $\\|g\\|_p = \\left(\\sum_i |g_i|^p\\right)^{1/p}$\ntaken over every element of every gradient, the update is\n\n\n\n$$\ng \\;\\mapsto\\; g \\cdot \\min\\!\\left(1,\\,\n    \\frac{\\text{max\\_norm}}{\\|g\\|_p + \\epsilon}\\right),\n$$\n\nwhere the $\\epsilon = 10^{-6}$ guards against division by zero\nwhen all gradients vanish.  Because every parameter is scaled by the\n*same* coefficient the direction of the global update is preserved —\nonly its magnitude is bounded."
@@ -62,7 +62,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_grad_norm_(parameters: Iterable[Parameter], max_norm: float, norm_type: float = 2.0, error_if_nonfinite: bool = False)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/clip_grad.py#L17",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/clip_grad.py#L17",
       "subcategory": "clip_grad",
       "summary": "Clip the global gradient norm of `parameters` in place.",
       "extended": "Rescales every gradient so that the total $\\ell_p$ norm —\ncomputed across all parameters jointly, as if they were one long\nconcatenated vector — is at most `max_norm`.  A staple of stable\nTransformer / RNN training: prevents the occasional huge gradient\nfrom derailing optimisation.",
@@ -98,7 +98,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.nn.utils import clip_grad_norm_\n>>> # after loss.backward() ...\n>>> total_norm = clip_grad_norm_(model.parameters(), max_norm=1.0)"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.nn.utils import clip_grad_norm_\n>>> model = nn.Linear(4, 2)\n>>> (model(lucid.randn(8, 4)) * 100.0).sum().backward()\n>>> total_norm = clip_grad_norm_(model.parameters(), max_norm=1.0)\n>>> float(total_norm) > 1.0                 # the norm before clipping\nTrue\n>>> after = clip_grad_norm_(model.parameters(), max_norm=1.0)\n>>> abs(float(after) - 1.0) < 1e-3          # and after it\nTrue"
       ],
       "notes": [
         "With combined norm $\\|g\\|_p = \\left(\\sum_i |g_i|^p\\right)^{1/p}$\ntaken over every element of every gradient, the update is\n\n\n\n$$\ng \\;\\mapsto\\; g \\cdot \\min\\!\\left(1,\\,\n    \\frac{\\text{max\\_norm}}{\\|g\\|_p + \\epsilon}\\right),\n$$\n\nwhere the $\\epsilon = 10^{-6}$ guards against division by zero\nwhen all gradients vanish.  Because every parameter is scaled by the\n*same* coefficient the direction of the global update is preserved —\nonly its magnitude is bounded."
@@ -113,7 +113,7 @@
       "kind": "function",
       "labels": [],
       "signature": "clip_grad_value_(parameters: Iterable[Parameter], clip_value: float)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/clip_grad.py#L132",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/clip_grad.py#L139",
       "subcategory": "clip_grad",
       "summary": "Clamp every gradient element to $[-\\text{clip\\_value}, \\text{clip\\_value}]$ in place.",
       "extended": "Unlike `clip_grad_norm_`, which preserves the direction of the\nfull gradient vector, this operates element-wise — each scalar entry\nis independently clipped to the symmetric interval.  Cheap, and a\nuseful safety net when only a handful of weights tend to blow up\n(e.g. embedding tables on rare tokens).",
@@ -137,7 +137,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> from lucid.nn.utils import clip_grad_value_\n>>> # after loss.backward() ...\n>>> clip_grad_value_(model.parameters(), clip_value=0.5)"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.nn.utils import clip_grad_value_\n>>> model = nn.Linear(4, 2)\n>>> (model(lucid.randn(8, 4)) * 100.0).sum().backward()\n>>> clip_grad_value_(model.parameters(), clip_value=0.5)\n>>> max(float(p.grad.abs().max()) for p in model.parameters()) <= 0.5\nTrue"
       ],
       "notes": [
         "The element-wise update is\n\n\n\n$$\ng_i \\;\\mapsto\\; \\mathrm{clip}(g_i,\\, -c,\\, +c),\n$$\n\nwith $c = \\text{clip\\_value}$.  Because each component is\ntreated independently the direction of the gradient vector is *not*\npreserved — large coordinates are flattened toward zero while small\nones pass through unchanged."
@@ -152,7 +152,7 @@
       "kind": "function",
       "labels": [],
       "signature": "get_total_norm(parameters: Iterable[Parameter], norm_type: float = 2.0, error_if_nonfinite: bool = False, foreach: bool | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/clip_grad.py#L184",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/clip_grad.py#L196",
       "subcategory": "clip_grad",
       "summary": "Compute the global gradient $\\ell_p$ norm without clipping.",
       "extended": "Mirrors the measurement step of `clip_grad_norm_` but returns\nthe magnitude without rescaling any gradients — handy for logging\nthe gradient size every step regardless of whether you intend to\nclip.",
@@ -188,7 +188,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> from lucid.nn.utils.clip_grad import get_total_norm\n>>> g_norm = get_total_norm(model.parameters())"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.nn.utils.clip_grad import get_total_norm\n>>> model = nn.Linear(4, 2)\n>>> model(lucid.randn(8, 4)).sum().backward()\n>>> g_norm = get_total_norm(model.parameters())\n>>> float(g_norm) > 0.0\nTrue"
       ],
       "notes": [
         "The returned scalar is\n\n\n\n$$\n\\|g\\|_p \\;=\\; \\left(\\sum_i |g_i|^p\\right)^{1/p}\n$$\n\ntaken over every element of every gradient — i.e. the same quantity\nthat `clip_grad_norm_` thresholds against `max_norm`."
@@ -203,7 +203,7 @@
       "kind": "function",
       "labels": [],
       "signature": "parameters_to_vector(parameters: Iterable[Parameter])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/convert_parameters.py#L16",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/convert_parameters.py#L16",
       "subcategory": "convert_parameters",
       "summary": "Flatten an iterable of parameters into a single 1-D `Tensor`.",
       "extended": "Every parameter is detached, reshaped to 1-D, and concatenated in\niteration order.  Useful when an algorithm needs to view the whole\nparameter set as one vector — most commonly second-order optimisers\n(L-BFGS, conjugate-gradient, trust-region methods), hyper-gradient\nsolvers, and natural-gradient pre-conditioners.",
@@ -221,7 +221,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.nn.utils import parameters_to_vector\n>>> vec = parameters_to_vector(model.parameters())\n>>> vec.shape\n(n_params,)"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.nn.utils import parameters_to_vector\n>>> model = nn.Linear(4, 2)                 # 4 * 2 weights + 2 biases\n>>> vec = parameters_to_vector(model.parameters())\n>>> vec.shape\n(10,)"
       ],
       "notes": [
         "Given parameters $p_1, p_2, \\dots, p_K$ with sizes $n_k$,\nthe returned vector is\n\n\n\n$$\nv \\;=\\; \\bigl[\\,\\operatorname{vec}(p_1);\\,\n\\operatorname{vec}(p_2);\\, \\dots;\\,\n\\operatorname{vec}(p_K)\\,\\bigr] \\in \\mathbb{R}^{\\sum_k n_k}.\n$$\n\nThe inverse operation is `vector_to_parameters`, which copies a\n1-D tensor of the same length back into the original parameter shapes."
@@ -236,7 +236,7 @@
       "kind": "function",
       "labels": [],
       "signature": "vector_to_parameters(vec: Tensor, parameters: Iterable[Parameter])",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/convert_parameters.py#L85",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/convert_parameters.py#L87",
       "subcategory": "convert_parameters",
       "summary": "Copy a flat 1-D tensor back into the supplied parameters in place.",
       "extended": "Inverse of `parameters_to_vector`.  `vec` is sliced according\nto the size of each parameter (in iteration order) and the slices are\nwritten into the parameters' storage.  Typically called by line-search\nroutines and second-order optimisers that operate on the concatenated\nvector and need to push the result back into the model.",
@@ -260,7 +260,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> from lucid.nn.utils import parameters_to_vector, vector_to_parameters\n>>> v = parameters_to_vector(model.parameters())\n>>> v = v + lr * search_direction\n>>> vector_to_parameters(v, model.parameters())"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.nn.utils import parameters_to_vector, vector_to_parameters\n>>> model = nn.Linear(4, 2)\n>>> lr = 0.1\n>>> v = parameters_to_vector(model.parameters())\n>>> search_direction = lucid.ones(v.shape[0])\n>>> v = v + lr * search_direction\n>>> vector_to_parameters(v, model.parameters())\n>>> bool((parameters_to_vector(model.parameters()) == v).all())\nTrue"
       ],
       "notes": [
         "Conceptually the operation splits `vec` at the parameter\nboundaries and reshapes each chunk:\n\n\n\n$$\np_k \\;\\leftarrow\\; \\operatorname{reshape}\\bigl(\n    v[s_{k-1}\\!:\\!s_k],\\, \\text{shape}(p_k)\\bigr),\n\\qquad s_k = \\sum_{j \\leq k} n_j.\n$$\n\nAutograd graph state is left intact — the assignment touches storage\ndirectly, not the parameter's identity, so existing references in\noptimiser state remain valid."
@@ -275,7 +275,7 @@
       "kind": "function",
       "labels": [],
       "signature": "remove_weight_norm(module: Module, name: str = 'weight')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/weight_norm.py#L147",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/weight_norm.py#L147",
       "subcategory": "weight_norm",
       "summary": "Reverse `weight_norm` and restore a plain leaf parameter.",
       "extended": "Materialises $\\mathbf{W} = g \\cdot \\mathbf{v}/\\|\\mathbf{v}\\|$\none last time, writes the result back as a single leaf parameter\n`module.<name>`, drops `<name>_g` / `<name>_v`, and detaches\nthe forward pre-hook.  Typical use is right before exporting a model\nfor inference where the reparametrised form is not needed.",
@@ -304,7 +304,7 @@
         }
       ],
       "examples": [
-        ">>> remove_weight_norm(layer)\n>>> \"weight_g\" in dict(layer.named_parameters())\nFalse"
+        ">>> import lucid.nn as nn\n>>> from lucid.nn.utils import weight_norm, remove_weight_norm\n>>> layer = weight_norm(nn.Linear(128, 64))\n>>> _ = remove_weight_norm(layer)\n>>> \"weight_g\" in dict(layer.named_parameters())\nFalse"
       ],
       "notes": [
         "The materialised parameter is detached from the autograd graph — any\nhistory accumulated through the reparametrisation is discarded.  If\nyou need the original `v` direction back, copy it out *before*\ncalling this."
@@ -319,7 +319,7 @@
       "kind": "function",
       "labels": [],
       "signature": "weight_norm(module: Module, name: str = 'weight', dim: int = 0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/weight_norm.py#L43",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/weight_norm.py#L43",
       "subcategory": "weight_norm",
       "summary": "Reparametrise a weight as direction times magnitude (Salimans & Kingma 2016).",
       "extended": "Replaces `module.<name>` with the derived tensor\n\n$$\n\\mathbf{W} \\;=\\; g \\,\\cdot\\, \\frac{\\mathbf{v}}{\\|\\mathbf{v}\\|}\n$$\n\nwhere `g` is a learnable scale (one entry per slice along `dim`)\nand `v` is a learnable direction sharing the original weight's\nshape.  Decoupling magnitude from direction often accelerates\nconvergence and improves conditioning, especially in deep\nconvolutional and recurrent networks.",
@@ -364,7 +364,7 @@
       "kind": "function",
       "labels": [],
       "signature": "remove_spectral_norm(module: Module, name: str = 'weight')",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/spectral_norm.py#L208",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/spectral_norm.py#L208",
       "subcategory": "spectral_norm",
       "summary": "Reverse `spectral_norm` and restore a plain leaf parameter.",
       "extended": "Copies `module.<name>_orig` back into a fresh leaf parameter\n`module.<name>`, removes the `<name>_u` / `<name>_v` power-\niteration buffers, and detaches the forward pre-hook.  Used before\nexporting for inference when the normalisation overhead is no\nlonger wanted, or before fine-tuning without the spectral cap.",
@@ -393,7 +393,7 @@
         }
       ],
       "examples": [
-        ">>> remove_spectral_norm(disc)"
+        ">>> import lucid.nn as nn\n>>> from lucid.nn.utils import spectral_norm, remove_spectral_norm\n>>> disc = spectral_norm(nn.Linear(16, 1))\n>>> _ = remove_spectral_norm(disc)\n>>> sorted(name for name, _ in disc.named_parameters())\n['bias', 'weight']"
       ],
       "notes": [
         "The restored parameter is $\\mathbf{W}_{\\text{orig}}$ — *not*\nthe rescaled $\\mathbf{W}_{\\text{orig}} / \\sigma$ that was\nvisible during training.  If you want the normalised matrix in the\nfinal checkpoint, copy it out *before* calling this function."
@@ -408,7 +408,7 @@
       "kind": "function",
       "labels": [],
       "signature": "spectral_norm(module: Module, name: str = 'weight', n_power_iterations: int = 1, eps: float = 1e-12, dim: int | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/spectral_norm.py#L58",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/spectral_norm.py#L58",
       "subcategory": "spectral_norm",
       "summary": "Constrain a weight's spectral norm via power iteration (Miyato et al. 2018).",
       "extended": "Reparametrises `module.<name>` as\n\n$$\n\\mathbf{W} \\;=\\; \\frac{\\mathbf{W}_{\\text{orig}}}{\\sigma(\\mathbf{W}_{\\text{orig}})},\n$$\n\nwhere $\\sigma(\\mathbf{W})$ is the largest singular value\n(operator 2-norm) of the weight viewed as a matrix.  This bounds the\nlayer's Lipschitz constant by `1` and is the canonical\nstabilisation trick for GAN discriminators; it also sees use in\ncertified-robust classifiers and contractive Transformer variants.",
@@ -469,7 +469,7 @@
       ],
       "labels": [],
       "signature": "PackedSequence()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/rnn.py#L54",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/rnn.py#L54",
       "subcategory": "rnn",
       "methods": [],
       "summary": "Compact representation of a batch of variable-length sequences.",
@@ -478,7 +478,7 @@
       "returns": null,
       "raises": [],
       "examples": [
-        ">>> from lucid.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence\n>>> # padded (B=3, T=4, F=5), sorted-by-length [4, 3, 2]\n>>> packed = pack_padded_sequence(x_padded, lengths=[4, 3, 2], batch_first=True)\n>>> # ... feed to RNN ...\n>>> unpacked, lengths = pad_packed_sequence(packed, batch_first=True)"
+        ">>> import lucid\n>>> from lucid.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence\n>>> # padded (B=3, T=4, F=5), sorted-by-length [4, 3, 2]\n>>> x_padded = lucid.randn(3, 4, 5)\n>>> packed = pack_padded_sequence(x_padded, lengths=[4, 3, 2], batch_first=True)\n>>> packed.data.shape                   # 4 + 3 + 2 real time-steps\n(9, 5)\n>>> packed.batch_sizes.tolist()         # sequences alive at each step\n[3, 3, 2, 1]\n>>> # ... feed to RNN ...\n>>> unpacked, lengths = pad_packed_sequence(packed, batch_first=True)\n>>> unpacked.shape, lengths.tolist()\n((3, 4, 5), [4, 3, 2])"
       ],
       "notes": [
         "Conceptually, with sequence lengths $\\ell_1 \\geq \\dots \\geq \\ell_B$, the packed layout walks time-major:\n\n\n\n$$\n\\text{data} = \\bigl[\\,x^{(1)}_0, \\dots, x^{(B)}_0,\\;\n                    x^{(1)}_1, \\dots, x^{(B_1)}_1,\\;\n                    \\dots\\,\\bigr],\n$$\n\nwhere $B_t$ (= `batch_sizes[t]`) is the count of sequences\nwith length $> t$."
@@ -514,7 +514,7 @@
       "kind": "function",
       "labels": [],
       "signature": "pack_padded_sequence(input: Tensor, lengths: Tensor | list[int], batch_first: bool = False, enforce_sorted: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/rnn.py#L108",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/rnn.py#L116",
       "subcategory": "rnn",
       "summary": "Pack a padded $(T, B, *)$ batch into a `PackedSequence`.",
       "extended": "Strips out the padding cells so downstream RNN kernels iterate only\nover genuine time-steps.  Reduces both compute and (with masked\nlosses) accidental gradient flow through pad positions.",
@@ -555,7 +555,7 @@
         }
       ],
       "examples": [
-        ">>> from lucid.nn.utils.rnn import pack_padded_sequence\n>>> packed = pack_padded_sequence(x, lengths=[5, 3, 2], batch_first=False)"
+        ">>> import lucid\n>>> from lucid.nn.utils.rnn import pack_padded_sequence\n>>> x = lucid.randn(5, 3, 8)                 # (T=5, B=3, F=8)\n>>> packed = pack_padded_sequence(x, lengths=[5, 3, 2], batch_first=False)\n>>> packed.data.shape                        # 5 + 3 + 2 real time-steps\n(10, 8)"
       ],
       "notes": [
         "Total packed length equals $\\sum_b \\ell_b$, the sum of true\nsequence lengths — strictly less than $T \\cdot B$ whenever any\nsequence is shorter than the max."
@@ -570,7 +570,7 @@
       "kind": "function",
       "labels": [],
       "signature": "pack_sequence(sequences: list[Tensor], enforce_sorted: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/rnn.py#L399",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/rnn.py#L420",
       "subcategory": "rnn",
       "summary": "One-shot pack-from-list — equivalent to `pad_sequence` then `pack_padded_sequence`.",
       "extended": "Convenience wrapper for the common case where a list of per-example\ntensors needs to become a `PackedSequence` without going\nthrough an intermediate padded tensor.  Each entry's leading axis\nis treated as the time dimension; remaining axes carry the feature\nshape (which must be identical across the list).",
@@ -599,7 +599,7 @@
         }
       ],
       "examples": [
-        ">>> from lucid.nn.utils.rnn import pack_sequence\n>>> packed = pack_sequence([long_seq, mid_seq, short_seq])"
+        ">>> import lucid\n>>> from lucid.nn.utils.rnn import pack_sequence\n>>> long_seq = lucid.ones(4, 2)\n>>> mid_seq = lucid.ones(3, 2)\n>>> short_seq = lucid.ones(1, 2)\n>>> packed = pack_sequence([long_seq, mid_seq, short_seq])\n>>> packed.batch_sizes.tolist()              # sequences alive at each step\n[3, 2, 2, 1]"
       ],
       "notes": [
         "Implemented as `pad_sequence` followed by\n`pack_padded_sequence`.  The intermediate padded tensor lives\nonly for the duration of the call."
@@ -614,7 +614,7 @@
       "kind": "function",
       "labels": [],
       "signature": "pad_packed_sequence(sequence: PackedSequence, batch_first: bool = False, padding_value: float = 0.0, total_length: int | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/rnn.py#L218",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/rnn.py#L230",
       "subcategory": "rnn",
       "summary": "Inverse of `pack_padded_sequence` — produce a padded tensor.",
       "extended": "Re-inflates a `PackedSequence` into a dense\n$(T_\\text{max}, B, *)$ (or $(B, T_\\text{max}, *)$)\ntensor with the original batch order restored.  The freshly created\ncells beyond each sequence's true length are filled with\n`padding_value`.",
@@ -650,7 +650,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> from lucid.nn.utils.rnn import pad_packed_sequence\n>>> padded, lens = pad_packed_sequence(packed, batch_first=True)"
+        ">>> import lucid\n>>> from lucid.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence\n>>> x = lucid.randn(3, 4, 5)                 # (B=3, T=4, F=5)\n>>> packed = pack_padded_sequence(x, lengths=[4, 3, 2], batch_first=True)\n>>> padded, lens = pad_packed_sequence(packed, batch_first=True)\n>>> padded.shape, lens.tolist()\n((3, 4, 5), [4, 3, 2])"
       ],
       "notes": [
         "Output time dimension is $\\max_b \\ell_b$ (or `total_length`\nif larger).  The function honours `unsorted_indices` on the\npacked sequence so the rows of the returned tensor match the order\nthe caller used at pack time."
@@ -665,7 +665,7 @@
       "kind": "function",
       "labels": [],
       "signature": "pad_sequence(sequences: list[Tensor], batch_first: bool = False, padding_value: float = 0.0)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/rnn.py#L326",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/rnn.py#L343",
       "subcategory": "rnn",
       "summary": "Stack a list of variable-length tensors into a padded batch.",
       "extended": "Each input is padded along its leading time dimension up to the\nlongest sequence in `sequences`, then the padded versions are\nstacked along a new batch axis.  Useful as the first step of an\nRNN training loop when sequences are produced one at a time (per-\nexample tokenisation, audio framing, etc.).",
@@ -700,7 +700,7 @@
         }
       ],
       "examples": [
-        ">>> from lucid.nn.utils.rnn import pad_sequence\n>>> batch = pad_sequence([a, b, c], batch_first=True)"
+        ">>> import lucid\n>>> from lucid.nn.utils.rnn import pad_sequence\n>>> a, b, c = lucid.ones(5, 3), lucid.ones(3, 3), lucid.ones(2, 3)\n>>> batch = pad_sequence([a, b, c], batch_first=True)\n>>> batch.shape                              # (B, T_max, F)\n(3, 5, 3)"
       ],
       "notes": [
         "Padding is constructed by concatenating a freshly allocated tail\nof shape `(T_max - T_i, *feat)` onto each input — this keeps the\noperation differentiable end-to-end (view-based mutation would\nsilently drop gradients through Lucid's autograd-aware\n`lucid._tensor.tensor.Tensor`)."
@@ -715,7 +715,7 @@
       "kind": "function",
       "labels": [],
       "signature": "copy_parameters_and_buffers(source: Module, dest: Module)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/_copy.py#L13",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/_copy.py#L13",
       "subcategory": "copy",
       "summary": "Copy all parameter / buffer values from `source` into `dest`.",
       "extended": "Both modules must expose the same set of parameter and buffer names;\na `KeyError` is raised if a name found on `source` is missing on\n`dest`.  Tensor data is copied in-place via `Tensor.detach()` and\nstorage assignment so that `dest`'s autograd graph (if any) is not\ndisturbed by the copy.",
@@ -739,7 +739,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> import lucid\n>>> from lucid.nn.utils import copy_parameters_and_buffers\n>>> src = MyModel()\n>>> dst = MyModel()\n>>> copy_parameters_and_buffers(src, dst)   # dst now mirrors src's weights + buffers"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.nn.utils import copy_parameters_and_buffers\n>>> src = nn.BatchNorm1d(4)        # parameters and running-stat buffers\n>>> dst = nn.BatchNorm1d(4)\n>>> _ = src(lucid.randn(8, 4))     # a training step moves src's running stats\n>>> copy_parameters_and_buffers(src, dst)   # dst now mirrors src's weights + buffers\n>>> bool((dst.running_mean == src.running_mean).all())\nTrue"
       ],
       "notes": [
         "Shape and dtype of corresponding entries must match.  Devices may\ndiffer — the source values are routed through `.to(device)` to\nland on `dest`'s device first."
@@ -754,7 +754,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fuse_conv_bn_eval(conv: object, bn: object)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/fusion.py#L31",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/fusion.py#L31",
       "subcategory": "fusion",
       "summary": "Fold a BatchNorm layer into the preceding Conv weights (inference-only).",
       "extended": "Because BN at eval time is an affine map with frozen statistics, the\ncomposition `BN(Conv(x))` is itself a single convolution — the BN\ncan be analytically absorbed into the conv's weight and bias.  The\nfused module computes exactly the same output but with one fewer\nkernel launch and one fewer allocation per call.  Standard step in\ndeployment / quantisation pipelines.",
@@ -783,7 +783,7 @@
         }
       ],
       "examples": [
-        ">>> import lucid.nn as nn\n>>> from lucid.nn.utils import fuse_conv_bn_eval\n>>> conv = nn.Conv2d(3, 16, 3); bn = nn.BatchNorm2d(16)\n>>> conv.eval(); bn.eval()\n>>> fused = fuse_conv_bn_eval(conv, bn)"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.nn.utils import fuse_conv_bn_eval\n>>> conv = nn.Conv2d(3, 16, 3); bn = nn.BatchNorm2d(16)\n>>> _ = conv.eval(); _ = bn.eval()\n>>> fused = fuse_conv_bn_eval(conv, bn)\n>>> x = lucid.randn(1, 3, 8, 8)\n>>> (fused(x) - bn(conv(x))).abs().max().item() < 1e-4\nTrue"
       ],
       "notes": [
         "Let $\\mu$, $\\sigma^2$, $\\epsilon$ be the BN running\nstatistics and $\\gamma$, $\\beta$ its affine parameters\n(treated as $1$ and $0$ if `affine=False`).  The\nfused weight and bias are\n\n\n\n$$\n\\mathbf{W}_{\\text{fused}} \\;=\\;\n    \\mathbf{W} \\cdot \\frac{\\gamma}{\\sqrt{\\sigma^2 + \\epsilon}},\n$$\n\n\n\n$$\nb_{\\text{fused}} \\;=\\;\n    \\frac{\\gamma\\,(b - \\mu)}{\\sqrt{\\sigma^2 + \\epsilon}} + \\beta,\n$$\n\nwhere the scale broadcasts along the output-channel axis.  When the\noriginal conv has no bias, $b$ is taken as $0$ and the\nfused module gains one."
@@ -798,7 +798,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fuse_conv_bn_weights(conv_w: Tensor, conv_b: Tensor | None, bn_rm: Tensor, bn_rv: Tensor, bn_eps: float, bn_w: Tensor | None, bn_b: Tensor | None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/fusion.py#L142",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/fusion.py#L146",
       "subcategory": "fusion",
       "summary": "Low-level form of `fuse_conv_bn_eval` operating on raw tensors.",
       "extended": "Takes the relevant Conv and BN tensors as plain arguments and\nreturns the fused `(weight, bias)` pair.  Useful for build tools\nthat walk a serialised graph (ONNX, ahead-of-time compilation) and\nneed to perform the fusion without instantiating Module objects.",
@@ -852,7 +852,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> from lucid.nn.utils import fuse_conv_bn_weights\n>>> W, b = fuse_conv_bn_weights(\n...     conv.weight, conv.bias,\n...     bn.running_mean, bn.running_var, bn.eps,\n...     bn.weight, bn.bias,\n... )"
+        ">>> import lucid.nn as nn\n>>> from lucid.nn.utils import fuse_conv_bn_weights\n>>> conv = nn.Conv2d(3, 16, 3); bn = nn.BatchNorm2d(16)\n>>> W, b = fuse_conv_bn_weights(\n...     conv.weight, conv.bias,\n...     bn.running_mean, bn.running_var, bn.eps,\n...     bn.weight, bn.bias,\n... )\n>>> W.shape, b.shape\n((16, 3, 3, 3), (16,))"
       ],
       "notes": [
         "Identical math to `fuse_conv_bn_eval`:\n\n\n\n$$\n\\mathbf{W}_{\\text{fused}} = \\mathbf{W}\n    \\cdot \\gamma / \\sqrt{\\sigma^2 + \\epsilon}, \\qquad\nb_{\\text{fused}} = \\gamma (b - \\mu)/\\sqrt{\\sigma^2 + \\epsilon} + \\beta.\n$$"
@@ -867,7 +867,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fuse_linear_bn_eval(linear: object, bn: object)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/fusion.py#L218",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/fusion.py#L226",
       "subcategory": "fusion",
       "summary": "Fold a BatchNorm1d into the preceding Linear weights (inference-only).",
       "extended": "The 1-D analogue of `fuse_conv_bn_eval` — absorbs the BN's\neval-time affine transform into a Linear layer's weight and bias.\nThe fused linear computes `BN(Linear(x))` exactly while using one\nfewer kernel.",
@@ -896,7 +896,7 @@
         }
       ],
       "examples": [
-        ">>> from lucid.nn.utils import fuse_linear_bn_eval\n>>> linear = nn.Linear(128, 64); bn = nn.BatchNorm1d(64)\n>>> linear.eval(); bn.eval()\n>>> fused = fuse_linear_bn_eval(linear, bn)"
+        ">>> import lucid\n>>> import lucid.nn as nn\n>>> from lucid.nn.utils import fuse_linear_bn_eval\n>>> linear = nn.Linear(128, 64); bn = nn.BatchNorm1d(64)\n>>> _ = linear.eval(); _ = bn.eval()\n>>> fused = fuse_linear_bn_eval(linear, bn)\n>>> x = lucid.randn(4, 128)\n>>> (fused(x) - bn(linear(x))).abs().max().item() < 1e-4\nTrue"
       ],
       "notes": [
         "Math is identical to the conv case — the Linear's weight matrix is\nscaled row-wise by $\\gamma / \\sqrt{\\sigma^2 + \\epsilon}$ and\nthe bias absorbs the mean shift and BN bias."
@@ -911,7 +911,7 @@
       "kind": "function",
       "labels": [],
       "signature": "fuse_linear_bn_weights(linear_w: Tensor, linear_b: Tensor | None, bn_rm: Tensor, bn_rv: Tensor, bn_eps: float, bn_w: Tensor | None, bn_b: Tensor | None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/fusion.py#L287",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/fusion.py#L300",
       "subcategory": "fusion",
       "summary": "Low-level form of `fuse_linear_bn_eval` operating on raw tensors.",
       "extended": "Internally identical to `fuse_conv_bn_weights` — a Linear's\nweight is just a 2-D conv weight from the BN's perspective.\nExposed under its own name to keep call sites self-documenting in\ngraph-rewrite passes.",
@@ -965,7 +965,7 @@
       },
       "raises": [],
       "examples": [
-        ">>> from lucid.nn.utils import fuse_linear_bn_weights\n>>> W, b = fuse_linear_bn_weights(\n...     linear.weight, linear.bias,\n...     bn.running_mean, bn.running_var, bn.eps,\n...     bn.weight, bn.bias,\n... )"
+        ">>> import lucid.nn as nn\n>>> from lucid.nn.utils import fuse_linear_bn_weights\n>>> linear = nn.Linear(128, 64); bn = nn.BatchNorm1d(64)\n>>> W, b = fuse_linear_bn_weights(\n...     linear.weight, linear.bias,\n...     bn.running_mean, bn.running_var, bn.eps,\n...     bn.weight, bn.bias,\n... )\n>>> W.shape, b.shape\n((64, 128), (64,))"
       ],
       "notes": [
         "Math:\n\n\n\n$$\n\\mathbf{W}_{\\text{fused}} = \\mathbf{W}\n    \\cdot \\gamma / \\sqrt{\\sigma^2 + \\epsilon}, \\qquad\nb_{\\text{fused}} = \\gamma (b - \\mu)/\\sqrt{\\sigma^2 + \\epsilon} + \\beta.\n$$"
@@ -980,7 +980,7 @@
       "kind": "function",
       "labels": [],
       "signature": "skip_init(module_cls: type, args: object = (), kwargs: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/c751446/lucid/nn/utils/skip_init.py#L18",
+      "source": "https://github.com/ChanLumerico/lucid/blob/94b1016/lucid/nn/utils/skip_init.py#L18",
       "subcategory": "skip_init",
       "summary": "Construct a module while skipping its parameter initialisation.",
       "extended": "Instantiates `module_cls(*args, **kwargs)` and then immediately\nreplaces every learnable parameter with an *uninitialised* buffer\nof the same shape / dtype / device.  The intended pattern is\n\"construct, then `load_state_dict`\": skipping the\n`xavier_uniform` / `kaiming_normal` work that is about\nto be overwritten saves measurable time on large models with many\nlayers.",
