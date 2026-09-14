@@ -3625,9 +3625,9 @@ class Tensor:
     def zero_(self) -> Self:
         r"""Fill the tensor with zeros in-place.
 
-        Mutates ``self``'s storage so every element becomes ``0``,
-        without allocating a new tensor. Equivalent to ``self.fill_(0.0)``
-        but routed through a multiply-by-zero kernel for clarity.
+        Writes ``0`` into every element of ``self``'s storage.  It is
+        :meth:`fill_` with ``0`` — a multiply by zero, which this used to
+        be, turns ``inf`` and ``NaN`` into ``NaN`` rather than ``0``.
 
         Returns
         -------
@@ -3653,12 +3653,7 @@ class Tensor:
         >>> x.tolist()
         [0.0, 0.0, 0.0]
         """
-        result = _C_engine.mul_(
-            self._impl,
-            _C_engine.zeros(self._impl.shape, self._impl.dtype, self._impl.device),
-        )
-        self._impl = result
-        return self
+        return self.fill_(0)
 
     # ── pickling support (required for multiprocessing DataLoader) ────────────
 

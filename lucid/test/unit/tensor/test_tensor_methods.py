@@ -236,3 +236,11 @@ class TestTrackBParity:
         t = lucid.tensor([[1.0, 2.0]], device=device)  # (1,2)
         r = t.expand(-1, -1)
         assert r.shape == (1, 2)
+
+
+class TestZero:
+    def test_zero__clears_inf_and_nan(self) -> None:
+        # zero_ multiplied by zeros, and inf * 0 and nan * 0 are both NaN.
+        x = lucid.tensor([float("inf"), float("-inf"), float("nan"), 2.0])
+        x.zero_()
+        assert x.tolist() == [0.0, 0.0, 0.0, 0.0]

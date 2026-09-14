@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - .to() carries the gradient back across devices
 - Mask R-CNN post-processing and the detection preset
 
+- zero_() writes zeros, where inf and NaN stayed NaN
+
 ### Added
 
 - CPU reshapes are views that see each other's writes
