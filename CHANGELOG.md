@@ -15,6 +15,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [3.12.0] — 2026-09-15
+
+A minor release in which CPU tensors start sharing memory the way the
+reference's do: reshapes, dim-0 slices, `.data` and `detach()` are views
+of their input's buffer, a write through any of them shows through the
+others, and autograd follows writes through slices. Around that, every
+docstring example in the library runs, and the bugs the examples turned
+up are fixed.
+
+- **CPU views share their buffer.** `reshape` / `view` / `flatten` /
+  `squeeze` / `unsqueeze`, dim-0 indexing and slicing (`x[i]`, `x[a:b]`,
+  `narrow`, `chunk`, `split`, `unbind`), `.data` and `detach()` return
+  views of a dense CPU tensor, and an in-place write to one reaches the
+  rest. Metal tensors keep copy semantics.
+- **Autograd follows writes through slices.** An in-place op that
+  autograd records on a slice re-derives the graph of its base and of
+  every overlapping slice (CopySlices), so `h[1].mul_(3)` sends the
+  gradient where the values went. `fill_`, `zero_` and `copy_` do the
+  same.
+- **`load_state_dict` copies into the tensors a module holds**, so views,
+  aliases and hooks see the loaded values.
+- **Integer true division gives floats.** `tensor([7, 8]) / 2` returned
+  `[3, 4]`; `/`, `lucid.div`, `divide` and `true_divide` now promote to a
+  floating dtype, and `/=` on an integer tensor is refused.
+- **`matmul` takes a vector** on either side, as the reference does.
+- **`.to()` is differentiable** across devices, and float16 graphs under
+  `lucid.compile` stay off the M4's Neural Engine, where they diverged.
+- **Every docstring example runs.** About 550 failing examples were
+  corrected against real output, and CI now runs them against a floor.
+  Fixed on the way: `prelu` with per-channel slopes, quantized
+  `Conv2d` / `Conv3d` built with an int `kernel_size`, `log_ndtr` in the
+  far tail, `erfcx` between 2 and 4, `NegativeBinomial.sample`'s shape,
+  `as_tensor` returning its input, and `grad_and_value`'s value.
+- **Detection preprocessing matches each reference**: a per-family
+  padding value, `Detection.to_image_boxes` to map boxes back through the
+  letterbox, and Mask R-CNN post-processing.
+
+### Changed
+
+- The engine ABI version is 11. `TensorImpl` gained a view family, so an
+  extension built against 3.11.3's headers refuses to load instead of
+  misreading it.
+- `/` on integer tensors returns a floating tensor; code that relied on
+  the truncating result should use `//`.
+- `/=` on an integer tensor raises `RuntimeError`.
 
 ### Fixed
 
@@ -25,21 +72,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - read a view through its offset and strides
 - .to() carries the gradient back across devices
 - Mask R-CNN post-processing and the detection preset
-
 - zero_() writes zeros, where inf and NaN stayed NaN
-
 - pad with what each reference feeds, and map boxes back
-
 - float16 graphs stay off the M4's Neural Engine
-
 - matmul takes a vector on either side
-
 - load_state_dict copies into the tensors a module holds
-
 - true division of integers gives floats
-
 - the docstring examples run, and the bugs they turned up
-
 - a float cast to int64 saturates, as it does on the CPU
 
 ### Added

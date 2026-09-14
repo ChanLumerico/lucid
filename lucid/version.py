@@ -1,2 +1,2 @@
-__version__: str = "3.11.3"
-_EXPECTED_ABI: int = 10
+__version__: str = "3.12.0"
+_EXPECTED_ABI: int = 11
