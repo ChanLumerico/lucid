@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - task wrappers report and swap their trunk's token table
 - feature_info reductions measured at 32×32
 - read a view through its offset and strides
+- .to() carries the gradient back across devices
 
 ---
 

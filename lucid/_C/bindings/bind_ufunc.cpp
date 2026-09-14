@@ -34,6 +34,7 @@
 #include "../ops/ufunc/ScalarParam.h"
 #include "../ops/ufunc/Scan.h"
 #include "../ops/ufunc/Softmax.h"
+#include "../ops/ufunc/ToDevice.h"
 #include "../ops/ufunc/Trace.h"
 #include "../ops/ufunc/Transpose.h"
 #include "../ops/ufunc/Trig.h"
@@ -178,6 +179,11 @@ void register_ufunc(py::module_& m) {
     // CPU: static_cast loop.  GPU: mlx::core::astype.
     m.def("astype", &astype_op, py::arg("a"), py::arg("dtype"),
           "Cast all elements to dtype. CPU: static_cast loop. GPU: mlx::core::astype.");
+
+    // Device move, differentiable: the gradient goes back to the source
+    // device, and a Metal shared buffer is relabelled rather than copied.
+    m.def("to_device", &to_device_op, py::arg("a"), py::arg("device"),
+          "Move to device; differentiable (the gradient returns to the source device).");
 }
 
 }  // namespace lucid::bindings

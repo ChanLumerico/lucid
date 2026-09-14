@@ -170,6 +170,14 @@ def _inject_to(cls: type) -> None:
         #   kernel dispatch where the CPU needs to read/write the same buffer.
         if target_device != impl.device:
             rg = self._impl.requires_grad
+            if rg and impl.requires_grad and _C_engine.grad_enabled():
+                # Inside a graph the move is differentiable: the gradient
+                # goes back to the source device.  Returning a fresh leaf
+                # here stopped backward at the move, and a leaf that
+                # requires grad is a legitimate thing to be, so nothing
+                # said the source had been cut off.  The engine op records
+                # the move, so a second derivative crosses it too.
+                return cast("Tensor", _wrap(_C_engine.to_device(impl, target_device)))
             if impl.is_metal_shared:
                 # Zero-copy: SharedStorage tensor re-labeled as the target device.
                 impl = _C_engine.transfer_storage(impl, target_device)

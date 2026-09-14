@@ -334,6 +334,7 @@ lucid_object_library(
     ops/linalg/Eig.cpp
     ops/linalg/Eigh.cpp
     ops/ufunc/Astype.cpp
+    ops/ufunc/ToDevice.cpp
     ops/linalg/LUFactor.cpp
     ops/linalg/SolveTriangular.cpp
     ops/linalg/Lstsq.cpp
