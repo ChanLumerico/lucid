@@ -115,13 +115,31 @@ inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
 //     26 SDK this opens up kernel-merge passes MPSGraph keeps gated
 //     behind Level1; the cost is a one-time ~5-20ms compile-time
 //     increase per signature, amortised over every subsequent run.
-inline MPSGraphCompilationDescriptor* make_compile_descriptor() {
+//
+//   * Half precision: ``Level0`` too.  Level1 also places ops across
+//     devices, the Neural Engine included, and on M4-class hardware a
+//     float16 graph placed there comes back wrong — a float16 Linear under
+//     autocast returned 25152 where eager returned 0.0116, with MPSGraph
+//     printing "Incompatible element type for ANE".  Level0 keeps the
+//     graph on the GPU; float32 graphs keep Level1, which is correct there.
+inline MPSGraphCompilationDescriptor* make_compile_descriptor(bool half_precision) {
     MPSGraphCompilationDescriptor* desc = [[MPSGraphCompilationDescriptor alloc] init];
-    if (::lucid::Determinism::is_enabled())
+    if (::lucid::Determinism::is_enabled() || half_precision)
         desc.optimizationLevel = MPSGraphOptimizationLevel0;
     else
         desc.optimizationLevel = MPSGraphOptimizationLevel1;
     return desc;
+}
+
+// Whether any value the trace computes is float16 or bfloat16 — the graphs
+// make_compile_descriptor keeps off the Neural Engine.
+template <class Graph>
+bool carries_half_precision(const Graph& graph) {
+    for (const auto& node : graph.ops)
+        for (const auto& meta : node.outputs)
+            if (meta.dtype == Dtype::F16 || meta.dtype == Dtype::BF16)
+                return true;
+    return false;
 }
 
 // Collect the trace ids that carry attention weights — a ``softmax`` output,
@@ -611,11 +629,12 @@ CompiledExecutable* MpsBuilder::compile_trace(bool dynamic_batch,
 
         id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
         MPSGraphDevice* mps_device = [MPSGraphDevice deviceWithMTLDevice:mtl_device];
-        MPSGraphExecutable* compiled = [graph_obj compileWithDevice:mps_device
-                                                              feeds:feed_dict
-                                                      targetTensors:target_arr
-                                                   targetOperations:nil
-                                              compilationDescriptor:make_compile_descriptor()];
+        MPSGraphExecutable* compiled =
+            [graph_obj compileWithDevice:mps_device
+                                   feeds:feed_dict
+                           targetTensors:target_arr
+                        targetOperations:nil
+                   compilationDescriptor:make_compile_descriptor(carries_half_precision(graph))];
         if (compiled == nil)
             return fail("compile_trace: MPSGraph compilation returned nil");
 
@@ -970,11 +989,12 @@ MpsBuilder::compile_trace_with_backward(TensorId loss_id,
 
         id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
         MPSGraphDevice* mps_device = [MPSGraphDevice deviceWithMTLDevice:mtl_device];
-        MPSGraphExecutable* compiled = [graph_obj compileWithDevice:mps_device
-                                                              feeds:feed_dict
-                                                      targetTensors:target_arr
-                                                   targetOperations:nil
-                                              compilationDescriptor:make_compile_descriptor()];
+        MPSGraphExecutable* compiled =
+            [graph_obj compileWithDevice:mps_device
+                                   feeds:feed_dict
+                           targetTensors:target_arr
+                        targetOperations:nil
+                   compilationDescriptor:make_compile_descriptor(carries_half_precision(graph))];
         if (compiled == nil)
             return fail("compile_trace_with_backward: MPSGraph compilation returned nil");
 
@@ -1438,11 +1458,12 @@ CompiledExecutable* MpsBuilder::compile_fused_training_step(
 
         id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
         MPSGraphDevice* mps_device = [MPSGraphDevice deviceWithMTLDevice:mtl_device];
-        MPSGraphExecutable* compiled = [graph_obj compileWithDevice:mps_device
-                                                              feeds:feed_dict
-                                                      targetTensors:target_arr
-                                                   targetOperations:nil
-                                              compilationDescriptor:make_compile_descriptor()];
+        MPSGraphExecutable* compiled =
+            [graph_obj compileWithDevice:mps_device
+                                   feeds:feed_dict
+                           targetTensors:target_arr
+                        targetOperations:nil
+                   compilationDescriptor:make_compile_descriptor(carries_half_precision(graph))];
         if (compiled == nil)
             return fail("compile_fused_training_step: MPSGraph compile "
                         "returned nil");
@@ -1820,11 +1841,12 @@ MpsBuilder::compile_generic_fused_step(TensorId loss_id,
 
         id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
         MPSGraphDevice* mps_device = [MPSGraphDevice deviceWithMTLDevice:mtl_device];
-        MPSGraphExecutable* compiled = [graph_obj compileWithDevice:mps_device
-                                                              feeds:feed_dict
-                                                      targetTensors:target_arr
-                                                   targetOperations:nil
-                                              compilationDescriptor:make_compile_descriptor()];
+        MPSGraphExecutable* compiled =
+            [graph_obj compileWithDevice:mps_device
+                                   feeds:feed_dict
+                           targetTensors:target_arr
+                        targetOperations:nil
+                   compilationDescriptor:make_compile_descriptor(carries_half_precision(graph))];
         if (compiled == nil)
             return fail("compile_generic_fused_step: MPSGraph compile returned nil");
 
@@ -2264,7 +2286,7 @@ CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
                                    feeds:feed_dict
                            targetTensors:target_arr
                         targetOperations:[target_ops_arr count] > 0 ? target_ops_arr : nil
-                   compilationDescriptor:make_compile_descriptor()];
+                   compilationDescriptor:make_compile_descriptor(carries_half_precision(graph))];
         if (compiled == nil)
             return fail("compile_generic_fused_step_with_vars: MPSGraph compile returned nil");
 

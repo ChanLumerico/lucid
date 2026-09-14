@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - pad with what each reference feeds, and map boxes back
 
+- float16 graphs stay off the M4's Neural Engine
+
 ### Added
 
 - CPU reshapes are views that see each other's writes

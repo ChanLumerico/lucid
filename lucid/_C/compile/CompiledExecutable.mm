@@ -8,6 +8,7 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -995,8 +996,18 @@ CompiledExecutable* load_executable(const std::string& path, std::string* error_
     @autoreleasepool {
         const std::string pkg_path = path + ".mpsgraphpackage";
         NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:pkg_path.c_str()]];
+        // A half-precision executable keeps to the GPU when it is loaded, as
+        // when it was built (make_compile_descriptor): the default would place
+        // it across devices again, the Neural Engine included, where float16
+        // graphs come back wrong on M4-class hardware.
+        const auto is_half = [](std::uint8_t raw) {
+            const auto dt = static_cast<Dtype>(raw);
+            return dt == Dtype::F16 || dt == Dtype::BF16;
+        };
+        const bool half = std::any_of(input_dt_raw.begin(), input_dt_raw.end(), is_half) ||
+                          std::any_of(output_dt_raw.begin(), output_dt_raw.end(), is_half);
         MPSGraphCompilationDescriptor* cdesc = nil;
-        if (::lucid::Determinism::is_enabled()) {
+        if (::lucid::Determinism::is_enabled() || half) {
             cdesc = [[MPSGraphCompilationDescriptor alloc] init];
             cdesc.optimizationLevel = MPSGraphOptimizationLevel0;
         }
