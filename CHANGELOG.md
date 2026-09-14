@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - float16 graphs stay off the M4's Neural Engine
 
+- matmul takes a vector on either side
+
 ### Added
 
 - CPU reshapes are views that see each other's writes

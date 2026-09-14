@@ -25,6 +25,7 @@
 #include "../../kernel/primitives/BatchedMatmul.h"
 #include "../bfunc/_BinaryOp.h"
 #include "../ufunc/Astype.h"
+#include "../utils/View.h"
 
 using lucid::kernel::primitives::NdMatmulInfo;
 using lucid::kernel::primitives::plan_nd_matmul;
@@ -126,8 +127,23 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
     if (a->device() != b->device())
         throw DeviceMismatch(std::string(device_name(a->device())),
                              std::string(device_name(b->device())), "matmul");
-    if (a->shape().size() < 2 || b->shape().size() < 2) {
-        throw ShapeMismatch(a->shape(), b->shape(), "matmul: both operands must be ≥2-D");
+    if (a->shape().empty() || b->shape().empty())
+        throw ShapeMismatch(a->shape(), b->shape(), "matmul: both operands must be at least 1-D");
+    // A vector is a matrix of one row on the left or one column on the
+    // right, and the axis it gained is dropped from the product again — so
+    // ``A @ v`` is a vector, as the reference and NumPy both have it.  The
+    // reshapes carry the gradient back to the vector's own shape.
+    if (a->shape().size() == 1 || b->shape().size() == 1) {
+        const bool row = a->shape().size() == 1;
+        const bool col = b->shape().size() == 1;
+        const auto out = forward(row ? reshape_op(a, {1, a->shape()[0]}) : a,
+                                 col ? reshape_op(b, {b->shape()[0], 1}) : b);
+        Shape shape = out->shape();
+        if (col)
+            shape.pop_back();
+        if (row)
+            shape.erase(shape.end() - (col ? 1 : 2));
+        return reshape_op(out, shape);
     }
 
     // 3.3 AMP plumbing: schema_v1.amp_policy == Promote.  Under
