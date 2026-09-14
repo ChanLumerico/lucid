@@ -91,11 +91,40 @@ class TestLeNetBackbone(unittest.TestCase):
         fi = self.model.feature_info
         self.assertEqual(len(fi), 3)
         self.assertEqual([f.num_channels for f in fi], [6, 16, 120])
-        # C5 is a 5x5 conv over the 5x5 S4 map: it collapses the map to 1x1
-        # without downsampling, so the network stride there is still 4 (the two
-        # 2x subsampling layers).  Reporting 32 confused "output is 1x1" with
-        # "downsampled 32x".
-        self.assertEqual([f.reduction for f in fi], [2, 4, 4])
+        # 32 // (14, 5, 1).  The unpadded convolutions shrink the maps past
+        # what the two 2x subsamplings alone would (2, 4, 4): C5 is a single
+        # pixel, not the 8x8 map a reduction of 4 promises.
+        self.assertEqual([f.reduction for f in fi], [2, 6, 32])
+
+    def test_feature_info_describes_what_each_stage_emits(self) -> None:
+        """Every advertised stage matches the map the trunk produces there.
+
+        A stage ends at S2, at S4 and at C5.  The trunk is walked layer by
+        layer on the canonical 32x32 input and each of those maps is checked
+        against its ``FeatureInfo``, for both the paper's tanh/average-pool
+        variant and the ReLU/max-pool one.
+        """
+        side = 32
+        pools = (lucid.nn.AvgPool2d, lucid.nn.MaxPool2d)
+        variants = (self.model, lenet_5(activation="relu", pooling="max").eval())
+        for model in variants:
+            x = lucid.randn(1, 1, side, side)
+            stage_maps = []
+            with lucid.no_grad():
+                for layer in model.features:
+                    x = layer(x)
+                    if isinstance(layer, pools):
+                        stage_maps.append(x)
+                stage_maps.append(x)  # C5 and its activation: the trunk's output
+                last = model.forward_features(lucid.randn(1, 1, side, side))
+            fi = model.feature_info
+            self.assertEqual(len(stage_maps), len(fi))
+            for info, fmap in zip(fi, stage_maps):
+                _, channels, h, w = fmap.shape
+                self.assertEqual(channels, info.num_channels)
+                self.assertEqual(side // h, info.reduction)
+                self.assertEqual(side // w, info.reduction)
+            self.assertEqual(last.shape[1:], stage_maps[-1].shape[1:])
 
     def test_forward_features_shape_32x32(self) -> None:
         x = lucid.randn(1, 1, 32, 32)

@@ -125,7 +125,10 @@ class LeNet(PretrainedModel, BackboneMixin):
         :func:`_build_features` for the exact layer chain.
     feature_info : list[FeatureInfo]
         Per-stage descriptor (channels + reduction factor) exposed via
-        :class:`BackboneMixin` for downstream decoder modules.
+        :class:`BackboneMixin` for downstream decoder modules.  The
+        reductions are measured on the canonical 32×32 input, where S2, S4
+        and C5 emit 14×14, 5×5 and 1×1 maps; the unpadded convolutions make
+        them depend on the input size.
 
     Notes
     -----
@@ -159,6 +162,12 @@ class LeNet(PretrainedModel, BackboneMixin):
     >>> out = backbone(x)
     >>> out.last_hidden_state.shape   # (B, 120, 1, 1)
     (8, 120, 1, 1)
+
+    Each stage's ``reduction`` is the 32-pixel input over the side of the map
+    it emits (14, 5 and 1), so the last stage spans the whole input.
+
+    >>> [f.reduction for f in backbone.feature_info]
+    [2, 6, 32]
     """
 
     config_class: ClassVar[type[LeNetConfig]] = LeNetConfig
@@ -167,13 +176,18 @@ class LeNet(PretrainedModel, BackboneMixin):
     def __init__(self, config: LeNetConfig) -> None:
         super().__init__(config)
         self.features = _build_features(config)
+        # Measured on the paper's 32x32 input, where S2, S4 and C5 emit 14x14,
+        # 5x5 and 1x1 maps.  Every convolution is valid (unpadded), so a map
+        # shrinks faster than the two 2x subsamplings alone make it: counting
+        # strides (2, 4, 4) would promise an 8x8 C5 map where there is one
+        # pixel.  ``reduction`` is ``32 // side``, the rule the rest of the
+        # zoo follows (the exact ratios 2.29 and 6.4 are not integers), and
+        # it holds for 32x32 only -- unpadded convolutions make the ratio
+        # depend on the input size.
         self._feature_info = [
             FeatureInfo(stage=1, num_channels=6, reduction=2),
-            FeatureInfo(stage=2, num_channels=16, reduction=4),
-            # C5 is a 5x5 conv over the 5x5 S4 map, so it collapses to 1x1
-            # without downsampling: the network stride there is still 4
-            # (the two 2x subsampling layers), not 32.
-            FeatureInfo(stage=3, num_channels=120, reduction=4),
+            FeatureInfo(stage=2, num_channels=16, reduction=6),
+            FeatureInfo(stage=3, num_channels=120, reduction=32),
         ]
 
     @override
