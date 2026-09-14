@@ -2559,17 +2559,15 @@ class Tensor:
     def data_ptr(self) -> int:
         r"""Return the address of the first element as an integer.
 
-        On Apple Silicon the tensor lives in unified memory; this method
-        returns a best-effort identifier derived from the storage object.
-        Use :meth:`numpy` + ``ndarray.ctypes.data`` for interop that
-        requires the actual pointer.
+        The address is the start of the tensor's buffer plus its storage
+        offset.  A metal tensor is evaluated first, so its buffer exists
+        and the address is one the CPU can read in unified memory.
 
         Returns
         -------
         int
-            A stable, process-unique integer suitable for aliasing checks
-            (e.g. "do these two tensors share storage?"). Not guaranteed
-            to be the raw memory address.
+            Address of the first element.  Tensors that share a buffer
+            and start at the same element report the same address.
 
         Examples
         --------
@@ -2584,46 +2582,33 @@ class Tensor:
 
         Notes
         -----
-        On Apple Silicon CPU and GPU share unified DRAM, so the same
-        :math:`\text{data\_ptr}(t)` identifies a buffer addressable from
-        both backends. The value is stable for the lifetime of ``self``;
-        equality is the canonical aliasing predicate
-        :math:`t_1 \sim t_2 \iff \text{data\_ptr}(t_1) = \text{data\_ptr}(t_2)`.
+        The address says where the tensor's values are now, not which
+        tensor it is: an in-place op that computes its result into a new
+        buffer moves it.  Compare addresses to ask whether two tensors
+        read the same memory at this moment.
         """
-        # id() of the impl object is a stable, process-unique identifier
-        # suitable for equality checks (e.g. detecting aliasing) even if not
-        # the raw memory address.
-        return id(self._impl)
+        return int(self._impl.data_ptr())
 
     def storage_offset(self) -> int:
-        r"""Return the offset (in elements) of the first element in storage.
+        r"""Return the offset, in elements, of the first element in its buffer.
 
-        Contiguous tensors always return ``0``. Non-contiguous view tensors
-        may return a non-zero offset in frameworks that support strided
-        views; Lucid currently represents all tensors as contiguous so
-        this always returns ``0``.
+        A tensor that owns its buffer starts at element ``0``.  A view that
+        begins partway through its base's buffer reports how far in, so
+        :math:`\text{data\_ptr}(t) = \text{base} + \text{offset}(t) \times
+        \text{element\_size}(t)`.
 
         Returns
         -------
         int
-            The element offset into the underlying storage where ``self``
-            begins. Always ``0`` in the current Lucid implementation.
+            Element offset of the first element within the buffer.
 
         Examples
         --------
         >>> import lucid
         >>> lucid.zeros(3, 4).storage_offset()
         0
-
-        Notes
-        -----
-        In Lucid every tensor owns a fresh contiguous storage, so the
-        offset is identically zero: :math:`\text{offset}(t) \equiv 0`.
-        Frameworks that support sub-views over a shared buffer use this
-        for pointer arithmetic; for Lucid it is provided purely for API
-        compatibility.
         """
-        return 0
+        return int(self._impl.storage_offset_bytes()) // self.element_size()
 
     @property
     def H(self) -> Tensor:

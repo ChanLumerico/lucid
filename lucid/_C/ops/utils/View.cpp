@@ -25,6 +25,7 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../bfunc/_BinaryOp.h"
+#include "Contiguous.h"
 
 namespace lucid {
 
@@ -93,8 +94,13 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
     Validator::input(a, std::string(op_name) + ".a").non_null();
     OpScopeFull scope{op_name, a->device(), a->dtype(), out_shape};
 
-    Storage out_storage = backend::Dispatcher::for_device(a->device())
-                              .reshape(a->storage(), a->shape(), out_shape, a->dtype());
+    // The CPU backend reshape copies the buffer from its first byte, so a CPU
+    // input that is not dense (a view at an offset, or not contiguous) is
+    // laid out first.  GPU tensors keep copy semantics and never alias.
+    // Autograd still wires to ``a`` itself below.
+    const TensorImplPtr src = (a->device() == Device::CPU && !a->is_dense()) ? contiguous_op(a) : a;
+    Storage out_storage = backend::Dispatcher::for_device(src->device())
+                              .reshape(src->storage(), src->shape(), out_shape, src->dtype());
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
                                             a->device(), false);
 

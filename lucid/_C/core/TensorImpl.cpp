@@ -141,7 +141,14 @@ py::dtype lucid_dtype_to_np(Dtype dt) {
 // py::array requires a raw void* for the data pointer but needs to know who
 // owns the memory; passing a capsule as the "base" object transfers that
 // responsibility to the ref-counted shared_ptr copy inside the capsule.
-py::object make_numpy_view(const CpuStorage& s, const Shape& shape, const Stride& stride) {
+// Defined further down, in this file's second anonymous namespace.
+std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
+                                           const Shape& shape,
+                                           const Stride& stride,
+                                           std::size_t storage_offset);
+
+py::object
+make_numpy_view(const CpuStorage& s, const Shape& shape, const Stride& stride, std::size_t offset) {
     // Heap-allocate a copy of the shared_ptr so the capsule's destructor can
     // call delete on the correct type.  The capsule holds a void* internally,
     // so we need a stable heap address for the shared_ptr object itself.
@@ -157,11 +164,13 @@ py::object make_numpy_view(const CpuStorage& s, const Shape& shape, const Stride
     // answers float32 — and a view would then describe a 2-byte buffer as
     // 4-byte elements and read straight across the boundaries.  The first
     // version of this did exactly that and returned values from the wrong
-    // positions: ``1e30`` came back as ``4e-41``.  Convert instead.
+    // positions: ``1e30`` came back as ``4e-41``.  Convert instead — only the
+    // tensor's own elements, in order, since the buffer may hold more.
     if (s.dtype == Dtype::BF16) {
-        const std::size_t n = static_cast<std::size_t>(s.nbytes / sizeof(std::uint16_t));
+        const auto packed = contig_snapshot_cpu(s, shape, stride, offset);
+        const std::size_t n = packed.size() / sizeof(std::uint16_t);
         py::array_t<float> out(py_shape);
-        const auto* bits = reinterpret_cast<const std::uint16_t*>(s.ptr.get());
+        const auto* bits = reinterpret_cast<const std::uint16_t*>(packed.data());
         auto* dst = static_cast<float*>(out.request().ptr);
         for (std::size_t i = 0; i < n; ++i) {
             const std::uint32_t widened = static_cast<std::uint32_t>(bits[i]) << 16;
@@ -170,8 +179,10 @@ py::object make_numpy_view(const CpuStorage& s, const Shape& shape, const Stride
         return out;
     }
 
+    // The first element sits ``offset`` bytes into the buffer; handing NumPy
+    // the buffer's first byte read a view at an offset from the wrong place.
     return py::array(lucid_dtype_to_np(s.dtype), py_shape, py_stride,
-                     static_cast<const void*>(s.ptr.get()), owner);
+                     static_cast<const void*>(s.ptr.get() + offset), owner);
 }
 
 }  // namespace
@@ -346,22 +357,27 @@ bool TensorImpl::is_contiguous() const {
     return expected == meta_.stride;
 }
 
+bool TensorImpl::is_dense() const {
+    return offset_ == 0 && is_contiguous() && storage_nbytes(storage_) == nbytes();
+}
+
 // Dispatches on the active Storage variant to produce a NumPy array.
 // GPU tensors are synchronously downloaded via the MLX bridge before wrapping;
 // SharedStorage is exposed through its cpu_view() alias.
 py::object TensorImpl::data_as_python() const {
     return std::visit(overloaded{
                           [&](const CpuStorage& s) -> py::object {
-                              return make_numpy_view(s, meta_.shape, meta_.stride);
+                              return make_numpy_view(s, meta_.shape, meta_.stride, offset_);
                           },
                           [&](const GpuStorage& g) -> py::object {
+                              // The download is a fresh, dense buffer.
                               CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
-                              return make_numpy_view(cpu, meta_.shape, meta_.stride);
+                              return make_numpy_view(cpu, meta_.shape, meta_.stride, 0);
                           },
 
                           [&](const SharedStorage& sh) -> py::object {
                               CpuStorage v = sh.cpu_view();
-                              return make_numpy_view(v, meta_.shape, meta_.stride);
+                              return make_numpy_view(v, meta_.shape, meta_.stride, offset_);
                           },
                       },
                       storage_);
@@ -373,18 +389,19 @@ py::object TensorImpl::grad_as_python() const {
     if (!autograd_ || !autograd_->grad.has_value()) {
         return py::none();
     }
+    // A gradient is always its own dense buffer, so it starts at byte 0.
     return std::visit(overloaded{
                           [&](const CpuStorage& s) -> py::object {
-                              return make_numpy_view(s, meta_.shape, meta_.stride);
+                              return make_numpy_view(s, meta_.shape, meta_.stride, 0);
                           },
                           [&](const GpuStorage& g) -> py::object {
                               CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
-                              return make_numpy_view(cpu, meta_.shape, meta_.stride);
+                              return make_numpy_view(cpu, meta_.shape, meta_.stride, 0);
                           },
 
                           [&](const SharedStorage& sh) -> py::object {
                               CpuStorage v = sh.cpu_view();
-                              return make_numpy_view(v, meta_.shape, meta_.stride);
+                              return make_numpy_view(v, meta_.shape, meta_.stride, 0);
                           },
                       },
                       *autograd_->grad);
@@ -1016,7 +1033,9 @@ py::object TensorImpl::item() const {
     // per-epoch CPU time (1.6 s of 3.3 s, 1874 calls/epoch).  This path
     // collapses the work to: eval (GPU only) → pointer-offset → scalar
     // decode → py::cast.  Measured on M4 Max: 870 µs/call → ~100 µs/call.
-    const std::size_t byte_offset = offset_ * dtype_size(meta_.dtype);
+    // ``offset_`` is already in bytes (see TensorImpl.h); scaling it by the
+    // element size again read the wrong element of any view at an offset.
+    const std::size_t byte_offset = offset_;
     return std::visit(
         overloaded{
             [&](const CpuStorage& s) -> py::object {
@@ -1120,6 +1139,11 @@ void TensorImpl::copy_from(const TensorImpl& other) {
     if (other.shape() != shape()) {
         throw ShapeMismatch(meta_.shape, other.shape(), "copy_from");
     }
+    // A view is written through its geometry, and nothing does that yet: the
+    // copy below lands at the buffer's first byte.  Refuse rather than write
+    // where the view does not reach.
+    if (storage_is_cpu(storage_) && (offset_ != 0 || !is_contiguous()))
+        ErrorBuilder("copy_from").not_implemented("copying into a view is not supported yet");
     // A shared buffer is written in place so every alias sees the copy; the
     // GPU branch below would hand this tensor a fresh array instead.
     if (write_into_shared(other)) {
@@ -1129,6 +1153,17 @@ void TensorImpl::copy_from(const TensorImpl& other) {
 
     std::visit(overloaded{
                    [&](CpuStorage& dst, const CpuStorage& src) {
+                       // A view source is read through its geometry, not from
+                       // its buffer's first byte.
+                       if (!other.is_dense()) {
+                           const auto packed = contig_snapshot_cpu(
+                               src, other.shape(), other.stride(), other.storage_offset());
+                           if (packed.size() != dst.nbytes)
+                               ErrorBuilder("copy_from").fail("nbytes mismatch");
+                           if (!packed.empty())
+                               std::memcpy(dst.ptr.get(), packed.data(), packed.size());
+                           return;
+                       }
                        if (dst.nbytes != src.nbytes) {
                            ErrorBuilder("copy_from").fail("nbytes mismatch");
                        }

@@ -141,6 +141,63 @@ void register_tensor_impl(py::module_& m) {
         .def("numel", &TensorImpl::numel)
         .def("nbytes", &TensorImpl::nbytes)
         .def("is_contiguous", &TensorImpl::is_contiguous)
+        .def("is_dense", &TensorImpl::is_dense,
+             "Contiguous, at the first byte of its storage, and covering all of it.")
+        .def("storage_offset_bytes", &TensorImpl::storage_offset,
+             "Byte offset of the first element from the start of the storage.")
+        .def(
+            "data_ptr",
+            [](const TensorImpl& t) -> std::uintptr_t {
+                // The storage's base address plus the view's byte offset, so
+                // two tensors at the same place in one buffer compare equal.
+                // A GPU array is evaluated first: its buffer may not exist yet.
+                const std::size_t off = t.storage_offset();
+                const Storage& s = t.storage();
+                if (storage_is_cpu(s))
+                    return reinterpret_cast<std::uintptr_t>(storage_cpu(s).ptr.get()) + off;
+                if (storage_is_gpu(s)) {
+                    const auto& g = storage_gpu(s);
+                    if (!g.arr)
+                        return 0;
+                    g.arr->eval();
+                    return reinterpret_cast<std::uintptr_t>(g.arr->data<std::uint8_t>()) + off;
+                }
+                return reinterpret_cast<std::uintptr_t>(storage_metal_shared(s).cpu_ptr) + off;
+            },
+            "Address of the first element: the storage base plus the byte offset.")
+        .def_static(
+            "_make_view",
+            [](const std::shared_ptr<TensorImpl>& base, const std::vector<std::int64_t>& shape,
+               const std::vector<std::int64_t>& stride,
+               std::int64_t offset) -> std::shared_ptr<TensorImpl> {
+                // Testing hook: a view of ``base`` described in elements.  No
+                // public op makes views yet, so this is how the paths that
+                // must read one correctly get exercised.
+                if (!base || shape.size() != stride.size() || offset < 0)
+                    throw std::invalid_argument(
+                        "_make_view: shape and stride need the same length and offset >= 0");
+                const auto elem = static_cast<std::int64_t>(dtype_size(base->dtype()));
+                Shape view_shape(shape.begin(), shape.end());
+                Stride byte_stride;
+                byte_stride.reserve(stride.size());
+                std::int64_t last = offset * elem;
+                bool empty = false;
+                for (std::size_t i = 0; i < shape.size(); ++i) {
+                    if (shape[i] < 0 || stride[i] < 0)
+                        throw std::invalid_argument("_make_view: negative shape or stride");
+                    empty = empty || shape[i] == 0;
+                    byte_stride.push_back(stride[i] * elem);
+                    last += (shape[i] - 1) * stride[i] * elem;
+                }
+                const auto size = static_cast<std::int64_t>(storage_nbytes(base->storage()));
+                if (!empty && last + elem > size)
+                    throw std::invalid_argument(
+                        "_make_view: the view reaches past the end of the storage");
+                return TensorImpl::make_view(base, std::move(view_shape), std::move(byte_stride),
+                                             static_cast<std::size_t>(offset * elem));
+            },
+            py::arg("base"), py::arg("shape"), py::arg("stride"), py::arg("offset"),
+            "Testing hook: a view of base given in elements (shape, stride, offset).")
         // data_as_python / grad_as_python return the underlying buffer as a
         // numpy array view without copying; the TensorImpl must outlive the
         // returned array (keep-alive is handled by pybind11's default policy

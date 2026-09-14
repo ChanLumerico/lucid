@@ -362,8 +362,9 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
+    // Laid out densely first unless it already is — see UnaryKernel.
     const TensorImplPtr a_contig =
-        (a->device() == Device::CPU && !a->is_contiguous()) ? contiguous_op(a) : a;
+        (a->device() == Device::CPU && !a->is_dense()) ? contiguous_op(a) : a;
     const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
 
     // normalize_axes converts negative indices and deduplicates; the

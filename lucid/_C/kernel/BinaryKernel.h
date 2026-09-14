@@ -572,10 +572,12 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
+    // Backend kernels read a Storage from its first byte, so any input that
+    // is not dense (non-contiguous, or a view at an offset) is laid out first.
     const TensorImplPtr a_contig =
-        (a->device() == Device::CPU && !a->is_contiguous()) ? contiguous_op(a) : a;
+        (a->device() == Device::CPU && !a->is_dense()) ? contiguous_op(a) : a;
     const TensorImplPtr b_contig =
-        (b->device() == Device::CPU && !b->is_contiguous()) ? contiguous_op(b) : b;
+        (b->device() == Device::CPU && !b->is_dense()) ? contiguous_op(b) : b;
     const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
     const TensorImplPtr b_ptr = detail::maybe_cast_for_kernel(b_contig, eff_dt);
 

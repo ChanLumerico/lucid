@@ -541,6 +541,12 @@ public:
     //     that were transposed / sliced / otherwise reordered.
     bool is_contiguous() const;
 
+    // Predicate: contiguous, at the first byte of its storage, and covering
+    // all of it — the layout every backend kernel assumes when it reads a
+    // Storage from byte 0.  A contiguous view at an offset, or one smaller
+    // than its buffer, is contiguous but not dense.
+    bool is_dense() const;
+
     // ---------------------------------------------------------------------------
     // Python / NumPy interop
     // ---------------------------------------------------------------------------
