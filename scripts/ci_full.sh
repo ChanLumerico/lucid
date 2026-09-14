@@ -128,9 +128,8 @@ echo "==> H4 numpy guard (sanctioned bridge files only)"
 # only part of it "reports clean over half a framework".
 #
 # ``--audit-only`` is the self-check and the sweep: a minute, because the
-# sweep is static contract probing rather than model work.  The other two
-# stages (suite, doctests) are already covered above and would only
-# duplicate them.
+# sweep is static contract probing rather than model work.  The suite is
+# covered by the tiers above; the doctest stage is not, and runs next.
 #
 # Exit is 0 only when every stage that ran is clean, so no output needs
 # reading.  2 means the harness broke, which is not the same as 1 — the
@@ -143,6 +142,23 @@ set -e
 if [ "$audit_status" -eq 2 ]; then
     echo "  [WARN] the audit harness itself failed — the sweep proved nothing"
 elif [ "$audit_status" -ne 0 ]; then
+    exit 1
+fi
+
+# Docstring examples, each module against its recorded failure count in
+# lucid/test/audit/doctest.json.  Nothing above runs them: the tiers
+# collect tests, not docstrings, and --audit-only skips this stage — which
+# is how lucid.coreml shipped 63 examples that had never run.  A module
+# whose count goes up fails the gate; the floor itself is rewritten
+# locally with ``python -m lucid.test.audit --doctests-only --update-doctests``.
+echo "==> Docstring examples (against the doctest floor)"
+set +e
+"$PYTHON_BIN" -m lucid.test.audit --doctests-only
+doctest_status=$?
+set -e
+if [ "$doctest_status" -eq 2 ]; then
+    echo "  [WARN] the doctest harness itself failed — the examples proved nothing"
+elif [ "$doctest_status" -ne 0 ]; then
     exit 1
 fi
 

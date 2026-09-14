@@ -99,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="the test suite and line-coverage floor alone, without the sweep",
     )
     stage.add_argument(
+        "--doctests-only",
+        action="store_true",
+        help="the docstring-example stage alone, against its recorded floor",
+    )
+    stage.add_argument(
         "--suite-path",
         default="lucid/test",
         help="what to hand pytest (default: the whole tree; the sweep is "
@@ -1184,11 +1189,11 @@ def main(argv: "Sequence[str] | None" = None) -> int:
     if args.list_uncovered:
         return report_uncovered(console, args)
 
-    if args.audit_only and args.tests_only:
+    if sum((args.audit_only, args.tests_only, args.doctests_only)) > 1:
         console.always(
             console.paint(
-                "  --audit-only and --tests-only exclude each other; "
-                "pass neither to run both",
+                "  --audit-only, --tests-only and --doctests-only exclude each "
+                "other; pass none to run everything",
                 "red",
             )
         )
@@ -1197,8 +1202,12 @@ def main(argv: "Sequence[str] | None" = None) -> int:
     # Both stages by default.  A gate that has to be invoked twice is a
     # gate that gets invoked once, and this session's defects split
     # roughly evenly between what each stage can see.
-    do_audit = not args.tests_only
-    do_suite = not args.audit_only
+    do_audit = not (args.tests_only or args.doctests_only)
+    do_suite = not (args.audit_only or args.doctests_only)
+    # The doctest stage rides with the suite, and alone under
+    # --doctests-only.  CI's gate ran the sweep with --audit-only, which
+    # skipped the examples, and 63 of them shipped without ever running.
+    do_doctests = (do_suite or args.doctests_only) and not args.no_doctests
 
     tallies: dict[str, int] = {}
     try:
@@ -1221,7 +1230,7 @@ def main(argv: "Sequence[str] | None" = None) -> int:
             broken, line_regressions = _run_suite_stage(args, console)
             tallies["suite failures"] = broken
             tallies["line coverage regressions"] = line_regressions
-        if do_suite and not args.no_doctests:
+        if do_doctests:
             tallies["docstring regressions"] = _run_doctest_stage(args, console)
     except KeyboardInterrupt:
         console.always("")
