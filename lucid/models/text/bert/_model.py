@@ -635,6 +635,26 @@ class _BERTLMPredictionHead(nn.Module):
         # ``cls.predictions.decoder.weight``.
         self.bias = nn.Parameter(lucid.zeros(config.vocab_size))
 
+    def tie_to(self, weight: nn.Parameter) -> None:
+        """Decode with ``weight`` (shared, not copied) and fit the bias to it.
+
+        The bias holds one entry per output token, so a table with another
+        number of rows needs one of matching length: surviving entries carry
+        over and new tokens start at zero.
+        """
+        self.decoder.weight = weight
+        vocab = int(weight.shape[0])
+        self.decoder.out_features = vocab
+        have = int(self.bias.shape[0])
+        if have != vocab:
+            kept = self.bias.detach()[: min(have, vocab)]
+            if vocab > have:
+                pad = lucid.zeros(
+                    vocab - have, dtype=kept.dtype, device=kept.device.type
+                )
+                kept = lucid.cat([kept, pad])
+            self.bias = nn.Parameter(kept)
+
     @override
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.transform(x))
@@ -721,14 +741,13 @@ class BERTForMaskedLM(LanguageModelingModel, MaskedLMMixin):
         self.bert = BERTModel(config)
         self.cls = _BERTOnlyMLMHead(config)
         if config.tie_word_embeddings:
-            self._tie_decoder_to_input_embeddings()
+            self._tie_word_embeddings()
 
-    def _tie_decoder_to_input_embeddings(self) -> None:
+    @override
+    def _tie_word_embeddings(self) -> None:
         # Bind the decoder weight to the input embedding matrix so the two
         # share storage and gradients.  HF does the same thing.
-        self.cls.predictions.decoder.weight = (
-            self.bert.embeddings.word_embeddings.weight
-        )
+        self.cls.predictions.tie_to(self.bert.embeddings.word_embeddings.weight)
 
     @override
     def forward(  # type: ignore[override]
@@ -1215,9 +1234,11 @@ class BERTForPreTraining(SequenceClassificationModel, MaskedLMMixin):
         self.bert = BERTModel(config)
         self.cls = _BERTPreTrainingHeads(config)
         if config.tie_word_embeddings:
-            self.cls.predictions.decoder.weight = (
-                self.bert.embeddings.word_embeddings.weight
-            )
+            self._tie_word_embeddings()
+
+    @override
+    def _tie_word_embeddings(self) -> None:
+        self.cls.predictions.tie_to(self.bert.embeddings.word_embeddings.weight)
 
     @override
     def forward(  # type: ignore[override]
@@ -1427,9 +1448,11 @@ class BERTForCausalLM(LanguageModelingModel):
         self.bert = BERTModel(config)
         self.cls = _BERTOnlyMLMHead(config)
         if config.tie_word_embeddings:
-            self.cls.predictions.decoder.weight = (
-                self.bert.embeddings.word_embeddings.weight
-            )
+            self._tie_word_embeddings()
+
+    @override
+    def _tie_word_embeddings(self) -> None:
+        self.cls.predictions.tie_to(self.bert.embeddings.word_embeddings.weight)
 
     def _causal_attention_mask(
         self,

@@ -516,10 +516,16 @@ class GPT2LMHeadModel(LanguageModelingModel, CausalLMMixin):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self._use_cache = config.use_cache
         if config.tie_word_embeddings:
-            self._tie_lm_head_to_input_embeddings()
+            self._tie_word_embeddings()
 
-    def _tie_lm_head_to_input_embeddings(self) -> None:
-        self.lm_head.weight = self.transformer.wte.weight
+    @override
+    def _tie_word_embeddings(self) -> None:
+        # Share the token table's storage and gradient.  ``out_features``
+        # follows it, so a swapped-in table of another size is reported
+        # truthfully (the quantized converters build from it).
+        weight = self.transformer.wte.weight
+        self.lm_head.weight = weight
+        self.lm_head.out_features = int(weight.shape[0])
 
     @override
     def forward(  # type: ignore[override]
@@ -828,7 +834,13 @@ class GPT2DoubleHeadsModel(LanguageModelingModel):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.mc_head = _GPT2MultipleChoiceHead(config)
         if config.tie_word_embeddings:
-            self.lm_head.weight = self.transformer.wte.weight
+            self._tie_word_embeddings()
+
+    @override
+    def _tie_word_embeddings(self) -> None:
+        weight = self.transformer.wte.weight
+        self.lm_head.weight = weight
+        self.lm_head.out_features = int(weight.shape[0])
 
     @override
     def forward(  # type: ignore[override]

@@ -251,8 +251,15 @@ class TransformerModel(PretrainedModel):
     def set_input_embeddings(self, value: nn.Module) -> None:
         if not isinstance(value, nn.Embedding):
             raise TypeError(
-                f"TransformerModel input embeddings must be nn.Embedding, got {type(value).__name__}"
+                "TransformerModel input embeddings must be nn.Embedding, got "
+                f"{type(value).__name__}"
             )
+        # With ``share_embeddings`` (or no decoder) the target side is the
+        # source table under a second name.  Replacing only the source would
+        # split them: the decoder would keep reading the old table, and the
+        # checkpoint would carry it.
+        if self.tgt_tok_emb is self.src_tok_emb:
+            self.tgt_tok_emb = value
         self.src_tok_emb = value
 
     def get_output_embeddings(self) -> nn.Module:
@@ -461,7 +468,16 @@ class TransformerForSeq2SeqLM(LanguageModelingModel):
         tgt_vocab = config.effective_decoder_vocab_size
         self.lm_head = nn.Linear(config.hidden_size, tgt_vocab, bias=False)
         if config.tie_word_embeddings:
-            self.lm_head.weight = self.transformer.tgt_tok_emb.weight
+            self._tie_word_embeddings()
+
+    @override
+    def _tie_word_embeddings(self) -> None:
+        # The head decodes into the *target* vocabulary, so it shares the
+        # target table -- the source table too only when ``share_embeddings``
+        # is set.
+        weight = self.transformer.tgt_tok_emb.weight
+        self.lm_head.weight = weight
+        self.lm_head.out_features = int(weight.shape[0])
 
     @override
     def forward(  # type: ignore[override]

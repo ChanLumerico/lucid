@@ -513,6 +513,21 @@ class PretrainedModel(nn.Module):
             total += sz
         return total
 
+    def _embedding_trunk(self) -> PretrainedModel | None:
+        r"""Return the wrapped trunk that owns the token table, if any.
+
+        A task wrapper keeps its trunk under :attr:`base_model_prefix`
+        (``bert`` on ``BERTForMaskedLM``, ``transformer`` on
+        ``GPTLMHeadModel``).  That attribute is the trunk when it is a
+        :class:`PretrainedModel` other than ``self``; a trunk itself, and a
+        model with no such attribute, has none.
+        """
+        prefix = type(self).base_model_prefix
+        trunk = getattr(self, prefix, None) if prefix else None
+        if isinstance(trunk, PretrainedModel) and trunk is not self:
+            return trunk
+        return None
+
     def get_input_embeddings(self) -> nn.Module | None:
         r"""Return the input-embedding submodule, or ``None`` if not applicable.
 
@@ -524,11 +539,24 @@ class PretrainedModel(nn.Module):
 
         Notes
         -----
-        Override in subclasses that have an embedding table.  Used by
-        tools that need to resize / share / introspect token embeddings
-        without coupling to family-specific attribute names.
+        Trunks with an embedding table override this.  A task wrapper does
+        not need to: this implementation hands the call to the trunk stored
+        under :attr:`base_model_prefix`, so a wrapper reports the same table
+        as the trunk inside it.  Used by tools that need to resize / share /
+        introspect token embeddings without coupling to family-specific
+        attribute names.
+
+        Examples
+        --------
+        >>> from lucid.models import create_model
+        >>> lm = create_model("gpt_lm", vocab_size=100, hidden_size=16,
+        ...                   num_hidden_layers=1, num_attention_heads=2,
+        ...                   intermediate_size=32, max_position_embeddings=8)
+        >>> lm.get_input_embeddings() is lm.transformer.tokens_embed
+        True
         """
-        return None
+        trunk = self._embedding_trunk()
+        return trunk.get_input_embeddings() if trunk is not None else None
 
     def set_input_embeddings(self, value: nn.Module) -> None:
         r"""Replace the input-embedding submodule.
@@ -541,12 +569,22 @@ class PretrainedModel(nn.Module):
         Raises
         ------
         NotImplementedError
-            On the base class — subclasses with embeddings must override.
+            When the model has no embedding table to replace — neither an
+            override of its own nor a trunk under :attr:`base_model_prefix`.
 
         Notes
         -----
-        Companion to :meth:`get_input_embeddings`.  Subclasses that
-        override one should override the other.
+        Companion to :meth:`get_input_embeddings`.  Trunks with a table
+        override both; a task wrapper inherits this implementation, which
+        makes the swap on its trunk.
+
+        When the wrapper ties an output head to the table
+        (``config.tie_word_embeddings``), the head is re-bound to the new
+        table's weight, so the two stay one matrix and the head scores the
+        new vocabulary.  A head bias sized to the vocabulary is resized with
+        it: existing entries are kept and new ones start at zero.  An untied
+        head is left as it is.  Either way ``config`` is frozen and keeps
+        its original ``vocab_size``.
 
         Examples
         --------
@@ -569,6 +607,20 @@ class PretrainedModel(nn.Module):
         >>> model(ids).last_hidden_state.shape
         (1, 2, 16)
 
+        A task wrapper makes the same swap on its trunk.  Its LM head is tied
+        to the table, so the head follows and the logits widen to the new
+        vocabulary, rather than keep scoring the table it replaced.
+
+        >>> lm = create_model("gpt_lm", vocab_size=100, hidden_size=16,
+        ...                   num_hidden_layers=1, num_attention_heads=2,
+        ...                   intermediate_size=32,
+        ...                   max_position_embeddings=8).eval()
+        >>> lm.set_input_embeddings(nn.Embedding(120, 16))
+        >>> lm.lm_head.weight is lm.get_input_embeddings().weight
+        True
+        >>> lm(ids).logits.shape
+        (1, 2, 120)
+
         A model with no embedding table keeps this base implementation and
         refuses, rather than attach a module that nothing would read.
 
@@ -580,6 +632,21 @@ class PretrainedModel(nn.Module):
             ...
         NotImplementedError: LeNet does not support set_input_embeddings
         """
-        raise NotImplementedError(
-            f"{type(self).__name__} does not support set_input_embeddings"
-        )
+        trunk = self._embedding_trunk()
+        if trunk is None or trunk.get_input_embeddings() is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not support set_input_embeddings"
+            )
+        trunk.set_input_embeddings(value)
+        if getattr(self.config, "tie_word_embeddings", False):
+            self._tie_word_embeddings()
+
+    def _tie_word_embeddings(self) -> None:
+        r"""Bind an output head's weight to the input embedding table.
+
+        Nothing to bind here.  A wrapper whose head shares the input table
+        overrides this and calls it from ``__init__`` when
+        ``config.tie_word_embeddings`` is set; :meth:`set_input_embeddings`
+        calls it again after a swap, so the head follows the new table
+        rather than keep the old one alive.
+        """
