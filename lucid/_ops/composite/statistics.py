@@ -1,7 +1,6 @@
 """Statistical composite ops: quantile, cov, corrcoef, cdist."""
 
 import math
-import random
 from bisect import bisect_right
 from typing import Sequence, TYPE_CHECKING
 
@@ -478,6 +477,11 @@ def bincount(
         return lucid.tensor(counts, dtype=lucid.int64, device=input.device)
 
 
+# Elements of the (batch, samples, categories) comparison multinomial makes
+# at once when drawing with replacement.
+_MULTINOMIAL_CHUNK = 1 << 24
+
+
 def multinomial(
     input: Tensor,
     num_samples: int,
@@ -490,7 +494,14 @@ def multinomial(
     Non-differentiable — gradients of ``input`` are not propagated
     through the sampling step.  Pass an explicit ``generator`` for an
     isolated PRNG stream; without one, draws come from Lucid's
-    :func:`manual_seed`-controlled default Philox generator.
+    :func:`manual_seed`-controlled default Philox generator.  The draws
+    are made on ``input``'s device.
+
+    With replacement, each draw inverts the cumulative weights at a
+    uniform sample.  Without replacement, the categories are ranked by
+    log-weight plus Gumbel noise and the first ``num_samples`` are kept,
+    which has the same law as drawing one at a time and removing each
+    pick.
 
     Parameters
     ----------
@@ -516,46 +527,69 @@ def multinomial(
         ``(B, num_samples)`` for 2-D input.
     """
 
-    def _sample_row(probs_list: list[float], k: int, replace: bool) -> list[int]:
-        """Draw ``k`` indices from a single categorical row with weights ``probs_list``.
+    if input.ndim not in (1, 2):
+        raise ValueError(f"multinomial: input must be 1-D or 2-D, got {input.ndim}-D")
+    k = int(input.shape[-1])
+    if num_samples < 1:
+        raise ValueError(
+            f"multinomial: num_samples must be positive, got {num_samples}"
+        )
+    if not replacement and num_samples > k:
+        raise ValueError(
+            f"multinomial: cannot draw {num_samples} samples without replacement "
+            f"from {k} categories"
+        )
+    rows = input.detach().reshape(-1, k)
+    if rows.dtype not in (lucid.float32, lucid.float64):
+        rows = rows.float()
+    if float(rows.min().item()) < 0 or not math.isfinite(float(rows.sum().item())):
+        raise ValueError("multinomial: weights must be finite and non-negative")
+    positive = int((rows > 0).sum(dim=-1).min().item())
+    if positive == 0:
+        raise ValueError("multinomial: every distribution needs a positive weight")
+    if not replacement and positive < num_samples:
+        raise ValueError(
+            f"multinomial: cannot draw {num_samples} samples without replacement "
+            f"from a distribution with {positive} positive weights"
+        )
+    batch = int(rows.shape[0])
 
-        Weights are renormalised internally. When ``replace`` is ``False``,
-        each chosen index is removed before the next draw.
-        """
-        total = sum(probs_list)
-        probs_list = [p / total for p in probs_list]
-        population = list(range(len(probs_list)))
-        if replace:
-            return random.choices(population, weights=probs_list, k=k)
-        # Without replacement: repeated weighted choice, removing chosen item.
-        chosen: list[int] = []
-        remaining = list(range(len(probs_list)))
-        w = list(probs_list)
-        for _ in range(k):
-            if not remaining:
-                raise ValueError(
-                    "multinomial: not enough elements for sampling without replacement"
-                )
-            (sel,) = random.choices(remaining, weights=w, k=1)
-            chosen.append(sel)
-            pos = remaining.index(sel)
-            remaining.pop(pos)
-            w.pop(pos)
-        return chosen
-
-    if input.ndim == 1:
-        n = int(input.shape[0])
-        probs = [float(input[i].item()) for i in range(n)]
-        idx = _sample_row(probs, num_samples, replacement)
-        return lucid.tensor(idx, dtype=lucid.int64)
+    if replacement:
+        # Inverse CDF: a uniform draw belongs to the category whose interval
+        # of the cumulative weights holds it, which is the count of cumulative
+        # weights at or below it.  Dividing by the last one makes that exactly
+        # 1.0, so a draw in [0, 1) never counts past the last category, and a
+        # zero weight's empty interval is never hit.
+        cdf = rows.cumsum(dim=-1)
+        cdf = cdf / cdf[:, -1:]
+        u = lucid.rand(
+            batch,
+            num_samples,
+            dtype=rows.dtype,
+            device=rows.device,
+            generator=generator,
+        )
+        # The comparison is (batch, samples, k); chunking the samples keeps it
+        # bounded however many draws are asked for.
+        step = max(1, _MULTINOMIAL_CHUNK // (batch * k))
+        parts = [
+            (cdf.unsqueeze(1) <= u[:, s : s + step].unsqueeze(-1)).sum(dim=-1)
+            for s in range(0, num_samples, step)
+        ]
+        idx = parts[0] if len(parts) == 1 else lucid.cat(parts, dim=1)
     else:
-        batch = int(input.shape[0])
-        n_cat = int(input.shape[1])
-        rows = []
-        for b in range(batch):
-            probs = [float(input[b, i].item()) for i in range(n_cat)]
-            rows.append(_sample_row(probs, num_samples, replacement))
-        return lucid.tensor(rows, dtype=lucid.int64)
+        # Gumbel-top-k: ranking the categories by log-weight plus independent
+        # Gumbel noise and keeping the first num_samples draws them without
+        # replacement, in the order one-at-a-time draws would pick them.  A
+        # zero weight's key is -inf, so it is never kept.
+        u = lucid.rand(
+            batch, k, dtype=rows.dtype, device=rows.device, generator=generator
+        )
+        gumbel = -(-u.clamp(min=1e-30).log()).log()
+        _, idx = lucid.topk(rows.log() + gumbel, num_samples, dim=-1)
+
+    idx = idx.long()
+    return idx.reshape(num_samples) if input.ndim == 1 else idx
 
 
 def poisson(

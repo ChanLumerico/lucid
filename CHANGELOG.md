@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Rectified Flow draws where the model is; DIAMOND's act keeps its memory
+- draws follow the generator and stay on the input's device
 
 ---
 

@@ -2,6 +2,7 @@
 histogram* / multinomial / poisson."""
 
 import numpy as np
+import pytest
 
 import lucid
 
@@ -115,6 +116,54 @@ class TestMultinomial:
         assert out.shape == (10,)
         arr = out.numpy()
         assert (arr >= 0).all() and (arr < 3).all()
+
+    def test_stays_on_the_input_device_as_int64(self, device: str) -> None:
+        for replacement in (True, False):
+            probs = lucid.tensor([[1.0, 2.0, 3.0]] * 2, device=device)
+            out = lucid.multinomial(probs, 2, replacement)
+            assert out.shape == (2, 2)
+            assert out.dtype == lucid.int64 and out.device == device
+
+    @pytest.mark.parametrize("replacement", [True, False])
+    def test_draws_follow_the_generator(self, device: str, replacement: bool) -> None:
+        # Draws came from the host's own random module, which ignored both
+        # the generator and manual_seed.
+        probs = lucid.tensor([[0.1, 0.2, 0.7], [0.5, 0.25, 0.25]], device=device)
+
+        def draw(seed: int) -> list[list[int]]:
+            gen = lucid.Generator(seed=seed)
+            return lucid.multinomial(probs, 3, replacement, generator=gen).tolist()
+
+        assert draw(7) == draw(7)
+        lucid.manual_seed(3)
+        first = lucid.multinomial(probs, 3, replacement).tolist()
+        lucid.manual_seed(3)
+        assert lucid.multinomial(probs, 3, replacement).tolist() == first
+
+    def test_frequencies_follow_the_weights(self, device: str) -> None:
+        lucid.manual_seed(0)
+        probs = lucid.tensor([1.0, 0.0, 3.0], device=device)
+        arr = lucid.multinomial(probs, 4000, replacement=True).numpy()
+        assert (arr != 1).all()  # a zero weight is never drawn
+        assert abs((arr == 2).mean() - 0.75) < 0.03
+
+    def test_without_replacement_draws_distinct_positive_categories(
+        self, device: str
+    ) -> None:
+        lucid.manual_seed(0)
+        probs = lucid.tensor([[1.0, 0.0, 2.0, 3.0]] * 2000, device=device)
+        rows = lucid.multinomial(probs, 3).tolist()
+        assert all(sorted(row) == [0, 2, 3] for row in rows)
+        # The first pick is an ordinary draw: category 3 holds half the weight.
+        assert abs(sum(row[0] == 3 for row in rows) / len(rows) - 0.5) < 0.05
+
+    def test_invalid_requests_raise(self, device: str) -> None:
+        with pytest.raises(ValueError, match="without replacement"):
+            lucid.multinomial(lucid.tensor([1.0, 0.0, 1.0], device=device), 3)
+        with pytest.raises(ValueError, match="non-negative"):
+            lucid.multinomial(lucid.tensor([1.0, -1.0], device=device), 1, True)
+        with pytest.raises(ValueError, match="positive weight"):
+            lucid.multinomial(lucid.tensor([0.0, 0.0], device=device), 1, True)
 
 
 class TestPoissonOp:
