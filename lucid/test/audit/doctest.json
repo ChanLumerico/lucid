@@ -9,8 +9,8 @@
     "",
     "Regenerate with:  lucid-audit --update-doctests"
   ],
-  "failed": 614,
-  "attempted": 5956,
+  "failed": 551,
+  "attempted": 6146,
   "failing": {
     "lucid._factories.converters": 7,
     "lucid._factories.creation": 10,
@@ -29,11 +29,6 @@
     "lucid.compile._core.signature": 5,
     "lucid.compile._debug.trace_dump": 3,
     "lucid.compile._entry.module": 7,
-    "lucid.coreml": 18,
-    "lucid.coreml._build": 4,
-    "lucid.coreml._model": 9,
-    "lucid.coreml._optimize": 5,
-    "lucid.coreml._spec": 27,
     "lucid.distributions.bernoulli": 20,
     "lucid.distributions.categorical": 1,
     "lucid.distributions.continuous_extra": 4,
