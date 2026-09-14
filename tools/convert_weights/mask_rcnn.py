@@ -90,7 +90,9 @@ class MaskRCNNArch(Architecture):
         # longest side 1333, the image in the top-left corner of a 1344 square
         # (a multiple of 32, as the reference pads its batches), ImageNet
         # normalisation (boxes / masks ride with the image).
-        preset = Detection(max_size=1333, size_divisible=32, pad_position="top_left")
+        preset = Detection(
+            max_size=1333, size_divisible=32, pad_position="top_left", pad_value=0.0
+        )
         preprocessing = preset.to_dict()
 
         tv_meta = dict(self._tv_weights.meta)

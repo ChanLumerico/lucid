@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - zero_() writes zeros, where inf and NaN stayed NaN
 
+- pad with what each reference feeds, and map boxes back
+
 ### Added
 
 - CPU reshapes are views that see each other's writes

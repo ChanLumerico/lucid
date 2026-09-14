@@ -455,7 +455,6 @@ class DarknetYOLOArch(Architecture):
 
     def spec(self) -> ConversionSpec:
         import lucid.models as models
-
         from lucid.utils.transforms import Detection
 
         src = self.src
@@ -471,6 +470,7 @@ class DarknetYOLOArch(Architecture):
         preprocessing = Detection(
             max_size=src.image_size,
             pad_position="center",
+            pad_value=0.5,
             mean=(0.0, 0.0, 0.0),
             std=(1.0, 1.0, 1.0),
         ).to_dict()

@@ -357,3 +357,53 @@ class TestDetectionCanvas:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_the_padding_reaches_the_model_at_pad_value() -> None:
+    img = T.Image(lucid.rand(3, 16, 32))
+    for pad_value in (0.0, 0.5):
+        tf = T.Detection(max_size=64, pad_value=pad_value, pad_position="top_left")
+        out = tf(img).data
+        # The resized image fills rows [0, 32); rows [32, 64) are padding.
+        assert float((out[:, 32:, :] - pad_value).abs().max().item()) < 1e-6
+
+
+def test_without_pad_value_the_padding_is_a_normalised_black_pixel() -> None:
+    # What a config saved before pad_value existed produced, unchanged.
+    tf = T.Detection(max_size=64, pad_position="top_left")
+    out = tf(T.Image(lucid.rand(3, 16, 32))).data
+    expect = [(0.0 - m) / s for m, s in zip(tf.mean, tf.std)]
+    assert [float(out[c, -1, 0].item()) for c in range(3)] == pytest.approx(
+        expect, abs=1e-6
+    )
+
+
+def test_to_image_boxes_undoes_the_letterbox_and_the_resize() -> None:
+    letterbox = T.Detection(max_size=64)
+    assert letterbox.image_size(16, 32) == (32, 64)
+    on_canvas = lucid.tensor([[0.0, 16.0, 64.0, 48.0]])
+    assert letterbox.to_image_boxes(on_canvas, 16, 32).tolist() == [
+        [0.0, 0.0, 32.0, 16.0]
+    ]
+    top_left = T.Detection(max_size=64, pad_position="top_left")
+    on_canvas = lucid.tensor([[0.0, 0.0, 64.0, 32.0]])
+    assert top_left.to_image_boxes(on_canvas, 16, 32).tolist() == [
+        [0.0, 0.0, 32.0, 16.0]
+    ]
+
+
+def test_a_per_axis_canvas_rounds_each_side_up_to_the_divisor() -> None:
+    # The reference gives a single image a canvas each side of which is the
+    # next multiple of 32; the square canvas pads the short side to the long.
+    img = T.Image(lucid.rand(3, 20, 30))
+    square = T.Detection(max_size=100, size_divisible=32, pad_position="top_left")
+    fitted = T.Detection(
+        max_size=100, size_divisible=32, pad_position="top_left", square=False
+    )
+    assert tuple(square(img).data.shape) == (3, 128, 128)
+    assert tuple(fitted(img).data.shape) == (3, 96, 128)
+
+
+def test_pad_if_needed_pads_up_to_a_divisor() -> None:
+    tf = T.PadIfNeeded(None, None, pad_height_divisor=32, pad_width_divisor=16)
+    assert tuple(tf(T.Image(lucid.rand(3, 33, 16))).data.shape) == (3, 64, 16)

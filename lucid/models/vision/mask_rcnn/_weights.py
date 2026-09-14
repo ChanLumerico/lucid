@@ -23,7 +23,9 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 # The reference transform copies each image into the top-left of a canvas
 # rounded up to a multiple of 32, which is where ``postprocess`` measures
 # ``image_sizes`` from.
-_PRESET = Detection(max_size=1333, size_divisible=32, pad_position="top_left")
+_PRESET = Detection(
+    max_size=1333, size_divisible=32, pad_position="top_left", pad_value=0.0
+)
 
 
 @register_weights("mask_rcnn")

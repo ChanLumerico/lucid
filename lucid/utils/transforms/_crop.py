@@ -7,6 +7,7 @@ geometric, moving mask / boxes / keypoints with the image.
 from dataclasses import dataclass
 from typing import override
 
+import lucid
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
 from lucid.utils.transforms import functional as F
@@ -127,16 +128,24 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
 
     Parameters
     ----------
-    min_height, min_width : int
-        Minimum output size; smaller inputs are padded up to it.
+    min_height, min_width : int or None
+        Minimum output size; smaller inputs are padded up to it.  ``None``
+        sets no minimum on that axis.
     border_mode : int, optional, default=4
-    value, mask_value : float, optional, default=0.0
+    value : float or tuple of float, optional, default=0.0
+        Fill for the image's padded area; a tuple gives one value per
+        channel.
+    mask_value : float, optional, default=0.0
     p : float, optional, default=1.0
     position : str, optional, default="center"
         Where a smaller input sits on the padded canvas: ``"center"``,
         ``"top_left"``, ``"top_right"``, ``"bottom_left"`` or
         ``"bottom_right"`` (the Albumentations names).  Boxes, masks and
         keypoints move with it.
+    pad_height_divisor, pad_width_divisor : int or None, optional
+        Pad that axis further, up to the next multiple of this (the
+        Albumentations names).  ``None`` (default) leaves it at the
+        minimum.
 
     Examples
     --------
@@ -157,14 +166,21 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
 
     def __init__(
         self,
-        min_height: int = 1024,
-        min_width: int = 1024,
+        min_height: int | None = 1024,
+        min_width: int | None = 1024,
         border_mode: int = 4,
-        value: float = 0.0,
+        value: float | tuple[float, ...] = 0.0,
         mask_value: float = 0.0,
         p: float = 1.0,
         position: str = "center",
+        pad_height_divisor: int | None = None,
+        pad_width_divisor: int | None = None,
     ) -> None:
+        for divisor in (pad_height_divisor, pad_width_divisor):
+            if divisor is not None and divisor < 1:
+                raise ValueError(
+                    f"PadIfNeeded: a divisor must be at least 1, got {divisor}"
+                )
         positions = ("center", "top_left", "top_right", "bottom_left", "bottom_right")
         if position not in positions:
             raise ValueError(
@@ -177,10 +193,17 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
         self.value = value
         self.mask_value = mask_value
         self.position = position
+        self.pad_height_divisor = pad_height_divisor
+        self.pad_width_divisor = pad_width_divisor
+
+    @staticmethod
+    def _target(size: int, minimum: int | None, divisor: int | None) -> int:
+        target = size if minimum is None else max(minimum, size)
+        return target if divisor is None else -(-target // divisor) * divisor
 
     def _pads(self, h: int, w: int) -> tuple[int, int, int, int]:
-        dh = max(self.min_height - h, 0)
-        dw = max(self.min_width - w, 0)
+        dh = self._target(h, self.min_height, self.pad_height_divisor) - h
+        dw = self._target(w, self.min_width, self.pad_width_divisor) - w
         if self.position == "center":
             top, left = dh // 2, dw // 2
         else:
@@ -192,7 +215,17 @@ class PadIfNeeded(_NoParams, GeometricTransform[Empty]):
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         h, w = F._spatial_hw(img)
-        return F.pad(img, self._pads(h, w), value=self.value)
+        pads = self._pads(h, w)
+        if not isinstance(self.value, tuple):
+            return F.pad(img, pads, value=self.value)
+        # One fill per channel: pad with 0, then add each channel's fill over
+        # the padded ring only.  ``x + 0`` is exact, so the image keeps its
+        # values bit for bit.
+        ring = F.pad(
+            lucid.zeros(1, h, w, dtype=img.dtype, device=img.device), pads, value=1.0
+        )
+        fill = lucid.tensor(list(self.value), dtype=img.dtype, device=img.device)
+        return F.pad(img, pads, value=0.0) + ring * fill.reshape(-1, 1, 1)
 
     @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:

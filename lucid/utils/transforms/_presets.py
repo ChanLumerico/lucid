@@ -42,6 +42,7 @@ True
 import abc
 from typing import ClassVar, cast, override
 
+import lucid
 from lucid._tensor import Tensor
 from lucid.utils.transforms._autoaugment import (
     AutoAugment,
@@ -56,17 +57,17 @@ from lucid.utils.transforms._base import (
     TransformLike,
     _NoParams,
 )
+from lucid.utils.transforms._crop import PadIfNeeded
 from lucid.utils.transforms._erasing import RandomErasing
 from lucid.utils.transforms._geometric import (
     CenterCrop,
     HorizontalFlip,
     LongestMaxSize,
+    RandomResizedCrop,
     Resize,
     ResizeShortestEdge,
-    RandomResizedCrop,
     SmallestMaxSize,
 )
-from lucid.utils.transforms._crop import PadIfNeeded
 from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._photometric import ColorJitter, Normalize
 from lucid.utils.transforms.functional import resize, resize_target
@@ -622,6 +623,22 @@ class Detection(TransformsPreset):
         detector's ``image_sizes`` is measured in; darknet letterboxes it
         centred.  The default is the placement a config saved before this
         option existed had.
+    pad_value : float or None, optional, default=None
+        The value the padded area reaches the model at, after
+        normalisation.  The R-CNN and DETR references pad an already
+        normalised batch with 0, and darknet letterboxes raw pixels with
+        0.5 grey; each family's weights pass what its reference uses.  The
+        preset fills with ``pad_value * std + mean`` before normalising, so
+        the padding comes out at exactly ``pad_value``.  ``None`` pads the
+        raw pixels with 0 — about -2 after ImageNet normalisation — as a
+        config saved before this option existed did.
+    square : bool, optional, default=True
+        Pad onto a square of side :attr:`canvas_size`, the canvas every
+        image shares, so a batch of them stacks.  ``False`` pads each axis
+        only up to the next multiple of ``size_divisible`` — the canvas the
+        reference detection transform gives a single image, with no
+        padding beyond what the strides need; images of different shapes
+        then no longer stack.  :attr:`canvas_size` describes the square.
     min_area : float, optional, default=1.0
         Drop post-pipeline boxes whose absolute pixel area is below
         this — see :class:`BboxParams`.
@@ -648,6 +665,15 @@ class Detection(TransformsPreset):
     >>> rcnn = T.Detection(size_divisible=32, pad_position="top_left")
     >>> rcnn.canvas_size, rcnn.image_size(300, 500)
     (1344, (800, 1333))
+
+    With ``pad_value=0.0`` the padding reaches the model at 0, as the R-CNN
+    references feed it, rather than at the normalised value of a black pixel:
+
+    >>> tf = T.Detection(max_size=64, size_divisible=32, pad_value=0.0,
+    ...                  pad_position="top_left")
+    >>> padded = tf(T.Image(lucid.rand(3, 20, 30))).data
+    >>> float(padded[:, -1, :].abs().max().item()) < 1e-6
+    True
     """
 
     preset_type: ClassVar[str] = "Detection"
@@ -659,6 +685,8 @@ class Detection(TransformsPreset):
         min_size: int | None = None,
         size_divisible: int = 1,
         pad_position: str = "center",
+        pad_value: float | None = None,
+        square: bool = True,
         min_area: float = 1.0,
         min_visibility: float = 0.0,
         mean: tuple[float, ...] | None = None,
@@ -673,6 +701,8 @@ class Detection(TransformsPreset):
         self.min_size = min_size
         self.size_divisible = size_divisible
         self.pad_position = pad_position
+        self.pad_value = pad_value
+        self.square = square
         self.min_area = min_area
         self.min_visibility = min_visibility
         self.mean = mean if mean is not None else _IMAGENET_MEAN
@@ -693,9 +723,27 @@ class Detection(TransformsPreset):
         else:
             self._resize = LongestMaxSize(max_size, interpolation=interpolation)
         side = self.canvas_size
+        # Filling with ``pad_value * std + mean`` normalises to ``pad_value``.
+        fill: float | tuple[float, ...] = (
+            0.0
+            if pad_value is None
+            else tuple(pad_value * s + m for m, s in zip(self.mean, self.std))
+        )
+        self._pad = (
+            PadIfNeeded(side, side, value=fill, position=pad_position)
+            if square
+            else PadIfNeeded(
+                None,
+                None,
+                value=fill,
+                position=pad_position,
+                pad_height_divisor=size_divisible,
+                pad_width_divisor=size_divisible,
+            )
+        )
         stages: list[TransformLike] = [
             self._resize,
-            PadIfNeeded(side, side, value=0.0, position=pad_position),
+            self._pad,
             Normalize(self.mean, self.std, max_pixel_value=1.0),
         ]
         self._pipeline = Compose(
@@ -746,6 +794,47 @@ class Detection(TransformsPreset):
         """
         return self._resize._target(height, width)
 
+    def to_image_boxes(self, boxes: Tensor, height: int, width: int) -> Tensor:
+        r"""Map boxes on the canvas back onto the image they came from.
+
+        A detector's ``postprocess`` answers in the coordinates of the canvas
+        it was fed.  This undoes what the preset did to an image of
+        ``height x width`` — the pad offset, then the resize — and clips to
+        that image.  A centred letterbox (YOLO's) shifts every box by the
+        margin above and left of the image; a top-left placement (the
+        R-CNNs', DETR's) leaves only the resize to undo.
+
+        Parameters
+        ----------
+        boxes : Tensor
+            ``(N, 4)`` boxes as ``(x1, y1, x2, y2)`` on the canvas.
+        height, width : int
+            Size of the image the preset was applied to.
+
+        Returns
+        -------
+        Tensor
+            ``(N, 4)`` boxes in that image's pixels.
+
+        Examples
+        --------
+        >>> import lucid, lucid.utils.transforms as T
+        >>> letterbox = T.Detection(max_size=64)
+        >>> letterbox.image_size(16, 32)
+        (32, 64)
+        >>> canvas_box = lucid.tensor([[0.0, 16.0, 64.0, 48.0]])
+        >>> letterbox.to_image_boxes(canvas_box, 16, 32).tolist()
+        [[0.0, 0.0, 32.0, 16.0]]
+        """
+        rh, rw = self.image_size(height, width)
+        left, _, top, _ = self._pad._pads(rh, rw)
+        dtype, device = boxes.dtype, boxes.device
+        offset = lucid.tensor([left, top, left, top], dtype=dtype, device=device)
+        scale = lucid.tensor([width / rw, height / rh] * 2, dtype=dtype, device=device)
+        limit = lucid.tensor([width, height, width, height], dtype=dtype, device=device)
+        mapped = (boxes - offset) * scale
+        return lucid.minimum(lucid.maximum(mapped, lucid.zeros_like(mapped)), limit)
+
     @override
     def _init_kwargs(self) -> dict[str, object]:
         interp = self.interpolation
@@ -754,6 +843,8 @@ class Detection(TransformsPreset):
             "min_size": self.min_size,
             "size_divisible": self.size_divisible,
             "pad_position": self.pad_position,
+            "pad_value": self.pad_value,
+            "square": self.square,
             "min_area": self.min_area,
             "min_visibility": self.min_visibility,
             "mean": list(self.mean),

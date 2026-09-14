@@ -24,12 +24,21 @@ from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 # Darknet letterbox + [0, 1] pixels.  v2 / v4 ship at 608, the v3 pair at 416
 # — the resolution each release quotes its COCO mAP at.  The letterbox is
 # centred, so ``postprocess`` boxes are in canvas coordinates: pass the canvas
-# size as ``image_sizes`` and take the letterbox offset off yourself.
+# size as ``image_sizes``, then ``transforms().to_image_boxes`` maps them back
+# onto the image, undoing the letterbox offset and the resize.
 _PRESET_416 = Detection(
-    max_size=416, pad_position="center", mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)
+    max_size=416,
+    pad_position="center",
+    pad_value=0.5,
+    mean=(0.0, 0.0, 0.0),
+    std=(1.0, 1.0, 1.0),
 )
 _PRESET_608 = Detection(
-    max_size=608, pad_position="center", mean=(0.0, 0.0, 0.0), std=(1.0, 1.0, 1.0)
+    max_size=608,
+    pad_position="center",
+    pad_value=0.5,
+    mean=(0.0, 0.0, 0.0),
+    std=(1.0, 1.0, 1.0),
 )
 
 
