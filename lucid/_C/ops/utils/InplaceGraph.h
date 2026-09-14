@@ -74,40 +74,27 @@ inline TensorImplPtr snapshot(const TensorImplPtr& a) {
     return source;
 }
 
-// Re-derive the other members of ``a``'s view family from ``a``.
+// Re-derive the other members of ``a``'s view family after a write through
+// ``a``.
 //
-// Every member reads the same bytes as ``a`` in the same order — each is a
-// full-buffer reshape of the others — so after a write through ``a`` each
-// one's values are ``a``'s, reshaped.  Autograd has to say so: a member
-// that kept its old grad_fn would send its gradient to the values the
-// write replaced.  When ``a`` requires grad each member becomes a reshape
-// of it (a fresh ViewBackward); when it does not, a member that had a
-// graph position is cut from it, since its values are a constant's now.
+// Every member reads one run of the buffer, as ``a`` does, so the write
+// changed exactly the part of each member the two runs share.  Autograd has
+// to say so, or the member sends its gradient to the values the write
+// replaced:
+//
+// * a member the write missed keeps its values, and so its graph;
+// * a member the write covered reads only ``a``'s values now — a reshape of
+//   ``a`` when the runs are the same, a run of ``a`` otherwise — and when
+//   ``a`` does not require grad it is cut from the graph, since those are a
+//   constant's values;
+// * a member the write reached into has ``a``'s part spliced into its old
+//   graph by a CopySlices node, as the reference does for the base of a
+//   written slice.  When ``a`` does not require grad, that part just stops
+//   passing gradient back.
 //
 // A leaf that requires grad never gets here: ``write_through`` refuses a
 // write to its family while autograd records.
-inline void rebase_views(const TensorImplPtr& a) {
-    // A write through a detached alias (``.data``) is untracked by design,
-    // and a detached member takes no part in autograd either way.
-    if (a->is_detached_alias())
-        return;
-    const bool differentiable = a->requires_grad();
-    for (const auto& m : a->live_views()) {
-        if (m->is_detached_alias())
-            continue;
-        // A leaf keeps its place: it is where gradient accumulates, and its
-        // AccumulateGrad is a grad_fn this must not cut.
-        if (m->is_leaf() && m->requires_grad())
-            continue;
-        if (differentiable) {
-            kernel::NaryKernel<ViewBackward, 1>::wire_autograd({a}, m, false);
-        } else if (m->grad_fn()) {
-            m->set_grad_fn(nullptr);
-            m->set_grad_output_nr(0);
-            m->set_requires_grad(false);
-        }
-    }
-}
+LUCID_API void rebase_views(const TensorImplPtr& a);
 
 // Move ``out``'s place in the autograd graph onto ``a``.
 //
@@ -126,9 +113,16 @@ inline void rebase_views(const TensorImplPtr& a) {
 inline bool adopt_graph_position(const TensorImplPtr& a, const TensorImplPtr& out) {
     if (!out->requires_grad() && !out->grad_fn())
         return false;
+    // A leaf ``out`` — ``copy_`` from a parameter — has no grad_fn until
+    // something asks for its AccumulateGrad, and ``a`` needs one to point at.
+    auto fn = out->grad_fn() ? out->grad_fn() : detail::ensure_grad_fn(out);
     a->set_requires_grad(true);
-    a->set_grad_fn(out->grad_fn());
+    a->set_grad_fn(std::move(fn));
     a->set_grad_output_nr(out->grad_output_nr());
+    // ``a`` is an op's output now, whatever it was before.  A factory
+    // tensor starts out a leaf, and one left marked so looked, to the next
+    // write into its family, like a parameter's view — which was refused.
+    a->set_leaf(false);
     if (a->is_aliased())
         rebase_views(a);
     return true;

@@ -319,17 +319,18 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
     if (!is_dense())
         ErrorBuilder(name).not_implemented(
             "writing through a view at an offset or with strides is not supported yet");
-    // After a recorded write the other members are re-derived from this one
-    // (inplace::rebase_views), which only a full-buffer reshape can be.  A
-    // slice would need the reference's CopySlices, which is not here yet.
-    if ((src.requires_grad() || src.grad_fn()) && family_) {
-        bool slice = nbytes() != family_->nbytes;
+    // After a recorded write every member the write reaches is re-derived
+    // (inplace::rebase_views), which reads each member as one run of the
+    // buffer.  A member with strides is not one run, so nothing could say
+    // which of its elements the write changed.
+    if (GradMode::is_enabled() && family_ && !is_detached_alias()) {
+        const bool graph = src.requires_grad() || src.grad_fn();
         for (const auto& m : live_views())
-            slice = slice || m->nbytes() != family_->nbytes;
-        if (slice)
-            ErrorBuilder(name).not_implemented(
-                "an in-place write that autograd records, on a tensor that shares its buffer "
-                "with a slice, is not supported yet — clone() first, or write under no_grad()");
+            if (!m->is_detached_alias() && !m->is_contiguous() && (graph || m->requires_grad()))
+                ErrorBuilder(name).not_implemented(
+                    "an in-place write that autograd records, on a tensor that shares its "
+                    "buffer with a strided view, is not supported yet — clone() first, or "
+                    "write under no_grad()");
     }
     // A leaf's values are where its gradient accumulates.  A write through
     // one of its views moves them as surely as a write to the leaf itself,

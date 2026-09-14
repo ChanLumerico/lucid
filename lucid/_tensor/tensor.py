@@ -3065,8 +3065,13 @@ class Tensor:
         # ``assign_from``, not ``copy_from``: the values are overwritten, so
         # the tensor no longer depends on what it was.  Written through the
         # raw buffer copy, the graph position stayed put and the gradient
-        # flowed back through it as if the fill had not happened.
-        self._impl.assign_from(filled, "fill_")
+        # flowed back through it as if the fill had not happened.  A tensor
+        # that shares its buffer with a view goes the in-place ops' way,
+        # which re-derives the views' graphs along with its own.
+        if self._impl.is_aliased():
+            _C_engine.assign_inplace(self._impl, filled, "fill_")
+        else:
+            self._impl.assign_from(filled, "fill_")
         return self
 
     def copy_(self, other: Self) -> Self:
@@ -3116,8 +3121,12 @@ class Tensor:
         src = _C_engine.contiguous(other._impl)
         # The gradient belongs to ``other`` after this, not to whatever
         # produced ``self`` — which is the whole point of copying a
-        # differentiable tensor in.
-        self._impl.assign_from(src, "copy_")
+        # differentiable tensor in.  With a view sharing the buffer, the
+        # in-place ops' route re-derives the view's graph too.
+        if self._impl.is_aliased():
+            _C_engine.assign_inplace(self._impl, src, "copy_")
+        else:
+            self._impl.assign_from(src, "copy_")
         return self
 
     # ``flip`` / ``fliplr`` / ``flipud`` are auto-injected from the registry

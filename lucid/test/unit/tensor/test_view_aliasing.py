@@ -346,19 +346,108 @@ def test_gradients_flow_through_a_slice_view() -> None:
     assert w.grad.tolist() == [[0.0, 0.0], [2.0, 2.0], [2.0, 2.0]]
 
 
-def test_a_recorded_write_beside_a_slice_is_refused() -> None:
-    # A slice would need its graph re-derived as a slice of the written
-    # tensor, which is not supported yet; refusing beats a wrong gradient.
+def test_a_recorded_write_through_a_slice_reaches_the_base_s_gradient() -> None:
+    # The base's graph takes the written row in (CopySlices); the rest of
+    # it still answers to what it was before.
     w = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
     h = w * 1.0
     s = h[1]
-    with pytest.raises(_C_engine.NotImplementedError, match="slice"):
-        h.mul_(2.0)
-    with pytest.raises(_C_engine.NotImplementedError, match="slice"):
-        s.mul_(2.0)
-    with lucid.no_grad():
-        s.mul_(2.0)
-    assert _flat(h) == [1.0, 2.0, 6.0, 8.0]
+    s.mul_(3.0)
+    assert _flat(h) == [1.0, 2.0, 9.0, 12.0]
+    h.sum().backward()
+    assert _flat(w.grad) == [1.0, 1.0, 3.0, 3.0]
+
+
+def test_a_recorded_write_through_the_base_reaches_a_slice_s_gradient() -> None:
+    w = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
+    h = w * 1.0
+    s = h[1]
+    h.mul_(2.0)
+    assert _flat(s) == [6.0, 8.0]
+    s.sum().backward()
+    assert _flat(w.grad) == [0.0, 0.0, 2.0, 2.0]
+
+
+def test_slices_written_in_turn() -> None:
+    # The node keeps no tensor, so it holds nothing that would stop the
+    # second write to the buffer.
+    w = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
+    h = w * 1.0
+    top, bottom = h[0], h[1]
+    top.mul_(2.0)
+    bottom.mul_(3.0)
+    assert _flat(h) == [2.0, 4.0, 9.0, 12.0]
+    h.sum().backward()
+    assert _flat(w.grad) == [2.0, 2.0, 3.0, 3.0]
+
+
+def test_overlapping_slices_share_only_what_the_write_reached() -> None:
+    w = lucid.tensor([[1.0], [2.0], [3.0]], requires_grad=True)
+    h = w * 1.0
+    first, last = h[0:2], h[1:3]
+    first.mul_(10.0)
+    assert _flat(last) == [20.0, 3.0]
+    last.sum().backward()
+    assert _flat(w.grad) == [0.0, 10.0, 1.0]
+
+
+def test_a_plain_base_takes_on_the_graph_written_into_its_slice() -> None:
+    h = lucid.zeros(2, 2)
+    v = lucid.tensor([5.0, 6.0], requires_grad=True)
+    h[1].add_(v)
+    assert h.requires_grad
+    (h * lucid.tensor([[1.0, 2.0], [3.0, 4.0]])).sum().backward()
+    assert _flat(v.grad) == [3.0, 4.0]
+
+
+def test_a_constant_written_through_a_slice_stops_its_gradient() -> None:
+    w = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
+    h = w * 1.0
+    h[1].zero_()
+    h.sum().backward()
+    assert _flat(w.grad) == [1.0, 1.0, 0.0, 0.0]
+
+
+def test_a_written_slice_differentiates_twice() -> None:
+    # h = [w0, w1 * w1]: the gradient is [1, 2 w1], and its own is [0, 2].
+    w = lucid.tensor([[1.0], [2.0]], requires_grad=True)
+    h = w * 1.0
+    s = h[1]
+    s.mul_(w[1])
+    (g,) = lucid.autograd.grad(h.sum(), w, create_graph=True)
+    assert g is not None
+    assert _flat(g) == [1.0, 4.0]
+    g.sum().backward()
+    assert _flat(w.grad) == [0.0, 2.0]
+
+
+def test_copy_into_a_slice_sends_the_gradient_to_the_source() -> None:
+    w = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
+    v = lucid.tensor([5.0, 6.0], requires_grad=True)
+    h = w * 1.0
+    h[0].copy_(v)
+    assert _flat(h) == [5.0, 6.0, 3.0, 4.0]
+    (h * lucid.tensor([[1.0, 2.0], [3.0, 4.0]])).sum().backward()
+    assert _flat(w.grad) == [0.0, 0.0, 3.0, 4.0]
+    assert _flat(v.grad) == [1.0, 2.0]
+
+
+def test_a_tensor_that_takes_on_a_graph_is_no_longer_a_leaf() -> None:
+    x = lucid.zeros(3)
+    x.add_(lucid.ones(3, requires_grad=True))
+    assert not x.is_leaf
+
+
+def test_a_slice_given_a_graph_leaves_its_base_writable() -> None:
+    # The slice stayed marked a leaf, so the next write into its family
+    # took it for a parameter's view and was refused.
+    v = lucid.ones(3, requires_grad=True)
+    h = lucid.zeros(2, 3)
+    s = h[1]
+    s.add_(v)
+    h.mul_(2.0)
+    (h * lucid.arange(6).float().reshape(2, 3)).sum().backward()
+    assert _flat(v.grad) == [6.0, 8.0, 10.0]
 
 
 def test_a_slice_keeps_its_buffer_alive() -> None:

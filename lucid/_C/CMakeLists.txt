@@ -299,6 +299,7 @@ lucid_object_library(
     ops/ufunc/Predicate.cpp
     ops/gfunc/Gfunc.cpp
     ops/utils/View.cpp
+    ops/utils/InplaceGraph.cpp
     ops/utils/Contiguous.cpp
     ops/utils/Concat.cpp
     ops/utils/Repeat.cpp
