@@ -53,8 +53,10 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <utility>
+#include <vector>
 
 #include "../api.h"
 #include "Device.h"
@@ -66,6 +68,25 @@
 namespace py = pybind11;
 
 namespace lucid {
+
+class TensorImpl;
+
+// The CPU tensors that read one buffer, as :func:`TensorImpl::make_view`
+// made them.
+//
+// Every member holds this through ``shared_ptr``, so ``use_count()`` is how
+// many of them are alive.  They share one version counter — a write
+// through any member moves every member's ``version()``, so a node that
+// saved one of them notices — and an in-place write to a member goes into
+// the buffer instead of a new storage slot, so the others see it
+// (:func:`TensorImpl::write_through`).  ``members`` is how autograd finds
+// the others to re-derive from the one written; entries expire with their
+// tensors.
+struct ViewFamily {
+    VersionCounter version{0};
+    std::mutex mu;
+    std::vector<std::weak_ptr<TensorImpl>> members;
+};
 
 // Reference-counted tensor implementation owned by every Python-level
 // :class:`lucid.Tensor`.
@@ -185,6 +206,69 @@ public:
     //     variants do not currently report sharing through this hook).
     bool storage_is_shared() const noexcept;
 
+    // Predicate: does another live tensor read this one's buffer as a view
+    // of it — a member of the same :class:`ViewFamily`?
+    //
+    // Such a tensor is written in place rather than handed a new storage
+    // slot, so its views see the write (:func:`write_through`).  Unlike
+    // :func:`storage_is_shared`, a NumPy array or a storage saved for
+    // backward does not count: neither is a view.
+    //
+    // Returns
+    // -------
+    // bool
+    //     ``true`` while at least one other member of the family is alive.
+    bool is_aliased() const noexcept { return family_ && family_.use_count() > 1; }
+
+    // Predicate: is this a detached alias — what ``.data`` hands out — rather
+    // than a view autograd follows?  Other clone_with_grad aliases are not
+    // detached: a factory's ``requires_grad=True`` tensor is one, and it has
+    // to stay an ordinary member once the temporary it aliased is gone.
+    //
+    // It reads the same buffer as the rest of its family and shares their
+    // version counter, but a write through it is untracked by design: the
+    // values change and no graph is re-derived, as with the reference's
+    // ``.data``.  Reshape-family views are not detached.
+    bool is_detached_alias() const noexcept { return detached_alias_; }
+
+    // Marks this tensor as a detached alias; see :func:`is_detached_alias`.
+    void set_detached_alias(bool v) noexcept { detached_alias_ = v; }
+
+    // The other live members of this tensor's view family.
+    //
+    // Returns
+    // -------
+    // std::vector<std::shared_ptr<TensorImpl>>
+    //     Every member but ``this``; empty for a tensor with no views.
+    std::vector<std::shared_ptr<TensorImpl>> live_views() const;
+
+    // Writes ``src``'s values into this tensor's buffer, in place.
+    //
+    // The write an in-place op makes to a tensor with live views: into the
+    // bytes the views read, where a new storage slot would leave them
+    // reading the old ones.  Bumps the version, which every member shares.
+    //
+    // Parameters
+    // ----------
+    // src : TensorImpl
+    //     The new values; same shape and dtype.
+    // name : const char*
+    //     Op name for error messages.
+    //
+    // Raises
+    // ------
+    // ShapeMismatch
+    //     ``src`` has another shape.
+    // LucidError
+    //     ``src`` has another dtype, or a view of a leaf that requires grad
+    //     would be modified while autograd records.
+    // NotImplementedError
+    //     The tensor is on the GPU or is not dense, or its buffer is also
+    //     held by something that is not one of its views — a storage saved
+    //     for backward, a NumPy array — which would read the new values
+    //     without being told.
+    void write_through(const TensorImpl& src, const char* name);
+
     // The Metal shared buffer this tensor still is, or ``nullptr``.
     //
     // Non-null only while the storage is the whole buffer, contiguous from
@@ -205,22 +289,26 @@ public:
     // A tensor over a Metal shared buffer writes the new values into the
     // buffer instead, so every alias of it sees them — but only when ``out``
     // recorded no graph, since a node that saved the pre-op input shares the
-    // buffer.  Otherwise the swap happens and the tensor stops being shared.
+    // buffer.  A CPU tensor with live views always writes into its buffer
+    // (:func:`write_through`).  Otherwise the swap happens and the tensor
+    // stops being shared.
     //
     // Parameters
     // ----------
     // out : TensorImpl&
     //     The op's result; its storage is moved from.
-    void take_storage_from(TensorImpl& out);
+    // name : const char*
+    //     Op name for error messages.
+    void take_storage_from(TensorImpl& out, const char* name);
 
     // Creates a new :class:`TensorImpl` that aliases ``base``'s
     // :class:`Storage` with a different shape, stride, and optional byte
     // offset.
     //
-    // The view inherits ``base``'s ``requires_grad`` and ``is_leaf`` flags.
-    // No data is copied — modifying either tensor through an in-place op
-    // affects the other (which is precisely why the shared
-    // :type:`VersionCounter` exists).
+    // No data is copied.  The view starts with no autograd state of its
+    // own; a caller that makes a differentiable view wires its grad_fn.  A
+    // CPU view joins ``base``'s :class:`ViewFamily` — one version counter,
+    // in-place writes into the buffer — unless ``join_family`` is ``false``.
     //
     // Parameters
     // ----------
@@ -232,6 +320,8 @@ public:
     //     Byte-stride vector for the new view.  Need not be contiguous.
     // offset_bytes : std::size_t, optional
     //     Byte offset from ``base``'s storage origin.  Defaults to ``0``.
+    // join_family : bool, optional
+    //     Whether a CPU view joins ``base``'s family.  Defaults to ``true``.
     //
     // Returns
     // -------
@@ -240,7 +330,8 @@ public:
     static std::shared_ptr<TensorImpl> make_view(const std::shared_ptr<TensorImpl>& base,
                                                  Shape shape,
                                                  Stride stride,
-                                                 std::size_t offset_bytes = 0);
+                                                 std::size_t offset_bytes = 0,
+                                                 bool join_family = true);
 
     // ---------------------------------------------------------------------------
     // Metadata accessors
@@ -300,10 +391,15 @@ public:
     // -------
     // std::int64_t
     //     Current version.  ``0`` when no :class:`AutogradMeta` exists and no
-    //     shared buffer has been written.
+    //     shared buffer or view family has been written.
     std::int64_t version() const noexcept {
-        const std::int64_t own = autograd_ ? autograd_->version : 0;
-        return shared_ ? own + static_cast<std::int64_t>(shared_->get_version()) : own;
+        std::int64_t v = autograd_ ? autograd_->version : 0;
+        if (shared_)
+            v += static_cast<std::int64_t>(shared_->get_version());
+        // A tensor with live views adds their family's counter the same way.
+        if (family_)
+            v += static_cast<std::int64_t>(family_->version.load(std::memory_order_relaxed));
+        return v;
     }
 
     // Returns the backward function pointer for this tensor.
@@ -500,12 +596,15 @@ public:
     // tensors that were saved for backward.  The tensor's own count is left
     // alone when no :class:`AutogradMeta` exists — it has never been in a
     // graph — but a Metal shared buffer's counter always moves, because
-    // another alias of the same bytes may have been saved.
+    // another alias of the same bytes may have been saved.  So does a view
+    // family's, for the same reason.
     void bump_version() noexcept {
         if (autograd_)
             ++autograd_->version;
         if (shared_)
             shared_->bump_version();
+        if (family_)
+            family_->version.fetch_add(1, std::memory_order_relaxed);
     }
 
     // ---------------------------------------------------------------------------
@@ -797,6 +896,14 @@ private:
     // constructor while storage_ holds the CPU view or GPU alias; see
     // metal_shared().  Views inherit it.
     std::optional<SharedStorage> shared_;
+    // The CPU tensors that read this one's buffer, this one included; set by
+    // make_view on the base and every view made from it, and null for a
+    // tensor that has never had a view.
+    std::shared_ptr<ViewFamily> family_;
+    // Set on what ``.data`` hands out (the data_alias binding): a member of
+    // the family whose writes autograd does not follow.  See
+    // is_detached_alias().
+    bool detached_alias_ = false;
 
     // Writes ``src``'s values into the shared buffer.  False when this
     // tensor no longer is the buffer or ``src`` does not match it.

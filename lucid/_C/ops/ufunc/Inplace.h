@@ -625,4 +625,27 @@ LUCID_API TensorImplPtr relu_inplace_op(const TensorImplPtr& a);
 // :func:`clip_op` — out-of-place counterpart.
 LUCID_API TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi);
 
+// Writes ``value`` into ``a`` in place, the way the ops above take their
+// own results: into ``a``'s buffer (``TensorImpl::write_through``), then
+// into ``value``'s place in the autograd graph, or out of it when
+// ``value`` has none.  For a tensor with live views, whose values have to
+// land where the views read them.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     A dense CPU tensor with live views.
+// value : TensorImplPtr
+//     The new contents; same shape and dtype as ``a``.
+// name : std::string
+//     Op name for error messages.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     The same pointer as ``a``.
+LUCID_API TensorImplPtr assign_inplace_op(const TensorImplPtr& a,
+                                          const TensorImplPtr& value,
+                                          const std::string& name);
+
 }  // namespace lucid

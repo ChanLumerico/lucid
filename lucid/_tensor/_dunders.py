@@ -8,7 +8,7 @@ the Tensor class by _inject_dunders() at module import time.
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap_or_scalar, _wrap
-from lucid._tensor._indexing import _getitem, _setitem
+from lucid._tensor._indexing import _adopt_inplace, _getitem, _setitem
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -186,8 +186,7 @@ def _inject_dunders(cls: type) -> None:
         Tensor([11., 12., 13.])
         """
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
-        self._impl = _C_engine.add_(a, b)
-        return self
+        return _adopt_inplace(self, _C_engine.add_(a, b), "+=")
 
     def __sub__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise subtraction: ``self - other`` with broadcasting.
@@ -299,8 +298,7 @@ def _inject_dunders(cls: type) -> None:
         Tensor([5., 15., 25.])
         """
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
-        self._impl = _C_engine.sub_(a, b)
-        return self
+        return _adopt_inplace(self, _C_engine.sub_(a, b), "-=")
 
     def __mul__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise multiplication: ``self * other`` (Hadamard product).
@@ -413,8 +411,7 @@ def _inject_dunders(cls: type) -> None:
         Tensor([10., 20., 30.])
         """
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
-        self._impl = _C_engine.mul_(a, b)
-        return self
+        return _adopt_inplace(self, _C_engine.mul_(a, b), "*=")
 
     def __truediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise true division: ``self / other``.
@@ -529,8 +526,7 @@ def _inject_dunders(cls: type) -> None:
         Tensor([1., 2., 3.])
         """
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
-        self._impl = _C_engine.div_(a, b)
-        return self
+        return _adopt_inplace(self, _C_engine.div_(a, b), "/=")
 
     def __floordiv__(self: Tensor, other: TensorOrScalar) -> Tensor:
         r"""Element-wise floor division: ``self // other``.
@@ -721,8 +717,7 @@ def _inject_dunders(cls: type) -> None:
         Tensor([1., 4., 9.])
         """
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
-        self._impl = _C_engine.pow_(a, b)
-        return self
+        return _adopt_inplace(self, _C_engine.pow_(a, b), "**=")
 
     def __matmul__(self: Tensor, other: Tensor) -> Tensor:
         r"""Matrix multiplication: ``self @ other`` with batched semantics.

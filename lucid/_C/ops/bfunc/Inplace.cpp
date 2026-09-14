@@ -30,7 +30,11 @@ namespace {
 //
 // Preconditions checked here:
 //   1. Neither a nor b is null.
-//   2. a does not share storage with any view tensor (would corrupt the view).
+//   2. a's buffer is not held by anything other than a and its own views —
+//      a NumPy array, a storage saved for backward.  The swap below would
+//      leave that holder reading the old values without saying so.  A
+//      tensor with live views is written through instead
+//      (TensorImpl::write_through), which checks the same thing.
 //   3. The out-of-place result has the same shape as a (in-place ops may not
 //      change shape; this would also silently break any live views of a).
 //
@@ -41,7 +45,7 @@ TensorImplPtr
 inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const char* name) {
     if (!a || !b)
         ErrorBuilder(name).fail("null input");
-    if (a->storage_is_shared())
+    if (a->storage_is_shared() && !a->is_aliased())
         ErrorBuilder(name).fail("in-place op on a tensor that shares storage with a view — "
                                 "call .clone() first or operate on the base tensor");
     inplace::refuse_on_leaf(a, name);
@@ -65,7 +69,7 @@ inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const
                             std::string(name) + " (in-place: shape changed)");
     // Splice the new Storage and metadata back into a — into its Metal
     // shared buffer instead when it has one and no graph was recorded.
-    a->take_storage_from(*out);
+    a->take_storage_from(*out, name);
     a->set_dtype(out->dtype());
     a->set_device(out->device());
     if (!inplace::adopt_graph_position(a, out))

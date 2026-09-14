@@ -78,14 +78,19 @@ public:
     // Graph label — ``"reshape"`` — for debug printing and profiler
     // traces.  Overrides :func:`Node::node_name`.
     std::string node_name() const override { return "reshape"; }
+    // Nothing to validate: the backward reads only the gradient and the two
+    // shapes, never the input's values.  The input's version still moves —
+    // a write through any tensor sharing its buffer bumps it — and checking
+    // it here turned every write through a view into a VersionMismatch.
+    void validate_versions() override {}
 };
 
-// Reinterpret a tensor under a new shape (no data copy).
+// Reinterpret a tensor under a new shape.
 //
 // The total element count must be preserved.  Exactly one entry of
 // ``new_shape`` may be ``-1``, in which case that dimension is inferred from
-// the remaining sizes.  The input must be contiguous; pass non-contiguous
-// inputs through :func:`contiguous_op` first.
+// the remaining sizes.  A dense CPU input is relabelled, not copied: the
+// result is a view over its buffer.  Anything else is copied.
 //
 // Parameters
 // ----------

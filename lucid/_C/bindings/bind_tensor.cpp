@@ -256,17 +256,37 @@ void register_tensor_impl(py::module_& m) {
              "CPU tensors: no-op.")
         .def(
             "clone_with_grad",
-            [](const TensorImpl& self, bool requires_grad) -> std::shared_ptr<TensorImpl> {
-                // Creates a new TensorImpl that SHARES the same Storage with a
-                // different requires_grad flag.  No data copy is made — only the
-                // autograd metadata differs.  This is the canonical way to flip
-                // requires_grad without going through a numpy round-trip.
-                return std::make_shared<TensorImpl>(self.storage(), self.shape(), self.dtype(),
-                                                    self.device(), requires_grad);
+            [](const std::shared_ptr<TensorImpl>& self,
+               bool requires_grad) -> std::shared_ptr<TensorImpl> {
+                // A second TensorImpl over the same bytes, at the same place in
+                // them, with its own autograd flags and no grad_fn — the
+                // canonical way to flip requires_grad without a copy.  It joins
+                // self's view family, so an in-place write through either
+                // reaches the other, which is what ``.data`` promises; and it
+                // keeps self's offset and strides instead of resetting them.
+                auto alias = TensorImpl::make_view(self, self->shape(), self->stride(), 0);
+                if (requires_grad)
+                    alias->set_requires_grad(true);
+                return alias;
             },
             py::arg("requires_grad"),
             "Return a new TensorImpl sharing the same storage but with a different "
             "requires_grad flag.  No data is copied.")
+        .def(
+            "data_alias",
+            [](const std::shared_ptr<TensorImpl>& self) -> std::shared_ptr<TensorImpl> {
+                // What ``.data`` hands out: a member of self's view family that
+                // autograd does not follow, so a write through it is untracked.
+                // Only ``.data`` is marked — clone_with_grad also makes the
+                // tensor a factory returns, which must stay an ordinary member.
+                auto alias = TensorImpl::make_view(self, self->shape(), self->stride(), 0);
+                alias->set_detached_alias(true);
+                return alias;
+            },
+            "Return the alias ``.data`` hands out: the same storage, no autograd "
+            "state, and writes through it untracked.")
+        .def("is_aliased", &TensorImpl::is_aliased,
+             "Whether another live tensor reads this one's buffer as a view of it.")
         .def(
             "set_grad",
             [](TensorImpl& self, const std::shared_ptr<TensorImpl>& g) {

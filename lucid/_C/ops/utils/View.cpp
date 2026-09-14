@@ -1,10 +1,11 @@
 // lucid/_C/ops/utils/View.cpp
 //
-// Implements reshape, squeeze, and unsqueeze as zero-copy view ops backed by a
-// shared Storage.  The central helper build_view_output delegates the actual
-// storage aliasing to the backend dispatcher's reshape method, then wires the
-// ViewBackward autograd node so that gradients flow back through the changed
-// shape.
+// Implements reshape, squeeze, and unsqueeze.  On the CPU, a dense input is
+// reshaped by relabelling: the result is a view over the same buffer, in the
+// input's ViewFamily.  Anything else — a CPU view at an offset, any GPU
+// tensor — is copied by the backend dispatcher's reshape.  Either way the
+// central helper build_view_output wires the ViewBackward autograd node so
+// that gradients flow back through the changed shape.
 
 #include "View.h"
 
@@ -94,16 +95,27 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
     Validator::input(a, std::string(op_name) + ".a").non_null();
     OpScopeFull scope{op_name, a->device(), a->dtype(), out_shape};
 
-    // The CPU backend reshape copies the buffer from its first byte, so a CPU
-    // input that is not dense (a view at an offset, or not contiguous) is
-    // laid out first.  GPU tensors keep copy semantics and never alias.
-    // Autograd still wires to ``a`` itself below.
-    const TensorImplPtr src = (a->device() == Device::CPU && !a->is_dense()) ? contiguous_op(a) : a;
-    Storage out_storage = backend::Dispatcher::for_device(src->device())
-                              .reshape(src->storage(), src->shape(), out_shape, src->dtype());
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
-                                            a->device(), false);
-
+    TensorImplPtr out;
+    if (a->device() == Device::CPU && a->is_dense()) {
+        // A dense CPU tensor holds its elements in row-major order from the
+        // first byte of its buffer, which is what any shape with the same
+        // element count reads there — so the result is a view of it: no
+        // copy, and an in-place write to either reaches the other (see
+        // ViewFamily).
+        Stride stride = contiguous_stride(out_shape, dtype_size(a->dtype()));
+        out = TensorImpl::make_view(a, out_shape, std::move(stride));
+    } else {
+        // A CPU tensor that is not dense (a view at an offset, or not
+        // contiguous) is laid out first, since the backend reshape reads its
+        // buffer from the first byte.  GPU tensors keep copy semantics: an
+        // MLX array cannot see a write made through another.
+        const TensorImplPtr src = a->device() == Device::CPU ? contiguous_op(a) : a;
+        Storage out_storage = backend::Dispatcher::for_device(src->device())
+                                  .reshape(src->storage(), src->shape(), out_shape, src->dtype());
+        out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
+                                           a->device(), false);
+    }
+    // Autograd wires to ``a`` itself either way.
     kernel::NaryKernel<ViewBackward, 1>::wire_autograd({a}, out, false);
     return out;
 }

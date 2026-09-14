@@ -12,6 +12,7 @@ Called once at module import time by ``tensor.py``.
 from typing import TYPE_CHECKING, cast
 
 from lucid._dispatch import _unwrap, _wrap
+from lucid._tensor._indexing import _adopt_inplace
 from lucid._ops._registry import _REGISTRY, OpEntry
 
 if TYPE_CHECKING:
@@ -79,8 +80,7 @@ def _inject_methods(tensor_cls: type) -> None:
 
                 if e.inplace:
                     result = e.engine_fn(self._impl, *proc_args, **kwargs)
-                    self._impl = result
-                    return self
+                    return _adopt_inplace(self, result, e.name)
                 else:
                     result = e.engine_fn(self._impl, *proc_args, **kwargs)
                     if e.returns_tensor:

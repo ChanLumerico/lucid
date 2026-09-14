@@ -659,7 +659,32 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     ):
         t._impl.copy_from(impl)
         return
+    # A tensor with live views takes the values into its buffer, where the
+    # views read them; rebinding would leave them holding the old ones.  The
+    # engine applies the in-place ops' rules to the write, graph included.
+    if t._impl.is_aliased():
+        _C_engine.assign_inplace(t._impl, impl, "__setitem__")
+        return
     t._impl = impl.clone_with_grad(True) if keep and not impl.requires_grad else impl
+
+
+def _adopt_inplace(t: Tensor, impl: _C_engine.TensorImpl, name: str) -> Tensor:
+    """Make ``impl``, an in-place op's result, ``t``'s impl; return ``t``.
+
+    An engine in-place op hands back ``t``'s own impl, written in place.  A
+    different one means a dtype promotion ran the op on a cast copy, and
+    rebinding to it would leave any view of ``t`` reading the old values —
+    so a tensor with live views refuses, as the reference refuses every
+    in-place op that would change a tensor's dtype.
+    """
+    if impl is not t._impl and t._impl.is_aliased():
+        raise RuntimeError(
+            f"{name}: the result is {impl.dtype}, which cannot be written into a "
+            f"{t._impl.dtype} tensor that shares storage with a live view — cast "
+            "it first, or use the out-of-place form"
+        )
+    t._impl = impl
+    return t
 
 
 def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:

@@ -1,0 +1,274 @@
+"""Tensors that read one CPU buffer see each other's in-place writes.
+
+A view family is the set of CPU tensors built over one buffer by
+``TensorImpl.make_view`` — reshape-family views, ``.data``, and the views
+these tests build directly with ``TensorImpl._make_view``.  Its members
+share a version counter, and an in-place write to any of them goes into the
+buffer instead of a new storage slot, so the others see it.  Where that
+cannot be done safely the write is refused rather than left to diverge.
+"""
+
+from collections.abc import Callable
+
+import pytest
+
+import lucid
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap
+
+
+def _view(base: lucid.Tensor, *shape: int) -> lucid.Tensor:
+    """A dense view of ``base`` under another shape, as reshape makes one."""
+    strides: list[int] = []
+    step = 1
+    for n in reversed(shape):
+        strides.append(step)
+        step *= n
+    impl = _C_engine.TensorImpl._make_view(base._impl, list(shape), strides[::-1], 0)
+    return _wrap(impl)
+
+
+def _flat(t: lucid.Tensor) -> list[float]:
+    return [float(v) for v in t.reshape(-1).tolist()]
+
+
+@pytest.fixture
+def x() -> lucid.Tensor:
+    return lucid.arange(6).float()
+
+
+_WRITES: dict[str, Callable[[lucid.Tensor], object]] = {
+    "add_": lambda t: t.add_(1.0),
+    "mul_": lambda t: t.mul_(2.0),
+    "iadd": lambda t: t.__iadd__(1.0),
+    "exp_": lambda t: t.exp_(),
+    "clamp_": lambda t: t.clamp_(min=2.0),
+    "zero_": lambda t: t.zero_(),
+    "fill_": lambda t: t.fill_(7.0),
+    "copy_": lambda t: t.copy_(lucid.full(t.shape, 7.0)),
+    "setitem-all": lambda t: t.__setitem__(..., 7.0),
+    "setitem-first": lambda t: t.__setitem__(0, 7.0),
+}
+
+
+def _written(write: Callable[[lucid.Tensor], object], *shape: int) -> list[float]:
+    """What ``write`` leaves in a tensor of ``shape`` that nothing else reads."""
+    ref = lucid.arange(6).float().reshape(*shape).clone()
+    write(ref)
+    return _flat(ref)
+
+
+def test_a_view_joins_its_base_s_family(x: lucid.Tensor) -> None:
+    assert not x._impl.is_aliased()
+    v = _view(x, 2, 3)
+    assert x._impl.is_aliased() and v._impl.is_aliased()
+    del v
+    assert not x._impl.is_aliased()
+
+
+@pytest.mark.parametrize("name", list(_WRITES))
+def test_a_write_through_a_view_reaches_the_base(x: lucid.Tensor, name: str) -> None:
+    v = _view(x, 2, 3)
+    _WRITES[name](v)
+    assert _flat(x) == _written(_WRITES[name], 2, 3)
+    assert _flat(v) == _flat(x)
+
+
+@pytest.mark.parametrize("name", list(_WRITES))
+def test_a_write_through_the_base_reaches_the_view(x: lucid.Tensor, name: str) -> None:
+    v = _view(x, 2, 3)
+    _WRITES[name](x)
+    assert _flat(v) == _written(_WRITES[name], 6)
+
+
+def test_every_member_s_version_moves_with_a_write(x: lucid.Tensor) -> None:
+    v = _view(x, 2, 3)
+    before = v._impl.version
+    x.add_(1.0)
+    assert v._impl.version != before
+    before = x._impl.version
+    v.mul_(2.0)
+    assert x._impl.version != before
+
+
+def test_a_tensor_whose_views_are_gone_writes_as_before(x: lucid.Tensor) -> None:
+    v = _view(x, 2, 3)
+    del v
+    x.add_(1.0)
+    assert _flat(x) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+
+
+def test_dot_data_is_a_member_of_the_family() -> None:
+    # ``x.data.exp_()`` swapped the alias's slot and left ``x`` alone, and
+    # ``x.data.add_(1)`` was refused outright; both now reach ``x``.
+    x = lucid.zeros(3)
+    x.data.add_(1.0)
+    assert _flat(x) == [1.0, 1.0, 1.0]
+    x.data.mul_(2.0)
+    x.data.exp_()
+    assert _flat(x) == pytest.approx([7.389056] * 3)
+
+
+def test_dot_data_keeps_a_view_s_offset(x: lucid.Tensor) -> None:
+    v = _wrap(_C_engine.TensorImpl._make_view(x._impl, [3], [1], 2))
+    assert _flat(v.data) == [2.0, 3.0, 4.0]
+
+
+def test_a_node_holding_the_buffer_stops_the_write(x: lucid.Tensor) -> None:
+    # The product saved ``v``'s storage for its backward; writing the new
+    # values under it would change what that backward reads.
+    v = _view(x, 2, 3)
+    w = lucid.ones(2, 3, requires_grad=True)
+    y = (v * w).sum()
+    with pytest.raises(_C_engine.NotImplementedError, match="also holds that storage"):
+        with lucid.no_grad():
+            x.add_(1.0)
+    assert _flat(x) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    y.backward()
+    assert _flat(w.grad) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+
+def test_a_numpy_array_over_the_buffer_stops_the_write(x: lucid.Tensor) -> None:
+    v = _view(x, 2, 3)
+    arr = x.numpy()
+    with pytest.raises(_C_engine.NotImplementedError, match="also holds that storage"):
+        v.add_(1.0)
+    assert arr.tolist() == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+
+def test_a_write_that_would_change_the_dtype_is_refused() -> None:
+    xi = lucid.tensor([0, 1, 2, 3, 4, 5], dtype=lucid.int64)
+    v = _view(xi, 2, 3)
+    with pytest.raises(RuntimeError, match="shares storage with a live view"):
+        xi += 0.5
+    assert xi.dtype == lucid.int64
+    assert _flat(v) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+
+def test_a_view_at_an_offset_is_not_written_yet(x: lucid.Tensor) -> None:
+    v = _wrap(_C_engine.TensorImpl._make_view(x._impl, [3], [1], 2))
+    with pytest.raises(_C_engine.NotImplementedError, match="offset or with strides"):
+        v.add_(1.0)
+    assert _flat(x) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+
+def test_a_leaf_s_view_is_written_only_outside_autograd() -> None:
+    p = lucid.zeros(6, requires_grad=True)
+    v = _view(p, 2, 3)
+    with pytest.raises(Exception, match="view of a leaf"):
+        v.add_(1.0)
+    assert _flat(p) == [0.0] * 6
+    with lucid.no_grad():
+        v.add_(1.0)
+    assert _flat(p) == [1.0] * 6
+
+
+def test_a_recorded_write_re_derives_the_other_views() -> None:
+    # ``v`` held ``h``'s values before the write and holds three times them
+    # after it; its gradient has to say so, or it reaches ``w`` unscaled.
+    w = lucid.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], requires_grad=True)
+    h = w * 1.0
+    v = _view(h, 2, 3)
+    h.mul_(3.0)
+    assert v.requires_grad
+    (v * 2.0).sum().backward()
+    assert _flat(w.grad) == [6.0] * 6
+
+
+def test_a_write_that_cuts_the_graph_leaves_constants_behind() -> None:
+    w = lucid.tensor([1.5, 2.5, 3.5, 4.5, 5.5, 6.5], requires_grad=True)
+    h = w * 1.0
+    v = _view(h, 2, 3)
+    h.floor_()  # not differentiable: h is a constant afterwards
+    assert not h.requires_grad and not v.requires_grad
+    assert _flat(v) == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+
+
+# ── reshape-family ops make these views on the CPU ────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda t: t.reshape(2, 3),
+        lambda t: t.view(3, 2),
+        lambda t: t.reshape(1, 6).squeeze(0),
+        lambda t: t.unsqueeze(0),
+        lambda t: t.reshape(2, 3).flatten(),
+    ],
+    ids=["reshape", "view", "squeeze", "unsqueeze", "flatten"],
+)
+def test_reshape_family_ops_view_a_dense_cpu_tensor(
+    x: lucid.Tensor, make: Callable[[lucid.Tensor], lucid.Tensor]
+) -> None:
+    v = make(x)
+    assert v.data_ptr() == x.data_ptr()
+    v.mul_(2.0)
+    assert _flat(x) == [0.0, 2.0, 4.0, 6.0, 8.0, 10.0]
+
+
+def test_a_metal_reshape_is_still_a_copy() -> None:
+    # An MLX array cannot see a write made through another, so the GPU keeps
+    # copy semantics.
+    x = lucid.arange(6).float().to("metal")
+    v = x.reshape(2, 3)
+    v.add_(1.0)
+    assert _flat(x) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+
+
+def test_a_reshape_under_no_grad_does_not_require_grad() -> None:
+    p = lucid.zeros(6, requires_grad=True)
+    with lucid.no_grad():
+        v = p.reshape(2, 3)
+    assert not v.requires_grad
+
+
+def test_gradients_flow_through_a_reshape_view() -> None:
+    w = lucid.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], requires_grad=True)
+    (w.reshape(2, 3) * 2.0).sum().backward()
+    assert _flat(w.grad) == [2.0] * 6
+
+
+def test_a_recorded_write_through_a_reshape_reaches_the_base_s_gradient() -> None:
+    # ``h`` holds three times its old values after the write through ``v``;
+    # its gradient has to say so.
+    w = lucid.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], requires_grad=True)
+    h = w * 1.0
+    v = h.reshape(2, 3)
+    v.mul_(3.0)
+    h.sum().backward()
+    assert _flat(w.grad) == [3.0] * 6
+    assert _flat(h) == [3.0, 6.0, 9.0, 12.0, 15.0, 18.0]
+
+
+def test_a_parameter_s_view_is_written_only_outside_autograd() -> None:
+    p = lucid.zeros(6, requires_grad=True)
+    v = p.reshape(2, 3)
+    with pytest.raises(Exception, match="view of a leaf"):
+        v.add_(1.0)
+    with lucid.no_grad():
+        v.add_(1.0)
+    assert _flat(p) == [1.0] * 6
+
+
+# ── a detached alias (``.data``) writes untracked ─────────────────────────────
+
+
+def test_a_write_through_dot_data_is_untracked_even_while_recording() -> None:
+    # The idiom for rescaling a parameter without autograd seeing it; the
+    # PlaNet tests saturate a head this way.
+    p = lucid.ones(3, requires_grad=True)
+    p.data.copy_(p.data * 60.0)
+    p.data.add_(1.0)
+    assert _flat(p) == [61.0] * 3
+    assert p.requires_grad and p.is_leaf
+
+
+def test_a_write_through_dot_data_leaves_the_views_graphs_alone() -> None:
+    w = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)
+    h = w * 1.0
+    v = h.reshape(1, 3)
+    h.data.mul_(2.0)
+    assert _flat(v) == [2.0, 4.0, 6.0]
+    v.sum().backward()
+    assert _flat(w.grad) == [1.0] * 3

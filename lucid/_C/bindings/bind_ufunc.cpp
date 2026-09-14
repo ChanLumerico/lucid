@@ -165,6 +165,8 @@ void register_ufunc(py::module_& m) {
     m.def("floor_", &floor_inplace_op, py::arg("a"));
     m.def("ceil_", &ceil_inplace_op, py::arg("a"));
     m.def("clip_", &clip_inplace_op, py::arg("a"), py::arg("min"), py::arg("max"));
+    m.def("assign_inplace", &assign_inplace_op, py::arg("a"), py::arg("value"), py::arg("name"),
+          "Write ``value`` into ``a``'s buffer in place, for a tensor with live views.");
 
     // Floating-point predicate ops (output is always bool).
     m.def("any", &any_op, py::arg("a"));

@@ -59,7 +59,7 @@ TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* nam
     if (out->shape() != a->shape())
         throw ShapeMismatch(a->shape(), out->shape(),
                             std::string(name) + " (in-place: shape changed)");
-    a->take_storage_from(*out);
+    a->take_storage_from(*out, name);
     a->set_dtype(out->dtype());
     a->set_device(out->device());
     const bool adopted = inplace::adopt_graph_position(a, out);
@@ -181,7 +181,7 @@ TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     // the original values stay alive and unmutated for as long as the node
     // needs them — and nothing is allocated when no graph is built.
     auto out = clip_op(inplace::snapshot(a), lo, hi);
-    a->take_storage_from(*out);
+    a->take_storage_from(*out, "clip_");
     a->set_dtype(out->dtype());
     a->set_device(out->device());
     const bool adopted = inplace::adopt_graph_position(a, out);
@@ -193,6 +193,21 @@ TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
     // tampering — VersionMismatch on every differentiable in-place call.
     // Outside the graph the counter still does its job.
     if (!adopted)
+        inplace::detach_and_bump(a);
+    return a;
+}
+
+// The same rules as the ops above, for a result computed elsewhere.
+// Indexing assignment uses it for a tensor with live views, whose values
+// have to land in the buffer the views read — rebinding the tensor, as
+// assignment does otherwise, would leave them holding the old ones.
+TensorImplPtr
+assign_inplace_op(const TensorImplPtr& a, const TensorImplPtr& value, const std::string& name) {
+    Validator::input(a, name + ".a").non_null();
+    Validator::input(value, name + ".value").non_null();
+    inplace::refuse_on_leaf(a, name.c_str());
+    a->write_through(*value, name.c_str());
+    if (!inplace::adopt_graph_position(a, value))
         inplace::detach_and_bump(a);
     return a;
 }

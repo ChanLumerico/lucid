@@ -124,7 +124,11 @@ Edge edge_for(const std::shared_ptr<TensorImpl>& t) {
 std::shared_ptr<TensorImpl> alias_with_hook(const std::shared_ptr<TensorImpl>& base,
                                             const std::shared_ptr<Node>& node,
                                             std::uint32_t slot) {
-    auto view = TensorImpl::make_view(base, base->shape(), base->stride(), 0);
+    // The alias stands in for the output in the graph; it is not a view the
+    // user made, so it stays out of the output's view family and an in-place
+    // op on it swaps its own slot, as it always has.
+    auto view =
+        TensorImpl::make_view(base, base->shape(), base->stride(), 0, /*join_family=*/false);
     view->set_grad_fn(node);
     view->set_grad_output_nr(slot);
     view->set_leaf(false);

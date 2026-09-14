@@ -1928,11 +1928,12 @@ class Tensor:
     def data(self) -> Self:
         r"""The tensor's underlying data, detached from gradient tracking.
 
-        Returns a view of the same storage as ``self`` but with
-        ``requires_grad=False`` and no ``grad_fn``.  Assigning to
-        ``tensor.data`` replaces the underlying storage in-place without
-        affecting the autograd graph — useful for in-place weight updates
-        that should not be tracked.
+        Returns a tensor over the same storage as ``self``, with
+        ``requires_grad=False`` and no ``grad_fn``.  On the CPU it is one of
+        ``self``'s views, so an in-place write through it reaches ``self``
+        without autograd recording it.  Outside ``no_grad`` a write through
+        the ``.data`` of a leaf that requires grad is refused, as a write to
+        the leaf itself would be.  There is no setter.
 
         Returns
         -------
@@ -1957,7 +1958,7 @@ class Tensor:
         without participating in autograd. Prefer :meth:`detach` for new
         code; ``data`` is retained for API compatibility.
         """
-        return Tensor.__new_from_impl__(_impl_with_grad(self._impl, False))  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(self._impl.data_alias())  # type: ignore[return-value]
 
     # ── device/dtype conversion ───────────────────────────────────────────────
     # Injected by _tensor/_to.py after class definition.
@@ -3214,12 +3215,12 @@ class Tensor:
         )
 
     def expand_as(self, other: Self) -> Self:
-        r"""Broadcast ``self`` to match ``other.shape`` without copying data.
+        r"""Broadcast ``self`` to match ``other.shape``.
 
         Convenience wrapper around ``broadcast_to`` that takes the target
-        shape from another tensor. The expansion is **view-like**: the
-        underlying storage is not duplicated, and the broadcast dimensions
-        are realised by zero-stride entries in the resulting tensor.
+        shape from another tensor.  The expansion is materialised: each
+        stretched axis is repeated into a new buffer, so writing into the
+        result never reaches ``self``.
 
         Parameters
         ----------
@@ -3230,15 +3231,15 @@ class Tensor:
         Returns
         -------
         Tensor
-            A view of ``self`` with shape ``other.shape``.
+            A new tensor with shape ``other.shape``.
 
         Notes
         -----
         Broadcasting rules follow the standard right-aligned semantics:
         each dimension of ``self.shape`` must either equal the
         corresponding entry of ``other.shape`` or be ``1``. Size-1 axes
-        are stretched by setting the corresponding stride to zero, so the
-        resulting view aliases the source storage. Formally, for each axis
+        are stretched by repeating their single entry. Formally, for each
+        axis
 
         .. math::
 
@@ -3246,8 +3247,6 @@ class Tensor:
                 s_i & \text{if } s_i = t_i \\
                 t_i & \text{if } s_i = 1
             \end{cases}
-
-        with stride :math:`0` on stretched axes.
 
         Examples
         --------

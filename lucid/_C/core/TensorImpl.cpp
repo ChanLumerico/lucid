@@ -16,6 +16,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstdint>
@@ -272,15 +273,90 @@ bool TensorImpl::write_into_shared(const TensorImpl& src) {
                       src.storage());
 }
 
-void TensorImpl::take_storage_from(TensorImpl& out) {
+void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // Write through only when ``out`` recorded no graph: a node that saved
     // the pre-op input shares this buffer and would read the new values back
     // — the ``cos(sin(x))`` failure :file:`ops/utils/InplaceGraph.h` records.
     const bool graph = out.requires_grad() || out.grad_fn();
     if (!graph && write_into_shared(out))
         return;
+    // A CPU tensor with live views takes the values into its buffer, graph or
+    // no graph: a new slot would leave the views reading the old ones.  Its
+    // snapshot was a copy (inplace::snapshot), so no node of this op holds
+    // the bytes being replaced.
+    if (is_aliased() && storage_is_cpu(storage_)) {
+        write_through(out, name);
+        return;
+    }
     storage_ = std::move(out.storage_);
     drop_shared();
+}
+
+std::vector<std::shared_ptr<TensorImpl>> TensorImpl::live_views() const {
+    std::vector<std::shared_ptr<TensorImpl>> views;
+    if (!family_)
+        return views;
+    std::lock_guard<std::mutex> lock(family_->mu);
+    auto& members = family_->members;
+    members.erase(std::remove_if(members.begin(), members.end(),
+                                 [](const std::weak_ptr<TensorImpl>& w) { return w.expired(); }),
+                  members.end());
+    for (const auto& w : members)
+        if (auto m = w.lock(); m && m.get() != this)
+            views.push_back(std::move(m));
+    return views;
+}
+
+void TensorImpl::write_through(const TensorImpl& src, const char* name) {
+    if (src.shape() != shape())
+        throw ShapeMismatch(shape(), src.shape(), std::string(name) + " (in-place: shape changed)");
+    if (src.dtype() != dtype())
+        ErrorBuilder(name).fail("an in-place write cannot change the dtype of a tensor that "
+                                "shares storage with a live view — cast first, or use the "
+                                "out-of-place form");
+    if (!storage_is_cpu(storage_) || !storage_is_cpu(src.storage_))
+        ErrorBuilder(name).not_implemented("writing through a view is only supported on the CPU");
+    if (!is_dense())
+        ErrorBuilder(name).not_implemented(
+            "writing through a view at an offset or with strides is not supported yet");
+    // A leaf's values are where its gradient accumulates.  A write through
+    // one of its views moves them as surely as a write to the leaf itself,
+    // which refuse_on_leaf refuses while autograd records.  is_leaf(), not
+    // a missing grad_fn: a leaf used in a graph holds an AccumulateGrad.  A
+    // detached alias (``.data``) is exempt — its writes are untracked by
+    // design — and so is a detached member, which no autograd reads.
+    if (GradMode::is_enabled() && !is_detached_alias())
+        for (const auto& m : live_views())
+            if (!m->is_detached_alias() && m->requires_grad() && m->is_leaf())
+                ErrorBuilder(name).fail("a view of a leaf tensor that requires grad cannot be "
+                                        "modified in place — wrap the call in no_grad, or use "
+                                        "the out-of-place form");
+    auto& dst = std::get<CpuStorage>(storage_);
+    const auto& from = std::get<CpuStorage>(src.storage_);
+    // The op handed back this very buffer (a no-op for this dtype): the
+    // values are already in place.
+    if (from.ptr == dst.ptr && src.is_dense())
+        return;
+    // Whatever else holds the buffer — a storage saved for backward, a NumPy
+    // array — expects the values it has now, and nothing would tell it they
+    // changed: a node's saved output carries no version.
+    const long members = family_ ? family_.use_count() : 1;
+    if (dst.ptr.use_count() > members)
+        ErrorBuilder(name).not_implemented(
+            "an in-place write to a tensor that shares storage with a live view is not supported "
+            "while something else also holds that storage (a tensor saved for backward, a NumPy "
+            "array) — clone() first");
+    const std::size_t n = nbytes();
+    if (src.is_dense()) {
+        if (n > 0)
+            std::memcpy(dst.ptr.get(), from.ptr.get(), n);
+    } else {
+        const auto packed =
+            contig_snapshot_cpu(from, src.shape(), src.stride(), src.storage_offset());
+        if (!packed.empty())
+            std::memcpy(dst.ptr.get(), packed.data(), packed.size());
+    }
+    bump_version();
 }
 
 void TensorImpl::drop_shared() {
@@ -1220,6 +1296,34 @@ void TensorImpl::assign_from(const TensorImpl& other, const char* name) {
     if (GradMode::is_enabled() && requires_grad() && !grad_fn())
         ErrorBuilder(name).fail("a leaf tensor that requires grad cannot be assigned in place — "
                                 "wrap the call in no_grad, or build a new tensor");
+    // A write through a detached alias (``.data``) is untracked by design:
+    // the values change and autograd is not told, as with the reference's
+    // ``.data`` — refused only when the source carries a graph, which such
+    // an alias cannot take on.  Anywhere else the copy moves the values of
+    // every view, while the graph bookkeeping below moves only this tensor;
+    // re-deriving the views belongs to the in-place ops
+    // (inplace::rebase_views), which this layer cannot reach.  While
+    // autograd records, refuse rather than leave them sending their gradient
+    // to values the write replaced.
+    if (GradMode::is_enabled() && is_aliased()) {
+        const bool source_graph = other.grad_fn() || other.requires_grad();
+        bool refuse = source_graph;
+        if (!is_detached_alias()) {
+            bool involved = source_graph || requires_grad() || grad_fn();
+            bool views = false;
+            for (const auto& m : live_views()) {
+                if (m->is_detached_alias())
+                    continue;
+                views = true;
+                involved = involved || m->requires_grad() || m->grad_fn();
+            }
+            refuse = views && involved;
+        }
+        if (refuse)
+            ErrorBuilder(name).not_implemented(
+                "assigning into a tensor that shares storage with a live view is not supported "
+                "while autograd records it — clone() first, or assign under no_grad()");
+    }
     copy_from(other);
     if (!GradMode::is_enabled())
         return;
@@ -1258,18 +1362,22 @@ bool TensorImpl::storage_is_shared() const noexcept {
 }
 
 // Creates a view TensorImpl that shares storage with base but has an
-// independent shape, stride, and byte offset.  The view is not a leaf unless
-// base is a leaf — it mirrors base's gradient-tracking status.
+// independent shape, stride, and byte offset.
 //
-// Note: make_view is itself a non-differentiable metadata operation; there
-// is no grad_fn attached to the view.  The caller must attach one separately
-// if the view participates in a differentiable reshape or slice.
+// The view starts with no autograd state of its own — make_view is a
+// metadata operation, and copying base's flags made a reshape under
+// no_grad report requires_grad.  A caller that makes a differentiable view
+// wires its grad_fn, as reshape does; one that makes a detached alias sets
+// the flags it wants, as clone_with_grad does.
+//
+// A CPU view joins base's view family (see ViewFamily) unless the caller
+// asks it not to.  GPU tensors form none: an MLX array cannot see a write
+// made through another, so they keep copy semantics.
 std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorImpl>& base,
                                                   Shape shape,
                                                   Stride stride,
-                                                  std::size_t offset_bytes) {
-    // requires_grad=false here to avoid spuriously allocating AutogradMeta for
-    // views of non-grad tensors; we set it manually below if base needs grads.
+                                                  std::size_t offset_bytes,
+                                                  bool join_family) {
     auto view = std::make_shared<TensorImpl>(base->storage_, std::move(shape), base->meta_.dtype,
                                              base->meta_.device, false);
     view->meta_.stride = std::move(stride);
@@ -1281,9 +1389,14 @@ std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorIm
     // metal_shared() still answers no unless the view is the whole buffer.
     view->shared_ = base->shared_;
 
-    if (base->requires_grad()) {
-        view->set_requires_grad(true);
-        view->set_leaf(base->is_leaf());
+    if (join_family && storage_is_cpu(base->storage_)) {
+        if (!base->family_) {
+            base->family_ = std::make_shared<ViewFamily>();
+            base->family_->members.push_back(base);
+        }
+        view->family_ = base->family_;
+        std::lock_guard<std::mutex> lock(view->family_->mu);
+        view->family_->members.push_back(view);
     }
     return view;
 }

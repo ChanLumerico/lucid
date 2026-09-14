@@ -1441,14 +1441,15 @@ def trace(input: Tensor) -> Tensor:
     """
     ...
 def reshape(input: Tensor, *shape: _int | Sequence[_int]) -> Tensor:
-    r"""    Reshape a tensor to ``shape``, returning a view when possible.
+    r"""    Reshape a tensor to ``shape``.
     
     The total number of elements must match
-    (:math:`\prod \text{shape} = \text{numel}`).  Unlike :func:`view`,
-    :func:`reshape` may allocate a new contiguous buffer when the
-    requested layout cannot be expressed by stride manipulation alone
-    (e.g. after a non-contiguous transpose).  Exactly one entry may be
-    ``-1``, inferred from the remaining sizes.
+    (:math:`\prod \text{shape} = \text{numel}`).  Exactly one entry may
+    be ``-1``, inferred from the remaining sizes.
+    
+    On the CPU a dense ``input`` is viewed, not copied: the result reads
+    the same buffer, so an in-place write to either reaches the other.
+    On metal the result is a copy.
     
     Parameters
     ----------
@@ -1460,14 +1461,13 @@ def reshape(input: Tensor, *shape: _int | Sequence[_int]) -> Tensor:
     Returns
     -------
     Tensor
-        Tensor of the requested shape.  View when feasible, otherwise a
-        copy.
+        Tensor of the requested shape — a view of ``input`` on the CPU,
+        a copy on metal.
     
     Notes
     -----
-    For the strict no-copy contract, use :func:`view`, which raises if
-    the layout cannot be expressed as a view.  :func:`reshape`'s
-    flexibility makes it the safer default for general user code.
+    :func:`view` behaves the same way: every tensor Lucid hands out is
+    contiguous, so neither ever has to refuse a layout.
     
     Examples
     --------
@@ -1494,13 +1494,14 @@ def unsqueeze(input: Tensor, dim: DimLike) -> Tensor:
     Returns
     -------
     Tensor
-        View into ``input`` with an extra size-1 axis.
+        ``input`` with an extra size-1 axis — a view of it on the CPU, a
+        copy on metal.
     
     Notes
     -----
     Inverse of :func:`squeeze` (when ``squeeze`` is called with the same
     ``dim``).  Pair with :func:`expand` to broadcast scalars or vectors
-    into higher-rank shapes without copying.
+    into higher-rank shapes.
     
     Examples
     --------
@@ -1535,8 +1536,8 @@ def flatten(input: Tensor, start_axis: _int = ..., end_axis: _int = ...) -> Tens
     -----
     The merged dim has size
     :math:`\prod_{k=\text{start}}^{\text{end}} \text{shape}[k]`.  The
-    result is a view when ``input`` is contiguous in the flattened range,
-    otherwise a copy.
+    result is a view of ``input`` on the CPU — an in-place write to
+    either reaches the other — and a copy on metal.
     
     Examples
     --------
@@ -1549,11 +1550,11 @@ def flatten(input: Tensor, start_axis: _int = ..., end_axis: _int = ...) -> Tens
     """
     ...
 def permute(input: Tensor, *dims: _int | Sequence[_int]) -> Tensor:
-    r"""    Return a view with dimensions rearranged.
+    r"""    Return ``input`` with its dimensions rearranged.
     
     The argument ``dims`` is a permutation of ``range(input.ndim)`` — the
     returned tensor's axis ``i`` corresponds to ``input``'s axis
-    ``dims[i]``.  Implemented by stride manipulation; no data is moved.
+    ``dims[i]``.  The data is copied into the new order.
     
     Parameters
     ----------
@@ -1565,8 +1566,7 @@ def permute(input: Tensor, *dims: _int | Sequence[_int]) -> Tensor:
     Returns
     -------
     Tensor
-        View with new strides.  Usually non-contiguous — follow with
-        :func:`contiguous` if a flat layout is required downstream.
+        A new tensor with the axes in the new order, stored contiguously.
     
     Notes
     -----
@@ -1586,8 +1586,7 @@ def transpose(input: Tensor) -> Tensor:
     
     The zero-argument form: for a 2-D tensor this is the matrix
     transpose; for higher-rank tensors the final two axes are swapped
-    (batch dims are preserved).  Implemented as a stride manipulation —
-    no data is copied.
+    (batch dims are preserved).  The data is copied into the new order.
     
     Parameters
     ----------
@@ -1631,7 +1630,7 @@ def broadcast_to(input: Tensor, shape: ShapeLike) -> Tensor:
     Returns
     -------
     Tensor
-        A view sharing storage with ``input``.
+        A new tensor of the requested shape; the data is copied.
     
     Notes
     -----
@@ -1650,12 +1649,12 @@ def broadcast_to(input: Tensor, shape: ShapeLike) -> Tensor:
     """
     ...
 def expand(input: Tensor, *sizes: _int | Sequence[_int]) -> Tensor:
-    r"""    Return a view with singleton dimensions broadcast to new sizes.
+    r"""    Broadcast the singleton dimensions of ``input`` to new sizes.
     
-    For each axis whose current size is 1, ``expand`` replaces it with
-    the requested size by setting the stride along that axis to 0.  Axes
-    that already have non-1 sizes must be passed as ``-1`` (or the same
-    size).  No data is copied.
+    For each axis whose current size is 1, ``expand`` repeats it to the
+    requested size.  Axes that already have non-1 sizes must be passed
+    as ``-1`` (or the same size).  The result is materialised: every
+    repeated element is a copy.
     
     Parameters
     ----------
@@ -1667,15 +1666,14 @@ def expand(input: Tensor, *sizes: _int | Sequence[_int]) -> Tensor:
     Returns
     -------
     Tensor
-        A view sharing storage with ``input``.
+        A new tensor of the requested shape; the data is copied.
     
     Notes
     -----
-    :func:`expand` is the in-place-style cousin of :func:`broadcast_to`;
-    they produce equivalent views but ``expand`` requires the input to
-    already have a 1-sized dim where the expansion happens.  Writing into
-    the result is undefined because multiple logical entries alias the
-    same physical element.
+    :func:`expand` is the cousin of :func:`broadcast_to`; they produce
+    equal results, but ``expand`` requires the input to already have a
+    1-sized dim where the expansion happens.  Since the result is a copy,
+    writing into it never reaches ``input``.
     
     Examples
     --------
@@ -2661,7 +2659,7 @@ def chunk(input: Tensor, chunks: _int, dim: DimLike = ...) -> Tensor:
     Returns
     -------
     list of Tensor
-        Up to ``chunks`` views into ``input`` (no copy).
+        Up to ``chunks`` pieces of ``input``, each a copy.
     
     Notes
     -----
@@ -2677,11 +2675,11 @@ def chunk(input: Tensor, chunks: _int, dim: DimLike = ...) -> Tensor:
     """
     ...
 def unbind(input: Tensor, dim: DimLike = ...) -> Tensor:
-    r"""    Remove ``dim`` and return a tuple of views along it.
+    r"""    Remove ``dim`` and return the slices along it.
     
     Equivalent to ``[x.select(dim, i) for i in range(x.size(dim))]`` but
-    implemented as a single op.  The resulting tensors share storage
-    with ``x``.
+    implemented as a single op.  Each slice is a copy: writing to one
+    does not change ``x``.
     
     Parameters
     ----------
@@ -3864,7 +3862,7 @@ def narrow(input: Tensor, dim: _int, start: _int, length: _int) -> Tensor:
     r"""    Return a contiguous slice of ``input`` along ``dim``.
     
     Equivalent to ``input[..., start:start+length, ...]`` with the slice
-    applied at position ``dim``.  Returns a view — no data copy.
+    applied at position ``dim``.  The slice is a copy.
     
     Parameters
     ----------
@@ -3881,7 +3879,7 @@ def narrow(input: Tensor, dim: _int, start: _int, length: _int) -> Tensor:
     Returns
     -------
     Tensor
-        View into ``input`` of size ``length`` along ``dim``.
+        Copy of the slice, of size ``length`` along ``dim``.
     
     Notes
     -----
@@ -3995,7 +3993,7 @@ def movedim(input: Tensor, source: _int | Sequence[_int], destination: _int | Se
     Returns
     -------
     Tensor
-        View with rearranged strides.
+        A new tensor with the axes moved, stored contiguously.
     
     Notes
     -----
@@ -4034,8 +4032,8 @@ def unflatten(input: Tensor, dim: _int, sizes: Sequence[_int]) -> Tensor:
     
     Notes
     -----
-    Returns a view when ``input`` is contiguous along ``dim``; otherwise
-    a copy is produced via :func:`reshape`.
+    Built on :func:`reshape`, so the result is a view of ``input`` on
+    the CPU and a copy on metal.
     
     Examples
     --------
@@ -4840,30 +4838,30 @@ def isclose(input: Tensor | Scalar, other: Tensor | Scalar, rtol: _float = ..., 
     """
     ...
 def view(input: Tensor, *shape: _int | Sequence[_int]) -> Tensor:
-    r"""    Return a view of ``input`` with a different shape.
+    r"""    Return ``input`` with a different shape.
     
-    The total number of elements must be preserved.  Unlike
-    :func:`reshape`, :func:`view` *requires* the input to be contiguous
-    over the affected dims and never copies — if a view is not possible
-    a runtime error is raised.
+    The total number of elements must be preserved.
+    
+    On the CPU a dense ``input`` is viewed, not copied: the result reads
+    the same buffer, so an in-place write to either reaches the other.
+    On metal the result is a copy.
     
     Parameters
     ----------
     input : Tensor
-        Source tensor.  Must be contiguous w.r.t. the requested layout.
+        Source tensor.
     shape : int or sequence of int
         Target shape.  Exactly one entry may be ``-1`` (auto-inferred).
     
     Returns
     -------
     Tensor
-        Tensor sharing storage with ``input``.
+        ``input`` under the new shape — a view on the CPU, a copy on metal.
     
     Notes
     -----
-    Use :func:`view` when zero-copy is part of the contract; use
-    :func:`reshape` when correctness should take precedence over
-    layout assumptions.
+    :func:`view` and :func:`reshape` behave the same: every tensor Lucid
+    hands out is contiguous, so neither ever has to refuse a layout.
     
     Examples
     --------
@@ -5263,7 +5261,8 @@ def squeeze(x: Tensor, dim: _int | list[_int] | None = None) -> Tensor:
     Returns
     -------
     Tensor
-        View into ``x`` with the chosen size-1 axes removed.
+        ``x`` without the chosen size-1 axes — a view of it on the CPU, a
+        copy on metal.
     
     Notes
     -----
@@ -5368,7 +5367,7 @@ def split(x: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -
     Returns
     -------
     list of Tensor
-        Views into ``x`` — no data is copied.
+        The pieces of ``x``, each a copy.
     
     Notes
     -----

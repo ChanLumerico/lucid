@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - .to() carries the gradient back across devices
 - Mask R-CNN post-processing and the detection preset
 
+### Added
+
+- CPU reshapes are views that see each other's writes
+
 ---
 
 ## [3.11.3] — 2026-09-14
