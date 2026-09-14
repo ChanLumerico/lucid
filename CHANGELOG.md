@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - matmul takes a vector on either side
 
+- load_state_dict copies into the tensors a module holds
+
 ### Added
 
 - CPU reshapes are views that see each other's writes

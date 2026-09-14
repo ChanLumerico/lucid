@@ -174,15 +174,12 @@ def _default_load_from_state_dict(
                     f"expected {tuple(attr.shape)}, got {tuple(src.shape)}"
                 )
                 continue
-            # Copy with original dtype/device preserved.
+            # Copy into the tensor the module already holds, with its own
+            # dtype and device, as the reference does.  Rebinding it to a new
+            # impl left everything that held the old one — a view of the
+            # weight, an alias, a hook — reading the old values.
             converted: Tensor = src.to(device=attr.device, dtype=attr.dtype)
-            new_impl = _C_engine.contiguous(converted._impl).clone_with_grad(
-                getattr(attr, "requires_grad", False)
-            )
-            if name in module._parameters:
-                module._parameters[name]._impl = new_impl  # type: ignore[union-attr]
-            else:
-                module._buffers[name] = _wrap(new_impl)
+            attr._impl.copy_from(_C_engine.contiguous(converted._impl))
 
     # extra_state (rare hook for opaque per-module state).
     extra_key: str = f"{prefix}_extra_state"
