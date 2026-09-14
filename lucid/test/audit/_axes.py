@@ -1565,6 +1565,10 @@ class NonFiniteAxis(Axis):
             "ones_like",
             "full_like",
             "empty_like",
+            # Writes 0 over every element by definition.  It used to multiply
+            # by zeros, which carried NaN through — this axis passed that,
+            # and the pass was the bug.
+            "zero_",
             "isclose",
             "allclose",
             "equal",
