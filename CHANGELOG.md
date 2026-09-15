@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - erfc in float64 keeps double precision
 
+- load_compiled no longer aborts on macOS 15
+
 ### Added
 
 - arange of integers is int64, as the reference has it
