@@ -4,16 +4,14 @@
     "",
     "A floor, not a target.  The stage fails when a module's count",
     "goes up, so a new example that does not run is caught on the",
-    "commit that adds it; the standing 5 are a backlog, recorded",
+    "commit that adds it; the standing failures are a backlog, recorded",
     "here so they cannot grow quietly.",
     "",
     "Regenerate with:  lucid-audit --update-doctests"
   ],
-  "failed": 5,
-  "attempted": 6458,
+  "failed": 1,
+  "attempted": 6473,
   "failing": {
-    "lucid._factories.converters": 2,
-    "lucid._factories.creation": 2,
-    "lucid.fft": 1
+    "lucid._factories.converters": 1
   }
 }

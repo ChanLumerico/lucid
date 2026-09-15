@@ -130,7 +130,7 @@ def save_floor(path: Path, result: DoctestResult) -> None:
             "",
             "A floor, not a target.  The stage fails when a module's count",
             "goes up, so a new example that does not run is caught on the",
-            "commit that adds it; the standing 585 are a backlog, recorded",
+            "commit that adds it; the standing failures are a backlog, recorded",
             "here so they cannot grow quietly.",
             "",
             "Regenerate with:  lucid-audit --update-doctests",
