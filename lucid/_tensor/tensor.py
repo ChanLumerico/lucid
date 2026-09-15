@@ -402,7 +402,8 @@ class Tensor:
         Returns
         -------
         Tensor
-            A view (or copy) with reversed dimension order.
+            ``self`` with its dimension order reversed — a view on the
+            CPU, a copy on metal.
 
         Notes
         -----
@@ -434,7 +435,8 @@ class Tensor:
         Returns
         -------
         Tensor
-            A view (or copy) with axes ``-2`` and ``-1`` swapped.
+            ``self`` with axes ``-2`` and ``-1`` swapped — a view on the
+            CPU, a copy on metal.
 
         Notes
         -----
@@ -744,13 +746,13 @@ class Tensor:
         memory in C (row-major) order — i.e. the stride of each dimension equals
         the product of all *later* dimension sizes times the element size.
 
-        **In this engine the answer is always** ``True``.  Lucid has no lazy
-        views: every operation that would return a strided view elsewhere
-        materialises a packed tensor here, including ``T``, :meth:`unfold`,
-        :meth:`diagonal`, ``expand``, ``broadcast_to`` and slicing with a
-        non-unit step.  The query is kept because it is part of the tensor
-        protocol and because kernels assert on it, not because it
-        distinguishes two states a caller can reach.
+        On the CPU a transpose, a slice along any axis, and ``expand``
+        are views of their input's buffer, and a transposed or column view
+        is not contiguous.  Every op reads such a view correctly and a write
+        through it follows its strides, so the answer matters only to code
+        that walks the memory itself.  Metal tensors are always packed:
+        :meth:`unfold`, :meth:`diagonal`, ``broadcast_to`` and slicing with
+        a non-unit step still copy on every device.
 
         Returns
         -------
@@ -764,8 +766,8 @@ class Tensor:
         >>> x = lucid.zeros(3, 4)
         >>> x.is_contiguous()
         True
-        >>> x.T.is_contiguous()   # a transpose is materialised, not viewed
-        True
+        >>> x.T.is_contiguous()   # a transpose is a view with swapped strides
+        False
 
         Notes
         -----
@@ -1035,6 +1037,7 @@ class Tensor:
 
         Examples
         --------
+        >>> import lucid
         >>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)
         >>> grads = []
         >>> h = x.register_hook(lambda g: grads.append(g.clone()))
@@ -1807,12 +1810,11 @@ class Tensor:
         this may return a view or a copy depending on the backend; the result
         is always safe to pass to kernels that require contiguous input.
 
-        **In this engine every tensor is already contiguous**, so this is a
-        no-op in effect: Lucid materialises rather than viewing, and
-        transposing, permuting or slicing with a non-unit step all return
-        packed tensors.  Call it anyway where a kernel documents the
-        requirement — it is free when it is unnecessary, and it keeps the
-        call site correct if lazy views are ever introduced.  Making a
+        On the CPU a transpose, a slice along any axis and ``expand`` are
+        views of their input's buffer, and a transposed or column view is
+        not contiguous.  Every op reads such a view correctly, so the call
+        is needed only before code that walks the memory itself — through
+        :meth:`data_ptr`, say.  Metal tensors are always packed.  Making a
         tensor contiguous rewrites the data into a fresh buffer with
         strides matching C row-major layout:
 
@@ -1828,9 +1830,9 @@ class Tensor:
         Examples
         --------
         >>> import lucid
-        >>> x = lucid.zeros(3, 4).T    # already materialised, so already packed
+        >>> x = lucid.zeros(3, 4).T    # a view with swapped strides
         >>> x.is_contiguous()
-        True
+        False
         >>> y = x.contiguous()
         >>> y.is_contiguous()
         True
@@ -1844,7 +1846,7 @@ class Tensor:
         return _wrap(_C_engine.contiguous(self._impl))  # type: ignore[return-value]
 
     def unfold(self, dimension: int, size: int, step: int) -> Tensor:
-        r"""Return a view with an extra dimension containing sliding-window slices.
+        r"""Return a copy with an extra dimension containing sliding-window slices.
 
         Extracts non-overlapping or overlapping windows of length ``size``
         along ``dimension``, advancing by ``step`` elements between windows.

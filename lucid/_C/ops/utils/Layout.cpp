@@ -183,8 +183,35 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
 
 // expand_op is a direct alias for broadcast_to_op, provided for API symmetry
 // with reference framework's Tensor::expand.  Both functions behave identically.
+//
+// On the CPU ``expand`` is a view: the same buffer, a zero stride on every
+// axis it broadcasts.  Reads through it are right — every op reads a strided
+// CPU view correctly — and writes are refused, since its elements overlap.
+// Metal, and ``broadcast_to`` everywhere, keep copying.
 TensorImplPtr expand_op(const TensorImplPtr& a, const Shape& shape) {
-    return broadcast_to_op(a, shape);
+    Validator::input(a, "expand.a").non_null();
+    if (!storage_is_cpu(a->raw_storage()))
+        return broadcast_to_op(a, shape);
+    const std::size_t nin = a->shape().size();
+    const std::size_t nout = shape.size();
+    if (nin > nout)
+        throw ShapeMismatch(shape, a->shape(), "expand");
+    Stride stride(nout, 0);
+    for (std::size_t d = nout - nin; d < nout; ++d) {
+        const std::size_t src = d - (nout - nin);
+        const auto have = a->shape()[src];
+        if (have == shape[d])
+            stride[d] = a->stride()[src];
+        else if (have != 1)
+            throw ShapeMismatch(shape, a->shape(), "expand");
+    }
+    OpScopeFull scope{"broadcast_to", a->device(), a->dtype(), shape};
+    auto out = TensorImpl::make_view(a, shape, std::move(stride), 0);
+    auto bwd = std::make_shared<BroadcastBackward>();
+    bwd->input_shape_ = a->shape();
+    bwd->output_shape_ = shape;
+    kernel::NaryKernel<BroadcastBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
+    return out;
 }
 
 }  // namespace lucid

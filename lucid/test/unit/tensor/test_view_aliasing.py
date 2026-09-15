@@ -427,10 +427,10 @@ def test_a_leading_dim_slice_is_a_view(
         assert _flat(grid)[3 * r : 3 * r + 3] == [scale * (3 * r + c) for c in range(3)]
 
 
-def test_a_slice_along_another_dim_is_still_a_copy(grid: lucid.Tensor) -> None:
+def test_a_slice_along_another_dim_is_a_view(grid: lucid.Tensor) -> None:
     column = grid[:, 1]
     column.add_(100.0)
-    assert _flat(grid) == [float(v) for v in range(12)]
+    assert _flat(grid) == [float(v) + (100.0 if v % 3 == 1 else 0.0) for v in range(12)]
 
 
 def test_writes_reach_between_a_tensor_and_its_slices(grid: lucid.Tensor) -> None:

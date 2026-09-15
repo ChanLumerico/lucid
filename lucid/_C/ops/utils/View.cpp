@@ -2,10 +2,11 @@
 //
 // Implements reshape, squeeze, and unsqueeze.  On the CPU, a dense input is
 // reshaped by relabelling: the result is a view over the same buffer, in the
-// input's ViewFamily.  Anything else — a CPU view at an offset, any GPU
-// tensor — is copied by the backend dispatcher's reshape.  Either way the
-// central helper build_view_output wires the ViewBackward autograd node so
-// that gradients flow back through the changed shape.
+// input's ViewFamily.  So is a strided CPU view whose new shape only drops or
+// inserts size-1 axes.  Anything else — any other CPU view, any GPU tensor —
+// is copied by the backend dispatcher's reshape.  Either way the central
+// helper build_view_output wires the ViewBackward autograd node so that
+// gradients flow back through the changed shape.
 
 #include "View.h"
 
@@ -83,14 +84,39 @@ Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_
     return resolved;
 }
 
+// Whether ``out`` only drops or inserts size-1 axes of ``a``'s shape.  If it
+// does, ``stride`` gets strides that leave every element of ``a`` where it
+// was: the kept axes keep theirs, and a size-1 axis — which never moves the
+// address — gets the one a packed layout would give it.
+bool squeezes_only(const TensorImpl& a, const Shape& out, Stride& stride) {
+    std::vector<std::int64_t> sizes;
+    std::vector<std::int64_t> kept;
+    for (std::size_t d = 0; d < a.shape().size(); ++d)
+        if (a.shape()[d] != 1) {
+            sizes.push_back(a.shape()[d]);
+            kept.push_back(a.stride()[d]);
+        }
+    std::vector<std::int64_t> want;
+    for (const auto n : out)
+        if (n != 1)
+            want.push_back(n);
+    if (want != sizes)
+        return false;
+    stride.assign(out.size(), 0);
+    std::size_t k = kept.size();
+    std::int64_t next = static_cast<std::int64_t>(dtype_size(a.dtype()));
+    for (std::size_t d = out.size(); d-- > 0;) {
+        stride[d] = out[d] != 1 ? kept[--k] : next;
+        next = stride[d] * out[d];
+    }
+    return true;
+}
+
 // Shared implementation used by reshape_op, squeeze_op, squeeze_all_op, and
-// unsqueeze_op.  Creates a new TensorImpl over the same storage with out_shape,
-// then attaches ViewBackward so that autograd can reshape gradients back to the
-// input's shape.
-//
-// The backend dispatcher's reshape method is responsible for returning a
-// Storage that aliases the same underlying allocation (or throws if the layout
-// is non-contiguous and the alias cannot be formed).
+// unsqueeze_op.  A dense CPU input, or a strided one whose new shape only drops
+// or inserts size-1 axes, gives a view over the same buffer; anything else is
+// copied.  Either way ViewBackward is attached so that autograd can reshape
+// gradients back to the input's shape.
 TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const char* op_name) {
     Validator::input(a, std::string(op_name) + ".a").non_null();
     OpScopeFull scope{op_name, a->device(), a->dtype(), out_shape};
@@ -104,6 +130,12 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
         // ViewFamily).
         Stride stride = contiguous_stride(out_shape, dtype_size(a->dtype()));
         out = TensorImpl::make_view(a, out_shape, std::move(stride));
+    } else if (Stride strided; a->device() == Device::CPU && storage_is_cpu(a->raw_storage()) &&
+                               squeezes_only(*a, out_shape, strided)) {
+        // A strided CPU view whose new shape only drops or inserts size-1
+        // axes keeps every element where it was — ``x[:, 1]`` is a column
+        // slice with its axis squeezed out — so the result is a view too.
+        out = TensorImpl::make_view(a, out_shape, std::move(strided));
     } else {
         // Any other reshape of a CPU tensor that is not dense (a view at an
         // offset, or not contiguous) copies: ``storage()`` hands the backend

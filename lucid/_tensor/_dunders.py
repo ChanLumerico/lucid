@@ -1685,8 +1685,10 @@ def _inject_dunders(cls: type) -> None:
         Returns
         -------
         Tensor
-            View or gather result.  Basic indexing produces a view that
-            shares storage with ``self``; advanced indexing copies.
+            View or gather result.  On the CPU basic indexing produces a
+            view that shares storage with ``self``; advanced indexing
+            copies, as do a step slice such as ``x[::2]`` and any index on
+            metal.
 
         Notes
         -----

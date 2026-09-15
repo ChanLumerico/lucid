@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - arange of integers is int64, as the reference has it
 - CPU transposes are views, and strided views read and write
+- CPU slices on any axis, split and expand are views
 
 ---
 

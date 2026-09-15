@@ -11,7 +11,7 @@
 [![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads)](https://pepy.tech/projects/lucid-dl)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-272268-purple)
+![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-273543-purple)
 
 **[Documentation](https://chanlumerico.github.io/lucid/)** ·
 **[Model Zoo](https://chanlumerico.github.io/lucid/)** ·
@@ -166,8 +166,8 @@ Dependencies run strictly downward, and CI validates the layer graph on every co
 violation fails the build rather than becoming a convention nobody enforces.
 
 Autograd is reverse-mode over a dynamic graph, with higher-order differentiation available in
-`lucid.autograd`. View ops — `reshape`, `permute`, `transpose`, slicing — are metadata-only
-and allocate nothing.
+`lucid.autograd`. On the CPU, view ops — `reshape`, `permute`, `transpose`, slicing, `expand` —
+are metadata-only and allocate nothing; Metal tensors keep copy semantics.
 
 ## 🧩 Ecosystem
 
