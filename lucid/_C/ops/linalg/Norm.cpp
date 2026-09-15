@@ -51,7 +51,7 @@ namespace lucid {
 
 // AmpPolicy::KeepInput: preserve the input dtype so that the A/N division in
 // the backward does not silently lose precision through AMP downcasting.
-const OpSchema NormBackward::schema_v1{"norm", 1, AmpPolicy::KeepInput};
+const OpSchema NormBackward::schema_v1{"norm", 1, AmpPolicy::KeepInput, true, "", true};
 
 // Backward pass for norm_op.
 //

@@ -289,6 +289,13 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
         return;
     }
     storage_ = std::move(out.storage_);
+    // The new buffer is laid out the way ``out`` lays it out — a dense run
+    // from its first byte, at ``out``'s element size.  Keeping this
+    // tensor's own stride and offset misread it whenever the two differ:
+    // an in-place op that turned int64 into float32 (``exp_`` on integers)
+    // kept 8-byte strides over 4-byte floats and read every other element.
+    meta_.stride = out.meta_.stride;
+    offset_ = out.offset_;
     drop_shared();
 }
 
