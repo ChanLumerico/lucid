@@ -21,11 +21,12 @@ Helpers ``_to_axes`` and ``_bessel_correct`` are shared across the reduction
 adapters and live at the top of the module.
 """
 
+import math
 from typing import Callable, Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap, _unwrap_or_scalar
-from lucid._dtype import to_engine_dtype
+from lucid._dispatch import _scalar_dtype, _unwrap, _unwrap_or_scalar
+from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._types import Scalar, TensorOrScalar
 
 if TYPE_CHECKING:
@@ -49,6 +50,7 @@ _ARITH_DTYPE_KIND_WIDTH: dict[_C_engine.Dtype, tuple[int, int]] = {
     _D.I32: (1, 32),
     _D.I64: (1, 64),
     _D.F16: (2, 16),
+    _D.BF16: (2, 16),
     _D.F32: (2, 32),
     _D.F64: (2, 64),
     _D.C64: (3, 64),
@@ -63,13 +65,59 @@ def _arith_result_dtype(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.D
     kb, wb = _ARITH_DTYPE_KIND_WIDTH.get(db, (2, 32))
     if ka != kb:
         return da if ka > kb else db
-    return da if wa >= wb else db
+    if wa == wb:
+        # float16 against bfloat16: neither holds the other, so both widen.
+        return _D.F32
+    return da if wa > wb else db
+
+
+def _is_integral(d: _C_engine.Dtype) -> bool:
+    """Whether ``d`` is an integer or bool dtype."""
+    return _ARITH_DTYPE_KIND_WIDTH.get(d, (2, 32))[0] < 2
+
+
+def _promote_impls(impls: Sequence[_Impl]) -> list[_Impl]:
+    """Cast ``impls`` to the one dtype they promote to together.
+
+    The n-ary form of ``_arith_result_dtype``, for the ops whose engine
+    kernel wants every tensor operand at a single dtype — the joins,
+    ``where``, ``outer``, ``einsum`` — and so raised ``DtypeMismatch`` for
+    an ``int64`` beside a ``float32``, where the reference answers at their
+    common dtype.  Operands that already agree come back uncast, so the
+    common case costs one comparison each.
+    """
+    out = list(impls)
+    if not out:
+        return out
+    tgt = out[0].dtype
+    if all(t.dtype == tgt for t in out):
+        return out
+    for t in out[1:]:
+        tgt = _arith_result_dtype(tgt, t.dtype)
+    return [t if t.dtype == tgt else _C_engine.astype(t, tgt) for t in out]
+
+
+def _keep_engine_signature(
+    adapter: Callable[..., object], engine_fn: Callable[..., object]
+) -> None:
+    """Let ``adapter`` stand in for ``engine_fn`` wherever a signature is read.
+
+    The pybind11 docstring carries the canonical signature line, and
+    ``__wrapped__`` points ``_signature_for_entry`` back at it, so
+    ``inspect.signature``, ``help()`` and ``gen_pyi.py`` see the op's own
+    Tensor-typed parameters rather than the adapter's ``_Impl``-typed ones:
+    wrapping an op leaves its public signature and its stub as they were.
+    """
+    adapter.__doc__ = getattr(engine_fn, "__doc__", None)
+    adapter.__name__ = getattr(engine_fn, "__name__", adapter.__name__)
+    adapter.__wrapped__ = engine_fn  # type: ignore[attr-defined]
 
 
 def _make_arith_adapter(
     engine_fn: Callable[[_Impl, _Impl], _Impl],
     *,
     floating: bool = False,
+    inplace: bool = False,
 ) -> Callable[[_Impl, _Impl], _Impl]:
     """Wrap an arithmetic binary engine function with scalars and dtype promotion.
 
@@ -92,18 +140,33 @@ def _make_arith_adapter(
     operands at a common one first, so the promotion applies unchanged.
 
     matmul/dot/inner/outer deliberately bypass it: a scalar operand is
-    meaningless there, and they have their own dtype constraints that the
-    engine enforces.
+    meaningless there.  ``outer`` promotes its two tensors through
+    ``_outer_adapter`` instead; the others have dtype constraints of their
+    own that the engine enforces.
 
     ``floating`` adds true division's rule on top: a common dtype that is
     integral or bool becomes the default float dtype, as it does for ``/``.
+
+    ``inplace`` marks the trailing-underscore form, which writes the result
+    back into ``a``.  Beside ``floating`` it refuses an integral ``a``: the
+    quotient is floating, and an integer tensor cannot hold it in place.
+    ``div_`` used to floor-divide in silence where the reference refuses —
+    and where ``/=`` already refused.
     """
+    name = getattr(engine_fn, "__name__", "_arith_adapter")
 
     def _adapter(a: _Impl, b: _Impl) -> _Impl:
         if not isinstance(b, _C_engine.TensorImpl):
             b = _unwrap_or_scalar(b, a if isinstance(a, _C_engine.TensorImpl) else None)
         if not isinstance(a, _C_engine.TensorImpl):
             a = _unwrap_or_scalar(a, b)
+        if inplace and floating and _is_integral(a.dtype):
+            dtype = _ENGINE_TO_DTYPE.get(a.dtype, a.dtype)
+            raise RuntimeError(
+                f"{name}: true division gives a floating result, which cannot be "
+                f"written in place into a {dtype} tensor — use "
+                f"{name.removesuffix('_')} instead"
+            )
         da, db = a.dtype, b.dtype
         if da != db:
             tgt = _arith_result_dtype(da, db)
@@ -111,20 +174,36 @@ def _make_arith_adapter(
                 a = _C_engine.astype(a, tgt)
             if db != tgt:
                 b = _C_engine.astype(b, tgt)
-        if floating and _ARITH_DTYPE_KIND_WIDTH.get(a.dtype, (2, 32))[0] < 2:
+        if floating and _is_integral(a.dtype):
             tgt = to_engine_dtype(None)
             a = _C_engine.astype(a, tgt)
             b = _C_engine.astype(b, tgt)
         return engine_fn(a, b)
 
-    # Preserve the pybind11 docstring (contains the canonical signature line)
-    # so that gen_pyi.py's _parse_pybind_signature path extracts the correct
-    # Tensor-typed signature rather than the internal _Impl-typed one.
-    _adapter.__doc__ = getattr(engine_fn, "__doc__", None)
-    _adapter.__name__ = getattr(engine_fn, "__name__", "_arith_adapter")
-    # Store the original engine function so that _signature_for_entry can
-    # fall back to pybind11 doc-string parsing when the AST path fails.
-    _adapter.__wrapped__ = engine_fn  # type: ignore[attr-defined]
+    _keep_engine_signature(_adapter, engine_fn)
+    return _adapter
+
+
+def _make_join_adapter(engine_fn: Callable[..., _Impl]) -> Callable[..., _Impl]:
+    """Wrap a joining engine op (cat, stack, ...) so it takes mixed dtypes.
+
+    The engine joins tensors of a single dtype only, so ``cat`` of an
+    ``int64`` and a ``float32`` raised ``DtypeMismatch``, where the
+    reference joins them at their common dtype.  The inputs are brought
+    there first; inputs that already agree pass straight through.
+    """
+
+    name = engine_fn.__name__
+
+    def _adapter(tensors: Sequence[_Impl], *args: object, **kwargs: object) -> _Impl:
+        # Looked up by name on each call rather than captured: shadow
+        # allocation swaps the engine's attributes for phantom-aware stand-ins
+        # and rebinds only the registry entries that hold the bare engine op,
+        # so an adapter holding the original would hand it phantoms it rejects.
+        join = cast(Callable[..., _Impl], getattr(_C_engine, name))
+        return join(_promote_impls(tensors), *args, **kwargs)
+
+    _keep_engine_signature(_adapter, engine_fn)
     return _adapter
 
 
@@ -281,7 +360,7 @@ def _view_adapter(a_impl: _Impl, *shape: int | Sequence[int]) -> _Impl:
 
 def _concat_adapter(tensors: Sequence[Tensor], dim: int = 0) -> _Impl:
     """concat(tensors, dim=0) — first arg is a list of tensors."""
-    return _C_engine.concat([_unwrap(t) for t in tensors], int(dim))
+    return _C_engine.concat(_promote_impls([_unwrap(t) for t in tensors]), int(dim))
 
 
 def _reshape_adapter(x_impl: _Impl, *shape: int | Sequence[int]) -> _Impl:
@@ -578,6 +657,29 @@ def _tensordot_adapter(
     return _C_engine.tensordot(a_impl, b_impl, axes_a, axes_b)
 
 
+def _outer_adapter(a_impl: _Impl, b_impl: _Impl) -> _Impl:
+    """outer(a, b) — the two vectors at their common dtype.
+
+    The engine multiplies operands of one dtype only, so an ``int64`` vector
+    beside a ``float32`` one raised ``DtypeMismatch``; the reference answers
+    in ``float32``, as ``a * b`` would.  Shared by ``Tensor.outer`` and
+    ``lucid.linalg.outer`` so the two cannot drift.
+
+    Both callers hand over impls already, and they are not unwrapped again:
+    shadow allocation's phantom impls pass one ``_unwrap`` but not a second.
+    A Python number is refused rather than coerced, as the bare engine op
+    refused it, since an outer product with one is not an outer product.
+    """
+    for operand in (a_impl, b_impl):
+        if isinstance(operand, (bool, int, float, complex)):
+            raise TypeError(f"outer: expected a tensor, got {type(operand).__name__}")
+    a_impl, b_impl = _promote_impls([a_impl, b_impl])
+    return _C_engine.outer(a_impl, b_impl)
+
+
+_keep_engine_signature(_outer_adapter, _C_engine.outer)
+
+
 def _meshgrid_adapter(*tensors: Tensor, indexing: str = "ij") -> list[_Impl]:
     """meshgrid(*tensors, indexing='ij') — variadic input; ``indexing`` kwarg
     selects between matrix ('ij') and Cartesian ('xy') ordering."""
@@ -598,24 +700,51 @@ def _clip_adapter(
     raise a pybind argument error rather than doing the obvious thing.
     Substituting an infinity would have been wrong for integer dtypes,
     where it has no representable value; routing a single bound through
-    ``maximum`` / ``minimum`` instead keeps the dtype exactly as it was.
+    ``maximum`` / ``minimum`` instead needs no stand-in value at all.
+
+    A bound promotes the result as it would in ``x + bound``, so a float
+    bound on an integer tensor answers in float, as the reference's does.
+    Taking the tensor's dtype instead truncated ``clamp(ints, 0.5, 2.5)`` to
+    whole numbers and made the one-sided form raise ``DtypeMismatch``.  A
+    Python number is weak here as everywhere: it can change the kind but
+    never the width, so a ``float16`` tensor stays ``float16``.
     """
     if min is None and max is None:
         raise ValueError("clip: at least one of min or max must be given")
-    if max is None:
-        return _C_engine.maximum(x_impl, _unwrap_or_scalar(min, x_impl))
-    if min is None:
-        return _C_engine.minimum(x_impl, _unwrap_or_scalar(max, x_impl))
+    tgt = x_impl.dtype
+    for bound in (min, max):
+        if bound is None:
+            continue
+        if isinstance(bound, (bool, int, float)):
+            # Read off the dtype without building the 0-d constant, so a
+            # clamp whose bounds already fit allocates nothing extra.
+            bound_dtype = _scalar_dtype(bound, x_impl.dtype, x_impl.device)
+        else:
+            bound_dtype = _unwrap(bound).dtype
+        tgt = _arith_result_dtype(tgt, bound_dtype)
+    if tgt != x_impl.dtype:
+        x_impl = _C_engine.astype(x_impl, tgt)
+    if min is None or max is None:
+        bound_impl = _unwrap_or_scalar(max if min is None else min, x_impl)
+        if bound_impl.dtype != tgt:
+            bound_impl = _C_engine.astype(bound_impl, tgt)
+        one_sided = _C_engine.minimum if min is None else _C_engine.maximum
+        return one_sided(x_impl, bound_impl)
     return _C_engine.clip(x_impl, float(min), float(max))
 
 
 def _where_adapter(cond: Tensor, x: TensorOrScalar, y: TensorOrScalar) -> _Impl:
-    """where(cond, x, y) — bool-cast the condition, promote scalar branches.
+    """where(cond, x, y) — bool-cast the condition, promote the branches.
 
     Either branch may be a Python scalar, which is the common spelling for
     a masked constant: ``where(x > 0, 1.0, -1.0)``.  Each is promoted
     against whichever operand is already a tensor, so the pair keeps the
     dtype it would have had written the long way.
+
+    The two branches then meet at their common dtype, as in ``x + y``: the
+    engine selects between tensors of one dtype only, so an ``int64``
+    branch beside a ``float32`` one — or beside ``1.5`` — raised
+    ``DtypeMismatch`` where the reference answers in float.
     """
     c = _unwrap(cond)
     if c.dtype != _C_engine.Bool:
@@ -627,17 +756,32 @@ def _where_adapter(cond: Tensor, x: TensorOrScalar, y: TensorOrScalar) -> _Impl:
         if not isinstance(branch, (bool, int, float, complex)):
             ref_impl = _unwrap(branch)
             break
-    return _C_engine.where(
-        c, _unwrap_or_scalar(x, ref_impl), _unwrap_or_scalar(y, ref_impl)
+    x_impl, y_impl = _promote_impls(
+        [_unwrap_or_scalar(x, ref_impl), _unwrap_or_scalar(y, ref_impl)]
     )
+    return _C_engine.where(c, x_impl, y_impl)
 
 
 def _masked_fill_adapter(x_impl: _Impl, mask: Tensor, value: float) -> _Impl:
-    """masked_fill(x, mask, value) — auto-cast mask to bool."""
+    """masked_fill(x, mask, value) — auto-cast mask to bool.
+
+    An integer or bool tensor has no infinity and no NaN, and the engine's
+    cast wrote whatever the conversion gave: ``-inf`` became ``INT64_MIN``
+    with nothing to say so, which then reads as a huge negative number
+    rather than a mask.  The reference refuses such a value, and so does
+    this; a finite one is cast to the tensor's dtype as before.
+    """
     m = _unwrap(mask)
     if m.dtype != _C_engine.Bool:
         m = _C_engine.astype(m, _C_engine.Bool)
-    return _C_engine.masked_fill(x_impl, m, float(value))
+    fill = float(value)
+    if not math.isfinite(fill) and _is_integral(x_impl.dtype):
+        dtype = _ENGINE_TO_DTYPE.get(x_impl.dtype, x_impl.dtype)
+        raise RuntimeError(
+            f"masked_fill: {fill} cannot be written into a {dtype} tensor, "
+            "which has no infinity or NaN — cast it to a floating dtype first"
+        )
+    return _C_engine.masked_fill(x_impl, m, fill)
 
 
 def _pad_adapter(

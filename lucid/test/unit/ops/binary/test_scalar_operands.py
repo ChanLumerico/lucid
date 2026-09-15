@@ -165,3 +165,34 @@ class TestScalarPromotion:
             assert t.add(1.5).dtype == expected
         finally:
             lucid.set_default_dtype(original)
+
+    @pytest.mark.parametrize(
+        ("bounds", "expected"),
+        [
+            ({"min": 0.5}, [0.5, 2.0, 3.0]),
+            ({"max": 2.5}, [0.0, 2.0, 2.5]),
+            ({"min": 0.5, "max": 2.5}, [0.5, 2.0, 2.5]),
+        ],
+    )
+    def test_a_float_bound_clamps_an_integer_tensor_in_float(
+        self, device: str, bounds: dict[str, float], expected: list[float]
+    ) -> None:
+        # The engine kept the tensor's dtype: one bound raised
+        # DtypeMismatch, and two truncated 0.5 and 2.5 to whole numbers.
+        t = lucid.tensor([0, 2, 3], dtype=lucid.int32, device=device)
+        for out in (
+            lucid.clamp(t, **bounds),
+            t.clamp(**bounds),
+            lucid.clip(t, **bounds),
+        ):
+            assert out.dtype == lucid.float32
+            assert out.tolist() == expected
+
+    def test_a_clamp_bound_never_widens_the_width(self, device: str) -> None:
+        half = lucid.tensor([0.0, 2.0], dtype=lucid.float16, device=device)
+        assert lucid.clamp(half, min=0.5).dtype == lucid.float16
+        assert lucid.clamp(half, 0.5, 1.5).dtype == lucid.float16
+        ints = lucid.tensor([0, 5], dtype=lucid.int32, device=device)
+        assert lucid.clamp(ints, 1, 3).dtype == lucid.int32
+        assert lucid.clamp(ints, 1, 3).tolist() == [1, 3]
+        assert lucid.clamp(ints, min=1).tolist() == [1, 5]

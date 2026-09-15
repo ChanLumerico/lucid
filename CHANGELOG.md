@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - tensor() copies, one_hot is int64, and the distributions derive
 
+- mixed int and float operands meet at the common dtype
+
 ### Added
 
 - arange of integers is int64, as the reference has it

@@ -8,6 +8,7 @@ from typing import Callable, cast, final, override
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._adapters import _outer_adapter
 from lucid._tensor.tensor import Tensor
 
 _la = _C_engine.linalg
@@ -2237,7 +2238,9 @@ def outer(x: Tensor, y: Tensor) -> Tensor:
     >>> outer(lucid.tensor([1.0, 2.0]), lucid.tensor([3.0, 4.0]))
     tensor([[3., 4.], [6., 8.]])
     """
-    return _wrap(_C_engine.outer(_unwrap(x), _unwrap(y)))
+    # The adapter ``Tensor.outer`` uses too: it brings mixed dtypes to their
+    # common one, which the engine's single-dtype kernel refused.
+    return _wrap(_outer_adapter(_unwrap(x), _unwrap(y)))
 
 
 def matrix_norm(

@@ -3443,14 +3443,16 @@ class Tensor:
         condition : Tensor
             Boolean (or truthy-valued) mask, broadcastable to ``self``.
         other : Tensor or float
-            Fall-back values when ``condition`` is falsy. Scalars are
-            broadcast to a constant tensor matching ``self.shape``.
+            Fall-back values when ``condition`` is falsy.  A scalar is
+            broadcast, and is weak as in ``self + other``: it can widen the
+            kind (a float beside an integer tensor gives float), never the
+            width.
 
         Returns
         -------
         Tensor
-            Tensor with the broadcast shape of the three inputs, dtype
-            matching ``self``.
+            Tensor with the broadcast shape of the three inputs, at the
+            common dtype of ``self`` and ``other``.
 
         Notes
         -----
@@ -3465,17 +3467,14 @@ class Tensor:
         >>> x.where(mask, 0.0).tolist()
         [1.0, 0.0, 3.0, 0.0]
         """
-        if not isinstance(other, Tensor):
-            other_impl = _C_engine.full(
-                list(self._impl.shape),
-                float(other),
-                self._impl.dtype,
-                self._impl.device,
-            )
-        else:
-            other_impl = other._impl
+        # The same path as ``lucid.where(condition, self, other)``.  Building
+        # ``other`` at ``self``'s dtype truncated a float scalar beside an
+        # integer tensor (``ints.where(m, 1.5)`` filled in 1), and a tensor
+        # ``other`` of another dtype raised ``DtypeMismatch``.
+        from lucid._ops._adapters import _where_adapter
+
         return Tensor.__new_from_impl__(  # type: ignore[return-value]
-            _C_engine.where(condition._impl, self._impl, other_impl)
+            _where_adapter(condition, self, other)
         )
 
     def diff(self, n: int = 1, dim: int = -1) -> Self:

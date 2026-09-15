@@ -201,31 +201,35 @@ def _signature_for_entry(entry: OpEntry) -> inspect.Signature:
     if pybind_fn is not None:
         # Adapter wrapping a pybind11 builtin: parse the original docstring
         # directly so the signature uses pybind11 param names, then rename.
+        # A list-taking one (the joins) goes on to the ``tensors`` rewrite
+        # below, as the bare builtin it wraps would.
         sig = _parse_pybind_signature(pybind_fn) or inspect.Signature(
             parameters=[
                 inspect.Parameter("args", inspect.Parameter.VAR_POSITIONAL),
                 inspect.Parameter("kwargs", inspect.Parameter.VAR_KEYWORD),
             ]
         )
-        return _rename_leading_tensor_params(sig, entry.n_tensor_args)
-    try:
-        if _FORWARDREF is not None:
-            sig = inspect.signature(fn, annotation_format=_FORWARDREF)
-        else:
-            sig = inspect.signature(fn)
-    except (TypeError, ValueError, NameError):  # fmt: skip
-        sig = _parse_pybind_signature(fn) or inspect.Signature(
-            parameters=[
-                inspect.Parameter(
-                    "args",
-                    inspect.Parameter.VAR_POSITIONAL,
-                ),
-                inspect.Parameter(
-                    "kwargs",
-                    inspect.Parameter.VAR_KEYWORD,
-                ),
-            ]
-        )
+        if entry.n_tensor_args != -1:
+            return _rename_leading_tensor_params(sig, entry.n_tensor_args)
+    else:
+        try:
+            if _FORWARDREF is not None:
+                sig = inspect.signature(fn, annotation_format=_FORWARDREF)
+            else:
+                sig = inspect.signature(fn)
+        except (TypeError, ValueError, NameError):  # fmt: skip
+            sig = _parse_pybind_signature(fn) or inspect.Signature(
+                parameters=[
+                    inspect.Parameter(
+                        "args",
+                        inspect.Parameter.VAR_POSITIONAL,
+                    ),
+                    inspect.Parameter(
+                        "kwargs",
+                        inspect.Parameter.VAR_KEYWORD,
+                    ),
+                ]
+            )
 
     if entry.n_tensor_args == -1:
         # Replace the first parameter (which is the impl-list at the engine

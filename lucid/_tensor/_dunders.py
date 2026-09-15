@@ -28,6 +28,7 @@ _DTYPE_KIND_WIDTH: dict[_C_engine.Dtype, tuple[int, int]] = {
     _D.I32: (1, 32),
     _D.I64: (1, 64),
     _D.F16: (2, 16),
+    _D.BF16: (2, 16),
     _D.F32: (2, 32),
     _D.F64: (2, 64),
     _D.C64: (3, 64),
@@ -42,7 +43,10 @@ def _result_dtype(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.Dtype:
     kb, wb = _DTYPE_KIND_WIDTH.get(db, (2, 32))
     if ka != kb:
         return da if ka > kb else db
-    return da if wa >= wb else db
+    if wa == wb:
+        # float16 against bfloat16: neither holds the other, so both widen.
+        return _D.F32
+    return da if wa > wb else db
 
 
 def _maybe_promote(
