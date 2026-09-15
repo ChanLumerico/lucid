@@ -237,20 +237,28 @@ jobs:
           PY
           otool -l lucid/_C/engine*.so | grep -A4 LC_BUILD_VERSION | grep -E "minos|sdk" || true
 
-      # The fast tier and the Core ML tier, split into processes the way
-      # scripts/ci_full.sh splits them: one process runs a hosted runner
-      # out of memory.
+      # The tiers, split into processes the way scripts/ci_full.sh splits
+      # them (one process runs a hosted runner out of memory), and each
+      # run to the end whatever the one before did.  --capture=sys leaves
+      # native stderr alone: an MPS assertion or an uncaught Objective-C
+      # exception prints its reason there just before it aborts, and
+      # pytest's fd capture would take that reason down with the process.
+      - name: Compile tier
+        run: python -m pytest lucid/test/unit/compile -v --capture=sys
+
       - name: Fast tier
+        if: ${{ !cancelled() }}
         run: >-
-          python -m pytest lucid/test/ -q
+          python -m pytest lucid/test/ -q --capture=sys
           --ignore=lucid/test/parity --ignore=lucid/test/integration
           --ignore=lucid/test/perf --ignore=lucid/test/unit/models
-          --ignore=lucid/test/unit/coreml
+          --ignore=lucid/test/unit/coreml --ignore=lucid/test/unit/compile
 
       - name: Core ML tier
+        if: ${{ !cancelled() }}
         run: |
-          python -m pytest lucid/test/unit/coreml -q --ignore=lucid/test/unit/coreml/test_family_export_smoke.py
-          python -m pytest lucid/test/unit/coreml/test_family_export_smoke.py -q
+          python -m pytest lucid/test/unit/coreml -q --capture=sys --ignore=lucid/test/unit/coreml/test_family_export_smoke.py
+          python -m pytest lucid/test/unit/coreml/test_family_export_smoke.py -q --capture=sys
 
   nightly-perf:
     name: Nightly perf placeholder
