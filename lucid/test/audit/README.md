@@ -84,7 +84,7 @@ cd /path/to/lucid
 #    ⚠️ `uv pip`, never plain `pip` — .venv has no pip, so `pip` leaks to
 #    the system pip3 and bakes that interpreter's absolute rpath into the
 #    .so. See [[debug-build-wrong-venv-rpath]].
-VIRTUAL_ENV=.venv MACOSX_DEPLOYMENT_TARGET=26.0 \
+VIRTUAL_ENV=.venv MACOSX_DEPLOYMENT_TARGET=15.0 \
     uv pip install -e ".[audit]" --no-build-isolation
 
 # 2. Confirm the engine linked against *this* venv.
@@ -119,7 +119,7 @@ python -m lucid.test.audit --coverage
 
 ### Requirements
 
-Inherited from Lucid itself: macOS 26+ on Apple Silicon, Python 3.14,
+Inherited from Lucid itself: macOS 15+ on Apple Silicon, Python 3.14,
 MLX ≥ 0.31. There is nothing the audit needs beyond what building the
 engine already needs.
 

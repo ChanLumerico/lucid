@@ -198,6 +198,60 @@ jobs:
           name: lucid-coverage-xml
           path: build/coverage/coverage.xml
 
+  macos-15:
+    name: macOS 15 floor / Python 3.14
+    # The wheel targets macOS 15.0 (setup.py, publish.yml), the oldest
+    # release Lucid supports.  The phase gate runs on macos-26; this job
+    # builds and tests on the floor itself, where MLX resolves to its
+    # macOS 15 build — so an engine call newer than 15, or a difference in
+    # that MLX build, fails here instead of on a user's machine.
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: macos-15-py3.14
+          max-size: 600M
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # --no-build-isolation for the same RPATH reason as the phase gate.
+          python -m pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1" mlx
+          python -m pip install --no-build-isolation -e ".[test]"
+
+      - name: Report the floor
+        run: |
+          sw_vers
+          python - <<'PY'
+          import importlib.metadata as md
+          import platform
+          print(f"macOS {platform.mac_ver()[0]} | mlx {md.version('mlx')} | mlx-metal {md.version('mlx-metal')}")
+          PY
+          otool -l lucid/_C/engine*.so | grep -A4 LC_BUILD_VERSION | grep -E "minos|sdk" || true
+
+      # The fast tier and the Core ML tier, split into processes the way
+      # scripts/ci_full.sh splits them: one process runs a hosted runner
+      # out of memory.
+      - name: Fast tier
+        run: >-
+          python -m pytest lucid/test/ -q
+          --ignore=lucid/test/parity --ignore=lucid/test/integration
+          --ignore=lucid/test/perf --ignore=lucid/test/unit/models
+          --ignore=lucid/test/unit/coreml
+
+      - name: Core ML tier
+        run: |
+          python -m pytest lucid/test/unit/coreml -q --ignore=lucid/test/unit/coreml/test_family_export_smoke.py
+          python -m pytest lucid/test/unit/coreml/test_family_export_smoke.py -q
+
   nightly-perf:
     name: Nightly perf placeholder
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
