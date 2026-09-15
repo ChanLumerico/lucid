@@ -27,3 +27,11 @@ def test_erfc_gradient_is_the_gaussian_slope() -> None:
     for xi, gi in zip(xs, x.grad.tolist()):
         want = -2.0 / math.sqrt(math.pi) * math.exp(-xi * xi)
         assert gi == pytest.approx(want, rel=1e-4, abs=1e-9), xi
+
+
+def test_erfc_in_float64_is_double_precision() -> None:
+    # The Chebyshev fit is float32 grade; float64 takes 1 - erf below 3 and
+    # a continued fraction above it.
+    got = lucid.erfc(lucid.tensor(_XS, dtype=lucid.float64)).tolist()
+    for x, value in zip(_XS, got):
+        assert value == pytest.approx(math.erfc(x), rel=1e-10), x

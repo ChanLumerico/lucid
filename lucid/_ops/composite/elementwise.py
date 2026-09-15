@@ -1136,6 +1136,8 @@ def erfc(x: Tensor) -> Tensor:
     >>> abs(lucid.erfc(lucid.tensor(4.0)).item() - 1.5417e-08) < 1e-12
     True
     """
+    if x.dtype == lucid.float64:
+        return _erfc_double(x)
     # ``where`` rather than ``abs``: the gradient of ``abs`` at 0 is 0,
     # which would zero erfc's slope (-2/√π) at exactly the origin.
     z = lucid.where(x >= 0.0, x, -x)
@@ -1155,6 +1157,26 @@ def erfc(x: Tensor) -> Tensor:
         poly = c + t * poly
     tail = t * lucid.exp(poly - z * z)
     return lucid.where(x >= 0.0, tail, 2.0 - tail)
+
+
+def _erfc_double(x: Tensor) -> Tensor:
+    """erfc in float64, where the Chebyshev fit's 1.2e-7 is float32 grade.
+
+    ``1 - erf(x)`` holds to float64's spacing until erfc itself shrinks
+    toward it, so it serves below x = 3; from there the continued fraction
+    for erfcx does, at 60 terms, without ever subtracting.  Both branches
+    are evaluated — ``where`` selects — so each is clamped onto its own
+    side first, keeping the losing one finite for the gradient.
+    """
+    z = lucid.where(x >= 0.0, x, -x)
+    head = 1.0 - lucid.erf(lucid.minimum(z, lucid.full_like(z, 3.0)))
+    far = lucid.maximum(z, lucid.full_like(z, 3.0))
+    frac = lucid.zeros_like(far)
+    for k in range(60, 0, -1):
+        frac = (0.5 * k) / (far + frac)
+    tail = lucid.exp(-far * far) / (_math.sqrt(_math.pi) * (far + frac))
+    value = lucid.where(z < 3.0, head, tail)
+    return lucid.where(x >= 0.0, value, 2.0 - value)
 
 
 def copysign(x: Tensor, y: Tensor) -> Tensor:

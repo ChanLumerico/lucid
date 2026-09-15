@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - mixed int and float operands meet at the common dtype
 
+- erfc in float64 keeps double precision
+
 ### Added
 
 - arange of integers is int64, as the reference has it
