@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - erfc keeps its relative precision in the tail
 - integer mean, norm and matmul stop truncating
 
+### Added
+
+- arange of integers is int64, as the reference has it
+
 ---
 
 ## [3.12.0] — 2026-09-15
