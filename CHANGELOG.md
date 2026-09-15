@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - complex arithmetic, broadcasting and casts on the CPU
+- erfc keeps its relative precision in the tail
 
 ---
 
