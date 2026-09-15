@@ -249,11 +249,18 @@ broadcast_cpu(const CpuStorage& src, const Shape& src_shape, const Shape& out_sh
         run(std::uint8_t{});
         break;
     case Dtype::F16:
-        // Broadcasting replicates elements without reading them, so half
-        // rides the 16-bit path.  This gate sits above the backend and so
-        // blocked 41 ops on its own, none of which had anything to do with
-        // arithmetic on half.
+    case Dtype::BF16:
+        // Broadcasting replicates elements without reading them, so both
+        // 16-bit floats ride the 16-bit path.  This gate sits above the
+        // backend and so blocked 41 ops on its own, none of which had
+        // anything to do with arithmetic on half.
         run(std::uint16_t{});
+        break;
+    case Dtype::C64:
+        // Complex64 is two floats per element; copying it as one 64-bit
+        // word replicates it just as well.  Without this, ``a / 2`` on a
+        // complex CPU tensor failed here before reaching the backend.
+        run(std::uint64_t{});
         break;
     default:
         ErrorBuilder("broadcast").not_implemented("dtype not supported");

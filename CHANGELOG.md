@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Fixed
+
+- complex arithmetic, broadcasting and casts on the CPU
+
 ---
 
 ## [3.12.0] — 2026-09-15

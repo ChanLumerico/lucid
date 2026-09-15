@@ -581,7 +581,25 @@ public:
         return Storage{CpuStorage{ptr, nbytes, dt}};
     }
 
+    // An interleaved complex64 op over two same-shape buffers.  ``binary_op``
+    // has no complex branch: its kernels are typed on one real scalar.
+    static Storage complex_binary(const Storage& a,
+                                  const Storage& b,
+                                  const Shape& shape,
+                                  void (*fn)(const float*, const float*, float*, std::size_t)) {
+        const auto& ca = std::get<CpuStorage>(a);
+        const auto& cb = std::get<CpuStorage>(b);
+        const std::size_t n = shape_numel(shape);
+        const std::size_t nb = n * dtype_size(Dtype::C64);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        fn(reinterpret_cast<const float*>(ca.ptr.get()),
+           reinterpret_cast<const float*>(cb.ptr.get()), reinterpret_cast<float*>(ptr.get()), n);
+        return Storage{CpuStorage{ptr, nb, Dtype::C64}};
+    }
+
     Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
+        if (dt == Dtype::C64)
+            return complex_binary(a, b, shape, cpu::vzadd_c64);
         return binary_op(
             a, b, shape, dt,
             [](const float* ap, const float* bp, float* op, std::size_t n) {
@@ -599,6 +617,8 @@ public:
     }
 
     Storage sub(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
+        if (dt == Dtype::C64)
+            return complex_binary(a, b, shape, cpu::vzsub_c64);
         return binary_op(
             a, b, shape, dt,
             [](const float* ap, const float* bp, float* op, std::size_t n) {
@@ -618,20 +638,8 @@ public:
     }
 
     Storage mul(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        if (dt == Dtype::C64) {
-            // Element-wise complex multiply on interleaved [re, im, re, im, ...].
-            // ``vDSP_zvmul`` operates on this exact layout via DSPComplex*; the
-            // strides are 1 because both inputs and outputs are contiguous.
-            const auto& ca = std::get<CpuStorage>(a);
-            const auto& cb = std::get<CpuStorage>(b);
-            const std::size_t n = shape_numel(shape);
-            const std::size_t nb = n * dtype_size(dt);
-            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-            cpu::vzmul_c64(reinterpret_cast<const float*>(ca.ptr.get()),
-                           reinterpret_cast<const float*>(cb.ptr.get()),
-                           reinterpret_cast<float*>(ptr.get()), n);
-            return Storage{CpuStorage{ptr, nb, dt}};
-        }
+        if (dt == Dtype::C64)
+            return complex_binary(a, b, shape, cpu::vzmul_c64);
         return binary_op(
             a, b, shape, dt,
             [](const float* ap, const float* bp, float* op, std::size_t n) {
@@ -651,6 +659,8 @@ public:
     }
 
     Storage div(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
+        if (dt == Dtype::C64)
+            return complex_binary(a, b, shape, cpu::vzdiv_c64);
         return binary_op(
             a, b, shape, dt,
             [](const float* ap, const float* bp, float* op, std::size_t n) {
@@ -6210,8 +6220,8 @@ public:
     // followup smoke runs — bool reductions need to promote through I64 first
     // and that promotion was silently NotImplementedError.  The dispatch below
     // covers every pair among {F16, F32, F64, I8, I16, I32, I64, Bool}.  C64
-    // and BF16 are not handled here because their host representation isn't a
-    // simple ``static_cast``-able scalar (F16 uses the IEEE half decoder from
+    // and BF16 are handled outside the table, through float32, because their
+    // host representation isn't a simple ``static_cast``-able scalar (F16 uses the IEEE half decoder from
     // ``item()`` indirectly via the F32 path — handled with a small helper).
     Storage astype(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override {
         const auto& ca = std::get<CpuStorage>(a);
@@ -6283,6 +6293,32 @@ public:
                 out16[i] = brain ? detail::float_to_bfloat_bits(f32[i])
                                  : detail::float_to_half_bits(f32[i]);
             return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
+        }
+
+        // Complex64 is interleaved ``[re, im]`` float pairs, which the table
+        // below has no scalar for.  A real value becomes ``re`` with a zero
+        // imaginary part; the other way keeps the real part and drops the
+        // imaginary one, as the reference framework's cast does.  Both legs
+        // go through float32, like the 16-bit floats above.
+        if (src_dt != dst_dt && (src_dt == Dtype::C64 || dst_dt == Dtype::C64)) {
+            if (dst_dt == Dtype::C64) {
+                Storage as_f32 = (src_dt == Dtype::F32) ? a : astype(a, shape, src_dt, Dtype::F32);
+                const auto* f32 =
+                    reinterpret_cast<const float*>(std::get<CpuStorage>(as_f32).ptr.get());
+                auto* out = reinterpret_cast<float*>(out_ptr.get());
+                for (std::size_t i = 0; i < n; ++i) {
+                    out[2 * i] = f32[i];
+                    out[2 * i + 1] = 0.0f;
+                }
+                return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
+            }
+            auto f32_ptr = allocate_aligned_bytes(n * sizeof(float), Device::CPU);
+            const auto* c = reinterpret_cast<const float*>(ca.ptr.get());
+            auto* f32 = reinterpret_cast<float*>(f32_ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                f32[i] = c[2 * i];
+            Storage as_f32{CpuStorage{f32_ptr, n * sizeof(float), Dtype::F32}};
+            return dst_dt == Dtype::F32 ? as_f32 : astype(as_f32, shape, Dtype::F32, dst_dt);
         }
 
         // Main Cartesian dispatch.  Outer = src, inner = dst.  Every
@@ -6581,9 +6617,13 @@ public:
             run(std::uint8_t{});
             break;
         case Dtype::F16:
-            // Broadcasting replicates elements without reading them, so
-            // half rides the 16-bit path.
+        case Dtype::BF16:
+            // Broadcasting replicates elements without reading them, so both
+            // 16-bit floats ride the 16-bit path and complex64 the 64-bit one.
             run(std::uint16_t{});
+            break;
+        case Dtype::C64:
+            run(std::uint64_t{});
             break;
         default:
             ErrorBuilder("cpu_backend::broadcast").not_implemented("dtype not supported");

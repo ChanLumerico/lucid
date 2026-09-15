@@ -268,6 +268,33 @@ void vzmul_c64(const float* a, const float* b, float* out, std::size_t n) {
         oc[i] = ac[i] * bc[i];
 }
 
+namespace {
+
+// ``out[i] = op(a[i], b[i])`` over interleaved complex64, the loop
+// :func:`vzmul_c64` spells out by hand.
+template <typename Op>
+void zv_binary(const float* a, const float* b, float* out, std::size_t n, Op op) {
+    const auto* ac = reinterpret_cast<const std::complex<float>*>(a);
+    const auto* bc = reinterpret_cast<const std::complex<float>*>(b);
+    auto* oc = reinterpret_cast<std::complex<float>*>(out);
+    for (std::size_t i = 0; i < n; ++i)
+        oc[i] = op(ac[i], bc[i]);
+}
+
+}  // namespace
+
+void vzadd_c64(const float* a, const float* b, float* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<float> x, std::complex<float> y) { return x + y; });
+}
+
+void vzsub_c64(const float* a, const float* b, float* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<float> x, std::complex<float> y) { return x - y; });
+}
+
+void vzdiv_c64(const float* a, const float* b, float* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<float> x, std::complex<float> y) { return x / y; });
+}
+
 void vzconj_c64(const float* a, float* out, std::size_t n) {
     // Copy the full interleaved buffer, then negate only the imag halves
     // via a stride-2 view starting at offset 1.  ``vDSP_vneg`` handles the

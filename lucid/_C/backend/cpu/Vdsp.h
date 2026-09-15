@@ -828,6 +828,24 @@ vadd_i64(const std::int64_t* a, const std::int64_t* b, std::int64_t* out, std::s
 // Accelerate.framework ``vDSP_zvmul``.
 LUCID_INTERNAL void vzmul_c64(const float* a, const float* b, float* out, std::size_t n);
 
+// Complex C64 add / subtract / divide on interleaved storage.
+//
+// The same layout and loop as :func:`vzmul_c64`, for the three arithmetic
+// ops the CPU stream used to refuse for complex input ("dtype not
+// supported") while Metal ran them.  Division is ``std::complex``'s own.
+//
+// Parameters
+// ----------
+// a, b : const float*
+//     Interleaved complex buffers, length $2n$ floats.
+// out : float*
+//     Interleaved complex output buffer, length $2n$ floats.
+// n : std::size_t
+//     Number of *complex* elements (NOT floats).
+LUCID_INTERNAL void vzadd_c64(const float* a, const float* b, float* out, std::size_t n);
+LUCID_INTERNAL void vzsub_c64(const float* a, const float* b, float* out, std::size_t n);
+LUCID_INTERNAL void vzdiv_c64(const float* a, const float* b, float* out, std::size_t n);
+
 // Complex C64 conjugation on interleaved storage.
 //
 // Returns the complex conjugate of an interleaved complex64 vector by
