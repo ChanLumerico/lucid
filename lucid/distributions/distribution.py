@@ -463,6 +463,21 @@ class Distribution:
 
     # ── validation ─────────────────────────────────────────────────────────
 
+    def _is_pending(self, name: str) -> bool:
+        """Whether ``name`` is the dual of a parameter given in its place.
+
+        ``probs`` of a ``Bernoulli`` built from ``logits`` exists — it is
+        derived on access — but it was not an argument, so neither
+        validation nor the repr should call it into being.  Validating it
+        would also reject arguments the user never passed:
+        ``Geometric(logits=20.0)`` derives a probability that rounds to 1 in
+        float32, outside the open interval its ``probs`` must lie in.
+        """
+        from lucid.distributions._util import _lazy_param
+
+        attr = getattr(type(self), name, None)
+        return isinstance(attr, _lazy_param) and not attr.is_stored(self)
+
     def _validate_params(self) -> None:
         """Check that all constructor arguments satisfy their constraints.
 
@@ -473,7 +488,7 @@ class Distribution:
         ``validate_args=True``.
         """
         for name, constraint in self.arg_constraints.items():
-            if not hasattr(self, name):
+            if self._is_pending(name) or not hasattr(self, name):
                 continue
             v = getattr(self, name)
             if not isinstance(v, lucid.Tensor):
@@ -523,7 +538,7 @@ class Distribution:
         """
         params = []
         for name in self.arg_constraints:
-            if not hasattr(self, name):
+            if self._is_pending(name) or not hasattr(self, name):
                 continue
             v = getattr(self, name)
             if isinstance(v, lucid.Tensor):

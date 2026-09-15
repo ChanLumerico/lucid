@@ -15,7 +15,7 @@ from lucid.distributions.constraints import (
 from lucid.distributions.distribution import Distribution, ExponentialFamily
 
 
-from lucid.distributions._util import _as_tensor
+from lucid.distributions._util import _as_tensor, _clamp_probs, _lazy_param
 
 
 def _probs_to_logits(probs: Tensor) -> Tensor:
@@ -122,6 +122,8 @@ class Bernoulli(ExponentialFamily):
     (4,)
     >>> d.log_prob(lucid.tensor(1.0))
     tensor(-0.3567)
+    >>> Bernoulli(logits=0.0).probs  # the other parameterisation, on demand
+    tensor(0.5)
     """
 
     arg_constraints = {"probs": unit_interval, "logits": real}
@@ -178,6 +180,21 @@ class Bernoulli(ExponentialFamily):
             tuple(self.probs.shape) if not self._is_logits else tuple(self.logits.shape)
         )
         super().__init__(batch_shape=shape, event_shape=(), validate_args=validate_args)
+
+    @_lazy_param
+    def probs(self) -> Tensor:
+        """Success probability — as given, or ``sigmoid(logits)`` on access."""
+        return _logits_to_probs(self.logits)
+
+    @_lazy_param
+    def logits(self) -> Tensor:
+        r"""Log-odds :math:`\log(p/(1-p))` — as given, or derived on access.
+
+        Derived from ``probs`` clamped one epsilon inside :math:`[0, 1]`, as
+        the reference framework derives it, so a degenerate probability
+        gives a large finite logit rather than an infinite one.
+        """
+        return _probs_to_logits(_clamp_probs(self.probs))
 
     @property
     def param(self) -> Tensor:
@@ -399,8 +416,8 @@ class Geometric(Distribution):
         Success probability :math:`p \in (0, 1)` per trial.  Mutually
         exclusive with ``logits``.
     logits : Tensor or float, optional
-        Log-odds :math:`\ell = \log(p/(1-p))`.  Converted to ``probs`` via
-        the sigmoid at construction.  Mutually exclusive with ``probs``.
+        Log-odds :math:`\ell = \log(p/(1-p))`; ``probs`` is then derived
+        from it on access.  Mutually exclusive with ``probs``.
     validate_args : bool, optional
         If ``True``, validate parameter constraints at construction time.
 
@@ -457,9 +474,8 @@ class Geometric(Distribution):
     ) -> None:
         r"""Construct a Geometric distribution.
 
-        Exactly one of ``probs`` or ``logits`` must be provided.  If
-        ``logits`` is given, it is converted to ``probs`` via the sigmoid
-        transform and stored as ``self.probs``.
+        Exactly one of ``probs`` or ``logits`` must be provided.  The one
+        given is stored; the other is derived from it on access.
 
         Parameters
         ----------
@@ -467,9 +483,8 @@ class Geometric(Distribution):
             Success probability :math:`p \in (0, 1)` of a single Bernoulli
             trial.  Mutually exclusive with ``logits``.
         logits : Tensor | float | None, optional
-            Log-odds :math:`\ell = \log(p / (1-p))`.  Converted to
-            ``probs`` at construction time.  Mutually exclusive with
-            ``probs``.
+            Log-odds :math:`\ell = \log(p / (1-p))`.  Mutually exclusive
+            with ``probs``.
         validate_args : bool | None, optional
             If ``True``, validate parameter constraints at construction time.
 
@@ -496,15 +511,31 @@ class Geometric(Distribution):
         """
         if (probs is None) == (logits is None):
             raise ValueError("Geometric: pass exactly one of `probs` or `logits`.")
+        # Whichever was given is stored and the other derived on access.
+        # Converting ``logits`` up front also validated the converted value,
+        # so ``logits=20.0`` — a probability that rounds to 1 in float32 —
+        # was refused as outside the open interval.
         if probs is not None:
             self.probs = _as_tensor(probs)
+            shape = tuple(self.probs.shape)
         else:
-            self.probs = _logits_to_probs(_as_tensor(logits))  # type: ignore[arg-type]
-        super().__init__(
-            batch_shape=tuple(self.probs.shape),
-            event_shape=(),
-            validate_args=validate_args,
-        )
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
+            shape = tuple(self.logits.shape)
+        super().__init__(batch_shape=shape, event_shape=(), validate_args=validate_args)
+
+    @_lazy_param
+    def probs(self) -> Tensor:
+        """Success probability — as given, or ``sigmoid(logits)`` on access."""
+        return _logits_to_probs(self.logits)
+
+    @_lazy_param
+    def logits(self) -> Tensor:
+        r"""Log-odds :math:`\log(p/(1-p))` — as given, or derived on access.
+
+        Derived from ``probs`` clamped one epsilon inside :math:`[0, 1]`, as
+        the reference framework derives it.
+        """
+        return _probs_to_logits(_clamp_probs(self.probs))
 
     @override
     @property

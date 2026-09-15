@@ -13,6 +13,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
 from lucid.distributions._util import _broadcast_pair
+from lucid.distributions._util import _clamp_probs, _lazy_param
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -688,6 +689,22 @@ class Multinomial(Distribution):
             return self._param
         return _probs_to_logits(self._probs)
 
+    @_lazy_param
+    def probs(self) -> Tensor:
+        """Category probabilities, normalised along the last axis."""
+        return self._probs
+
+    @_lazy_param
+    def logits(self) -> Tensor:
+        """Log-probabilities — the ``logits`` argument as given, or derived.
+
+        Derived as ``log(probs)`` with ``probs`` clamped one epsilon inside
+        ``[0, 1]``, as the reference framework derives it.
+        """
+        if self._is_logits:
+            return self._param
+        return _clamp_probs(self._probs).log()
+
     @property
     def total_count(self) -> Tensor:
         """Total number of trials :math:`n` per Multinomial draw.
@@ -883,6 +900,22 @@ class ContinuousBernoulli(Distribution):
         otherwise computes the log-odds from the stored probs.
         """
         return self._param if self._is_logits else _probs_to_logits(self._param)
+
+    @_lazy_param
+    def probs(self) -> Tensor:
+        r"""Parameter :math:`\lambda` — as given, or ``sigmoid(logits)``."""
+        return self._probs
+
+    @_lazy_param
+    def logits(self) -> Tensor:
+        r"""Log-odds of :math:`\lambda` — as given, or derived on access.
+
+        Derived from ``probs`` clamped one epsilon inside :math:`[0, 1]`, as
+        the reference framework derives it.
+        """
+        if self._is_logits:
+            return self._param
+        return _probs_to_logits(_clamp_probs(self._param))
 
     # -- helpers ---------------------------------------------------------------
 

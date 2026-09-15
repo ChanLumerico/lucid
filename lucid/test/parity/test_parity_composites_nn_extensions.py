@@ -120,7 +120,8 @@ class TestNNUtilsFusionTopLevelParity:
         linear = nn.Linear(4, 2)
         x = lucid.tensor(np.random.standard_normal((3, 4)).astype(np.float32))
         linear(x).sum().backward()
-        lucid_norm = nnu.get_total_norm(linear.parameters()).item()
+        grads = [p.grad for p in linear.parameters() if p.grad is not None]
+        lucid_norm = nnu.get_total_norm(grads).item()
         # Verify manually: sqrt(sum(grad**2 for each param))
         expected = (
             float(

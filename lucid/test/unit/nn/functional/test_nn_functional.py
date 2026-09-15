@@ -3,6 +3,7 @@
 import math
 
 import numpy as np
+import pytest
 
 import lucid
 import lucid.nn.functional as F
@@ -105,6 +106,25 @@ class TestGumbelSoftmax:
             lucid.tensor([[1.0, 2.0, 3.0]]), tau=1.0, hard=True
         ).numpy()
         assert out.sum() == 1.0
+
+
+class TestOneHot:
+    def test_answers_int64(self, device: str) -> None:
+        # The reference framework's dtype; this returned the engine's int8.
+        out = F.one_hot(lucid.tensor([0, 2, 1], device=device), num_classes=3)
+        assert out.dtype == lucid.int64
+        expected = np.eye(3, dtype=np.int64)[[0, 2, 1]]
+        np.testing.assert_array_equal(out.numpy(), expected)
+
+    def test_infers_num_classes_from_the_largest_index(self) -> None:
+        # ``-1`` is the documented default, and the engine refused it.
+        out = F.one_hot(lucid.tensor([0, 3, 1]))
+        assert out.shape == (3, 4)
+        assert out.numpy()[1].tolist() == [0, 0, 0, 1]
+
+    def test_cannot_infer_from_an_empty_tensor(self) -> None:
+        with pytest.raises(ValueError, match="num_classes"):
+            F.one_hot(lucid.tensor([], dtype=lucid.int64))
 
 
 class TestTripletWithDistance:
