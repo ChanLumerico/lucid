@@ -152,7 +152,7 @@ void register_tensor_impl(py::module_& m) {
                 // two tensors at the same place in one buffer compare equal.
                 // A GPU array is evaluated first: its buffer may not exist yet.
                 const std::size_t off = t.storage_offset();
-                const Storage& s = t.storage();
+                const Storage& s = t.raw_storage();
                 if (storage_is_cpu(s))
                     return reinterpret_cast<std::uintptr_t>(storage_cpu(s).ptr.get()) + off;
                 if (storage_is_gpu(s)) {
@@ -189,7 +189,7 @@ void register_tensor_impl(py::module_& m) {
                     byte_stride.push_back(stride[i] * elem);
                     last += (shape[i] - 1) * stride[i] * elem;
                 }
-                const auto size = static_cast<std::int64_t>(storage_nbytes(base->storage()));
+                const auto size = static_cast<std::int64_t>(storage_nbytes(base->raw_storage()));
                 if (!empty && last + elem > size)
                     throw std::invalid_argument(
                         "_make_view: the view reaches past the end of the storage");

@@ -105,13 +105,12 @@ TensorImplPtr build_view_output(const TensorImplPtr& a, Shape out_shape, const c
         Stride stride = contiguous_stride(out_shape, dtype_size(a->dtype()));
         out = TensorImpl::make_view(a, out_shape, std::move(stride));
     } else {
-        // A CPU tensor that is not dense (a view at an offset, or not
-        // contiguous) is laid out first, since the backend reshape reads its
-        // buffer from the first byte.  GPU tensors keep copy semantics: an
-        // MLX array cannot see a write made through another.
-        const TensorImplPtr src = a->device() == Device::CPU ? contiguous_op(a) : a;
-        Storage out_storage = backend::Dispatcher::for_device(src->device())
-                                  .reshape(src->storage(), src->shape(), out_shape, src->dtype());
+        // Any other reshape of a CPU tensor that is not dense (a view at an
+        // offset, or not contiguous) copies: ``storage()`` hands the backend
+        // its elements packed.  GPU tensors keep copy semantics: an MLX array
+        // cannot see a write made through another.
+        Storage out_storage = backend::Dispatcher::for_device(a->device())
+                                  .reshape(a->storage(), a->shape(), out_shape, a->dtype());
         out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
                                            a->device(), false);
     }

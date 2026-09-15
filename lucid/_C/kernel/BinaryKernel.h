@@ -557,9 +557,9 @@ protected:
 //
 // See the in-class declaration for parameter and return semantics.
 // The broadcast shape is inferred from ``a`` and ``b``; equal shapes
-// short-circuit the broadcast copy.  On CPU, non-contiguous inputs are
-// materialised via :func:`contiguous_op` before entering the typed
-// compute loop so :class:`Derived` may rely on flat pointer arithmetic.
+// short-circuit the broadcast copy.  A strided CPU input reaches the typed
+// compute loop packed, through ``storage()``, so :class:`Derived` may rely
+// on flat pointer arithmetic.
 template <class Derived>
 std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr<TensorImpl>& a,
                                                            const std::shared_ptr<TensorImpl>& b) {
@@ -579,14 +579,10 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
-    // Backend kernels read a Storage from its first byte, so any input that
-    // is not dense (non-contiguous, or a view at an offset) is laid out first.
-    const TensorImplPtr a_contig =
-        (a->device() == Device::CPU && !a->is_dense()) ? contiguous_op(a) : a;
-    const TensorImplPtr b_contig =
-        (b->device() == Device::CPU && !b->is_dense()) ? contiguous_op(b) : b;
-    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
-    const TensorImplPtr b_ptr = detail::maybe_cast_for_kernel(b_contig, eff_dt);
+    // A strided CPU input needs no copy here — ``storage()`` hands the
+    // backend its elements packed — see UnaryKernel.
+    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a, eff_dt);
+    const TensorImplPtr b_ptr = detail::maybe_cast_for_kernel(b, eff_dt);
 
     Shape out_shape = (a_ptr->shape() == b_ptr->shape())
                           ? a_ptr->shape()

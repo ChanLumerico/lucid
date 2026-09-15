@@ -8,8 +8,8 @@
 //
 // broadcast_to validates that `a` can be broadcast to the requested shape by
 // left-padding with 1s and checking that each dimension is either equal or
-// equal to 1 in the padded input.  A non-contiguous input is materialised
-// before broadcasting.  BroadcastBackward reduces the gradient back by
+// equal to 1 in the padded input.  A strided CPU input is read packed,
+// through ``storage()``.  BroadcastBackward reduces the gradient back by
 // summing over all axes that were broadcast via Dispatcher::reduce_broadcast.
 
 #include "Layout.h"
@@ -137,11 +137,11 @@ std::vector<TensorImplPtr> BroadcastBackward::apply_for_graph(const TensorImplPt
 
 LUCID_REGISTER_OP(BroadcastBackward)
 
-// Ensure the input is contiguous (materialise if needed), left-pad its shape
-// with 1s to match the target rank, verify that each dimension is either
-// equal or 1 in the padded input, then call Dispatcher::broadcast to produce
-// the expanded storage.  Attaches BroadcastBackward so that the gradient can
-// be summed back over the broadcast dimensions.
+// Left-pad the input's shape with 1s to match the target rank, verify that
+// each dimension is either equal or 1 in the padded input, then call
+// Dispatcher::broadcast to produce the expanded storage.  Attaches
+// BroadcastBackward so that the gradient can be summed back over the
+// broadcast dimensions.
 //
 // Raises ShapeMismatch if:
 //   - the input rank is greater than the target rank (cannot broadcast down), or
@@ -152,8 +152,7 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
     const Device device = a->device();
     OpScopeFull scope{"broadcast_to", device, dt, shape};
 
-    // Capture input and output shapes upfront so that the lambda closes over
-    // stable values even if a temporary contiguous copy is created below.
+    // Wrap the broadcast storage, wiring autograd and the tracer to ``a``.
     auto build_with_grad = [&](Storage&& out_storage) {
         auto out = std::make_shared<TensorImpl>(std::move(out_storage), shape, dt, device, false);
         auto bwd = std::make_shared<BroadcastBackward>();
@@ -166,23 +165,19 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
         return out;
     };
 
-    // A non-contiguous input (e.g. a transposed view) cannot be broadcast
-    // directly by the backend; materialise a dense copy first so the stride
-    // metadata is guaranteed to be trivial before the broadcast kernel runs.
-    const TensorImplPtr a_c = a->is_contiguous() ? a : contiguous_op(a);
-    const std::size_t nin = a_c->shape().size();
+    const std::size_t nin = a->shape().size();
     const std::size_t nout = shape.size();
     if (nin > nout)
-        throw ShapeMismatch(shape, a_c->shape(), "broadcast_to");
+        throw ShapeMismatch(shape, a->shape(), "broadcast_to");
     Shape padded(nout, 1);
-    std::copy(a_c->shape().begin(), a_c->shape().end(), padded.begin() + (nout - nin));
+    std::copy(a->shape().begin(), a->shape().end(), padded.begin() + (nout - nin));
     for (std::size_t d = 0; d < nout; ++d) {
         if (padded[d] != shape[d] && padded[d] != 1)
-            throw ShapeMismatch(shape, a_c->shape(), "broadcast_to");
+            throw ShapeMismatch(shape, a->shape(), "broadcast_to");
     }
 
     Storage out_storage =
-        backend::Dispatcher::for_device(device).broadcast(a_c->storage(), a_c->shape(), shape, dt);
+        backend::Dispatcher::for_device(device).broadcast(a->storage(), a->shape(), shape, dt);
     return build_with_grad(std::move(out_storage));
 }
 

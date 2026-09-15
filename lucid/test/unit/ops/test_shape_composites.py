@@ -48,23 +48,15 @@ def test_row_stack_is_vstack():
     assert np.array_equal(got, np.vstack([M.copy(), M.copy()]))
 
 
-def test_adjoint_on_a_complex_matrix_is_not_supported_yet():
-    """A gap, pinned rather than papered over.
+def test_adjoint_of_a_complex_matrix_is_its_conjugate_transpose():
+    """``adjoint`` is defined as the conjugate transpose.
 
-    ``permute`` has no complex branch, so ``transpose``, ``swapaxes`` and
-    ``adjoint`` all refuse a complex tensor — while ``reshape`` and
-    ``conj`` accept one, which is what makes the omission look like an
-    oversight rather than a decision.  ``adjoint`` is *defined* as the
-    conjugate transpose, so on complex input it is currently unreachable.
+    It used to be unreachable on complex input — ``permute`` had no complex
+    branch — and was pinned as a gap.  A CPU transpose is now a view, which
+    reads any dtype, so the definition holds.
     """
     z = lucid.tensor(np.array([[1 + 2j, 3 - 1j]], dtype=np.complex64))
-    assert np.allclose(_v(lucid.conj(z)), np.array([[1 - 2j, 3 + 1j]]))
-    assert np.allclose(_v(z.reshape(2)), np.array([1 + 2j, 3 - 1j]))
-    # ``RuntimeError``, not ``NotImplementedError``: the engine defines its
-    # own class of that name, which subclasses ``LucidError`` and *not* the
-    # builtin, so ``except NotImplementedError`` does not catch it.
-    with pytest.raises(RuntimeError, match="permute"):
-        lucid.adjoint(z)
+    assert np.allclose(_v(lucid.adjoint(z)), np.array([[1 - 2j], [3 + 1j]]))
 
 
 def test_the_engines_NotImplementedError_is_not_the_builtin_one():
@@ -84,13 +76,13 @@ def test_the_engines_NotImplementedError_is_not_the_builtin_one():
     """
     z = lucid.tensor(np.array([[1 + 2j]], dtype=np.complex64))
     try:
-        z.mT
+        lucid.sigmoid(z)
     except Exception as exc:
         assert type(exc).__name__ == "NotImplementedError"
         assert not isinstance(exc, NotImplementedError)
         assert isinstance(exc, RuntimeError)
     else:
-        pytest.fail("expected the permute refusal")
+        pytest.fail("expected the complex sigmoid refusal")
 
 
 def test_adjoint_of_a_real_matrix_is_the_transpose():

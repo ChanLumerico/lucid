@@ -424,8 +424,8 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
 
                 // Collapse each label group to one axis: matmul over the
                 // trailing (M,K)·(K,N) with the batch labels as leading dims
-                // (matmul_op batches over any leading rank).  reshape needs a
-                // contiguous source, so materialise the permuted views first.
+                // (matmul_op batches over any leading rank).  reshape copies a
+                // permuted view itself.
                 Shape lshape, rshape;
                 for (const auto& c : batch) {
                     lshape.push_back(sizes.at(c));
@@ -435,8 +435,8 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
                 lshape.push_back(kn);
                 rshape.push_back(kn);
                 rshape.push_back(nn);
-                lhs_t = reshape_op(contiguous_op(lhs_t), lshape);
-                rhs_t = reshape_op(contiguous_op(rhs_t), rshape);
+                lhs_t = reshape_op(lhs_t, lshape);
+                rhs_t = reshape_op(rhs_t, rshape);
 
                 auto prod = matmul_op(lhs_t, rhs_t);  // [batch..., in, nn]
 
@@ -448,7 +448,7 @@ TensorImplPtr einsum_op(const std::string& pattern, const std::vector<TensorImpl
                     oshape.push_back(sizes.at(c));
                 for (const auto& c : ronly)
                     oshape.push_back(sizes.at(c));
-                cur = reshape_op(contiguous_op(prod), oshape);
+                cur = reshape_op(prod, oshape);
 
                 cur_labels = batch;
                 cur_labels.insert(cur_labels.end(), lonly.begin(), lonly.end());

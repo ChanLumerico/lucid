@@ -23,6 +23,8 @@ import json
 import pathlib
 
 import lucid
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap
 from lucid.test.audit import _probe, _specs, _surface
 from lucid.test.audit._axes import Axis, Context
 from lucid.test.audit._result import Finding, Status
@@ -371,7 +373,22 @@ class ContiguityAxis(Axis):
     def applies(self, symbol: "Symbol") -> bool:
         return super().applies(symbol) and "stochastic" not in symbol.flags
 
+    # These answer with the layout itself, so a strided view answers
+    # differently by design.
+    _REPORTS_LAYOUT = frozenset(
+        {
+            "Tensor.is_contiguous",
+            "Tensor.stride",
+            "Tensor.storage_offset",
+            "Tensor.data_ptr",
+        }
+    )
+
     def run(self, symbol: "Symbol", ctx: Context) -> Finding:
+        if symbol.qualname in self._REPORTS_LAYOUT:
+            return self._finding(
+                symbol, Status.NOT_APPLICABLE, "reports the layout itself"
+            )
         fn = _surface.resolve(symbol)
         if fn is None:
             return self._finding(symbol, Status.SKIP, "not resolvable")
@@ -423,6 +440,7 @@ class ContiguityAxis(Axis):
             else:
                 big = _probe.as_f64(padded)
             view = big[..., ::2]
+            operand = self._strided_operand(big, view, base, symbol)
         except Exception as exc:  # noqa: BLE001
             return self._finding(
                 symbol, Status.SKIP, f"could not build a view: {exc!r}"
@@ -454,7 +472,7 @@ class ContiguityAxis(Axis):
         try:
             packed = _probe.to_numpy(fn(*call.with_primary(base).args, **call.kwargs))
             args = list(call.args)
-            args[call.primary] = view
+            args[call.primary] = operand
             strided = _probe.to_numpy(fn(*args, **call.kwargs))
         except Exception as exc:  # noqa: BLE001
             return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:60]}", call)
@@ -496,8 +514,8 @@ class ContiguityAxis(Axis):
         # meaning something the day the engine grows a lazy view — and the
         # ``layout`` mutant proves it still catches a real difference now.
         if (
-            bool(view.is_contiguous())
-            and view.stride() == big[..., : base.shape[-1]].stride()
+            bool(operand.is_contiguous())
+            and operand.stride() == big[..., : base.shape[-1]].stride()
         ):
             return self._finding(
                 symbol,
@@ -506,6 +524,36 @@ class ContiguityAxis(Axis):
                 "half is vacuous here — this engine packs every view",
             )
         return self._finding(symbol, Status.PASS, "strided and packed agree")
+
+    @staticmethod
+    def _strided_operand(
+        big: Any, view: Any, base: np.ndarray, symbol: "Symbol"
+    ) -> Any:
+        """The probe as a genuinely strided view of ``big``, where one exists.
+
+        ``big[..., ::2]`` comes back packed — the engine copies a slice past
+        axis 0 — so feeding it to the op compared the op with itself, 691
+        cells a run.  On the CPU a view family can read every second element
+        of ``big``'s buffer in place, and an op that assumes a dense buffer
+        then reads the −7 sentinels instead of the probe.  The packed slice
+        still carries the sentinel check above: it is the path the
+        ``layout`` mutant breaks.
+
+        Metal keeps the packed slice (its tensors are never views), and so
+        do in-place methods: a write through a strided view is refused by
+        design, which says nothing about how the op reads a layout.
+        """
+        if big.is_metal or symbol.qualname.endswith("_"):
+            return view
+        strides: list[int] = []
+        step = 1
+        for n in reversed(tuple(big.shape)):
+            strides.append(step)
+            step *= n
+        strides.reverse()
+        strides[-1] = 2
+        impl = _C_engine.TensorImpl._make_view(big._impl, list(base.shape), strides, 0)
+        return _wrap(impl)
 
 
 class DeterminismAxis(Axis):

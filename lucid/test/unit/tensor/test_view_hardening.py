@@ -74,14 +74,11 @@ def test_copying_from_a_view_takes_the_view_s_values(base) -> None:
     assert dst.tolist() == [2.0, 3.0, 4.0]
 
 
-def test_copying_into_a_view_is_refused_until_writes_honour_geometry(base) -> None:
-    # A copy into a view wrote at the buffer's first byte; until in-place
-    # writes follow a view's geometry it has to refuse rather than land
-    # somewhere else.  The view shares its buffer, so the copy takes the
-    # in-place ops' route and is refused there.
-    with pytest.raises(_C_engine.NotImplementedError, match="offset or with strides"):
-        _view(base, [3], [1], 2).copy_(lucid.ones(3))
-    assert base.tolist() == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+def test_copying_into_a_view_lands_in_the_view_s_elements(base) -> None:
+    # A copy into a view once wrote at the buffer's first byte, and was then
+    # refused; it now follows the view's offset.
+    _view(base, [3], [1], 2).copy_(lucid.ones(3))
+    assert base.tolist() == [0.0, 1.0, 1.0, 1.0, 1.0, 5.0]
 
 
 def test_a_view_past_the_end_of_its_buffer_is_refused(base) -> None:

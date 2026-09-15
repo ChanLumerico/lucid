@@ -42,7 +42,7 @@ TensorImplPtr ContiguousBackward::forward(const TensorImplPtr& a) {
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
 
     Storage out_storage = backend::Dispatcher::for_device(a->device())
-                              .contiguous(a->storage(), a->shape(), a->stride(),
+                              .contiguous(a->raw_storage(), a->shape(), a->stride(),
                                           a->storage_offset(), a->is_contiguous(), a->dtype());
 
     auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
