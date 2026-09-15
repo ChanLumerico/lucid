@@ -11742,6 +11742,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.distributions.relaxed"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.transforms"
     },
     {
