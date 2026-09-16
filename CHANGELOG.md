@@ -15,19 +15,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [3.13.0] — 2026-09-17
+
+A minor release in which the CPU view work of 3.12.0 reaches transposes
+and slices along any axis: `x.T`, `x[:, 1:3]`, `split` along a later axis
+and `expand` share their input's buffer, and every op reads a strided
+view correctly. Alongside it the wheel's floor moves down — one wheel now
+covers macOS 15 and every later release — and a batch of silently wrong
+results is fixed.
+
+- **CPU transposes and slices are views.** `permute`, `transpose`, `.T`,
+  `.mT`, a slice along any axis (`x[:, 1:3]`, `x[:, i]`), `split` /
+  `chunk` / `unbind` / `narrow` on a later axis, and `expand` return
+  views of their input's buffer. A write through one reaches the tensor
+  it came from, and autograd follows a recorded write through it
+  (CopySlices splices by element positions as well as runs). `expand`'s
+  view repeats elements, so a write through it is refused. Metal keeps
+  copy semantics, and `diagonal`, `unfold`, `broadcast_to` and step
+  slices still copy.
+- **Every op reads a strided view correctly.** `TensorImpl::storage()`
+  hands a non-dense CPU tensor a packed copy of its elements, cached
+  against its version; the audit's layout axis found about a hundred ops
+  reading the wrong bytes before that, and none after.
+- **macOS 15 is the floor.** The wheel is built for macOS 15.0 and
+  installs on 15 and later. CI builds and tests on a macOS 15 runner on
+  every push, and a release publishes only once the built wheel has been
+  installed and exercised there.
+- **`arange` of integers gives int64**, as the reference does, and ranges
+  past 2^53 are built exactly.
+- **Mixed int and float operands meet at their common dtype** in `cat`,
+  `stack`, `where`, `clamp`, `outer` and `einsum` instead of raising —
+  and `clamp(int_t, 0.5, 2.5)` no longer answers in int64.
+- **`lucid.tensor(t)` copies** and honours `dtype=` and `device=`,
+  `F.one_hot` returns int64, and the distributions derive `probs` from
+  `logits` and back.
+- **float64 `erfc` keeps double precision**, and `erfc` holds its
+  relative precision in the tail.
+- **CPU complex arithmetic works**: `+`, `-`, `/`, broadcasting, and
+  casts between real and complex.
+
+### Changed
+
+- The engine ABI version is 12. `TensorImpl` gained a packed-storage
+  cache, so an extension built against 3.12.0's headers refuses to load
+  instead of misreading it.
+- **The minimum macOS is 15 Sequoia** (was 26 Tahoe). The wheel is tagged
+  `macosx_15_0_arm64`; MLX ships macOS 14, 15 and 26 builds of one ABI,
+  and pip picks the one for the machine.
+- On macOS 26.0 and 26.1, MLX 0.32's macOS 26 build is compiled for 26.2.
+  When it fails to load, the import error says so and points at a macOS
+  update or `mlx<0.32`.
+- `x.T.is_contiguous()` is `False` on the CPU, and the docstrings that
+  called these ops copies now describe the views.
 
 ### Fixed
 
 - complex arithmetic, broadcasting and casts on the CPU
 - erfc keeps its relative precision in the tail
 - integer mean, norm and matmul stop truncating
-
 - tensor() copies, one_hot is int64, and the distributions derive
-
 - mixed int and float operands meet at the common dtype
-
 - erfc in float64 keeps double precision
-
 - load_compiled no longer aborts on macOS 15
 
 ### Added
@@ -4017,7 +4067,9 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.11.1...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.13.0...HEAD
+[3.13.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.13.0
+[3.12.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.12.0
 [3.11.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.11.1
 [3.11.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.11.0
 [3.10.2]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.2
