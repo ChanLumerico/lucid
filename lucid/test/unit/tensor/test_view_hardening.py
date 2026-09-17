@@ -1,10 +1,11 @@
-"""Paths that must read a view correctly, before any op makes one.
+"""Paths that must read a view correctly, whichever op made it.
 
-Every op copies today, so every tensor starts at the first byte of its own
-buffer and nothing has ever checked the paths below against a view.  The
-first views planned are CPU reshapes and leading-dimension slices; these
-tests build such views directly (``TensorImpl._make_view``) and hold each
-path to reading the view's elements rather than the buffer's first ones.
+Written before any op made a view, when every tensor started at the first
+byte of its own buffer.  On the CPU reshapes, slices, transposes,
+``expand``, ``diagonal``, ``unfold`` and ``as_strided`` now all do; these
+tests build views directly (``TensorImpl._make_view``), at offsets and
+strides no single op has to produce, and hold each path to reading the
+view's elements rather than the buffer's first ones.
 """
 
 import numpy as np

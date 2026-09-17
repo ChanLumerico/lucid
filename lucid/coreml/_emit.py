@@ -510,9 +510,9 @@ def _out_shape(op: TracedOp, b: Builder | None = None) -> list[int]:
 # ── shape ops ────────────────────────────────────────────────────────
 #
 # ``squeeze`` / ``unsqueeze`` / ``contiguous`` all become a ``reshape`` to
-# the shape the trace already recorded.  Lucid materialises every view, so
-# the result shape is static and a reshape expresses each of them exactly,
-# which avoids carrying axis bookkeeping that could disagree with the trace.
+# the shape the trace already recorded.  A Core ML tensor holds values, not
+# strides, and the result shape is static, so a reshape expresses each of
+# them exactly and avoids axis bookkeeping that could disagree with the trace.
 
 
 @_emitter("squeeze")

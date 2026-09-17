@@ -9,7 +9,7 @@ They are not all cosmetic.  Alongside the repr line-wrapping and the
 float-precision drift there is ``_C_engine.Dtype.Float32``, an attribute
 that does not exist, in the documented way to build a tensor from an
 impl; and ``Tensor.is_contiguous`` promising ``False`` for a transpose in
-an engine that materialises every view.  A user following the
+an engine that then materialised every view.  A user following the
 documentation writes code that does not run.
 
 This is a *floor*, not a target, for the same reason the line-coverage
