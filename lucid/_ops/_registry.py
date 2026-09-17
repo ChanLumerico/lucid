@@ -213,7 +213,8 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("transpose",  _R.transpose,  1, method_name="transpose",  free_fn_name="transpose"),
     OpEntry("swapaxes",   _R.swapaxes,   1, method_name="swapaxes",
             extra_kwargs=["d0", "d1"]),  # positional: swapaxes(d0, d1)
-    OpEntry("broadcast_to",_R.broadcast_to,1,method_name="broadcast_to",free_fn_name="broadcast_to",
+    # broadcast_to is expand without the -1: a view on the CPU, as expand is.
+    OpEntry("broadcast_to",_R.expand,1,method_name="broadcast_to",free_fn_name="broadcast_to",
             extra_kwargs=["shape"]),
     OpEntry("expand",     A._expand_adapter, 1, method_name="expand",     free_fn_name="expand"),
     OpEntry("expand_dims",_R.expand_dims,1, method_name="expand_dims",

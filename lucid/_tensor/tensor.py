@@ -747,12 +747,12 @@ class Tensor:
         the product of all *later* dimension sizes times the element size.
 
         On the CPU a transpose, a slice along any axis, :meth:`diagonal`,
-        :meth:`unfold` and ``expand`` are views of their input's buffer, and
-        a transposed or column view is not contiguous.  Every op reads such
-        a view correctly and a write through it follows its strides, so the
-        answer matters only to code that walks the memory itself.  Metal
-        tensors are always packed; ``broadcast_to`` and slicing with a
-        non-unit step still copy on every device.
+        :meth:`unfold`, ``expand`` and ``broadcast_to`` are views of their
+        input's buffer, and a transposed or column view is not contiguous.
+        Every op reads such a view correctly and a write through it follows
+        its strides, so the answer matters only to code that walks the memory
+        itself.  Metal tensors are always packed; slicing with a non-unit
+        step still copies on every device.
 
         Returns
         -------
@@ -1811,12 +1811,13 @@ class Tensor:
         is always safe to pass to kernels that require contiguous input.
 
         On the CPU a transpose, a slice along any axis, :meth:`diagonal`,
-        :meth:`unfold` and ``expand`` are views of their input's buffer, and
-        a transposed or column view is not contiguous.  Every op reads such a view correctly, so the call
-        is needed only before code that walks the memory itself — through
-        :meth:`data_ptr`, say.  Metal tensors are always packed.  Making a
-        tensor contiguous rewrites the data into a fresh buffer with
-        strides matching C row-major layout:
+        :meth:`unfold`, ``expand`` and ``broadcast_to`` are views of their
+        input's buffer, and a transposed or column view is not contiguous.
+        Every op reads such a view correctly, so the call is needed only
+        before code that walks the memory itself — through :meth:`data_ptr`,
+        say.  Metal tensors are always packed.  Making a tensor contiguous
+        rewrites the data into a fresh buffer with strides matching C
+        row-major layout:
 
         .. math::
 
@@ -3242,10 +3243,11 @@ class Tensor:
     def expand_as(self, other: Self) -> Self:
         r"""Broadcast ``self`` to match ``other.shape``.
 
-        Convenience wrapper around ``broadcast_to`` that takes the target
-        shape from another tensor.  The expansion is materialised: each
-        stretched axis is repeated into a new buffer, so writing into the
-        result never reaches ``self``.
+        Convenience wrapper around :meth:`expand` that takes the target
+        shape from another tensor.  On the CPU the result is a view of
+        ``self``'s buffer: each stretched axis has stride 0, so every repeated
+        element is one of ``self``'s and a write through the result is
+        refused.  On metal it is a copy.
 
         Parameters
         ----------
@@ -3256,7 +3258,8 @@ class Tensor:
         Returns
         -------
         Tensor
-            A new tensor with shape ``other.shape``.
+            ``self`` under ``other.shape`` — a read-only view on the CPU, a
+            copy on metal.
 
         Notes
         -----
@@ -3282,7 +3285,7 @@ class Tensor:
         (4, 3)
         """
         return Tensor.__new_from_impl__(  # type: ignore[return-value]
-            _C_engine.broadcast_to(self._impl, list(other._impl.shape))
+            _C_engine.expand(self._impl, list(other._impl.shape))
         )
 
     def view_as(self, other: Self) -> Self:

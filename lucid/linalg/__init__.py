@@ -1112,7 +1112,9 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
         eye_2d: Tensor = lucid.eye(int(sh[-1]), dtype=x.dtype)
         if len(sh) == 2:
             return eye_2d
-        return lucid.broadcast_to(eye_2d, tuple(sh))
+        # A fresh identity per batch element, writable as the reference's
+        # is — broadcast_to alone would be a read-only view of one.
+        return lucid.broadcast_to(eye_2d, tuple(sh)).contiguous()
 
     base: Tensor = cast(Tensor, inv(x)) if n < 0 else x
     exponent: int = -n if n < 0 else n

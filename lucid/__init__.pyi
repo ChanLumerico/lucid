@@ -1623,8 +1623,8 @@ def broadcast_to(input: Tensor, shape: ShapeLike) -> Tensor:
     
     Performs the standard right-aligned broadcasting rules: dimensions of
     size 1 in the input may be expanded to any size in ``shape``; new
-    leading dimensions may be prepended.  The result is a copy on every
-    device; :func:`expand` gives the same values as a view on the CPU.
+    leading dimensions may be prepended.  On the CPU the result is a view of
+    ``input``'s buffer, as :func:`expand`'s is; on metal it is a copy.
     
     Parameters
     ----------
@@ -1636,13 +1636,14 @@ def broadcast_to(input: Tensor, shape: ShapeLike) -> Tensor:
     Returns
     -------
     Tensor
-        A new tensor of the requested shape; the data is copied.
+        ``input`` under the requested shape — a read-only view on the CPU,
+        a copy on metal.
     
     Notes
     -----
-    The result owns its data, so writing into it never reaches ``input``.
-    :func:`expand` is the CPU view form: its broadcast axes have stride 0,
-    so a write through it is refused.
+    On the CPU the broadcast axes have stride 0, so every repeated element is
+    one of ``input``'s and a write through the result is refused; call
+    ``contiguous()`` on it first for a writable copy.
     
     Examples
     --------
@@ -1680,8 +1681,7 @@ def expand(input: Tensor, *sizes: _int | Sequence[_int]) -> Tensor:
     -----
     :func:`expand` is the cousin of :func:`broadcast_to`; they produce
     equal results, but ``expand`` requires the input to already have a
-    1-sized dim where the expansion happens.  :func:`broadcast_to` always
-    copies, so its result can be written to.
+    1-sized dim where the expansion happens.  On the CPU both are views.
     
     Examples
     --------
