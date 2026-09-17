@@ -346,9 +346,10 @@ autograd during training, with no branch in your code.
 | MLX | ≥ 0.31 (`mlx-metal` ships macOS 14, 15 and 26 builds; pip picks the one for your OS) |
 | Build | CMake ≥ 3.24, Ninja ≥ 1.11, Xcode CLT |
 
-Linux, Windows, x86-64, and macOS 14 or earlier are not supported. On macOS 26.0 and 26.1,
-MLX 0.32's macOS 26 build — compiled for 26.2 — may not load: update macOS, or install
-`mlx<0.32`.
+Linux, Windows, x86-64, and macOS 14 or earlier are not supported. MLX 0.32's macOS 26 build
+is compiled for macOS 26.2: on an M5-class Mac still running 26.0 or 26.1 it can pick GPU
+kernels that release predates and fail at runtime — update macOS, or install `mlx<0.32`.
+M1–M4 Macs are not affected.
 
 ## 🧠 Design Notes
 

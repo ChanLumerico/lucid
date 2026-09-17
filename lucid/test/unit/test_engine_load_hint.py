@@ -1,8 +1,8 @@
 """The engine names a known cause when it cannot load.
 
-MLX 0.32's macOS 26 build is compiled for macOS 26.2, so on 26.0 and 26.1
-the engine's import can fail inside ``libmlx.dylib``.  The hint says so,
-and stays out of the way everywhere else.
+MLX 0.32's macOS 26 build is compiled for macOS 26.2.  When the engine's
+import fails on 26.0 or 26.1, the hint names that build as the first thing
+to rule out, and stays out of the way everywhere else.
 """
 
 import pytest

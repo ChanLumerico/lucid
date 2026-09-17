@@ -21,7 +21,7 @@ Lucid targets macOS on M1–M4 chips exclusively. Linux, Windows, and x86 are no
 One wheel covers macOS 15 and every later release. Python 3.14 is required: Lucid's type annotations rely on its lazy evaluation (PEP 649).
 
 <Callout variant="note">
-On macOS 26.0 and 26.1, MLX 0.32's macOS 26 build is compiled for 26.2 and may not load. Update macOS, or install the previous MLX with `pip install "mlx<0.32"`.
+MLX 0.32's macOS 26 build is compiled for macOS 26.2. On an M5-class Mac still running 26.0 or 26.1 it can pick GPU kernels that release predates and fail at runtime; update macOS, or install the previous MLX with `pip install "mlx<0.32"`. M1–M4 Macs are not affected.
 </Callout>
 
 ## Install

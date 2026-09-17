@@ -11,12 +11,15 @@ def _version(text: str) -> tuple[int, ...]:
 
 
 def _mlx_load_hint(macos: str, mlx: str | None) -> str | None:
-    """Why the engine may not load on this machine, when the cause is known.
+    """A known cause to name when the engine fails to import on this machine.
 
     MLX 0.32's macOS 26 build — the ``mlx-metal`` wheel pip installs on any
-    macOS 26 release — is compiled for macOS 26.2, so on 26.0 and 26.1 its
-    ``libmlx.dylib`` can refuse to load and take the engine with it.  MLX
-    0.31's macOS 26 build is compiled for 26.0.
+    macOS 26 release — is compiled for macOS 26.2 (MLX 0.31's for 26.0).  The
+    OS checks it guards with that version are folded to true, so on 26.0 and
+    26.1 it assumes newer features: an M5-class GPU gets kernels the OS
+    predates.  That usually fails later, at runtime, rather than at import;
+    when the import itself fails on those releases, this build is still the
+    first thing to rule out.
 
     Parameters
     ----------
