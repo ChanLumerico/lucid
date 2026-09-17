@@ -234,11 +234,14 @@ than the framework:
   nine directions;
 * the tokenizer round trip passed a decoder that silently dropped a
   character, on the grounds that dropping it was at least repeatable;
-* `layout` **cannot fail at all**. It compares a packed operand against a
-  strided view, and this engine materialises every view — `t[..., ::2]`,
-  `T`, `expand`, `broadcast_to`, `diagonal` and `unfold` all come back
-  packed — so the two operands are byte-identical. 688 cells per run were
-  reporting agreement between an op and itself. The axis now says so.
+* `layout` **could not fail at all**. It compared a packed operand against
+  a strided view, and the engine then materialised every view —
+  `t[..., ::2]`, `T`, `expand`, `broadcast_to`, `diagonal` and `unfold`
+  all came back packed — so the two operands were byte-identical. 688
+  cells per run were reporting agreement between an op and itself. On the
+  CPU those are views now and `t[..., ::2]` is the strided operand; on
+  metal, where tensors stay packed, the axis still says the layout half is
+  vacuous.
 
 `SKIP` is the number to watch. The summary's *applicable cells* line
 reports how many cells produced a verdict at all, and that is the honest

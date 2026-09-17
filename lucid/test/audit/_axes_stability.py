@@ -23,8 +23,6 @@ import json
 import pathlib
 
 import lucid
-from lucid._C import engine as _C_engine
-from lucid._dispatch import _wrap
 from lucid.test.audit import _probe, _specs, _surface
 from lucid.test.audit._axes import Axis, Context
 from lucid.test.audit._result import Finding, Status
@@ -439,8 +437,12 @@ class ContiguityAxis(Axis):
                 big = _probe.as_f32(padded)
             else:
                 big = _probe.as_f64(padded)
+            # On the CPU a positive-step slice is a view: every second
+            # element of ``big``'s buffer, read in place, so an op that
+            # assumes a dense buffer reads the −7 sentinels instead of the
+            # probe.  Metal tensors are always packed, and there the slice
+            # is a copy.
             view = big[..., ::2]
-            operand = self._strided_operand(big, view, base, symbol)
         except Exception as exc:  # noqa: BLE001
             return self._finding(
                 symbol, Status.SKIP, f"could not build a view: {exc!r}"
@@ -452,11 +454,8 @@ class ContiguityAxis(Axis):
         # the comparison below would then be measuring an op against
         # different numbers while calling the difference a layout effect.
         #
-        # This is also the question this axis can still answer.  The
-        # engine materialises every view, so the two operands end up with
-        # identical layouts and the strided-vs-packed comparison cannot
-        # fail; whether the materialisation produced the right values very
-        # much can, and that is a property worth a verdict.
+        # This is the half the ``layout`` mutant breaks: a slice that takes
+        # the wrong stride fails here, on every device.
         seen = _probe.to_numpy(view)
         if seen is None or tuple(seen.shape) != tuple(base.shape):
             return self._finding(symbol, Status.SKIP, "the view is not readable")
@@ -468,11 +467,15 @@ class ContiguityAxis(Axis):
                 f"materialised the wrong values (max diff "
                 f"{np.nanmax(np.abs(np.asarray(seen) - base)):.3e})",
             )
+        # ``seen`` reads ``big``'s buffer.  While it lives, an in-place op
+        # through the view is refused — a NumPy array holding the storage
+        # would not see the write — which says nothing about the layout.
+        del seen
 
         try:
             packed = _probe.to_numpy(fn(*call.with_primary(base).args, **call.kwargs))
             args = list(call.args)
-            args[call.primary] = operand
+            args[call.primary] = view
             strided = _probe.to_numpy(fn(*args, **call.kwargs))
         except Exception as exc:  # noqa: BLE001
             return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:60]}", call)
@@ -492,68 +495,22 @@ class ContiguityAxis(Axis):
                 f"(max diff {np.nanmax(np.abs(packed.astype(float) - strided.astype(float))):.3e})",
             )
 
-        # They agreed — but could they have disagreed?
-        #
-        # This framework **materialises every view**.  ``big[..., ::2]``
-        # comes back packed, with the strides of a fresh tensor, and so
-        # do ``T``, ``expand``, ``broadcast_to``, ``diagonal`` and
-        # ``unfold``: ``is_contiguous()`` is True for all of them.  The
-        # two operands this axis compares therefore have the *same*
-        # layout, and 691 cells per run were reporting agreement between
-        # an op and itself.
-        #
-        # The layout half of this comparison is vacuous on this engine and
-        # says so, but it is no longer the only thing the axis
-        # established: the check above proved the strided slice
-        # materialised the probe's values and not the interleaved
-        # sentinel, which is falsifiable today and is what a broken view
-        # would break.  So the cell gets a verdict, and the detail names
-        # which half earned it rather than implying both did.
-        #
-        # The comparison below stays because it is correct and starts
-        # meaning something the day the engine grows a lazy view — and the
-        # ``layout`` mutant proves it still catches a real difference now.
+        # They agreed — but could they have disagreed?  Only if the operand
+        # was strided.  On metal the slice comes back packed, with the
+        # strides of a fresh tensor, and the comparison is between an op and
+        # itself: the sentinel check above is then the half that earned the
+        # verdict, and the detail says so.
         if (
-            bool(operand.is_contiguous())
-            and operand.stride() == big[..., : base.shape[-1]].stride()
+            bool(view.is_contiguous())
+            and view.stride() == big[..., : base.shape[-1]].stride()
         ):
             return self._finding(
                 symbol,
                 Status.PASS,
                 "the strided slice materialised the right values; the layout "
-                "half is vacuous here — this engine packs every view",
+                "half is vacuous here — the slice came back packed",
             )
         return self._finding(symbol, Status.PASS, "strided and packed agree")
-
-    @staticmethod
-    def _strided_operand(
-        big: Any, view: Any, base: np.ndarray, symbol: "Symbol"
-    ) -> Any:
-        """The probe as a genuinely strided view of ``big``, where one exists.
-
-        ``big[..., ::2]`` comes back packed — the engine copies a slice past
-        axis 0 — so feeding it to the op compared the op with itself, 691
-        cells a run.  On the CPU a view family can read every second element
-        of ``big``'s buffer in place, and an op that assumes a dense buffer
-        then reads the −7 sentinels instead of the probe.  The packed slice
-        still carries the sentinel check above: it is the path the
-        ``layout`` mutant breaks.
-
-        Metal keeps the packed slice (its tensors are never views), and so
-        do in-place methods: a write through a strided view is refused by
-        design, which says nothing about how the op reads a layout.
-        """
-        if big.is_metal or symbol.qualname.endswith("_"):
-            return view
-        strides: list[int] = []
-        step = 1
-        for n in reversed(tuple(big.shape)):
-            strides.append(step)
-            step *= n
-        strides.reverse()
-        strides[-1] = 2
-        impl = _C_engine.TensorImpl._make_view(big._impl, list(base.shape), strides, 0)
-        return _wrap(impl)
 
 
 class DeterminismAxis(Axis):

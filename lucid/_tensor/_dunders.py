@@ -1686,9 +1686,9 @@ def _inject_dunders(cls: type) -> None:
         -------
         Tensor
             View or gather result.  On the CPU basic indexing produces a
-            view that shares storage with ``self``; advanced indexing
-            copies, as do a step slice such as ``x[::2]`` and any index on
-            metal.
+            view that shares storage with ``self``, a positive step such as
+            ``x[::2]`` included; advanced indexing copies, as do a negative
+            step and any index on metal.
 
         Notes
         -----

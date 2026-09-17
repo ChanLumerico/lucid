@@ -751,8 +751,8 @@ class Tensor:
         input's buffer, and a transposed or column view is not contiguous.
         Every op reads such a view correctly and a write through it follows
         its strides, so the answer matters only to code that walks the memory
-        itself.  Metal tensors are always packed; slicing with a non-unit
-        step still copies on every device.
+        itself.  A slice with a positive step is a view too.  Metal tensors
+        are always packed, and a negative step still copies.
 
         Returns
         -------
