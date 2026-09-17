@@ -170,7 +170,7 @@ __all__ = [
     # ── tensor manipulation ───────────────────────────────────────────────
     "reshape", "view", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
     "unflatten", "narrow", "movedim",
-    "expand", "broadcast_to", "repeat", "repeat_interleave", "tile",
+    "expand", "broadcast_to", "as_strided", "repeat", "repeat_interleave", "tile",
     "cat", "concat", "stack", "hstack", "vstack",
     "split", "chunk", "unbind",
     "gather", "scatter", "scatter_add", "take", "index_select", "masked_select",
@@ -281,7 +281,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     # ── shape / view ──────────────────────────────────────────────────────
     "reshape", "view", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
     "unflatten", "narrow", "movedim",
-    "expand", "broadcast_to", "repeat", "repeat_interleave", "tile",
+    "expand", "broadcast_to", "as_strided", "repeat", "repeat_interleave", "tile",
     "cat", "concat", "stack", "hstack", "vstack",
     "split", "chunk", "unbind",
     "ravel", "diagonal", "tril", "triu",

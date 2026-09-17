@@ -217,6 +217,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("broadcast_to",_R.expand,1,method_name="broadcast_to",free_fn_name="broadcast_to",
             extra_kwargs=["shape"]),
     OpEntry("expand",     A._expand_adapter, 1, method_name="expand",     free_fn_name="expand"),
+    OpEntry("as_strided", A._as_strided_adapter, 1, method_name="as_strided", free_fn_name="as_strided"),
     OpEntry("expand_dims",_R.expand_dims,1, method_name="expand_dims",
             extra_kwargs=["axis"]),
     # ``lucid.repeat(x, repeats, dim=None)`` — interleave semantics.  No

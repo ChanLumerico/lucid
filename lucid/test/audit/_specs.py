@@ -547,6 +547,9 @@ def _shape_with_args(name: str, domain: str) -> "Iterator[Call]":
     elif name in ("expand",):
         yield Call([_f((1, 3), domain), (2, 3)], {}, 0, "expand(x, shape)")
         yield Call([_f((1, 3), domain), 2, 3], {}, 0, "expand(x, *shape)")
+    elif name in ("as_strided",):
+        # Positions 0, 1, 3, 4 of the six elements.
+        yield Call([flat, (2, 2), (3, 1)], {}, 0, "as_strided(x, size, stride)")
     elif name in ("permute",):
         yield Call([x, (2, 0, 1)], {}, 0, "permute(x, dims)")
         yield Call([x, 2, 0, 1], {}, 0, "permute(x, *dims)")
@@ -926,7 +929,7 @@ _FAMILIES: list[tuple[str, "Callable[[str, str], Iterator[Call]]"]] = [
         _indexing,
     ),
     (
-        r"^(broadcast_to|expand|permute|moveaxis|movedim|swapaxes|swapdims|tile|"
+        r"^(broadcast_to|expand|as_strided|permute|moveaxis|movedim|swapaxes|swapdims|tile|"
         r"repeat|roll|unflatten|unfold|dsplit|hsplit|vsplit|tensor_split|view)$",
         _shape_with_args,
     ),

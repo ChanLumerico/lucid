@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - diagonal and unfold are CPU views
 - public broadcast_to and expand_as are CPU views
 - positive-step slices are CPU views
+- add as_strided
 
 ---
 

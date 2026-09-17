@@ -371,14 +371,16 @@ class ContiguityAxis(Axis):
     def applies(self, symbol: "Symbol") -> bool:
         return super().applies(symbol) and "stochastic" not in symbol.flags
 
-    # These answer with the layout itself, so a strided view answers
-    # differently by design.
+    # These answer with the layout itself, or read the storage through it,
+    # so a strided view answers differently by design.
     _REPORTS_LAYOUT = frozenset(
         {
             "Tensor.is_contiguous",
             "Tensor.stride",
             "Tensor.storage_offset",
             "Tensor.data_ptr",
+            "Tensor.as_strided",
+            "lucid.as_strided",
         }
     )
 

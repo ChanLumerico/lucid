@@ -1691,6 +1691,50 @@ def expand(input: Tensor, *sizes: _int | Sequence[_int]) -> Tensor:
     (3, 4)
     """
     ...
+def as_strided(input: Tensor, size: Sequence[_int], stride: Sequence[_int], storage_offset: _int | None = ...) -> Tensor:
+    r"""    View a tensor's storage through chosen sizes and strides.
+    
+    Element ``i`` of the result reads storage element
+    ``storage_offset + sum(i[k] * stride[k])``.  Everything counts in
+    elements, and ``storage_offset`` counts from the start of the storage
+    rather than from ``input``; it defaults to ``input``'s own offset.  On
+    the CPU the result is a view of that buffer; on metal it is a copy of
+    the elements it names.
+    
+    Parameters
+    ----------
+    input : Tensor
+        The tensor whose storage is read.
+    size : sequence of int
+        Shape of the result.
+    stride : sequence of int
+        Storage elements to step per unit along each axis of the result —
+        one per entry of ``size``, none negative.
+    storage_offset : int, optional
+        Storage element the result starts at.  Defaults to ``input``'s own
+        offset.
+    
+    Returns
+    -------
+    Tensor
+        A tensor of shape ``size`` — a view on the CPU, a copy on metal.
+    
+    Notes
+    -----
+    A view reaching past the end of the storage is refused.  Strides that
+    name one element twice give a view that reads correctly but refuses a
+    write.  The gradient adds each output element's gradient at the
+    element it read, and needs a contiguous ``input``.
+    
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.arange(6).float()
+    >>> lucid.as_strided(x, (2, 2), (3, 1))
+    Tensor([[0., 1.],
+            [3., 4.]])
+    """
+    ...
 def tile(input: Tensor, reps: Sequence[_int]) -> Tensor:
     r"""    Construct a tensor by repeating ``input`` ``reps`` times per axis.
     

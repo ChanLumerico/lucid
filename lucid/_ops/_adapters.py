@@ -326,6 +326,21 @@ def _narrow_adapter(a_impl: _Impl, dim: int, start: int, length: int) -> _Impl:
     return _C_engine.narrow(a_impl, int(dim), int(start), int(length))
 
 
+def _as_strided_adapter(
+    x_impl: _Impl,
+    size: Sequence[int],
+    stride: Sequence[int],
+    storage_offset: int | None = None,
+) -> _Impl:
+    """as_strided(x, size, stride, storage_offset=None), all in elements."""
+    return _C_engine.as_strided(
+        x_impl,
+        [int(s) for s in size],
+        [int(s) for s in stride],
+        None if storage_offset is None else int(storage_offset),
+    )
+
+
 # ── Layout / shape adapters ──────────────────────────────────────────────────
 
 
