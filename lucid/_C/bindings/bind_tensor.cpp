@@ -170,9 +170,9 @@ void register_tensor_impl(py::module_& m) {
             [](const std::shared_ptr<TensorImpl>& base, const std::vector<std::int64_t>& shape,
                const std::vector<std::int64_t>& stride,
                std::int64_t offset) -> std::shared_ptr<TensorImpl> {
-                // Testing hook: a view of ``base`` described in elements.  No
-                // public op makes views yet, so this is how the paths that
-                // must read one correctly get exercised.
+                // Testing hook: a view of ``base`` described in elements, for
+                // geometries no public op makes.  The offset is from ``base``'s
+                // own first element, as make_view's is.
                 if (!base || shape.size() != stride.size() || offset < 0)
                     throw std::invalid_argument(
                         "_make_view: shape and stride need the same length and offset >= 0");
@@ -180,7 +180,9 @@ void register_tensor_impl(py::module_& m) {
                 Shape view_shape(shape.begin(), shape.end());
                 Stride byte_stride;
                 byte_stride.reserve(stride.size());
-                std::int64_t last = offset * elem;
+                // Bounds are the buffer's: ``base`` may itself start partway in.
+                std::int64_t last =
+                    static_cast<std::int64_t>(base->storage_offset()) + offset * elem;
                 bool empty = false;
                 for (std::size_t i = 0; i < shape.size(); ++i) {
                     if (shape[i] < 0 || stride[i] < 0)

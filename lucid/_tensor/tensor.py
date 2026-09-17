@@ -746,13 +746,13 @@ class Tensor:
         memory in C (row-major) order — i.e. the stride of each dimension equals
         the product of all *later* dimension sizes times the element size.
 
-        On the CPU a transpose, a slice along any axis, and ``expand``
-        are views of their input's buffer, and a transposed or column view
-        is not contiguous.  Every op reads such a view correctly and a write
-        through it follows its strides, so the answer matters only to code
-        that walks the memory itself.  Metal tensors are always packed:
-        :meth:`unfold`, :meth:`diagonal`, ``broadcast_to`` and slicing with
-        a non-unit step still copy on every device.
+        On the CPU a transpose, a slice along any axis, :meth:`diagonal`,
+        :meth:`unfold` and ``expand`` are views of their input's buffer, and
+        a transposed or column view is not contiguous.  Every op reads such
+        a view correctly and a write through it follows its strides, so the
+        answer matters only to code that walks the memory itself.  Metal
+        tensors are always packed; ``broadcast_to`` and slicing with a
+        non-unit step still copy on every device.
 
         Returns
         -------
@@ -1810,9 +1810,9 @@ class Tensor:
         this may return a view or a copy depending on the backend; the result
         is always safe to pass to kernels that require contiguous input.
 
-        On the CPU a transpose, a slice along any axis and ``expand`` are
-        views of their input's buffer, and a transposed or column view is
-        not contiguous.  Every op reads such a view correctly, so the call
+        On the CPU a transpose, a slice along any axis, :meth:`diagonal`,
+        :meth:`unfold` and ``expand`` are views of their input's buffer, and
+        a transposed or column view is not contiguous.  Every op reads such a view correctly, so the call
         is needed only before code that walks the memory itself — through
         :meth:`data_ptr`, say.  Metal tensors are always packed.  Making a
         tensor contiguous rewrites the data into a fresh buffer with
@@ -1846,7 +1846,7 @@ class Tensor:
         return _wrap(_C_engine.contiguous(self._impl))  # type: ignore[return-value]
 
     def unfold(self, dimension: int, size: int, step: int) -> Tensor:
-        r"""Return a copy with an extra dimension containing sliding-window slices.
+        r"""Return a view with an extra dimension containing sliding-window slices.
 
         Extracts non-overlapping or overlapping windows of length ``size``
         along ``dimension``, advancing by ``step`` elements between windows.
@@ -1874,8 +1874,11 @@ class Tensor:
         Notes
         -----
         Unfold is the fundamental primitive behind 1-D convolution and
-        sliding-window aggregations.  The windows may overlap when
-        ``step < size``.
+        sliding-window aggregations.  On the CPU the result is a view of
+        ``self``'s buffer, so a write through a window reaches ``self``; the
+        windows overlap when ``step < size``, and a write through
+        overlapping windows is refused, since an element then repeats.  On
+        metal the result is a copy.
 
         Examples
         --------

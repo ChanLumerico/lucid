@@ -353,8 +353,9 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
     if (!storage_is_cpu(storage_) || !storage_is_cpu(src.storage_))
         ErrorBuilder(name).not_implemented("writing through a view is only supported on the CPU");
     if (overlaps_itself(meta_.shape, meta_.stride))
-        ErrorBuilder(name).fail("an in-place write into a tensor whose elements overlap (an "
-                                "expanded view) is ambiguous — clone() first");
+        ErrorBuilder(name).fail(
+            "an in-place write into a tensor whose elements overlap (an "
+            "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
     // A leaf's values are where its gradient accumulates.  A write through
     // one of its views moves them as surely as a write to the leaf itself,
     // which refuse_on_leaf refuses while autograd records.  is_leaf(), not
@@ -611,14 +612,55 @@ void scatter_contig_to_strided(const std::byte* packed,
     }
 }
 
-// Whether two of a view's elements are the same byte: a zero stride on an
-// axis longer than one, as an expanded view has.  Such a view reads fine and
-// cannot be written — a repeated element has no single value to take.
+// Whether two of a view's elements are the same byte.  A zero stride on an
+// axis longer than one — an expanded view — always makes one; so do windows
+// that overlap, as an unfold with step < size gives, though every stride is
+// non-zero.  Such a view reads fine and cannot be written: a repeated element
+// has no single value to take.
 bool overlaps_itself(const Shape& shape, const Stride& stride) {
-    for (std::size_t d = 0; d < shape.size(); ++d)
-        if (shape[d] > 1 && stride[d] == 0)
+    std::vector<std::pair<std::int64_t, std::int64_t>> axes;  // |stride|, extent - 1
+    std::size_t n = 1;
+    for (std::size_t d = 0; d < shape.size(); ++d) {
+        n *= static_cast<std::size_t>(std::max<std::int64_t>(shape[d], 0));
+        if (shape[d] <= 1)
+            continue;
+        if (stride[d] == 0)
             return true;
-    return false;
+        axes.emplace_back(stride[d] < 0 ? -stride[d] : stride[d], shape[d] - 1);
+    }
+    if (n == 0)
+        return false;
+    // Sorted by stride, if every axis steps past all that the smaller ones
+    // reach, each index lands on its own byte, as the digits of a
+    // mixed-radix number do.
+    std::sort(axes.begin(), axes.end());
+    std::int64_t reach = 0;
+    bool separated = true;
+    for (const auto& [step, span] : axes) {
+        if (step <= reach) {
+            separated = false;
+            break;
+        }
+        reach += step * span;
+    }
+    if (separated)
+        return false;
+    // Strides that interleave can still miss each other, so count addresses.
+    std::vector<std::int64_t> at(n);
+    std::vector<std::int64_t> idx(shape.size(), 0);
+    for (std::size_t i = 0; i < n; ++i) {
+        std::int64_t off = 0;
+        for (std::size_t d = 0; d < shape.size(); ++d)
+            off += idx[d] * stride[d];
+        at[i] = off;
+        for (std::size_t d = shape.size(); d-- > 0;) {
+            if (++idx[d] < shape[d])
+                break;
+            idx[d] = 0;
+        }
+    }
+    std::sort(at.begin(), at.end());
+    return std::adjacent_find(at.begin(), at.end()) != at.end();
 }
 
 // Format a single scalar element at ``ptr`` of dtype ``dt`` into ``os``.
@@ -1300,8 +1342,9 @@ void TensorImpl::copy_from(const TensorImpl& other) {
     if (storage_is_cpu(storage_) && storage_is_cpu(other.storage_) && !is_dense()) {
         if (overlaps_itself(meta_.shape, meta_.stride))
             ErrorBuilder("copy_from")
-                .fail("copying into a tensor whose elements overlap (an "
-                      "expanded view) is ambiguous — clone() first");
+                .fail(
+                    "copying into a tensor whose elements overlap (an "
+                    "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
         const auto packed = contig_snapshot_cpu(std::get<CpuStorage>(other.storage_), other.shape(),
                                                 other.stride(), other.storage_offset());
         scatter_contig_to_strided(packed.data(), std::get<CpuStorage>(storage_), meta_.shape,
