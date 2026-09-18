@@ -1816,7 +1816,7 @@
           "see_also": []
         }
       ],
-      "summary": "Repeated-augmentation sampler (Hoffer et al., 2020 — arXiv:1901.09335).",
+      "summary": "Repeated-augmentation sampler (Hoffer et al., 2020 — [arXiv:1901.09335](https://arxiv.org/abs/1901.09335)).",
       "extended": "Each dataset sample appears `num_repeats` times consecutively in\nthe index stream, so that — when combined with a stochastic\naugmentation pipeline — the model sees several different augmented\nviews of the same image inside each batch.  Empirically lifts\nImageNet accuracy at no extra labelled-data cost.\n\nThe sampler is also distributed-aware (single-process here, but\nsharding by `rank` is preserved for parity with the reference\nframework — see `DistributedSampler`).  Per-epoch shuffling\nis deterministic given `seed` + the epoch counter\n(`set_epoch`).",
       "parameters": [
         {
@@ -2236,7 +2236,7 @@
           "see_also": []
         }
       ],
-      "summary": "CutMix collator (Yun et al., 2019 — arXiv:1905.04899).",
+      "summary": "CutMix collator (Yun et al., 2019 — [arXiv:1905.04899](https://arxiv.org/abs/1905.04899)).",
       "extended": "Same lambda-sampling scheme as `MixupCollator`, but instead\nof blending pixels globally, a rectangular patch of one image is\npasted onto another.  The effective $\\lambda$ is recomputed\nfrom the actual patch area (after border clamping) so soft\ntargets stay calibrated.",
       "parameters": [
         {
@@ -2346,7 +2346,7 @@
           "see_also": []
         }
       ],
-      "summary": "Mixup collator (Zhang et al., 2018 — arXiv:1710.09412).",
+      "summary": "Mixup collator (Zhang et al., 2018 — [arXiv:1710.09412](https://arxiv.org/abs/1710.09412)).",
       "extended": "For each batch:\n\n1. Run `default_collate` to get `(images, labels)`.\n2. One-hot encode `labels` to `(B, num_classes)` soft targets.\n3. With probability `p`, sample\n   $\\lambda \\sim \\mathrm{Beta}(\\alpha, \\alpha)$, choose a\n   random permutation of the batch, and produce\n\n$$\n\\begin{aligned}\nx_{\\mathrm{mix}} &= \\lambda x + (1 - \\lambda) x_{\\pi} \\\\\ny_{\\mathrm{mix}} &= \\lambda y + (1 - \\lambda) y_{\\pi}\n\\end{aligned}\n$$\n\nOtherwise the batch passes through with one-hot soft targets.",
       "parameters": [
         {

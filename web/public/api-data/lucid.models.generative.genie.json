@@ -383,7 +383,7 @@
         ">>> from lucid.models.generative.genie import GenieConfig\n>>> config = GenieConfig()\n>>> config.frame_shape, config.token_grid\n((90, 160), (23, 40))\n>>> config.num_latent_actions, config.maskgit_steps, config.temperature\n(8, 25, 2.0)\nEvery component's attention may be narrower than its model width:\n>>> config.dynamics_heads * config.attention_head_dim(\"dynamics\")\n4608"
       ],
       "notes": [
-        "Reference: Bruce, Jake, et al., *\"Genie: Generative Interactive\nEnvironments\"*, ICML 2024 (arXiv:2402.15391).  The CoinRun case\nstudy of Appendix F is `lucid.models.genie_coinrun`."
+        "Reference: Bruce, Jake, et al., *\"Genie: Generative Interactive\nEnvironments\"*, ICML 2024 ([arXiv:2402.15391](https://arxiv.org/abs/2402.15391)).  The CoinRun case\nstudy of Appendix F is `lucid.models.genie_coinrun`."
       ],
       "attributes": [],
       "warns": [],
@@ -1078,7 +1078,7 @@
         "The configuration is read without building the model:\n>>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"genie\")\n>>> config.dynamics_layers, config.dynamics_dim, config.dynamics_heads\n(48, 5120, 36)\n>>> config.frame_shape, config.num_latent_actions\n((90, 160), 8)\nThe 41M dynamics model of Table 10 is three fields away:\n>>> small = AutoConfig.from_pretrained(\"genie\")\n>>> from dataclasses import replace\n>>> replace(small, dynamics_layers=18, dynamics_dim=512,\n...         dynamics_heads=8, dynamics_head_dim=64).dynamics_dim\n512"
       ],
       "notes": [
-        "Reference: Bruce, Jake, et al., *\"Genie: Generative Interactive\nEnvironments\"*, ICML 2024 (arXiv:2402.15391) — Table 7 for the\ntokenizer, Table 5 for the latent action model, Table 12 for the\ndynamics model.\n\nThe paper reports 10.7B parameters: a 200M tokenizer, a 300M latent\naction model and a 10.1B dynamics model.  This build has 20.2B —\n388M, 675M and 19.1B — and no choice of the values the paper leaves\nout reconciles its tables with those counts.  The latent action\nmodel's two attention layers per block come to 339M at the tabulated\nwidths, over its 300M before any feed-forward layer; the tokenizer\nwould need a feed-forward a tenth of its width and the dynamics model\ntwo-fifths of its, which disagree with each other and with every\ntransformer at this scale.  The tables are what is built.  At float32\nthat is about 81 GB; the scaling study's smaller dynamics models\n(Table 10) are overrides of the `dynamics_*` sizes."
+        "Reference: Bruce, Jake, et al., *\"Genie: Generative Interactive\nEnvironments\"*, ICML 2024 ([arXiv:2402.15391](https://arxiv.org/abs/2402.15391)) — Table 7 for the\ntokenizer, Table 5 for the latent action model, Table 12 for the\ndynamics model.\n\nThe paper reports 10.7B parameters: a 200M tokenizer, a 300M latent\naction model and a 10.1B dynamics model.  This build has 20.2B —\n388M, 675M and 19.1B — and no choice of the values the paper leaves\nout reconciles its tables with those counts.  The latent action\nmodel's two attention layers per block come to 339M at the tabulated\nwidths, over its 300M before any feed-forward layer; the tokenizer\nwould need a feed-forward a tenth of its width and the dynamics model\ntwo-fifths of its, which disagree with each other and with every\ntransformer at this scale.  The tables are what is built.  At float32\nthat is about 81 GB; the scaling study's smaller dynamics models\n(Table 10) are overrides of the `dynamics_*` sizes."
       ],
       "attributes": [],
       "warns": [],
@@ -1863,7 +1863,7 @@
         ">>> from lucid.models import genie_coinrun\n>>> model = genie_coinrun()\n>>> config = model.config\n>>> config.frame_shape, config.num_latent_actions, config.temperature\n((64, 64), 6, 1.0)\n>>> config.token_grid\n(16, 16)"
       ],
       "notes": [
-        "Reference: Bruce et al., arXiv:2402.15391, Appendix F — Table 15 for\nthe tokenizer, Table 16 for the latent action model (six actions),\nTable 17 for the dynamics model (sampling at temperature 1).  The\nappendix trains the tokenizer on batches of 48 sixteen-frame clips\nand the other two, together, on batches of 36.\n\nThree values it does not give are filled in: 64x64 frames, a latent\naction patch of 16, and 8 dynamics heads where Table 17 prints\n`num_layers` twice.  The appendix reports no parameter count; this\nbuild has 188M."
+        "Reference: Bruce et al., [arXiv:2402.15391](https://arxiv.org/abs/2402.15391), Appendix F — Table 15 for\nthe tokenizer, Table 16 for the latent action model (six actions),\nTable 17 for the dynamics model (sampling at temperature 1).  The\nappendix trains the tokenizer on batches of 48 sixteen-frame clips\nand the other two, together, on batches of 36.\n\nThree values it does not give are filled in: 64x64 frames, a latent\naction patch of 16, and 8 dynamics heads where Table 17 prints\n`num_layers` twice.  The appendix reports no parameter count; this\nbuild has 188M."
       ],
       "attributes": [],
       "warns": [],
@@ -2634,7 +2634,7 @@
         ">>> import lucid\n>>> from lucid.models import genie_coinrun_world_model\n>>> model = genie_coinrun_world_model(\n...     sample_size=16, num_frames=3, num_codes=16, code_dim=4,\n...     tokenizer_encoder_layers=1, tokenizer_encoder_dim=16,\n...     tokenizer_encoder_heads=2, tokenizer_decoder_layers=1,\n...     tokenizer_decoder_dim=16, tokenizer_decoder_heads=2,\n...     action_patch_size=8, action_dim=4,\n...     action_encoder_layers=1, action_encoder_dim=16, action_encoder_heads=2,\n...     action_decoder_layers=1, action_decoder_dim=16, action_decoder_heads=2,\n...     dynamics_layers=1, dynamics_dim=16, dynamics_heads=2,\n...     maskgit_steps=3).eval()\n>>> model.config.num_latent_actions\n6\n>>> out = model(lucid.rand(2, 2, 3, 16, 16), lucid.tensor([[5], [0]], dtype=lucid.int64))\n>>> out.frames.shape, out.tokens.shape\n((2, 1, 3, 16, 16), (2, 3, 16))"
       ],
       "notes": [
-        "Reference: Bruce et al., arXiv:2402.15391, Appendix F, Table 17:\n25 MaskGIT steps at temperature 1."
+        "Reference: Bruce et al., [arXiv:2402.15391](https://arxiv.org/abs/2402.15391), Appendix F, Table 17:\n25 MaskGIT steps at temperature 1."
       ],
       "attributes": [],
       "warns": [],
@@ -3413,7 +3413,7 @@
         ">>> import lucid\n>>> from lucid.models import genie_world_model\n>>> model = genie_world_model(\n...     sample_size=(8, 8), num_frames=4, num_codes=16, code_dim=4,\n...     tokenizer_encoder_layers=1, tokenizer_encoder_dim=16,\n...     tokenizer_encoder_heads=2, tokenizer_encoder_head_dim=8,\n...     tokenizer_decoder_layers=1, tokenizer_decoder_dim=16,\n...     tokenizer_decoder_heads=2, tokenizer_decoder_head_dim=8,\n...     action_patch_size=4, action_dim=4,\n...     action_encoder_layers=1, action_encoder_dim=16, action_encoder_heads=2,\n...     action_decoder_layers=1, action_decoder_dim=16, action_decoder_heads=2,\n...     dynamics_layers=1, dynamics_dim=16, dynamics_heads=2,\n...     dynamics_head_dim=8, maskgit_steps=2).eval()\n>>> out = model(lucid.rand(1, 1, 3, 8, 8), lucid.tensor([[3, 1]], dtype=lucid.int64))\n>>> out.frames.shape\n(1, 2, 3, 8, 8)"
       ],
       "notes": [
-        "Reference: Bruce et al., arXiv:2402.15391, Section 2.2 for playing\nthe model and Section 3 for its sampling: 25 MaskGIT steps per frame\nat temperature 2."
+        "Reference: Bruce et al., [arXiv:2402.15391](https://arxiv.org/abs/2402.15391), Section 2.2 for playing\nthe model and Section 3 for its sampling: 25 MaskGIT steps per frame\nat temperature 2."
       ],
       "attributes": [],
       "warns": [],
@@ -4175,7 +4175,7 @@
     }
   ],
   "summary": "Genie — a playable world model learned from unlabelled video.",
-  "extended": "Bruce et al., ICML 2024 (arXiv:2402.15391).  A spatiotemporal video\ntokenizer, a latent action model that invents a controller of eight\nbuttons from videos with no actions in them, and a MaskGIT dynamics\nmodel that answers each button press with the next frame.",
+  "extended": "Bruce et al., ICML 2024 ([arXiv:2402.15391](https://arxiv.org/abs/2402.15391)).  A spatiotemporal video\ntokenizer, a latent action model that invents a controller of eight\nbuttons from videos with no actions in them, and a MaskGIT dynamics\nmodel that answers each button press with the next frame.",
   "parameters": [],
   "returns": null,
   "raises": [],

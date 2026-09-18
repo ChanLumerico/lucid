@@ -1982,6 +1982,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.genie._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.mean_flow._model"
     },
     {
@@ -2568,6 +2572,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.genie._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.mean_flow._model"
     },
     {
@@ -2831,6 +2839,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.flow_matching._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie._pretrained"
     },
     {
       "kind": "module",
@@ -3861,6 +3873,82 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.flow_matching"
+    }
+  ],
+  "lucid.models.generative.genie": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.genie._config.GenieConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie._pretrained"
+    }
+  ],
+  "lucid.models.generative.genie._model.GenieForWorldModeling": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie._pretrained"
+    }
+  ],
+  "lucid.models.generative.genie._model.GenieModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie._pretrained"
+    }
+  ],
+  "lucid.models.generative.genie._model.GenieOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie"
+    }
+  ],
+  "lucid.models.generative.genie._model.GenieRolloutOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie"
+    }
+  ],
+  "lucid.models.generative.genie._pretrained.genie": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie"
+    }
+  ],
+  "lucid.models.generative.genie._pretrained.genie_coinrun": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie"
+    }
+  ],
+  "lucid.models.generative.genie._pretrained.genie_coinrun_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie"
+    }
+  ],
+  "lucid.models.generative.genie._pretrained.genie_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie"
     }
   ],
   "lucid.models.generative.mean_flow": [
@@ -10708,6 +10796,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.genie._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.mean_flow._model"
     },
     {
@@ -11135,6 +11227,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.flow_matching._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie._model"
     },
     {
       "kind": "module",
@@ -12767,6 +12863,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.diamond._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.genie._model"
     },
     {
       "kind": "module",
