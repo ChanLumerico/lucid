@@ -334081,5 +334081,2977 @@
         "children": []
       }
     ]
+  },
+  "genie": {
+    "name": "GenieModel",
+    "type": "GenieModel",
+    "params": 20208496240,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "tokenizer",
+        "type": "_VideoTokenizer",
+        "params": 387979856,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder_in",
+            "type": "Linear",
+            "params": 25088,
+            "own_params": 25088,
+            "children": []
+          },
+          {
+            "name": "encoder",
+            "type": "_STTransformer",
+            "params": 50928640,
+            "own_params": 479232,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 50448384,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 4204032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_code",
+            "type": "Linear",
+            "params": 16416,
+            "own_params": 16416,
+            "children": []
+          },
+          {
+            "name": "quantizer",
+            "type": "_Codebook",
+            "params": 32768,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "quantizer",
+                "type": "VectorQuantizer",
+                "params": 32768,
+                "own_params": 32768,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "decoder_in",
+            "type": "Linear",
+            "params": 33792,
+            "own_params": 33792,
+            "children": []
+          },
+          {
+            "name": "decoder",
+            "type": "_STTransformer",
+            "params": 336893952,
+            "own_params": 958464,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 335933440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 16796672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 20
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_pixels",
+            "type": "Linear",
+            "params": 49200,
+            "own_params": 49200,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "latent_action_model",
+        "type": "_LatentActionModel",
+        "params": 674455584,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder_in",
+            "type": "Linear",
+            "params": 787456,
+            "own_params": 787456,
+            "children": []
+          },
+          {
+            "name": "encoder",
+            "type": "_STTransformer",
+            "params": 336013312,
+            "own_params": 77824,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 335933440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 16796672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 20
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_action",
+            "type": "Linear",
+            "params": 32800,
+            "own_params": 32800,
+            "children": []
+          },
+          {
+            "name": "quantizer",
+            "type": "_Codebook",
+            "params": 256,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "quantizer",
+                "type": "VectorQuantizer",
+                "params": 256,
+                "own_params": 256,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "decoder_in",
+            "type": "Linear",
+            "params": 787456,
+            "own_params": 787456,
+            "children": []
+          },
+          {
+            "name": "action_in",
+            "type": "Linear",
+            "params": 33792,
+            "own_params": 33792,
+            "children": []
+          },
+          {
+            "name": "decoder",
+            "type": "_STTransformer",
+            "params": 336013312,
+            "own_params": 77824,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 335933440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 16796672,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 20
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_pixels",
+            "type": "Linear",
+            "params": 787200,
+            "own_params": 787200,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "dynamics",
+        "type": "_DynamicsModel",
+        "params": 19146060800,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "token_embedding",
+            "type": "Embedding",
+            "params": 5248000,
+            "own_params": 5248000,
+            "children": []
+          },
+          {
+            "name": "action_embedding",
+            "type": "Linear",
+            "params": 168960,
+            "own_params": 168960,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_STTransformer",
+            "params": 19135399936,
+            "own_params": 4792320,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 19130597376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 398554112,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 10240,
+                        "own_params": 10240,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 94391296,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 23597568,
+                            "own_params": 23597568,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "out",
+                            "type": "Linear",
+                            "params": 23598080,
+                            "own_params": 23598080,
+                            "children": []
+                          },
+                          {
+                            "name": "query_norm",
+                            "type": "LayerNorm",
+                            "params": 256,
+                            "own_params": 256,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 10240,
+                        "own_params": 10240,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 94391296,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 23597568,
+                            "own_params": 23597568,
+                            "children": [],
+                            "repeat": 3
+                          },
+                          {
+                            "name": "out",
+                            "type": "Linear",
+                            "params": 23598080,
+                            "own_params": 23598080,
+                            "children": []
+                          },
+                          {
+                            "name": "query_norm",
+                            "type": "LayerNorm",
+                            "params": 256,
+                            "own_params": 256,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 10240,
+                        "own_params": 10240,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 209740800,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 104878080,
+                            "own_params": 104878080,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 104862720,
+                            "own_params": 104862720,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 48
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 10240,
+                "own_params": 10240,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_logits",
+            "type": "Linear",
+            "params": 5243904,
+            "own_params": 5243904,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "genie_coinrun": {
+    "name": "GenieModel",
+    "type": "GenieModel",
+    "params": 187836976,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "tokenizer",
+        "type": "_VideoTokenizer",
+        "params": 67660880,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder_in",
+            "type": "Linear",
+            "params": 25088,
+            "own_params": 25088,
+            "children": []
+          },
+          {
+            "name": "encoder",
+            "type": "_STTransformer",
+            "params": 33772544,
+            "own_params": 139264,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 33632256,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 4204032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 8
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_code",
+            "type": "Linear",
+            "params": 16416,
+            "own_params": 16416,
+            "children": []
+          },
+          {
+            "name": "quantizer",
+            "type": "_Codebook",
+            "params": 32768,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "quantizer",
+                "type": "VectorQuantizer",
+                "params": 32768,
+                "own_params": 32768,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "decoder_in",
+            "type": "Linear",
+            "params": 16896,
+            "own_params": 16896,
+            "children": []
+          },
+          {
+            "name": "decoder",
+            "type": "_STTransformer",
+            "params": 33772544,
+            "own_params": 139264,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 33632256,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 4204032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 8
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_pixels",
+            "type": "Linear",
+            "params": 24624,
+            "own_params": 24624,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "latent_action_model",
+        "type": "_LatentActionModel",
+        "params": 68514272,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder_in",
+            "type": "Linear",
+            "params": 393728,
+            "own_params": 393728,
+            "children": []
+          },
+          {
+            "name": "encoder",
+            "type": "_STTransformer",
+            "params": 33649664,
+            "own_params": 16384,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 33632256,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 4204032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 8
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_action",
+            "type": "Linear",
+            "params": 16416,
+            "own_params": 16416,
+            "children": []
+          },
+          {
+            "name": "quantizer",
+            "type": "_Codebook",
+            "params": 192,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "quantizer",
+                "type": "VectorQuantizer",
+                "params": 192,
+                "own_params": 192,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "decoder_in",
+            "type": "Linear",
+            "params": 393728,
+            "own_params": 393728,
+            "children": []
+          },
+          {
+            "name": "action_in",
+            "type": "Linear",
+            "params": 16896,
+            "own_params": 16896,
+            "children": []
+          },
+          {
+            "name": "decoder",
+            "type": "_STTransformer",
+            "params": 33649664,
+            "own_params": 16384,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 33632256,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 4204032,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 1050624,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 8
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_pixels",
+            "type": "Linear",
+            "params": 393984,
+            "own_params": 393984,
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "dynamics",
+        "type": "_DynamicsModel",
+        "params": 51661824,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "token_embedding",
+            "type": "Embedding",
+            "params": 524800,
+            "own_params": 524800,
+            "children": []
+          },
+          {
+            "name": "action_embedding",
+            "type": "Linear",
+            "params": 16896,
+            "own_params": 16896,
+            "children": []
+          },
+          {
+            "name": "transformer",
+            "type": "_STTransformer",
+            "params": 50594816,
+            "own_params": 139264,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 50454528,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_STBlock",
+                    "params": 4204544,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "spatial_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "spatial",
+                        "type": "_Attention",
+                        "params": 1050880,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          },
+                          {
+                            "name": "query_norm",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "temporal_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "temporal",
+                        "type": "_Attention",
+                        "params": 1050880,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "query",
+                            "type": "Linear",
+                            "params": 262656,
+                            "own_params": 262656,
+                            "children": [],
+                            "repeat": 4
+                          },
+                          {
+                            "name": "query_norm",
+                            "type": "LayerNorm",
+                            "params": 128,
+                            "own_params": 128,
+                            "children": [],
+                            "repeat": 2
+                          }
+                        ]
+                      },
+                      {
+                        "name": "ffw_norm",
+                        "type": "LayerNorm",
+                        "params": 1024,
+                        "own_params": 1024,
+                        "children": []
+                      },
+                      {
+                        "name": "ffw",
+                        "type": "Sequential",
+                        "params": 2099712,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "0",
+                            "type": "Linear",
+                            "params": 1050624,
+                            "own_params": 1050624,
+                            "children": []
+                          },
+                          {
+                            "name": "1",
+                            "type": "GELU",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "2",
+                            "type": "Linear",
+                            "params": 1049088,
+                            "own_params": 1049088,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 1024,
+                "own_params": 1024,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "to_logits",
+            "type": "Linear",
+            "params": 525312,
+            "own_params": 525312,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "genie_coinrun_world_model": {
+    "name": "GenieForWorldModeling",
+    "type": "GenieForWorldModeling",
+    "params": 187836976,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "genie",
+        "type": "GenieModel",
+        "params": 187836976,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "tokenizer",
+            "type": "_VideoTokenizer",
+            "params": 67660880,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder_in",
+                "type": "Linear",
+                "params": 25088,
+                "own_params": 25088,
+                "children": []
+              },
+              {
+                "name": "encoder",
+                "type": "_STTransformer",
+                "params": 33772544,
+                "own_params": 139264,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 33632256,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 8
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_code",
+                "type": "Linear",
+                "params": 16416,
+                "own_params": 16416,
+                "children": []
+              },
+              {
+                "name": "quantizer",
+                "type": "_Codebook",
+                "params": 32768,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "quantizer",
+                    "type": "VectorQuantizer",
+                    "params": 32768,
+                    "own_params": 32768,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "decoder_in",
+                "type": "Linear",
+                "params": 16896,
+                "own_params": 16896,
+                "children": []
+              },
+              {
+                "name": "decoder",
+                "type": "_STTransformer",
+                "params": 33772544,
+                "own_params": 139264,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 33632256,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 8
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_pixels",
+                "type": "Linear",
+                "params": 24624,
+                "own_params": 24624,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "latent_action_model",
+            "type": "_LatentActionModel",
+            "params": 68514272,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder_in",
+                "type": "Linear",
+                "params": 393728,
+                "own_params": 393728,
+                "children": []
+              },
+              {
+                "name": "encoder",
+                "type": "_STTransformer",
+                "params": 33649664,
+                "own_params": 16384,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 33632256,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 8
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_action",
+                "type": "Linear",
+                "params": 16416,
+                "own_params": 16416,
+                "children": []
+              },
+              {
+                "name": "quantizer",
+                "type": "_Codebook",
+                "params": 192,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "quantizer",
+                    "type": "VectorQuantizer",
+                    "params": 192,
+                    "own_params": 192,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "decoder_in",
+                "type": "Linear",
+                "params": 393728,
+                "own_params": 393728,
+                "children": []
+              },
+              {
+                "name": "action_in",
+                "type": "Linear",
+                "params": 16896,
+                "own_params": 16896,
+                "children": []
+              },
+              {
+                "name": "decoder",
+                "type": "_STTransformer",
+                "params": 33649664,
+                "own_params": 16384,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 33632256,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 8
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_pixels",
+                "type": "Linear",
+                "params": 393984,
+                "own_params": 393984,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "dynamics",
+            "type": "_DynamicsModel",
+            "params": 51661824,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 524800,
+                "own_params": 524800,
+                "children": []
+              },
+              {
+                "name": "action_embedding",
+                "type": "Linear",
+                "params": 16896,
+                "own_params": 16896,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_STTransformer",
+                "params": 50594816,
+                "own_params": 139264,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 50454528,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 4204544,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 1050880,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              },
+                              {
+                                "name": "query_norm",
+                                "type": "LayerNorm",
+                                "params": 128,
+                                "own_params": 128,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 1050880,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              },
+                              {
+                                "name": "query_norm",
+                                "type": "LayerNorm",
+                                "params": 128,
+                                "own_params": 128,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_logits",
+                "type": "Linear",
+                "params": 525312,
+                "own_params": 525312,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "genie_world_model": {
+    "name": "GenieForWorldModeling",
+    "type": "GenieForWorldModeling",
+    "params": 20208496240,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "genie",
+        "type": "GenieModel",
+        "params": 20208496240,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "tokenizer",
+            "type": "_VideoTokenizer",
+            "params": 387979856,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder_in",
+                "type": "Linear",
+                "params": 25088,
+                "own_params": 25088,
+                "children": []
+              },
+              {
+                "name": "encoder",
+                "type": "_STTransformer",
+                "params": 50928640,
+                "own_params": 479232,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 50448384,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 4204032,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 1050624,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 262656,
+                                "own_params": 262656,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 1024,
+                            "own_params": 1024,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 2099712,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 1050624,
+                                "own_params": 1050624,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 1049088,
+                                "own_params": 1049088,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1024,
+                    "own_params": 1024,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_code",
+                "type": "Linear",
+                "params": 16416,
+                "own_params": 16416,
+                "children": []
+              },
+              {
+                "name": "quantizer",
+                "type": "_Codebook",
+                "params": 32768,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "quantizer",
+                    "type": "VectorQuantizer",
+                    "params": 32768,
+                    "own_params": 32768,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "decoder_in",
+                "type": "Linear",
+                "params": 33792,
+                "own_params": 33792,
+                "children": []
+              },
+              {
+                "name": "decoder",
+                "type": "_STTransformer",
+                "params": 336893952,
+                "own_params": 958464,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 335933440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 16796672,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 20
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_pixels",
+                "type": "Linear",
+                "params": 49200,
+                "own_params": 49200,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "latent_action_model",
+            "type": "_LatentActionModel",
+            "params": 674455584,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder_in",
+                "type": "Linear",
+                "params": 787456,
+                "own_params": 787456,
+                "children": []
+              },
+              {
+                "name": "encoder",
+                "type": "_STTransformer",
+                "params": 336013312,
+                "own_params": 77824,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 335933440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 16796672,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 20
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_action",
+                "type": "Linear",
+                "params": 32800,
+                "own_params": 32800,
+                "children": []
+              },
+              {
+                "name": "quantizer",
+                "type": "_Codebook",
+                "params": 256,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "quantizer",
+                    "type": "VectorQuantizer",
+                    "params": 256,
+                    "own_params": 256,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "decoder_in",
+                "type": "Linear",
+                "params": 787456,
+                "own_params": 787456,
+                "children": []
+              },
+              {
+                "name": "action_in",
+                "type": "Linear",
+                "params": 33792,
+                "own_params": 33792,
+                "children": []
+              },
+              {
+                "name": "decoder",
+                "type": "_STTransformer",
+                "params": 336013312,
+                "own_params": 77824,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 335933440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 16796672,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": [],
+                                "repeat": 4
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 20
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_pixels",
+                "type": "Linear",
+                "params": 787200,
+                "own_params": 787200,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "dynamics",
+            "type": "_DynamicsModel",
+            "params": 19146060800,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "token_embedding",
+                "type": "Embedding",
+                "params": 5248000,
+                "own_params": 5248000,
+                "children": []
+              },
+              {
+                "name": "action_embedding",
+                "type": "Linear",
+                "params": 168960,
+                "own_params": 168960,
+                "children": []
+              },
+              {
+                "name": "transformer",
+                "type": "_STTransformer",
+                "params": 19135399936,
+                "own_params": 4792320,
+                "children": [
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 19130597376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_STBlock",
+                        "params": 398554112,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "spatial_norm",
+                            "type": "LayerNorm",
+                            "params": 10240,
+                            "own_params": 10240,
+                            "children": []
+                          },
+                          {
+                            "name": "spatial",
+                            "type": "_Attention",
+                            "params": 94391296,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 23597568,
+                                "own_params": 23597568,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out",
+                                "type": "Linear",
+                                "params": 23598080,
+                                "own_params": 23598080,
+                                "children": []
+                              },
+                              {
+                                "name": "query_norm",
+                                "type": "LayerNorm",
+                                "params": 256,
+                                "own_params": 256,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "temporal_norm",
+                            "type": "LayerNorm",
+                            "params": 10240,
+                            "own_params": 10240,
+                            "children": []
+                          },
+                          {
+                            "name": "temporal",
+                            "type": "_Attention",
+                            "params": 94391296,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "query",
+                                "type": "Linear",
+                                "params": 23597568,
+                                "own_params": 23597568,
+                                "children": [],
+                                "repeat": 3
+                              },
+                              {
+                                "name": "out",
+                                "type": "Linear",
+                                "params": 23598080,
+                                "own_params": 23598080,
+                                "children": []
+                              },
+                              {
+                                "name": "query_norm",
+                                "type": "LayerNorm",
+                                "params": 256,
+                                "own_params": 256,
+                                "children": [],
+                                "repeat": 2
+                              }
+                            ]
+                          },
+                          {
+                            "name": "ffw_norm",
+                            "type": "LayerNorm",
+                            "params": 10240,
+                            "own_params": 10240,
+                            "children": []
+                          },
+                          {
+                            "name": "ffw",
+                            "type": "Sequential",
+                            "params": 209740800,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "0",
+                                "type": "Linear",
+                                "params": 104878080,
+                                "own_params": 104878080,
+                                "children": []
+                              },
+                              {
+                                "name": "1",
+                                "type": "GELU",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              },
+                              {
+                                "name": "2",
+                                "type": "Linear",
+                                "params": 104862720,
+                                "own_params": 104862720,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 48
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 10240,
+                    "own_params": 10240,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "to_logits",
+                "type": "Linear",
+                "params": 5243904,
+                "own_params": 5243904,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

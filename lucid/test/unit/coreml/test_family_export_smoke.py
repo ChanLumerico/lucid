@@ -246,6 +246,12 @@ NOT_SINGLE_IMAGE = {
     # covering it needs an agreed small configuration first, not a
     # translation it is missing.
     "stable",
+    # ``genie``'s ``forward`` is its three training objectives, and a
+    # tiny configuration stops on ``mse_loss``, which has no Core ML
+    # translation.  A packaged training loss has no caller; the playable
+    # rollout is a MaskGIT loop in Python around the dynamics model and
+    # was not tried.
+    "genie",
     # Covered above by a representative whose family key differs:
     # ``nice_cifar`` stands for the flow family, ``vqvae`` for itself,
     # ``ddpm``/``flow``/``ncsn``/``dit``/``mean`` and

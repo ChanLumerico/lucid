@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - public broadcast_to and expand_as are CPU views
 - positive-step slices are CPU views
 - add as_strided
+- add Genie (world-modeling) — 4 factories
 
 ---
 

@@ -438,5 +438,9 @@
   "yolo_v3_tiny": "9d4d5ff6c7d9e7de",
   "yolo_v4": "9d4d5ff6c7d9e7de",
   "zfnet": "4a1dc617879aa0fa",
-  "zfnet_cls": "4a1dc617879aa0fa"
+  "zfnet_cls": "4a1dc617879aa0fa",
+  "genie": "d459554205057f2c",
+  "genie_coinrun": "d459554205057f2c",
+  "genie_coinrun_world_model": "d459554205057f2c",
+  "genie_world_model": "d459554205057f2c"
 }

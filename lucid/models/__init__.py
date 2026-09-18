@@ -165,6 +165,11 @@ from lucid.models.generative.diamond import (
     DIAMONDConfig, DIAMONDModel, DIAMONDForWorldModeling,
     diamond, diamond_csgo, diamond_world_model,
 )
+# 2024 — Genie (Bruce, Dennis, Edwards, Parker-Holder, Shi, Hughes, Lai, et al.)
+from lucid.models.generative.genie import (
+    GenieConfig, GenieModel, GenieForWorldModeling,
+    genie, genie_world_model, genie_coinrun, genie_coinrun_world_model,
+)
 # 2025 — MeanFlow (Geng, Deng, Bai, Kolter & He)
 from lucid.models.generative.mean_flow import (
     MeanFlowConfig, MeanFlowModel, MeanFlowForImageGeneration,
@@ -857,6 +862,9 @@ __all__ = [    # ── Infrastructure ─────────────�
     # ── Generative (2024) DIAMOND ─────────────────────────────────────────────
     "DIAMONDConfig", "DIAMONDModel", "DIAMONDForWorldModeling",
     "diamond", "diamond_world_model", "diamond_csgo",
+    # ── Generative (2024) Genie ───────────────────────────────────────────────
+    "GenieConfig", "GenieModel", "GenieForWorldModeling",
+    "genie", "genie_world_model", "genie_coinrun", "genie_coinrun_world_model",
     # ── Generative (2025) MeanFlow ────────────────────────────────────────────
     "MeanFlowConfig", "MeanFlowModel", "MeanFlowForImageGeneration",
     "mean_flow_base_4", "mean_flow_base_2", "mean_flow_medium_2",

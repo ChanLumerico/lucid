@@ -450,6 +450,7 @@ ELSEWHERE: dict[str, str] = {
     "dreamer_v2": "test_models_recent_e2e.py — model.backward, three optimizers",
     "dreamer_v3": "test_models_recent_e2e.py — model.backward, three optimizers",
     "diamond": "test_models_recent_e2e.py — three losses",
+    "genie": "test_models_genie.py — one backward trains all three networks",
     "ncsn": "test_models_recent_e2e.py",
     "ddpm": "test_models_recent_e2e.py — the caller noises the input",
     "planet": "test_models_planet.py — rewards=",
