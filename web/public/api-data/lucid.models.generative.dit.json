@@ -3,7 +3,7 @@
   "name": "dit",
   "path": "lucid.models.generative.dit",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/__init__.py#L1",
   "members": [
     {
       "name": "DiTConfig",
@@ -15,7 +15,7 @@
       ],
       "labels": [],
       "signature": "DiTConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 4, out_channels: int = 8, act_fn: GenerativeActivation = 'silu', num_train_timesteps: int = 1000, beta_start: float = 0.0001, beta_end: float = 0.02, beta_schedule: BetaSchedule = 'linear', prediction_type: Literal['epsilon', 'sample', 'v_prediction'] = 'epsilon', patch_size: int = 2, hidden_size: int = 1152, depth: int = 28, num_heads: int = 16, mlp_ratio: float = 4.0, frequency_embedding_size: int = 256, num_classes: int = 1000, class_dropout: float = 0.1, conditioning: DiTConditioning = 'adaln_zero', learn_sigma: bool = True)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_config.py#L38",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_config.py#L38",
       "subcategory": "config",
       "methods": [
         {
@@ -26,7 +26,7 @@
             "property"
           ],
           "signature": "num_patches: int",
-          "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_config.py#L185",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_config.py#L185",
           "summary": "Tokens the latent is cut into — `(sample_size / patch_size)ˆ2`.",
           "extended": null,
           "parameters": [],
@@ -47,7 +47,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 4, out_channels: int = 8, act_fn: GenerativeActivation = 'silu', num_train_timesteps: int = 1000, beta_start: float = 0.0001, beta_end: float = 0.02, beta_schedule: BetaSchedule = 'linear', prediction_type: Literal['epsilon', 'sample', 'v_prediction'] = 'epsilon', patch_size: int = 2, hidden_size: int = 1152, depth: int = 28, num_heads: int = 16, mlp_ratio: float = 4.0, frequency_embedding_size: int = 256, num_classes: int = 1000, class_dropout: float = 0.1, conditioning: DiTConditioning = 'adaln_zero', learn_sigma: bool = True)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_config.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_config.py#L1",
           "subcategory": "config",
           "summary": "Initialise the block. See the class docstring for parameters.",
           "extended": null,
@@ -152,7 +152,7 @@
         ">>> from lucid.models.generative.dit import DiTConfig\n>>> config = DiTConfig()\n>>> config.depth, config.hidden_size, config.num_heads\n(28, 1152, 16)\nThe token count is what the scaling study varies, and it comes from\nthe patch size rather than the width:\n>>> DiTConfig(patch_size=2).num_patches, DiTConfig(patch_size=8).num_patches\n(256, 16)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)).  Backbone\nconfigurations are Table 1; the diffusion hyperparameters are ADM's,\nwhich is a linear variance schedule over 1000 steps from 1e-4 to\n2e-2 — the defaults `DiffusionModelConfig` already carries."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748).  Backbone\nconfigurations are Table 1; the diffusion hyperparameters are ADM's,\nwhich is a linear variance schedule over 1000 steps from 1e-4 to\n2e-2 — the defaults `DiffusionModelConfig` already carries."
       ],
       "attributes": [],
       "warns": [],
@@ -168,7 +168,7 @@
       ],
       "labels": [],
       "signature": "DiTForImageGeneration(config: DiTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_model.py#L366",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_model.py#L366",
       "subcategory": "model",
       "methods": [
         {
@@ -177,7 +177,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DiTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_model.py#L406",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_model.py#L406",
           "subcategory": "model",
           "summary": "Initialise the model. See the class docstring for parameters.",
           "extended": null,
@@ -199,7 +199,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(images: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_model.py#L428",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_model.py#L428",
           "subcategory": "model",
           "summary": "One denoising step of training.",
           "extended": null,
@@ -234,7 +234,7 @@
           "kind": "function",
           "labels": [],
           "signature": "generate(n_samples: int = 1, labels: Tensor | None = None, steps: int | None = None, eta: float = 0.0, noise: Tensor | None = None, device: str | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_model.py#L476",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_model.py#L476",
           "subcategory": "model",
           "summary": "Sample by running the reverse diffusion process.",
           "extended": null,
@@ -311,7 +311,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.dit import (\n...     DiTConfig, DiTForImageGeneration)\n>>> config = DiTConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                    depth=2, num_heads=4, num_classes=10)\n>>> model = DiTForImageGeneration(config).eval()\n>>> model.generate(2, steps=3).samples.shape\n(2, 4, 8, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023.  The diffusion\nhyperparameters are ADM's, which the paper retains wholesale: a\nlinear variance schedule over 1000 steps from 1e-4 to 2e-2.\n\nThe training objective here is the simple one — mean squared error on\nthe noise.  The covariance the decoder emits is returned rather than\ntrained; ADM's full objective adds a variational term for it, which\nthe paper inherits but does not modify and which a caller can build\nfrom `DiTOutput.variance_pred`."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023.  The diffusion\nhyperparameters are ADM's, which the paper retains wholesale: a\nlinear variance schedule over 1000 steps from 1e-4 to 2e-2.\n\nThe training objective here is the simple one — mean squared error on\nthe noise.  The covariance the decoder emits is returned rather than\ntrained; ADM's full objective adds a variational term for it, which\nthe paper inherits but does not modify and which a caller can build\nfrom `DiTOutput.variance_pred`."
       ],
       "attributes": [
         {
@@ -333,7 +333,7 @@
       ],
       "labels": [],
       "signature": "DiTModel(config: DiTConfig)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_model.py#L170",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_model.py#L170",
       "subcategory": "model",
       "methods": [
         {
@@ -342,7 +342,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(config: DiTConfig)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_model.py#L211",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_model.py#L211",
           "subcategory": "model",
           "summary": "Initialise the network. See the class docstring for parameters.",
           "extended": null,
@@ -364,7 +364,7 @@
           "kind": "function",
           "labels": [],
           "signature": "forward(latent: Tensor, timesteps: Tensor, labels: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_model.py#L312",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_model.py#L312",
           "subcategory": "model",
           "summary": "Predict the noise (and covariance) in a noised latent.",
           "extended": null,
@@ -416,7 +416,7 @@
         ">>> import lucid\n>>> from lucid.models.generative.dit import DiTConfig, DiTModel\n>>> config = DiTConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                    depth=2, num_heads=4, num_classes=10)\n>>> model = DiTModel(config).eval()\n>>> latent = lucid.randn((1, 4, 8, 8))\n>>> model(latent, lucid.tensor([10.0]), lucid.tensor([3], dtype=lucid.int64)).shape\n(1, 8, 8, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)).  Backbone shapes are\nTable 1."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748).  Backbone shapes are\nTable 1."
       ],
       "attributes": [
         {
@@ -453,7 +453,7 @@
       ],
       "labels": [],
       "signature": "DiTOutput(loss: Tensor, noise_pred: Tensor, variance_pred: Tensor | None = None)",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_model.py#L132",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_model.py#L132",
       "subcategory": "model",
       "methods": [
         {
@@ -462,7 +462,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(loss: Tensor, noise_pred: Tensor, variance_pred: Tensor | None = None)",
-          "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_model.py#L1",
+          "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_model.py#L1",
           "subcategory": "model",
           "summary": "Initialise the block. See the class docstring for parameters.",
           "extended": null,
@@ -518,7 +518,7 @@
       ],
       "labels": [],
       "signature": "DiTXLarge2Weights()",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_weights.py#L44",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_weights.py#L44",
       "subcategory": "weights",
       "methods": [],
       "summary": "Pretrained weights for `lucid.models.dit_xlarge_2`.",
@@ -530,7 +530,7 @@
         ">>> from lucid.models.generative.dit._weights import DiTXLarge2Weights\n>>> list(DiTXLarge2Weights.__members__)\n['IMAGENET1K_256', 'IMAGENET1K_512', 'DEFAULT']\nDEFAULT is an alias rather than a fourth entry, so a bare\npretrained=True and the tag it resolves to cannot drift apart.\n>>> DiTXLarge2Weights.DEFAULT is DiTXLarge2Weights.IMAGENET1K_256\nTrue\n>>> DiTXLarge2Weights.IMAGENET1K_256.num_classes\n1000"
       ],
       "notes": [
-        "Reference: Peebles and Xie, ICCV 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 2\nand Table 3.  The reported FIDs — 2.27 at 256 and 3.04 at 512 — are\nmeasured with classifier-free guidance at scale 1.5 over **250 DDPM\nsampling steps**, which `DiTForImageGeneration.generate` reaches\nas `steps=250, eta=1.0`; the default `eta=0.0` is DDIM's\ndeterministic step, matching the released pipeline's scheduler but\nnot the protocol behind those numbers.\n\nThe two tags differ only in the latent they were trained on — a\n32-side latent for 256-pixel images and 64 for 512 — so the 512 tag\nneeds a model built at that size, which its factory override does.\nTheir parameter counts are identical, because the positional table\nthat grows with the latent is a non-persistent buffer rather than a\nparameter and is rebuilt from the config on construction."
+        "Reference: Peebles and Xie, ICCV 2023 (arXiv:2212.09748), Table 2\nand Table 3.  The reported FIDs — 2.27 at 256 and 3.04 at 512 — are\nmeasured with classifier-free guidance at scale 1.5 over **250 DDPM\nsampling steps**, which `DiTForImageGeneration.generate` reaches\nas `steps=250, eta=1.0`; the default `eta=0.0` is DDIM's\ndeterministic step, matching the released pipeline's scheduler but\nnot the protocol behind those numbers.\n\nThe two tags differ only in the latent they were trained on — a\n32-side latent for 256-pixel images and 64 for 512 — so the 512 tag\nneeds a model built at that size, which its factory override does.\nTheir parameter counts are identical, because the positional table\nthat grows with the latent is a non-persistent buffer rather than a\nparameter and is rebuilt from the config on construction."
       ],
       "attributes": [],
       "warns": [],
@@ -542,7 +542,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_base_2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L231",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L231",
       "subcategory": "pretrained",
       "summary": "DiT-B/2 — the B backbone at patch 2.",
       "extended": null,
@@ -569,7 +569,7 @@
         ">>> from lucid.models import dit_base_2\n>>> config = dit_base_2().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 768, 2)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 768, 12 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 768, 12 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -765,7 +765,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_base_2_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L724",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L724",
       "subcategory": "pretrained",
       "summary": "`dit_base_2` posed as a diffusion sampler.",
       "extended": null,
@@ -792,7 +792,7 @@
         ">>> from lucid.models import dit_base_2_gen\n>>> model = dit_base_2_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -996,7 +996,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_base_4(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L271",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L271",
       "subcategory": "pretrained",
       "summary": "DiT-B/4 — the B backbone at patch 4.",
       "extended": null,
@@ -1023,7 +1023,7 @@
         ">>> from lucid.models import dit_base_4\n>>> config = dit_base_4().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 768, 4)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 768, 12 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 768, 12 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -1219,7 +1219,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_base_4_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L762",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L762",
       "subcategory": "pretrained",
       "summary": "`dit_base_4` posed as a diffusion sampler.",
       "extended": null,
@@ -1246,7 +1246,7 @@
         ">>> from lucid.models import dit_base_4_gen\n>>> model = dit_base_4_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -1450,7 +1450,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_base_8(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L311",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L311",
       "subcategory": "pretrained",
       "summary": "DiT-B/8 — the B backbone at patch 8.",
       "extended": null,
@@ -1477,7 +1477,7 @@
         ">>> from lucid.models import dit_base_8\n>>> config = dit_base_8().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 768, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 768, 12 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 768, 12 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -1673,7 +1673,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_base_8_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L800",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L800",
       "subcategory": "pretrained",
       "summary": "`dit_base_8` posed as a diffusion sampler.",
       "extended": null,
@@ -1700,7 +1700,7 @@
         ">>> from lucid.models import dit_base_8_gen\n>>> model = dit_base_8_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -1904,7 +1904,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_large_2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L351",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L351",
       "subcategory": "pretrained",
       "summary": "DiT-L/2 — the L backbone at patch 2.",
       "extended": null,
@@ -1931,7 +1931,7 @@
         ">>> from lucid.models import dit_large_2\n>>> config = dit_large_2().config\n>>> config.depth, config.hidden_size, config.patch_size\n(24, 1024, 2)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n24 layers, hidden 1024, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n24 layers, hidden 1024, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -2127,7 +2127,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_large_2_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L838",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L838",
       "subcategory": "pretrained",
       "summary": "`dit_large_2` posed as a diffusion sampler.",
       "extended": null,
@@ -2154,7 +2154,7 @@
         ">>> from lucid.models import dit_large_2_gen\n>>> model = dit_large_2_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -2358,7 +2358,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_large_4(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L391",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L391",
       "subcategory": "pretrained",
       "summary": "DiT-L/4 — the L backbone at patch 4.",
       "extended": null,
@@ -2385,7 +2385,7 @@
         ">>> from lucid.models import dit_large_4\n>>> config = dit_large_4().config\n>>> config.depth, config.hidden_size, config.patch_size\n(24, 1024, 4)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n24 layers, hidden 1024, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n24 layers, hidden 1024, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -2581,7 +2581,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_large_4_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L876",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L876",
       "subcategory": "pretrained",
       "summary": "`dit_large_4` posed as a diffusion sampler.",
       "extended": null,
@@ -2608,7 +2608,7 @@
         ">>> from lucid.models import dit_large_4_gen\n>>> model = dit_large_4_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -2812,7 +2812,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_large_8(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L431",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L431",
       "subcategory": "pretrained",
       "summary": "DiT-L/8 — the L backbone at patch 8.",
       "extended": null,
@@ -2839,7 +2839,7 @@
         ">>> from lucid.models import dit_large_8\n>>> config = dit_large_8().config\n>>> config.depth, config.hidden_size, config.patch_size\n(24, 1024, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n24 layers, hidden 1024, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n24 layers, hidden 1024, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -3035,7 +3035,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_large_8_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L914",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L914",
       "subcategory": "pretrained",
       "summary": "`dit_large_8` posed as a diffusion sampler.",
       "extended": null,
@@ -3062,7 +3062,7 @@
         ">>> from lucid.models import dit_large_8_gen\n>>> model = dit_large_8_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -3266,7 +3266,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_small_2(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L111",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L111",
       "subcategory": "pretrained",
       "summary": "DiT-S/2 — the S backbone at patch 2.",
       "extended": null,
@@ -3293,7 +3293,7 @@
         ">>> from lucid.models import dit_small_2\n>>> config = dit_small_2().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 384, 2)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 384, 6 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 384, 6 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -3489,7 +3489,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_small_2_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L610",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L610",
       "subcategory": "pretrained",
       "summary": "`dit_small_2` posed as a diffusion sampler.",
       "extended": null,
@@ -3516,7 +3516,7 @@
         ">>> from lucid.models import dit_small_2_gen\n>>> model = dit_small_2_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -3720,7 +3720,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_small_4(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L151",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L151",
       "subcategory": "pretrained",
       "summary": "DiT-S/4 — the S backbone at patch 4.",
       "extended": null,
@@ -3747,7 +3747,7 @@
         ">>> from lucid.models import dit_small_4\n>>> config = dit_small_4().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 384, 4)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 384, 6 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 384, 6 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -3943,7 +3943,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_small_4_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L648",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L648",
       "subcategory": "pretrained",
       "summary": "`dit_small_4` posed as a diffusion sampler.",
       "extended": null,
@@ -3970,7 +3970,7 @@
         ">>> from lucid.models import dit_small_4_gen\n>>> model = dit_small_4_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -4174,7 +4174,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_small_8(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L191",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L191",
       "subcategory": "pretrained",
       "summary": "DiT-S/8 — the S backbone at patch 8.",
       "extended": null,
@@ -4201,7 +4201,7 @@
         ">>> from lucid.models import dit_small_8\n>>> config = dit_small_8().config\n>>> config.depth, config.hidden_size, config.patch_size\n(12, 384, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n12 layers, hidden 384, 6 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n12 layers, hidden 384, 6 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -4397,7 +4397,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_small_8_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L686",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L686",
       "subcategory": "pretrained",
       "summary": "`dit_small_8` posed as a diffusion sampler.",
       "extended": null,
@@ -4424,7 +4424,7 @@
         ">>> from lucid.models import dit_small_8_gen\n>>> model = dit_small_8_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -4628,7 +4628,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_xlarge_2(pretrained: bool | str = False, weights: DiTXLarge2Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L474",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L474",
       "subcategory": "pretrained",
       "summary": "DiT-XL/2 — the XL backbone at patch 2.",
       "extended": null,
@@ -4661,7 +4661,7 @@
         ">>> from lucid.models import dit_xlarge_2\n>>> config = dit_xlarge_2().config\n>>> config.depth, config.hidden_size, config.patch_size\n(28, 1152, 2)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n28 layers, hidden 1152, 16 heads.\n\nReports 2.27 FID with classifier-free guidance at scale 1.50 on ImageNet 256x256 — the state of the art when published, and 3.04 at 512x512 with the same config over a 64-wide latent."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n28 layers, hidden 1152, 16 heads.\n\nReports 2.27 FID with classifier-free guidance at scale 1.50 on ImageNet 256x256 — the state of the art when published, and 3.04 at 512x512 with the same config over a 64-wide latent."
       ],
       "attributes": [],
       "warns": [],
@@ -4857,7 +4857,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_xlarge_2_gen(pretrained: bool | str = False, weights: DiTXLarge2Weights | None = None, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L955",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L955",
       "subcategory": "pretrained",
       "summary": "`dit_xlarge_2` posed as a diffusion sampler.",
       "extended": null,
@@ -4890,7 +4890,7 @@
         ">>> from lucid.models import dit_xlarge_2_gen\n>>> model = dit_xlarge_2_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -5094,7 +5094,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_xlarge_4(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L530",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L530",
       "subcategory": "pretrained",
       "summary": "DiT-XL/4 — the XL backbone at patch 4.",
       "extended": null,
@@ -5121,7 +5121,7 @@
         ">>> from lucid.models import dit_xlarge_4\n>>> config = dit_xlarge_4().config\n>>> config.depth, config.hidden_size, config.patch_size\n(28, 1152, 4)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n28 layers, hidden 1152, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n28 layers, hidden 1152, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -5317,7 +5317,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_xlarge_4_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L1007",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L1007",
       "subcategory": "pretrained",
       "summary": "`dit_xlarge_4` posed as a diffusion sampler.",
       "extended": null,
@@ -5344,7 +5344,7 @@
         ">>> from lucid.models import dit_xlarge_4_gen\n>>> model = dit_xlarge_4_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -5548,7 +5548,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_xlarge_8(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L570",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L570",
       "subcategory": "pretrained",
       "summary": "DiT-XL/8 — the XL backbone at patch 8.",
       "extended": null,
@@ -5575,7 +5575,7 @@
         ">>> from lucid.models import dit_xlarge_8\n>>> config = dit_xlarge_8().config\n>>> config.depth, config.hidden_size, config.patch_size\n(28, 1152, 8)"
       ],
       "notes": [
-        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)), Table 1 —\n28 layers, hidden 1152, 16 heads."
+        "Reference: Peebles and Xie, *\"Scalable Diffusion Models with\nTransformers\"*, ICCV, 2023 (arXiv:2212.09748), Table 1 —\n28 layers, hidden 1152, 16 heads."
       ],
       "attributes": [],
       "warns": [],
@@ -5771,7 +5771,7 @@
       "kind": "function",
       "labels": [],
       "signature": "dit_xlarge_8_gen(pretrained: bool = False, overrides: object = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/dit/_pretrained.py#L1045",
+      "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/generative/dit/_pretrained.py#L1045",
       "subcategory": "pretrained",
       "summary": "`dit_xlarge_8` posed as a diffusion sampler.",
       "extended": null,
@@ -5798,7 +5798,7 @@
         ">>> from lucid.models import dit_xlarge_8_gen\n>>> model = dit_xlarge_8_gen()"
       ],
       "notes": [
-        "Reference: Peebles and Xie, [arXiv:2212.09748](https://arxiv.org/abs/2212.09748), 2023."
+        "Reference: Peebles and Xie, arXiv:2212.09748, 2023."
       ],
       "attributes": [],
       "warns": [],
@@ -5998,7 +5998,7 @@
     }
   ],
   "summary": "DiT — the diffusion model that replaced the U-Net with a transformer.",
-  "extended": "Peebles and Xie, ICCV 2023 ([arXiv:2212.09748](https://arxiv.org/abs/2212.09748)).  Latent patches through a\nplain Vision Transformer, conditioned by adaLN-Zero, and the finding that\nFID tracks the backbone's Gflops rather than its parameter count.",
+  "extended": "Peebles and Xie, ICCV 2023 (arXiv:2212.09748).  Latent patches through a\nplain Vision Transformer, conditioned by adaLN-Zero, and the finding that\nFID tracks the backbone's Gflops rather than its parameter count.",
   "parameters": [],
   "returns": null,
   "raises": [],
