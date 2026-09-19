@@ -25,7 +25,8 @@ import pytest
 
 import lucid
 from lucid.models.vision.ijepa import IJEPAConfig, IJEPAModel
-from lucid.models.vision.ijepa._model import _Block, _sincos_2d
+from lucid.models.vision._common._transformers import Block
+from lucid.models.vision.ijepa._model import _sincos_2d
 
 
 def _np(tensor: Any) -> Any:
@@ -108,7 +109,7 @@ class TestBlockParity:
 
     def test_the_block_matches_the_reference(self, ref: Any) -> None:
         lucid.manual_seed(0)
-        block = _Block(dim=12, num_heads=3, hidden=24, eps=1e-6).eval()
+        block = Block(dim=12, num_heads=3, hidden=24, eps=1e-6).eval()
         x = np.random.RandomState(0).randn(2, 5, 12).astype(np.float32)
 
         ours = _np(block(lucid.tensor(x.copy())))
@@ -137,7 +138,7 @@ class TestBlockParity:
 
     def test_the_qkv_projection_is_fused(self, ref: Any) -> None:
         """Guards the copy above — the shapes it moves must be the fused ones."""
-        block = _Block(dim=12, num_heads=3, hidden=24, eps=1e-6)
+        block = Block(dim=12, num_heads=3, hidden=24, eps=1e-6)
         assert tuple(int(d) for d in block.attn.qkv.weight.shape) == (36, 12)
         assert tuple(int(d) for d in block.attn.proj.weight.shape) == (12, 12)
 

@@ -162335,7 +162335,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Block",
+                "type": "Block",
                 "params": 7087872,
                 "own_params": 0,
                 "children": [
@@ -162348,7 +162348,7 @@
                   },
                   {
                     "name": "attn",
-                    "type": "_Attention",
+                    "type": "Attention",
                     "params": 2362368,
                     "own_params": 0,
                     "children": [
@@ -162377,7 +162377,7 @@
                   },
                   {
                     "name": "mlp",
-                    "type": "_MLP",
+                    "type": "MLP",
                     "params": 4722432,
                     "own_params": 0,
                     "children": [
@@ -162433,7 +162433,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Block",
+                "type": "Block",
                 "params": 1774464,
                 "own_params": 0,
                 "children": [
@@ -162446,7 +162446,7 @@
                   },
                   {
                     "name": "attn",
-                    "type": "_Attention",
+                    "type": "Attention",
                     "params": 591360,
                     "own_params": 0,
                     "children": [
@@ -162475,7 +162475,7 @@
                   },
                   {
                     "name": "mlp",
-                    "type": "_MLP",
+                    "type": "MLP",
                     "params": 1181568,
                     "own_params": 0,
                     "children": [
@@ -162559,7 +162559,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_Block",
+                    "type": "Block",
                     "params": 7087872,
                     "own_params": 0,
                     "children": [
@@ -162572,7 +162572,7 @@
                       },
                       {
                         "name": "attn",
-                        "type": "_Attention",
+                        "type": "Attention",
                         "params": 2362368,
                         "own_params": 0,
                         "children": [
@@ -162601,7 +162601,7 @@
                       },
                       {
                         "name": "mlp",
-                        "type": "_MLP",
+                        "type": "MLP",
                         "params": 4722432,
                         "own_params": 0,
                         "children": [
@@ -162657,7 +162657,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_Block",
+                    "type": "Block",
                     "params": 1774464,
                     "own_params": 0,
                     "children": [
@@ -162670,7 +162670,7 @@
                       },
                       {
                         "name": "attn",
-                        "type": "_Attention",
+                        "type": "Attention",
                         "params": 591360,
                         "own_params": 0,
                         "children": [
@@ -162699,7 +162699,7 @@
                       },
                       {
                         "name": "mlp",
-                        "type": "_MLP",
+                        "type": "MLP",
                         "params": 1181568,
                         "own_params": 0,
                         "children": [
@@ -162786,7 +162786,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Block",
+                "type": "Block",
                 "params": 19677440,
                 "own_params": 0,
                 "children": [
@@ -162799,7 +162799,7 @@
                   },
                   {
                     "name": "attn",
-                    "type": "_Attention",
+                    "type": "Attention",
                     "params": 6558720,
                     "own_params": 0,
                     "children": [
@@ -162828,7 +162828,7 @@
                   },
                   {
                     "name": "mlp",
-                    "type": "_MLP",
+                    "type": "MLP",
                     "params": 13113600,
                     "own_params": 0,
                     "children": [
@@ -162884,7 +162884,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Block",
+                "type": "Block",
                 "params": 1774464,
                 "own_params": 0,
                 "children": [
@@ -162897,7 +162897,7 @@
                   },
                   {
                     "name": "attn",
-                    "type": "_Attention",
+                    "type": "Attention",
                     "params": 591360,
                     "own_params": 0,
                     "children": [
@@ -162926,7 +162926,7 @@
                   },
                   {
                     "name": "mlp",
-                    "type": "_MLP",
+                    "type": "MLP",
                     "params": 1181568,
                     "own_params": 0,
                     "children": [
@@ -163010,7 +163010,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_Block",
+                    "type": "Block",
                     "params": 19677440,
                     "own_params": 0,
                     "children": [
@@ -163023,7 +163023,7 @@
                       },
                       {
                         "name": "attn",
-                        "type": "_Attention",
+                        "type": "Attention",
                         "params": 6558720,
                         "own_params": 0,
                         "children": [
@@ -163052,7 +163052,7 @@
                       },
                       {
                         "name": "mlp",
-                        "type": "_MLP",
+                        "type": "MLP",
                         "params": 13113600,
                         "own_params": 0,
                         "children": [
@@ -163108,7 +163108,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_Block",
+                    "type": "Block",
                     "params": 1774464,
                     "own_params": 0,
                     "children": [
@@ -163121,7 +163121,7 @@
                       },
                       {
                         "name": "attn",
-                        "type": "_Attention",
+                        "type": "Attention",
                         "params": 591360,
                         "own_params": 0,
                         "children": [
@@ -163150,7 +163150,7 @@
                       },
                       {
                         "name": "mlp",
-                        "type": "_MLP",
+                        "type": "MLP",
                         "params": 1181568,
                         "own_params": 0,
                         "children": [
@@ -163237,7 +163237,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Block",
+                "type": "Block",
                 "params": 19677440,
                 "own_params": 0,
                 "children": [
@@ -163250,7 +163250,7 @@
                   },
                   {
                     "name": "attn",
-                    "type": "_Attention",
+                    "type": "Attention",
                     "params": 6558720,
                     "own_params": 0,
                     "children": [
@@ -163279,7 +163279,7 @@
                   },
                   {
                     "name": "mlp",
-                    "type": "_MLP",
+                    "type": "MLP",
                     "params": 13113600,
                     "own_params": 0,
                     "children": [
@@ -163335,7 +163335,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Block",
+                "type": "Block",
                 "params": 1774464,
                 "own_params": 0,
                 "children": [
@@ -163348,7 +163348,7 @@
                   },
                   {
                     "name": "attn",
-                    "type": "_Attention",
+                    "type": "Attention",
                     "params": 591360,
                     "own_params": 0,
                     "children": [
@@ -163377,7 +163377,7 @@
                   },
                   {
                     "name": "mlp",
-                    "type": "_MLP",
+                    "type": "MLP",
                     "params": 1181568,
                     "own_params": 0,
                     "children": [
@@ -163461,7 +163461,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_Block",
+                    "type": "Block",
                     "params": 19677440,
                     "own_params": 0,
                     "children": [
@@ -163474,7 +163474,7 @@
                       },
                       {
                         "name": "attn",
-                        "type": "_Attention",
+                        "type": "Attention",
                         "params": 6558720,
                         "own_params": 0,
                         "children": [
@@ -163503,7 +163503,7 @@
                       },
                       {
                         "name": "mlp",
-                        "type": "_MLP",
+                        "type": "MLP",
                         "params": 13113600,
                         "own_params": 0,
                         "children": [
@@ -163559,7 +163559,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_Block",
+                    "type": "Block",
                     "params": 1774464,
                     "own_params": 0,
                     "children": [
@@ -163572,7 +163572,7 @@
                       },
                       {
                         "name": "attn",
-                        "type": "_Attention",
+                        "type": "Attention",
                         "params": 591360,
                         "own_params": 0,
                         "children": [
@@ -163601,7 +163601,7 @@
                       },
                       {
                         "name": "mlp",
-                        "type": "_MLP",
+                        "type": "MLP",
                         "params": 1181568,
                         "own_params": 0,
                         "children": [
@@ -163688,7 +163688,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Block",
+                "type": "Block",
                 "params": 12596224,
                 "own_params": 0,
                 "children": [
@@ -163701,7 +163701,7 @@
                   },
                   {
                     "name": "attn",
-                    "type": "_Attention",
+                    "type": "Attention",
                     "params": 4198400,
                     "own_params": 0,
                     "children": [
@@ -163730,7 +163730,7 @@
                   },
                   {
                     "name": "mlp",
-                    "type": "_MLP",
+                    "type": "MLP",
                     "params": 8393728,
                     "own_params": 0,
                     "children": [
@@ -163786,7 +163786,7 @@
             "children": [
               {
                 "name": "0",
-                "type": "_Block",
+                "type": "Block",
                 "params": 1774464,
                 "own_params": 0,
                 "children": [
@@ -163799,7 +163799,7 @@
                   },
                   {
                     "name": "attn",
-                    "type": "_Attention",
+                    "type": "Attention",
                     "params": 591360,
                     "own_params": 0,
                     "children": [
@@ -163828,7 +163828,7 @@
                   },
                   {
                     "name": "mlp",
-                    "type": "_MLP",
+                    "type": "MLP",
                     "params": 1181568,
                     "own_params": 0,
                     "children": [
@@ -163912,7 +163912,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_Block",
+                    "type": "Block",
                     "params": 12596224,
                     "own_params": 0,
                     "children": [
@@ -163925,7 +163925,7 @@
                       },
                       {
                         "name": "attn",
-                        "type": "_Attention",
+                        "type": "Attention",
                         "params": 4198400,
                         "own_params": 0,
                         "children": [
@@ -163954,7 +163954,7 @@
                       },
                       {
                         "name": "mlp",
-                        "type": "_MLP",
+                        "type": "MLP",
                         "params": 8393728,
                         "own_params": 0,
                         "children": [
@@ -164010,7 +164010,7 @@
                 "children": [
                   {
                     "name": "0",
-                    "type": "_Block",
+                    "type": "Block",
                     "params": 1774464,
                     "own_params": 0,
                     "children": [
@@ -164023,7 +164023,7 @@
                       },
                       {
                         "name": "attn",
-                        "type": "_Attention",
+                        "type": "Attention",
                         "params": 591360,
                         "own_params": 0,
                         "children": [
@@ -164052,7 +164052,7 @@
                       },
                       {
                         "name": "mlp",
-                        "type": "_MLP",
+                        "type": "MLP",
                         "params": 1181568,
                         "own_params": 0,
                         "children": [
@@ -329493,6 +329493,1557 @@
         "type": "Linear",
         "params": 1025000,
         "own_params": 1025000,
+        "children": []
+      }
+    ]
+  },
+  "vjepa_huge_16": {
+    "name": "VJEPAModel",
+    "type": "VJEPAModel",
+    "params": 1285575808,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "encoder",
+        "type": "_Encoder",
+        "params": 631648000,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_TubeletEmbed",
+            "params": 1967360,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv3d",
+                "params": 1967360,
+                "own_params": 1967360,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 629678080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Block",
+                "params": 19677440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "Attention",
+                    "params": 6558720,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 4919040,
+                        "own_params": 4919040,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1639680,
+                        "own_params": 1639680,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "MLP",
+                    "params": 13113600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 6558720,
+                        "own_params": 6558720,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 6554880,
+                        "own_params": 6554880,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 32
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          }
+        ],
+        "repeat": 2
+      },
+      {
+        "name": "predictor",
+        "type": "_Predictor",
+        "params": 22279808,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "predictor_embed",
+            "type": "Linear",
+            "params": 491904,
+            "own_params": 491904,
+            "children": []
+          },
+          {
+            "name": "mask_tokens",
+            "type": "ParameterList",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "predictor_blocks",
+            "type": "ModuleList",
+            "params": 21293568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Block",
+                "params": 1774464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "Attention",
+                    "params": 591360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 443520,
+                        "own_params": 443520,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 147840,
+                        "own_params": 147840,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "MLP",
+                    "params": 1181568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "predictor_norm",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "predictor_proj",
+            "type": "Linear",
+            "params": 492800,
+            "own_params": 492800,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "vjepa_huge_16_384": {
+    "name": "VJEPAModel",
+    "type": "VJEPAModel",
+    "params": 1285575808,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "encoder",
+        "type": "_Encoder",
+        "params": 631648000,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_TubeletEmbed",
+            "params": 1967360,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv3d",
+                "params": 1967360,
+                "own_params": 1967360,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 629678080,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Block",
+                "params": 19677440,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "Attention",
+                    "params": 6558720,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 4919040,
+                        "own_params": 4919040,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1639680,
+                        "own_params": 1639680,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "MLP",
+                    "params": 13113600,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 6558720,
+                        "own_params": 6558720,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 6554880,
+                        "own_params": 6554880,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 32
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          }
+        ],
+        "repeat": 2
+      },
+      {
+        "name": "predictor",
+        "type": "_Predictor",
+        "params": 22279808,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "predictor_embed",
+            "type": "Linear",
+            "params": 491904,
+            "own_params": 491904,
+            "children": []
+          },
+          {
+            "name": "mask_tokens",
+            "type": "ParameterList",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "predictor_blocks",
+            "type": "ModuleList",
+            "params": 21293568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Block",
+                "params": 1774464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "Attention",
+                    "params": 591360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 443520,
+                        "own_params": 443520,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 147840,
+                        "own_params": 147840,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "MLP",
+                    "params": 1181568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "predictor_norm",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "predictor_proj",
+            "type": "Linear",
+            "params": 492800,
+            "own_params": 492800,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "vjepa_huge_16_384_cls": {
+    "name": "VJEPAForVideoClassification",
+    "type": "VJEPAForVideoClassification",
+    "params": 1305766928,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "vjepa",
+        "type": "VJEPAModel",
+        "params": 1285575808,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 631648000,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_TubeletEmbed",
+                "params": 1967360,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv3d",
+                    "params": 1967360,
+                    "own_params": 1967360,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 629678080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 19677440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 6558720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 4919040,
+                            "own_params": 4919040,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1639680,
+                            "own_params": 1639680,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 13113600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 6558720,
+                            "own_params": 6558720,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 6554880,
+                            "own_params": 6554880,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 32
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 22279808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 491904,
+                "own_params": 491904,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 492800,
+                "own_params": 492800,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "pooler",
+        "type": "_AttentivePooler",
+        "params": 19678720,
+        "own_params": 1280,
+        "children": [
+          {
+            "name": "norm_keys",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          },
+          {
+            "name": "query",
+            "type": "Linear",
+            "params": 1639680,
+            "own_params": 1639680,
+            "children": [],
+            "repeat": 4
+          },
+          {
+            "name": "norm_out",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          },
+          {
+            "name": "mlp",
+            "type": "MLP",
+            "params": 13113600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 6558720,
+                "own_params": 6558720,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 6554880,
+                "own_params": 6554880,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "head",
+        "type": "Linear",
+        "params": 512400,
+        "own_params": 512400,
+        "children": []
+      }
+    ]
+  },
+  "vjepa_huge_16_cls": {
+    "name": "VJEPAForVideoClassification",
+    "type": "VJEPAForVideoClassification",
+    "params": 1305766928,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "vjepa",
+        "type": "VJEPAModel",
+        "params": 1285575808,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 631648000,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_TubeletEmbed",
+                "params": 1967360,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv3d",
+                    "params": 1967360,
+                    "own_params": 1967360,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 629678080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 19677440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 6558720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 4919040,
+                            "own_params": 4919040,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1639680,
+                            "own_params": 1639680,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 13113600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 6558720,
+                            "own_params": 6558720,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 6554880,
+                            "own_params": 6554880,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 32
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 22279808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 491904,
+                "own_params": 491904,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 492800,
+                "own_params": 492800,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "pooler",
+        "type": "_AttentivePooler",
+        "params": 19678720,
+        "own_params": 1280,
+        "children": [
+          {
+            "name": "norm_keys",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          },
+          {
+            "name": "query",
+            "type": "Linear",
+            "params": 1639680,
+            "own_params": 1639680,
+            "children": [],
+            "repeat": 4
+          },
+          {
+            "name": "norm_out",
+            "type": "LayerNorm",
+            "params": 2560,
+            "own_params": 2560,
+            "children": []
+          },
+          {
+            "name": "mlp",
+            "type": "MLP",
+            "params": 13113600,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 6558720,
+                "own_params": 6558720,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 6554880,
+                "own_params": 6554880,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "head",
+        "type": "Linear",
+        "params": 512400,
+        "own_params": 512400,
+        "children": []
+      }
+    ]
+  },
+  "vjepa_large_16": {
+    "name": "VJEPAModel",
+    "type": "VJEPAModel",
+    "params": 629853568,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "encoder",
+        "type": "_Encoder",
+        "params": 303885312,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "_TubeletEmbed",
+            "params": 1573888,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "proj",
+                "type": "Conv3d",
+                "params": 1573888,
+                "own_params": 1573888,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 302309376,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Block",
+                "params": 12596224,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "Attention",
+                    "params": 4198400,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "MLP",
+                    "params": 8393728,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 4198400,
+                        "own_params": 4198400,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 4195328,
+                        "own_params": 4195328,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 24
+              }
+            ]
+          },
+          {
+            "name": "norm",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          }
+        ],
+        "repeat": 2
+      },
+      {
+        "name": "predictor",
+        "type": "_Predictor",
+        "params": 22082944,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "predictor_embed",
+            "type": "Linear",
+            "params": 393600,
+            "own_params": 393600,
+            "children": []
+          },
+          {
+            "name": "mask_tokens",
+            "type": "ParameterList",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "predictor_blocks",
+            "type": "ModuleList",
+            "params": 21293568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "Block",
+                "params": 1774464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "Attention",
+                    "params": 591360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 443520,
+                        "own_params": 443520,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 147840,
+                        "own_params": 147840,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "MLP",
+                    "params": 1181568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 591360,
+                        "own_params": 591360,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 590208,
+                        "own_params": 590208,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 12
+              }
+            ]
+          },
+          {
+            "name": "predictor_norm",
+            "type": "LayerNorm",
+            "params": 768,
+            "own_params": 768,
+            "children": []
+          },
+          {
+            "name": "predictor_proj",
+            "type": "Linear",
+            "params": 394240,
+            "own_params": 394240,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "vjepa_large_16_cls": {
+    "name": "VJEPAForVideoClassification",
+    "type": "VJEPAForVideoClassification",
+    "params": 642860816,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "vjepa",
+        "type": "VJEPAModel",
+        "params": 629853568,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 303885312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_TubeletEmbed",
+                "params": 1573888,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv3d",
+                    "params": 1573888,
+                    "own_params": 1573888,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 3148800,
+                            "own_params": 3148800,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 22082944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 393600,
+                "own_params": 393600,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 394240,
+                "own_params": 394240,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "pooler",
+        "type": "_AttentivePooler",
+        "params": 12597248,
+        "own_params": 1024,
+        "children": [
+          {
+            "name": "norm_keys",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "query",
+            "type": "Linear",
+            "params": 1049600,
+            "own_params": 1049600,
+            "children": [],
+            "repeat": 4
+          },
+          {
+            "name": "norm_out",
+            "type": "LayerNorm",
+            "params": 2048,
+            "own_params": 2048,
+            "children": []
+          },
+          {
+            "name": "mlp",
+            "type": "MLP",
+            "params": 8393728,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 4198400,
+                "own_params": 4198400,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 4195328,
+                "own_params": 4195328,
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "head",
+        "type": "Linear",
+        "params": 410000,
+        "own_params": 410000,
         "children": []
       }
     ]

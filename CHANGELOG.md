@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - add as_strided
 - add Genie (world-modeling) — 4 factories
 - add I-JEPA (self-supervised pretraining) — 8 factories
+- add V-JEPA (video feature prediction) — 6 factories
 
 ---
 

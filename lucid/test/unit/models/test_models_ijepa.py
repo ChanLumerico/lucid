@@ -463,3 +463,70 @@ class TestLinearProbe:
         assert out.loss is not None
         expected = F.cross_entropy(out.logits, labels)
         assert float((out.loss - expected).abs().item()) < 1e-6
+
+
+class TestInitialisation:
+    """The released code's initialisation, which the paper does not state.
+
+    Only a from-scratch run can tell the difference, and this family is
+    for from-scratch runs: the targets are the encoder's own averaged
+    output, so the width it starts at is not a detail that washes out.
+    """
+
+    def test_the_tower_starts_at_the_released_width(self) -> None:
+        lucid.manual_seed(0)
+        model = IJEPAModel(_tiny(dim=32, depth=4, num_heads=4))
+        block = model.encoder.blocks[0]
+
+        assert float(block.attn.qkv.weight.std().item()) == pytest.approx(
+            0.02, rel=0.15
+        )
+        assert float(block.mlp.fc1.weight.std().item()) == pytest.approx(0.02, rel=0.15)
+        assert float(
+            model.encoder.patch_embed.proj.weight.std().item()
+        ) == pytest.approx(0.02, rel=0.15)
+
+    def test_biases_start_at_zero_and_norms_at_one(self) -> None:
+        model = IJEPAModel(_tiny(dim=32, depth=2, num_heads=4))
+        block = model.encoder.blocks[0]
+        assert float(block.attn.qkv.bias.abs().max().item()) == 0.0
+        assert float(block.mlp.fc2.bias.abs().max().item()) == 0.0
+        assert float((block.norm1.weight - 1.0).abs().max().item()) == 0.0
+        assert float(block.norm1.bias.abs().max().item()) == 0.0
+
+    def test_each_block_narrows_its_residual_writes_by_its_depth(self) -> None:
+        # A block adds to the residual stream twice, so the two projections
+        # it adds through are drawn at 0.02 / sqrt(2 * depth).
+        lucid.manual_seed(1)
+        model = IJEPAModel(_tiny(dim=32, depth=4, num_heads=4))
+        for depth_index, block in enumerate(model.encoder.blocks, start=1):
+            want = 0.02 / math.sqrt(2.0 * depth_index)
+            assert float(block.attn.proj.weight.std().item()) == pytest.approx(
+                want, rel=0.15
+            ), depth_index
+            assert float(block.mlp.fc2.weight.std().item()) == pytest.approx(
+                want, rel=0.15
+            ), depth_index
+
+    def test_the_deepest_block_writes_the_least(self) -> None:
+        """Guards the test above — without the scaling every block matches."""
+        lucid.manual_seed(2)
+        model = IJEPAModel(_tiny(dim=32, depth=4, num_heads=4))
+        widths = [
+            float(block.mlp.fc2.weight.std().item()) for block in model.encoder.blocks
+        ]
+        assert widths == sorted(widths, reverse=True), widths
+        assert widths[0] > 1.7 * widths[-1]
+
+    def test_the_predictor_is_initialised_as_its_own_tower(self) -> None:
+        lucid.manual_seed(3)
+        model = IJEPAModel(_tiny(dim=32, depth=2, num_heads=4, predictor_dim=32))
+        first = model.predictor.predictor_blocks[0]
+        assert float(first.attn.proj.weight.std().item()) == pytest.approx(
+            0.02 / math.sqrt(2.0), rel=0.15
+        )
+        # The mask token is drawn before the sweep and must survive it:
+        # the sweep visits linear, convolutional and norm layers only.
+        assert float(model.predictor.mask_token.std().item()) == pytest.approx(
+            0.02, rel=0.25
+        )

@@ -249,6 +249,13 @@ NOT_SINGLE_IMAGE = {
     # covering it needs an agreed small configuration first, not a
     # translation it is missing.
     "stable",
+    # ``vjepa`` exports cleanly at a small configuration — a 64-pixel,
+    # four-frame probe traces and verifies to 2e-07 — but the factories
+    # here are built with their defaults, and V-JEPA's smallest is a pair
+    # of ViT-L encoders over a 16-frame clip: 630M parameters, and a
+    # package in gigabytes.  Covering it needs an agreed small
+    # configuration first, as ``stable`` does.
+    "vjepa",
     # ``genie``'s ``forward`` is its three training objectives, and a
     # tiny configuration stops on ``mse_loss``, which has no Core ML
     # translation.  A packaged training loss has no caller; the playable

@@ -464,6 +464,13 @@ from lucid.models.vision.ijepa import (
     ijepa_huge_14, ijepa_huge_14_cls,
     ijepa_huge_16_448, ijepa_huge_16_448_cls,
 )
+# 2024 — V-JEPA (Bardes, Garrido, Ponce, Chen, Rabbat, LeCun, Assran & Ballas)
+from lucid.models.vision.vjepa import (
+    VJEPAConfig, VJEPAModel, VJEPAForVideoClassification,
+    vjepa_large_16, vjepa_large_16_cls,
+    vjepa_huge_16, vjepa_huge_16_cls,
+    vjepa_huge_16_384, vjepa_huge_16_384_cls,
+)
 # 2014 — R-CNN (Girshick et al.)
 from lucid.models.vision.rcnn import (
     RCNNConfig, RCNNForObjectDetection,
@@ -707,6 +714,11 @@ __all__ = [    # ── Infrastructure ─────────────�
     "ijepa_large_16", "ijepa_large_16_cls",
     "ijepa_huge_14", "ijepa_huge_14_cls",
     "ijepa_huge_16_448", "ijepa_huge_16_448_cls",
+    # ── Vision (2024) V-JEPA ─────────────────────────────────────────────────
+    "VJEPAConfig", "VJEPAModel", "VJEPAForVideoClassification",
+    "vjepa_large_16", "vjepa_large_16_cls",
+    "vjepa_huge_16", "vjepa_huge_16_cls",
+    "vjepa_huge_16_384", "vjepa_huge_16_384_cls",
     # ── Vision (2015) FCN ────────────────────────────────────────────────────
     "FCNConfig", "FCNForSemanticSegmentation",
     "fcn_resnet50", "fcn_resnet101",

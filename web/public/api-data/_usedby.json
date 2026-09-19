@@ -1916,6 +1916,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.vjepa._config"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.xception._config"
     },
     {
@@ -2167,6 +2171,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vit._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa._model"
     },
     {
       "kind": "module",
@@ -2518,6 +2526,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.vjepa._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.zfnet._model"
     }
   ],
@@ -2633,6 +2645,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.ijepa._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa._model"
     }
   ],
   "lucid.models._output.NormalizingFlowOutput": [
@@ -3083,6 +3099,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vit._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa._pretrained"
     },
     {
       "kind": "module",
@@ -10565,6 +10585,88 @@
       "module": "lucid.models.weights"
     }
   ],
+  "lucid.models.vision.vjepa": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.vision.vjepa._config.VJEPAConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa._pretrained"
+    }
+  ],
+  "lucid.models.vision.vjepa._model.VJEPAForVideoClassification": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa._pretrained"
+    }
+  ],
+  "lucid.models.vision.vjepa._model.VJEPAModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa._pretrained"
+    }
+  ],
+  "lucid.models.vision.vjepa._model.VJEPAOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    }
+  ],
+  "lucid.models.vision.vjepa._pretrained.vjepa_huge_16": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    }
+  ],
+  "lucid.models.vision.vjepa._pretrained.vjepa_huge_16_384": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    }
+  ],
+  "lucid.models.vision.vjepa._pretrained.vjepa_huge_16_384_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    }
+  ],
+  "lucid.models.vision.vjepa._pretrained.vjepa_huge_16_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    }
+  ],
+  "lucid.models.vision.vjepa._pretrained.vjepa_large_16": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    }
+  ],
+  "lucid.models.vision.vjepa._pretrained.vjepa_large_16_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa"
+    }
+  ],
   "lucid.models.vision.xception": [
     {
       "kind": "module",
@@ -10986,6 +11088,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision._common._transformers"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.alexnet._model"
     },
     {
@@ -11143,6 +11249,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vit._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa._model"
     },
     {
       "kind": "module",
@@ -11412,6 +11522,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision._common._transformers"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.alexnet._model"
     },
     {
@@ -11565,6 +11679,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vit._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa._model"
     },
     {
       "kind": "module",

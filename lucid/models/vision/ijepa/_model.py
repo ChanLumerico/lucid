@@ -31,6 +31,13 @@ from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import ImageClassificationOutput, ModelOutput
 from lucid.models._tasks import ImageClassificationModel
+from lucid.models.vision._common._transformers import (
+    Block as _Block,
+    gather_tokens as _gather_tokens,
+    init_transformer_weights as _init_transformer_weights,
+    scale_residual_projection as _scale_residual_projection,
+    sincos_embedding as _sincos_embedding,
+)
 from lucid.models.vision.ijepa._config import IJEPAConfig
 
 __all__ = [
@@ -41,21 +48,6 @@ __all__ = [
 
 
 # ── positions ────────────────────────────────────────────────────────────────
-
-
-def _sincos_embedding(positions: Tensor, dim: int) -> Tensor:
-    """Sine/cosine embedding of one coordinate, ``(N,) -> (N, dim)``.
-
-    Built at double precision and cast down at the end.  The frequencies
-    span four decades, so evaluating ``10000 ** k`` in float32 moves the
-    angles by about 1e-4 — negligible on its own, but this table is the
-    input to every block, and at float32 it sat a visible distance from
-    the released checkpoint's own table.
-    """
-    omega = 1.0 / (10000.0 ** (lucid.arange(dim // 2).to(lucid.float64) * (2.0 / dim)))
-    angles = positions.to(lucid.float64).reshape(-1, 1) * omega.reshape(1, -1)
-    table = lucid.cat([lucid.sin(angles), lucid.cos(angles)], dim=1)
-    return table.to(lucid.float32)
 
 
 def _sincos_2d(dim: int, grid: int) -> Tensor:
@@ -85,16 +77,7 @@ def _sincos_2d(dim: int, grid: int) -> Tensor:
     return table.unsqueeze(dim=0)
 
 
-def _gather_tokens(tokens: Tensor, indices: Tensor) -> Tensor:
-    """Pick tokens per batch element: ``(B, N, D)`` and ``(B, K)`` to ``(B, K, D)``."""
-    width = int(tokens.shape[2])
-    spread = indices.unsqueeze(dim=-1) + lucid.zeros(
-        int(indices.shape[0]), int(indices.shape[1]), width, dtype=indices.dtype
-    )
-    return lucid.gather(tokens, spread, dim=1)
-
-
-# ── the transformer ──────────────────────────────────────────────────────────
+# ── patches ──────────────────────────────────────────────────────────────────
 
 
 class _PatchEmbed(nn.Module):
@@ -111,55 +94,6 @@ class _PatchEmbed(nn.Module):
         return x.reshape(b, c, h * w).permute(0, 2, 1)
 
 
-class _Attention(nn.Module):
-    """Multi-head self-attention with a fused QKV projection."""
-
-    def __init__(self, dim: int, num_heads: int) -> None:
-        super().__init__()
-        self.num_heads = num_heads
-        self.head_dim = dim // num_heads
-        self.qkv = nn.Linear(dim, 3 * dim, bias=True)
-        self.proj = nn.Linear(dim, dim, bias=True)
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b, n, c = (int(s) for s in x.shape)
-        qkv = cast(Tensor, self.qkv(x)).reshape(b, n, 3, self.num_heads, self.head_dim)
-        qkv = qkv.permute(2, 0, 3, 1, 4)
-        out = F.scaled_dot_product_attention(qkv[0], qkv[1], qkv[2])
-        out = out.permute(0, 2, 1, 3).reshape(b, n, c)
-        return cast(Tensor, self.proj(out))
-
-
-class _MLP(nn.Module):
-    """The position-wise feed-forward of a transformer block."""
-
-    def __init__(self, dim: int, hidden: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(dim, hidden)
-        self.fc2 = nn.Linear(hidden, dim)
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.fc2(F.gelu(cast(Tensor, self.fc1(x)))))
-
-
-class _Block(nn.Module):
-    """A pre-norm transformer block."""
-
-    def __init__(self, dim: int, num_heads: int, hidden: int, eps: float) -> None:
-        super().__init__()
-        self.norm1 = nn.LayerNorm(dim, eps=eps)
-        self.attn = _Attention(dim, num_heads)
-        self.norm2 = nn.LayerNorm(dim, eps=eps)
-        self.mlp = _MLP(dim, hidden)
-
-    @override
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = x + cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))
-        return x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
-
-
 class _Encoder(nn.Module):
     """A ViT over patches, with no class token.
 
@@ -174,13 +108,20 @@ class _Encoder(nn.Module):
             config.in_channels, config.patch_size, config.dim
         )
         self.register_buffer("pos_embed", _sincos_2d(config.dim, config.grid_size))
-        self.blocks = nn.ModuleList(
-            [
-                _Block(config.dim, config.num_heads, hidden, config.layer_norm_eps)
-                for _ in range(config.depth)
-            ]
-        )
+        blocks = [
+            _Block(config.dim, config.num_heads, hidden, config.layer_norm_eps)
+            for _ in range(config.depth)
+        ]
+        self.blocks = nn.ModuleList([*blocks])
         self.norm = nn.LayerNorm(config.dim, eps=config.layer_norm_eps)
+
+        # The released code — not the paper — initialises the tower at 0.02
+        # and narrows each block's two residual writes by its depth.  A
+        # fan-in default starts it several times wider, which nothing but a
+        # from-scratch run would notice.
+        _init_transformer_weights(self)
+        for depth_index, block in enumerate(blocks, start=1):
+            _scale_residual_projection(block.attn.proj, block.mlp.fc2, depth_index)
 
     @override
     def forward(self, x: Tensor, indices: Tensor | None = None) -> Tensor:  # type: ignore[override]
@@ -214,14 +155,20 @@ class _Predictor(nn.Module):
         self.mask_token = nn.Parameter(lucid.zeros(1, 1, width))
         init.trunc_normal_(self.mask_token, std=0.02)
         self.register_buffer("predictor_pos_embed", _sincos_2d(width, config.grid_size))
-        self.predictor_blocks = nn.ModuleList(
-            [
-                _Block(width, heads, hidden, config.layer_norm_eps)
-                for _ in range(config.predictor_depth)
-            ]
-        )
+        blocks = [
+            _Block(width, heads, hidden, config.layer_norm_eps)
+            for _ in range(config.predictor_depth)
+        ]
+        self.predictor_blocks = nn.ModuleList([*blocks])
         self.predictor_norm = nn.LayerNorm(width, eps=config.layer_norm_eps)
         self.predictor_proj = nn.Linear(width, config.dim)
+
+        # The predictor is initialised on its own terms, as its own tower;
+        # the mask token above keeps the draw it was given, since only
+        # linear, convolutional and norm layers are visited here.
+        _init_transformer_weights(self)
+        for depth_index, block in enumerate(blocks, start=1):
+            _scale_residual_projection(block.attn.proj, block.mlp.fc2, depth_index)
 
     @override
     def forward(  # type: ignore[override]
