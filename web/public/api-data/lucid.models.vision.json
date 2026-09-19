@@ -3,7 +3,7 @@
   "name": "vision",
   "path": "lucid.models.vision",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/3e37b700c/lucid/models/vision/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/__init__.py#L1",
   "members": [],
   "summary": "Vision model families — chronological order of publication.",
   "extended": null,
@@ -79,6 +79,10 @@
     {
       "slug": "lucid.models.vision.googlenet",
       "label": "googlenet"
+    },
+    {
+      "slug": "lucid.models.vision.ijepa",
+      "label": "ijepa"
     },
     {
       "slug": "lucid.models.vision.inception",

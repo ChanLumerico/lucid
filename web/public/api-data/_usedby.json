@@ -1824,6 +1824,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.ijepa._config"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.inception._config"
     },
     {
@@ -2091,6 +2095,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.googlenet._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa._model"
     },
     {
       "kind": "module",
@@ -2446,6 +2454,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.ijepa._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.inception_next._model"
     },
     {
@@ -2617,6 +2629,10 @@
     {
       "kind": "module",
       "module": "lucid.models.text.transformer._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa._model"
     }
   ],
   "lucid.models._output.NormalizingFlowOutput": [
@@ -2975,6 +2991,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.googlenet._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa._pretrained"
     },
     {
       "kind": "module",
@@ -7785,6 +7805,100 @@
       "module": "lucid.models.weights"
     }
   ],
+  "lucid.models.vision.ijepa": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.vision.ijepa._config.IJEPAConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa._pretrained"
+    }
+  ],
+  "lucid.models.vision.ijepa._model.IJEPAForImageClassification": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa._pretrained"
+    }
+  ],
+  "lucid.models.vision.ijepa._model.IJEPAModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa._pretrained"
+    }
+  ],
+  "lucid.models.vision.ijepa._model.IJEPAOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    }
+  ],
+  "lucid.models.vision.ijepa._pretrained.ijepa_base_16": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    }
+  ],
+  "lucid.models.vision.ijepa._pretrained.ijepa_base_16_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    }
+  ],
+  "lucid.models.vision.ijepa._pretrained.ijepa_huge_14": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    }
+  ],
+  "lucid.models.vision.ijepa._pretrained.ijepa_huge_14_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    }
+  ],
+  "lucid.models.vision.ijepa._pretrained.ijepa_huge_16_448": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    }
+  ],
+  "lucid.models.vision.ijepa._pretrained.ijepa_huge_16_448_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    }
+  ],
+  "lucid.models.vision.ijepa._pretrained.ijepa_large_16": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    }
+  ],
+  "lucid.models.vision.ijepa._pretrained.ijepa_large_16_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa"
+    }
+  ],
   "lucid.models.vision.inception": [
     {
       "kind": "module",
@@ -10940,6 +11054,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.ijepa._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.inception._model"
     },
     {
@@ -11355,6 +11473,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.googlenet._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa._model"
     },
     {
       "kind": "module",
@@ -12867,6 +12989,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.genie._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.ijepa._model"
     },
     {
       "kind": "module",

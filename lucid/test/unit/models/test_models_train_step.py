@@ -451,6 +451,10 @@ ELSEWHERE: dict[str, str] = {
     "dreamer_v3": "test_models_recent_e2e.py — model.backward, three optimizers",
     "diamond": "test_models_recent_e2e.py — three losses",
     "genie": "test_models_genie.py — one backward trains all three networks",
+    "ijepa": (
+        "test_models_ijepa.py — the target encoder is frozen by design, which "
+        "the check above refuses"
+    ),
     "ncsn": "test_models_recent_e2e.py",
     "ddpm": "test_models_recent_e2e.py — the caller noises the input",
     "planet": "test_models_planet.py — rewards=",

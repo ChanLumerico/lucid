@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - positive-step slices are CPU views
 - add as_strided
 - add Genie (world-modeling) — 4 factories
+- add I-JEPA (self-supervised pretraining) — 8 factories
 
 ---
 

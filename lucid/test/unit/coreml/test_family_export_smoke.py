@@ -72,6 +72,9 @@ FAMILIES = [
     ("swin_tiny", (1, 3, 224, 224)),
     ("vgg_11", (1, 3, 224, 224)),
     ("vit_base_16", (1, 3, 224, 224)),
+    # The probe, not the pretraining model: the latter samples its masks
+    # and answers with a loss.
+    ("ijepa_base_16_cls", (1, 3, 224, 224)),
     ("wide_resnet_50", (1, 3, 224, 224)),
     ("xception", (1, 3, 224, 224)),
     ("zfnet", (1, 3, 224, 224)),

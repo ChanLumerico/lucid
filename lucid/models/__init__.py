@@ -456,6 +456,14 @@ from lucid.models.vision.inception_next import (
     inception_next_small, inception_next_small_cls,
     inception_next_base, inception_next_base_cls,
 )
+# 2023 — I-JEPA (Assran, Duval, Misra, Bojanowski, Vincent, Rabbat, LeCun & Ballas)
+from lucid.models.vision.ijepa import (
+    IJEPAConfig, IJEPAModel, IJEPAForImageClassification,
+    ijepa_base_16, ijepa_base_16_cls,
+    ijepa_large_16, ijepa_large_16_cls,
+    ijepa_huge_14, ijepa_huge_14_cls,
+    ijepa_huge_16_448, ijepa_huge_16_448_cls,
+)
 # 2014 — R-CNN (Girshick et al.)
 from lucid.models.vision.rcnn import (
     RCNNConfig, RCNNForObjectDetection,
@@ -693,6 +701,12 @@ __all__ = [    # ── Infrastructure ─────────────�
     "inception_next_tiny", "inception_next_tiny_cls",
     "inception_next_small", "inception_next_small_cls",
     "inception_next_base", "inception_next_base_cls",
+    # ── Vision (2023) I-JEPA ─────────────────────────────────────────────────
+    "IJEPAConfig", "IJEPAModel", "IJEPAForImageClassification",
+    "ijepa_base_16", "ijepa_base_16_cls",
+    "ijepa_large_16", "ijepa_large_16_cls",
+    "ijepa_huge_14", "ijepa_huge_14_cls",
+    "ijepa_huge_16_448", "ijepa_huge_16_448_cls",
     # ── Vision (2015) FCN ────────────────────────────────────────────────────
     "FCNConfig", "FCNForSemanticSegmentation",
     "fcn_resnet50", "fcn_resnet101",

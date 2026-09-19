@@ -1,0 +1,2834 @@
+{
+  "slug": "lucid.models.vision.ijepa",
+  "name": "ijepa",
+  "path": "lucid.models.vision.ijepa",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/__init__.py#L1",
+  "members": [
+    {
+      "name": "IJEPAConfig",
+      "path": "lucid.models.vision.ijepa._config.IJEPAConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "IJEPAConfig(image_size: int = 224, patch_size: int = 16, in_channels: int = 3, num_classes: int = 1000, dim: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, predictor_dim: int = 384, predictor_depth: int = 6, predictor_heads: int | None = None, num_target_blocks: int = 4, target_scale: tuple[float, float] = (0.15, 0.2), target_aspect: tuple[float, float] = (0.75, 1.5), context_scale: tuple[float, float] = (0.85, 1.0), min_keep: int = 10, allow_overlap: bool = False, ema: tuple[float, float] = (0.996, 1.0), objective: IJEPAObjective = 'smooth_l1', smooth_l1_beta: float = 1.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_config.py#L29",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "grid_size",
+          "path": "lucid.models.vision.ijepa._config.IJEPAConfig.grid_size",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "grid_size: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_config.py#L192",
+          "summary": "Patches along one side of the image.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "num_patches",
+          "path": "lucid.models.vision.ijepa._config.IJEPAConfig.num_patches",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "num_patches: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_config.py#L197",
+          "summary": "Patches in an image.  There is no class token to add to it.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "resolved_predictor_heads",
+          "path": "lucid.models.vision.ijepa._config.IJEPAConfig.resolved_predictor_heads",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "resolved_predictor_heads: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_config.py#L202",
+          "summary": "Heads the predictor runs with, taking the encoder's when unset.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.ijepa._config.IJEPAConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(image_size: int = 224, patch_size: int = 16, in_channels: int = 3, num_classes: int = 1000, dim: int = 768, depth: int = 12, num_heads: int = 12, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, predictor_dim: int = 384, predictor_depth: int = 6, predictor_heads: int | None = None, num_target_blocks: int = 4, target_scale: tuple[float, float] = (0.15, 0.2), target_aspect: tuple[float, float] = (0.75, 1.5), context_scale: tuple[float, float] = (0.85, 1.0), min_keep: int = 10, allow_overlap: bool = False, ema: tuple[float, float] = (0.996, 1.0), objective: IJEPAObjective = 'smooth_l1', smooth_l1_beta: float = 1.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_config.py#L1",
+          "subcategory": "config",
+          "summary": "Build the three networks. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen configuration for the I-JEPA family.",
+      "extended": "Defaults are the paper's ViT-B/16 (Table 1, Appendix A.1).",
+      "parameters": [
+        {
+          "name": "image_size",
+          "annotation": "int",
+          "description": "Input resolution.  The 448-pixel variant is the one exception.",
+          "default": "224"
+        },
+        {
+          "name": "patch_size",
+          "annotation": "int",
+          "description": "Patch side; `image_size` must be a multiple of it.",
+          "default": "16"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Image channels.",
+          "default": "3"
+        },
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Classes the linear probe predicts.  Pretraining ignores it.",
+          "default": "1000"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "The encoder, which is a ViT of the named size.",
+          "default": "768, 12, 12"
+        },
+        {
+          "name": "depth",
+          "annotation": "int",
+          "description": "The encoder, which is a ViT of the named size.",
+          "default": "768, 12, 12"
+        },
+        {
+          "name": "num_heads",
+          "annotation": "int",
+          "description": "The encoder, which is a ViT of the named size.",
+          "default": "768, 12, 12"
+        },
+        {
+          "name": "mlp_ratio",
+          "annotation": "float",
+          "description": "Feed-forward width as a multiple of `dim`.  ViT-g/16 is the one\nvariant where the paper uses a different ratio.",
+          "default": "4.0"
+        },
+        {
+          "name": "layer_norm_eps",
+          "annotation": "float",
+          "description": "Epsilon of every LayerNorm.",
+          "default": "1e-6"
+        },
+        {
+          "name": "predictor_dim",
+          "annotation": "int",
+          "description": "Predictor width, for every variant (Appendix A.1; Table 14 measures\n384 against 1024 and prefers it).  The predictor is deliberately\nnarrower than the encoder.",
+          "default": "384"
+        },
+        {
+          "name": "predictor_depth",
+          "annotation": "int",
+          "description": "Predictor blocks: 6 for ViT-B/16, 12 for the larger encoders.",
+          "default": "6"
+        },
+        {
+          "name": "predictor_heads",
+          "annotation": "int or None",
+          "description": "Heads inside the predictor.  `None` takes the encoder's count,\nwhich is what the released code does — so a 16-head predictor 384\nwide has 24-dimensional heads.",
+          "default": "None"
+        },
+        {
+          "name": "num_target_blocks",
+          "annotation": "int",
+          "description": "Target blocks predicted per image (Section 3).  They may overlap\neach other.",
+          "default": "4"
+        },
+        {
+          "name": "target_scale",
+          "annotation": "tuple of float",
+          "description": "Fraction of the image each target block covers.",
+          "default": "(0.15, 0.2)"
+        },
+        {
+          "name": "target_aspect",
+          "annotation": "tuple of float",
+          "description": "Aspect-ratio range of a target block.",
+          "default": "(0.75, 1.5)"
+        },
+        {
+          "name": "context_scale",
+          "annotation": "tuple of float",
+          "description": "Fraction of the image the context block covers.  Its aspect ratio\nis 1 — *not stated* in the paper, fixed in the released code.",
+          "default": "(0.85, 1.0)"
+        },
+        {
+          "name": "min_keep",
+          "annotation": "int",
+          "description": "Patches a sampled block must exceed, or it is resampled.  *Not\nstated*; the released configs set it.",
+          "default": "10"
+        },
+        {
+          "name": "allow_overlap",
+          "annotation": "bool",
+          "description": "Whether the context may keep patches that fall inside a target\nblock.  The paper removes them; the released code makes it a flag\nand sets it False.",
+          "default": "False"
+        },
+        {
+          "name": "ema",
+          "annotation": "tuple of float",
+          "description": "Momentum of the target encoder at the first and last training step,\nmoving linearly between them.",
+          "default": "(0.996, 1.0)"
+        },
+        {
+          "name": "objective",
+          "annotation": "(smooth_l1, l2)",
+          "description": "How predicted and target representations are compared.  ⚠️ The\npaper states an $\\ell_2$ loss; the released code — which\nproduced the released checkpoints — uses smooth L1.  The default\nfollows the code, and `\"l2\"` is the paper's.",
+          "default": "\"smooth_l1\""
+        },
+        {
+          "name": "smooth_l1_beta",
+          "annotation": "float",
+          "description": "Where smooth L1 turns from quadratic to linear.",
+          "default": "1.0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.vision.ijepa import IJEPAConfig\n>>> config = IJEPAConfig()\n>>> config.num_patches, config.grid_size\n(196, 14)\n>>> config.predictor_dim, config.num_target_blocks\n(384, 4)\nThe predictor takes the encoder's head count when it is not given:\n>>> IJEPAConfig(num_heads=16, predictor_heads=None).resolved_predictor_heads\n16"
+      ],
+      "notes": [
+        "Reference: Assran, Mahmoud, et al., *\"Self-Supervised Learning from\nImages with a Joint-Embedding Predictive Architecture\"*, CVPR 2023\n([arXiv:2301.08243](https://arxiv.org/abs/2301.08243)), Table 1 for the variants and Appendix A.1 for the\nmasking and the momentum schedule."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "IJEPAForImageClassification",
+      "path": "lucid.models.vision.ijepa._model.IJEPAForImageClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ImageClassificationModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "IJEPAForImageClassification(config: IJEPAConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L625",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.ijepa._model.IJEPAForImageClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: IJEPAConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L668",
+          "subcategory": "model",
+          "summary": "Build the probe. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.ijepa._model.IJEPAForImageClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L675",
+          "subcategory": "model",
+          "summary": "Classify images from the frozen representation.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "Images `(B, C, H, W)`.",
+              "default": null
+            },
+            {
+              "name": "labels",
+              "annotation": "Tensor or None",
+              "description": "Class indices `(B,)`; when given, the cross-entropy is\nreturned with the logits.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "ImageClassificationOutput",
+            "description": "Logits `(B, num_classes)`, and the loss when labels came."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "A linear probe on I-JEPA's representation.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "IJEPAConfig",
+          "description": "Frozen configuration; `num_classes` sizes the head.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.ijepa import (\n...     IJEPAConfig, IJEPAForImageClassification)\n>>> config = IJEPAConfig(\n...     image_size=32, patch_size=8, dim=16, depth=1, num_heads=2,\n...     predictor_dim=8, predictor_depth=1, num_classes=10, min_keep=1)\n>>> model = IJEPAForImageClassification(config).eval()\n>>> model(lucid.rand(2, 3, 32, 32)).logits.shape\n(2, 10)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Appendix A.2 — the paper\nevaluates by linear probing the frozen target encoder, which is what\nthis is.  The target encoder cannot be trained through this class: its\nparameters are frozen where they are built, so an optimiser handed\neverything still only moves the head.\n\nIt carries the whole pretraining model — both encoders and the\npredictor — because that is what a checkpoint holds and what\ncontinuing to pretrain would need.  Inference uses one of the three,\nso an exported package is about three times the size it has to be."
+      ],
+      "attributes": [
+        {
+          "name": "ijepa",
+          "annotation": "IJEPAModel",
+          "description": "The pretrained networks."
+        },
+        {
+          "name": "head",
+          "annotation": "nn.Linear",
+          "description": "The probe, over the average-pooled target encoder."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "IJEPAModel",
+      "path": "lucid.models.vision.ijepa._model.IJEPAModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "IJEPAModel(config: IJEPAConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L379",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.ijepa._model.IJEPAModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: IJEPAConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L436",
+          "subcategory": "model",
+          "summary": "Build the three networks. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.ijepa._model.IJEPAModel.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L458",
+          "summary": "One stage: patch tokens at the encoder's width.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.ijepa._model.IJEPAModel.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L462",
+          "subcategory": "model",
+          "summary": "The average-pooled target encoder, which is `encode`.",
+          "extended": "A backbone's features here are the representation the paper\nevaluates — the target encoder's, not the context encoder's.",
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "trainable_parameters",
+          "path": "lucid.models.vision.ijepa._model.IJEPAModel.trainable_parameters",
+          "kind": "function",
+          "labels": [],
+          "signature": "trainable_parameters()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L473",
+          "subcategory": "model",
+          "summary": "Everything an optimiser should be given.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list of Parameter",
+            "description": "The context encoder and the predictor.  The target encoder is\nexcluded: it follows by moving average, and handing it to an\noptimiser would train the thing that defines the target."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "momentum",
+          "path": "lucid.models.vision.ijepa._model.IJEPAModel.momentum",
+          "kind": "function",
+          "labels": [],
+          "signature": "momentum(step: int, total_steps: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L487",
+          "subcategory": "model",
+          "summary": "The target encoder's momentum at a training step.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "step",
+              "annotation": "int",
+              "description": "Steps already taken.",
+              "default": null
+            },
+            {
+              "name": "total_steps",
+              "annotation": "int",
+              "description": "Steps the run will take in total.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "float",
+            "description": "Linear between `config.ema[0]` and `config.ema[1]` — 0.996\nto 1 at the paper's values, so the target stops moving exactly\nas training ends."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "update_target",
+          "path": "lucid.models.vision.ijepa._model.IJEPAModel.update_target",
+          "kind": "function",
+          "labels": [],
+          "signature": "update_target(momentum: float)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L510",
+          "subcategory": "model",
+          "summary": "Move the target encoder toward the context encoder.",
+          "extended": "Call it after the optimiser step: this writes parameters in place,\nand doing that while a graph that read them is alive would sever\nthe two.",
+          "parameters": [
+            {
+              "name": "momentum",
+              "annotation": "float",
+              "description": "Weight kept on the target encoder, from `momentum`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.vision.ijepa._model.IJEPAModel.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L534",
+          "subcategory": "model",
+          "summary": "The representation downstream tasks use.",
+          "extended": "Appendix A.1 evaluates the *target* encoder, average-pooled over\npatches — not the context encoder, which is a silent accuracy loss.",
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "Images `(B, C, H, W)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(B, dim)`."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Not wrapped in `no_grad`: the target encoder's parameters are\nfrozen already, so nothing accumulates into them, and a method a\nprobe reads through should not sever the gradient a probe needs.\nThe stop-gradient that matters is in `forward`, where the\ntargets are built."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.ijepa._model.IJEPAModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L565",
+          "subcategory": "model",
+          "summary": "Run one pretraining step's worth of computation.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "Images `(B, C, H, W)` at `config.image_size`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "IJEPAOutput",
+            "description": "The loss and what it was computed from."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "I-JEPA: a context encoder, an averaged target encoder, a predictor.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "IJEPAConfig",
+          "description": "Frozen configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.ijepa import IJEPAConfig, IJEPAModel\n>>> config = IJEPAConfig(\n...     image_size=32, patch_size=8, dim=16, depth=1, num_heads=2,\n...     predictor_dim=8, predictor_depth=1, min_keep=1,\n...     target_scale=(0.1, 0.2), context_scale=(0.8, 1.0))\n>>> model = IJEPAModel(config)\n>>> out = model(lucid.rand(2, 3, 32, 32))\n>>> out.prediction.shape == out.target.shape\nTrue\n>>> float(out.loss.item()) >= 0.0\nTrue\nThe representation a downstream task uses is the target encoder's,\naverage-pooled:\n>>> model.encode(lucid.rand(2, 3, 32, 32)).shape\n(2, 16)"
+      ],
+      "notes": [
+        "Reference: Assran, Mahmoud, et al., *\"Self-Supervised Learning from\nImages with a Joint-Embedding Predictive Architecture\"*, CVPR 2023\n([arXiv:2301.08243](https://arxiv.org/abs/2301.08243)), Section 3 and Appendix A.1.\n\nThe target encoder is not updated by the optimiser.  Call\n`update_target` after each step, with\n`momentum` for the value the schedule asks for.\n\nTwo details come from the released code rather than the paper: the\ntarget representations are layer-normalised (without affine terms)\nbefore the loss reads them, and that loss is smooth L1 where the paper\nwrites $\\ell_2$.  `config.objective` selects between them."
+      ],
+      "attributes": [
+        {
+          "name": "encoder",
+          "annotation": "Module",
+          "description": "The context encoder — the one that is trained."
+        },
+        {
+          "name": "target_encoder",
+          "annotation": "Module",
+          "description": "Its exponential moving average.  Frozen; produces the targets and,\nafter pretraining, the representation everything downstream uses."
+        },
+        {
+          "name": "predictor",
+          "annotation": "Module",
+          "description": "The narrow transformer that answers for blocks it was not given."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "IJEPAOutput",
+      "path": "lucid.models.vision.ijepa._model.IJEPAOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "IJEPAOutput(loss: Tensor, prediction: Tensor, target: Tensor, context_indices: Tensor, target_indices: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L336",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.ijepa._model.IJEPAOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(loss: Tensor, prediction: Tensor, target: Tensor, context_indices: Tensor, target_indices: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Build the three networks. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What one pretraining step produced.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.ijepa import IJEPAOutput\n>>> out = IJEPAOutput(\n...     loss=lucid.zeros(()),\n...     prediction=lucid.zeros(1, 4, 9, 8),\n...     target=lucid.zeros(1, 4, 9, 8),\n...     context_indices=lucid.zeros(1, 20).to(lucid.int64),\n...     target_indices=lucid.zeros(1, 4, 9).to(lucid.int64))\n>>> out.prediction.shape\n(1, 4, 9, 8)"
+      ],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "loss",
+          "annotation": "Tensor",
+          "description": "The discrepancy between predicted and target representations,\naveraged over target blocks.  Scalar."
+        },
+        {
+          "name": "prediction",
+          "annotation": "Tensor",
+          "description": "What the predictor said, `(B, M, Nt, D)`."
+        },
+        {
+          "name": "target",
+          "annotation": "Tensor",
+          "description": "What the target encoder said, `(B, M, Nt, D)`.  Carries no\ngradient."
+        },
+        {
+          "name": "context_indices",
+          "annotation": "Tensor",
+          "description": "Patches the context encoder was given, `(B, Nc)`."
+        },
+        {
+          "name": "target_indices",
+          "annotation": "Tensor",
+          "description": "Patches each target block covers, `(B, M, Nt)`."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "ijepa_base_16",
+      "path": "lucid.models.vision.ijepa._pretrained.ijepa_base_16",
+      "kind": "function",
+      "labels": [],
+      "signature": "ijepa_base_16(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_pretrained.py#L61",
+      "subcategory": "pretrained",
+      "summary": "I-JEPA with a ViT-B/16 encoder.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this size; `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `IJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "IJEPAModel",
+        "description": "Context encoder, target encoder and predictor, untrained."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"ijepa_base_16\")\n>>> config.dim, config.depth, config.num_heads, config.predictor_depth\n(768, 12, 12, 6)\n>>> config.num_patches\n196"
+      ],
+      "notes": [
+        "Reference: Assran, Mahmoud, et al., *\"Self-Supervised Learning from\nImages with a Joint-Embedding Predictive Architecture\"*, CVPR 2023\n([arXiv:2301.08243](https://arxiv.org/abs/2301.08243)), Table 1 — 72.9% ImageNet-1k linear probe after 600\nepochs.  Its predictor is 6 blocks deep, the shallowest of the four."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "IJEPAModel",
+        "type": "IJEPAModel",
+        "params": 182532096,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 85646592,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 590592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 590592,
+                    "own_params": 590592,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 85054464,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 7087872,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_Attention",
+                        "params": 2362368,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 1771776,
+                            "own_params": 1771776,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 590592,
+                            "own_params": 590592,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 1536,
+                        "own_params": 1536,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 4722432,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 2362368,
+                            "own_params": 2362368,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 2360064,
+                            "own_params": 2360064,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 1536,
+                "own_params": 1536,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 11238912,
+            "own_params": 384,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 295296,
+                "own_params": 295296,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 10646784,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 6
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 295680,
+                "own_params": 295680,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ijepa_base_16_cls",
+      "path": "lucid.models.vision.ijepa._pretrained.ijepa_base_16_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "ijepa_base_16_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_pretrained.py#L105",
+      "subcategory": "pretrained",
+      "summary": "A linear probe on I-JEPA ViT-B/16.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this size; `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `IJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "IJEPAForImageClassification",
+        "description": "The pretraining networks plus a linear head over the frozen\ntarget encoder."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import ijepa_base_16_cls\n>>> model = ijepa_base_16_cls(\n...     image_size=32, patch_size=8, dim=16, depth=1, num_heads=2,\n...     predictor_dim=8, predictor_depth=1, num_classes=10, min_keep=1)\n>>> model.config.num_classes\n10"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Appendix A.2 — the paper's\nevaluation protocol is a linear probe on the average-pooled target\nencoder."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "IJEPAForImageClassification",
+        "type": "IJEPAForImageClassification",
+        "params": 183301096,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "ijepa",
+            "type": "IJEPAModel",
+            "params": 182532096,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_Encoder",
+                "params": 85646592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "_PatchEmbed",
+                    "params": 590592,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 590592,
+                        "own_params": 590592,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 85054464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 7087872,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_Attention",
+                            "params": 2362368,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 1771776,
+                                "own_params": 1771776,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 590592,
+                                "own_params": 590592,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 1536,
+                            "own_params": 1536,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 4722432,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 2362368,
+                                "own_params": 2362368,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 2360064,
+                                "own_params": 2360064,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 1536,
+                    "own_params": 1536,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_Predictor",
+                "params": 11238912,
+                "own_params": 384,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 295296,
+                    "own_params": 295296,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 10646784,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_Attention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 6
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 295680,
+                    "own_params": 295680,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 769000,
+            "own_params": 769000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "ijepa_huge_14",
+      "path": "lucid.models.vision.ijepa._pretrained.ijepa_huge_14",
+      "kind": "function",
+      "labels": [],
+      "signature": "ijepa_huge_14(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_pretrained.py#L233",
+      "subcategory": "pretrained",
+      "summary": "I-JEPA with a ViT-H/14 encoder.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The released `.pth.tar` checkpoints are not redistributed here;\n`True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `IJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "IJEPAModel",
+        "description": "Context encoder, target encoder and predictor, untrained."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"ijepa_huge_14\")\n>>> config.patch_size, config.grid_size, config.num_patches\n(14, 16, 256)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1 — 79.3% ImageNet-1k\nlinear probe after 300 epochs, 73.3% on 1% of ImageNet (Table 2), and\nthe transfer results of Tables 3 and 4 (CIFAR-100 87.5, Places205\n58.4, Clevr/Count 86.7).\n\nA 14-pixel patch over 224 pixels is a 16×16 grid, the same token count\nas the /16 models at that resolution."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "IJEPAModel",
+        "type": "IJEPAModel",
+        "params": 1283148544,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 630434560,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 753920,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 753920,
+                    "own_params": 753920,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 629678080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 19677440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_Attention",
+                        "params": 6558720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 4919040,
+                            "own_params": 4919040,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1639680,
+                            "own_params": 1639680,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 13113600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 6558720,
+                            "own_params": 6558720,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 6554880,
+                            "own_params": 6554880,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 32
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 22279424,
+            "own_params": 384,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 491904,
+                "own_params": 491904,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 492800,
+                "own_params": 492800,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ijepa_huge_14_cls",
+      "path": "lucid.models.vision.ijepa._pretrained.ijepa_huge_14_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "ijepa_huge_14_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_pretrained.py#L279",
+      "subcategory": "pretrained",
+      "summary": "A linear probe on I-JEPA ViT-H/14.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Not redistributed; `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `IJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "IJEPAForImageClassification",
+        "description": "The pretraining networks plus a linear head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"ijepa_huge_14_cls\").dim\n1280"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "IJEPAForImageClassification",
+        "type": "IJEPAForImageClassification",
+        "params": 1284429544,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "ijepa",
+            "type": "IJEPAModel",
+            "params": 1283148544,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_Encoder",
+                "params": 630434560,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "_PatchEmbed",
+                    "params": 753920,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 753920,
+                        "own_params": 753920,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 629678080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 19677440,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_Attention",
+                            "params": 6558720,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 4919040,
+                                "own_params": 4919040,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1639680,
+                                "own_params": 1639680,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 13113600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 6558720,
+                                "own_params": 6558720,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 6554880,
+                                "own_params": 6554880,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 32
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_Predictor",
+                "params": 22279424,
+                "own_params": 384,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 491904,
+                    "own_params": 491904,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_Attention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 492800,
+                    "own_params": 492800,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 1281000,
+            "own_params": 1281000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "ijepa_huge_16_448",
+      "path": "lucid.models.vision.ijepa._pretrained.ijepa_huge_16_448",
+      "kind": "function",
+      "labels": [],
+      "signature": "ijepa_huge_16_448(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_pretrained.py#L319",
+      "subcategory": "pretrained",
+      "summary": "I-JEPA with a ViT-H/16 encoder at 448 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The released `.pth.tar` checkpoint is not redistributed here;\n`True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `IJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "IJEPAModel",
+        "description": "Context encoder, target encoder and predictor, untrained."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"ijepa_huge_16_448\")\n>>> config.image_size, config.num_patches\n(448, 784)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1 — 81.1% ImageNet-1k\nlinear probe, the paper's best, and 77.3% on 1% of ImageNet (Table 2);\n87.1% when fine-tuned on all of it (Table 15).\n\nFour times the pixels is four times the tokens: 784 patches against\n196, which is where the accuracy comes from and what it costs."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "IJEPAModel",
+        "type": "IJEPAModel",
+        "params": 1283609344,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 630664960,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 984320,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 984320,
+                    "own_params": 984320,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 629678080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 19677440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_Attention",
+                        "params": 6558720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 4919040,
+                            "own_params": 4919040,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1639680,
+                            "own_params": 1639680,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 13113600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 6558720,
+                            "own_params": 6558720,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 6554880,
+                            "own_params": 6554880,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 32
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 22279424,
+            "own_params": 384,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 491904,
+                "own_params": 491904,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 492800,
+                "own_params": 492800,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ijepa_huge_16_448_cls",
+      "path": "lucid.models.vision.ijepa._pretrained.ijepa_huge_16_448_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "ijepa_huge_16_448_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_pretrained.py#L364",
+      "subcategory": "pretrained",
+      "summary": "A linear probe on I-JEPA ViT-H/16 at 448 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Not redistributed; `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `IJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "IJEPAForImageClassification",
+        "description": "The pretraining networks plus a linear head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"ijepa_huge_16_448_cls\").image_size\n448"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1 and Appendix A.2."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "IJEPAForImageClassification",
+        "type": "IJEPAForImageClassification",
+        "params": 1284890344,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "ijepa",
+            "type": "IJEPAModel",
+            "params": 1283609344,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_Encoder",
+                "params": 630664960,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "_PatchEmbed",
+                    "params": 984320,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 984320,
+                        "own_params": 984320,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 629678080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 19677440,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_Attention",
+                            "params": 6558720,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 4919040,
+                                "own_params": 4919040,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1639680,
+                                "own_params": 1639680,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 13113600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 6558720,
+                                "own_params": 6558720,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 6554880,
+                                "own_params": 6554880,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 32
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_Predictor",
+                "params": 22279424,
+                "own_params": 384,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 491904,
+                    "own_params": 491904,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_Attention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 492800,
+                    "own_params": 492800,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 1281000,
+            "own_params": 1281000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "ijepa_large_16",
+      "path": "lucid.models.vision.ijepa._pretrained.ijepa_large_16",
+      "kind": "function",
+      "labels": [],
+      "signature": "ijepa_large_16(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_pretrained.py#L151",
+      "subcategory": "pretrained",
+      "summary": "I-JEPA with a ViT-L/16 encoder.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this size; `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `IJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "IJEPAModel",
+        "description": "Context encoder, target encoder and predictor, untrained."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"ijepa_large_16\")\n>>> config.dim, config.depth, config.num_heads\n(1024, 24, 16)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1 — 77.5% ImageNet-1k\nlinear probe after 600 epochs, and 69.4% on 1% of ImageNet (Table 2).\nTable 13 reports 77.8% for the same model under the weight-decay\nschedule it prefers, which is the paper disagreeing with itself by 0.3."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "IJEPAModel",
+        "type": "IJEPAModel",
+        "params": 628280320,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 303098880,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_PatchEmbed",
+                "params": 787456,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv2d",
+                    "params": 787456,
+                    "own_params": 787456,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_Attention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 3148800,
+                            "own_params": 3148800,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 22082560,
+            "own_params": 384,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 393600,
+                "own_params": 393600,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 394240,
+                "own_params": 394240,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ijepa_large_16_cls",
+      "path": "lucid.models.vision.ijepa._pretrained.ijepa_large_16_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "ijepa_large_16_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/2c1e283fb/lucid/models/vision/ijepa/_pretrained.py#L193",
+      "subcategory": "pretrained",
+      "summary": "A linear probe on I-JEPA ViT-L/16.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "No weights are published for this size; `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `IJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "IJEPAForImageClassification",
+        "description": "The pretraining networks plus a linear head."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"ijepa_large_16_cls\").predictor_depth\n12"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2301.08243](https://arxiv.org/abs/2301.08243), Table 1."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "IJEPAForImageClassification",
+        "type": "IJEPAForImageClassification",
+        "params": 629305320,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "ijepa",
+            "type": "IJEPAModel",
+            "params": 628280320,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_Encoder",
+                "params": 303098880,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "_PatchEmbed",
+                    "params": 787456,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv2d",
+                        "params": 787456,
+                        "own_params": 787456,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_Attention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 3148800,
+                                "own_params": 3148800,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_Predictor",
+                "params": 22082560,
+                "own_params": 384,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 393600,
+                    "own_params": 393600,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_Attention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 394240,
+                    "own_params": 394240,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 1025000,
+            "own_params": 1025000,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "I-JEPA — self-supervised pretraining that predicts representations.",
+  "extended": "Assran et al., CVPR 2023 ([arXiv:2301.08243](https://arxiv.org/abs/2301.08243)).  A context block is encoded,\nand a narrow predictor must say what an exponential moving average of that\nencoder would report about four blocks it was never shown.  Nothing is\nreconstructed in pixel space, which is the point.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "I-JEPA",
+  "citation": "Assran, Mahmoud, et al. \"Self-Supervised Learning from Images with a Joint-Embedding Predictive Architecture.\" Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2023.",
+  "theory": "I-JEPA asks a question about an image and grades the answer in\nrepresentation space.  One *context* block is encoded by\n$f_\\theta$; four *target* blocks are encoded by a second network\n$f_{\\bar\\theta}$, and a predictor $g_\\phi$ must produce the\ntarget encoder's output for each target block from the context alone,\ntold only *where* each block is:\n\n\n\n$$\n\\mathcal{L} = \\frac{1}{M} \\sum_{i=1}^{M} \\sum_{j \\in B_i}\nd\\bigl(\\hat s_{y_j},\\, s_{y_j}\\bigr), \\qquad\n\\hat s_{y} = g_\\phi\\bigl(f_\\theta(x_{\\text{context}}),\\, p_y\\bigr).\n$$\n\n**The target is a representation, not a pixel.**  A generative\nobjective must account for every detail that distinguishes one plausible\ncompletion from another --- the exact texture of grass, the grain of a\nwall --- and spends capacity doing so.  Predicting $f_{\\bar\\theta}$'s\noutput lets the model drop whatever that encoder has already learned to\ndrop.  The paper's ablation is unusually clean: the same architecture\ntrained against pixels reaches 40.7% on 1% of ImageNet, and against\nrepresentations 66.9%.\n\n**The target encoder is the model's own past.**  $f_{\\bar\\theta}$\nis not trained; its weights are an exponential moving average of\n$f_\\theta$, with the momentum moving linearly from 0.996 to 1 over\ntraining.  There is no gradient path into it at all, which is what stops\nthe pair from agreeing on a constant --- the target moves only as fast\nas the average lets it.\n\n**The masking carries the difficulty.**  Four target blocks covering\n15--20% of the image each, at aspect ratios from 3:4 to 3:2, with a\ncontext block of 85--100% from which every target region is then\nremoved.  Predicting a large connected region from a large connected\nregion is what forces semantics; the paper's ablation against\nrasterised or small random masks (54.2% versus 15.5% and 17.6%) is a\nstatement about the task, not the architecture.\n\n**No** $[\\text{cls}]$ **token.**  Evaluation average-pools the\ntarget encoder's patch outputs.",
+  "tasks": [
+    "image-classification"
+  ]
+}
