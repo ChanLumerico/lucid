@@ -21,6 +21,8 @@ html[data-lucid-host] .diagram-guide-action[data-guide-action="present"] {
   display: none;
 }
 
+/* ── Chapter rail ────────────────────────────────────────────────────────── */
+
 /* Chapter chips drop their focus-delta tallies (each chip's title and
    aria-label still carry them), so chapter titles fit instead of truncating. */
 html[data-lucid-host] .guided-view-chapter-delta {
@@ -36,6 +38,38 @@ html[data-lucid-host] .guided-view-meta {
 html[data-lucid-host] .guided-view-meta .guided-view-progress {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* Type on the rail and dock follows the page: archify's 8–10px labels read
+   small beside the site's text. */
+html[data-lucid-host] .guided-view-meta {
+  font-size: 0.6875rem;
+}
+
+html[data-lucid-host] .guided-view-copy strong {
+  font-size: 0.8125rem;
+}
+
+html[data-lucid-host] .guided-view-copy small {
+  font-size: 0.75rem;
+}
+
+html[data-lucid-host] .guided-view-play {
+  font-size: 0.75rem !important;
+}
+
+html[data-lucid-host] .guided-view-chapter-title {
+  font-size: 0.75rem;
+}
+
+html[data-lucid-host] .guided-view-chapter-index {
+  font-size: 0.625rem;
+}
+
+html[data-lucid-host] .diagram-nav button {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  font-size: 0.6875rem;
 }
 
 /* A narrow frame leaves the idle rail (no chapter open) too little room for
@@ -61,10 +95,16 @@ html[data-lucid-host] .guided-view-meta .guided-view-progress {
   }
 }
 
+/* ── Stage ───────────────────────────────────────────────────────────────── */
+
 /* The diagram sits on the page itself: the stage has no padding, the rail
    spans the content width, and the canvas drops its panel, border and radius
    (host.js clears the grid).  The bottom padding stays archify's — it keeps
    the zoom dock off the diagram. */
+html[data-lucid-host][data-present="true"] {
+  --lucid-fade: 2.5rem;
+}
+
 html[data-lucid-host][data-present="true"] body {
   padding: 0;
 }
@@ -74,26 +114,113 @@ html[data-lucid-host][data-present="true"] .container {
   height: 100dvh;
 }
 
-/* On the bare page archify's floating shadows read as smudges (in light mode
-   the rail's cast a grey band across the diagram); the site's surfaces are
-   flat, so the rail and the zoom dock keep only their borders. */
+/* The rail takes the site's box — the diagram switcher's radius and padding —
+   and keeps only its border: on the bare page archify's floating shadow read
+   as a smudge (a grey band across the diagram in light mode).  The idle
+   caption loses its divider and reads as an unboxed chip: its text sits as
+   far from the rail's left edge as the last chip's text does from the right
+   (chip inset + chip padding). */
 html[data-lucid-host][data-present="true"] .guided-views {
   margin: 0;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
   background: var(--toolbar-bg);
   box-shadow: none;
 }
 
-html[data-lucid-host][data-present="true"] .diagram-nav {
-  box-shadow: none;
+html[data-lucid-host] .guided-views[data-active-view="all"] .guided-view-copy {
+  padding-left: 0.625rem;
+  border-left: 0;
 }
 
 html[data-lucid-host][data-present="true"] .diagram-container {
   padding-top: 0;
-  padding-inline: 0;
+  padding-inline: var(--lucid-fade);
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+/* Zoomed in, archify trims the diagram back to its unzoomed box with an
+   inline clip-path (clipToViewport), which drew a hard line --lucid-fade
+   inside the canvas and above the dock.  Unclipped, the diagram runs on to
+   the canvas edges, where the container's overflow and the fade below take
+   over. */
+html[data-lucid-host][data-present="true"] .diagram-container > svg {
+  clip-path: none !important;
+}
+
+/* The viewer's floating controls line up with the rail: flush with the
+   content edges rather than 1rem inside them. */
+html[data-lucid-host][data-present="true"] .diagram-nav {
+  right: 0;
+  bottom: 0;
+  box-shadow: none;
+}
+
+html[data-lucid-host][data-present="true"] .focus-chip,
+html[data-lucid-host][data-present="true"] .node-finder {
+  left: 0;
+}
+
+html[data-lucid-host][data-present="true"] .diagram-guide,
+html[data-lucid-host][data-present="true"] .semantic-lens {
+  right: 0;
+}
+
+/* Zoomed or panned past the canvas, the diagram melts into the page instead
+   of stopping at a hard line: a light blur, then a fade to the page colour,
+   over the outer --lucid-fade of every edge.  Both layers sit under the
+   viewer's controls (z-index 12 and up) and take no pointer events; the side
+   padding above keeps the fitted diagram clear of them. */
+html[data-lucid-host][data-present="true"] .diagram-container::before,
+html[data-lucid-host][data-present="true"] .diagram-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+html[data-lucid-host][data-present="true"] .diagram-container::before {
+  z-index: 4;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  -webkit-mask-image:
+    linear-gradient(to right, #000, transparent var(--lucid-fade), transparent calc(100% - var(--lucid-fade)), #000),
+    linear-gradient(to bottom, #000, transparent var(--lucid-fade), transparent calc(100% - var(--lucid-fade)), #000);
+  mask-image:
+    linear-gradient(to right, #000, transparent var(--lucid-fade), transparent calc(100% - var(--lucid-fade)), #000),
+    linear-gradient(to bottom, #000, transparent var(--lucid-fade), transparent calc(100% - var(--lucid-fade)), #000);
+}
+
+html[data-lucid-host][data-present="true"] .diagram-container::after {
+  z-index: 5;
+  background:
+    linear-gradient(
+      to right,
+      var(--bg),
+      color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--lucid-fade) * 0.35),
+      transparent var(--lucid-fade),
+      transparent calc(100% - var(--lucid-fade)),
+      color-mix(in srgb, var(--bg) 55%, transparent) calc(100% - var(--lucid-fade) * 0.35),
+      var(--bg)
+    ),
+    linear-gradient(
+      to bottom,
+      var(--bg),
+      color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--lucid-fade) * 0.35),
+      transparent var(--lucid-fade),
+      transparent calc(100% - var(--lucid-fade)),
+      color-mix(in srgb, var(--bg) 55%, transparent) calc(100% - var(--lucid-fade) * 0.35),
+      var(--bg)
+    );
+}
+
+@media (max-width: 720px) {
+  html[data-lucid-host][data-present="true"] {
+    --lucid-fade: 1.25rem;
+  }
 }
 
 /* The site's surfaces are flat; drop the viewer's decorative glow. */
