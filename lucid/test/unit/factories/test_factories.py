@@ -419,3 +419,11 @@ class TestFromNumpy:
         arr = np.arange(6, dtype=np.float32).reshape(2, 3)
         t = lucid.from_numpy(arr)
         assert_close(t, arr)
+
+    def test_input_and_result_mutations_are_independent(self) -> None:
+        arr = np.arange(6, dtype=np.float32).reshape(2, 3)
+        t = lucid.from_numpy(arr)
+        arr[0, 0] = 99.0
+        assert t[0, 0].item() == 0.0
+        t[0, 1] = -7.0
+        assert arr[0, 1] == 1.0

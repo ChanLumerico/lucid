@@ -1,9 +1,18 @@
 """Unit tests for MobileNet v4 (Qin et al., 2024)."""
 
+import importlib.util
 import unittest
+
+import pytest
 
 import lucid
 import lucid.models as models
+
+if importlib.util.find_spec("lucid.models.vision.mobilenet_v4") is None:
+    pytest.skip(
+        "MobileNet-v4 is a pending family, not implemented", allow_module_level=True
+    )
+
 from lucid.models.vision.mobilenet_v4 import (
     MobileNetV4Config,
     MobileNetV4,

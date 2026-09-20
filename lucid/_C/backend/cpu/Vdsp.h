@@ -827,6 +827,14 @@ vadd_i64(const std::int64_t* a, const std::int64_t* b, std::int64_t* out, std::s
 // ----------
 // Accelerate.framework ``vDSP_zvmul``.
 LUCID_INTERNAL void vzmul_c64(const float* a, const float* b, float* out, std::size_t n);
+// Interleaved double-precision complex lanes, without narrowing to float32.
+LUCID_INTERNAL void vzdiv_c128(const double* a, const double* b, double* out, std::size_t n);
+// Interleaved double-precision complex lanes, without narrowing to float32.
+LUCID_INTERNAL void vzmul_c128(const double* a, const double* b, double* out, std::size_t n);
+// Interleaved double-precision complex lanes, without narrowing to float32.
+LUCID_INTERNAL void vzsub_c128(const double* a, const double* b, double* out, std::size_t n);
+// Interleaved double-precision complex lanes, without narrowing to float32.
+LUCID_INTERNAL void vzadd_c128(const double* a, const double* b, double* out, std::size_t n);
 
 // Complex C64 add / subtract / divide on interleaved storage.
 //

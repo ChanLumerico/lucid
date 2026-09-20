@@ -335,7 +335,7 @@ def _fetch(url: str, sha256: str) -> Path:
 
     req = urllib.request.Request(url, headers={"User-Agent": "lucid-convert-weights"})
     tmp = dest.with_suffix(dest.suffix + ".tmp")
-    with urllib.request.urlopen(req) as resp, open(tmp, "wb") as out:
+    with urllib.request.urlopen(req, timeout=30) as resp, open(tmp, "wb") as out:
         while chunk := resp.read(1 << 20):
             out.write(chunk)
     got = digest(tmp)

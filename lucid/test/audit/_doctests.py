@@ -1,21 +1,17 @@
 """The documentation, checked against the code it documents.
 
 A docstring example is a claim about behaviour, written by the author, in
-the file the behaviour lives in.  Nothing was checking them: the package
-has 5,499 doctest examples and **585 of them fail**, across 90 modules,
-and not one of those failures had ever been reported by anything.
+the file the behaviour lives in. When this gate was introduced, 585 of
+5,499 examples failed across 90 modules without being reported. Those
+historical counts are not the current baseline; ``doctest.json`` records it.
 
-They are not all cosmetic.  Alongside the repr line-wrapping and the
-float-precision drift there is ``_C_engine.Dtype.Float32``, an attribute
-that does not exist, in the documented way to build a tensor from an
-impl; and ``Tensor.is_contiguous`` promising ``False`` for a transpose in
-an engine that then materialised every view.  A user following the
-documentation writes code that does not run.
+The initial failures were not all cosmetic: they included nonexistent
+dtype attributes and view promises that the implementation did not keep.
+The gate checks current behaviour instead of treating those old findings
+as permanent limitations.
 
-This is a *floor*, not a target, for the same reason the line-coverage
-stage is: 585 failures cannot be fixed in the change that first measures
-them, and a gate that is red on arrival is a gate people learn to pass
-with a flag.  The number is recorded, and the stage fails when it goes
+This is a *floor*, not a target: the initial backlog was recorded rather
+than making the new gate red on arrival. The stage fails when it goes
 **up** — a new docstring that does not run is caught on the commit that
 adds it.
 
@@ -59,7 +55,7 @@ class DoctestResult:
         self,
         failed: int = 0,
         attempted: int = 0,
-        per_module: "dict[str, int] | None" = None,
+        per_module: dict[str, int] | None = None,
         ran: bool = False,
     ) -> None:
         self.failed = failed
@@ -68,7 +64,7 @@ class DoctestResult:
         self.ran = ran
 
 
-def _modules() -> "Iterator[Any]":
+def _modules() -> Iterator[Any]:
     yield lucid
     for info in pkgutil.walk_packages(lucid.__path__, "lucid."):
         name = info.name
@@ -88,7 +84,7 @@ def _modules() -> "Iterator[Any]":
 def run() -> DoctestResult:
     """Every docstring example in the package, once."""
     failed = attempted = 0
-    per_module: "dict[str, int]" = {}
+    per_module: dict[str, int] = {}
     for module in _modules():
         buffer = io.StringIO()
         try:
@@ -111,7 +107,7 @@ def run() -> DoctestResult:
     return DoctestResult(failed, attempted, per_module, ran=True)
 
 
-def load_floor(path: Path) -> "dict[str, int] | None":
+def load_floor(path: Path) -> dict[str, int] | None:
     """The recorded per-module failure counts, or ``None``."""
     if not path.exists():
         return None
@@ -143,8 +139,8 @@ def save_floor(path: Path, result: DoctestResult) -> None:
 
 
 def regressions(
-    result: DoctestResult, floor: "dict[str, int]"
-) -> "list[tuple[str, int, int]]":
+    result: DoctestResult, floor: dict[str, int]
+) -> list[tuple[str, int, int]]:
     """``(module, was, now)`` for every module that got worse."""
     out: "list[tuple[str, int, int]]" = []
     for name, now in sorted(result.per_module.items()):

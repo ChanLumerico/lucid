@@ -32,6 +32,7 @@ _DTYPE_KIND_WIDTH: dict[_C_engine.Dtype, tuple[int, int]] = {
     _D.F32: (2, 32),
     _D.F64: (2, 64),
     _D.C64: (3, 64),
+    _D.C128: (3, 128),
 }
 
 
@@ -41,6 +42,8 @@ def _result_dtype(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.Dtype:
         return da
     ka, wa = _DTYPE_KIND_WIDTH.get(da, (2, 32))
     kb, wb = _DTYPE_KIND_WIDTH.get(db, (2, 32))
+    if (ka == 3 and db == _D.F64) or (kb == 3 and da == _D.F64):
+        return _D.C128
     if ka != kb:
         return da if ka > kb else db
     if wa == wb:

@@ -77,6 +77,7 @@ from typing import TYPE_CHECKING, Callable, final
 from lucid._C import engine as _C_engine
 from lucid._device import device as _device_cls
 from lucid._dtype import dtype as _dtype_cls
+from lucid.compile._core.bn_runstats import advance_bn_counters, bn_counter_targets
 
 # Thread-local flag flipped on while ``_FusedStep._build_executable``
 # is actively tracing.  ``lucid.nn.functional.dropout`` checks it to
@@ -385,6 +386,7 @@ class _FusedStep:
         # output_targets list parallel to exe.grad_output_ids (the opt
         # outputs in order: new_params + new_state buffers).
         self._output_targets: list[Tensor] = []
+        self._bn_counters: list[tuple[Module, int]] = []
         # Loss meta for fresh allocation each step.
         self._loss_shape: tuple[int, ...] = ()
         self._loss_dtype: _dtype_cls | None = None
@@ -696,6 +698,7 @@ class _FusedStep:
 
         graph = tracer.graph
         ext = dict(tracer.external_feeds)
+        self._bn_counters = bn_counter_targets(self._model, graph, ext)
         if not graph.ops:
             raise RuntimeError("fused_step: empty trace")
 
@@ -1107,6 +1110,7 @@ class _FusedStep:
         output_targets = [_unwrap_hot(loss_tensor), *self._opt_target_impls]
 
         _C_engine.compile.run_executable_inplace(self._exe, feeds, output_targets)
+        advance_bn_counters(self._bn_counters)
 
         # GradScaler post-step: read found_inf back from the persistent
         # holder + advance the scaler's schedule.  Also divide the

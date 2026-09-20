@@ -1,7 +1,7 @@
 // lucid/_C/ops/complex/Imag.cpp
 //
 // Forward implementation of imag_op.  Mirrors real_op but pulls the
-// imaginary halves out of the interleaved C64 storage.
+// imaginary halves out of the interleaved complex storage.
 
 #include "Imag.h"
 
@@ -13,6 +13,7 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../gfunc/Gfunc.h"
+#include "Complex.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -43,6 +44,10 @@ std::vector<Storage> ImagBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     auto zero = zeros_op(shape_, lane_, device_);
     return {be.complex_combine(zero->storage(), grad_out, shape_)};
+}
+
+std::vector<TensorImplPtr> ImagBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    return {complex_op(zeros_op(shape_, lane_, device_), grad_out)};
 }
 
 LUCID_REGISTER_OP(ImagBackward)

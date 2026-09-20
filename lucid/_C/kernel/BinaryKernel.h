@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <complex>
 #include <memory>
 #include <string>
 #include <utility>
@@ -261,6 +262,9 @@ broadcast_cpu(const CpuStorage& src, const Shape& src_shape, const Shape& out_sh
         // word replicates it just as well.  Without this, ``a / 2`` on a
         // complex CPU tensor failed here before reaching the backend.
         run(std::uint64_t{});
+        break;
+    case Dtype::C128:
+        run(std::complex<double>{});
         break;
     default:
         ErrorBuilder("broadcast").not_implemented("dtype not supported");

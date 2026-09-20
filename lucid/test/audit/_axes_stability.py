@@ -401,9 +401,11 @@ class ContiguityAxis(Axis):
                 Status.NOT_APPLICABLE,
                 "two identical calls disagree — this measures the draw, not the op",
             )
-        try:
-            base = call.base
-        except TypeError:
+        original = (
+            call.args[call.primary] if 0 <= call.primary < len(call.args) else None
+        )
+        base = _probe.to_numpy(original)
+        if base is None:
             return self._finding(
                 symbol,
                 Status.NOT_APPLICABLE,
@@ -419,39 +421,32 @@ class ContiguityAxis(Axis):
         # A tensor twice the size in the last axis, whose every second
         # column holds the probe.  Slicing it back gives the same values
         # through a different stride.
-        padded = np.repeat(base, 2, axis=-1)
-        padded[..., 1::2] = -7.0
+        # Numeric differentiation deliberately projects onto real float64;
+        # layout must instead preserve every value and the operand's dtype.
+        base = np.array(base, copy=True)
+        padded_shape = (*base.shape[:-1], base.shape[-1] * 2 + 1)
+        padded = np.full(padded_shape, 0, dtype=base.dtype)
+        padded[..., 1::2] = base
         try:
-            # Built the same way the packed operand is.
-            #
-            # ``Call.with_primary`` honours the original argument's dtype;
-            # building the view unconditionally at float64 made the two
-            # operands *different precisions* rather than different
-            # layouts, and 19 float32 ops were reported for a "layout"
-            # difference of 1e-8 — exactly float32 epsilon.
-            packed_probe = call.with_primary(base).args[call.primary]
-            text = str(getattr(packed_probe, "dtype", ""))
-            if "complex64" in text:
-                big = _probe.as_complex64(padded)
-            elif "complex" in text:
-                big = _probe.as_complex(padded)
-            elif "float32" in text or "float16" in text:
-                big = _probe.as_f32(padded)
-            else:
-                big = _probe.as_f64(padded)
+            if not isinstance(original, lucid.Tensor):
+                original = lucid.tensor(base)
+            packed_probe = lucid.tensor(
+                base, dtype=original.dtype, device=original.device
+            )
+            big = lucid.tensor(padded, dtype=original.dtype, device=original.device)
             # On the CPU a positive-step slice is a view: every second
             # element of ``big``'s buffer, read in place, so an op that
-            # assumes a dense buffer reads the −7 sentinels instead of the
+            # assumes a dense buffer reads the sentinels instead of the
             # probe.  Metal tensors are always packed, and there the slice
             # is a copy.
-            view = big[..., ::2]
+            view = big[..., 1:][..., ::2]
         except Exception as exc:  # noqa: BLE001
             return self._finding(
                 symbol, Status.SKIP, f"could not build a view: {exc!r}"
             )
 
         # Before the operands are compared, the view has to *be* the probe.
-        # Every second column of ``padded`` is a −7 sentinel, so a slice
+        # Every second column of ``padded`` is a sentinel, so a slice
         # that materialises the wrong elements picks the sentinel up — and
         # the comparison below would then be measuring an op against
         # different numbers while calling the difference a layout effect.
@@ -465,7 +460,7 @@ class ContiguityAxis(Axis):
             return self._finding(
                 symbol,
                 Status.FAIL,
-                "big[..., ::2] does not hold the probe — a strided slice "
+                "big[..., 1:][..., ::2] does not hold the probe — a strided slice "
                 f"materialised the wrong values (max diff "
                 f"{np.nanmax(np.abs(np.asarray(seen) - base)):.3e})",
             )
@@ -475,26 +470,26 @@ class ContiguityAxis(Axis):
         del seen
 
         try:
-            packed = _probe.to_numpy(fn(*call.with_primary(base).args, **call.kwargs))
             args = list(call.args)
+            args[call.primary] = packed_probe
+            packed = _probe.to_numpy(fn(*args, **call.kwargs))
             args[call.primary] = view
             strided = _probe.to_numpy(fn(*args, **call.kwargs))
         except Exception as exc:  # noqa: BLE001
             return self._refusal(symbol, f"{type(exc).__name__}: {str(exc)[:60]}", call)
         if packed is None or strided is None or packed.shape != strided.shape:
             return self._finding(symbol, Status.SKIP, "outputs not comparable")
-        if not np.allclose(
-            packed.astype(float),
-            strided.astype(float),
-            rtol=1e-9,
-            atol=1e-12,
-            equal_nan=True,
-        ):
+        agree = (
+            np.array_equal(packed, strided)
+            if packed.dtype.kind in "biu"
+            else np.allclose(packed, strided, rtol=1e-9, atol=1e-12, equal_nan=True)
+        )
+        if not agree:
             return self._finding(
                 symbol,
                 Status.FAIL,
                 "a strided view of the same values gave a different answer "
-                f"(max diff {np.nanmax(np.abs(packed.astype(float) - strided.astype(float))):.3e})",
+                "(including imaginary components and exact integer values)",
             )
 
         # They agreed — but could they have disagreed?  Only if the operand

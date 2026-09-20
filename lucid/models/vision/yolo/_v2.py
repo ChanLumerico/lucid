@@ -169,6 +169,9 @@ class YOLOV2Config(ModelConfig):
         nms_thresh:   IoU threshold for NMS at inference.
         lambda_coord: Up-weighting for box regression loss.
         lambda_noobj: Down-weighting for no-object confidence loss.
+        darknet_reorg: Reproduce the original flat-index passthrough layout.
+            Defaults to False for legacy user configurations; published
+            pretrained weights select True automatically.
 
     Examples
     --------
@@ -190,6 +193,9 @@ class YOLOV2Config(ModelConfig):
     nms_thresh: float = 0.5
     lambda_coord: float = 5.0
     lambda_noobj: float = 0.5
+    # False preserves configurations saved before original-weight parity was
+    # established. The published-checkpoint factory explicitly enables this.
+    darknet_reorg: bool = False
 
     def __post_init__(self) -> None:
         if len(self.anchors) != self.num_anchors:
@@ -323,7 +329,8 @@ def _space_to_depth(x: Tensor, block_size: int) -> Tensor:
     # against spatial position.  The two agree on shape and on the
     # multiset of values, so training from scratch is unaffected, but a
     # port of darknet weights would have to reproduce the quirk exactly
-    # — no YOLOv2 checkpoint ships here, so the readable form is used.
+    # — retained for existing user checkpoints; released darknet weights
+    # select _darknet_reorg instead.
     x = x.reshape(B, C, new_h, bs, new_w, bs)
     # → (B, new_h, new_w, C, bs, bs)
     x = x.permute(0, 2, 4, 1, 3, 5)
@@ -331,6 +338,25 @@ def _space_to_depth(x: Tensor, block_size: int) -> Tensor:
     x = x.reshape(B, new_h, new_w, new_c)
     # → (B, new_c, new_h, new_w)
     return x.permute(0, 3, 1, 2)
+
+
+def _darknet_reorg(x: Tensor, block_size: int) -> Tensor:
+    """Match original reorg_cpu(forward=0), including its flat-index layout.
+
+    This is not pixel-unshuffle: the original interprets the input buffer
+    as fewer channels with larger spatial dimensions before gathering.
+    """
+    batch, channels, height, width = x.shape
+    bs = block_size
+    if bs <= 0 or channels % (bs * bs) or height % bs or width % bs:
+        raise ValueError(
+            "darknet reorg requires divisible channels and spatial dimensions"
+        )
+    return (
+        x.reshape(batch, channels // (bs * bs), height, bs, width, bs)
+        .permute(0, 3, 5, 1, 2, 4)
+        .reshape(batch, channels * bs * bs, height // bs, width // bs)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -452,7 +478,11 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
 
         # Passthrough: 1x1 reduce to 64 ch, then space_to_depth → (B, 256, ...)
         route = cast(Tensor, self.route_reduce(route))
-        passthrough = _space_to_depth(route, 2)
+        passthrough = (
+            _darknet_reorg(route, 2)
+            if self.config.darknet_reorg
+            else _space_to_depth(route, 2)
+        )
 
         # Concatenate along channel axis
         feat = lucid.cat([passthrough, feat], dim=1)  # (B, 1280, H/32, W/32)
@@ -1033,6 +1063,10 @@ def yolo_v2(
     1
     """
     entry = weights_mod.resolve_weights(YOLOV2Weights, pretrained, weights)
+    if entry is not None:
+        if overrides.get("darknet_reorg") is False:
+            raise ValueError("published YOLOv2 weights require darknet_reorg=True")
+        overrides = {**overrides, "darknet_reorg": True}
     model = _make_v2(_CFG_V2, overrides)
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="yolo_v2")

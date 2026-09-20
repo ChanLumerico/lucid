@@ -9,9 +9,7 @@
     "",
     "Regenerate with:  lucid-audit --update-doctests"
   ],
-  "failed": 1,
+  "failed": 0,
   "attempted": 6473,
-  "failing": {
-    "lucid._factories.converters": 1
-  }
+  "failing": {}
 }

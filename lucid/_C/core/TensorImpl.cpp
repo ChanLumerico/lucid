@@ -414,11 +414,6 @@ void TensorImpl::drop_shared() {
 
 std::shared_ptr<TensorImpl>
 TensorImpl::from_numpy(py::array arr, Device device, bool requires_grad) {
-    // Request a C-contiguous view so that the subsequent memcpy can assume
-    // row-major layout.  forcecast allows NumPy to create a temporary copy if
-    // the source array is Fortran-order or non-contiguous, rather than failing.
-    py::array_t<std::byte, py::array::c_style | py::array::forcecast> view =
-        py::array_t<std::byte, py::array::c_style | py::array::forcecast>::ensure(arr);
     if (!arr) {
         ErrorBuilder("from_numpy").fail("input is not a numpy array");
     }
@@ -442,8 +437,9 @@ TensorImpl::from_numpy(py::array arr, Device device, bool requires_grad) {
     cpu.nbytes = total;
     cpu.dtype = dtype;
 
-    // Obtain the C-contiguous view a second time (arr may have changed ownership
-    // after the first ensure() call due to pybind11 temporaries).
+    // Preserve dtype while packing strides. An array_t<std::byte> forcecast
+    // converts values rather than reinterpreting bytes: it allocated an unused
+    // buffer and emitted lossy-cast warnings (or failed under warnings=error).
     py::array contig = py::array::ensure(arr, py::array::c_style | py::array::forcecast);
     if (!contig) {
         ErrorBuilder("from_numpy").fail("failed to obtain C-contiguous view");

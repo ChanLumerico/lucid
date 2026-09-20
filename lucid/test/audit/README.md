@@ -4,12 +4,18 @@ Four stages, one verdict, one exit code.
 
 | stage | asks | catches |
 |---|---|---|
-| **self-check** | can the instruments still go red? | 30 mutants over 29 of 33 axes |
-| **sweep** | does each reachable symbol keep its contract? | 1,512 symbols × 33 axes = 10,800+ cells |
+| **self-check** | can the instruments still go red? | one or more negative controls for every axis, including an isolated fatal-call probe |
+| **sweep** | does each reachable symbol keep its contract? | the runtime public-symbol census × all applicable axes |
 | **suite** | are the specific values the right values? | `pytest lucid/test` + a line-coverage floor |
-| **doctests** | does the documentation run? | 5,499 examples + a per-module floor |
+| **doctests** | does the documentation run? | executable examples + a per-module floor |
 
 They fail independently, and none is a substitute for another.
+
+Use the report's counts instead of historical totals. `python -m tools.support_manifest`
+can attach a scoped audit report and link exports to source, stubs, generated
+documentation and static test references. References are not proof that tests ran.
+The smoke self-check terminates only a dedicated subprocess with a known exit
+code; a successful child or an unrelated import failure does not count as caught.
 
 The self-check runs **first**, on a clean interpreter, and the order is
 load-bearing: run after the sweep, four mutants stopped being caught,
@@ -221,10 +227,12 @@ lucid-audit --self-check
 Breaks the framework on purpose, once per axis, in exactly the way that
 axis exists to notice — a gradient that is not the derivative, a NaN that
 gets swallowed, a handle whose `remove` does not remove — and reports
-whether the axis said so. 30 mutants, 29 of 33 axes; the four with no
-mutant are printed as **unproven**, each with the reason it cannot be
-written — "nobody got to it" and "it cannot be done" are different
-facts and only the second is a finding.
+whether the axis said so. The 2026-09-20 validation caught 35/35 mutants
+covering 34/34 axes, including constant/extreme inputs and a fatal-call
+negative control in a dedicated subprocess. Always use the current report's
+counts: an axis without a mutant is printed as **unproven**, not silently
+treated as covered. A caught mutant proves sensitivity to that deliberate
+defect, not exhaustive correctness of every operation on the axis.
 
 It is not decoration. Three findings so far, all about this tool rather
 than the framework:

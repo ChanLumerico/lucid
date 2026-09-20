@@ -225,6 +225,7 @@ _NP_TO_ENGINE_DTYPE: dict[str, _C_engine.Dtype] = {
     "int64": _C_engine.Dtype.I64,
     "bool": _C_engine.Dtype.Bool,
     "complex64": _C_engine.Dtype.C64,
+    "complex128": _C_engine.Dtype.C128,
 }
 
 
@@ -383,6 +384,7 @@ def _engine_dtype_to_np(d: _C_engine.Dtype) -> str:
         _C_engine.Dtype.I64: "int64",
         _C_engine.Dtype.Bool: "bool",
         _C_engine.Dtype.C64: "complex64",
+        _C_engine.Dtype.C128: "complex128",
     }
     return _MAP.get(d, "float32")
 
@@ -584,33 +586,32 @@ def as_tensor(
 
 
 def from_numpy(arr: np.ndarray) -> Tensor:
-    r"""Create a CPU tensor from a NumPy ``ndarray`` with shared storage.
+    r"""Copy a NumPy ``ndarray`` into an owned Lucid tensor.
 
-    The returned tensor wraps the array's existing buffer — no data is
-    copied — and inherits the array's dtype according to the canonical
+    The returned tensor owns a copy and inherits the array's dtype according
+    to the canonical
     NumPy → Lucid mapping (``np.float32`` → ``lucid.float32``,
-    ``np.int64`` → ``lucid.int64``, etc.).  Because storage is shared,
-    mutations in the array are visible in the tensor and vice versa.
+    ``np.int64`` → ``lucid.int64``, etc.). Mutations do not propagate between
+    the source array and the result. Like :func:`tensor`, this bridge uses
+    the active default device; use ``tensor(arr, device="cpu")`` to pin it.
 
     Parameters
     ----------
     arr : numpy.ndarray
         Source array.  Must reside in CPU memory.  Any layout (C / Fortran /
-        strided) is accepted; the resulting tensor preserves the array's
-        strides where possible.
+        strided) is accepted and copied to contiguous owned storage.
 
     Returns
     -------
     Tensor
-        A CPU tensor sharing storage with ``arr``.
+        A tensor with copied values on the active default device.
 
     Raises
     ------
-    TypeError
-        If ``arr`` is not a NumPy ``ndarray``.
-    ValueError
-        If ``arr``\'s dtype has no corresponding Lucid dtype
-        (e.g. ``np.float128`` on some platforms).
+    RuntimeError
+        If the array dtype has no corresponding Lucid dtype. The native
+        ``DtypeMismatch`` exception derives from ``RuntimeError``; for
+        example, object arrays and unsigned integer arrays are rejected.
 
     Notes
     -----
@@ -628,8 +629,8 @@ def from_numpy(arr: np.ndarray) -> Tensor:
     >>> t.dtype
     lucid.float32
     >>> arr[0, 0] = 99.0          # mutate the source
-    >>> t[0, 0].item()            # change visible in the tensor
-    99.0
+    >>> t[0, 0].item()            # the owned copy is unchanged
+    1.0
     """
     return tensor(arr)
 

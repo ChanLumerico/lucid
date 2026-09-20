@@ -15,6 +15,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tooling
+
+- Add `python -m tools.doctor` to diagnose checkout dependencies and native import failures without importing Lucid in the diagnostic process.
+- Add a JSON support manifest separating registrations from scoped audit and checkpoint evidence.
+- Complete source-output comparisons for all 151 discovered default pretrained factory checkpoints; retain per-entry scope and earlier failure provenance. This does not cover every weight enum variant, generation sampling or dataset metrics.
+- Pretrained parity rejects non-finite comparisons, bounds all loaders by parameter count and reports unverified entries explicitly.
+- Isolated checkpoint checks preserve authentication paths without copying credentials; reference loads disable remote auto-conversion and cap inherited socket timeouts.
+- Strengthen checkpoint continuation, pretrained intermediate-activation and small-batch quantized GEMM checks.
+- Fail CI when required audit instruments crash; expose pending model families as explicit skips in file-sharded runs.
+- Benchmark CSVs include measurement metadata; failed rows fail the command and training baselines compare like-for-like.
+- Link public API registrations to source, typing, documentation, static test references and scoped audit findings; add the missing complex128 stub declaration.
+- Exercise every audit axis with negative controls, isolating the fatal smoke probe in a child process.
+- Share materialized end-to-end benchmark timing; validate training updates before reporting speed and preserve integer inputs during precision sweeps.
+- Apply perf thresholds with either benchmark provider, materialize returned gradients, and avoid speedup claims across different sampling protocols.
+
+### Fixed
+
+- Register the existing Stable Diffusion generation and four CLIP zero-shot wrappers' pretrained weights for discovery.
+- Bound stalled checkpoint reads while preserving checksum verification and atomic cache writes.
+- Correct `from_numpy`'s owned-copy documentation and reduce the executable-docstring failure baseline to zero.
+- Published YOLOv2 checkpoints use the original passthrough layout; existing user configurations retain their previous layout.
+- Shared BatchNorm calls chain their running-stat updates inside compiled steps instead of overwriting the first update.
+- Explicit complex128 tensor construction preserves its dtype, imaginary components and double precision.
+- Layout auditing preserves dtype and imaginary values, checks nonzero storage offsets, and compares filtered runs only against their requested coverage scope.
+- An engine ABI mismatch now includes the project-environment rebuild command and diagnostic entry point.
+- CPU complex128 arithmetic, casts, broadcast, constants and reduction paths retain double-precision real and imaginary lanes.
+- Complex projections support higher derivatives; multiplication and division VJPs conjugate their Jacobians on CPU and Metal.
+- NumPy conversion avoids an unused byte cast and its lossy-conversion warnings; complex truth casts include both lanes and module dtype conversion includes complex128.
+- Compiled training advances BatchNorm batch counters for observed layers on every successful step.
+
 
 ### Added
 

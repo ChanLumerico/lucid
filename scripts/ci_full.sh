@@ -140,7 +140,8 @@ set +e
 audit_status=$?
 set -e
 if [ "$audit_status" -eq 2 ]; then
-    echo "  [WARN] the audit harness itself failed — the sweep proved nothing"
+    echo "  [ERROR] the audit harness itself failed — the sweep proved nothing"
+    exit 2
 elif [ "$audit_status" -ne 0 ]; then
     exit 1
 fi
@@ -157,7 +158,8 @@ set +e
 doctest_status=$?
 set -e
 if [ "$doctest_status" -eq 2 ]; then
-    echo "  [WARN] the doctest harness itself failed — the examples proved nothing"
+    echo "  [ERROR] the doctest harness itself failed — the examples proved nothing"
+    exit 2
 elif [ "$doctest_status" -ne 0 ]; then
     exit 1
 fi
