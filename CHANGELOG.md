@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Performance
+
+- fingerprint model summaries by content, not mtime
+
 ---
 
 ## [3.14.0] — 2026-09-22
