@@ -15,6 +15,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [3.14.0] — 2026-09-22
+
+A minor release adding the V-JEPA 2 family and its action-conditioned
+world model, both checked against the released implementations with the
+published weights rather than against random tensors. The four V-JEPA 2
+backbones reproduce their sources to between 1.7e-5 and 1.9e-4 relative;
+V-JEPA 2-AC, which has no port in any reference package, was compared by
+running the official repository's own code against its published
+checkpoint — 8.5e-5 on the encoder and 4.5e-5 on the predictor.
+
+- **V-JEPA 2** (Assran et al., arXiv:2506.09985) — the paper's four
+  checkpoints at `vjepa2_vit_large` / `_huge` / `_giant` / `_giant_384`,
+  each also under the attentive probe the paper evaluates through. Three
+  self-attention blocks and a cross-attention that carries no output
+  projection, matching the released classifier tensor for tensor. Weights
+  are re-hosted as SafeTensors; the probe's own head is not published and
+  `pretrained=True` refuses rather than returning an untrained one.
+- **V-JEPA 2-AC** — the action-conditioned latent world model, one
+  released ViT-g variant under `world-modeling`. One action-model step is
+  one frame: the encoder's three-dimensional patch embedding wants two, so
+  a frame is repeated to fill the tubelet, as the released training loop
+  does. A clip of `T` frames therefore takes `T - 1` conditioning rows and
+  is scored against the *next* frame's latents, both sides
+  layer-normalised.
+- **Three-axis rotary attention** reproduces the released layout, block
+  repeat and all — the upstream source marks that repeat as a bug and
+  keeps it, because the published weights were trained through it. Parity
+  tests pin both directions: ours matches the released rotation and
+  differs from the corrected one.
+- **Published checkpoints are compared against their sources.**
+  `tools.check_pretrained_parity` gained a V-JEPA 2 loader that compares
+  the encoder and the masked predictor. The two ViT-g entries sit just
+  over the tool's global 1e-4 bound; the gap grows monotonically with
+  depth and token count and `top1` agrees throughout, so the bound was
+  left where it is rather than widened.
+
 ### Tooling
 
 - Add `python -m tools.doctor` to diagnose checkout dependencies and native import failures without importing Lucid in the diagnostic process.
@@ -32,6 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Generated model cards call the model before reading its output, and a
+  world model's card shows the conditioning its forward actually takes
+  instead of an image classifier's call.
+- A converted checkpoint's card states what was verified — key set,
+  shapes and a strict load — rather than claiming a numerical comparison
+  that only some families have a reference for.
 - Register the existing Stable Diffusion generation and four CLIP zero-shot wrappers' pretrained weights for discovery.
 - Bound stalled checkpoint reads while preserving checksum verification and atomic cache writes.
 - Correct `from_numpy`'s owned-copy documentation and reduce the executable-docstring failure baseline to zero.
@@ -55,6 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - add Genie (world-modeling) — 4 factories
 - add I-JEPA (self-supervised pretraining) — 8 factories
 - add V-JEPA (video feature prediction) — 6 factories
+- add V-JEPA 2 (video representation) — 8 factories, four with published weights
+- add V-JEPA 2-AC (action-conditioned world modeling) — 2 factories
 
 ---
 

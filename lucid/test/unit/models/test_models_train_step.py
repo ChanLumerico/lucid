@@ -459,6 +459,15 @@ ELSEWHERE: dict[str, str] = {
         "test_models_vjepa.py — the target encoder is frozen by design, as "
         "I-JEPA's is"
     ),
+    "vjepa2": (
+        "test_models_vjepa2.py — the target encoder is frozen and nine of "
+        "the ten mask-token slots sit out any one step, which the check "
+        "above refuses; the probe takes its own step there too"
+    ),
+    "vjepa2_ac": (
+        "test_models_vjepa2.py — the forward takes a video, actions and "
+        "states together, which no single-input case here can supply"
+    ),
     "ncsn": "test_models_recent_e2e.py",
     "ddpm": "test_models_recent_e2e.py — the caller noises the input",
     "planet": "test_models_planet.py — rewards=",

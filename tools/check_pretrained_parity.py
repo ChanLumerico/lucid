@@ -176,6 +176,10 @@ def _reference_for(source: str) -> tuple[str, str] | None:
         return ("diffusers", source.split("/", 1)[1])
     if source.startswith(("facebook/maskformer-", "facebook/mask2former-")):
         return ("transformers", source)
+    if source.startswith("facebook/vjepa2-"):
+        # ``facebook/vjepa2-vitl-fpc64-256/model.safetensors`` names the
+        # file inside the repository the checkpoint was converted from.
+        return ("vjepa2", source.rsplit("/", 1)[0])
     if source.startswith("facebook/DiT-"):
         return ("dit", source.split(" ", 1)[0])
     if source == "stable-diffusion-v1-5 (diffusers layout)":
@@ -286,6 +290,8 @@ def _compare(
         return _compare_darknet(model_name, shape)
     if kind == "diamond":
         return _compare_diamond(model_name, identifier)
+    if kind == "vjepa2":
+        return _compare_vjepa2(model_name, identifier)
     if kind in ("transformers", "clip"):
         return _compare_transformers(model_name, kind, identifier, params, max_params)
     if (kind == "timm" and zoo_module() is None) or (
@@ -495,6 +501,91 @@ def _compare_transformers(
             got = getattr(answer, field).numpy()
         pairs.append((field, wanted, got))
     return _compare_fields(pairs)
+
+
+def _compare_vjepa2(model_name: str, repo: str) -> dict[str, object]:
+    """A published V-JEPA 2 backbone against the repository it came from.
+
+    Two differences from the shared image path, both forced by what the
+    model takes.  The input is a clip, ``(B, T, C, H, W)`` on both sides.
+    And it is a two-frame one rather than the configured sixty-four: the
+    rotary geometry is computed from token positions rather than read
+    from a table, so a short clip exercises the same weights, while a
+    full one would put 8192 tokens through a twenty-four-block encoder
+    twice over.
+
+    What is compared is Lucid's *target* encoder against the reference's
+    only one — the conversion mirrors the context encoder into it, so a
+    mirroring that silently dropped a tensor shows up here.
+
+    The predictor is fed by hand rather than through
+    ``VJEPA2Model.forward``, because the two sides mean different things
+    by "the context".  Lucid's masked path runs the encoder *on the
+    context subset*, which is the pretraining contract — the context
+    encoder must not see the region it is asked to predict.  The
+    reference port runs one encoder over the whole clip and selects the
+    context positions afterwards, which is the inference contract.  Both
+    are right; comparing one against the other measures the difference
+    between them (0.36 relative on ViT-L) rather than the conversion.
+    """
+    transformers = _transformers_module()
+    ref = ref_module()
+    if transformers is None or ref is None:
+        return {
+            "unreachable": "transformers or the reference framework is not installed"
+        }
+    try:
+        ours = create_model(model_name, pretrained=True, num_frames=2).eval()
+        theirs = getattr(transformers, "AutoModel").from_pretrained(repo).eval()
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"[:200]}
+
+    side = int(getattr(ours.config, "image_size"))
+    video = np.random.default_rng(0).standard_normal(
+        (1, 2, 3, side, side)
+    ).astype(np.float32)
+    tokens = (side // int(getattr(ours.config, "patch_size"))) ** 2
+    half = tokens // 2
+    context = np.arange(half, dtype=np.int64).reshape(1, -1)
+    target = np.arange(half, tokens, dtype=np.int64).reshape(1, -1)
+    try:
+        with ref.no_grad(), lucid.no_grad():
+            reference = theirs(
+                pixel_values_videos=ref.from_numpy(video.copy()),
+                context_mask=[ref.from_numpy(context.copy())],
+                target_mask=[ref.from_numpy(target.copy())],
+            )
+            encoded = getattr(ours(lucid.from_numpy(video.copy())), "tokens")
+            # The reference's context: the whole clip encoded, then the
+            # context positions taken out of it.
+            indices = lucid.from_numpy(context.copy())
+            gather = indices.unsqueeze(-1) + lucid.zeros(
+                1,
+                half,
+                int(encoded.shape[2]),
+                dtype=indices.dtype,
+                device=encoded.device,
+            )
+            predicted = getattr(
+                ours.predictor(
+                    lucid.gather(encoded, gather, dim=1),
+                    indices,
+                    lucid.from_numpy(target.copy()),
+                ),
+                "numpy",
+            )()
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"[:200]}
+    return _compare_fields(
+        [
+            ("encoder", reference.last_hidden_state.numpy(), encoded.numpy()),
+            (
+                "predictor",
+                reference.predictor_output.last_hidden_state.numpy(),
+                predicted,
+            ),
+        ]
+    )
 
 
 def _compare_fields(pairs: list[tuple[str, np.ndarray, np.ndarray]]) -> dict[str, object]:

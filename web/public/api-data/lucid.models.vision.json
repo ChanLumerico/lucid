@@ -3,7 +3,7 @@
   "name": "vision",
   "path": "lucid.models.vision",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/638940275/lucid/models/vision/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/__init__.py#L1",
   "members": [],
   "summary": "Vision model families — chronological order of publication.",
   "extended": null,
@@ -175,6 +175,10 @@
     {
       "slug": "lucid.models.vision.vjepa",
       "label": "vjepa"
+    },
+    {
+      "slug": "lucid.models.vision.vjepa2",
+      "label": "vjepa2"
     },
     {
       "slug": "lucid.models.vision.xception",

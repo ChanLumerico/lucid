@@ -1752,6 +1752,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._config"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.multimodal._common._config"
     },
     {
@@ -1920,6 +1924,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.vjepa2._config"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.xception._config"
     },
     {
@@ -2031,6 +2039,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.vae._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._model"
     },
     {
       "kind": "module",
@@ -2175,6 +2187,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vjepa._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._model"
     },
     {
       "kind": "module",
@@ -2530,6 +2546,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.vision.vjepa2._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.vision.zfnet._model"
     }
   ],
@@ -2620,6 +2640,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vqvae._model"
     },
     {
@@ -2649,6 +2673,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vjepa._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._model"
     }
   ],
   "lucid.models._output.NormalizingFlowOutput": [
@@ -2918,6 +2946,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._pretrained"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vqvae._pretrained"
     },
     {
@@ -3103,6 +3135,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vjepa._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._pretrained"
     },
     {
       "kind": "module",
@@ -4867,6 +4903,74 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.vae"
+    }
+  ],
+  "lucid.models.generative.vjepa2_ac": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.vjepa2_ac._config.VJEPA2ACConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._pretrained"
+    }
+  ],
+  "lucid.models.generative.vjepa2_ac._model.VJEPA2ACForWorldModeling": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._pretrained"
+    }
+  ],
+  "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._pretrained"
+    }
+  ],
+  "lucid.models.generative.vjepa2_ac._model.VJEPA2ACOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac"
+    }
+  ],
+  "lucid.models.generative.vjepa2_ac._pretrained.vjepa2_ac_vit_giant": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac"
+    }
+  ],
+  "lucid.models.generative.vjepa2_ac._pretrained.vjepa2_ac_vit_giant_world_model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac"
+    }
+  ],
+  "lucid.models.generative.vjepa2_ac._weights.VJEPA2ACWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._pretrained"
     }
   ],
   "lucid.models.generative.vqvae": [
@@ -10667,6 +10771,140 @@
       "module": "lucid.models.vision.vjepa"
     }
   ],
+  "lucid.models.vision.vjepa2": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.vision.vjepa2._config.VJEPA2Config": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._pretrained"
+    }
+  ],
+  "lucid.models.vision.vjepa2._model.VJEPA2ForVideoClassification": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._pretrained"
+    }
+  ],
+  "lucid.models.vision.vjepa2._model.VJEPA2Model": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._pretrained"
+    }
+  ],
+  "lucid.models.vision.vjepa2._model.VJEPA2Output": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    }
+  ],
+  "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_giant": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    }
+  ],
+  "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_giant_384": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    }
+  ],
+  "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_giant_384_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    }
+  ],
+  "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_giant_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    }
+  ],
+  "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_huge": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    }
+  ],
+  "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_huge_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    }
+  ],
+  "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_large": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    }
+  ],
+  "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_large_cls": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    }
+  ],
+  "lucid.models.vision.vjepa2._weights.VJEPA2ViTGiant384Weights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._pretrained"
+    }
+  ],
+  "lucid.models.vision.vjepa2._weights.VJEPA2ViTGiantWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._pretrained"
+    }
+  ],
+  "lucid.models.vision.vjepa2._weights.VJEPA2ViTHugeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._pretrained"
+    }
+  ],
+  "lucid.models.vision.vjepa2._weights.VJEPA2ViTLargeWeights": [
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._pretrained"
+    }
+  ],
   "lucid.models.vision.xception": [
     {
       "kind": "module",
@@ -11056,6 +11294,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vqvae._model"
     },
     {
@@ -11253,6 +11495,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vjepa._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._model"
     },
     {
       "kind": "module",
@@ -11490,6 +11736,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vqvae._model"
     },
     {
@@ -11683,6 +11933,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vjepa._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._model"
     },
     {
       "kind": "module",
@@ -16386,6 +16640,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._weights"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.multimodal.clip._weights"
     },
     {
@@ -16527,6 +16785,10 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vit._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._weights"
     },
     {
       "kind": "module",
@@ -17432,6 +17694,14 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.vjepa2_ac._weights"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.multimodal.clip._pretrained"
     },
     {
@@ -17717,6 +17987,14 @@
     {
       "kind": "module",
       "module": "lucid.models.vision.vit._weights"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.vision.vjepa2._weights"
     },
     {
       "kind": "module",

@@ -1,0 +1,1163 @@
+{
+  "slug": "lucid.models.generative.vjepa2_ac",
+  "name": "vjepa2_ac",
+  "path": "lucid.models.generative.vjepa2_ac",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/__init__.py#L1",
+  "members": [
+    {
+      "name": "VJEPA2ACConfig",
+      "path": "lucid.models.generative.vjepa2_ac._config.VJEPA2ACConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ACConfig(image_size: int = 256, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 64, in_channels: int = 3, encoder_dim: int = 1408, encoder_depth: int = 40, encoder_heads: int = 22, mlp_ratio: float = 48.0 / 11.0, predictor_mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, qkv_bias: bool = True, init_std: float = 0.02, use_silu: bool = False, wide_silu: bool = True, use_rope: bool = True, rope_base: float = 10000.0, predictor_dim: int = 1024, predictor_depth: int = 24, predictor_heads: int = 16, action_dim: int = 7, state_dim: int = 7, extrinsics_dim: int = 6, use_extrinsics: bool = False, frame_causal: bool = True, normalize_targets: bool = True)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "token_grid",
+          "path": "lucid.models.generative.vjepa2_ac._config.VJEPA2ACConfig.token_grid",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "token_grid: tuple[int, int, int]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_config.py#L103",
+          "summary": "Configured step, row and column counts.",
+          "extended": "One step is one frame, so the temporal entry is the clip length\nrather than a tubelet count.",
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[int, int, int]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "tokens_per_step",
+          "path": "lucid.models.generative.vjepa2_ac._config.VJEPA2ACConfig.tokens_per_step",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "tokens_per_step: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_config.py#L116",
+          "summary": "Spatial tokens emitted for one encoded frame.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.vjepa2_ac._config.VJEPA2ACConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(image_size: int = 256, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 64, in_channels: int = 3, encoder_dim: int = 1408, encoder_depth: int = 40, encoder_heads: int = 22, mlp_ratio: float = 48.0 / 11.0, predictor_mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, qkv_bias: bool = True, init_std: float = 0.02, use_silu: bool = False, wide_silu: bool = True, use_rope: bool = True, rope_base: float = 10000.0, predictor_dim: int = 1024, predictor_depth: int = 24, predictor_heads: int = 16, action_dim: int = 7, state_dim: int = 7, extrinsics_dim: int = 6, use_extrinsics: bool = False, frame_causal: bool = True, normalize_targets: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen architecture configuration for V-JEPA 2-AC.",
+      "extended": "Inputs use Lucid's video convention `(B, T, C, H, W)`.  The encoder\nis applied independently to each frame, producing `T` action-model\nsteps — one per frame, which is the rate the released checkpoint was\npost-trained at.\n\n`num_frames` records the released clip length and sizes\n`token_grid`; it does not constrain a call.  One action-model\nstep is one frame — the released loop repeats each frame to fill the\nencoder's tubelet — so a rollout is as long as the actions handed to\nit and any frame count of two or more is valid.\n\n`normalize_targets` layer-normalises the latents on both sides of\nthe transition loss, which the released post-training does.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPA2ACForWorldModeling",
+      "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACForWorldModeling",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WorldModelingModel"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ACForWorldModeling(config: VJEPA2ACConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L252",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACForWorldModeling.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VJEPA2ACConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L276",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACForWorldModeling.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(video: Tensor, actions: Tensor, states: Tensor, extrinsics: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L281",
+          "subcategory": "model",
+          "summary": "Return an action-conditioned latent transition.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "VJEPA2ACOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "V-JEPA 2-AC under the zoo's world-modeling task.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "VJEPA2ACConfig",
+          "description": "Frozen model configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "It exists so `AutoModelForWorldModeling` can reach the family and so\nthe registry can tag it by task.  The forward is one teacher-forced\nlatent transition; a rollout is that forward applied to its own\noutput, and the controller that decides the actions stays outside."
+      ],
+      "attributes": [
+        {
+          "name": "vjepa2_ac",
+          "annotation": "VJEPA2ACModel",
+          "description": "The encoder and the action-conditioned predictor.  The wrapper\nadds no parameters of its own."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPA2ACModel",
+      "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ACModel(config: VJEPA2ACConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L48",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VJEPA2ACConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L70",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L120",
+          "summary": "The spatial latent-grid feature stage.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L124",
+          "subcategory": "model",
+          "summary": "Encode a video into flattened per-step spatial tokens.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "trainable_parameters",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel.trainable_parameters",
+          "kind": "function",
+          "labels": [],
+          "signature": "trainable_parameters()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L129",
+          "subcategory": "model",
+          "summary": "Return encoder and predictor parameters for post-training.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[nn.Parameter]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(video: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L152",
+          "subcategory": "model",
+          "summary": "Encode every frame to its own latent grid, `(B, T * P, D)`.",
+          "extended": "One action-model step is **one frame**, not one two-frame tubelet.\nThe encoder's patch embedding is three-dimensional and wants\n`tubelet_size` frames, so each frame is repeated to fill one —\nwhich is what the released code does in both its training loop\nand its energy-landscape example:\n\nc.permute(0, 2, 1, 3, 4).flatten(0, 1).unsqueeze(2).repeat(1, 1, 2, 1, 1)\n\nPairing two *distinct* frames instead would halve the temporal\nresolution and take one action per two frames, which is not the\nrate the released checkpoint was post-trained at.",
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "normalize",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel.normalize",
+          "kind": "function",
+          "labels": [],
+          "signature": "normalize(tokens: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L176",
+          "subcategory": "model",
+          "summary": "Layer-normalise latents, as the released loop does to both sides.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "predict",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel.predict",
+          "kind": "function",
+          "labels": [],
+          "signature": "predict(context: Tensor, actions: Tensor, states: Tensor, extrinsics: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L182",
+          "subcategory": "model",
+          "summary": "Predict the next latent grids from encoded context and controls.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(video: Tensor, actions: Tensor, states: Tensor, extrinsics: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L196",
+          "subcategory": "model",
+          "summary": "One teacher-forced transition step over a clip.",
+          "extended": "The clip's first `T - 1` frames are the context and its last\n`T - 1` are the target: the predictor is asked what the *next*\nframe looks like, which is the post-training objective.  A\nconditioning row is therefore one per transition, so `actions`,\n`states` and `extrinsics` carry `T - 1` of them.",
+          "parameters": [
+            {
+              "name": "video",
+              "annotation": "Tensor",
+              "description": "Clip `(B, T, C, H, W)` with `T >= 2`.",
+              "default": null
+            },
+            {
+              "name": "actions",
+              "annotation": "Tensor",
+              "description": "`(B, T - 1, action_dim)` and `(B, T - 1, state_dim)`.",
+              "default": null
+            },
+            {
+              "name": "states",
+              "annotation": "Tensor",
+              "description": "`(B, T - 1, action_dim)` and `(B, T - 1, state_dim)`.",
+              "default": null
+            },
+            {
+              "name": "extrinsics",
+              "annotation": "Tensor or None",
+              "description": "`(B, T - 1, extrinsics_dim)` when the config enables them.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "VJEPA2ACOutput",
+            "description": "The predicted next latents, the context they came from, the\nlatents actually observed at those frames, and the L1 between\nthem."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Both sides are layer-normalised before the loss when\n`normalize_targets` is set, as the released loop does.  Comparing\na prediction against the frame it was *given* — which is what\nscoring the unshifted latents would do — is satisfied by copying\nthe input, since the predictor's attention is frame-causal."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "V-JEPA 2-AC encoder plus action-conditioned latent predictor.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "VJEPA2ACConfig",
+          "description": "Frozen model configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "The encoder is applied independently to each frame, repeated to fill\nthe patch embedding's tubelet.  A video with `T` frames therefore\nproduces `T` action-model steps, each containing\n`(image_size // patch_size) ** 2` spatial tokens — one step per\nframe, as the released training loop and energy-landscape example\nboth do.  `forward` takes one conditioning row per *transition*,\nso `T - 1` of them.  Planning and controller search stay outside the\nmodel."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPA2ACOutput",
+      "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ACOutput(prediction: Tensor, context: Tensor, target: Tensor, loss: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L26",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.vjepa2_ac._model.VJEPA2ACOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(prediction: Tensor, context: Tensor, target: Tensor, loss: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_model.py#L1",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Latent transition output of V-JEPA 2-AC.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "prediction",
+          "annotation": "Tensor",
+          "description": "Predicted latent grids, `(B, S * P, D)`."
+        },
+        {
+          "name": "context",
+          "annotation": "Tensor",
+          "description": "Encoded context grids consumed by the predictor."
+        },
+        {
+          "name": "target",
+          "annotation": "Tensor",
+          "description": "The latents actually observed at the predicted frames."
+        },
+        {
+          "name": "loss",
+          "annotation": "Tensor",
+          "description": "Representation-space L1 between the two."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "vjepa2_ac_vit_giant",
+      "path": "lucid.models.generative.vjepa2_ac._pretrained.vjepa2_ac_vit_giant",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_ac_vit_giant(pretrained: bool | str = False, weights: VJEPA2ACWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_pretrained.py#L30",
+      "subcategory": "pretrained",
+      "summary": "Construct the official V-JEPA 2-AC ViT-g action model.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "`True` loads the Lucid-hosted official action checkpoint; a string\nselects a declared weight tag explicitly.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(VJEPA2ACWeights, optional, keyword - only)",
+          "description": "Explicit weight enum member; takes precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2ACConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2ACModel",
+        "description": "The ViT-g/16 latent encoder and action-conditioned predictor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_ac_vit_giant\")\n>>> config.encoder_dim, config.encoder_depth, config.encoder_heads\n(1408, 40, 22)\n>>> config.predictor_dim, config.predictor_depth, config.predictor_heads\n(1024, 24, 16)\n>>> config.tokens_per_step\n256"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The release publishes\none action-conditioned ViT-g checkpoint; smaller variants are\nintentionally not registered.  One action-model step is one frame — the\nreleased loop repeats each frame to fill the encoder's tubelet — so a\nclip of `T` frames takes `T - 1` conditioning rows.  Checked against\nthe official implementation with that checkpoint: encoder `8.5e-5`,\npredictor `4.5e-5` relative."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2ACModel",
+        "type": "VJEPA2ACModel",
+        "params": 1317394944,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_RoPEVideoEncoder",
+            "params": 1012173952,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv3d",
+                "params": 2164096,
+                "own_params": 2164096,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 1010007040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 25250176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 7935488,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 5951616,
+                            "own_params": 5951616,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1983872,
+                            "own_params": 1983872,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 17309056,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 8656896,
+                            "own_params": 8656896,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 8652160,
+                            "own_params": 8652160,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 40
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2816,
+                "own_params": 2816,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "predictor",
+            "type": "_ActionConditionedPredictor",
+            "params": 305220992,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 1442816,
+                "own_params": 1442816,
+                "children": []
+              },
+              {
+                "name": "action_encoder",
+                "type": "Linear",
+                "params": 8192,
+                "own_params": 8192,
+                "children": [],
+                "repeat": 2
+              },
+              {
+                "name": "extrinsics_encoder",
+                "type": "Linear",
+                "params": 7168,
+                "own_params": 7168,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 3148800,
+                            "own_params": 3148800,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 1443200,
+                "own_params": 1443200,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa2_ac_vit_giant_world_model",
+      "path": "lucid.models.generative.vjepa2_ac._pretrained.vjepa2_ac_vit_giant_world_model",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_ac_vit_giant_world_model(pretrained: bool | str = False, weights: VJEPA2ACWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_pretrained.py#L89",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA 2-AC under Lucid's world-model task wrapper.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "`True` loads the Lucid-hosted official action checkpoint into the\nwrapped model; a string selects a declared weight tag explicitly.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(VJEPA2ACWeights, optional, keyword - only)",
+          "description": "Explicit weight enum member; takes precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2ACConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2ACForWorldModeling",
+        "description": "The same encoder and predictor as `vjepa2_ac_vit_giant`,\nregistered under the `world-modeling` task."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_ac_vit_giant_world_model\")\n>>> config.action_dim, config.state_dim\n(7, 7)\n>>> config.frame_causal, config.use_extrinsics\n(True, False)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The wrapper adds no\nparameters; it exists so `AutoModelForWorldModeling` can reach the\nfamily.  Planning and controller search stay outside the model — the\nforward is one teacher-forced latent transition."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2ACForWorldModeling",
+        "type": "VJEPA2ACForWorldModeling",
+        "params": 1317394944,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vjepa2_ac",
+            "type": "VJEPA2ACModel",
+            "params": 1317394944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_RoPEVideoEncoder",
+                "params": 1012173952,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "Conv3d",
+                    "params": 2164096,
+                    "own_params": 2164096,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 1010007040,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 25250176,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2816,
+                            "own_params": 2816,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 7935488,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 5951616,
+                                "own_params": 5951616,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1983872,
+                                "own_params": 1983872,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2816,
+                            "own_params": 2816,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 17309056,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 8656896,
+                                "own_params": 8656896,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 8652160,
+                                "own_params": 8652160,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 40
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2816,
+                    "own_params": 2816,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "predictor",
+                "type": "_ActionConditionedPredictor",
+                "params": 305220992,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 1442816,
+                    "own_params": 1442816,
+                    "children": []
+                  },
+                  {
+                    "name": "action_encoder",
+                    "type": "Linear",
+                    "params": 8192,
+                    "own_params": 8192,
+                    "children": [],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "extrinsics_encoder",
+                    "type": "Linear",
+                    "params": 7168,
+                    "own_params": 7168,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 3148800,
+                                "own_params": 3148800,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 1443200,
+                    "own_params": 1443200,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "VJEPA2ACWeights",
+      "path": "lucid.models.generative.vjepa2_ac._weights.VJEPA2ACWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ACWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/generative/vjepa2_ac/_weights.py#L28",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "Official V-JEPA 2-AC ViT-g/16 action-conditioned weights.",
+      "extended": "Converted from the released `vjepa2-ac-vitg.pt`, whose `encoder`\nand `predictor` mappings load strictly into this family with nothing\nmissing on either side.  Checked by running the official repository's\nown code against the same checkpoint: `8.5e-5` on the encoder,\n`4.5e-5` on the predictor, relative.  The file is the post-trained\nViT-g encoder beside the 24-block action predictor, 1,317,394,944\nparameters together.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "V-JEPA 2-AC — action-conditioned latent world modeling.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "V-JEPA 2-AC",
+  "citation": "Assran, Mahmoud, et al. \"V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning.\" [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.",
+  "theory": "V-JEPA 2-AC post-trains a V-JEPA 2 visual encoder as a latent,\naction-conditioned world model.  Each frame is encoded into its own\nspatial token grid — the three-dimensional patch embedding wants\n$2$ frames, so a frame is repeated to fill one tubelet.  The\npredictor interleaves an action token and a state token before every\ngrid, applies a frame-causal transformer, and emits the next latent\ngrid.  The visual target is kept in representation space, so\nthe model predicts the consequences of an action without rendering pixels.\n\nThe released action-conditioned checkpoint contains one ViT-g/16 variant\nwith a 1024-wide, 24-layer predictor and seven-dimensional robot action\nand state vectors.  Its encoder uses the ViT-g wide MLP ratio, while the\npredictor retains the released four-times expansion.\n\nAttention is *frame-causal* rather than token-causal: every token of a\nstep attends to every token of that step and of the ones before it, and\nto nothing after.  A step is therefore a unit of time rather than a\nposition in a sequence, and the conditioning tokens sit inside it —\naction first, then state, then the spatial grid.  The action and state\ntokens are rotated only along the time axis, since they have no place in\nthe spatial grid, which is what separates this attention from the\nencoder's.\n\nThe training signal is next-frame prediction in representation space:\nthe predictor is given the latents of frames up to $t$ and the\naction taken at $t$, and is scored against the latents of frame\n$t + 1$, both sides layer-normalised.  Scoring against the same\nframe instead would be satisfied by copying the input, which the causal\nmask already permits.  Planning and controller search are consumers of\nthis latent transition model, not additional network layers — the\nforward is one transition, and a rollout is that forward applied to its\nown output.",
+  "tasks": [
+    "world-modeling"
+  ]
+}

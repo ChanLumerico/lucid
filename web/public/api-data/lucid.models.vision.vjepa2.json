@@ -1,0 +1,3716 @@
+{
+  "slug": "lucid.models.vision.vjepa2",
+  "name": "vjepa2",
+  "path": "lucid.models.vision.vjepa2",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/__init__.py#L1",
+  "members": [
+    {
+      "name": "VJEPA2Config",
+      "path": "lucid.models.vision.vjepa2._config.VJEPA2Config",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "VJEPA2Config(image_size: int = 256, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 64, in_channels: int = 3, num_classes: int = 400, dim: int = 1024, depth: int = 24, num_heads: int = 16, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, qkv_bias: bool = True, init_std: float = 0.02, use_silu: bool = False, wide_silu: bool = True, use_rope: bool = True, rope_base: float = 10000.0, uniform_power: bool = False, drop_rate: float = 0.0, attn_drop_rate: float = 0.0, drop_path_rate: float = 0.0, predictor_dim: int = 384, predictor_out_dim: int | None = None, predictor_depth: int = 12, predictor_heads: int = 12, predictor_mlp_ratio: float = 4.0, predictor_num_mask_tokens: int = 10, zero_init_mask_tokens: bool = True, predictor_return_all_tokens: bool = False, num_pooler_layers: int = 3, normalize_targets: bool = True, objective: str = 'l1', ema: tuple[float, float] = (0.99925, 0.99925), ema_schedule_scale: float = 1.25)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_config.py#L10",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "token_grid",
+          "path": "lucid.models.vision.vjepa2._config.VJEPA2Config.token_grid",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "token_grid: tuple[int, int, int]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_config.py#L142",
+          "summary": "Number of tubelet positions along time, height and width.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[int, int, int]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "num_tokens",
+          "path": "lucid.models.vision.vjepa2._config.VJEPA2Config.num_tokens",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "num_tokens: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_config.py#L151",
+          "summary": "Number of tokens in a full configured clip.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "predictor_output_dim",
+          "path": "lucid.models.vision.vjepa2._config.VJEPA2Config.predictor_output_dim",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "predictor_output_dim: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_config.py#L157",
+          "summary": "Target width emitted by the predictor.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vjepa2._config.VJEPA2Config.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(image_size: int = 256, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 64, in_channels: int = 3, num_classes: int = 400, dim: int = 1024, depth: int = 24, num_heads: int = 16, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, qkv_bias: bool = True, init_std: float = 0.02, use_silu: bool = False, wide_silu: bool = True, use_rope: bool = True, rope_base: float = 10000.0, uniform_power: bool = False, drop_rate: float = 0.0, attn_drop_rate: float = 0.0, drop_path_rate: float = 0.0, predictor_dim: int = 384, predictor_out_dim: int | None = None, predictor_depth: int = 12, predictor_heads: int = 12, predictor_mlp_ratio: float = 4.0, predictor_num_mask_tokens: int = 10, zero_init_mask_tokens: bool = True, predictor_return_all_tokens: bool = False, num_pooler_layers: int = 3, normalize_targets: bool = True, objective: str = 'l1', ema: tuple[float, float] = (0.99925, 0.99925), ema_schedule_scale: float = 1.25)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_config.py#L1",
+          "subcategory": "config",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen architecture configuration for V-JEPA 2.",
+      "extended": "The defaults are the released ViT-L/16 checkpoint geometry.  The public\nfactories select the other paper variants by overriding `dim`, `depth`\nand `num_heads`; callers may still use a small explicit override for\ntests or experiments.",
+      "parameters": [
+        {
+          "name": "image_size",
+          "annotation": "int",
+          "description": "Height and width of each video frame.",
+          "default": "256"
+        },
+        {
+          "name": "patch_size",
+          "annotation": "int",
+          "description": "Spatial side of one patch.",
+          "default": "16"
+        },
+        {
+          "name": "tubelet_size",
+          "annotation": "int",
+          "description": "Number of adjacent frames in one token.",
+          "default": "2"
+        },
+        {
+          "name": "num_frames",
+          "annotation": "int",
+          "description": "Clip length used by the released pretraining configuration.",
+          "default": "64"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "Width, block count and head count of the video encoder.",
+          "default": "1024, 24, 16"
+        },
+        {
+          "name": "depth",
+          "annotation": "int",
+          "description": "Width, block count and head count of the video encoder.",
+          "default": "1024, 24, 16"
+        },
+        {
+          "name": "num_heads",
+          "annotation": "int",
+          "description": "Width, block count and head count of the video encoder.",
+          "default": "1024, 24, 16"
+        },
+        {
+          "name": "use_rope",
+          "annotation": "bool",
+          "description": "Use the released three-axis rotary attention geometry.",
+          "default": "True"
+        },
+        {
+          "name": "predictor_dim",
+          "annotation": "int",
+          "description": "Width of the latent predictor.",
+          "default": "384"
+        },
+        {
+          "name": "predictor_depth",
+          "annotation": "int",
+          "description": "Number of predictor blocks.",
+          "default": "12"
+        },
+        {
+          "name": "predictor_heads",
+          "annotation": "int",
+          "description": "Predictor attention heads.",
+          "default": "12"
+        },
+        {
+          "name": "predictor_mlp_ratio",
+          "annotation": "float",
+          "description": "Predictor feed-forward expansion.  The ViT-g encoder ratio is wider\nthan its predictor ratio in the released checkpoint.",
+          "default": "4.0"
+        },
+        {
+          "name": "predictor_num_mask_tokens",
+          "annotation": "int",
+          "description": "Learned mask-token slots used by the official mask generator.",
+          "default": "10"
+        },
+        {
+          "name": "num_pooler_layers",
+          "annotation": "int",
+          "description": "Self-attention blocks the attentive probe runs before its query\nattends.  Every released classifier checkpoint carries three.",
+          "default": "3"
+        },
+        {
+          "name": "ema",
+          "annotation": "tuple of float",
+          "description": "Target-encoder momentum at the start and end of the schedule.\nThe released pretraining configuration holds it constant, which\nis where V-JEPA 2 departs from V-JEPA 1's ramp.",
+          "default": "(0.99925, 0.99925)"
+        },
+        {
+          "name": "ema_schedule_scale",
+          "annotation": "float",
+          "description": "Stretches the momentum horizon past the run's own length, as the\nreleased `ipe_scale` does.",
+          "default": "1.25"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPA2ForVideoClassification",
+      "path": "lucid.models.vision.vjepa2._model.VJEPA2ForVideoClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ImageClassificationModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ForVideoClassification(config: VJEPA2Config)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1261",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2ForVideoClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VJEPA2Config)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1291",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2ForVideoClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1298",
+          "subcategory": "model",
+          "summary": "Classify a clip and optionally return cross-entropy loss.",
+          "extended": "The backbone is the frozen target encoder, which is what the\npaper's probe reads.  Freezing is a property of those parameters,\nnot of this call: wrapping the pass in `no_grad` would also\nstop a caller who unfroze them deliberately.",
+          "parameters": [],
+          "returns": {
+            "annotation": "ImageClassificationOutput",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "V-JEPA 2 read through the probe the paper evaluates with.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "VJEPA2Config",
+          "description": "Frozen configuration; `num_classes` sizes the classifier and\n`num_pooler_layers` the probe's tower.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [
+        "Registered under `image-classification` because that is the task\nthis zoo has; the input is a clip rather than an image, which is what\nthe class name says.  Averaging tokens and fitting a linear map would\nmeasure something else — the paper prices the difference in points."
+      ],
+      "attributes": [
+        {
+          "name": "vjepa2",
+          "annotation": "VJEPA2Model",
+          "description": "The pretraining networks.  Its target encoder is frozen, and that\nis the tower this reads."
+        },
+        {
+          "name": "pooler",
+          "annotation": "Module",
+          "description": "The attentive probe: self-attention blocks, then one learned query\ncross-attending the feature map."
+        },
+        {
+          "name": "head",
+          "annotation": "nn.Linear",
+          "description": "The classifier on the pooled vector."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPA2Model",
+      "path": "lucid.models.vision.vjepa2._model.VJEPA2Model",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "VJEPA2Model(config: VJEPA2Config)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1054",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Model.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VJEPA2Config)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1066",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Model.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1124",
+          "summary": "The single tubelet-token feature stage.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Model.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1128",
+          "subcategory": "model",
+          "summary": "Return the mean target representation for backbone consumers.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "trainable_parameters",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Model.trainable_parameters",
+          "kind": "function",
+          "labels": [],
+          "signature": "trainable_parameters()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1133",
+          "subcategory": "model",
+          "summary": "Return context-encoder and predictor parameters only.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[nn.Parameter]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "momentum",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Model.momentum",
+          "kind": "function",
+          "labels": [],
+          "signature": "momentum(step: int, total_steps: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1137",
+          "subcategory": "model",
+          "summary": "The target encoder's momentum at a training step.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "step",
+              "annotation": "int",
+              "description": "Steps already taken.",
+              "default": null
+            },
+            {
+              "name": "total_steps",
+              "annotation": "int",
+              "description": "Steps the run will take in total.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "float",
+            "description": "Linear from `config.ema[0]` toward `config.ema[1]` over\n`total_steps * config.ema_schedule_scale` steps."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "The released pretraining configuration sets both ends of `ema`\nto `0.99925`, so this is a constant for the published runs —\nunlike V-JEPA 1, which ramps.  The schedule is still built from\nthe two endpoints, because a method that takes a step and a\nhorizon and reads neither cannot be given a different recipe."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "update_target",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Model.update_target",
+          "kind": "function",
+          "labels": [],
+          "signature": "update_target(momentum: float)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1168",
+          "subcategory": "model",
+          "summary": "Update the non-gradient target encoder after an optimiser step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "tokens",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Model.tokens",
+          "kind": "function",
+          "labels": [],
+          "signature": "tokens(x: Tensor, target: bool = True)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1192",
+          "subcategory": "model",
+          "summary": "Return the full `(B, N, dim)` token map.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Model.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1198",
+          "subcategory": "model",
+          "summary": "Return mean-pooled target-encoder representations `(B, dim)`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Model.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, context_indices: Tensor | None = None, target_indices: Tensor | None = None, mask_index: int = 1)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1209",
+          "subcategory": "model",
+          "summary": "Run representation extraction or a masked prediction step.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "VJEPA2Output",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "V-JEPA 2 context encoder, EMA target encoder and predictor.",
+      "extended": "Clips use `(B, T, C, H, W)`.  A plain call returns the target encoder's\ntoken map.  Supplying both `context_indices` and `target_indices` runs\none masked representation-prediction step, which is useful for training or\nchecking the predictor in isolation.  Indices are flattened tubelet\npositions in row-major `(time, height, width)` order.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPA2Output",
+      "path": "lucid.models.vision.vjepa2._model.VJEPA2Output",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "VJEPA2Output(tokens: Tensor | None = None, prediction: Tensor | None = None, target: Tensor | None = None, loss: Tensor | None = None, context_indices: Tensor | None = None, target_indices: Tensor | None = None)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L923",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vjepa2._model.VJEPA2Output.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(tokens: Tensor | None = None, prediction: Tensor | None = None, target: Tensor | None = None, loss: Tensor | None = None, context_indices: Tensor | None = None, target_indices: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_model.py#L1",
+          "subcategory": "model",
+          "summary": null,
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Output of a representation pass or masked prediction step.",
+      "extended": "`tokens` is populated for a plain representation pass.  When both mask\nindex matrices are supplied, `prediction`, `target` and `loss` hold\nthe predictor result and the representation-space training objective.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "vjepa2_vit_giant",
+      "path": "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_giant",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_vit_giant(pretrained: bool | str = False, weights: VJEPA2ViTGiantWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_pretrained.py#L167",
+      "subcategory": "pretrained",
+      "summary": "The released V-JEPA 2 ViT-g/16 backbone at 256 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "`True` loads the Lucid FPC64-256 tag; a string selects a declared\nweight tag explicitly.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(VJEPA2ViTGiantWeights, optional, keyword - only)",
+          "description": "Explicit weight enum member; takes precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2Model",
+        "description": "Context encoder, EMA target encoder and predictor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_giant\")\n>>> config.dim, config.depth, config.num_heads\n(1408, 40, 22)\n>>> round(config.mlp_ratio, 4), config.predictor_mlp_ratio\n(4.3636, 4.0)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The release lists\nViT-g/16 at 1B parameters and resolution 256.  This is the variant the\naction-conditioned model is post-trained from, and the only one whose\nencoder widens its feed-forward to `48 / 11` while keeping 22\nattention heads.  The FPC64-256 tag reproduces its source to `1.0e-4`\nrelative."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2Model",
+        "type": "VJEPA2Model",
+        "params": 2046729216,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_RoPEVideoEncoder",
+            "params": 1012173952,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv3d",
+                "params": 2164096,
+                "own_params": 2164096,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 1010007040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 25250176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 7935488,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 5951616,
+                            "own_params": 5951616,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1983872,
+                            "own_params": 1983872,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 17309056,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 8656896,
+                            "own_params": 8656896,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 8652160,
+                            "own_params": 8652160,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 40
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2816,
+                "own_params": 2816,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_RoPEVideoPredictor",
+            "params": 22381312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 541056,
+                "own_params": 541056,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 3840,
+                "own_params": 3840,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 542080,
+                "own_params": 542080,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa2_vit_giant_384",
+      "path": "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_giant_384",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_vit_giant_384(pretrained: bool | str = False, weights: VJEPA2ViTGiant384Weights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_pretrained.py#L223",
+      "subcategory": "pretrained",
+      "summary": "The released V-JEPA 2 ViT-g/16 backbone at 384 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "`True` loads the Lucid FPC64-384 tag; a string selects a declared\nweight tag explicitly.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(VJEPA2ViTGiant384Weights, optional, keyword - only)",
+          "description": "Explicit weight enum member; takes precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2Model",
+        "description": "Context encoder, EMA target encoder and predictor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_giant_384\")\n>>> config.image_size, config.token_grid\n(384, (32, 24, 24))\n>>> config.num_tokens\n18432"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The same network as\n`vjepa2_vit_giant` evaluated at a higher resolution: the rotary\ngeometry is computed from token positions rather than read from a\nlearned table, so the wider grid needs no interpolation and no new\nparameters — only more tokens, 18432 against 8192."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2Model",
+        "type": "VJEPA2Model",
+        "params": 2046729216,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_RoPEVideoEncoder",
+            "params": 1012173952,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv3d",
+                "params": 2164096,
+                "own_params": 2164096,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 1010007040,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 25250176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 7935488,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 5951616,
+                            "own_params": 5951616,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1983872,
+                            "own_params": 1983872,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 17309056,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 8656896,
+                            "own_params": 8656896,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 8652160,
+                            "own_params": 8652160,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 40
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2816,
+                "own_params": 2816,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_RoPEVideoPredictor",
+            "params": 22381312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 541056,
+                "own_params": 541056,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 3840,
+                "own_params": 3840,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 542080,
+                "own_params": 542080,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa2_vit_giant_384_cls",
+      "path": "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_giant_384_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_vit_giant_384_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_pretrained.py#L426",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA 2 ViT-g/16 at 384 pixels under the paper's attentive probe.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The probe's own weights are not published; `True` raises.  The\nbackbone tags are reachable through `vjepa2_vit_giant_384`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2ForVideoClassification",
+        "description": "The pretraining networks, the attentive pooler and a classifier."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_giant_384_cls\")\n>>> config.dim, config.depth, config.num_heads\n(1408, 40, 22)\n>>> config.num_pooler_layers, config.num_classes\n(3, 400)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The released\nclassifiers read a frozen backbone through three self-attention blocks\nand one learned query whose cross-attention carries no output\nprojection — the layout `num_pooler_layers` defaults to, checked\nagainst the published `ssv2` classifier to `4.3e-6`.\n`num_classes` defaults to 400, Kinetics-400's count."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2ForVideoClassification",
+        "type": "VJEPA2ForVideoClassification",
+        "params": 2146311056,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vjepa2",
+            "type": "VJEPA2Model",
+            "params": 2046729216,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_RoPEVideoEncoder",
+                "params": 1012173952,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "Conv3d",
+                    "params": 2164096,
+                    "own_params": 2164096,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 1010007040,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 25250176,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2816,
+                            "own_params": 2816,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 7935488,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 5951616,
+                                "own_params": 5951616,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1983872,
+                                "own_params": 1983872,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2816,
+                            "own_params": 2816,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 17309056,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 8656896,
+                                "own_params": 8656896,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 8652160,
+                                "own_params": 8652160,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 40
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2816,
+                    "own_params": 2816,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_RoPEVideoPredictor",
+                "params": 22381312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 541056,
+                    "own_params": 541056,
+                    "children": []
+                  },
+                  {
+                    "name": "mask_tokens",
+                    "type": "ParameterList",
+                    "params": 3840,
+                    "own_params": 3840,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 542080,
+                    "own_params": 542080,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_AttentivePooler",
+            "params": 99018240,
+            "own_params": 1408,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 75750528,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SelfAttentionBlock",
+                    "params": 25250176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 5951616,
+                        "own_params": 5951616,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1983872,
+                        "own_params": 1983872,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 17309056,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 8656896,
+                            "own_params": 8656896,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 8652160,
+                            "own_params": 8652160,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "norm_keys",
+                "type": "LayerNorm",
+                "params": 2816,
+                "own_params": 2816,
+                "children": []
+              },
+              {
+                "name": "query",
+                "type": "Linear",
+                "params": 1983872,
+                "own_params": 1983872,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "norm_out",
+                "type": "LayerNorm",
+                "params": 2816,
+                "own_params": 2816,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "_FeedForward",
+                "params": 17309056,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 8656896,
+                    "own_params": 8656896,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 8652160,
+                    "own_params": 8652160,
+                    "children": []
+                  },
+                  {
+                    "name": "drop",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 563600,
+            "own_params": 563600,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa2_vit_giant_cls",
+      "path": "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_giant_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_vit_giant_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_pretrained.py#L375",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA 2 ViT-g/16 at 256 pixels under the paper's attentive probe.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The probe's own weights are not published; `True` raises.  The\nbackbone tags are reachable through `vjepa2_vit_giant`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2ForVideoClassification",
+        "description": "The pretraining networks, the attentive pooler and a classifier."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_giant_cls\")\n>>> config.dim, config.depth, config.num_heads\n(1408, 40, 22)\n>>> config.num_pooler_layers, config.num_classes\n(3, 400)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The released\nclassifiers read a frozen backbone through three self-attention blocks\nand one learned query whose cross-attention carries no output\nprojection — the layout `num_pooler_layers` defaults to, checked\nagainst the published `ssv2` classifier to `4.3e-6`.\n`num_classes` defaults to 400, Kinetics-400's count."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2ForVideoClassification",
+        "type": "VJEPA2ForVideoClassification",
+        "params": 2146311056,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vjepa2",
+            "type": "VJEPA2Model",
+            "params": 2046729216,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_RoPEVideoEncoder",
+                "params": 1012173952,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "Conv3d",
+                    "params": 2164096,
+                    "own_params": 2164096,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 1010007040,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 25250176,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2816,
+                            "own_params": 2816,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 7935488,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 5951616,
+                                "own_params": 5951616,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1983872,
+                                "own_params": 1983872,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2816,
+                            "own_params": 2816,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 17309056,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 8656896,
+                                "own_params": 8656896,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 8652160,
+                                "own_params": 8652160,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 40
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2816,
+                    "own_params": 2816,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_RoPEVideoPredictor",
+                "params": 22381312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 541056,
+                    "own_params": 541056,
+                    "children": []
+                  },
+                  {
+                    "name": "mask_tokens",
+                    "type": "ParameterList",
+                    "params": 3840,
+                    "own_params": 3840,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 542080,
+                    "own_params": 542080,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_AttentivePooler",
+            "params": 99018240,
+            "own_params": 1408,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 75750528,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SelfAttentionBlock",
+                    "params": 25250176,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 5951616,
+                        "own_params": 5951616,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1983872,
+                        "own_params": 1983872,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2816,
+                        "own_params": 2816,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 17309056,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 8656896,
+                            "own_params": 8656896,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 8652160,
+                            "own_params": 8652160,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "norm_keys",
+                "type": "LayerNorm",
+                "params": 2816,
+                "own_params": 2816,
+                "children": []
+              },
+              {
+                "name": "query",
+                "type": "Linear",
+                "params": 1983872,
+                "own_params": 1983872,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "norm_out",
+                "type": "LayerNorm",
+                "params": 2816,
+                "own_params": 2816,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "_FeedForward",
+                "params": 17309056,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 8656896,
+                    "own_params": 8656896,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 8652160,
+                    "own_params": 8652160,
+                    "children": []
+                  },
+                  {
+                    "name": "drop",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 563600,
+            "own_params": 563600,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa2_vit_huge",
+      "path": "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_huge",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_vit_huge(pretrained: bool | str = False, weights: VJEPA2ViTHugeWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_pretrained.py#L112",
+      "subcategory": "pretrained",
+      "summary": "The released V-JEPA 2 ViT-H/16 backbone at 256 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "`True` loads the Lucid FPC64-256 tag; a string selects a declared\nweight tag explicitly.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(VJEPA2ViTHugeWeights, optional, keyword - only)",
+          "description": "Explicit weight enum member; takes precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2Model",
+        "description": "Context encoder, EMA target encoder and predictor."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_huge\")\n>>> config.dim, config.depth, config.num_heads\n(1280, 32, 16)\n>>> config.token_grid, config.num_tokens\n((32, 16, 16), 8192)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The release lists\nViT-H/16 at 600M parameters and resolution 256 — that figure counts one\nencoder, while this factory builds two of them and the predictor.  The\nFPC64-256 SafeTensors tag is hosted by Lucid and reproduces its source\nto `5.3e-5` relative."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2Model",
+        "type": "VJEPA2Model",
+        "params": 1285578880,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_RoPEVideoEncoder",
+            "params": 631648000,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv3d",
+                "params": 1967360,
+                "own_params": 1967360,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 629678080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 19677440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 6558720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 4919040,
+                            "own_params": 4919040,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1639680,
+                            "own_params": 1639680,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 13113600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 6558720,
+                            "own_params": 6558720,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 6554880,
+                            "own_params": 6554880,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 32
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_RoPEVideoPredictor",
+            "params": 22282880,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 491904,
+                "own_params": 491904,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 3840,
+                "own_params": 3840,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 492800,
+                "own_params": 492800,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa2_vit_huge_cls",
+      "path": "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_huge_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_vit_huge_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_pretrained.py#L324",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA 2 ViT-H/16 under the paper's attentive probe.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The probe's own weights are not published; `True` raises.  The\nbackbone tags are reachable through `vjepa2_vit_huge`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2ForVideoClassification",
+        "description": "The pretraining networks, the attentive pooler and a classifier."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_huge_cls\")\n>>> config.dim, config.depth, config.num_heads\n(1280, 32, 16)\n>>> config.num_pooler_layers, config.num_classes\n(3, 400)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The released\nclassifiers read a frozen backbone through three self-attention blocks\nand one learned query whose cross-attention carries no output\nprojection — the layout `num_pooler_layers` defaults to, checked\nagainst the published `ssv2` classifier to `4.3e-6`.\n`num_classes` defaults to 400, Kinetics-400's count."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2ForVideoClassification",
+        "type": "VJEPA2ForVideoClassification",
+        "params": 1363162640,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vjepa2",
+            "type": "VJEPA2Model",
+            "params": 1285578880,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_RoPEVideoEncoder",
+                "params": 631648000,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "Conv3d",
+                    "params": 1967360,
+                    "own_params": 1967360,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 629678080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 19677440,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 6558720,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 4919040,
+                                "own_params": 4919040,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1639680,
+                                "own_params": 1639680,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 13113600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 6558720,
+                                "own_params": 6558720,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 6554880,
+                                "own_params": 6554880,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 32
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_RoPEVideoPredictor",
+                "params": 22282880,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 491904,
+                    "own_params": 491904,
+                    "children": []
+                  },
+                  {
+                    "name": "mask_tokens",
+                    "type": "ParameterList",
+                    "params": 3840,
+                    "own_params": 3840,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 492800,
+                    "own_params": 492800,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_AttentivePooler",
+            "params": 77071360,
+            "own_params": 1280,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 59032320,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SelfAttentionBlock",
+                    "params": 19677440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 4919040,
+                        "own_params": 4919040,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1639680,
+                        "own_params": 1639680,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 13113600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 6558720,
+                            "own_params": 6558720,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 6554880,
+                            "own_params": 6554880,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "norm_keys",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              },
+              {
+                "name": "query",
+                "type": "Linear",
+                "params": 1639680,
+                "own_params": 1639680,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "norm_out",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "_FeedForward",
+                "params": 13113600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 6558720,
+                    "own_params": 6558720,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 6554880,
+                    "own_params": 6554880,
+                    "children": []
+                  },
+                  {
+                    "name": "drop",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 512400,
+            "own_params": 512400,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa2_vit_large",
+      "path": "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_large",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_vit_large(pretrained: bool | str = False, weights: VJEPA2ViTLargeWeights | None = None, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_pretrained.py#L57",
+      "subcategory": "pretrained",
+      "summary": "Construct the released V-JEPA 2 ViT-L/16 backbone at 256 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool or str",
+          "description": "`True` loads the Lucid FPC64-256 tag; a string selects a declared\nweight tag explicitly.",
+          "default": "False"
+        },
+        {
+          "name": "weights",
+          "annotation": "(VJEPA2ViTLargeWeights, optional, keyword - only)",
+          "description": "Explicit weight enum member; takes precedence over `pretrained`.",
+          "default": "None"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2Model",
+        "description": ""
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa2_vit_large\")\n>>> config.dim, config.depth, config.num_heads\n(1024, 24, 16)\n>>> config.token_grid, config.num_tokens\n((32, 16, 16), 8192)"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The release lists\nthis variant as ViT-L/16, 300M parameters, resolution 256 — that figure\ncounts one encoder, while this factory builds two of them and the\npredictor.  The FPC64-256 tag reproduces its source to `1.7e-5`\nrelative, the closest of the four."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2Model",
+        "type": "VJEPA2Model",
+        "params": 629856640,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_RoPEVideoEncoder",
+            "params": 303885312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "Conv3d",
+                "params": 1573888,
+                "own_params": 1573888,
+                "children": []
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 3148800,
+                            "own_params": 3148800,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_RoPEVideoPredictor",
+            "params": 22086016,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 393600,
+                "own_params": 393600,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 3840,
+                "own_params": 3840,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "_RoPEAttention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          },
+                          {
+                            "name": "proj_drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "drop_path",
+                        "type": "DropPath",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 394240,
+                "own_params": 394240,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa2_vit_large_cls",
+      "path": "lucid.models.vision.vjepa2._pretrained.vjepa2_vit_large_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa2_vit_large_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_pretrained.py#L278",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA 2 ViT-L/16 under the paper's attentive probe.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The probe's own weights are not published; `True` raises.  The\nbackbone tags are reachable through `vjepa2_vit_large`.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPA2Config` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPA2ForVideoClassification",
+        "description": "The pretraining networks, the attentive pooler and a classifier."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"vjepa2_vit_large_cls\").num_classes\n400"
+      ],
+      "notes": [
+        "Reference: Assran et al., [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.  The released\nclassifiers read a frozen backbone through three self-attention\nblocks and one learned query, which is what `num_pooler_layers`\ndefaults to; `num_classes` defaults to 400, Kinetics-400's count."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPA2ForVideoClassification",
+        "type": "VJEPA2ForVideoClassification",
+        "params": 679602960,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vjepa2",
+            "type": "VJEPA2Model",
+            "params": 629856640,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_RoPEVideoEncoder",
+                "params": 303885312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "Conv3d",
+                    "params": 1573888,
+                    "own_params": 1573888,
+                    "children": []
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 3148800,
+                                "own_params": 3148800,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_RoPEVideoPredictor",
+                "params": 22086016,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 393600,
+                    "own_params": 393600,
+                    "children": []
+                  },
+                  {
+                    "name": "mask_tokens",
+                    "type": "ParameterList",
+                    "params": 3840,
+                    "own_params": 3840,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "_Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "_RoPEAttention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              },
+                              {
+                                "name": "proj_drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "drop_path",
+                            "type": "DropPath",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "_FeedForward",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              },
+                              {
+                                "name": "drop",
+                                "type": "Dropout",
+                                "params": 0,
+                                "own_params": 0,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 394240,
+                    "own_params": 394240,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_AttentivePooler",
+            "params": 49336320,
+            "own_params": 1024,
+            "children": [
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 37788672,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "_SelfAttentionBlock",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3148800,
+                        "own_params": 3148800,
+                        "children": []
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1049600,
+                        "own_params": 1049600,
+                        "children": []
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "_FeedForward",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          },
+                          {
+                            "name": "drop",
+                            "type": "Dropout",
+                            "params": 0,
+                            "own_params": 0,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 3
+                  }
+                ]
+              },
+              {
+                "name": "norm_keys",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "query",
+                "type": "Linear",
+                "params": 1049600,
+                "own_params": 1049600,
+                "children": [],
+                "repeat": 3
+              },
+              {
+                "name": "norm_out",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "_FeedForward",
+                "params": 8393728,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 4198400,
+                    "own_params": 4198400,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 4195328,
+                    "own_params": 4195328,
+                    "children": []
+                  },
+                  {
+                    "name": "drop",
+                    "type": "Dropout",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 410000,
+            "own_params": 410000,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "VJEPA2ViTGiant384Weights",
+      "path": "lucid.models.vision.vjepa2._weights.VJEPA2ViTGiant384Weights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ViTGiant384Weights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_weights.py#L177",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "FPC64 ViT-g/16 representation weights at 384 pixels.",
+      "extended": "The same network as the 256-pixel ViT-g tag, read over a wider grid:\nthe rotary geometry is computed from token positions, so no parameter\nchanges and no table is interpolated.  Reproduces its source to\n`1.9e-4` relative over 18432 tokens against the other's 8192.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPA2ViTGiantWeights",
+      "path": "lucid.models.vision.vjepa2._weights.VJEPA2ViTGiantWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ViTGiantWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_weights.py#L145",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "FPC64 ViT-g/16 representation weights at 256 pixels.",
+      "extended": "Converted from `facebook/vjepa2-vitg-fpc64-256`.  This is the encoder\nV-JEPA 2-AC is post-trained from, and the only one that widens its\nfeed-forward to `48 / 11`.  Reproduces its source to `1.0e-4`\nrelative — just over the parity tool's global bound, which was left\nwhere it is because the gap tracks depth rather than a defect.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPA2ViTHugeWeights",
+      "path": "lucid.models.vision.vjepa2._weights.VJEPA2ViTHugeWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ViTHugeWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_weights.py#L115",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "FPC64 ViT-H/16 representation weights at 256 pixels.",
+      "extended": "Converted from `facebook/vjepa2-vith-fpc64-256` the same way as the\nViT-L tag.  Reproduces its source to `5.3e-5` relative; the residual\ngrows with depth, and this network is eight blocks deeper.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPA2ViTLargeWeights",
+      "path": "lucid.models.vision.vjepa2._weights.VJEPA2ViTLargeWeights",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "WeightsEnum"
+      ],
+      "labels": [],
+      "signature": "VJEPA2ViTLargeWeights()",
+      "source": "https://github.com/ChanLumerico/lucid/blob/8145fa483/lucid/models/vision/vjepa2/_weights.py#L84",
+      "subcategory": "weights",
+      "methods": [],
+      "summary": "FPC64 ViT-L/16 representation weights at 256 pixels.",
+      "extended": "Converted from `facebook/vjepa2-vitl-fpc64-256`: separate query, key\nand value projections fused, and the context encoder mirrored into the\nEMA target.  Reproduces its source to `1.7e-5` relative over the\nencoder and the masked predictor — the closest of the four.",
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [],
+      "notes": [],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    }
+  ],
+  "summary": "V-JEPA 2 — self-supervised video feature prediction.",
+  "extended": null,
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "V-JEPA 2",
+  "citation": "Assran, Mahmoud, et al. \"V-JEPA 2: Self-Supervised Video Models Enable Understanding, Prediction and Planning.\" [arXiv:2506.09985](https://arxiv.org/abs/2506.09985), 2025.",
+  "theory": "V-JEPA 2 learns a video representation by predicting the target encoder's\nlatent features at hidden tubelet positions.  A 3-D patch embedding turns\na clip into a sequence of $2\\times16\\times16$ tubelets.  The context\nencoder sees only the unmasked indices, while the predictor inserts learned\nmask tokens and reconstructs the target encoder's representation at the\nheld-out indices.  The target encoder is an exponential moving average of\nthe context encoder and is not differentiated through.\n\nThe released backbone uses a pre-normalised transformer with three-axis\nrotary position encoding.  Each attention head gives one third of its\nwidth to time, row and column — rounded down to an even number, so a\nhead of 64 channels rotates 20 per axis and leaves the last four\nuntouched.  Because position enters through that rotation rather than a\nlearned table, a clip of a different length or resolution needs no\ninterpolation and no new parameters: the 384-pixel variant is the\n256-pixel network read over a wider grid.\n\nTwo details of the released rotation are reproduced rather than\ncorrected.  The frequency half is repeated as a block before adjacent\nfeature pairs are rotated, which pairs each rotation with a frequency\nthat a straightforward implementation would not choose; the upstream\nsource marks it as a bug and keeps it, because the published weights\nwere trained through it.  Fixing it yields a different model, not a\nbetter-implemented one.\n\nThe predictor is narrower than the video encoder — 384 channels and 12\nheads in every released checkpoint, whatever the encoder's width — and\nowns ten mask-token slots, one per block the mask generator samples.  It\nsees the context tokens and the mask tokens together, sorted into token\norder so that a position's identity reaches attention through the same\nrotary coordinates the encoder used, then answers only at the held-out\npositions.  Targets come from the momentum encoder and are\nlayer-normalised, so the objective compares directions in\nrepresentation space rather than magnitudes.",
+  "tasks": [
+    "image-classification"
+  ]
+}
