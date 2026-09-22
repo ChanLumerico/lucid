@@ -457,6 +457,90 @@ def _parse_auto_augment(spec: str) -> TransformLike:
 
 
 @_register_preset
+class VideoClassification(TransformsPreset):
+    r"""Inference preset for a decoded video clip.
+
+    The released video encoders preprocess a clip by running the
+    ordinary ImageNet evaluation pipeline on **every frame** — shortest
+    side to ``crop_size * 256 / 224``, centre crop, rescale, ImageNet
+    normalise, bilinear throughout.  Nothing is done across time: no
+    temporal resampling, no frame selection.  Which frames reach this
+    is the caller's decision, because it is the decoder's.
+
+    Decoding is not done here and cannot be: reading a container is an
+    external dependency, and Lucid's compute path takes none (H4).  The
+    input is an already-decoded clip.
+
+    Parameters
+    ----------
+    crop_size : int
+        Square centre crop, per frame.  The released encoders use 256,
+        or 384 for the high-resolution ViT-g.
+    resize_size : int or None, optional
+        Shortest side before the crop.  Defaults to the released rule,
+        ``round(crop_size * 256 / 224)`` — 292 for a 256 crop.
+    mean, std : tuple of float, optional
+        Channel statistics; ImageNet's by default.
+    interpolation : str or Interpolation, optional
+        Resampling filter, bilinear by default as the release uses.
+
+    Examples
+    --------
+    A clip in, a clip out — ``(T, C, H, W)`` both sides:
+
+    >>> import lucid, lucid.utils.transforms as T
+    >>> preset = T.VideoClassification(crop_size=64)
+    >>> tuple(preset(T.Image(lucid.rand(4, 3, 90, 120))).data.shape)
+    (4, 3, 64, 64)
+    """
+
+    preset_type: ClassVar[str] = "VideoClassification"
+
+    def __init__(
+        self,
+        crop_size: int,
+        *,
+        resize_size: int | None = None,
+        mean: tuple[float, ...] | None = None,
+        std: tuple[float, ...] | None = None,
+        interpolation: str | Interpolation = Interpolation.BILINEAR,
+    ) -> None:
+        self.crop_size = crop_size
+        # The release derives it rather than declaring it, and it
+        # *truncates*: ``int(256 * 256 / 224)`` is 292, not the 293 that
+        # rounding 292.57 would give.  One pixel of resize moves the
+        # centre crop's window and rescales every pixel inside it — the
+        # released processor's own config records shortest_edge 292.
+        self.resize_size = (
+            resize_size if resize_size is not None else int(crop_size * 256 / 224)
+        )
+        self.mean = mean if mean is not None else _IMAGENET_MEAN
+        self.std = std if std is not None else _IMAGENET_STD
+        self.interpolation = interpolation
+        # Frames thread through the image stages on the leading axis,
+        # which those stages already treat as a batch.
+        self._pipeline = Compose(
+            [
+                _ReferenceShorterSide(self.resize_size, interpolation=interpolation),
+                CenterCrop(crop_size, crop_size),
+                Normalize(self.mean, self.std, max_pixel_value=1.0),
+            ]
+        )
+
+    @override
+    def _init_kwargs(self) -> dict[str, object]:
+        interp = self.interpolation
+        return {
+            "crop_size": self.crop_size,
+            "resize_size": self.resize_size,
+            "mean": list(self.mean),
+            "std": list(self.std),
+            "interpolation": (
+                interp.value if isinstance(interp, Interpolation) else interp
+            ),
+        }
+
+
 class ImageClassificationAugment(TransformsPreset):
     r"""Standard ImageNet classification *training* preset (augmentation).
 

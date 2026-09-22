@@ -3,12 +3,18 @@
 The four representation checkpoints are the public FPC64 releases: ViT-L,
 ViT-H and ViT-g at 256 pixels, plus the ViT-g 384-pixel evaluation release.
 They are converted into Lucid's fused-QKV / EMA-target layout and hosted under
-the ``lucid-dl`` organisation.  The transform is deliberately a no-op because
-the model consumes an already decoded ``(B, T, C, H, W)`` video tensor; the
-frame count, spatial size and ImageNet normalisation are recorded in ``meta``.
+the ``lucid-dl`` organisation.
+
+Each tag carries the released inference preprocessing:
+:class:`~lucid.utils.transforms.VideoClassification`, which runs the ImageNet
+evaluation pipeline on every frame — shortest side to ``int(crop * 256 / 224)``,
+centre crop, rescale, ImageNet normalise.  *Decoding* is not part of it and
+cannot be: reading a container needs a library Lucid's compute path may not
+take (H4).  Hand it an already-decoded clip; which frames to hand it is the
+decoder's decision, and ``meta`` records the released frame count.
 """
 
-from lucid.utils.transforms import Compose
+from lucid.utils.transforms import VideoClassification
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
 __all__ = [
@@ -18,7 +24,8 @@ __all__ = [
     "VJEPA2ViTGiant384Weights",
 ]
 
-_NOOP = Compose([])
+_PRESET_256 = VideoClassification(crop_size=256)
+_PRESET_384 = VideoClassification(crop_size=384)
 
 
 def _requires(
@@ -95,7 +102,7 @@ class VJEPA2ViTLargeWeights(WeightsEnum):
         url=_url("vjepa2-vitl", "FPC64_256"),
         sha256="ad1c6f0894438b0a549ad3fff0a49a5f563c663ca5f2c9474be43a9e58469b3e",
         num_classes=1024,
-        transforms=_NOOP,
+        transforms=_PRESET_256,
         requires_config=_requires(image_size=256, dim=1024, depth=24, num_heads=16),
         meta=_meta(
             tag="FPC64_256",
@@ -125,7 +132,7 @@ class VJEPA2ViTHugeWeights(WeightsEnum):
         url=_url("vjepa2-vith", "FPC64_256"),
         sha256="4ccd2fe7944df5970c0cd10bdbcd75a7b5a25b2f095601859600650daa4f0780",
         num_classes=1280,
-        transforms=_NOOP,
+        transforms=_PRESET_256,
         requires_config=_requires(image_size=256, dim=1280, depth=32, num_heads=16),
         meta=_meta(
             tag="FPC64_256",
@@ -157,7 +164,7 @@ class VJEPA2ViTGiantWeights(WeightsEnum):
         url=_url("vjepa2-vitg", "FPC64_256"),
         sha256="8bbf146683b9aea9592fc2b85a7c1506c03edce08b225fe68ddd96443c0093e3",
         num_classes=1408,
-        transforms=_NOOP,
+        transforms=_PRESET_256,
         requires_config=_requires(image_size=256, dim=1408, depth=40, num_heads=22),
         meta=_meta(
             tag="FPC64_256",
@@ -188,7 +195,7 @@ class VJEPA2ViTGiant384Weights(WeightsEnum):
         url=_url("vjepa2-vitg-384", "FPC64_384"),
         sha256="60e3349300380d4c0c3b3cfc7c21b8acc474eddbb7f8b0eb5cc54e0c710d889a",
         num_classes=1408,
-        transforms=_NOOP,
+        transforms=_PRESET_384,
         requires_config=_requires(image_size=384, dim=1408, depth=40, num_heads=22),
         meta=_meta(
             tag="FPC64_384",

@@ -17593,6 +17593,12 @@
       "module": "lucid.utils.transforms"
     }
   ],
+  "lucid.utils.transforms._presets.VideoClassification": [
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms"
+    }
+  ],
   "lucid.utils.transforms._spatial.Affine": [
     {
       "kind": "module",

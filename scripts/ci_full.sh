@@ -116,6 +116,9 @@ echo "==> Kernel template coverage"
 echo "==> Storage API compliance"
 "$PYTHON_BIN" tools/check_storage_api.py
 
+echo "==> Dead model-config fields"
+"$PYTHON_BIN" tools/check_dead_config_fields.py
+
 echo "==> H4 numpy guard (sanctioned bridge files only)"
 "$PYTHON_BIN" tools/check_numpy_h4.py
 
@@ -168,6 +171,20 @@ fi
 # conformance of every family under lucid/models/.  Strict mode is OFF so
 # advisory warnings don't fail CI; flip to --strict when ready to enforce.
 # Spec: obsidian/architecture/arch-models-family-contract.md
+# The model tier as a whole is excluded above — a full pass wants 50-60
+# GB, past any hosted runner.  But the four files that gate the zoo's
+# *contract* rather than its numbers are cheap: 377 tests, 29 seconds,
+# 2.4 GB peak.  Leaving them out meant the rules the zoo states about
+# itself were enforced only on whoever remembered to run them locally —
+# "every family takes a training step" among them, which is how a family
+# reached a release branch untrained.
+echo "==> Model-zoo contract tests"
+"$PYTHON_BIN" -m pytest -q -p no:randomly \
+    lucid/test/unit/models/test_family_contract.py \
+    lucid/test/unit/models/test_models_train_step.py \
+    lucid/test/unit/models/test_models_eval_determinism.py \
+    lucid/test/unit/models/test_video_preprocessing.py
+
 echo "==> Model-zoo family contract"
 "$PYTHON_BIN" -m tools.validate_model_zoo --runtime
 

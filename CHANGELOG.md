@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fingerprint model summaries by content, not mtime
 
+### Added
+
+- three instruments for the axis weight parity cannot see
+
 ---
 
 ## [3.14.0] — 2026-09-22

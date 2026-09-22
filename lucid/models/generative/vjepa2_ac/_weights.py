@@ -1,11 +1,11 @@
 """Pretrained SafeTensors declaration for V-JEPA 2-AC."""
 
-from lucid.utils.transforms import Compose
+from lucid.utils.transforms import VideoClassification
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
 __all__ = ["VJEPA2ACWeights"]
 
-_NOOP = Compose([])
+_PRESET = VideoClassification(crop_size=256)
 _REQUIRES_CONFIG: dict[str, object] = {
     "image_size": 256,
     "patch_size": 16,
@@ -43,7 +43,7 @@ class VJEPA2ACWeights(WeightsEnum):
         url=f"{HUB_BASE}/vjepa2-ac-vitg/resolve/main/OFFICIAL/model.safetensors",
         sha256="67b4fac83e0d1f37b4777e1f3e70afe3520e5a59dcdccf0f22fe5b3838d410ce",
         num_classes=1408,
-        transforms=_NOOP,
+        transforms=_PRESET,
         requires_config=_REQUIRES_CONFIG,
         meta={
             "tag": "OFFICIAL",
