@@ -17,89 +17,115 @@ DropPath at all, and the validator, the family contract test, ``mypy
 --strict``, ruff and the summary builder all passed. A user setting
 ``drop_path_rate=0.3`` got a model identical to ``0.0``.
 
-This is deliberately a *name* check, not a dataflow one: it asks
-whether the field's name appears anywhere in the family's own sources
-apart from the config that declares it — ``_model.py`` reads most of
-them, but a factory legitimately consumes ``variant`` or
-``rpn_nms_thresh`` in ``_pretrained.py`` and never in the model. That
-is cheap and has no false negatives worth worrying about — a field the
-model genuinely uses has to name it somewhere. It does have false
-positives, which is what ``_ALLOWED`` is for, and it cannot see the
-other half of the failure: a name that *is* mentioned but is overridden
-at the call site, as ``uniform_power`` was by ``_sincos_3d(dim, grid,
-False)``. Read the call sites when adding a family; this catches the
-half that a reader would otherwise have to hold in their head.
+How a field is credited
+-----------------------
+This is a *name* check, not a dataflow one, and it credits a field
+three ways. The first version had only the first of them and
+over-reported by more than half — ten of the seventeen fields it
+flagged were reached by one of the other two:
+
+``own``
+    The name appears somewhere in the family's own sources outside the
+    config that declares it. The ordinary case.
+
+``derived``
+    The name appears in ``_config.py`` itself, inside a method other
+    than ``__post_init__`` or a ``_validate*`` helper — a derived
+    property the model reads. ``flow_matching.exact_trace_max_dim``
+    only ever reaches the model through ``resolved_trace_method``.
+    Validators are excluded deliberately: a field that is only
+    range-checked still does nothing.
+
+``config-read``
+    Some other file in the zoo reads it *off a config* —
+    ``config.x`` / ``cfg.x`` / ``self._cfg.x`` / ``getattr(cfg, "x")``.
+    Mask R-CNN's ``rpn_*`` thresholds are consumed by Faster R-CNN's
+    shared proposal layer, and the text families' ``eos_token_id`` by
+    ``GenerationMixin``; neither name occurs in the owning family at
+    all. The receiver is required — matching a bare ``.x`` credited
+    ``ddpm.clip_denoised`` to the *scheduler's* own attribute of that
+    name, which is a different variable that happens to agree.
+
+Two things it still cannot see, both worth knowing:
+
+* A name mentioned but overridden at the call site, as
+  ``uniform_power`` was by ``_sincos_3d(dim, grid, False)``.
+* Whose config a ``config-read`` belongs to. A field name shared
+  across a domain's configs is credited domain-wide, so
+  ``LanguageModelConfig``'s token ids count as read for every text
+  family once one of them reads them.
+
+Read the call sites when adding a family; this catches the half a
+reader would otherwise have to hold in their head. ``--list`` prints
+the rule that credited each field so the verdict can be audited rather
+than trusted.
+
+Everything left over is in ``_ALLOWED`` with a reason. There is no
+untriaged baseline: a field that is neither read nor answered for
+fails the gate.
 
 Run::
 
     python tools/check_dead_config_fields.py
     python tools/check_dead_config_fields.py --list   # every field, with its verdict
 
-Seventeen fields across thirteen families were already unreferenced
-when this check was written. They are listed in ``_BASELINE``, which is
-not an excuse list: the check still prints them every run, and the gate
-only fails on a field that is in neither ``_ALLOWED`` nor the baseline.
-The point is to stop the eighteenth, not to claim the seventeen are
-fine. Work one off the baseline and delete its line.
-
 Exit codes
 ----------
-0 — every declared field is named, allowed, or on the baseline.
-1 — at least one is none of those.
+0 — every declared field is read by one of the three rules, or allowed.
+1 — at least one is neither.
 """
 
 import argparse
 import ast
+import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MODELS_ROOT = REPO_ROOT / "lucid" / "models"
 
-#: Fields that are declared and legitimately not named in ``_model.py``,
-#: each with the reason.  Keep this list short and each entry answerable:
-#: an unexplained entry is how a real dead field hides.
+#: Fields that are declared and legitimately unread, each with the
+#: reason.  Keep every entry answerable: an unexplained one is how a
+#: real dead field hides.
 _ALLOWED: dict[tuple[str, str], str] = {
     ("*", "model_type"): (
         "ClassVar the registry reads, not a family-local parameter"
-    ),
-    ("vjepa2_ac", "num_frames"): (
-        "records the released clip length and sizes token_grid; the action "
-        "model takes any frame count of two or more, which its config "
-        "docstring says"
     ),
     ("vjepa", "sampling_rate"): (
         "records the released clip's frame stride; the model is handed an "
         "already-sampled clip"
     ),
+    ("diamond", "burn_in"): (
+        "steps of real experience an imagination loop replays to warm the "
+        "LSTM state before rollout; the family ships the denoiser and its "
+        "heads, not the loop, so the paper's value is recorded for whoever "
+        "writes one"
+    ),
+    ("genie", "action_encoder_head_dim"): (
+        "read as getattr(self, f'{stack}_head_dim') by "
+        "GenieConfig.attention_head_dim, which _model.py calls per stack — "
+        "the literal name occurs nowhere for a name search to find"
+    ),
+    ("genie", "action_decoder_head_dim"): (
+        "read as getattr(self, f'{stack}_head_dim') by "
+        "GenieConfig.attention_head_dim, which _model.py calls per stack — "
+        "the literal name occurs nowhere for a name search to find"
+    ),
+    ("bert", "position_embedding_type"): (
+        "single-valued Literal['absolute'] recording which positional "
+        "scheme the family implements; the type admits no other value, so "
+        "it documents rather than selects"
+    ),
+    ("roformer", "position_embedding_type"): (
+        "single-valued Literal['rotary'] recording which positional scheme "
+        "the family implements; the type admits no other value, so it "
+        "documents rather than selects"
+    ),
 }
 
-
-#: Unreferenced when this check was introduced (2026-09-22), untriaged.
-#: Each is either a real dead field or a decorative one that nobody has
-#: written the reason for yet.  Shrinking this list is the work; the
-#: gate exists to keep it from growing.
-_BASELINE: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("ddpm", "clip_denoised"),
-        ("diamond", "burn_in"),
-        ("flow_matching", "exact_trace_max_dim"),
-        ("genie", "action_encoder_head_dim"),
-        ("genie", "action_decoder_head_dim"),
-        ("rectified_flow", "exact_trace_max_dim"),
-        ("bert", "position_embedding_type"),
-        ("gpt", "pad_token_id"),
-        ("gpt2", "pad_token_id"),
-        ("gpt2", "bos_token_id"),
-        ("gpt2", "eos_token_id"),
-        ("roformer", "position_embedding_type"),
-        ("densenet", "memory_efficient"),
-        ("mask_rcnn", "rpn_nms_thresh"),
-        ("mask_rcnn", "rpn_min_size"),
-        ("mask_rcnn", "rpn_score_thresh"),
-        ("maskformer", "backbone_block"),
-    }
-)
+#: ``__post_init__`` and ``_validate*`` in a config are excluded from
+#: the ``derived`` rule: range-checking a field is not using it.
+_VALIDATORS = ("__post_init__",)
 
 
 def _declared_fields(config_path: Path) -> list[str]:
@@ -113,6 +139,35 @@ def _declared_fields(config_path: Path) -> list[str]:
             if isinstance(node.target, ast.Name) and not node.target.id.startswith("_"):
                 names.append(node.target.id)
     return names
+
+
+def _derived_source(config_path: Path) -> str:
+    """The config's own methods, minus the ones that only validate."""
+    text = config_path.read_text()
+    lines = text.splitlines()
+    chunks: list[str] = []
+    for node in ast.walk(ast.parse(text)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name in _VALIDATORS or node.name.startswith("_validate"):
+            continue
+        chunks.append("\n".join(lines[node.lineno - 1 : node.end_lineno]))
+    return "\n".join(chunks)
+
+
+def _config_read(field: str) -> re.Pattern[str]:
+    """``config.field`` / ``cfg.field`` / ``getattr(cfg, "field")``.
+
+    The receiver is part of the pattern on purpose.  A bare ``.field``
+    matches any object's attribute, and the zoo has several that share
+    a config field's name without being it.
+    """
+    name = re.escape(field)
+    holder = r"(?:config|cfg|_cfg|_config)"
+    return re.compile(
+        rf"(?:\b{holder}\.{name}\b)"
+        rf"|(?:getattr\(\s*(?:self\.)?{holder}\s*,\s*[\"']{name}[\"'])"
+    )
 
 
 def _families() -> list[tuple[str, Path]]:
@@ -137,8 +192,10 @@ def main() -> int:
     parser.add_argument("--family", help="only this family")
     args = parser.parse_args()
 
+    # Read the zoo once — the config-read rule scans all of it per field.
+    zoo = {p: p.read_text() for p in MODELS_ROOT.rglob("*.py")}
+
     dead: list[tuple[str, str]] = []
-    known: list[tuple[str, str]] = []
     checked = 0
     for family, family_dir in _families():
         if args.family and family != args.family:
@@ -146,41 +203,44 @@ def main() -> int:
         # Every .py in the family except the config itself: a factory
         # that selects a variant reads the field and the model never
         # sees it, which is not the failure this looks for.
-        source = [
+        own = [
             f.read_text()
             for f in sorted(family_dir.rglob("*.py"))
             if f.name != "_config.py"
         ]
+        derived = _derived_source(family_dir / "_config.py")
+        outside = {p: t for p, t in zoo.items() if family_dir not in p.parents}
+
         for field in _declared_fields(family_dir / "_config.py"):
             checked += 1
-            if any(field in text for text in source):
+            if any(field in text for text in own):
                 if args.list:
-                    print(f"  used     {family}.{field}")
+                    print(f"  own         {family}.{field}")
+                continue
+            if field in derived:
+                if args.list:
+                    print(f"  derived     {family}.{field}")
+                continue
+            pattern = _config_read(field)
+            reader = next((p for p, t in outside.items() if pattern.search(t)), None)
+            if reader is not None:
+                if args.list:
+                    where = reader.relative_to(MODELS_ROOT)
+                    print(f"  config-read {family}.{field} — {where}")
                 continue
             reason = _allowed(family, field)
             if reason is not None:
                 if args.list:
-                    print(f"  allowed  {family}.{field} — {reason}")
-                continue
-            if (family, field) in _BASELINE:
-                known.append((family, field))
-                if args.list:
-                    print(f"  baseline {family}.{field}")
+                    print(f"  allowed     {family}.{field} — {reason}")
                 continue
             dead.append((family, field))
             if args.list:
-                print(f"  DEAD     {family}.{field}")
-
-    if known:
-        print(
-            f"[check_dead_config_fields] {len(known)} field(s) on the untriaged "
-            f"baseline: " + ", ".join(f"{f}.{n}" for f, n in sorted(known))
-        )
+                print(f"  DEAD        {family}.{field}")
 
     if dead:
         print(
             f"[check_dead_config_fields] {len(dead)} field(s) declared but "
-            f"named nowhere in their family outside the config:",
+            f"read by nothing:",
             file=sys.stderr,
         )
         for family, field in dead:
@@ -188,15 +248,15 @@ def main() -> int:
         print(
             "\n  Either wire the field into the forward pass, or delete it. If it "
             "is genuinely decorative, add it to _ALLOWED in this file with the "
-            "reason — an entry nobody can answer is how a real one hides. Do "
-            "not add it to _BASELINE; that list is closed and only shrinks.",
+            "reason — an entry nobody can answer is how a real one hides. Run "
+            "with --list to see which rule credited every other field.",
             file=sys.stderr,
         )
         return 1
 
     print(
         f"[check_dead_config_fields] OK — {checked} field(s) across "
-        f"{len(_families())} families, none newly unaccounted for."
+        f"{len(_families())} families, every one read or answered for."
     )
     return 0
 

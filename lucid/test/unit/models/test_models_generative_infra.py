@@ -293,6 +293,37 @@ class TestDiffusionMixin:
         for inter in out.intermediates:
             assert tuple(inter.shape) == (1, 3, 8, 8)
 
+    def test_the_model_can_build_the_scheduler_its_config_describes(self) -> None:
+        """``clip_denoised`` had no route from the config to the sampler.
+
+        Every other schedule field was on the config too and had to be
+        retyped by the caller; a scheduler built with a different
+        schedule from the trained one produces plausible noise rather
+        than an error, so the mismatch is invisible.
+        """
+        from lucid.models.generative.ddpm import DDPMConfig, DDPMForImageGeneration
+
+        cfg = DDPMConfig(
+            sample_size=8,
+            base_channels=16,
+            channel_mult=(1,),
+            num_res_blocks=1,
+            resnet_groups=8,
+            num_train_timesteps=20,
+            beta_start=2e-4,
+            beta_end=0.03,
+            clip_denoised=False,
+        )
+        sched = DDPMForImageGeneration(cfg).make_scheduler()
+        assert sched.clip_denoised is False
+        assert (sched.num_train_timesteps, sched.beta_start, sched.beta_end) == (
+            cfg.num_train_timesteps,
+            cfg.beta_start,
+            cfg.beta_end,
+        )
+        assert sched.prediction_type == cfg.prediction_type
+        assert sched.beta_schedule == cfg.beta_schedule
+
     def test_generate_no_config_no_shape_raises(self) -> None:
         cfg = self._tiny_cfg()
         m = _DummyDiffusionModel(cfg).eval()
