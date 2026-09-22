@@ -519,10 +519,16 @@ class VideoClassification(TransformsPreset):
         self.interpolation = interpolation
         # Frames thread through the image stages on the leading axis,
         # which those stages already treat as a batch.
+        # ``floor``, not the zoo's usual ``round``: these weights are
+        # published through Hugging Face's fast processors, which place
+        # an odd margin down.  A 519-wide frame cropped to 256 starts at
+        # column 131 there and 132 under the rounding convention the
+        # reference vision package uses — one column, and on anything
+        # but a smooth frame a different picture.
         self._pipeline = Compose(
             [
                 _ReferenceShorterSide(self.resize_size, interpolation=interpolation),
-                CenterCrop(crop_size, crop_size),
+                CenterCrop(crop_size, crop_size, offset="floor"),
                 Normalize(self.mean, self.std, max_pixel_value=1.0),
             ]
         )

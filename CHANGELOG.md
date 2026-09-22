@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - VideoClassification stole the neighbouring registration
+- the video crop places an odd margin down, not to nearest
 
 ---
 

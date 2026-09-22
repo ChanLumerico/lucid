@@ -1,29 +1,28 @@
-"""What the video preset does, pinned where it is exact.
+"""What the video preset does, and which convention it takes.
 
 The V-JEPA families ship a preprocessing preset rather than the no-op
 they carried at first: without one a caller holding a decoded clip has
 no way to reach the numbers the published weights expect.
 
-Three parts of the pipeline were compared against the released
-``VJEPA2VideoProcessor`` and agree **exactly**, and those are what this
-file pins:
+Compared against the released ``VJEPA2VideoProcessor``, a float clip
+through this preset agrees to ``1.1e-4`` — the pipeline is the same
+computation. Two things had to be right for that:
 
-* the resize target — ``int(crop * 256 / 224)``, which truncates.
-  ``round`` gives 293 for a 256 crop where the release gives 292, and
-  one pixel there moves the crop window and rescales every pixel in it;
-* the centre-crop window — read back through a ramp, both take rows and
-  columns 18..273 out of 292;
-* the normalisation — 2e-7 against the released mean and std.
+* the resize target truncates. ``int(256 * 256 / 224)`` is 292 and
+  ``round`` gives 293, one pixel that moves the crop window and
+  rescales everything inside it;
+* the centre crop places an **odd** margin *down*, not to nearest.
+  A 292x519 frame cropped to 256 starts at column 131 under Hugging
+  Face's fast processors and 132 under the rounding that torchvision
+  and Albumentations use. These weights are published through the
+  former. A square frame cannot see the difference — its margin is
+  even — which is why the first version of this file missed it.
 
-What is *not* pinned is the resized pixel values. Lucid's bilinear
-resize and the reference's differ by a sub-pixel sampling phase: on a
-smooth frame the gap is ~2.6e-2 in normalised units, on white noise it
-is ~2.7, which is the signature of a phase offset rather than a wrong
-convention — noise decorrelates under any shift and smooth content does
-not. The same magnitudes appear when an *image* preset is compared the
-same way, so it is a property of the resize, not of this preset.
-Asserting a bound on it here would pin Lucid's interpolation, which is
-a separate question from whether this preset is assembled correctly.
+Handing the preset ``uint8`` and the reference the same leaves a
+uniform ``1.74e-2``, which is ``1/255`` divided by the blue channel's
+std: the reference rounds back to ``uint8`` between stages and Lucid
+stays in float. That is Lucid computing the same thing more precisely,
+so it is recorded rather than matched.
 """
 
 import numpy as np
@@ -46,21 +45,64 @@ class TestReleasedGeometry:
         """``int(256 * 256 / 224)`` is 292; rounding 292.57 gives 293."""
         assert T.VideoClassification(crop_size=crop).resize_size == resize
 
-    def test_the_crop_takes_the_centre_window(self) -> None:
-        """A ramp encodes each pixel's (row, col) so the window reads back."""
-        side = 292
-        rows = np.arange(side)[None, :, None] * 1000
-        cols = np.arange(side)[None, None, :]
+    @staticmethod
+    def _ramp(height: int, width: int) -> lucid.Tensor:
+        """A clip whose pixels encode ``row * 1000 + col``.
+
+        Reading a corner back says which window a crop took, which beats
+        reasoning about offsets.
+        """
+        rows = np.arange(height)[None, :, None] * 1000
+        cols = np.arange(width)[None, None, :]
         frame = (rows + cols).astype(np.float32)
         clip = np.ascontiguousarray(
-            np.broadcast_to(frame, (3, side, side))[None].repeat(2, axis=0)
+            np.broadcast_to(frame, (3, height, width))[None].repeat(2, axis=0)
         )
+        return lucid.from_numpy(clip)
 
-        cropped = T.CenterCrop(256, 256)(T.Image(lucid.from_numpy(clip))).data
-        top_left = int(cropped[0, 0, 0, 0].item())
-        bottom_right = int(cropped[0, 0, -1, -1].item())
-        assert (top_left // 1000, top_left % 1000) == (18, 18)
-        assert (bottom_right // 1000, bottom_right % 1000) == (273, 273)
+    @staticmethod
+    def _window(cropped: lucid.Tensor) -> tuple[int, int, int, int]:
+        first = int(cropped[0, 0, 0, 0].item())
+        last = int(cropped[0, 0, -1, -1].item())
+        return first // 1000, last // 1000, first % 1000, last % 1000
+
+    def test_an_even_margin_places_the_same_either_way(self) -> None:
+        """292 -> 256 leaves 36, so both conventions start at 18.
+
+        This is the case that cannot tell them apart — pinned so the
+        next reader knows a green square-frame test proves nothing about
+        the placement rule.
+        """
+        clip = self._ramp(292, 292)
+        for offset in ("round", "floor"):
+            window = self._window(T.CenterCrop(256, 256, offset=offset)(
+                T.Image(clip)).data)
+            assert window == (18, 273, 18, 273)
+
+    def test_an_odd_margin_is_placed_down(self) -> None:
+        """519 -> 256 leaves 263; the release starts at 131, not 132."""
+        clip = self._ramp(292, 519)
+        floored = self._window(
+            T.CenterCrop(256, 256, offset="floor")(T.Image(clip)).data
+        )
+        rounded = self._window(
+            T.CenterCrop(256, 256, offset="round")(T.Image(clip)).data
+        )
+        assert floored == (18, 273, 131, 386)
+        assert rounded == (18, 273, 132, 387)
+
+    def test_the_preset_takes_the_released_placement(self) -> None:
+        """The weights come from Hugging Face, so the preset floors.
+
+        Fed a clip already at the resize target the resize is a no-op,
+        which leaves the crop as the only thing that can move a pixel.
+        The preset normalises on the way out, so the ramp is read back
+        through the inverse.
+        """
+        preset = T.VideoClassification(crop_size=256)
+        out = preset(T.Image(self._ramp(292, 519))).data
+        first = out[0, 0, 0, 0].item() * preset.std[0] + preset.mean[0]
+        assert round(first) % 1000 == 131
 
     def test_the_statistics_are_imagenet_s(self) -> None:
         preset = T.VideoClassification(crop_size=256)
