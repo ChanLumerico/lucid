@@ -541,6 +541,7 @@ class VideoClassification(TransformsPreset):
         }
 
 
+@_register_preset
 class ImageClassificationAugment(TransformsPreset):
     r"""Standard ImageNet classification *training* preset (augmentation).
 
