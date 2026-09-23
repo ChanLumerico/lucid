@@ -71,6 +71,7 @@ def _tensors_of(output: Any) -> list[tuple[str, lucid.Tensor]]:
         return found
     return []
 
+
 #: Config fields that put a dropout somewhere in the forward.  A family
 #: that declares none is still worth running: the point is that *no*
 #: source of non-determinism survives ``eval()``, and dropout is only

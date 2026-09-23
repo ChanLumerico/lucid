@@ -75,8 +75,9 @@ class TestReleasedGeometry:
         """
         clip = self._ramp(292, 292)
         for offset in ("round", "floor"):
-            window = self._window(T.CenterCrop(256, 256, offset=offset)(
-                T.Image(clip)).data)
+            window = self._window(
+                T.CenterCrop(256, 256, offset=offset)(T.Image(clip)).data
+            )
             assert window == (18, 273, 18, 273)
 
     def test_an_odd_margin_is_placed_down(self) -> None:
@@ -169,7 +170,7 @@ class TestWeightsCarryIt:
 
     def test_the_preset_agrees_with_the_recorded_metadata(self) -> None:
         """``meta`` and the preset must not describe different pipelines."""
-        for entry, in (
+        for (entry,) in (
             (VJEPA2ViTLargeWeights.DEFAULT,),
             (VJEPA2ViTGiant384Weights.DEFAULT,),
             (VJEPA2ACWeights.DEFAULT,),
