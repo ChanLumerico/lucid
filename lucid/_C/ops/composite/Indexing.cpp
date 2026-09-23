@@ -128,8 +128,8 @@ TensorImplPtr kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool 
     // Refused for bool as the reference does; it sorts underneath, and
     // sorting bool is allowed, so without this the answer depended on it.
     if (a->dtype() == Dtype::Bool)
-        ErrorBuilder("kthvalue").not_implemented(
-            "kthvalue does not accept bool — cast to an integer dtype");
+        ErrorBuilder("kthvalue")
+            .not_implemented("kthvalue does not accept bool — cast to an integer dtype");
     const int d = wrap_dim(a, dim, "kthvalue");
     const std::int64_t size = a->shape()[static_cast<std::size_t>(d)];
     if (k < 1 || k > size)
