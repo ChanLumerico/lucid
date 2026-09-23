@@ -3398,6 +3398,13 @@ class Tensor:
             Interpolated tensor with the broadcast shape of
             ``self``, ``end``, and ``weight``.
 
+        Raises
+        ------
+        TypeError
+            If ``self`` or ``end`` is not floating point.  The weight is a
+            fraction, and building it in an integer dtype truncated it to
+            zero, so an integer ``lerp`` used to return ``self`` unchanged.
+
         Notes
         -----
         Linear interpolation is affine: ``lerp(a, b, t)`` lies on the
@@ -3413,6 +3420,11 @@ class Tensor:
         >>> a.lerp(b, 0.5).tolist()
         [5.0, 10.0, 15.0]
         """
+        if not (self.is_floating_point() and end.is_floating_point()):
+            raise TypeError(
+                f"lerp expects floating-point tensors, got {self.dtype} and "
+                f"{end.dtype} — cast them first"
+            )
         diff = Tensor.__new_from_impl__(  # type: ignore[return-value]
             _C_engine.sub(end._impl, self._impl)
         )

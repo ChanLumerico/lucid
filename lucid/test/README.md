@@ -87,6 +87,28 @@ special — they pull `device` and the cross-product runs automatically.
 For tests that need to compare CPU vs GPU output of the *same* op
 (detecting "device drift"), use the `cross_device_pair` fixture.
 
+## Correctness matrices
+
+Three tests share one table of small cases — every compile emitter, over
+float32 / int64 / int32 / bool — in `unit/compile/_op_matrix.py`. They run
+in the fast tier, about half a minute together.
+
+| test | holds | against |
+|---|---|---|
+| `unit/compile/test_op_dtype_replay.py` | `lucid.compile` output, traced on one input and replayed on another | eager on the second input |
+| `unit/compile/test_op_grad_replay.py` | `make_step` gradients through each op | eager backward |
+| `unit/ops/test_numpy_oracle.py` | eager, on CPU and on Metal | numpy (`unit/ops/_numpy_oracle.py`) |
+
+Values are read through `Tensor.numpy()` on the tensor as produced — the
+path that once reported compiled integer outputs as float32. A fallback to
+eager is allowed only where the harness lists it with a reason, so a graph
+that stops compiling fails the day it happens.
+
+Adding a case means adding it to `CASES` and giving it a numpy reference in
+`REFS`, or a reason in `NO_REF` — `test_every_case_is_accounted_for` fails
+otherwise. numpy is used there only to compute expected values (H4 covers
+the compute path, not the test tree).
+
 ## Adding a new test
 
 Drop the file under the right `unit/<area>/` subdirectory. Match the

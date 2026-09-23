@@ -316,6 +316,11 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
     Validator::input(a, "topk.a").non_null();
     const Dtype dt = a->dtype();
     const Device device = a->device();
+    // The reference refuses bool here, as for argmax: which k booleans are
+    // "largest" is not a question it answers.  Sorting a bool tensor is
+    // allowed — ``sort`` / ``argsort`` accept it on both devices.
+    if (dt == Dtype::Bool)
+        ErrorBuilder("topk").not_implemented("topk does not accept bool — cast to an integer dtype");
     OpScopeFull scope{"topk", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     if (k <= 0 || k > a->shape()[static_cast<std::size_t>(ax)])

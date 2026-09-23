@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the dead-config-field check was wrong about ten of seventeen
 - integer // never reached the graph, and would have floored wrong
 - replay every emitter over dtypes, and fix what it found
+- hold eager to numpy, and fix the bool asymmetry CI caught
 
 ---
 

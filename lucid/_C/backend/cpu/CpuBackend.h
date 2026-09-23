@@ -2246,62 +2246,87 @@ public:
         return Storage{CpuStorage{ptr, n, Dtype::Bool}};
     }
 
+    // Truth of element ``i`` in its own dtype.  ``any`` / ``all`` handled
+    // F32 / F64 / I32 / Bool and sent every other dtype to a byte loop that
+    // read one *byte* per element: an int64 1 is the bytes 01 00 00 …, so
+    // ``all([[1, 2], [3, 4]])`` saw the zero second byte and answered False,
+    // and ``any`` looked only at the first n bytes — the first n/8 int64s.
+    // Floating zero includes -0.0, so the half types mask off the sign bit.
+    static bool element_nonzero(const std::byte* base, std::size_t i, Dtype dt) {
+        switch (dt) {
+        case Dtype::Bool:
+        case Dtype::I8: {
+            std::int8_t v;
+            std::memcpy(&v, base + i, 1);
+            return v != 0;
+        }
+        case Dtype::I16: {
+            std::int16_t v;
+            std::memcpy(&v, base + i * 2, 2);
+            return v != 0;
+        }
+        case Dtype::I32: {
+            std::int32_t v;
+            std::memcpy(&v, base + i * 4, 4);
+            return v != 0;
+        }
+        case Dtype::I64: {
+            std::int64_t v;
+            std::memcpy(&v, base + i * 8, 8);
+            return v != 0;
+        }
+        case Dtype::F16:
+        case Dtype::BF16: {
+            std::uint16_t v;
+            std::memcpy(&v, base + i * 2, 2);
+            return (v & 0x7FFFu) != 0;
+        }
+        case Dtype::F32: {
+            float v;
+            std::memcpy(&v, base + i * 4, 4);
+            return v != 0.f;
+        }
+        case Dtype::F64: {
+            double v;
+            std::memcpy(&v, base + i * 8, 8);
+            return v != 0.0;
+        }
+        case Dtype::C64: {
+            float v[2];
+            std::memcpy(v, base + i * 8, 8);
+            return v[0] != 0.f || v[1] != 0.f;
+        }
+        case Dtype::C128: {
+            double v[2];
+            std::memcpy(v, base + i * 16, 16);
+            return v[0] != 0.0 || v[1] != 0.0;
+        }
+        }
+        return false;
+    }
+
     Storage any(const Storage& a, const Shape& shape, Dtype dt) override {
         const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
+        const std::size_t n = shape_numel(shape);
         auto ptr = allocate_aligned_bytes(1, Device::CPU);
         auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+        const auto* base = reinterpret_cast<const std::byte*>(cs.ptr.get());
         bool found = false;
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n && !found; ++i)
-                found = (p[i] != 0.f);
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n && !found; ++i)
-                found = (p[i] != 0.0);
-        } else if (dt == Dtype::I32) {
-            const std::int32_t* p = reinterpret_cast<const std::int32_t*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n && !found; ++i)
-                found = (p[i] != 0);
-        } else if (dt == Dtype::Bool) {
-            const std::uint8_t* p = reinterpret_cast<const std::uint8_t*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n && !found; ++i)
-                found = (p[i] != 0u);
-        } else {
-            for (std::size_t i = 0; i < n && !found; ++i)
-                found = (reinterpret_cast<const std::uint8_t*>(cs.ptr.get())[i] != 0u);
-        }
+        for (std::size_t i = 0; i < n && !found; ++i)
+            found = element_nonzero(base, i, dt);
         dst[0] = found ? 1u : 0u;
         return Storage{CpuStorage{ptr, 1, Dtype::Bool}};
     }
 
     Storage all(const Storage& a, const Shape& shape, Dtype dt) override {
         const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
+        const std::size_t n = shape_numel(shape);
         auto ptr = allocate_aligned_bytes(1, Device::CPU);
         auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+        const auto* base = reinterpret_cast<const std::byte*>(cs.ptr.get());
         bool all_nz = true;
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n && all_nz; ++i)
-                all_nz = (p[i] != 0.f);
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n && all_nz; ++i)
-                all_nz = (p[i] != 0.0);
-        } else if (dt == Dtype::I32) {
-            const std::int32_t* p = reinterpret_cast<const std::int32_t*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n && all_nz; ++i)
-                all_nz = (p[i] != 0);
-        } else if (dt == Dtype::Bool) {
-            const std::uint8_t* p = reinterpret_cast<const std::uint8_t*>(cs.ptr.get());
-            for (std::size_t i = 0; i < n && all_nz; ++i)
-                all_nz = (p[i] != 0u);
-        } else {
-            for (std::size_t i = 0; i < n && all_nz; ++i)
-                all_nz = (reinterpret_cast<const std::uint8_t*>(cs.ptr.get())[i] != 0u);
-        }
+        for (std::size_t i = 0; i < n && all_nz; ++i)
+            all_nz = element_nonzero(base, i, dt);
         dst[0] = all_nz ? 1u : 0u;
         return Storage{CpuStorage{ptr, 1, Dtype::Bool}};
     }
@@ -4011,8 +4036,10 @@ public:
         //
         // Only the values come back narrowed.  The second half of the pair
         // is the index tensor, which is int64 by contract whatever the
-        // operand's dtype was.
-        if (detail::is_narrow_int(dt) && dt != Dtype::Bool) {
+        // operand's dtype was.  Bool takes the same road — false < true is
+        // 0 < 1 — and was excluded for no reason the code recorded: sorting a
+        // bool tensor raised on the CPU and answered on Metal.
+        if (detail::is_narrow_int(dt)) {
             auto wide = sort_select(detail::as_i64(a), input_shape, output_shape, axis, Dtype::I64,
                                     descending);
             const std::size_t out_n = shape_numel(output_shape);
@@ -10694,8 +10721,17 @@ public:
                 return reinterpret_cast<const std::int32_t*>(is_.ptr.get())[i];
             case Dtype::I64:
                 return reinterpret_cast<const std::int64_t*>(is_.ptr.get())[i];
+            // Float and bool indices used to fall to the default, which read
+            // the bytes as int32: 2.7 became a huge class number and its row
+            // stayed zero, where Metal truncates it to class 2.
+            case Dtype::Bool:
+                return reinterpret_cast<const std::uint8_t*>(is_.ptr.get())[i];
+            case Dtype::F32:
+                return static_cast<std::int64_t>(reinterpret_cast<const float*>(is_.ptr.get())[i]);
+            case Dtype::F64:
+                return static_cast<std::int64_t>(reinterpret_cast<const double*>(is_.ptr.get())[i]);
             default:
-                return reinterpret_cast<const std::int32_t*>(is_.ptr.get())[i];
+                return -1;  // no class — the row stays zero rather than reading garbage
             }
         };
         for (std::size_t i = 0; i < M; ++i) {

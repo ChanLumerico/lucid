@@ -20,9 +20,10 @@ the two take different paths out of a compiled output's storage, and the
 first is the one that once reported every integer output as float32.
 """
 
+import contextlib
 import io
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -161,29 +162,45 @@ def run(case: Case, dtype: str) -> Outcome:
 # and every case using it would "fall back" for a reason that is the
 # recipe's, not the op's.
 _CONSTS: dict[tuple[object, ...], lucid.Tensor] = {}
+_ACTIVE: list[str] = [DEV]
+
+
+@contextlib.contextmanager
+def on_device(device: str) -> Iterator[None]:
+    """Build the recipes' constants on ``device`` for the duration.
+
+    The matrices run on the compile device; the numpy oracle runs the same
+    recipes on the CPU as well, and a Metal weight beside a CPU input is a
+    device mismatch rather than an answer.
+    """
+    _ACTIVE.append(device)
+    try:
+        yield
+    finally:
+        _ACTIVE.pop()
 
 
 def _idx(*vals: int) -> lucid.Tensor:
-    key = ("idx", *vals)
+    key = ("idx", _ACTIVE[-1], *vals)
     if key not in _CONSTS:
-        _CONSTS[key] = lucid.tensor(list(vals)).to(lucid.int64).to(DEV)
+        _CONSTS[key] = lucid.tensor(list(vals)).to(lucid.int64).to(_ACTIVE[-1])
     return _CONSTS[key]
 
 
 def _w(*shape: int, seed: int = 7) -> lucid.Tensor:
-    key = ("w", seed, *shape)
+    key = ("w", _ACTIVE[-1], seed, *shape)
     if key not in _CONSTS:
         state = lucid.get_rng_state()
         lucid.manual_seed(seed)
-        _CONSTS[key] = (lucid.randn(*shape) * 0.3).to(DEV)
+        _CONSTS[key] = (lucid.randn(*shape) * 0.3).to(_ACTIVE[-1])
         lucid.set_rng_state(state)
     return _CONSTS[key]
 
 
 def _eye(n: int) -> lucid.Tensor:
-    key = ("eye", n)
+    key = ("eye", _ACTIVE[-1], n)
     if key not in _CONSTS:
-        _CONSTS[key] = lucid.eye(n).to(DEV)
+        _CONSTS[key] = lucid.eye(n).to(_ACTIVE[-1])
     return _CONSTS[key]
 
 
