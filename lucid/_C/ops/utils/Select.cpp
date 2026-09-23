@@ -299,11 +299,6 @@ public:
         return {diagonal_backward_storage(grad_out, input_shapes_[0], out_shape_, offset_, axis1_,
                                           axis2_, dtype_, device_)};
     }
-
-    // The gradient never reads the input's values, and on the CPU the
-    // diagonal is a view of it: a write through that view moves the version
-    // it would otherwise refuse.
-    void validate_versions() override {}
 };
 
 const OpSchema DiagonalBackward::schema_v1{"diagonal", 1, AmpPolicy::KeepInput, true};
@@ -589,13 +584,8 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
     int a2 = wrap_axis(axis2, static_cast<int>(ndim));
     if (a1 == a2)
         ErrorBuilder("diagonal").fail("axis1 and axis2 must differ");
-    // Kept in ascending order.  Swapping the axes mirrors the matrix, so the
-    // same diagonal sits at the negated offset: (i, i + k) seen from the
-    // other side is (i + k, i).
-    if (a1 > a2) {
+    if (a1 > a2)
         std::swap(a1, a2);
-        offset = -offset;
-    }
     scope.set_attr("offset", static_cast<std::int64_t>(offset));
     scope.set_attr("axis1", static_cast<std::int64_t>(a1));
     scope.set_attr("axis2", static_cast<std::int64_t>(a2));
@@ -618,28 +608,9 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
         out_shape.push_back(a->shape()[d]);
     }
     out_shape.push_back(L);
-    TensorImplPtr result;
-    if (device == Device::CPU && storage_is_cpu(a->raw_storage())) {
-        // On the CPU the diagonal is a view: one step along it moves one
-        // element down both axes, starting (r0, c0) in.  The other axes keep
-        // their strides, in order, ahead of it.
-        const Stride& in_stride = a->stride();
-        const auto s1 = in_stride[static_cast<std::size_t>(a1)];
-        const auto s2 = in_stride[static_cast<std::size_t>(a2)];
-        Stride stride;
-        stride.reserve(out_shape.size());
-        for (std::size_t d = 0; d < ndim; ++d)
-            if (static_cast<int>(d) != a1 && static_cast<int>(d) != a2)
-                stride.push_back(in_stride[d]);
-        stride.push_back(s1 + s2);
-        const std::int64_t start = L > 0 ? r0 * s1 + c0 * s2 : 0;
-        result = TensorImpl::make_view(a, std::move(out_shape), std::move(stride),
-                                       static_cast<std::size_t>(start));
-    } else {
-        auto out_storage = backend::Dispatcher::for_device(device).diagonal(
-            a->storage(), a->shape(), offset, a1, a2, dt);
-        result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
-    }
+    auto out_storage = backend::Dispatcher::for_device(device).diagonal(a->storage(), a->shape(),
+                                                                        offset, a1, a2, dt);
+    auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
     auto bwd = std::make_shared<DiagonalBackward>();
     bwd->input_shapes_ = {a->shape()};
     bwd->out_shape_ = result->shape();

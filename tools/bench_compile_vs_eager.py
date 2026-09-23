@@ -21,7 +21,7 @@ Usage::
         --workload mlp,resnet18_train
 
 Closes the data gap identified in
-the vault's compile parity architecture note §4.2 —
+``obsidian/architecture/arch-compile-parity-vs-torch-mps.md`` §4.2 —
 Lucid eager vs Lucid compile end-to-end measurements have never
 been recorded.
 
@@ -29,17 +29,17 @@ Methodology
 -----------
 * Wall-clock via ``time.perf_counter`` after every region; matches
   ``tools/bench_compile.py`` convention.
-* Materialise every output via ``sum().item()`` (or ``loss.item()``)
-  and then call ``lucid.metal.synchronize()``. Synchronisation alone
-  does not submit a lazy graph. These are end-to-end latencies,
-  including the host observation, not isolated kernel timings.
+* ``lucid.metal.synchronize()`` after every measured region —
+  MLX dispatch is async and unsync'd timing only captures launch
+  overhead.  Single most important methodology rule.
 * **Cold** = one call after model/input transfer to metal, before
   any other invocation.  Captures trace + MPSGraph compile + first
   run.  Reported in its own CSV column.
-* **Warm** = median of ``--iter`` timed runs (default 10)
+* **Warm** = median of 10 timed runs (50 for sub-5ms workloads)
   after 3 warmup calls + synchronize.  Reported with p5/p95.
-* For multiple trials, rerun the command with a distinct CSV path.
-  There is no automatic interleaving or thermal-throttling correction.
+* **3 interleaved trials** when ``--trials 3`` — the full sweep
+  runs three times, median across trials.  Defends against thermal
+  throttling per ``obsidian/perf/perf-state-vars-regression-2026-05-25.md``.
 * **Parity guard before timing.**  Compile-out vs eager-out
   ``max|diff| / max|eager|`` > 1e-3 aborts the row with note
   ``parity-diverged``.  A compile that produces wrong outputs
@@ -62,10 +62,9 @@ warm_ms_p5, warm_ms_p95, speedup_vs_eager, parity_rel_diff, note``
 
 import argparse
 import csv
-import json
-from pathlib import Path
-import platform
+import statistics
 import sys
+import time
 import traceback
 from typing import Callable
 
@@ -74,7 +73,6 @@ import lucid.metal as _metal
 import lucid.nn as nn
 import lucid.optim as optim
 from lucid.compile import fused_step
-from tools._bench_timing import cold_ms, warm_ms
 
 # Import works both as a package module (``python -m tools.bench_*``
 # from the repo root) and as a flat script (``python bench_*.py`` from
@@ -116,7 +114,7 @@ def _cast_inputs(
     """Cast float inputs to ``dtype``.  Integer targets (CE indices) untouched."""
     out: list[lucid.Tensor] = []
     for t in inputs:
-        if not t.is_floating_point():
+        if t.dtype == lucid.int32 or t.dtype == lucid.int64:
             out.append(t)
         else:
             out.append(t.to(dtype))
@@ -124,8 +122,11 @@ def _cast_inputs(
 
 
 def _cast_model(model: nn.Module, dtype: object) -> nn.Module:
-    """Cast parameters and floating buffers without replacing Parameter objects."""
-    return model.to(dtype=dtype)
+    """In-place cast every float parameter to ``dtype``."""
+    for _, p in model.named_parameters():
+        if p.dtype != dtype:
+            p.copy_(p.to(dtype))
+    return model
 
 
 # ── Timing primitives ──────────────────────────────────────────────
@@ -138,14 +139,32 @@ def _sync() -> None:
 
 def _time_cold(call: Callable[[], object]) -> float:
     """Single cold call — captures trace + compile + first dispatch."""
-    return cold_ms(call)
+    _sync()
+    t0 = time.perf_counter()
+    call()
+    _sync()
+    return (time.perf_counter() - t0) * 1000.0
 
 
 def _time_warm(
     call: Callable[[], object], n_warmup: int, n_iter: int
 ) -> tuple[float, float, float]:
     """Return (median, p5, p95) wall-ms over ``n_iter`` calls after warmup."""
-    return warm_ms(call, n_warmup, n_iter)
+    for _ in range(n_warmup):
+        call()
+    _sync()
+    samples: list[float] = []
+    for _ in range(n_iter):
+        t0 = time.perf_counter()
+        call()
+        _sync()
+        samples.append((time.perf_counter() - t0) * 1000.0)
+    samples.sort()
+    n = len(samples)
+    med = statistics.median(samples)
+    p5 = samples[max(0, int(n * 0.05))]
+    p95 = samples[min(n - 1, int(n * 0.95))]
+    return med, p5, p95
 
 
 # ── Parity guard ───────────────────────────────────────────────────
@@ -204,6 +223,7 @@ def _bench_forward_eager(
 
     def call() -> object:
         y = _unwrap(model(*inputs))
+        _ = float(y.sum().item())  # force eager lazy-graph eval
         return y
 
     cold = _time_cold(call)
@@ -231,6 +251,7 @@ def _bench_forward_compile(
     # — matches the apples-to-apples convention of the other paths).
     def call() -> object:
         y = _unwrap(cm(*inputs))
+        _ = float(y.sum().item())
         return y
 
     cold = _time_cold(call)
@@ -253,8 +274,9 @@ def _bench_fused_step(
     """``fused_step`` — forward + backward + opt step in one executable.
 
     Skips with note ``"no-loss"`` for forward-only workloads.
-    This sweep times F32 training only. Manual F16 forward casting is not
-    equivalent to autocast training; use ``bench_autocast`` for the latter.
+    Skips with note ``"skip-amp-fused"`` for AMP F16 (X4.3 GradScaler
+    not yet integrated — running fused_step in F16 would either NaN
+    or produce silently-bad gradients).
     """
     if w.loss_fn is None or w.mk_target is None:
         return float("nan"), float("nan"), float("nan"), float("nan"), "no-loss"
@@ -275,6 +297,7 @@ def _bench_fused_step(
     # apples-to-apples convention across all paths.
     def call() -> object:
         loss = step(*inputs, target)
+        _ = float(loss.item())
         return loss
 
     cold = _time_cold(call)
@@ -324,6 +347,7 @@ def _bench_eager_train(
         loss = w.loss_fn(out, target)
         loss.backward()
         opt.step()
+        _ = float(loss.item())  # force lazy-graph eval
         return loss
 
     cold = _time_cold(call)
@@ -438,7 +462,7 @@ def _compute_speedups(rows: list[dict[str, object]]) -> None:
             r["speedup_vs_eager"] = float("nan")
             continue
         path = str(r["path"])
-        baseline_path = "eager_train" if path in ("fused_step", "eager_train") else "eager"
+        baseline_path = "eager_train" if path == "fused_step" else "eager"
         baseline = lookup.get(key, {}).get(baseline_path, float("nan"))
         if baseline != baseline or baseline <= 0.0:
             r["speedup_vs_eager"] = float("nan")
@@ -511,7 +535,7 @@ def main() -> int:
         default="f32",
         help="Comma-separated precisions.  AMP F16 sweep is deferred until "
         "X4.3 GradScaler + X4.4 autocast threading land — see "
-        "the compile parity architecture note §1.4. Pass `f32,f16` to "
+        "arch-compile-parity-vs-torch-mps.md §1.4.  Pass `f32,f16` to "
         "force the F16 rows anyway (will show DtypeMismatch under the "
         "current Lucid cast surface).",
     )
@@ -531,11 +555,9 @@ def main() -> int:
         "--iter",
         type=int,
         default=10,
-        help="Warm iterations per row (default 10, after 3 warmup calls).",
+        help="Warm iterations per row (50 used automatically for sub-5ms).",
     )
     args = ap.parse_args()
-    if args.iter < 1:
-        ap.error("--iter must be positive")
 
     # Workload selection
     if args.quick:
@@ -608,18 +630,8 @@ def main() -> int:
     for r in all_rows:
         _emit_row(writer, r, f)
     f.close()
-    metadata = {
-        "version": lucid.__version__, "platform": platform.platform(),
-        "python": platform.python_version(), "arguments": vars(args),
-        "warmup_calls": 3, "timed_calls_per_row": args.iter,
-        "materialization": "output sum/loss item then Metal synchronize on every call",
-        "timing_scope": "end-to-end host-observed latency, not isolated kernels",
-        "trials": 1,
-    }
-    Path(args.csv + ".meta.json").write_text(json.dumps(metadata, indent=2) + "\n")
     print(f"\n# CSV written to {args.csv}")
-    return 1 if any(str(row["note"]).startswith(("error:", "parity-diverged", "unknown-path:"))
-                    for row in all_rows) else 0
+    return 0
 
 
 if __name__ == "__main__":

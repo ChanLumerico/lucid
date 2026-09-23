@@ -917,27 +917,10 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
     scope.set_attr("size", static_cast<std::int64_t>(size));
     scope.set_attr("step", static_cast<std::int64_t>(step));
 
-    TensorImplPtr result;
-    if (a->device() == Device::CPU && storage_is_cpu(a->raw_storage())) {
-        // On the CPU the windows are a view of the input: the window-count
-        // axis steps ``step`` elements along ``d`` and the window axis one,
-        // so a write through a window reaches the input — refused when the
-        // windows overlap (step < size), since an element then repeats.
-        const Stride& in_stride = a->stride();
-        Stride stride;
-        stride.reserve(out_shape.size());
-        for (int i = 0; i < ndim; ++i) {
-            const auto s = in_stride[static_cast<std::size_t>(i)];
-            stride.push_back(i == d ? s * step : s);
-        }
-        stride.push_back(in_stride[static_cast<std::size_t>(d)]);
-        result = TensorImpl::make_view(a, out_shape, std::move(stride));
-    } else {
-        auto& be = backend::Dispatcher::for_device(a->device());
-        Storage out_s = be.unfold_dim(a->storage(), in_shape, d, size, step, a->dtype());
-        result = std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(),
-                                              false);
-    }
+    auto& be = backend::Dispatcher::for_device(a->device());
+    Storage out_s = be.unfold_dim(a->storage(), in_shape, d, size, step, a->dtype());
+    auto result =
+        std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(), false);
     if (auto* trc = ::lucid::compile::current_tracer()) {
         trc->on_op_io({a}, result);
     }

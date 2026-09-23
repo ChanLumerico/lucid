@@ -17,10 +17,7 @@ try:
     if _abi != _EXPECTED_ABI:
         raise RuntimeError(
             f"lucid C++ engine ABI mismatch: expected {_EXPECTED_ABI}, "
-            f"got {_abi}. The native extension is stale for this Python source. "
-            "From the repository root, rebuild in the project environment with: "
-            "uv pip install --python .venv/bin/python -e . --no-build-isolation. "
-            "Diagnose the environment with: .venv/bin/python -m tools.doctor"
+            f"got {_abi}. Rebuild the engine."
         )
 except (TypeError, ValueError):  # fmt: skip
     pass  # Mocked during docs build — skip ABI check
@@ -173,7 +170,7 @@ __all__ = [
     # ── tensor manipulation ───────────────────────────────────────────────
     "reshape", "view", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
     "unflatten", "narrow", "movedim",
-    "expand", "broadcast_to", "as_strided", "repeat", "repeat_interleave", "tile",
+    "expand", "broadcast_to", "repeat", "repeat_interleave", "tile",
     "cat", "concat", "stack", "hstack", "vstack",
     "split", "chunk", "unbind",
     "gather", "scatter", "scatter_add", "take", "index_select", "masked_select",
@@ -284,7 +281,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     # ── shape / view ──────────────────────────────────────────────────────
     "reshape", "view", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
     "unflatten", "narrow", "movedim",
-    "expand", "broadcast_to", "as_strided", "repeat", "repeat_interleave", "tile",
+    "expand", "broadcast_to", "repeat", "repeat_interleave", "tile",
     "cat", "concat", "stack", "hstack", "vstack",
     "split", "chunk", "unbind",
     "ravel", "diagonal", "tril", "triu",

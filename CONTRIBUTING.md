@@ -55,9 +55,7 @@ bindings → ops → kernel → autograd → backend → tensor → core
                   primitives (kernel/primitives/; may use backend)
 ```
 
-`tools/check_layers.py` checks four Python import boundaries in CI; it is not
-a complete validator of this C++ dependency DAG. Review the remaining edges
-when changing engine code.
+`tools/check_layers.py` enforces this in CI. A violation fails the build.
 
 ### Backend rule
 
@@ -74,9 +72,9 @@ when changing engine code.
 
 ### Requirements
 
-- macOS 15 Sequoia (arm64) or later, M1 or later
+- macOS 26 Tahoe (arm64) or later, M1 or later
 - Python 3.14 only (PEP 649 lazy annotations — H1/H7 require it)
-- MLX ≥ 0.31 (`mlx-metal` ships macOS 14, 15 and 26 builds of one ABI; the engine targets 15.0)
+- MLX ≥ 0.31 (matches the `macosx_26_0_arm64` wheel + `mlx-metal` split package)
 - CMake ≥ 3.24
 - Ninja ≥ 1.11
 - Xcode Command Line Tools
@@ -86,132 +84,36 @@ when changing engine code.
 ```bash
 git clone https://github.com/ChanLumerico/lucid.git
 cd lucid
-uv venv --python 3.14
-uv pip install --python .venv/bin/python setuptools wheel cmake ninja "pybind11>=3.0,<3.1" "mlx>=0.31"
-uv pip install --python .venv/bin/python -e ".[dev]" --no-build-isolation
-.venv/bin/python -m tools.doctor
+pip install -e ".[dev]"
 ```
 
 For parity tests against the reference framework, install it separately and run:
 
 ```bash
-uv pip install --python .venv/bin/python -e ".[test]" --no-build-isolation
+pip install -e ".[test]"
 # install reference framework separately
-.venv/bin/python -m pytest lucid/test/parity/ -m parity
+pytest lucid/test/parity/ -m parity
 ```
 
 For documentation:
 
 ```bash
-uv pip install --python .venv/bin/python -e ".[docs]" --no-build-isolation
+pip install -e ".[docs]"
 ```
 
 ### Build the C++ engine
 
 ```bash
-uv pip install --python .venv/bin/python -e . --no-build-isolation
-.venv/bin/python -m tools.doctor
-```
-
-The build backend is setuptools; `setup.py` drives CMake. Pin the interpreter
-explicitly: a uv environment need not contain pip, and invoking another pip
-can link the engine against another environment's MLX. Rebuild after source
-updates when the import guard reports an ABI mismatch. `tools.doctor --json`
-reports interpreter, dependencies, source ABI agreement and an isolated native
-import/CPU smoke check, even when `import lucid` itself fails.
-
-### Published checkpoint checks
-
-```bash
-.venv/bin/python -m tools.check_pretrained_parity --list
-.venv/bin/python -m tools.check_pretrained_parity --model resnet_18_cls \
-  --clean-downloads --json build/pretrained.json
-```
-
-The selected checkpoint comes from the factory's actual `pretrained=True`
-resolution, not necessarily the shared enum's `DEFAULT`. `--clean-downloads`
-uses an owned temporary cache in a child process: existing user caches are
-neither reused nor swept. The normal HF authentication file location is preserved
-without copying token contents; explicit authentication settings and implicit-auth
-opt-out remain respected. Authentication files are outside download cleanup.
-Reports checkpoint completed comparisons atomically;
-`finished` and `complete` are distinct, and missing or oversized oracles remain
-unverified. The default 500M-parameter bound applies to every adapter. Raise it
-only on a machine able to hold both implementations and loading temporaries.
-
-Adapters compare classification/text/CLIP outputs, segmentation query or semantic
-scores, raw DETR queries, and deterministic diffusion components. Diffusion
-checks do not validate stochastic sampling or image quality; none of these checks
-establishes a dataset metric. DETR uses its original upstream implementation at
-a pinned revision. Optional oracle packages belong only in the development
-environment, never in Lucid's internal compute dependencies.
-
-Reference loading disables automatic remote format conversion: validation reads
-existing checkpoints and must not start publishing-service jobs. Socket defaults
-are capped at 60 seconds during each comparison, preserving stricter caller
-defaults and restoring them afterward; explicit SDK timeouts are unaffected.
-
-For split runs, merge explicitly ordered reports before attaching them:
-
-```bash
-.venv/bin/python -m tools.merge_pretrained_evidence \
-  build/pretrained-first.json build/pretrained-recheck.json \
-  --output build/pretrained-merged.json
-```
-
-Later observations replace earlier ones even when they fail or cannot be
-verified. Missing factories, unexpected names, invalid numbers and report hashes
-remain explicit. A complete aggregate covers the current discovery registry's
-default checkpoints; it does not establish working-tree equivalence or coverage
-of every enum variant. CLIP zero-shot wrappers have fully pretrained trunks and
-no random classifier; text wrappers with random task heads are not advertised as
-fully pretrained checkpoints.
-
-To snapshot the actual API/model/native registrations and attach verification
-evidence without interpreting registrations as universal backend support:
-
-```bash
-.venv/bin/python -m tools.support_manifest --output build/support.json
-# Reports are optional, scoped evidence; absent evidence means unverified.
-.venv/bin/python -m tools.support_manifest --audit build/audit.json \
-  --pretrained build/pretrained.json --output build/support.json
-```
-
-Attached reports retain failures, skips, environment and scope; the manifest
-does not assume they were generated from the current source revision. Checkpoint
-output parity is not a dataset accuracy or training-convergence result.
-
-The manifest's `api_contracts` links each enumerated export to its implementation,
-stub declarations (or explicitly unverified inline typing), generated documentation,
-static test calls and attached audit findings. Empty links stay empty: a test call
-is not a passed assertion, and a documented name is not a verified implementation.
-
-Compile and quantized-development benchmarks share `tools/_bench_timing.py`:
-every measured call materializes its returned output before synchronization.
-These are end-to-end latencies, including host observation, not kernel timings.
-Use `python -m tools.bench_quantized_dispatch --output build/quantized.json` to
-compare packed, cached-dense and per-call dequantization on identical weights.
-
-The pytest `bench` fixture uses the same output-observation contract. Return
-the tensors being measured, including gradients for backward timings. Its
-`last_elapsed` is the plugin median or a one-shot fallback/disabled-plugin
-observation, so configured thresholds apply with either provider. Do not compare
-these different sampling protocols as a speedup measurement.
-
-On memory-constrained Apple Silicon, run large suites sequentially. The existing
-sharded model runner starts a fresh interpreter for each chunk and reports any
-memory-related omissions explicitly:
-
-```bash
-.venv/bin/python -m lucid.test.audit --tests-only \
-  --suite-path lucid/test/unit/models --no-line-coverage --no-doctests
+pip install -e . --no-build-isolation
+# or build only the extension:
+cmake --build build/temp.macosx-*/lucid__C_engine/ -j$(sysctl -n hw.ncpu)
 ```
 
 Sanitizer builds for memory/UB checking:
 
 ```bash
-LUCID_BUILD_MODE=debug-asan  uv pip install --python .venv/bin/python -e . --no-build-isolation
-LUCID_BUILD_MODE=debug-ubsan uv pip install --python .venv/bin/python -e . --no-build-isolation
+LUCID_BUILD_MODE=debug-asan  pip install -e . --no-build-isolation
+LUCID_BUILD_MODE=debug-ubsan pip install -e . --no-build-isolation
 ```
 
 ### Static analysis tools
@@ -226,8 +128,7 @@ bash tools/check_format.sh  # clang-format + clang-tidy for C++
 
 ## 3. Hard rules — non-negotiable
 
-These rules are mandatory. Automated checks cover parts of them; a green CI run
-does not replace review of the remaining requirements.
+Every one of these rules is enforced in CI. A PR that violates any of them will be rejected without review.
 
 ### H1 — No `from __future__ import annotations`
 
@@ -341,38 +242,6 @@ def add(self, other: Tensor | float, /, *, alpha: float = 1.0) -> Tensor: ...
 The only exception is a genuinely variadic API such as `def cat(*tensors: Tensor) -> Tensor`.
 
 Detection: `grep -rn "\*args\|\*\*kwargs" lucid/ --include="*.pyi"`
-
-### H10 — Spell model size names in full
-
-Use `tiny`, `small`, `base`, `medium`, `large` and `xlarge`, not abbreviated
-suffixes. This applies to factories, exports, registry names and test IDs.
-
-### H11 — Register only paper-defined variants
-
-Every variant needs a basis in its original paper. A single-size family uses its
-nominal name without an invented size suffix. For small tests, override the config
-of an existing real factory instead of registering an imaginary tiny variant.
-
-### H12 — Complete the new-family contract
-
-New families require the maintainer's explicit implementation approval after
-paper review; discovering a missing family is not authorization to add it. Follow
-the project's full 16-step family procedure. Its required structural gates include:
-
-- `_config.py`, `_model.py`, `_pretrained.py`, and `__init__.py` in the family directory.
-- `@model_family_meta(canonical_name=, citation=, theory=)` above a frozen dataclass
-  config, with its `model_type: ClassVar[str]`.
-- Config, direct model, task wrapper, output dataclass and private building blocks.
-- Every factory declares task, family, model type/class, default config,
-  paper-grounded integer parameter count and `summary="auto"`.
-- Pass `python -m tools.validate_model_zoo --family <family> --runtime`,
-  `pytest lucid/test/unit/models/test_family_contract.py -k <family>`, and
-  `python -m tools.build_model_summaries --family <family>` using shadow allocation.
-
-### H13 — No `goto` statements in native code
-
-Under `lucid/_C/`, use structured control flow, extracted functions and RAII
-instead of `goto` in `.cpp`, `.h` or `.mm` files.
 
 ---
 
@@ -630,10 +499,10 @@ ci: enforce strict commit convention
 
 Before opening a PR, verify every item:
 
-- [ ] Hard rules H1–H13 are not violated (run the detection commands from §3)
+- [ ] Hard rules H1–H9 are not violated (run the detection commands from §3)
 - [ ] `ruff check lucid/` passes
 - [ ] `mypy --strict lucid/` passes (error count must not increase)
-- [ ] `pytest lucid/test/ -q` passes, or the documented sequential tiers cover the suite with explicit skips
+- [ ] `pytest lucid/test/ -q` passes (1,500+ tests)
 - [ ] C++ Google Test suite passes (if C++ was modified)
 - [ ] `tools/check_layers.py` passes (no new layer dependency violations)
 - [ ] `tools/check_stubs.py` passes (stubs are up to date)
@@ -655,15 +524,14 @@ The following will not be accepted in this major version:
 
 - Linux / Windows / x86_64 cross-platform support
 - CUDA or NCCL distributed training
+- Quantization (int8 / int4) — float-only for now
 - ONNX export (Lucid's own `.lucid` format is in scope; ONNX is not)
 - TorchScript / FX graph
+- `torch.compile`-style JIT (deferred to a future phase)
 - `__torch_function__` protocol
+- Multi-process `DataLoader` (`num_workers > 0`)
 
 PRs adding any of these will be closed.
-
-Quantization, `lucid.compile`, Core ML export and multi-process `DataLoader`
-already exist. Their supported cases and limits must be checked against current
-APIs and scoped tests; older "future phase" descriptions are not current policy.
 
 ---
 

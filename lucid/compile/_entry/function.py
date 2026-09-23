@@ -102,8 +102,6 @@ def compiled_step(
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
     from lucid.compile._core.bn_runstats import (
-        advance_bn_counters,
-        bn_counter_targets,
         bn_writeback_targets,
         model_has_cumulative_bn,
     )
@@ -164,7 +162,6 @@ def compiled_step(
             "lucid.compile.make_step or a momentum-based BatchNorm."
         )
     bn_targets = bn_writeback_targets(g, ext)
-    counters = bn_counter_targets(model, g, ext)
     bn_stat_out_ids = [out_id for _, out_id, _ in bn_targets]
     bn_stat_buffers = [_wrap(impl) for _, _, impl in bn_targets]
 
@@ -198,6 +195,5 @@ def compiled_step(
     # Write BN running stats back into the live module buffers.
     for _i, _buf in enumerate(bn_stat_buffers):
         _buf.copy_(_wrap(outs[n_loss_grad + _i]))
-    advance_bn_counters(counters)
 
     return loss_compiled

@@ -61,7 +61,6 @@ _SOURCE = "openai/CLIPModel (via transformers re-hosting)"
 
 
 @register_weights("clip_vit_base_32")
-@register_weights("clip_vit_base_32_zero_shot")
 class CLIPViTBase32Weights(WeightsEnum):
     """Pretrained weights for :func:`lucid.models.clip_vit_base_32`.
 
@@ -101,7 +100,6 @@ class CLIPViTBase32Weights(WeightsEnum):
 
 
 @register_weights("clip_vit_base_16")
-@register_weights("clip_vit_base_16_zero_shot")
 class CLIPViTBase16Weights(WeightsEnum):
     """Pretrained weights for :func:`lucid.models.clip_vit_base_16`.
 
@@ -142,7 +140,6 @@ class CLIPViTBase16Weights(WeightsEnum):
 
 
 @register_weights("clip_vit_large_14")
-@register_weights("clip_vit_large_14_zero_shot")
 class CLIPViTLarge14Weights(WeightsEnum):
     """Pretrained weights for :func:`lucid.models.clip_vit_large_14`.
 
@@ -182,7 +179,6 @@ class CLIPViTLarge14Weights(WeightsEnum):
 
 
 @register_weights("clip_vit_large_14_336")
-@register_weights("clip_vit_large_14_336_zero_shot")
 class CLIPViTLarge14_336Weights(WeightsEnum):
     """Pretrained weights for :func:`lucid.models.clip_vit_large_14_336`.
 

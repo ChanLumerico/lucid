@@ -815,7 +815,6 @@ class Module:
             float32,
             float64,
             complex64,
-            complex128,
             dtype as _DT,
         )
 
@@ -828,8 +827,7 @@ class Module:
                 break
         skip_int_buffers: bool = (
             target_dtype is not None
-            and target_dtype
-            in (float16, bfloat16, float32, float64, complex64, complex128)
+            and target_dtype in (float16, bfloat16, float32, float64, complex64)
             and "device" not in kwargs
             and not any(isinstance(a, str) for a in args)
         )
@@ -841,7 +839,6 @@ class Module:
                 float32,
                 float64,
                 complex64,
-                complex128,
             ):
                 # Integer / bool buffer — leave dtype alone.
                 return t

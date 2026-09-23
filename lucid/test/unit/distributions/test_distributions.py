@@ -9,7 +9,6 @@ correctness is the same on either device.
 import math
 
 import numpy as np
-import pytest
 
 import lucid
 import lucid.distributions as D
@@ -183,103 +182,6 @@ class TestPoissonBinomial:
         assert scalar.sample().shape == ()
         batched = D.NegativeBinomial(5.0, probs=lucid.tensor([0.2, 0.4, 0.6]))
         assert batched.sample((4, 2)).shape == (4, 2, 3)
-
-    def test_negbin_broadcasts_total_count(self) -> None:
-        # The batch was sized from ``probs`` alone: ``batch_shape`` came
-        # out ``()`` beside a three-element ``total_count``.
-        d = D.NegativeBinomial(lucid.tensor([2.0, 5.0, 9.0]), probs=0.4)
-        assert d.batch_shape == (3,)
-        assert d.sample((4,)).shape == (4, 3)
-        assert np.allclose(d.mean.numpy(), [2 / 1.5, 5 / 1.5, 9 / 1.5])
-
-    def test_negbin_samples_are_floating(self) -> None:
-        # Floating counts, as the reference framework returns them; they
-        # came back int64.
-        s = D.NegativeBinomial(5.0, probs=0.4).sample((16,)).numpy()
-        assert s.dtype == np.float32
-        assert np.array_equal(s, np.round(s)) and (s >= 0).all()
-
-    def test_binomial_broadcasts_total_count(self) -> None:
-        # The same defect, and here ``sample`` raised a shape mismatch.
-        d = D.Binomial(lucid.tensor([2.0, 5.0, 9.0]), probs=0.4)
-        assert d.batch_shape == (3,)
-        s = d.sample((4,)).numpy()
-        assert s.shape == (4, 3)
-        assert (s <= np.array([2, 5, 9])).all()
-
-
-# Each entry builds one family from ``probs=`` or ``logits=``.
-_BINARY_FAMILIES = {
-    "Bernoulli": lambda **kw: D.Bernoulli(**kw),
-    "Geometric": lambda **kw: D.Geometric(**kw),
-    "Binomial": lambda **kw: D.Binomial(10, **kw),
-    "NegativeBinomial": lambda **kw: D.NegativeBinomial(3.0, **kw),
-    "RelaxedBernoulli": lambda **kw: D.RelaxedBernoulli(0.5, **kw),
-    "ContinuousBernoulli": lambda **kw: D.ContinuousBernoulli(**kw),
-}
-_CATEGORICAL_FAMILIES = {
-    "Categorical": lambda **kw: D.Categorical(**kw),
-    "OneHotCategorical": lambda **kw: D.OneHotCategorical(**kw),
-    "RelaxedOneHotCategorical": lambda **kw: D.RelaxedOneHotCategorical(0.5, **kw),
-    "Multinomial": lambda **kw: D.Multinomial(10, **kw),
-}
-
-
-class TestDualParameterisation:
-    """``probs`` and ``logits`` both answer, whichever one was given.
-
-    The reference framework derives the missing one on demand; here it
-    raised AttributeError.
-    """
-
-    @pytest.mark.parametrize("name", list(_BINARY_FAMILIES))
-    def test_binary_families(self, name: str) -> None:
-        make = _BINARY_FAMILIES[name]
-        p = np.array([0.2, 0.5, 0.9], dtype=np.float32)
-        logit = np.log(p) - np.log1p(-p)
-        from_probs = make(probs=lucid.tensor(p))
-        from_logits = make(logits=lucid.tensor(logit))
-        assert np.allclose(from_probs.logits.numpy(), logit, atol=1e-5)
-        assert np.allclose(from_logits.probs.numpy(), p, atol=1e-6)
-
-    @pytest.mark.parametrize("name", list(_CATEGORICAL_FAMILIES))
-    def test_categorical_families(self, name: str) -> None:
-        make = _CATEGORICAL_FAMILIES[name]
-        p = np.array([0.2, 0.3, 0.5], dtype=np.float32)
-        from_probs = make(probs=lucid.tensor(p))
-        assert np.allclose(from_probs.logits.numpy(), np.log(p), atol=1e-6)
-        # Unnormalised logits still derive normalised probabilities.
-        from_logits = make(logits=lucid.tensor(np.log(p) + 3.0))
-        assert np.allclose(from_logits.probs.numpy(), p, atol=1e-6)
-
-    def test_derived_logits_of_a_degenerate_probability_are_finite(self) -> None:
-        # Clamped one epsilon inside [0, 1] first, as the reference does.
-        eps = float(np.finfo(np.float32).eps)
-        edge = math.log(eps) - math.log1p(-eps)
-        got = D.Bernoulli(probs=lucid.tensor([0.0, 1.0])).logits.numpy()
-        assert np.allclose(got, [edge, -edge], rtol=1e-5)
-        cat = D.Categorical(probs=lucid.tensor([0.0, 1.0])).logits.numpy()
-        assert np.allclose(cat, [math.log(eps), math.log1p(-eps)], rtol=1e-5)
-
-    def test_only_the_given_parameter_is_validated(self) -> None:
-        # Converting at construction validated the converted value, and
-        # ``sigmoid(20)`` rounds to 1.0 in float32 — outside Geometric's
-        # open interval — so a perfectly good argument was refused.
-        assert D.Geometric(logits=20.0).batch_shape == ()
-        assert repr(D.Bernoulli(logits=0.0)) == "Bernoulli(logits=())"
-
-    def test_derived_parameter_follows_the_stored_one(self) -> None:
-        # Derived on every read, never cached: it sees an in-place update
-        # of the stored parameter, and gradients reach that parameter.
-        stored = lucid.tensor([0.0])
-        d = D.Bernoulli(logits=stored)
-        assert np.allclose(d.probs.numpy(), [0.5])
-        stored.add_(100.0)
-        assert np.allclose(d.probs.numpy(), [1.0])
-        leaf = lucid.tensor([0.0], requires_grad=True)
-        D.Bernoulli(logits=leaf).probs.sum().backward()
-        assert leaf.grad is not None
-        assert np.allclose(leaf.grad.numpy(), [0.25])
 
 
 # ── multivariate / wrappers ─────────────────────────────────────────────

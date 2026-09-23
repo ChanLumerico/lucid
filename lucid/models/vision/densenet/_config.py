@@ -65,6 +65,8 @@ class DenseNetConfig(ModelConfig):
     ``bn_size`` — bottleneck expansion factor (each layer uses bn_size*k filters
       in its 1×1 branch before the 3×3 branch).
     ``dropout_rate`` — dropout after each dense layer (0 = disabled).
+    ``memory_efficient`` — toggles checkpointing in dense blocks (unused here,
+      kept for API parity with other frameworks).
 
     Examples
     --------
@@ -85,6 +87,7 @@ class DenseNetConfig(ModelConfig):
     num_init_features: int = 64
     bn_size: int = 4
     dropout_rate: float = 0.0
+    memory_efficient: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "block_config", tuple(self.block_config))

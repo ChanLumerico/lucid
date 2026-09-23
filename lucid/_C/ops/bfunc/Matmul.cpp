@@ -115,27 +115,6 @@ std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
     return {std::move(dA_s), std::move(dB_s)};
 }
 
-namespace {
-
-// The dtype two matmul operands meet at: complex over float over integer
-// over bool, and the wider within a kind — the rule the Python operators
-// already follow for every other arithmetic op.  Two different 16-bit
-// floats meet at float32.
-Dtype common_dtype(Dtype a, Dtype b) {
-    if (a == b)
-        return a;
-    const auto kind = [](Dtype d) {
-        return is_complex(d) ? 3 : is_floating_point(d) ? 2 : is_integral(d) ? 1 : 0;
-    };
-    if (kind(a) != kind(b))
-        return kind(a) > kind(b) ? a : b;
-    if (dtype_size(a) != dtype_size(b))
-        return dtype_size(a) > dtype_size(b) ? a : b;
-    return Dtype::F32;
-}
-
-}  // namespace
-
 // Execute the forward matmul, open a profiler scope, compute FLOPs, and wire
 // the backward node if gradient tracking is active.
 //
@@ -180,11 +159,7 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
     // through the AMP cast.  ``maybe_cast_for_kernel`` would produce a
     // requires_grad=false cast tensor → wire_autograd would short-circuit
     // → backward would drop every gradient.  No-op fast path on F32.
-    // The operands meet at their common dtype.  The guard used to key off
-    // ``a`` alone, so ``int @ float`` cast the float operand to int and
-    // truncated it (``[[1, 2]] @ [[0.5], [0.25]]`` was 0) while
-    // ``float @ int`` was right.
-    SchemaGuard sg{MatmulBackward::schema_v1, common_dtype(a->dtype(), b->dtype()), a->device()};
+    SchemaGuard sg{MatmulBackward::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
     const TensorImplPtr a_eff = astype_op(a, eff_dt);
     const TensorImplPtr b_eff = astype_op(b, eff_dt);

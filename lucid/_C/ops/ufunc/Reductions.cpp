@@ -260,7 +260,7 @@ LUCID_REGISTER_OP(SumBackward)
 
 // mean — uses AmpPolicy::Promote; divides broadcast gradient by the count of
 // reduced elements.
-const OpSchema MeanBackward::schema_v1{"mean", 1, AmpPolicy::Promote, true, "", true};
+const OpSchema MeanBackward::schema_v1{"mean", 1, AmpPolicy::Promote, true};
 
 namespace {
 // Count the number of elements collapsed by the given axes.

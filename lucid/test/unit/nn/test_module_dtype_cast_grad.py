@@ -26,27 +26,6 @@ DTYPES = [
 ]
 
 
-def test_complex128_module_cast_preserves_integer_buffers_and_parameter_identity():
-    module = nn.Module()
-    module.register_parameter(
-        "weight", nn.Parameter(lucid.tensor([1 + 2j], dtype=lucid.complex128))
-    )
-    module.register_buffer("counter", lucid.tensor([3], dtype=lucid.int64))
-    module.register_buffer("phase", lucid.tensor([2 + 3j], dtype=lucid.complex128))
-    weight = module.weight
-    module.to(lucid.complex64)
-    assert module.weight is weight
-    assert module.weight.dtype == lucid.complex64
-    assert module.phase.dtype == lucid.complex64
-    assert module.counter.dtype == lucid.int64
-    module.to(lucid.complex128)
-    assert module.weight is weight
-    assert module.counter.dtype == lucid.int64
-    assert module.phase.dtype == lucid.complex128
-    assert module.weight.is_leaf
-    np.testing.assert_array_equal(module.weight.numpy(), [1 + 2j])
-
-
 def _train_step(module, dt, npdt, device="cpu"):
     x = lucid.tensor(np.ones((2, 4), dtype=npdt), device=device, dtype=dt)
     out = module(x)

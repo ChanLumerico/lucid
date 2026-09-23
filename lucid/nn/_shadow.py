@@ -37,7 +37,6 @@ Constraints
 """
 
 import contextlib
-import math
 from typing import Any, Iterator, cast, final
 
 from lucid._C import engine as _C_engine
@@ -162,20 +161,15 @@ def _full_factory(shape: Any, value: Any, *args: Any, **kwargs: Any) -> PhantomI
 def _arange_factory(
     start: float, end: float | None = None, step: float = 1, *args: Any, **kwargs: Any
 ) -> PhantomImpl:
-    """Engine signature: ``arange(start, end, step, dtype, device)``.
-
-    ``dtype`` and ``device`` are the two positions after ``step``, so
-    they are ``args[0]`` and ``args[1]`` here. The length follows the
-    engine's rule — ``ceil((end - start) / step)``, and none when the
-    step points away from ``end`` — so the reported shape is the one a
-    real run would give, fractional steps included.
-    """
+    """Engine signature: ``arange(start, end, step, dtype, device)`` —
+    we still derive a length for accurate shape reporting."""
     if end is None:
         start, end = 0, start
-    span = float(end) - float(start)
-    length = math.ceil(span / step) if span * step > 0 else 0
-    dtype = args[0] if len(args) >= 1 else kwargs.get("dtype")
-    device = args[1] if len(args) >= 2 else kwargs.get("device")
+    length = max(
+        0, int((float(end) - float(start) + step - (1 if step > 0 else -1)) // step)
+    )
+    dtype = args[2] if len(args) >= 3 else kwargs.get("dtype")
+    device = args[3] if len(args) >= 4 else kwargs.get("device")
     return PhantomImpl((length,), dtype, device)
 
 

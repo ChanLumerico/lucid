@@ -1,11 +1,10 @@
-"""Paths that must read a view correctly, whichever op made it.
+"""Paths that must read a view correctly, before any op makes one.
 
-Written before any op made a view, when every tensor started at the first
-byte of its own buffer.  On the CPU reshapes, slices, transposes,
-``expand``, ``diagonal``, ``unfold`` and ``as_strided`` now all do; these
-tests build views directly (``TensorImpl._make_view``), at offsets and
-strides no single op has to produce, and hold each path to reading the
-view's elements rather than the buffer's first ones.
+Every op copies today, so every tensor starts at the first byte of its own
+buffer and nothing has ever checked the paths below against a view.  The
+first views planned are CPU reshapes and leading-dimension slices; these
+tests build such views directly (``TensorImpl._make_view``) and hold each
+path to reading the view's elements rather than the buffer's first ones.
 """
 
 import numpy as np
@@ -75,11 +74,14 @@ def test_copying_from_a_view_takes_the_view_s_values(base) -> None:
     assert dst.tolist() == [2.0, 3.0, 4.0]
 
 
-def test_copying_into_a_view_lands_in_the_view_s_elements(base) -> None:
-    # A copy into a view once wrote at the buffer's first byte, and was then
-    # refused; it now follows the view's offset.
-    _view(base, [3], [1], 2).copy_(lucid.ones(3))
-    assert base.tolist() == [0.0, 1.0, 1.0, 1.0, 1.0, 5.0]
+def test_copying_into_a_view_is_refused_until_writes_honour_geometry(base) -> None:
+    # A copy into a view wrote at the buffer's first byte; until in-place
+    # writes follow a view's geometry it has to refuse rather than land
+    # somewhere else.  The view shares its buffer, so the copy takes the
+    # in-place ops' route and is refused there.
+    with pytest.raises(_C_engine.NotImplementedError, match="offset or with strides"):
+        _view(base, [3], [1], 2).copy_(lucid.ones(3))
+    assert base.tolist() == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
 
 
 def test_a_view_past_the_end_of_its_buffer_is_refused(base) -> None:

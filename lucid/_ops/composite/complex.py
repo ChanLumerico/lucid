@@ -140,8 +140,9 @@ def view_as_real(input: Tensor) -> Tensor:
 
     Currently implemented as a copy via :func:`lucid.stack`, not a
     zero-copy storage reinterpret.  Apple Silicon's GPU memory model
-    makes a genuine zero-copy alias tricky.  Use freely for shape
-    round-trips; a write into the result never reaches the input.
+    makes a genuine zero-copy alias tricky, and Lucid's view contract
+    intentionally enforces value semantics.  Use freely for shape
+    round-trips; do not rely on aliasing for in-place writes.
 
     Examples
     --------

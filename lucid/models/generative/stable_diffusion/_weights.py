@@ -60,7 +60,6 @@ _PRESET_512 = ImageClassification(
 
 
 @register_weights("stable_diffusion")
-@register_weights("stable_diffusion_gen")
 class StableDiffusionWeights(WeightsEnum):
     """Pretrained weights for :func:`lucid.models.stable_diffusion`.
 

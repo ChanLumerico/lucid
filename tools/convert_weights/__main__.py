@@ -54,8 +54,6 @@ import tools.convert_weights.sknet  # noqa: F401
 import tools.convert_weights.swin  # noqa: F401
 import tools.convert_weights.vgg  # noqa: F401
 import tools.convert_weights.vit  # noqa: F401
-import tools.convert_weights.vjepa2  # noqa: F401
-import tools.convert_weights.vjepa2_ac  # noqa: F401
 import tools.convert_weights.xception  # noqa: F401
 import tools.convert_weights.yolo  # noqa: F401
 from tools.convert_weights._base import convert, get_arch, upload, write

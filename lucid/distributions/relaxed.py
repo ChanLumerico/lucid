@@ -13,7 +13,7 @@ from typing import override
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.distributions._util import _as_tensor, _clamp_probs, _lazy_param
+from lucid.distributions._util import _as_tensor
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -62,11 +62,9 @@ class RelaxedBernoulli(Distribution):
     temperature : Tensor
         Temperature :math:`\tau`.
     probs : Tensor
-        Success probability — stored when given, otherwise derived from
-        ``logits`` on access.
+        Success probability (present when constructed with ``probs``).
     logits : Tensor
-        Log-odds — stored when given, otherwise derived from ``probs`` on
-        access.
+        Log-odds (present when constructed with ``logits``).
 
     Notes
     -----
@@ -159,20 +157,6 @@ class RelaxedBernoulli(Distribution):
             self._is_logits = True
             shape = tuple(self.logits.shape)
         super().__init__(batch_shape=shape, event_shape=(), validate_args=validate_args)
-
-    @_lazy_param
-    def probs(self) -> Tensor:
-        """Success probability — as given, or ``sigmoid(logits)`` on access."""
-        return _logits_to_probs(self.logits)
-
-    @_lazy_param
-    def logits(self) -> Tensor:
-        r"""Log-odds :math:`\log(p/(1-p))` — as given, or derived on access.
-
-        Derived from ``probs`` clamped one epsilon inside :math:`[0, 1]`, as
-        the reference framework derives it.
-        """
-        return _probs_to_logits(_clamp_probs(self.probs))
 
     @property
     def _logits(self) -> Tensor:
@@ -286,11 +270,10 @@ class RelaxedOneHotCategorical(Distribution):
     temperature : Tensor
         Temperature :math:`\tau`.
     probs : Tensor
-        Normalised probability vector — stored when given, otherwise derived
-        from ``logits`` on access.
+        Normalised probability vector (present when constructed with ``probs``).
     logits : Tensor
-        Log-probability vector — as given, otherwise derived from ``probs``
-        on access.
+        Unnormalised log-probability vector (present when constructed with
+        ``logits``).
 
     Notes
     -----
@@ -395,22 +378,6 @@ class RelaxedOneHotCategorical(Distribution):
             event_shape=shape[-1:],
             validate_args=validate_args,
         )
-
-    @_lazy_param
-    def probs(self) -> Tensor:
-        """Normalised probabilities — as given, or ``softmax(logits)``."""
-        from lucid.nn.functional.activations import softmax
-
-        return softmax(self.logits, dim=-1)
-
-    @_lazy_param
-    def logits(self) -> Tensor:
-        """Log-probabilities — as given, or derived from ``probs`` on access.
-
-        Derived as ``log(probs)`` with ``probs`` clamped one epsilon inside
-        ``[0, 1]``, as the reference framework derives it.
-        """
-        return _clamp_probs(self.probs).log()
 
     @property
     def _logits(self) -> Tensor:

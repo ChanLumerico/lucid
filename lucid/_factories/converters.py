@@ -225,7 +225,6 @@ _NP_TO_ENGINE_DTYPE: dict[str, _C_engine.Dtype] = {
     "int64": _C_engine.Dtype.I64,
     "bool": _C_engine.Dtype.Bool,
     "complex64": _C_engine.Dtype.C64,
-    "complex128": _C_engine.Dtype.C128,
 }
 
 
@@ -384,44 +383,8 @@ def _engine_dtype_to_np(d: _C_engine.Dtype) -> str:
         _C_engine.Dtype.I64: "int64",
         _C_engine.Dtype.Bool: "bool",
         _C_engine.Dtype.C64: "complex64",
-        _C_engine.Dtype.C128: "complex128",
     }
     return _MAP.get(d, "float32")
-
-
-def _copy_tensor(
-    src: Tensor,
-    *,
-    dtype: DTypeLike,
-    device: DeviceLike,
-    requires_grad: bool,
-) -> _C_engine.TensorImpl:
-    """A fresh copy of ``src`` for :func:`tensor`, as a leaf of its own.
-
-    ``_to_impl`` hands a Tensor's impl back as it is, which is right for
-    ``Tensor(t)`` and ``Parameter(t)`` — they wrap the data they are given
-    — and wrong here: ``tensor`` is documented to copy, and passing the
-    impl through made ``tensor(t, dtype=float64)`` a float32 alias of
-    ``t``'s storage, with ``dtype`` and ``device`` silently dropped.
-
-    ``None`` keeps the source's own dtype and device rather than falling
-    back to the global defaults, as the reference framework does.
-    """
-    dt, dev, rg = normalize_factory_kwargs(
-        dtype if dtype is not None else src.dtype,
-        device if device is not None else src.device,
-        requires_grad,
-    )
-    # Starting from a detached view means none of the steps below is
-    # recorded, so the copy does not hang off ``src``'s graph.
-    # ``contiguous`` always allocates, which is what makes this a copy even
-    # when neither the dtype nor the device changes.
-    impl = _C_engine.contiguous(src.detach()._impl)
-    if impl.dtype != dt:
-        impl = _C_engine.astype(impl, dt)
-    if impl.device != dev:
-        impl = impl.transfer_to_device(dev, False)
-    return impl.clone_with_grad(True) if rg else impl
 
 
 def tensor(
@@ -453,17 +416,14 @@ def tensor(
         * ``numpy.ndarray`` — bridge boundary
           (see :mod:`lucid._factories.converters`); the data is copied
           regardless of the source array's contiguity.
-        * Existing :class:`Tensor` — copied to a new buffer and detached
-          from its autograd graph, so the result is a leaf of its own (use
+        * Existing :class:`Tensor` — copied to a new buffer (use
           :func:`as_tensor` to avoid the copy when dtype/device match).
     dtype : dtype | str | None, optional
         Target element type.  ``None`` (default) infers from ``data``:
-        integers → ``int64``, floats → ``float32``, complex → ``complex64``;
-        a Tensor keeps its own dtype.
+        integers → ``int64``, floats → ``float32``, complex → ``complex64``.
     device : device | str | None, optional
         Target device (``"cpu"`` or ``"metal"``).  ``None`` uses
-        :func:`lucid.get_default_device`, except that a Tensor stays on its
-        own device.
+        :func:`lucid.get_default_device`.
     requires_grad : bool, optional
         Whether the resulting tensor should record autograd operations.
         Defaults to ``False``.
@@ -495,17 +455,9 @@ def tensor(
     >>> lucid.tensor(np.arange(6).reshape(2, 3))
     tensor([[0, 1, 2],
             [3, 4, 5]], dtype=lucid.int64)
-    >>> src = lucid.tensor([1.0, 2.0], requires_grad=True)
-    >>> copy = lucid.tensor(src, dtype=lucid.float64)
-    >>> copy.dtype, copy.is_leaf, copy.requires_grad
-    (lucid.float64, True, False)
     """
     from lucid._tensor.tensor import Tensor
 
-    if isinstance(data, Tensor):
-        return Tensor.__new_from_impl__(
-            _copy_tensor(data, dtype=dtype, device=device, requires_grad=requires_grad)
-        )
     return Tensor.__new_from_impl__(
         _to_impl(data, dtype=dtype, device=device, requires_grad=requires_grad)
     )
@@ -522,12 +474,10 @@ def as_tensor(
 
     * If ``data`` is already a :class:`Tensor` with the requested ``dtype``
       and ``device``, it is returned unchanged.
-    * If ``data`` is a :class:`Tensor` whose dtype or device differs, it is
-      converted as :meth:`Tensor.to` converts it, and the result stays
-      connected to ``data``'s autograd graph — unlike :func:`tensor`, which
-      copies into a detached leaf.
-    * Anything else — Python data, NumPy arrays — goes through
-      :func:`tensor`, which copies.
+    * If ``data`` is a NumPy array on CPU and ``dtype`` matches (or is
+      ``None``), the resulting tensor shares its storage with the array —
+      mutations in either side are reflected in the other.
+    * Otherwise the call delegates to :func:`tensor`, which copies.
 
     Parameters
     ----------
@@ -542,29 +492,27 @@ def as_tensor(
     Returns
     -------
     Tensor
-        ``data`` itself, a converted copy of it, or a freshly-constructed
-        Lucid tensor.
+        The input tensor or a freshly-constructed Lucid tensor.
 
     Notes
     -----
-    ``as_tensor`` is the right choice in code that may be handed either a
-    Tensor or raw data (e.g. a collate function): a Tensor that already has
-    the requested dtype and device passes through with no allocation at
-    all.  For semantic clarity in library code that should never share
-    storage, use :func:`tensor`.
+    ``as_tensor`` is the right choice in performance-sensitive code paths
+    (e.g. DataLoader collate functions) where the input is already an
+    ``ndarray`` and copying would be wasteful.  For semantic clarity in
+    library code that should never share storage, use :func:`tensor`.
 
     Examples
     --------
     >>> import lucid
-    >>> x = lucid.tensor([1.0, 2.0, 3.0])
+    >>> import numpy as np
+    >>> arr = np.array([1.0, 2.0, 3.0])
+    >>> t = lucid.as_tensor(arr)            # no copy
+    >>> arr[0] = 99.0
+    >>> t                                    # reflects the mutation
+    Tensor([99.,  2.,  3.])
+    >>> x = lucid.tensor([1, 2, 3])
     >>> lucid.as_tensor(x) is x              # already a Tensor, returned as-is
     True
-    >>> lucid.as_tensor(x, dtype=lucid.float64).dtype
-    lucid.float64
-    >>> w = lucid.tensor([1.0, 2.0], requires_grad=True)
-    >>> lucid.as_tensor(w, dtype=lucid.float64).sum().backward()
-    >>> w.grad                               # the conversion stays in the graph
-    tensor([1., 1.])
     """
     from lucid._tensor.tensor import Tensor
 
@@ -577,41 +525,37 @@ def as_tensor(
         )
         if data._impl.dtype == _dt and data._impl.device == _dev:
             return data
-        # A conversion goes through ``Tensor.to`` rather than ``tensor``:
-        # ``tensor`` copies into a detached leaf, while ``as_tensor`` of a
-        # Tensor is a cast that stays in the graph, as the reference
-        # framework's is.
-        return data.to(device=_dev, dtype=_dt)
     return tensor(data, dtype=dtype, device=device)
 
 
 def from_numpy(arr: np.ndarray) -> Tensor:
-    r"""Copy a NumPy ``ndarray`` into an owned Lucid tensor.
+    r"""Create a CPU tensor from a NumPy ``ndarray`` with shared storage.
 
-    The returned tensor owns a copy and inherits the array's dtype according
-    to the canonical
+    The returned tensor wraps the array's existing buffer — no data is
+    copied — and inherits the array's dtype according to the canonical
     NumPy → Lucid mapping (``np.float32`` → ``lucid.float32``,
-    ``np.int64`` → ``lucid.int64``, etc.). Mutations do not propagate between
-    the source array and the result. Like :func:`tensor`, this bridge uses
-    the active default device; use ``tensor(arr, device="cpu")`` to pin it.
+    ``np.int64`` → ``lucid.int64``, etc.).  Because storage is shared,
+    mutations in the array are visible in the tensor and vice versa.
 
     Parameters
     ----------
     arr : numpy.ndarray
         Source array.  Must reside in CPU memory.  Any layout (C / Fortran /
-        strided) is accepted and copied to contiguous owned storage.
+        strided) is accepted; the resulting tensor preserves the array's
+        strides where possible.
 
     Returns
     -------
     Tensor
-        A tensor with copied values on the active default device.
+        A CPU tensor sharing storage with ``arr``.
 
     Raises
     ------
-    RuntimeError
-        If the array dtype has no corresponding Lucid dtype. The native
-        ``DtypeMismatch`` exception derives from ``RuntimeError``; for
-        example, object arrays and unsigned integer arrays are rejected.
+    TypeError
+        If ``arr`` is not a NumPy ``ndarray``.
+    ValueError
+        If ``arr``\'s dtype has no corresponding Lucid dtype
+        (e.g. ``np.float128`` on some platforms).
 
     Notes
     -----
@@ -629,8 +573,8 @@ def from_numpy(arr: np.ndarray) -> Tensor:
     >>> t.dtype
     lucid.float32
     >>> arr[0, 0] = 99.0          # mutate the source
-    >>> t[0, 0].item()            # the owned copy is unchanged
-    1.0
+    >>> t[0, 0].item()            # change visible in the tensor
+    99.0
     """
     return tensor(arr)
 

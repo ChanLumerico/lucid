@@ -10,7 +10,7 @@ All operations are Lucid-native (engine ops only) — no numpy / PIL.
 
 import functools
 import math
-from typing import Literal, cast
+from typing import cast
 
 import lucid
 import lucid.nn.functional as F
@@ -221,11 +221,7 @@ def crop(img: Tensor, top: int, left: int, height: int, width: int) -> Tensor:
     return img[..., top : top + height, left : left + width]
 
 
-def center_crop(
-    img: Tensor,
-    size: int | tuple[int, int],
-    offset: Literal["round", "floor"] = "round",
-) -> Tensor:
+def center_crop(img: Tensor, size: int | tuple[int, int]) -> Tensor:
     r"""Crop a centered window of ``size`` (square if ``size`` is an int).
 
     The crop window is centered on the input; if the requested ``size``
@@ -238,15 +234,6 @@ def center_crop(
         Image ``(C, H, W)`` or ``(B, C, H, W)``.
     size : int or (int, int)
         Output ``(height, width)``.  An ``int`` selects a square window.
-    offset : {"round", "floor"}, optional
-        How to place the window when the margin is odd, which is the
-        only case the two conventions disagree on.  ``"round"`` is the
-        default and what the reference vision package does — flooring
-        put a 379-wide image's 224 crop one column left of it.
-        ``"floor"`` is what Hugging Face's fast processors do, and a
-        checkpoint published through those expects it: a 519-wide frame
-        cropped to 256 starts at column 131 there and 132 here, which on
-        anything but a smooth image is a different picture.
 
     Returns
     -------
@@ -255,11 +242,10 @@ def center_crop(
     """
     crop_h, crop_w = (size, size) if isinstance(size, int) else (size[0], size[1])
     h, w = _spatial_hw(img)
-    if offset == "floor":
-        top, left = max((h - crop_h) // 2, 0), max((w - crop_w) // 2, 0)
-    else:
-        top = max(int(round((h - crop_h) / 2.0)), 0)
-        left = max(int(round((w - crop_w) / 2.0)), 0)
+    # Rounded half to even, as the reference does: flooring put a 379-wide
+    # image's 224 crop one column left of the reference's.
+    top = max(int(round((h - crop_h) / 2.0)), 0)
+    left = max(int(round((w - crop_w) / 2.0)), 0)
     return crop(img, top, left, crop_h, crop_w)
 
 

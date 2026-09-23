@@ -389,26 +389,6 @@ bool pieces_are_views(const TensorImplPtr& a, int ax) {
     return ax == 0 && a->device() == Device::CPU && a->is_dense() && !a->shape().empty();
 }
 
-// Along any other axis — or from a tensor that is itself a strided view — a
-// CPU tensor's pieces are strided views of its buffer: its own strides, each
-// piece starting ``from`` steps along the axis.  Every op reads a strided CPU
-// view correctly and a write through one follows its strides, so these are
-// views as the reference's are.  Metal keeps copying.
-bool pieces_are_strided_views(const TensorImplPtr& a) {
-    return a->device() == Device::CPU && storage_is_cpu(a->raw_storage()) && !a->shape().empty();
-}
-
-// The piece of ``a`` that starts ``from`` steps along ``ax``, as a strided
-// view of shape ``shape``; ``drop`` removes the axis, as ``unbind`` does.
-TensorImplPtr
-strided_piece(const TensorImplPtr& a, Shape shape, int ax, std::int64_t from, bool drop) {
-    Stride stride = a->stride();
-    const auto offset = static_cast<std::size_t>(from * stride[static_cast<std::size_t>(ax)]);
-    if (drop)
-        stride.erase(stride.begin() + ax);
-    return TensorImpl::make_view(a, std::move(shape), std::move(stride), offset);
-}
-
 // Bytes in one step along axis 0.
 std::size_t row_bytes(const TensorImplPtr& a) {
     const auto rows = static_cast<std::size_t>(a->shape()[0]);
@@ -556,16 +536,6 @@ std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_spl
         }
         return views;
     }
-    if (pieces_are_strided_views(a)) {
-        std::vector<TensorImplPtr> views;
-        views.reserve(static_cast<std::size_t>(num_splits));
-        for (std::int64_t k = 0; k < num_splits; ++k) {
-            const std::int64_t from = k * piece;
-            views.push_back(attach_split_grad(a, strided_piece(a, piece_shape, ax, from, false),
-                                              piece_shape, ax, from, false));
-        }
-        return views;
-    }
     auto pieces = backend::Dispatcher::for_device(device).split_equal(a->storage(), a->shape(), ax,
                                                                       num_splits, dt);
     std::vector<TensorImplPtr> out;
@@ -626,20 +596,6 @@ split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices, int axis)
         }
         return views;
     }
-    if (pieces_are_strided_views(a)) {
-        std::vector<TensorImplPtr> views;
-        views.reserve(indices.size() + 1);
-        std::int64_t from = 0;
-        for (std::size_t i = 0; i <= indices.size(); ++i) {
-            const std::int64_t to = i < indices.size() ? indices[i] : extent;
-            Shape piece_shape = a->shape();
-            piece_shape[static_cast<std::size_t>(ax)] = to - from;
-            views.push_back(attach_split_grad(a, strided_piece(a, piece_shape, ax, from, false),
-                                              piece_shape, ax, from, false));
-            from = to;
-        }
-        return views;
-    }
     auto pieces =
         backend::Dispatcher::for_device(device).split_at(a->storage(), a->shape(), ax, indices, dt);
     std::vector<TensorImplPtr> out;
@@ -695,13 +651,6 @@ std::vector<TensorImplPtr> unbind_op(const TensorImplPtr& a, int axis) {
                 TensorImpl::make_block_view(a, out_shape, static_cast<std::size_t>(k) * step);
             out.push_back(attach_split_grad(a, std::move(view), slice_shape, ax, k, true));
         }
-        return out;
-    }
-
-    if (pieces_are_strided_views(a)) {
-        for (std::int64_t k = 0; k < a->shape()[ax]; ++k)
-            out.push_back(attach_split_grad(a, strided_piece(a, out_shape, ax, k, true),
-                                            slice_shape, ax, k, true));
         return out;
     }
 

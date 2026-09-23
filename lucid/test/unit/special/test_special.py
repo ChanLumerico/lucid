@@ -65,24 +65,6 @@ class TestNdtri:
         np.testing.assert_allclose(round_trip, x.numpy(), atol=1e-3)
 
 
-def _log_ndtr_double(x: float) -> float:
-    """``log Φ(x)`` in double precision, from ``math.erfc``.
-
-    ``erfc`` itself underflows in double below x ≈ -37.5, so the far left
-    tail uses the asymptotic Mills-ratio series, which is converged to
-    double precision within a few terms at |x| > 37.
-    """
-    if x < -37.0:
-        s, term = 1.0, 1.0
-        for k in range(1, 8):
-            term *= -(2 * k - 1) / (x * x)
-            s += term
-        return -0.5 * x * x - math.log(-x) - 0.5 * math.log(2.0 * math.pi) + math.log(s)
-    if x < 0.0:
-        return math.log(0.5 * math.erfc(-x / math.sqrt(2.0)))
-    return math.log1p(-0.5 * math.erfc(x / math.sqrt(2.0)))
-
-
 class TestLogNdtr:
     def test_at_zero(self) -> None:
         # log Φ(0) = log 0.5 = -log 2.
@@ -108,44 +90,6 @@ class TestLogNdtr:
         assert all(math.isfinite(v) for v in g)
         # d/dx log Φ(x) = φ(x)/Φ(x), which tends to -x as x → -∞.
         assert abs(g[0] - 40.02498) < 1e-3
-
-    def test_matches_double_precision_from_minus_40_to_40(self, device: str) -> None:
-        # The upper tail was the gap: there log Φ(x) ≈ -Q with Q = 1 - Φ(x)
-        # small, and forming Φ first left Q to rounding — float32 answered
-        # -2.98e-7 at x = 5 for -2.867e-7, and 0 from x ≈ 5.4 on.
-        xs = [i / 8.0 for i in range(-320, 321)]
-        got = lucid.special.log_ndtr(lucid.tensor(xs, device=device)).tolist()
-        # Relative to the answer, down to float32's smallest normal: beyond
-        # x ≈ 13 the true value is smaller than that, and whether it comes
-        # back subnormal or flushed to zero is the device's business.
-        tiny = float(np.finfo(np.float32).tiny)
-        for x, g in zip(xs, got):
-            r = _log_ndtr_double(x)
-            assert abs(g - r) <= max(3e-5 * abs(r), tiny), (x, g, r)
-
-    def test_float64_matches_double_precision(self) -> None:
-        # Held to 1e-7 rather than float64's own precision by the lower
-        # tail, whose erfcx goes through the engine's float64 erfc.
-        xs = [i / 8.0 for i in range(-320, 321)]
-        got = lucid.special.log_ndtr(lucid.tensor(xs, dtype=lucid.float64)).tolist()
-        tiny = float(np.finfo(np.float64).tiny)
-        for x, g in zip(xs, got):
-            r = _log_ndtr_double(x)
-            assert abs(g - r) <= max(1e-7 * abs(r), tiny), (x, g, r)
-
-    def test_gradient_continuous_across_the_cuts(self) -> None:
-        # d/dx log Φ(x) = φ(x)/Φ(x) on either side of each branch point; a
-        # mismatch between two branches would show here as a jump.
-        upper = 2.0 * math.sqrt(2.0)
-        xs = [-1.0 - 1e-4, -1.0, -1.0 + 1e-4, upper - 1e-4, upper, upper + 1e-4]
-        xs += [6.0, 20.0]
-        x = lucid.tensor(xs, dtype=lucid.float64, requires_grad=True)
-        lucid.special.log_ndtr(x).sum().backward()
-        assert x.grad is not None
-        for xv, g in zip(xs, x.grad.tolist()):
-            log_pdf = -0.5 * xv * xv - 0.5 * math.log(2.0 * math.pi)
-            ref = math.exp(log_pdf - _log_ndtr_double(xv))
-            assert abs(g - ref) <= 1e-5 * ref, (xv, g, ref)
 
 
 class TestXlog1py:

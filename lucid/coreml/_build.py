@@ -2971,9 +2971,6 @@ def build_package(
     # the caller.
     blob = into.blob if into is not None else cm.BlobWriter(paths.weight_bin)
     weight_shapes: dict[str, list[int]] = {}
-    # MIL element type each weight is declared as.  Not all of them are the
-    # body's float: integer and boolean buffers go out as what they are.
-    weight_dtypes: dict[str, int] = {}
     quantized_count = 0
 
     def _write_float_const(name: str, tensor: Tensor, dedup: int | None) -> None:
@@ -3095,19 +3092,16 @@ def build_package(
         name = f"_w{tid}"
         if is_float:
             _write_float_const(name, tensor, id(impl))
-            weight_dtypes[name] = body_mil
         elif tensor.dtype == lucid.bool_:
             # A boolean buffer is a mask, not a count that happens to be 0
             # or 1, and MIL types the two apart — an int32 constant would
             # be rejected wherever a condition is wanted.
             program.add_bool_const_shaped(name, _flatten_bools(tensor), shape)
-            weight_dtypes[name] = _C_engine.coreml.DTYPE_BOOL
         else:
             # Integer buffers (position ids, token-type ids) go inline: the
             # blob carries float payloads only, and MIL has an integer
             # tensor value already, so nothing has to be guessed.
             program.add_int_const_shaped(name, _flatten_ints(tensor), shape)
-            weight_dtypes[name] = _C_engine.coreml.DTYPE_INT32
         names[tid] = name
         weight_shapes[name] = shape
 
@@ -3153,13 +3147,9 @@ def build_package(
     builder.shapes.update(builder_shapes_state)
     # Weights are constants whichever way they were stored — plain, int8,
     # palettized or sparse. Emitters that must bind a constant ask here.
-    # Each is recorded as the type it was declared: an integer buffer
-    # recorded as float had ``agree_on_dtype`` cast the *other* operand to
-    # float, and Core ML refused the pair.  ``lucid.arange(n)`` is int64 and
-    # reaches the trace as such a buffer, so ``arange(n) == labels`` hit it.
     for weight_name in weight_shapes:
         builder.mark_const(weight_name)
-        builder.dtypes[weight_name] = weight_dtypes[weight_name]
+        builder.dtypes[weight_name] = body_mil
     if image_input is not None and asked_for != 1:
         raise ValueError(
             f"lucid.coreml: image_input needs a single-input model, and this one "

@@ -47,9 +47,9 @@ def _make_inputs(seed: int = 0) -> tuple[lucid.Tensor, np.ndarray]:
     return chw, hwc
 
 
-def _run_lucid(tf: T.Transform, chw: lucid.Tensor) -> lucid.Tensor:
-    """Keep the result so the common fixture can submit lazy work."""
-    return tf(T.Image(chw)).data
+def _run_lucid(tf: T.Transform, chw: lucid.Tensor) -> None:
+    """Single-shot Lucid call ignoring the result (we time the call)."""
+    tf(T.Image(chw))
 
 
 def _run_albu(aug: object, hwc: np.ndarray) -> None:
@@ -57,10 +57,10 @@ def _run_albu(aug: object, hwc: np.ndarray) -> None:
 
 
 def _report(name: str, lucid_s: float, albu_s: float) -> None:
+    ratio = lucid_s / albu_s if albu_s > 0 else float("inf")
     print(
-        f"\n  {name:30s}  lucid_observed={lucid_s * 1e3:7.2f} ms  "
-        f"albu_10_call_mean={albu_s * 1e3:7.2f} ms  "
-        "(different sampling protocols; no speedup claim)"
+        f"\n  {name:30s}  lucid={lucid_s * 1e3:7.2f} ms  "
+        f"albu={albu_s * 1e3:7.2f} ms  ratio={ratio:5.2f}x"
     )
 
 
@@ -236,7 +236,7 @@ class TestPipelineBench:
         _bench_pair(
             bench,
             "ImageNet eval pipeline",
-            lambda: lucid_tf(T.Image(chw)).data,
+            lambda: lucid_tf(T.Image(chw)),
             lambda: albu_tf(image=hwc),
         )
 

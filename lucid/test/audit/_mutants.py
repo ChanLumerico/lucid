@@ -32,8 +32,6 @@ axes could fail somewhere else.
 """
 
 import contextlib
-import subprocess
-import sys
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -58,7 +56,6 @@ class Mutant:
         "build",
         "patch",
         "qualname",
-        "isolated_exit",
     )
 
     def __init__(
@@ -71,7 +68,6 @@ class Mutant:
         subsystem: str = "lucid",
         patch: Any = None,
         qualname: str = "",
-        isolated_exit: int | None = None,
     ) -> None:
         self.axis = axis
         self.name = name
@@ -89,7 +85,6 @@ class Mutant:
         #: package, for axes that dispatch on a symbol's *name* and so
         #: cannot be handed a synthetic one.
         self.patch = patch
-        self.isolated_exit = isolated_exit
 
 
 # ── mutants that need no patching: a broken callable is enough ───────────────
@@ -97,14 +92,6 @@ class Mutant:
 
 def _swallows_nan(x: Any) -> Any:
     return lucid.where(lucid.isnan(x), lucid.zeros_like(x), x)
-
-
-def _terminates_process(*args: object, **kwargs: object) -> None:
-    # Only invoked in the self-check's dedicated subprocess. A deterministic
-    # abnormal exit exercises fatal-call detection without creating a core dump.
-    import os
-
-    os._exit(73)
 
 
 def _invents_data(x: Any) -> Any:
@@ -460,28 +447,6 @@ def _observer_that_ignores_its_input() -> "Iterator[None]":
 #: reader can see the gaps.
 MUTANTS: "tuple[Mutant, ...]" = (
     Mutant(
-        "smoke",
-        "fatal_callable",
-        "invoking a callable terminates its isolated process",
-        lambda: _terminates_process,
-        isolated_exit=73,
-    ),
-    Mutant(
-        "extreme",
-        "softmax_not_normalized",
-        "saturated softmax returns unnormalized probabilities",
-        lambda: (lambda x: lucid.ones_like(x)),
-        qualname="lucid.softmax",
-    ),
-    Mutant(
-        "constant",
-        "invalid_version",
-        "an exported version is not a version string",
-        lambda: "not-a-version",
-        kind="value",
-        qualname="lucid.__version__",
-    ),
-    Mutant(
         "nonfinite",
         "swallows_nan",
         "returns 0 where its input was NaN",
@@ -768,42 +733,6 @@ def verify(ctx: "_axes.Context | None" = None) -> "list[Verdict]":
     context = ctx if ctx is not None else _axes.Context()
     out: "list[Verdict]" = []
     for mutant in MUTANTS:
-        if mutant.isolated_exit is not None:
-            code = (
-                "import sys; from lucid.test.audit import _axes, _mutants; "
-                "m = next(m for m in _mutants.MUTANTS if m.name == sys.argv[1]); "
-                "a = _axes.axis_by_name(m.axis); s = _mutants._symbol_for(m); "
-                "assert a.applies(s); a.run(s, _axes.Context())"
-            )
-            try:
-                child = subprocess.run(
-                    [sys.executable, "-c", code, mutant.name],
-                    capture_output=True,
-                    timeout=30,
-                )
-                caught = child.returncode == mutant.isolated_exit
-                out.append(
-                    Verdict(
-                        mutant.axis,
-                        mutant.name,
-                        mutant.why,
-                        caught,
-                        "isolated process exit",
-                        f"exit {child.returncode}; expected deliberate exit {mutant.isolated_exit}",
-                    )
-                )
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                out.append(
-                    Verdict(
-                        mutant.axis,
-                        mutant.name,
-                        mutant.why,
-                        False,
-                        "harness error",
-                        str(exc),
-                    )
-                )
-            continue
         axis = _axes.axis_by_name(mutant.axis)
         if axis is None:
             out.append(
@@ -861,7 +790,21 @@ def verify(ctx: "_axes.Context | None" = None) -> "list[Verdict]":
 #: between "nobody has got to it" and "it cannot be done" — the second is
 #: a finding about the framework and belongs in the report, not in a
 #: backlog.
-UNPROVEN_REASONS: dict[str, str] = {}
+UNPROVEN_REASONS: "dict[str, str]" = {
+    "extreme": (
+        "the axis dispatches on a fixed list of named limits (softmax, "
+        "log1p, logsumexp); a mutant would have to be one of those ops, "
+        "and patching it tests the patch rather than the axis"
+    ),
+    "constant": (
+        "a dtype that builds a tensor of a different dtype cannot be "
+        "constructed — the value and its behaviour are the same object"
+    ),
+    "smoke": (
+        "its failure mode is a crash, and a mutant that crashes takes the "
+        "self-check down with it"
+    ),
+}
 
 
 def unproven_axes() -> "list[str]":

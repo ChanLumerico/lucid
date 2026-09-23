@@ -1,6 +1,6 @@
 // lucid/_C/ops/complex/Real.cpp
 //
-// Forward implementation of real_op. Validates the input is complex, then
+// Forward implementation of real_op.  Validates the input is C64, then
 // dispatches through ``IBackend::complex_real`` (CPU = stride-2 walk,
 // GPU = ``mlx::core::real``).
 
@@ -14,7 +14,6 @@
 #include "../../core/Validate.h"
 #include "../../kernel/NaryKernel.h"
 #include "../gfunc/Gfunc.h"
-#include "Complex.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -45,10 +44,6 @@ std::vector<Storage> RealBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     auto zero = zeros_op(shape_, lane_, device_);
     return {be.complex_combine(grad_out, zero->storage(), shape_)};
-}
-
-std::vector<TensorImplPtr> RealBackward::apply_for_graph(const TensorImplPtr& grad_out) {
-    return {complex_op(grad_out, zeros_op(shape_, lane_, device_))};
 }
 
 LUCID_REGISTER_OP(RealBackward)

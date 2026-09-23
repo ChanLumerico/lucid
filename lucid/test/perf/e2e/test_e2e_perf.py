@@ -30,13 +30,12 @@ class TestMLPForwardBackward:
             nn.Linear(64, 1),
         ).to(device=device)
 
-        def step() -> tuple[lucid.Tensor, list[lucid.Tensor | None]]:
+        def step() -> None:
             for p in model.parameters():
                 if p.grad is not None:
                     p.grad = None
             loss = F.mse_loss(model(x), y)
             loss.backward()
-            return loss, [p.grad for p in model.parameters()]
 
         bench(step)
         if hasattr(bench, "last_elapsed"):
@@ -53,7 +52,7 @@ class TestTransformerForward:
             d_model=64, nhead=4, dim_feedforward=128, batch_first=True
         ).to(device=device)
 
-        bench(lambda: block(x))
+        bench(lambda: block(x).numpy())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(
                 f"transformer_block_fwd_{device}", bench.last_elapsed, _THRESHOLDS

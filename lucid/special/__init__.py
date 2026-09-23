@@ -419,14 +419,6 @@ def ndtr(x: Tensor) -> Tensor:
     return 0.5 * (1.0 + lucid.erf(x * _INV_SQRT2))
 
 
-# Where ``log_ndtr`` hands the upper tail to ``log1p`` of the complement.
-# It is the point at which ``_erfcx_stable`` switches to its continued
-# fraction: below it the complement would come from ``erfc`` again, which
-# holds only about 1e-7 in float64, where the direct ``log(ndtr(x))`` is
-# still good to 1e-14.
-_LOG_NDTR_UPPER = 2.0 * math.sqrt(2.0)
-
-
 def log_ndtr(x: Tensor) -> Tensor:
     r"""Numerically stable logarithm of the standard normal CDF.
 
@@ -448,36 +440,24 @@ def log_ndtr(x: Tensor) -> Tensor:
 
     Notes
     -----
-    The implementation has three branches; with :math:`t = -x/\sqrt{2}`
-    in the lower tail and :math:`u = x/\sqrt{2}` in the upper one,
+    The implementation switches strategies on a branch boundary at
+    ``x = -1``; with :math:`t = -x/\sqrt{2}`,
 
     .. math::
 
         \log \Phi(x) = \begin{cases}
+            \log \Phi(x), & x \ge -1 \\[2pt]
             \log\!\left(\tfrac{1}{2}\,\mathrm{erfcx}(t)\right) - t^2,
-                & x < -1 \\[2pt]
-            \log \Phi(x), & -1 \le x \le 2\sqrt{2} \\[2pt]
-            \operatorname{log1p}\!\left(
-                -\tfrac{1}{2}\,\mathrm{erfcx}(u)\, e^{-u^2}\right),
-                & x > 2\sqrt{2}.
+                & x < -1.
         \end{cases}
 
-    Between the cuts :math:`0.16 \lesssim \Phi(x) \lesssim 0.998`, so the
+    For :math:`x \ge -1` we have :math:`\Phi(x) \gtrsim 0.16` so the
     direct ``log(ndtr(x))`` is safe.  Below :math:`x = -1` the identity
     :math:`\Phi(x) = \tfrac{1}{2}\,\mathrm{erfc}(t)
     = \tfrac{1}{2}\,\mathrm{erfcx}(t)\, e^{-t^2}` is used: ``erfc(t)``
     itself underflows to zero near :math:`x = -13` in float32 (and loses
     its relative precision well before that), while ``erfcx`` stays
     bounded and the Gaussian factor comes out exactly as :math:`-t^2`.
-
-    The upper tail fails the other way round.  There
-    :math:`\log \Phi(x) \approx -Q` with :math:`Q = 1 - \Phi(x)` small, and
-    forming :math:`\Phi(x)` first leaves :math:`Q` to rounding: float32
-    answered ``-2.98e-7`` at :math:`x = 5` for ``-2.867e-7``, and ``0``
-    from :math:`x \approx 5.4` on.  Computing
-    :math:`Q = \tfrac{1}{2}\,\mathrm{erfcx}(u)\, e^{-u^2}` directly and
-    taking ``log1p`` of its negative keeps the relative precision until
-    :math:`Q` itself underflows.
 
     Examples
     --------
@@ -487,17 +467,13 @@ def log_ndtr(x: Tensor) -> Tensor:
     tensor([-53.23, -1.841, -0.6931, -0.1728])
     """
     x = _real(x)
-    lo = lucid.full_like(x, -1.0)
-    hi = lucid.full_like(x, _LOG_NDTR_UPPER)
-    # Each branch sees only its own stretch of the line: ``where``
-    # evaluates all three, and a -inf in a branch that loses is a NaN in
-    # the gradient.
-    direct = lucid.log(ndtr(lucid.minimum(lucid.maximum(x, lo), hi)))
-    t = -lucid.minimum(x, lo) * _INV_SQRT2
+    cut = lucid.full_like(x, -1.0)
+    # Each branch sees only its own side of the cut: ``where`` evaluates
+    # both, and a -inf in the branch that loses is a NaN in the gradient.
+    direct = lucid.log(ndtr(lucid.maximum(x, cut)))
+    t = -lucid.minimum(x, cut) * _INV_SQRT2
     tail = lucid.log(0.5 * _erfcx_stable(t)) - t * t
-    u = lucid.maximum(x, hi) * _INV_SQRT2
-    upper = lucid.log1p(-0.5 * _erfcx_stable(u) * lucid.exp(-u * u))
-    return lucid.where(x < lo, tail, lucid.where(x > hi, upper, direct))
+    return lucid.where(x >= cut, direct, tail)
 
 
 # Beasley-Springer-Moro coefficients for the inverse normal CDF.  Hosted as

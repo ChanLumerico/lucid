@@ -78,40 +78,24 @@ _FAMILY_FP_CACHE: dict[Path, str] = {}
 
 
 def _family_fingerprint(fam_dir: Path) -> str:
-    """SHA-256 over the *contents* of every ``.py`` in the family
-    directory plus the two global files.
-
-    Content rather than ``mtime``: a fresh checkout rewrites every
-    mtime, so an mtime fingerprint misses on every factory in CI and the
-    cache it gates can never hit there.  That is the whole reason the
-    gate ran ``--force`` — the incremental path was dead on a runner and
-    the full rebuild was the only honest option.  Hashing bytes makes
-    the fingerprint reproducible across checkouts, so a runner reaches
-    the same values the committed sidecar holds.
-
-    Reading each file costs a few milliseconds per family against the
-    seconds-to-minutes of instantiating the models it gates.  Cached
-    per-call so a tree is read once per CLI run.
-    """
+    """SHA-256 of the (path, mtime_ns) tuple for every ``.py`` in the
+    family directory plus the two global files.  Cached per-call so we
+    only ``stat`` each tree once per CLI run."""
     if fam_dir in _FAMILY_FP_CACHE:
         return _FAMILY_FP_CACHE[fam_dir]
     h = hashlib.sha256()
     for f in sorted(fam_dir.rglob("*.py")):
         try:
-            payload = f.read_bytes()
+            st = f.stat()
         except OSError:
             continue
-        h.update(f"{f.relative_to(REPO_ROOT)}:".encode())
-        h.update(hashlib.sha256(payload).digest())
-        h.update(b"\n")
+        h.update(f"{f.relative_to(REPO_ROOT)}:{st.st_mtime_ns}\n".encode())
     for extra in _GLOBAL_FINGERPRINT_FILES:
         try:
-            payload = extra.read_bytes()
+            st = extra.stat()
         except OSError:
             continue
-        h.update(f"{extra.relative_to(REPO_ROOT)}:".encode())
-        h.update(hashlib.sha256(payload).digest())
-        h.update(b"\n")
+        h.update(f"{extra.relative_to(REPO_ROOT)}:{st.st_mtime_ns}\n".encode())
     fp = h.hexdigest()[:16]
     _FAMILY_FP_CACHE[fam_dir] = fp
     return fp

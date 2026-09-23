@@ -581,29 +581,7 @@ public:
         return Storage{CpuStorage{ptr, nbytes, dt}};
     }
 
-    // An interleaved complex op over two same-shape buffers.  ``binary_op``
-    // has no complex branch: its kernels are typed on one real scalar.
-    template <typename Scalar>
-    static Storage complex_binary(const Storage& a,
-                                  const Storage& b,
-                                  const Shape& shape,
-                                  void (*fn)(const Scalar*, const Scalar*, Scalar*, std::size_t)) {
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        const std::size_t n = shape_numel(shape);
-        constexpr auto dt = sizeof(Scalar) == sizeof(double) ? Dtype::C128 : Dtype::C64;
-        const std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        fn(reinterpret_cast<const Scalar*>(ca.ptr.get()),
-           reinterpret_cast<const Scalar*>(cb.ptr.get()), reinterpret_cast<Scalar*>(ptr.get()), n);
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
     Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        if (dt == Dtype::C128)
-            return complex_binary(a, b, shape, cpu::vzadd_c128);
-        if (dt == Dtype::C64)
-            return complex_binary(a, b, shape, cpu::vzadd_c64);
         return binary_op(
             a, b, shape, dt,
             [](const float* ap, const float* bp, float* op, std::size_t n) {
@@ -621,10 +599,6 @@ public:
     }
 
     Storage sub(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        if (dt == Dtype::C128)
-            return complex_binary(a, b, shape, cpu::vzsub_c128);
-        if (dt == Dtype::C64)
-            return complex_binary(a, b, shape, cpu::vzsub_c64);
         return binary_op(
             a, b, shape, dt,
             [](const float* ap, const float* bp, float* op, std::size_t n) {
@@ -644,10 +618,20 @@ public:
     }
 
     Storage mul(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        if (dt == Dtype::C128)
-            return complex_binary(a, b, shape, cpu::vzmul_c128);
-        if (dt == Dtype::C64)
-            return complex_binary(a, b, shape, cpu::vzmul_c64);
+        if (dt == Dtype::C64) {
+            // Element-wise complex multiply on interleaved [re, im, re, im, ...].
+            // ``vDSP_zvmul`` operates on this exact layout via DSPComplex*; the
+            // strides are 1 because both inputs and outputs are contiguous.
+            const auto& ca = std::get<CpuStorage>(a);
+            const auto& cb = std::get<CpuStorage>(b);
+            const std::size_t n = shape_numel(shape);
+            const std::size_t nb = n * dtype_size(dt);
+            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+            cpu::vzmul_c64(reinterpret_cast<const float*>(ca.ptr.get()),
+                           reinterpret_cast<const float*>(cb.ptr.get()),
+                           reinterpret_cast<float*>(ptr.get()), n);
+            return Storage{CpuStorage{ptr, nb, dt}};
+        }
         return binary_op(
             a, b, shape, dt,
             [](const float* ap, const float* bp, float* op, std::size_t n) {
@@ -667,10 +651,6 @@ public:
     }
 
     Storage div(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        if (dt == Dtype::C128)
-            return complex_binary(a, b, shape, cpu::vzdiv_c128);
-        if (dt == Dtype::C64)
-            return complex_binary(a, b, shape, cpu::vzdiv_c64);
         return binary_op(
             a, b, shape, dt,
             [](const float* ap, const float* bp, float* op, std::size_t n) {
@@ -947,8 +927,6 @@ public:
     }
 
     Storage neg(const Storage& a, const Shape& shape, Dtype dt) override {
-        if (is_complex(dt))
-            return sub(zeros(shape, dt), a, shape, dt);
         // A bool has no negation.  It went through the integer path as
         // uint8, where ``-1`` wraps to 255 and 255 reads back as ``true``,
         // so ``-tensor([True, False])`` answered ``[True, False]`` — the
@@ -6232,8 +6210,8 @@ public:
     // followup smoke runs — bool reductions need to promote through I64 first
     // and that promotion was silently NotImplementedError.  The dispatch below
     // covers every pair among {F16, F32, F64, I8, I16, I32, I64, Bool}.  C64
-    // and BF16 are handled outside the table, through float32, because their
-    // host representation isn't a simple ``static_cast``-able scalar (F16 uses the IEEE half decoder from
+    // and BF16 are not handled here because their host representation isn't a
+    // simple ``static_cast``-able scalar (F16 uses the IEEE half decoder from
     // ``item()`` indirectly via the F32 path — handled with a small helper).
     Storage astype(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override {
         const auto& ca = std::get<CpuStorage>(a);
@@ -6305,36 +6283,6 @@ public:
                 out16[i] = brain ? detail::float_to_bfloat_bits(f32[i])
                                  : detail::float_to_half_bits(f32[i]);
             return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
-        }
-
-        // Cast complex lanes separately. Routing C128 through F32 loses
-        // precision; routing complex-to-complex through a real tensor loses
-        // its imaginary component entirely. Recursion below is real-only.
-        if (src_dt != dst_dt && (is_complex(src_dt) || is_complex(dst_dt))) {
-            if (is_complex(src_dt) && dst_dt == Dtype::Bool) {
-                auto truth = [&]<typename T>() {
-                    const auto* values = reinterpret_cast<const std::complex<T>*>(ca.ptr.get());
-                    auto* output = reinterpret_cast<std::uint8_t*>(out_ptr.get());
-                    for (std::size_t i = 0; i < n; ++i)
-                        output[i] = values[i].real() != T{} || values[i].imag() != T{};
-                };
-                if (src_dt == Dtype::C128)
-                    truth.template operator()<double>();
-                else
-                    truth.template operator()<float>();
-                return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
-            }
-            const auto src_lane = is_complex(src_dt) ? real_lane_of(src_dt) : src_dt;
-            Storage re = is_complex(src_dt) ? complex_real(a, shape) : a;
-            if (!is_complex(dst_dt))
-                return src_lane == dst_dt ? re : astype(re, shape, src_lane, dst_dt);
-            const auto dst_lane = real_lane_of(dst_dt);
-            Storage im = is_complex(src_dt) ? complex_imag(a, shape) : zeros(shape, src_lane);
-            if (src_lane != dst_lane) {
-                re = astype(re, shape, src_lane, dst_lane);
-                im = astype(im, shape, src_lane, dst_lane);
-            }
-            return complex_combine(re, im, shape);
         }
 
         // Main Cartesian dispatch.  Outer = src, inner = dst.  Every
@@ -6633,16 +6581,9 @@ public:
             run(std::uint8_t{});
             break;
         case Dtype::F16:
-        case Dtype::BF16:
-            // Broadcasting replicates elements without reading them, so both
-            // 16-bit floats ride the 16-bit path and complex64 the 64-bit one.
+            // Broadcasting replicates elements without reading them, so
+            // half rides the 16-bit path.
             run(std::uint16_t{});
-            break;
-        case Dtype::C64:
-            run(std::uint64_t{});
-            break;
-        case Dtype::C128:
-            run(std::complex<double>{});
             break;
         default:
             ErrorBuilder("cpu_backend::broadcast").not_implemented("dtype not supported");
@@ -11832,11 +11773,6 @@ private:
     // Fills ptr with the scalar value 1 for dtype dt.  Used by ones().
     void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {
         switch (dt) {
-        case Dtype::C128: {
-            auto* p = reinterpret_cast<std::complex<double>*>(ptr);
-            std::fill_n(p, n, std::complex<double>{1.0, 0.0});
-            break;
-        }
         case Dtype::F32: {
             float* p = reinterpret_cast<float*>(ptr);
             for (std::size_t i = 0; i < n; ++i)
@@ -12103,16 +12039,6 @@ private:
     // min_axis primitive.  Mean divides by the reduce dimension after summing.
     Storage reduce_axes(
         const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt, ReduceOp op) {
-        if (is_complex(dt)) {
-            if (op != ReduceOp::Sum && op != ReduceOp::Mean)
-                ErrorBuilder("cpu_backend::reduce")
-                    .not_implemented("complex ordering is undefined");
-            const auto lane = real_lane_of(dt);
-            auto re = reduce_axes(complex_real(a, in_shape), in_shape, opts, lane, op);
-            auto im = reduce_axes(complex_imag(a, in_shape), in_shape, opts, lane, op);
-            const auto n = std::get<CpuStorage>(re).nbytes / dtype_size(lane);
-            return complex_combine(re, im, Shape{static_cast<std::int64_t>(n)});
-        }
         // Reductions accumulate, and there is no half accumulator on the
         // host.  Widening also removes the rounding-per-step error a true
         // half accumulation would carry.
@@ -12836,10 +12762,6 @@ private:
             do_reduce(float{});
         else if (dt == Dtype::F64)
             do_reduce(double{});
-        else if (dt == Dtype::C64)
-            do_reduce(std::complex<float>{});
-        else if (dt == Dtype::C128)
-            do_reduce(std::complex<double>{});
         else
             ErrorBuilder("cpu_backend::reduce_grad_to_shape")
                 .not_implemented("dtype not supported");
@@ -12914,10 +12836,6 @@ private:
             do_bcast(float{});
         else if (dt == Dtype::F64)
             do_bcast(double{});
-        else if (dt == Dtype::C64)
-            do_bcast(std::complex<float>{});
-        else if (dt == Dtype::C128)
-            do_bcast(std::complex<double>{});
         else
             ErrorBuilder("cpu_backend::broadcast_back_for_reduce")
                 .not_implemented("dtype not supported");
@@ -12930,11 +12848,6 @@ private:
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         auto* p = ptr.get();
         switch (dt) {
-        case Dtype::C128: {
-            auto* out = reinterpret_cast<std::complex<double>*>(p);
-            std::fill_n(out, n, std::complex<double>{fill_value, 0.0});
-            break;
-        }
         case Dtype::Bool: {
             auto v = fill_value != 0.0 ? std::uint8_t{1} : std::uint8_t{0};
             for (std::size_t i = 0; i < n; ++i)

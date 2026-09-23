@@ -10,7 +10,6 @@
 
 #include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
-#include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -55,21 +54,7 @@ TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 
     auto out_storage = backend::Dispatcher::for_device(device).floordiv(
         bc.a->storage(), bc.b->storage(), bc.shape, dt);
-    auto result = fresh(std::move(out_storage), bc.shape, Dtype::I64, device);
-    // Integer floor-division is non-differentiable, so it never reaches
-    // ``wire_autograd`` — which is also what records a traced op's
-    // operands.  Without this the op lands in the trace with no inputs,
-    // and ``lucid.compile`` refuses the whole graph rather than bake a
-    // value it cannot prove constant ("did not record its trace I/O").
-    // Three-axis RoPE hits exactly this: ``ids // (height * width)``
-    // is how every V-JEPA 2 / V-JEPA block derives its depth index, so
-    // the entire family fell back to eager.  The floating-point branch
-    // above needs no such call — ``floor_op`` and ``div_op`` are kernel
-    // ops that wire themselves.
-    if (auto* trc = ::lucid::compile::current_tracer()) {
-        trc->on_op_io({a, b}, result);
-    }
-    return result;
+    return fresh(std::move(out_storage), bc.shape, Dtype::I64, device);
 }
 
 }  // namespace lucid

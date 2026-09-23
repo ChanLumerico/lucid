@@ -359,9 +359,8 @@ class PixelShuffle(Module):
       low-resolution grid, then rearrange the :math:`r^2` feature channels
       into a single high-resolution plane, which is cheaper than computing
       features at high resolution.
-    - Implemented as reshape → permute → reshape on the C++ engine; on
-      the CPU the permute is a view, so the only copy is the final
-      reshape's.
+    - Implemented as reshape → permute → reshape on the C++ engine; no
+      intermediate copies beyond those required by the permute.
     - ``PixelUnshuffle`` is the exact inverse.
 
     Examples

@@ -3,7 +3,7 @@
   "name": "generative",
   "path": "lucid.models.generative",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/cd3dbdb03/lucid/models/generative/__init__.py#L1",
+  "source": "https://github.com/ChanLumerico/lucid/blob/79ac2e4/lucid/models/generative/__init__.py#L1",
   "members": [],
   "summary": "Image-generative model families — Phase 5 of the model zoo.",
   "extended": "Concrete families live in sub-packages: latent-variable (`vae`),\ndiffusion / score-based (`ddpm`, `ncsn`), and exact-likelihood flows\n(`nice`).  The infrastructure exported here — base configs (one tier per\nmodel class: generative → diffusion / normalizing-flow), output\ndataclasses, noise schedulers — is what a new family builds on, so each\none only needs its own `_config.py`, `_model.py`, and\n`_pretrained.py`.\n\nPositional / timestep encoding primitives (`SinusoidalEmbedding`,\n`TimestepEmbedding`) live in `lucid.nn`; family code imports them\nfrom there rather than redefining locally.",
@@ -45,10 +45,6 @@
       "label": "flow_matching"
     },
     {
-      "slug": "lucid.models.generative.genie",
-      "label": "genie"
-    },
-    {
       "slug": "lucid.models.generative.mean_flow",
       "label": "mean_flow"
     },
@@ -87,10 +83,6 @@
     {
       "slug": "lucid.models.generative.vae",
       "label": "vae"
-    },
-    {
-      "slug": "lucid.models.generative.vjepa2_ac",
-      "label": "vjepa2_ac"
     },
     {
       "slug": "lucid.models.generative.vqvae",

@@ -158,15 +158,6 @@ public:
     // mistakes at hook sites.
     void on_op_io(const std::vector<TensorImplPtr>& inputs, const TensorImplPtr& output);
 
-    // Give later reads of a live buffer the SSA id of its updated value,
-    // without mutating trace-time storage or losing the original feed.
-    void on_buffer_update(const TensorImplPtr& buffer, const TensorImplPtr& value);
-
-    TensorImplPtr buffer_value(const TensorImplPtr& buffer) const {
-        const auto it = buffer_values_.find(buffer.get());
-        return it == buffer_values_.end() ? buffer : it->second;
-    }
-
     // Attach a single attribute to the most recently recorded
     // :class:`OpNode`.  Used by op forwards via
     // :func:`OpScopeFull::set_attr` to thread payloads (permutation,
@@ -241,7 +232,7 @@ public:
                 continue;
             const auto it = impl_to_id_.find(impl.get());
             if (it != impl_to_id_.end())
-                out.emplace(it->second, buffer_value(impl));
+                out.emplace(it->second, impl);
         }
         return out;
     }
@@ -269,8 +260,6 @@ private:
     // input ids — if the pointer isn't in this map yet, the op's
     // input is an external feed and a fresh id is minted on the spot.
     std::unordered_map<TensorImpl*, TensorId> impl_to_id_;
-    // Trace-local values for state writes whose live storage stays untouched.
-    std::unordered_map<TensorImpl*, TensorImplPtr> buffer_values_;
     // Owning subset of ``impl_to_id_``: every external feed (inputs
     // not produced by any earlier op) carries a strong reference so
     // its TensorImpl can't be released mid-trace.  The builder

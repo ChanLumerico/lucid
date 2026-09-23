@@ -8,9 +8,9 @@
 // GPU dispatches to ``mlx::core::real``.  Real-dtype inputs are rejected by
 // ``complex_detail::require_complex``.
 //
-// Native storage and graph backward embed the incoming real-valued
+// Forward only — the Python autograd layer embeds the incoming real-valued
 // gradient as the real part of a fresh complex gradient with zero imaginary
-// part: ``d real(z) / d z = complex(grad, 0)``. This matches the Wirtinger
+// part: ``d real(z) / d z = complex(grad, 0)``.  This matches the Wirtinger
 // calculus convention used by complex autograd in the reference framework.
 //
 // Math
@@ -40,7 +40,7 @@ namespace lucid {
 
 // Extract the real part of a complex tensor as a real tensor.
 //
-// The result dtype is the corresponding real dtype (C64 → F32, C128 → F64); the
+// The result dtype is the corresponding real dtype (``C64`` → ``F32``); the
 // shape and device are unchanged.
 //
 // Math
@@ -52,12 +52,12 @@ namespace lucid {
 // Parameters
 // ----------
 // a : TensorImplPtr
-//     Complex-dtype input tensor (C64; CPU also supports C128).
+//     Complex-dtype input tensor (currently ``C64``).
 //
 // Returns
 // -------
 // TensorImplPtr
-//     Real-dtype output (F32 or F64) of the same shape and device as ``a``.
+//     Real-dtype output (``F32``) of the same shape and device as ``a``.
 //
 // Raises
 // ------
@@ -99,8 +99,7 @@ public:
     Device device_ = Device::CPU;
 
     // ``g`` lands in the real lane; the imaginary lane receives nothing.
-    std::vector<Storage> apply(Storage grad_out) override;
-    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+    std::vector<Storage> apply(Storage grad_out);
 };
 
 LUCID_API TensorImplPtr real_op(const TensorImplPtr& a);

@@ -772,33 +772,6 @@ def save_coverage(path: Path, report: Report) -> int:
     return len(answered)
 
 
-def _scoped_coverage(
-    recorded: dict[str, str],
-    args: argparse.Namespace,
-) -> dict[str, str]:
-    """A filtered sweep cannot answer cells outside the requested scope.
-
-    Keep the complete baseline for full runs, including removed symbols.
-    A scoped run compares only the selected symbols and axes, including
-    selected cells that now skip or refuse their input.
-    """
-    axes = {axis.name for axis in _selected_axes(args.axis)}
-    scoped_symbols = (
-        args.subsystem.strip() not in ("all", "") or args.select or args.limit
-    )
-    symbols = (
-        {symbol.qualname for symbol in _selected_symbols(args)}
-        if scoped_symbols
-        else None
-    )
-    return {
-        key: value
-        for key, value in recorded.items()
-        if key.partition("::")[0] in axes
-        and (symbols is None or key.partition("::")[2] in symbols)
-    }
-
-
 def report_coverage_diff(
     report: Report, recorded: "dict[str, str]", console: Console
 ) -> int:
@@ -982,9 +955,7 @@ def _run_audit_stage(args: argparse.Namespace, console: Console) -> "tuple[int, 
                 )
             )
         else:
-            regressions = report_coverage_diff(
-                report, _scoped_coverage(recorded_cells, args), console
-            )
+            regressions = report_coverage_diff(report, recorded_cells, console)
 
     if args.update_known:
         Baseline.load(args.known).save(args.known, report.defects)
@@ -1226,18 +1197,6 @@ def main(argv: "Sequence[str] | None" = None) -> int:
                 "red",
             )
         )
-        return 2
-
-    if args.update_coverage and (
-        args.axis.strip() not in ("all", "")
-        or args.subsystem.strip() not in ("all", "")
-        or args.select
-        or args.limit
-        or args.fail_fast
-        or args.no_metal
-        or args.quick
-    ):
-        console.always("--update-coverage requires a complete, unfiltered sweep")
         return 2
 
     # Both stages by default.  A gate that has to be invoked twice is a

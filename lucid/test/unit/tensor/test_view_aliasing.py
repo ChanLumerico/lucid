@@ -145,112 +145,11 @@ def test_a_write_that_would_change_the_dtype_is_refused() -> None:
     assert _flat(v) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
 
 
-def _strided(
-    base: lucid.Tensor, shape: list[int], stride: list[int], offset: int = 0
-) -> lucid.Tensor:
-    return _wrap(_C_engine.TensorImpl._make_view(base._impl, shape, stride, offset))
-
-
-def test_a_write_through_a_view_at_an_offset_lands_there(x: lucid.Tensor) -> None:
-    _strided(x, [3], [1], 2).add_(1.0)
-    assert _flat(x) == [0.0, 1.0, 3.0, 4.0, 5.0, 5.0]
-
-
-def test_a_write_through_a_transposed_view_reaches_every_element(
-    x: lucid.Tensor,
-) -> None:
-    t = _strided(x, [3, 2], [1, 3])  # x viewed as (2, 3), transposed
-    t.mul_(10.0)
-    assert _flat(x) == [0.0, 10.0, 20.0, 30.0, 40.0, 50.0]
-
-
-def test_copy_into_a_transposed_view_follows_its_strides(x: lucid.Tensor) -> None:
-    t = _strided(x, [3, 2], [1, 3])
-    t.copy_(lucid.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))
-    assert _flat(x) == [1.0, 3.0, 5.0, 2.0, 4.0, 6.0]
-    assert t.tolist() == [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]
-
-
-def test_an_expanded_view_is_read_but_not_written(x: lucid.Tensor) -> None:
-    e = _strided(x, [2, 3], [0, 1])  # the first three elements, twice
-    assert e.tolist() == [[0.0, 1.0, 2.0], [0.0, 1.0, 2.0]]
-    with pytest.raises(Exception, match="overlap"):
-        e.add_(1.0)
+def test_a_view_at_an_offset_is_not_written_yet(x: lucid.Tensor) -> None:
+    v = _wrap(_C_engine.TensorImpl._make_view(x._impl, [3], [1], 2))
+    with pytest.raises(_C_engine.NotImplementedError, match="offset or with strides"):
+        v.add_(1.0)
     assert _flat(x) == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
-
-
-def test_a_transpose_is_a_view_of_its_input() -> None:
-    x = lucid.arange(6).float().reshape(2, 3)
-    t = x.t()
-    assert not t.is_contiguous()
-    t.mul_(10.0)
-    assert _flat(x) == [0.0, 10.0, 20.0, 30.0, 40.0, 50.0]
-    x.add_(1.0)
-    assert t.tolist() == [[1.0, 31.0], [11.0, 41.0], [21.0, 51.0]]
-
-
-def test_a_recorded_write_through_a_transpose_reaches_the_base_s_gradient() -> None:
-    w = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], requires_grad=True)
-    h = w * 1.0
-    t = h.t()
-    t.mul_(2.0)
-    assert _flat(h) == [2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
-    (h * lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])).sum().backward()
-    assert _flat(w.grad) == [2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
-
-
-def test_a_recorded_write_through_the_base_reaches_a_transpose_s_gradient() -> None:
-    w = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], requires_grad=True)
-    h = w * 1.0
-    t = h.t()
-    h.mul_(3.0)
-    (t * lucid.tensor([[1.0, 4.0], [2.0, 5.0], [3.0, 6.0]])).sum().backward()
-    assert _flat(w.grad) == [3.0, 6.0, 9.0, 12.0, 15.0, 18.0]
-
-
-def test_a_constant_written_through_a_strided_column_stops_its_gradient() -> None:
-    w = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], requires_grad=True)
-    h = w * 1.0
-    col = _strided(h, [2], [3], 1)  # column 1
-    col.fill_(0.0)
-    assert _flat(h) == [1.0, 0.0, 3.0, 4.0, 0.0, 6.0]
-    h.sum().backward()
-    assert _flat(w.grad) == [1.0, 0.0, 1.0, 1.0, 0.0, 1.0]
-
-
-def test_copy_into_a_strided_column_sends_the_gradient_to_the_source() -> None:
-    w = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], requires_grad=True)
-    v = lucid.tensor([7.0, 8.0], requires_grad=True)
-    h = w * 1.0
-    col = _strided(h, [2], [3], 1)
-    col.copy_(v)
-    assert _flat(h) == [1.0, 7.0, 3.0, 4.0, 8.0, 6.0]
-    (h * lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])).sum().backward()
-    assert _flat(w.grad) == [1.0, 0.0, 3.0, 4.0, 0.0, 6.0]
-    assert _flat(v.grad) == [2.0, 5.0]
-
-
-def test_a_strided_splice_differentiates_twice() -> None:
-    v = lucid.tensor([1.0, 2.0], requires_grad=True)
-    h = lucid.zeros(2, 3)
-    col = _strided(h, [2], [3], 1)
-    col.copy_(v * v)
-    (g,) = lucid.autograd.grad(h.sum(), v, create_graph=True)
-    assert g is not None
-    assert _flat(g) == [2.0, 4.0]
-    g.sum().backward()
-    assert _flat(v.grad) == [2.0, 2.0]
-
-
-def test_a_repeated_element_s_gradient_adds_up() -> None:
-    # ``e`` reads ``h`` twice over; after ``h`` doubles, each of ``w``'s
-    # elements reaches ``e.sum()`` twice, at twice its value.
-    w = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)
-    h = w * 1.0
-    e = _strided(h, [2, 3], [0, 1])
-    h.mul_(2.0)
-    e.sum().backward()
-    assert _flat(w.grad) == [4.0, 4.0, 4.0]
 
 
 def test_a_leaf_s_view_is_written_only_outside_autograd() -> None:
@@ -427,10 +326,10 @@ def test_a_leading_dim_slice_is_a_view(
         assert _flat(grid)[3 * r : 3 * r + 3] == [scale * (3 * r + c) for c in range(3)]
 
 
-def test_a_slice_along_another_dim_is_a_view(grid: lucid.Tensor) -> None:
+def test_a_slice_along_another_dim_is_still_a_copy(grid: lucid.Tensor) -> None:
     column = grid[:, 1]
     column.add_(100.0)
-    assert _flat(grid) == [float(v) + (100.0 if v % 3 == 1 else 0.0) for v in range(12)]
+    assert _flat(grid) == [float(v) for v in range(12)]
 
 
 def test_writes_reach_between_a_tensor_and_its_slices(grid: lucid.Tensor) -> None:

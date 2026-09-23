@@ -11,7 +11,6 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
 #include "../../ops/ufunc/Arith.h"
-#include "../complex/Conj.h"
 #include "Mul.h"
 
 namespace lucid {
@@ -33,18 +32,12 @@ std::pair<Storage, Storage> DivBackward::grad_formula(const Storage& grad_out) {
 
     auto a_b = saved_input_broadcasted(0);
     auto b_b = saved_input_broadcasted(1);
-    if (is_complex(dtype_)) {
-        auto& be = backend::Dispatcher::for_device(device_);
-        a_b = be.complex_conj(a_b, out_shape_, dtype_);
-        b_b = be.complex_conj(b_b, out_shape_, dtype_);
-    }
 
     // dA = grad_out / b
     Storage dx = divide_storages(grad_out, b_b, n, dtype_, device_);
 
     // dB = -(grad_out * a) / b²
-    Storage b_sq = is_complex(dtype_) ? multiply_storages(b_b, b_b, n, dtype_, device_)
-                                      : square_storage(b_b, n, dtype_, device_);
+    Storage b_sq = square_storage(b_b, n, dtype_, device_);
     Storage g_times_a = multiply_storages(grad_out, a_b, n, dtype_, device_);
     Storage div_by_b_sq = divide_storages(g_times_a, b_sq, n, dtype_, device_);
     Storage dy = negate_storage(div_by_b_sq, n, dtype_, device_);
@@ -54,12 +47,10 @@ std::pair<Storage, Storage> DivBackward::grad_formula(const Storage& grad_out) {
 std::pair<TensorImplPtr, TensorImplPtr> DivBackward::grad_formula_impl(
     const TensorImplPtr& grad_out, const TensorImplPtr& a, const TensorImplPtr& b) {
     // da = grad_out / b
-    auto ac = is_complex(dtype_) ? conj_op(a) : a;
-    auto bc = is_complex(dtype_) ? conj_op(b) : b;
-    auto da = div_op(grad_out, bc);
+    auto da = div_op(grad_out, b);
     // db = -grad_out * a / b^2
-    auto b_sq = mul_op(bc, bc);
-    auto ga = mul_op(grad_out, ac);
+    auto b_sq = mul_op(b, b);
+    auto ga = mul_op(grad_out, a);
     auto db = neg_op(div_op(ga, b_sq));
     return {da, db};
 }

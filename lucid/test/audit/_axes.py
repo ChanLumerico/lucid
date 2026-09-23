@@ -178,7 +178,7 @@ class Axis:
         base = None
         if hasattr(primary, "dtype") and hasattr(primary, "shape"):
             try:
-                base = _probe.to_numpy(primary)
+                base = call.base
             except TypeError:
                 base = None
         try:
@@ -192,7 +192,7 @@ class Axis:
             return False
         if first.dtype.kind not in "fciub" or second.dtype.kind not in "fciub":
             return False
-        return not np.array_equal(first, second, equal_nan=first.dtype.kind in "fc")
+        return not np.array_equal(first, second, equal_nan=first.dtype.kind == "f")
 
     @staticmethod
     def _comparable(array: np.ndarray) -> np.ndarray:
@@ -994,11 +994,8 @@ class CreateGraphAxis(Axis):
                 "two identical calls disagree — this measures the draw, not the op",
             )
         try:
-            values = _probe.to_numpy(call.args[call.primary])
-            if values is None:
-                raise TypeError("no array-valued primary operand")
-            base = np.asarray(values)
-        except TypeError, IndexError, AttributeError:
+            base = call.base
+        except TypeError:
             return self._finding(
                 symbol,
                 Status.NOT_APPLICABLE,
@@ -1046,7 +1043,7 @@ class CreateGraphAxis(Axis):
                     "no gradient reached the input — nothing for the two "
                     "routes to disagree about",
                 )
-            reference = self._gradient_lanes(x_ref.grad)
+            reference = np.asarray(x_ref.grad.numpy(), dtype=np.float64).reshape(-1)
             if np.abs(reference).max(initial=0.0) != 0.0:
                 break
         if np.abs(reference).max(initial=0.0) == 0.0:
@@ -1057,7 +1054,7 @@ class CreateGraphAxis(Axis):
         try:
             x_probe, loss2 = loss_of(base)
             (got,) = lucid.autograd.grad(loss2, [x_probe], create_graph=True)
-            candidate = self._gradient_lanes(got)
+            candidate = np.asarray(got.numpy(), dtype=np.float64).reshape(-1)
         except Exception as exc:  # noqa: BLE001
             return self._finding(
                 symbol, Status.UNSUPPORTED, f"grad(create_graph): {type(exc).__name__}"
@@ -1109,17 +1106,6 @@ class CreateGraphAxis(Axis):
             backward=reference[:8].tolist(),
             create_graph=candidate[:8].tolist(),
         )
-
-    @staticmethod
-    def _gradient_lanes(gradient: Any) -> np.ndarray:
-        values = np.asarray(gradient.numpy())
-        if np.iscomplexobj(values):
-            return (
-                np.ascontiguousarray(values, dtype=np.complex128)
-                .reshape(-1)
-                .view(np.float64)
-            )
-        return values.astype(np.float64).reshape(-1)
 
 
 def _receiver_position(free_fn: Any, method_fn: Any) -> int:

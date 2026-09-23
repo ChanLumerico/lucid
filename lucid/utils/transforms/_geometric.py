@@ -8,7 +8,7 @@ GeometricTransform`: every transform here moves the image, its mask
 
 import math
 from dataclasses import dataclass
-from typing import Literal, override
+from typing import override
 
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
@@ -314,11 +314,6 @@ class CenterCrop(_NoParams, GeometricTransform[Empty]):
         Target crop height in pixels.
     width : int
         Target crop width in pixels.
-    offset : {"round", "floor"}, optional
-        Where the window sits when the margin is odd.  ``"round"`` is
-        the default and matches Albumentations and the reference vision
-        package; ``"floor"`` matches Hugging Face's fast processors, and
-        a checkpoint published through one expects that placement.
     p : float, optional, default=1.0
         Probability of applying the transform.
 
@@ -330,30 +325,21 @@ class CenterCrop(_NoParams, GeometricTransform[Empty]):
     (3, 16, 16)
     """
 
-    def __init__(
-        self,
-        height: int,
-        width: int,
-        offset: Literal["round", "floor"] = "round",
-        p: float = 1.0,
-    ) -> None:
+    def __init__(self, height: int, width: int, p: float = 1.0) -> None:
         super().__init__(p=p)
         self.height = height
         self.width = width
-        self.offset = offset
 
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        return F.center_crop(img, (self.height, self.width), self.offset)
+        return F.center_crop(img, (self.height, self.width))
 
     @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
-        return F.center_crop(mask, (self.height, self.width), self.offset)
+        return F.center_crop(mask, (self.height, self.width))
 
     def _offsets(self, canvas: tuple[int, int]) -> tuple[int, int]:
         h, w = canvas
-        if self.offset == "floor":
-            return max((h - self.height) // 2, 0), max((w - self.width) // 2, 0)
         top = max(int(round((h - self.height) / 2.0)), 0)
         left = max(int(round((w - self.width) / 2.0)), 0)
         return top, left

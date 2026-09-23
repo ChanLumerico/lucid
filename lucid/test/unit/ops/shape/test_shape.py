@@ -1,7 +1,6 @@
 """Shape-manipulation ops — reshape / permute / cat / stack / split / pad / ..."""
 
 import numpy as np
-import pytest
 
 import lucid
 
@@ -95,47 +94,6 @@ class TestCatStack:
         out = lucid.stack([a, b], dim=0)
         assert out.shape == (2, 2)
         np.testing.assert_array_equal(out.numpy(), [[1.0, 2.0], [3.0, 4.0]])
-
-    @pytest.mark.parametrize(
-        "join",
-        [
-            "cat",
-            "concat",
-            "stack",
-            "hstack",
-            "vstack",
-            "dstack",
-            "column_stack",
-            "row_stack",
-        ],
-    )
-    def test_mixed_dtypes_join_at_the_common_dtype(
-        self, device: str, join: str
-    ) -> None:
-        # The engine joins one dtype only, so an int64 beside a float32
-        # raised DtypeMismatch; the reference joins them in float32.
-        ints = lucid.tensor([1, 2], dtype=lucid.int64, device=device)
-        floats = lucid.tensor([0.5, 1.5], device=device)
-        fn = getattr(lucid, join)
-        out = fn([ints, floats])
-        assert out.dtype == lucid.float32
-        np.testing.assert_array_equal(out.numpy(), fn([ints.float(), floats]).numpy())
-
-    def test_join_promotion_orders_kind_then_width(self, device: str) -> None:
-        flag = lucid.tensor([True], device=device)
-        narrow = lucid.tensor([2], dtype=lucid.int32, device=device)
-        wide = lucid.tensor([3], dtype=lucid.int64, device=device)
-        assert lucid.cat([flag, narrow]).dtype == lucid.int32
-        assert lucid.cat([narrow, wide]).dtype == lucid.int64
-        assert lucid.cat([flag, narrow, wide]).tolist() == [1, 2, 3]
-        assert lucid.cat([narrow, narrow]).dtype == lucid.int32
-
-    def test_a_promoted_join_still_carries_gradient(self, device: str) -> None:
-        ints = lucid.tensor([1, 2], dtype=lucid.int64, device=device)
-        floats = lucid.tensor([0.5, 1.5], device=device, requires_grad=True)
-        lucid.cat([ints, floats]).sum().backward()
-        assert floats.grad is not None
-        assert floats.grad.tolist() == [1.0, 1.0]
 
 
 class TestSplitChunk:

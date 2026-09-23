@@ -34,8 +34,10 @@ def swapaxes(x: Tensor, axis0: int, axis1: int) -> Tensor:
     -------
     Tensor
         Tensor with the same data as ``x`` but with ``axis0`` and
-        ``axis1`` exchanged — a view of ``x``'s buffer on the CPU, so a
-        write through it reaches ``x``; a copy on metal.
+        ``axis1`` exchanged.  Where possible Lucid returns a view; if
+        the underlying storage is non-contiguous, a freshly materialised
+        tensor is returned (still satisfying value semantics — Lucid
+        never aliases in a way that would surprise in-place writers).
 
     Notes
     -----
@@ -51,8 +53,8 @@ def swapaxes(x: Tensor, axis0: int, axis1: int) -> Tensor:
             s_i,     & \text{otherwise.}
         \end{cases}
 
-    As in the reference, the result is a view on the CPU: no data moves,
-    only the two strides trade places.
+    Some reference frameworks document ``swapaxes`` as having in-place
+    view semantics — in Lucid it is always a (possibly fresh) value-view.
 
     Examples
     --------
@@ -67,8 +69,8 @@ def swapaxes(x: Tensor, axis0: int, axis1: int) -> Tensor:
 def swapdims(x: Tensor, dim0: int, dim1: int) -> Tensor:
     r"""Swap two named dimensions of a tensor.
 
-    Returns a tensor whose dimensions ``dim0`` and ``dim1`` have been
-    exchanged — a view on the CPU, a copy on metal. All other
+    Returns a view (or, if not contiguous, a freshly materialised tensor)
+    whose dimensions ``dim0`` and ``dim1`` have been exchanged. All other
     dimensions retain their position.
 
     Parameters
@@ -169,8 +171,9 @@ def adjoint(x: Tensor) -> Tensor:
     r"""Conjugate (Hermitian) transpose of the trailing two dimensions.
 
     For real-valued tensors this is identical to a plain transpose of the
-    last two axes. For complex tensors the entries are also conjugated,
-    yielding the Hermitian transpose :math:`A^{*} = \overline{A^{T}}`.
+    last two axes. For complex tensors (when supported), the entries are
+    additionally conjugated, yielding the Hermitian transpose
+    :math:`A^{*} = \overline{A^{T}}`.
 
     Parameters
     ----------
@@ -208,12 +211,7 @@ def adjoint(x: Tensor) -> Tensor:
     """
     if x.ndim < 2:
         raise ValueError("adjoint requires at least 2 dimensions")
-    swapped = _swap_dims(x, x.ndim - 2, x.ndim - 1)
-    # The conjugation the definition promises.  It was never applied: a
-    # complex transpose used to be refused, so this returned nothing wrong —
-    # until transposes read every dtype, and a complex input came back only
-    # transposed.
-    return lucid.conj(swapped) if lucid.is_complex(x) else swapped
+    return _swap_dims(x, x.ndim - 2, x.ndim - 1)
 
 
 def t(x: Tensor) -> Tensor:

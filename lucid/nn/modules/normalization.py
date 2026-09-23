@@ -661,8 +661,9 @@ class _BatchNormBase(Module):
         # ``num_batches_tracked + 1`` 0-D add and the cumulative-MA
         # composition both leak side-effectful ops into the trace whose
         # MPSGraph lowering hits an 8-byte buffer-size mismatch.  The
-        # compile path needs pure forward graphs; training entry points
-        # advance the observed layers' counters after each executable run.
+        # compile path needs *pure* forward graphs; running-stats
+        # bookkeeping is a no-op there (the next eager call advances
+        # the counter normally).
         _tracing_active = _C_engine.compile.current_tracer() is not None
         if self.training and self.track_running_stats and not fuse_running_update:
             if not _tracing_active:

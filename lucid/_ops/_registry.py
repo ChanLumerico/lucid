@@ -142,10 +142,8 @@ _REGISTRY: list[OpEntry] = [
     # so that mixed-dtype operands (e.g. float32 × bool) are automatically
     # promoted to their common type before entering the C++ kernel — matching
     # the reference framework's type-promotion semantics.
-    # matmul/dot/inner bypass it: they have dtype contracts of their own that
-    # the engine enforces.  outer has none — an elementwise product, nothing
-    # contracted — so it promotes its two tensors (and only tensors) through
-    # the adapter it shares with linalg.outer.
+    # matmul/dot/inner/outer intentionally bypass promotion: they require
+    # matching float dtypes and the engine enforces that contract.
     OpEntry("add",      A._make_arith_adapter(_R.add),      2, method_name="add",      free_fn_name="add"),
     OpEntry("sub",      A._make_arith_adapter(_R.sub),      2, method_name="sub",      free_fn_name="sub"),
     OpEntry("mul",      A._make_arith_adapter(_R.mul),      2, method_name="mul",      free_fn_name="mul"),
@@ -156,16 +154,13 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("matmul",   _R.matmul,   2, method_name="matmul",   free_fn_name="matmul"),
     OpEntry("dot",      _R.dot,      2, method_name="dot",      free_fn_name="dot"),
     OpEntry("inner",    _R.inner,    2, method_name="inner",    free_fn_name="inner"),
-    OpEntry("outer",    A._outer_adapter, 2, method_name="outer", free_fn_name="outer"),
+    OpEntry("outer",    _R.outer,    2, method_name="outer",    free_fn_name="outer"),
 
     # ── in-place binary ────────────────────────────────────────────────────
     OpEntry("add_",     A._make_arith_adapter(_R.add_),     2, inplace=True, method_name="add_"),
     OpEntry("sub_",     A._make_arith_adapter(_R.sub_),     2, inplace=True, method_name="sub_"),
     OpEntry("mul_",     A._make_arith_adapter(_R.mul_),     2, inplace=True, method_name="mul_"),
-    # True division cannot land in an integer tensor in place, so div_ refuses
-    # one, as /= does, rather than floor-dividing it.
-    OpEntry("div_",     A._make_arith_adapter(_R.div_, floating=True, inplace=True), 2,
-            inplace=True, method_name="div_"),
+    OpEntry("div_",     A._make_arith_adapter(_R.div_),     2, inplace=True, method_name="div_"),
     OpEntry("pow_",     A._make_arith_adapter(_R.pow_),     2, inplace=True, method_name="pow_"),
     OpEntry("maximum_", A._make_arith_adapter(_R.maximum_), 2, inplace=True, method_name="maximum_"),
     OpEntry("minimum_", A._make_arith_adapter(_R.minimum_), 2, inplace=True, method_name="minimum_"),
@@ -213,11 +208,9 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("transpose",  _R.transpose,  1, method_name="transpose",  free_fn_name="transpose"),
     OpEntry("swapaxes",   _R.swapaxes,   1, method_name="swapaxes",
             extra_kwargs=["d0", "d1"]),  # positional: swapaxes(d0, d1)
-    # broadcast_to is expand without the -1: a view on the CPU, as expand is.
-    OpEntry("broadcast_to",_R.expand,1,method_name="broadcast_to",free_fn_name="broadcast_to",
+    OpEntry("broadcast_to",_R.broadcast_to,1,method_name="broadcast_to",free_fn_name="broadcast_to",
             extra_kwargs=["shape"]),
     OpEntry("expand",     A._expand_adapter, 1, method_name="expand",     free_fn_name="expand"),
-    OpEntry("as_strided", A._as_strided_adapter, 1, method_name="as_strided", free_fn_name="as_strided"),
     OpEntry("expand_dims",_R.expand_dims,1, method_name="expand_dims",
             extra_kwargs=["axis"]),
     # ``lucid.repeat(x, repeats, dim=None)`` — interleave semantics.  No
@@ -276,14 +269,12 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["value"]),
 
     # ── joining ────────────────────────────────────────────────────────────
-    # The engine joins tensors of one dtype only; the join adapter brings
-    # mixed inputs to their common dtype first, as the reference does.
-    OpEntry("concatenate", A._make_join_adapter(_R.concatenate), -1, free_fn_name="cat",
+    OpEntry("concatenate", _R.concatenate, -1, free_fn_name="cat",
             extra_kwargs=["axis"]),
-    OpEntry("stack",       A._make_join_adapter(_R.stack),       -1, free_fn_name="stack",
+    OpEntry("stack",       _R.stack,       -1, free_fn_name="stack",
             extra_kwargs=["axis"]),
-    OpEntry("hstack",      A._make_join_adapter(_R.hstack),      -1, free_fn_name="hstack"),
-    OpEntry("vstack",      A._make_join_adapter(_R.vstack),      -1, free_fn_name="vstack"),
+    OpEntry("hstack",      _R.hstack,      -1, free_fn_name="hstack"),
+    OpEntry("vstack",      _R.vstack,      -1, free_fn_name="vstack"),
     OpEntry("split",       A._split_adapter, 1,  method_name="split",      free_fn_name="split",
             extra_kwargs=["dim"]),
     OpEntry("chunk",       _R.chunk,       1,  method_name="chunk",      free_fn_name="chunk",

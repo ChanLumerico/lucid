@@ -80,9 +80,8 @@ docs/_build/
 # keep the conversion artifact outside the repo entirely.
 _converted/
 
-# CLAUDE & CODEX
+# CLAUDE
 CLAUDE.md
-AGENTS.md
 
 # workspace sync harness (local tooling, not part of the project)
 .sync/

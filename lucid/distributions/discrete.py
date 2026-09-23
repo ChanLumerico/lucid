@@ -12,7 +12,6 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _as_tensor
 from lucid.distributions._util import _broadcast_pair
-from lucid.distributions._util import _clamp_probs, _lazy_param
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -245,13 +244,11 @@ class Binomial(Distribution):
     Attributes
     ----------
     total_count : Tensor
-        Number of trials :math:`n`, broadcast against the probability.
+        Number of trials :math:`n`.
     probs : Tensor
-        Success probability — stored when given, otherwise derived from
-        ``logits`` on access.
+        Success probability (present when constructed with ``probs``).
     logits : Tensor
-        Log-odds — stored when given, otherwise derived from ``probs`` on
-        access.
+        Log-odds (present when constructed with ``logits``).
 
     Notes
     -----
@@ -333,41 +330,23 @@ class Binomial(Distribution):
         """
         if (probs is None) == (logits is None):
             raise ValueError("Binomial: pass exactly one of `probs` or `logits`.")
-        self._is_logits = probs is None
+        self.total_count: Tensor = _as_tensor(total_count)
         if probs is not None:
-            param = _as_tensor(probs)
+            self.probs = _as_tensor(probs)
+            self._is_logits = False
+            shape = tuple(self.probs.shape)
         else:
-            param = _as_tensor(logits)  # type: ignore[arg-type]
-        # Both sides broadcast, not only the count.  The batch used to be
-        # sized from the probability alone, so ``Binomial([2, 5, 9], 0.4)``
-        # reported ``batch_shape == ()`` and ``sample`` raised a shape
-        # mismatch for a perfectly good batch of three.
-        self.total_count, param = _broadcast_pair(_as_tensor(total_count), param)
-        if self._is_logits:
-            self.logits = param
-        else:
-            self.probs = param
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
+            self._is_logits = True
+            shape = tuple(self.logits.shape)
+        # Broadcast total_count against probs/logits.
+        param: Tensor = self.logits if self._is_logits else self.probs
+        self.total_count, _ = _broadcast_pair(self.total_count, param)
         super().__init__(
-            batch_shape=tuple(param.shape),
+            batch_shape=shape,
             event_shape=(),
             validate_args=validate_args,
         )
-
-    @_lazy_param
-    def probs(self) -> Tensor:
-        """Success probability — as given, or ``sigmoid(logits)`` on access."""
-        return _logits_to_probs(self.logits)
-
-    @_lazy_param
-    def logits(self) -> Tensor:
-        r"""Log-odds :math:`\log(p/(1-p))` — as given, or derived on access.
-
-        Derived from ``probs`` clamped one epsilon inside :math:`[0, 1]`, as
-        the reference framework derives it.  :meth:`log_prob` does not use
-        this attribute: it keeps the exact, possibly infinite, log-odds that
-        its degenerate-probability guards are written around.
-        """
-        return _probs_to_logits(_clamp_probs(self.probs))
 
     @override
     @property
@@ -598,13 +577,11 @@ class NegativeBinomial(Distribution):
     Attributes
     ----------
     total_count : Tensor
-        Dispersion parameter :math:`r`, broadcast against the probability.
+        Dispersion parameter :math:`r`.
     probs : Tensor
-        Failure probability — stored when given, otherwise derived from
-        ``logits`` on access.
+        Failure probability (present when constructed with ``probs``).
     logits : Tensor
-        Log-odds of failure — stored when given, otherwise derived from
-        ``probs`` on access.
+        Log-odds of failure (present when constructed with ``logits``).
 
     Notes
     -----
@@ -642,10 +619,6 @@ class NegativeBinomial(Distribution):
     (100,)
     >>> dist.mean  # r p / (1 - p) = 5 * 0.4 / 0.6
     tensor(3.333)
-    >>> samples.dtype  # floating counts, like the parameters
-    lucid.float32
-    >>> NegativeBinomial(lucid.tensor([2.0, 5.0, 9.0]), probs=0.4).batch_shape
-    (3,)
     """
 
     arg_constraints = {
@@ -687,39 +660,20 @@ class NegativeBinomial(Distribution):
             raise ValueError(
                 "NegativeBinomial: pass exactly one of `probs` or `logits`."
             )
-        self._is_logits = probs is None
+        self.total_count = _as_tensor(total_count)
         if probs is not None:
-            param = _as_tensor(probs)
+            self.probs = _as_tensor(probs)
+            self._is_logits = False
+            shape = tuple(self.probs.shape)
         else:
-            param = _as_tensor(logits)  # type: ignore[arg-type]
-        # Both sides broadcast, as in :class:`Binomial`: sizing the batch
-        # from the probability alone gave ``NegativeBinomial([2, 5, 9],
-        # probs=0.4)`` a ``batch_shape`` of ``()`` beside a three-element
-        # ``total_count``.
-        self.total_count, param = _broadcast_pair(_as_tensor(total_count), param)
-        if self._is_logits:
-            self.logits = param
-        else:
-            self.probs = param
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
+            self._is_logits = True
+            shape = tuple(self.logits.shape)
         super().__init__(
-            batch_shape=tuple(param.shape),
+            batch_shape=shape,
             event_shape=(),
             validate_args=validate_args,
         )
-
-    @_lazy_param
-    def probs(self) -> Tensor:
-        """Failure probability — as given, or ``sigmoid(logits)`` on access."""
-        return _logits_to_probs(self.logits)
-
-    @_lazy_param
-    def logits(self) -> Tensor:
-        r"""Log-odds of failure — as given, or derived on access.
-
-        Derived from ``probs`` clamped one epsilon inside :math:`[0, 1]`, as
-        the reference framework derives it.
-        """
-        return _probs_to_logits(_clamp_probs(self.probs))
 
     @property
     def _probs(self) -> Tensor:
@@ -787,9 +741,8 @@ class NegativeBinomial(Distribution):
         Returns
         -------
         Tensor
-            Non-negative integer-valued samples of shape
-            ``(*sample_shape, *batch_shape)``, in the parameters' floating
-            dtype.
+            Non-negative integer samples of shape
+            ``(*sample_shape, *batch_shape)``.
         """
         # Gamma-Poisson compound: X = Poisson(λ),  λ = Gamma(r, (1−p)/p).
         from lucid.distributions.gamma import _sample_standard_gamma
@@ -808,9 +761,7 @@ class NegativeBinomial(Distribution):
         # would prepend it twice and hand back ``sample_shape * 2``.
         std_gamma: Tensor = _sample_standard_gamma(r, ())
         lam: Tensor = std_gamma / rate
-        # In the parameters' floating dtype, as the reference framework
-        # returns its counts — ``poisson`` itself answers in int64.
-        return lucid.poisson(lam).to(lam.dtype).detach()
+        return lucid.poisson(lam).detach()
 
     @override
     def log_prob(self, value: Tensor) -> Tensor:

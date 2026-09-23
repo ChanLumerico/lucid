@@ -21,8 +21,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <optional>
-
 #include "../core/Shape.h"
 #include "../core/TensorImpl.h"
 #include "../ops/utils/Concat.h"
@@ -115,13 +113,6 @@ void register_utils(py::module_& m) {
             return expand_op(a, vec_to_shape(shape));
         },
         py::arg("a"), py::arg("shape"));
-    m.def(
-        "as_strided",
-        [](const TensorImplPtr& a, std::vector<std::int64_t> size, std::vector<std::int64_t> stride,
-           std::optional<std::int64_t> storage_offset) {
-            return as_strided_op(a, vec_to_shape(size), stride, storage_offset.value_or(-1));
-        },
-        py::arg("a"), py::arg("size"), py::arg("stride"), py::arg("storage_offset") = py::none());
 
     // Triangular masking.  k is the diagonal offset (0 = main diagonal).
     m.def("tril", &tril_op, py::arg("a"), py::arg("k") = 0);

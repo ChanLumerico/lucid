@@ -177,7 +177,7 @@ def _inject_to(cls: type) -> None:
                 # requires grad is a legitimate thing to be, so nothing
                 # said the source had been cut off.  The engine op records
                 # the move, so a second derivative crosses it too.
-                return _wrap(_C_engine.to_device(impl, target_device))
+                return cast("Tensor", _wrap(_C_engine.to_device(impl, target_device)))
             if impl.is_metal_shared:
                 # Zero-copy: SharedStorage tensor re-labeled as the target device.
                 impl = _C_engine.transfer_storage(impl, target_device)

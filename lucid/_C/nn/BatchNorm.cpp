@@ -244,11 +244,8 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         Storage inv_rstd_sq = be.reciprocal(rstd_sq, stat_shape, stat_dt);
         Storage var = be.add_scalar(inv_rstd_sq, stat_shape, stat_dt, -eps);
 
-        auto* tracer = ::lucid::compile::current_tracer();
-        const auto rm_value = tracer ? tracer->buffer_value(running_mean) : running_mean;
-        const auto rv_value = tracer ? tracer->buffer_value(running_var) : running_var;
-        Storage rm_in = into_stat(rm_value->storage(), buf_dt);
-        Storage rv_in = into_stat(rv_value->storage(), buf_dt);
+        Storage rm_in = into_stat(running_mean->storage(), buf_dt);
+        Storage rv_in = into_stat(running_var->storage(), buf_dt);
 
         // new_rm = (1-m) * running_mean + m * mean
         Storage rm_scaled = be.mul_scalar(rm_in, stat_shape, stat_dt, 1.0 - m);
@@ -320,10 +317,6 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
             trc->on_op_io(bn_inputs, out);       // alias: refresh outputs[0]=y, rebuild 5 inputs
             trc->on_op_io(bn_inputs, new_rm_t);  // append outputs[1] = new_rm
             trc->on_op_io(bn_inputs, new_rv_t);  // append outputs[2] = new_rv
-            // A shared layer can execute again in this trace. Its next EMA
-            // must consume these outputs, not the unchanged external buffers.
-            trc->on_buffer_update(running_mean, new_rm_t);
-            trc->on_buffer_update(running_var, new_rv_t);
         }
     }
     return out;

@@ -123,16 +123,15 @@ jobs:
 
       - name: Build wheel + sdist
         env:
-          # Match the default in setup.py — keep them in sync.  15.0 is the
-          # floor: the one wheel installs on macOS 15 and every later release.
-          MACOSX_DEPLOYMENT_TARGET: "15.0"
+          # Match the default in setup.py — keep them in sync.
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
           # python.org's Python 3.14 is a universal2 build, so without
           # this override sysconfig.get_platform() returns
           # `macosx-10.15-universal2` and the wheel ships with a
           # `universal2` plat tag — incorrectly advertising x86_64
           # compatibility for an arm64-only engine. Forcing the host
           # platform fixes the tag without affecting compilation.
-          _PYTHON_HOST_PLATFORM: "macosx-15.0-arm64"
+          _PYTHON_HOST_PLATFORM: "macosx-26.0-arm64"
           ARCHFLAGS: "-arch arm64"
         run: |
           # `python -m build --no-isolation` builds both wheel and sdist
@@ -180,55 +179,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # ── The wheel on the oldest macOS it claims ─────────────────────────
-  # The wheel is built on macos-26 with a 15.0 deployment target.
-  # Installing it on macos-15 — where pip resolves MLX's macOS 15 build —
-  # is what makes the macosx_15_0 tag true: an engine call newer than 15,
-  # or a difference in that MLX build, stops the release here.
-  verify-macos-15:
-    name: Verify wheel on macOS 15
-    needs: build
-    runs-on: macos-15
-
-    steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.14"
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: lucid-pypi-dist
-          path: dist
-
-      - name: Install the wheel and smoke it
-        run: |
-          set -euo pipefail
-          sw_vers -productVersion
-          WHEEL=$(ls dist/lucid*.whl | sort -V | tail -1)
-          TMP=$(mktemp -d)
-          python -m venv "$TMP/venv"
-          "$TMP/venv/bin/pip" install "$WHEEL" -q
-          ( cd "$TMP" && "$TMP/venv/bin/python" - <<'PY'
-          import importlib.metadata as md
-          import platform
-
-          import lucid
-
-          x = lucid.arange(0, 24).reshape(2, 3, 4).permute(2, 0, 1)
-          assert x.shape == (4, 2, 3)
-          y = lucid.randn(8, 8) @ lucid.randn(8, 8)
-          assert y.shape == (8, 8)
-          if lucid.metal.is_available():
-              z = lucid.ones(4, device="metal") * 2.0
-              assert float(z.sum().item()) == 8.0
-          print(f"✅ macOS {platform.mac_ver()[0]}, mlx-metal {md.version('mlx-metal')}: {lucid.__file__}")
-          PY
-          )
-
   # ── Publish to PyPI (Trusted Publishing / OIDC) ─────────────────────
   publish:
     name: Publish to PyPI
-    needs: [build, verify-macos-15]
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: release

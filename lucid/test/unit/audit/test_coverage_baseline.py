@@ -23,8 +23,6 @@ import pytest
 
 from lucid.test.audit.__main__ import (
     _answered,
-    _scoped_coverage,
-    build_parser,
     load_coverage,
     report_coverage_diff,
     save_coverage,
@@ -42,41 +40,6 @@ def _report(*cells: "tuple[str, str, Status]") -> Report:
 
 def _quiet() -> Console:
     return Console(colour=False, quiet=False)
-
-
-def test_axis_filter_does_not_report_unrequested_cells_as_lost() -> None:
-    recorded = {"layout::lucid.exp": "pass", "grad::lucid.exp": "pass"}
-    args = build_parser().parse_args(["--axis", "layout"])
-    scoped = _scoped_coverage(recorded, args)
-    assert scoped == {"layout::lucid.exp": "pass"}
-    assert (
-        report_coverage_diff(
-            _report(("layout", "lucid.exp", Status.PASS)), scoped, _quiet()
-        )
-        == 0
-    )
-    assert (
-        report_coverage_diff(
-            _report(("layout", "lucid.exp", Status.SKIP)), scoped, _quiet()
-        )
-        == 1
-    )
-
-
-def test_full_sweep_keeps_removed_symbols_in_the_baseline() -> None:
-    recorded = {"layout::lucid.removed_symbol": "pass"}
-    assert _scoped_coverage(recorded, build_parser().parse_args([])) == recorded
-
-
-@pytest.mark.parametrize(
-    "selection", [["--axis", "layout"], ["--limit", "1"], ["--quick"]]
-)
-def test_partial_sweep_cannot_overwrite_full_coverage_baseline(
-    selection: list[str],
-) -> None:
-    from lucid.test.audit.__main__ import main
-
-    assert main(["--audit-only", "--update-coverage", "--no-log", *selection]) == 2
 
 
 # ── what gets recorded ────────────────────────────────────────────────────────

@@ -61,28 +61,6 @@ def test_in_place_true_division_of_an_integer_tensor_is_refused() -> None:
     assert a.tolist() == [7, 8]
 
 
-def test_div_in_place_on_an_integer_tensor_is_refused() -> None:
-    # ``div_`` floor-divided in silence, leaving [3, 4], where ``/=`` above
-    # already refused.
-    a = _ints(7, 8)
-    with pytest.raises(RuntimeError, match="in place"):
-        a.div_(2)
-    with pytest.raises(RuntimeError, match="in place"):
-        a.div_(lucid.tensor([2.0, 4.0]))
-    with pytest.raises(RuntimeError, match="in place"):
-        lucid.tensor([True, False]).div_(2)
-    assert a.dtype == lucid.int64
-    assert a.tolist() == [7, 8]
-
-
-def test_div_in_place_on_a_float_tensor_is_unchanged() -> None:
-    a = lucid.tensor([1.0, 3.0])
-    a.div_(2)
-    assert a.tolist() == [0.5, 1.5]
-    a.div_(_ints(1, 3))
-    assert a.tolist() == [0.5, 0.5]
-
-
 def test_float_division_is_unchanged() -> None:
     a = lucid.tensor([1.0, 3.0])
     assert (a / 2).tolist() == [0.5, 1.5]

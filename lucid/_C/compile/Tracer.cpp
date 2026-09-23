@@ -181,16 +181,6 @@ void Tracer::on_op_io(const std::vector<TensorImplPtr>& inputs, const TensorImpl
     }
 }
 
-void Tracer::on_buffer_update(const TensorImplPtr& buffer, const TensorImplPtr& value) {
-    if (!buffer || !value)
-        return;
-    const auto it = impl_to_id_.find(value.get());
-    if (it != impl_to_id_.end()) {
-        impl_to_id_[buffer.get()] = it->second;
-        buffer_values_[buffer.get()] = value;
-    }
-}
-
 void Tracer::on_op_attr(std::string_view key, AttributeValue value) {
     if (graph_.ops.empty())
         return;

@@ -402,8 +402,7 @@ class Tensor:
         Returns
         -------
         Tensor
-            ``self`` with its dimension order reversed — a view on the
-            CPU, a copy on metal.
+            A view (or copy) with reversed dimension order.
 
         Notes
         -----
@@ -435,8 +434,7 @@ class Tensor:
         Returns
         -------
         Tensor
-            ``self`` with axes ``-2`` and ``-1`` swapped — a view on the
-            CPU, a copy on metal.
+            A view (or copy) with axes ``-2`` and ``-1`` swapped.
 
         Notes
         -----
@@ -746,13 +744,13 @@ class Tensor:
         memory in C (row-major) order — i.e. the stride of each dimension equals
         the product of all *later* dimension sizes times the element size.
 
-        On the CPU a transpose, a slice along any axis, :meth:`diagonal`,
-        :meth:`unfold`, ``expand`` and ``broadcast_to`` are views of their
-        input's buffer, and a transposed or column view is not contiguous.
-        Every op reads such a view correctly and a write through it follows
-        its strides, so the answer matters only to code that walks the memory
-        itself.  A slice with a positive step is a view too.  Metal tensors
-        are always packed, and a negative step still copies.
+        **In this engine the answer is always** ``True``.  Lucid has no lazy
+        views: every operation that would return a strided view elsewhere
+        materialises a packed tensor here, including ``T``, :meth:`unfold`,
+        :meth:`diagonal`, ``expand``, ``broadcast_to`` and slicing with a
+        non-unit step.  The query is kept because it is part of the tensor
+        protocol and because kernels assert on it, not because it
+        distinguishes two states a caller can reach.
 
         Returns
         -------
@@ -766,8 +764,8 @@ class Tensor:
         >>> x = lucid.zeros(3, 4)
         >>> x.is_contiguous()
         True
-        >>> x.T.is_contiguous()   # a transpose is a view with swapped strides
-        False
+        >>> x.T.is_contiguous()   # a transpose is materialised, not viewed
+        True
 
         Notes
         -----
@@ -1037,7 +1035,6 @@ class Tensor:
 
         Examples
         --------
-        >>> import lucid
         >>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)
         >>> grads = []
         >>> h = x.register_hook(lambda g: grads.append(g.clone()))
@@ -1810,14 +1807,14 @@ class Tensor:
         this may return a view or a copy depending on the backend; the result
         is always safe to pass to kernels that require contiguous input.
 
-        On the CPU a transpose, a slice along any axis, :meth:`diagonal`,
-        :meth:`unfold`, ``expand`` and ``broadcast_to`` are views of their
-        input's buffer, and a transposed or column view is not contiguous.
-        Every op reads such a view correctly, so the call is needed only
-        before code that walks the memory itself — through :meth:`data_ptr`,
-        say.  Metal tensors are always packed.  Making a tensor contiguous
-        rewrites the data into a fresh buffer with strides matching C
-        row-major layout:
+        **In this engine every tensor is already contiguous**, so this is a
+        no-op in effect: Lucid materialises rather than viewing, and
+        transposing, permuting or slicing with a non-unit step all return
+        packed tensors.  Call it anyway where a kernel documents the
+        requirement — it is free when it is unnecessary, and it keeps the
+        call site correct if lazy views are ever introduced.  Making a
+        tensor contiguous rewrites the data into a fresh buffer with
+        strides matching C row-major layout:
 
         .. math::
 
@@ -1831,9 +1828,9 @@ class Tensor:
         Examples
         --------
         >>> import lucid
-        >>> x = lucid.zeros(3, 4).T    # a view with swapped strides
+        >>> x = lucid.zeros(3, 4).T    # already materialised, so already packed
         >>> x.is_contiguous()
-        False
+        True
         >>> y = x.contiguous()
         >>> y.is_contiguous()
         True
@@ -1875,11 +1872,8 @@ class Tensor:
         Notes
         -----
         Unfold is the fundamental primitive behind 1-D convolution and
-        sliding-window aggregations.  On the CPU the result is a view of
-        ``self``'s buffer, so a write through a window reaches ``self``; the
-        windows overlap when ``step < size``, and a write through
-        overlapping windows is refused, since an element then repeats.  On
-        metal the result is a copy.
+        sliding-window aggregations.  The windows may overlap when
+        ``step < size``.
 
         Examples
         --------
@@ -3243,11 +3237,10 @@ class Tensor:
     def expand_as(self, other: Self) -> Self:
         r"""Broadcast ``self`` to match ``other.shape``.
 
-        Convenience wrapper around :meth:`expand` that takes the target
-        shape from another tensor.  On the CPU the result is a view of
-        ``self``'s buffer: each stretched axis has stride 0, so every repeated
-        element is one of ``self``'s and a write through the result is
-        refused.  On metal it is a copy.
+        Convenience wrapper around ``broadcast_to`` that takes the target
+        shape from another tensor.  The expansion is materialised: each
+        stretched axis is repeated into a new buffer, so writing into the
+        result never reaches ``self``.
 
         Parameters
         ----------
@@ -3258,8 +3251,7 @@ class Tensor:
         Returns
         -------
         Tensor
-            ``self`` under ``other.shape`` — a read-only view on the CPU, a
-            copy on metal.
+            A new tensor with shape ``other.shape``.
 
         Notes
         -----
@@ -3285,7 +3277,7 @@ class Tensor:
         (4, 3)
         """
         return Tensor.__new_from_impl__(  # type: ignore[return-value]
-            _C_engine.expand(self._impl, list(other._impl.shape))
+            _C_engine.broadcast_to(self._impl, list(other._impl.shape))
         )
 
     def view_as(self, other: Self) -> Self:
@@ -3451,16 +3443,14 @@ class Tensor:
         condition : Tensor
             Boolean (or truthy-valued) mask, broadcastable to ``self``.
         other : Tensor or float
-            Fall-back values when ``condition`` is falsy.  A scalar is
-            broadcast, and is weak as in ``self + other``: it can widen the
-            kind (a float beside an integer tensor gives float), never the
-            width.
+            Fall-back values when ``condition`` is falsy. Scalars are
+            broadcast to a constant tensor matching ``self.shape``.
 
         Returns
         -------
         Tensor
-            Tensor with the broadcast shape of the three inputs, at the
-            common dtype of ``self`` and ``other``.
+            Tensor with the broadcast shape of the three inputs, dtype
+            matching ``self``.
 
         Notes
         -----
@@ -3475,14 +3465,17 @@ class Tensor:
         >>> x.where(mask, 0.0).tolist()
         [1.0, 0.0, 3.0, 0.0]
         """
-        # The same path as ``lucid.where(condition, self, other)``.  Building
-        # ``other`` at ``self``'s dtype truncated a float scalar beside an
-        # integer tensor (``ints.where(m, 1.5)`` filled in 1), and a tensor
-        # ``other`` of another dtype raised ``DtypeMismatch``.
-        from lucid._ops._adapters import _where_adapter
-
+        if not isinstance(other, Tensor):
+            other_impl = _C_engine.full(
+                list(self._impl.shape),
+                float(other),
+                self._impl.dtype,
+                self._impl.device,
+            )
+        else:
+            other_impl = other._impl
         return Tensor.__new_from_impl__(  # type: ignore[return-value]
-            _where_adapter(condition, self, other)
+            _C_engine.where(condition._impl, self._impl, other_impl)
         )
 
     def diff(self, n: int = 1, dim: int = -1) -> Self:

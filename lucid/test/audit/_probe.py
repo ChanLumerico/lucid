@@ -230,14 +230,6 @@ def contract(out: Any, weights: np.ndarray) -> Any:
         # superset of a shorter one — a run remains reproducible and a
         # finding re-derivable by hand.
         weights = rng(SEED_A).standard_normal(n)
-    if flat.is_complex():
-        # A complex scalar is not a real-valued loss. Probe both lanes with
-        # independent covectors instead of implicitly discarding one of them.
-        imaginary_weights = rng(SEED_A + 1).standard_normal(n)
-        return (
-            lucid.real(flat) * as_f64(weights[:n])
-            + lucid.imag(flat) * as_f64(imaginary_weights)
-        ).sum()
     return (flat * as_f64(weights[:n])).sum()
 
 

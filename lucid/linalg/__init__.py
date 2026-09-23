@@ -8,7 +8,6 @@ from typing import Callable, cast, final, override
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid._ops._adapters import _outer_adapter
 from lucid._tensor.tensor import Tensor
 
 _la = _C_engine.linalg
@@ -1112,9 +1111,7 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
         eye_2d: Tensor = lucid.eye(int(sh[-1]), dtype=x.dtype)
         if len(sh) == 2:
             return eye_2d
-        # A fresh identity per batch element, writable as the reference's
-        # is — broadcast_to alone would be a read-only view of one.
-        return lucid.broadcast_to(eye_2d, tuple(sh)).contiguous()
+        return lucid.broadcast_to(eye_2d, tuple(sh))
 
     base: Tensor = cast(Tensor, inv(x)) if n < 0 else x
     exponent: int = -n if n < 0 else n
@@ -2240,9 +2237,7 @@ def outer(x: Tensor, y: Tensor) -> Tensor:
     >>> outer(lucid.tensor([1.0, 2.0]), lucid.tensor([3.0, 4.0]))
     tensor([[3., 4.], [6., 8.]])
     """
-    # The adapter ``Tensor.outer`` uses too: it brings mixed dtypes to their
-    # common one, which the engine's single-dtype kernel refused.
-    return _wrap(_outer_adapter(_unwrap(x), _unwrap(y)))
+    return _wrap(_C_engine.outer(_unwrap(x), _unwrap(y)))
 
 
 def matrix_norm(

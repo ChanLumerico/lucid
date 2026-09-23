@@ -193,15 +193,9 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
     Returns
     -------
     Tensor
-        One-hot encoded ``int64`` tensor of shape ``(*, num_classes)``.
-        Cast to a floating dtype if it will participate in gradient-based
-        computation.
-
-    Raises
-    ------
-    ValueError
-        If ``num_classes`` is ``-1`` and ``tensor`` is empty — there is no
-        largest index to infer the count from.
+        One-hot encoded tensor of shape ``(*, num_classes)`` and integer
+        dtype.  Cast to a floating dtype if it will participate in
+        gradient-based computation.
 
     Notes
     -----
@@ -219,25 +213,9 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
     tensor([[1, 0, 0],
             [0, 0, 1],
             [0, 1, 0],
-            [0, 0, 1]], dtype=lucid.int64)
-    >>> one_hot(lucid.tensor([1, 0]))  # num_classes inferred as max + 1
-    tensor([[0, 1],
-            [1, 0]], dtype=lucid.int64)
+            [0, 0, 1]], dtype=lucid.int8)
     """
-    if num_classes == -1:
-        # The engine takes only a positive count, so the default this
-        # function has always advertised went straight through and was
-        # refused.  Inferred here instead, as documented.
-        if tensor.numel() == 0:
-            raise ValueError(
-                "one_hot: cannot infer num_classes from an empty tensor; "
-                "pass num_classes explicitly"
-            )
-        num_classes = int(tensor.max().item()) + 1
-    out = _C_engine.nn.one_hot(_unwrap(tensor), num_classes)
-    # int64, the dtype the reference framework answers in and the one class
-    # indices are carried in everywhere else; the engine builds int8.
-    return _wrap(_C_engine.astype(out, _C_engine.Dtype.I64))
+    return _wrap(_C_engine.nn.one_hot(_unwrap(tensor), num_classes))
 
 
 def nearest_codebook(x: Tensor, codebook: Tensor) -> Tensor:

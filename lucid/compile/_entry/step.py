@@ -75,7 +75,6 @@ class _StepEntry:
     # of the frozen trace-time value.  Empty when the model has no such BN.
     bn_stat_buffers: list[Tensor] = field(default_factory=list)
     bn_stat_out_count: int = 0
-    bn_counters: list[tuple[Module, int]] = field(default_factory=list)
 
 
 def make_step(
@@ -184,8 +183,6 @@ def make_step(
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
     from lucid.compile._core.bn_runstats import (
-        advance_bn_counters,
-        bn_counter_targets,
         bn_writeback_targets,
         model_has_cumulative_bn,
     )
@@ -326,7 +323,6 @@ def make_step(
             compile_ms=(time.perf_counter() - t0) * 1000.0,
             bn_stat_buffers=bn_stat_buffers,
             bn_stat_out_count=len(bn_stat_out_ids),
-            bn_counters=bn_counter_targets(model, graph, ext),
         )
 
     def _run(
@@ -363,7 +359,6 @@ def make_step(
             )
         for _i, _buf in enumerate(entry.bn_stat_buffers):
             _buf.copy_(_wrap(cast(_C_engine.TensorImpl, outs[n_loss_grad + _i])))
-        advance_bn_counters(entry.bn_counters)
         # outs = [loss_impl, grad_param_0_impl, …]
         loss_impl = cast(_C_engine.TensorImpl, outs[0])
         grad_impls = [cast(_C_engine.TensorImpl, g) for g in outs[1 : 1 + len(params)]]

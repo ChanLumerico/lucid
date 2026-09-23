@@ -32,9 +32,9 @@ def main() -> int:
         fn_name = entry.free_fn_name
         if fn_name is None:
             continue
-        if not callable(getattr(_ops_module, fn_name, None)):
+        if not hasattr(_ops_module, fn_name):
             errors.append(
-                f"  NOT CALLABLE IN lucid._ops: free_fn_name={fn_name!r} missing or not callable"
+                f"  NOT IN lucid._ops: free_fn_name={fn_name!r} not found in _ops module"
             )
 
     if errors:

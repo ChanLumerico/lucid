@@ -2,7 +2,7 @@
 //
 // Element-wise complex conjugate $\bar{z} = a - b\,i$ for $z = a + b\,i$.
 //
-// For complex (C64, or CPU C128) input only the imaginary half of the interleaved
+// For complex (C64) input only the imaginary half of the interleaved
 // ``[re, im, re, im, ...]`` storage is negated; for real dtypes the input is
 // returned unchanged (the conjugate of a real number is itself), so the
 // real-dtype path is a true identity that allocates and copies nothing.
@@ -10,7 +10,7 @@
 // CPU uses ``vDSP_vneg`` over the imag-stride-2 view for the C64 path; GPU
 // dispatches to ``mlx::core::conjugate``.
 //
-// Native storage and graph backward are
+// Forward only — the Wirtinger-style backward composed at the Python layer is
 // again ``conj`` (the conjugate operator is its own adjoint up to sign on the
 // holomorphic component, which under Lucid's convention means ``grad_in =
 // conj(grad_out)``).
@@ -42,7 +42,7 @@ namespace lucid {
 
 // Return the element-wise complex conjugate of a tensor.
 //
-// For complex input, produces a fresh tensor of the same dtype whose imaginary part is
+// For ``C64`` input, produces a fresh C64 tensor whose imaginary part is
 // negated.  For any real dtype the operator is a no-op (the conjugate of a
 // real number equals itself) and the backend short-circuits the dispatch.
 //
@@ -55,7 +55,7 @@ namespace lucid {
 // Parameters
 // ----------
 // a : TensorImplPtr
-//     Input tensor. May be any dtype; only complex input produces a non-trivial
+//     Input tensor.  May be any dtype; only ``C64`` produces a non-trivial
 //     transformation.
 //
 // Returns
@@ -65,7 +65,7 @@ namespace lucid {
 //
 // Notes
 // -----
-// Native backward applies another ``conj`` on
+// Backward is performed at the Python autograd layer as another ``conj`` on
 // the incoming gradient, consistent with the Wirtinger calculus convention
 // adopted by the reference framework.
 //
@@ -81,8 +81,7 @@ public:
     Dtype dtype_ = Dtype::C64;
     Device device_ = Device::CPU;
 
-    std::vector<Storage> apply(Storage grad_out) override;
-    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+    std::vector<Storage> apply(Storage grad_out);
 };
 
 LUCID_API TensorImplPtr conj_op(const TensorImplPtr& a);

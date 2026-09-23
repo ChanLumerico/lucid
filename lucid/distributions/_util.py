@@ -1,9 +1,6 @@
 """Tiny helpers shared across the distribution implementations."""
 
-from typing import Any, Callable, Self, overload
-
 import lucid
-from lucid._dtype import finfo
 from lucid._tensor.tensor import Tensor
 
 
@@ -95,64 +92,3 @@ def _broadcast_pair(a: Tensor, b: Tensor) -> tuple[Tensor, Tensor]:
         return a, b
     z = a * 0 + b * 0
     return a + z, b + z
-
-
-def _clamp_probs(probs: Tensor) -> Tensor:
-    """``probs`` held one machine epsilon inside ``[0, 1]``.
-
-    What the reference framework does before the logarithm that turns
-    probabilities into logits: an exact 0 or 1 would otherwise give an
-    infinite logit, and a derived ``logits`` attribute is expected to be
-    finite whatever ``probs`` it came from.
-    """
-    eps = float(finfo(probs.dtype).eps)
-    return probs.clip(eps, 1.0 - eps)
-
-
-class _lazy_param:
-    """A parameter a distribution either stores or derives from its dual.
-
-    ``Bernoulli`` takes ``probs`` *or* ``logits``, and the reference
-    framework answers both attributes whichever one was given.  Assigning
-    stores the value on the instance; reading an attribute that was never
-    assigned derives it from the other one.
-
-    The derivation runs on every read rather than once.  A cached value
-    goes stale the moment the stored parameter is trained in place, and it
-    ties every later use to the autograd graph of whichever step happened
-    to read it first.
-
-    Parameters
-    ----------
-    derive : callable
-        ``derive(dist)`` computes the value from the stored dual.
-    """
-
-    def __init__(self, derive: Callable[[Any], Tensor]) -> None:
-        self._derive = derive
-        self._name = derive.__name__
-        self.__doc__ = derive.__doc__
-
-    def __set_name__(self, owner: type, name: str) -> None:
-        self._name = name
-
-    @overload
-    def __get__(self, instance: None, owner: type | None = None) -> Self: ...
-
-    @overload
-    def __get__(self, instance: object, owner: type | None = None) -> Tensor: ...
-
-    def __get__(
-        self, instance: object | None, owner: type | None = None
-    ) -> Self | Tensor:
-        if instance is None:
-            return self
-        stored: Tensor | None = vars(instance).get(self._name)
-        return stored if stored is not None else self._derive(instance)
-
-    def __set__(self, instance: object, value: Tensor) -> None:
-        vars(instance)[self._name] = value
-
-    def is_stored(self, instance: object) -> bool:
-        """Whether ``instance`` was given this parameter rather than its dual."""
-        return self._name in vars(instance)

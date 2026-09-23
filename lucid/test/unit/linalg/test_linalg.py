@@ -144,21 +144,3 @@ class TestMatrixRank:
             pytest.skip("matrix_rank not exposed")
         I = lucid.eye(4)
         assert int(lucid.linalg.matrix_rank(I).item()) == 4
-
-
-class TestOuter:
-    def test_mixed_dtypes_meet_at_the_common_dtype(self, device: str) -> None:
-        # The engine multiplies one dtype only, so an int64 vector beside a
-        # float32 one raised DtypeMismatch; the reference answers in float32.
-        ints = lucid.tensor([1, 2], dtype=lucid.int64, device=device)
-        floats = lucid.tensor([0.5, 1.5], device=device)
-        out = lucid.linalg.outer(ints, floats)
-        assert out.dtype == lucid.float32
-        assert out.tolist() == [[0.5, 1.5], [1.0, 3.0]]
-        assert ints.outer(floats).tolist() == out.tolist()
-
-    def test_integers_stay_exact(self, device: str) -> None:
-        ints = lucid.tensor([1, 2], dtype=lucid.int64, device=device)
-        out = lucid.linalg.outer(ints, ints)
-        assert out.dtype == lucid.int64
-        assert out.tolist() == [[1, 2], [2, 4]]

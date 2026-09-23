@@ -21,23 +21,6 @@ class TestClipGradNorm:
         new_norm = float(np.sqrt((x.grad.numpy() ** 2).sum()))
         assert abs(new_norm - 5.0) < 1e-4
 
-    def test_returns_a_0d_tensor(self) -> None:
-        # Documented as a scalar and 0-d in the reference framework; it was
-        # shape (1,), which puts a stray axis into whatever it is stacked or
-        # broadcast with.
-        from lucid.nn.utils.clip_grad import get_total_norm
-
-        x = lucid.tensor([3.0, 4.0], requires_grad=True)
-        (x * x).sum().backward()
-        assert nn.utils.clip_grad_norm_([x], max_norm=5.0).shape == ()
-        inf_norm = nn.utils.clip_grad_norm_([x], 5.0, norm_type=float("inf"))
-        assert inf_norm.shape == ()
-        assert get_total_norm([x]).shape == ()
-        # Nothing to measure is still a 0-d zero, not a length-1 vector.
-        no_grad = lucid.tensor([1.0], requires_grad=True)
-        assert nn.utils.clip_grad_norm_([no_grad], 1.0).shape == ()
-        assert nn.utils.clip_grad_norm_([], 1.0).shape == ()
-
 
 class TestClipGradValue:
     def test_clamps_each_element(self) -> None:
@@ -112,17 +95,3 @@ class TestFuseConvBnEval:
         fused = nn.utils.fusion.fuse_conv_bn_eval(conv, bn)
         out = fused(x).numpy()
         np.testing.assert_allclose(ref, out, atol=1e-5)
-
-
-def test_get_total_norm_measures_the_tensors_it_is_given() -> None:
-    # It used to read ``.grad`` from its arguments, so the usual call —
-    # handing it the gradients themselves — answered 0.
-    from lucid.nn.utils.clip_grad import clip_grad_norm_, get_total_norm
-
-    assert get_total_norm([lucid.tensor([3.0, 4.0])]).item() == 5.0
-    assert get_total_norm(lucid.tensor([3.0, 4.0])).item() == 5.0
-    x = lucid.tensor([3.0, 4.0], requires_grad=True)
-    (x * x).sum().backward()  # the gradient is 2x = [6, 8]
-    assert x.grad is not None
-    assert get_total_norm([x.grad]).item() == 10.0
-    assert clip_grad_norm_([x], max_norm=100.0).item() == 10.0

@@ -28,11 +28,9 @@ _DTYPE_KIND_WIDTH: dict[_C_engine.Dtype, tuple[int, int]] = {
     _D.I32: (1, 32),
     _D.I64: (1, 64),
     _D.F16: (2, 16),
-    _D.BF16: (2, 16),
     _D.F32: (2, 32),
     _D.F64: (2, 64),
     _D.C64: (3, 64),
-    _D.C128: (3, 128),
 }
 
 
@@ -42,14 +40,9 @@ def _result_dtype(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.Dtype:
         return da
     ka, wa = _DTYPE_KIND_WIDTH.get(da, (2, 32))
     kb, wb = _DTYPE_KIND_WIDTH.get(db, (2, 32))
-    if (ka == 3 and db == _D.F64) or (kb == 3 and da == _D.F64):
-        return _D.C128
     if ka != kb:
         return da if ka > kb else db
-    if wa == wb:
-        # float16 against bfloat16: neither holds the other, so both widen.
-        return _D.F32
-    return da if wa > wb else db
+    return da if wa >= wb else db
 
 
 def _maybe_promote(
@@ -1688,10 +1681,8 @@ def _inject_dunders(cls: type) -> None:
         Returns
         -------
         Tensor
-            View or gather result.  On the CPU basic indexing produces a
-            view that shares storage with ``self``, a positive step such as
-            ``x[::2]`` included; advanced indexing copies, as do a negative
-            step and any index on metal.
+            View or gather result.  Basic indexing produces a view that
+            shares storage with ``self``; advanced indexing copies.
 
         Notes
         -----

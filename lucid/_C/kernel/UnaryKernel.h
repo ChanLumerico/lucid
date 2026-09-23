@@ -300,11 +300,12 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
-    // A strided CPU input needs no copy here: ``storage()`` hands the kernel
-    // its elements packed.  Calling ``contiguous`` inside this op's scope put
-    // a second op between this one and its real input, which the compile and
-    // Core ML tracers could not follow.
-    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a, eff_dt);
+    // Anything but a dense CPU tensor — non-contiguous, or a view at an offset
+    // into a larger buffer — must be materialized before the typed cpu_kernel
+    // loop reads the Storage from its first byte.
+    const TensorImplPtr a_contig =
+        (a->device() == Device::CPU && !a->is_dense()) ? contiguous_op(a) : a;
+    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
 
     OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), eff_dt, a_ptr->shape()};
 

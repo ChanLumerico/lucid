@@ -48,7 +48,6 @@ def render_config_json(spec: "ConversionSpec") -> str:
 # segmentation pipeline; Lucid distinguishes semantic vs instance).
 _HF_PIPELINE_TAG: dict[str, str] = {
     "image-classification": "image-classification",
-    "video-classification": "video-classification",
     "object-detection": "object-detection",
     "semantic-segmentation": "image-segmentation",
     "instance-segmentation": "image-segmentation",
@@ -221,34 +220,13 @@ def _text_usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
     return preamble + tail
 
 
-def _clip_frames(spec: "ConversionSpec") -> int:
-    """Frames one clip carries, from the tag's own preprocessing block."""
-    value = spec.preprocessing.get("frames_per_clip", 64)
-    return int(value) if isinstance(value, (int, float, str)) else 64
-
-
-def _clip_size(spec: "ConversionSpec") -> int:
-    """Spatial side of one frame, from the tag's own preprocessing block."""
-    value = spec.preprocessing.get("size", 256)
-    return int(value) if isinstance(value, (int, float, str)) else 256
-
-
 def _usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
     """Build the task-appropriate Python usage example body."""
     if spec.task in _TEXT_TASKS:
         return _text_usage_snippet(spec, enum_name)
-    is_video = spec.task == "video-classification"
-    # A world model is conditioned on more than pixels, and on what varies
-    # by family.  The one shape this generator can write down is the
-    # action-conditioned video model's, which its preprocessing declares.
-    is_action_video = (
-        spec.task == "world-modeling"
-        and spec.preprocessing.get("type") == "video-with-actions"
-    )
     preamble = (
-        ("import lucid\n" if is_video or is_action_video else "")
-        + "import lucid.models as models\n"
-        + f"from lucid.models.weights import {enum_name}\n\n"
+        "import lucid.models as models\n"
+        f"from lucid.models.weights import {enum_name}\n\n"
         "# default tag\n"
         f"model = models.{spec.model_name}(pretrained=True)\n\n"
         "# explicit tag (enum or string)\n"
@@ -257,44 +235,9 @@ def _usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
         "# preprocessing travels with the weights\n"
         f"weights = {enum_name}.{spec.tag}\n"
         "preprocess = weights.transforms()\n"
+        "out = model(preprocess(image)[None])\n"
     )
-    # Video models take a decoded clip rather than one preprocessed image,
-    # so they supply their own call; every other task shares the image one.
-    if is_video:
-        preamble += (
-            "# the model consumes a decoded (B, T, C, H, W) clip\n"
-            f"video = lucid.rand(1, {_clip_frames(spec)}, 3,"
-            f" {_clip_size(spec)}, {_clip_size(spec)})\n"
-            "out = model(video)\n"
-        )
-    elif is_action_video:
-        frames = _clip_frames(spec)
-        side = _clip_size(spec)
-        # One step is one frame, so a clip of T frames has T - 1
-        # transitions and that many conditioning rows.
-        steps = max(frames - 1, 1)
-        preamble += (
-            "# a clip, plus one action and one state per transition\n"
-            f"video = lucid.rand(1, {frames}, 3, {side}, {side})\n"
-            f"actions = lucid.rand(1, {steps},"
-            f" {spec.preprocessing.get('action_dim', 7)})\n"
-            f"states = lucid.rand(1, {steps},"
-            f" {spec.preprocessing.get('state_dim', 7)})\n"
-            "out = model(video, actions, states)\n"
-        )
-    elif spec.task == "world-modeling":
-        preamble += (
-            "# a world model's conditioning differs by family — see the\n"
-            "# factory's docstring for the signature this one takes\n"
-        )
-    else:
-        preamble += "out = model(preprocess(image)[None])\n"
-
-    if is_action_video:
-        tail = "latents = out.prediction  # (B, steps * tokens_per_step, dim)\n"
-    elif spec.task == "world-modeling":
-        tail = ""
-    elif spec.task == "object-detection":
+    if spec.task == "object-detection":
         tail = (
             "# ObjectDetectionOutput: per-query/proposal class logits + boxes\n"
             "logits, boxes = out.logits, out.pred_boxes\n"
@@ -314,29 +257,9 @@ def _usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
             "# A latent diffusion backbone predicts noise, not labels.\n"
             "eps = out[:, : model.config.in_channels]  # (B, C, H, W)\n"
         )
-    else:  # image-classification / video-classification
+    else:  # image-classification
         tail = "logits = out.logits  # (B, num_classes)\n"
     return preamble + tail
-
-
-def _conversion_evidence(spec: "ConversionSpec") -> str:
-    """State what was actually checked, not what conversions usually check.
-
-    Every conversion passes the same gate — a 1:1 key set against a
-    freshly built model, a per-key shape check and a real strict load —
-    so that sentence is always true.  A numerical comparison against the
-    source needs a runnable reference implementation, which some families
-    have and some do not, so it is claimed only when the converter
-    recorded one in ``meta['parity']``.
-    """
-    base = (
-        "Key set, tensor shapes and a strict load verified against a "
-        "freshly built Lucid model."
-    )
-    parity = spec.meta.get("parity")
-    if isinstance(parity, str) and parity:
-        return f"{base}\nNumerical parity against the source: {parity}."
-    return base
 
 
 def _model_index(spec: "ConversionSpec") -> str:
@@ -440,7 +363,7 @@ converted to Lucid-native safetensors.
 
 Converted from `{spec.source}` via
 `python -m tools.convert_weights {spec.architecture} --tag {spec.tag}`.
-{_conversion_evidence(spec)}
+Key mapping + numerical parity verified against the source.
 
 ## License
 

@@ -147,12 +147,6 @@ std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
                                            const Shape& shape,
                                            const Stride& stride,
                                            std::size_t storage_offset);
-void scatter_contig_to_strided(const std::byte* packed,
-                               CpuStorage& dst,
-                               const Shape& shape,
-                               const Stride& stride,
-                               std::size_t storage_offset);
-bool overlaps_itself(const Shape& shape, const Stride& stride);
 
 py::object
 make_numpy_view(const CpuStorage& s, const Shape& shape, const Stride& stride, std::size_t offset) {
@@ -295,37 +289,7 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
         return;
     }
     storage_ = std::move(out.storage_);
-    // The new buffer is laid out the way ``out`` lays it out — a dense run
-    // from its first byte, at ``out``'s element size.  Keeping this
-    // tensor's own stride and offset misread it whenever the two differ:
-    // an in-place op that turned int64 into float32 (``exp_`` on integers)
-    // kept 8-byte strides over 4-byte floats and read every other element.
-    meta_.stride = out.meta_.stride;
-    offset_ = out.offset_;
     drop_shared();
-}
-
-const Storage& TensorImpl::storage() const {
-    if (!storage_is_cpu(storage_) || is_dense())
-        return storage_;
-    // Packed once per version, not once per call: an op asks several times,
-    // and a reference handed out earlier in the same op must still hold the
-    // bytes it pointed at.
-    std::lock_guard<std::mutex> lock(packed_mu_);
-    const std::int64_t v = version();
-    if (!packed_ || packed_version_ != v) {
-        const auto bytes =
-            contig_snapshot_cpu(std::get<CpuStorage>(storage_), meta_.shape, meta_.stride, offset_);
-        CpuStorage packed;
-        packed.ptr = allocate_aligned_bytes(bytes.size());
-        packed.nbytes = bytes.size();
-        packed.dtype = meta_.dtype;
-        if (!bytes.empty())
-            std::memcpy(packed.ptr.get(), bytes.data(), bytes.size());
-        packed_ = Storage{std::move(packed)};
-        packed_version_ = v;
-    }
-    return *packed_;
 }
 
 std::vector<std::shared_ptr<TensorImpl>> TensorImpl::live_views() const {
@@ -352,10 +316,22 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
                                 "out-of-place form");
     if (!storage_is_cpu(storage_) || !storage_is_cpu(src.storage_))
         ErrorBuilder(name).not_implemented("writing through a view is only supported on the CPU");
-    if (overlaps_itself(meta_.shape, meta_.stride))
-        ErrorBuilder(name).fail(
-            "an in-place write into a tensor whose elements overlap (an "
-            "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
+    if (!is_dense())
+        ErrorBuilder(name).not_implemented(
+            "writing through a view at an offset or with strides is not supported yet");
+    // After a recorded write every member the write reaches is re-derived
+    // (inplace::rebase_views), which reads each member as one run of the
+    // buffer.  A member with strides is not one run, so nothing could say
+    // which of its elements the write changed.
+    if (GradMode::is_enabled() && family_ && !is_detached_alias()) {
+        const bool graph = src.requires_grad() || src.grad_fn();
+        for (const auto& m : live_views())
+            if (!m->is_detached_alias() && !m->is_contiguous() && (graph || m->requires_grad()))
+                ErrorBuilder(name).not_implemented(
+                    "an in-place write that autograd records, on a tensor that shares its "
+                    "buffer with a strided view, is not supported yet — clone() first, or "
+                    "write under no_grad()");
+    }
     // A leaf's values are where its gradient accumulates.  A write through
     // one of its views moves them as surely as a write to the leaf itself,
     // which refuse_on_leaf refuses while autograd records.  is_leaf(), not
@@ -372,7 +348,7 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
     const auto& from = std::get<CpuStorage>(src.storage_);
     // The op handed back this very buffer (a no-op for this dtype): the
     // values are already in place.
-    if (from.ptr == dst.ptr && src.is_dense() && is_dense())
+    if (from.ptr == dst.ptr && src.is_dense())
         return;
     // Whatever else holds the buffer — a storage saved for backward, a NumPy
     // array — expects the values it has now, and nothing would tell it they
@@ -383,20 +359,15 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
             "an in-place write to a tensor that shares storage with a live view is not supported "
             "while something else also holds that storage (a tensor saved for backward, a NumPy "
             "array) — clone() first");
-    // The source packed, then laid into this tensor's own elements — at its
-    // offset and through its strides, which a dense tensor has trivially.
     const std::size_t n = nbytes();
-    std::vector<std::byte> packed;
-    const std::byte* bytes = from.ptr.get();
-    if (!src.is_dense()) {
-        packed = contig_snapshot_cpu(from, src.shape(), src.stride(), src.storage_offset());
-        bytes = packed.data();
-    }
-    if (is_dense()) {
+    if (src.is_dense()) {
         if (n > 0)
-            std::memcpy(dst.ptr.get(), bytes, n);
+            std::memcpy(dst.ptr.get(), from.ptr.get(), n);
     } else {
-        scatter_contig_to_strided(bytes, dst, meta_.shape, meta_.stride, offset_);
+        const auto packed =
+            contig_snapshot_cpu(from, src.shape(), src.stride(), src.storage_offset());
+        if (!packed.empty())
+            std::memcpy(dst.ptr.get(), packed.data(), packed.size());
     }
     bump_version();
 }
@@ -414,6 +385,11 @@ void TensorImpl::drop_shared() {
 
 std::shared_ptr<TensorImpl>
 TensorImpl::from_numpy(py::array arr, Device device, bool requires_grad) {
+    // Request a C-contiguous view so that the subsequent memcpy can assume
+    // row-major layout.  forcecast allows NumPy to create a temporary copy if
+    // the source array is Fortran-order or non-contiguous, rather than failing.
+    py::array_t<std::byte, py::array::c_style | py::array::forcecast> view =
+        py::array_t<std::byte, py::array::c_style | py::array::forcecast>::ensure(arr);
     if (!arr) {
         ErrorBuilder("from_numpy").fail("input is not a numpy array");
     }
@@ -437,9 +413,8 @@ TensorImpl::from_numpy(py::array arr, Device device, bool requires_grad) {
     cpu.nbytes = total;
     cpu.dtype = dtype;
 
-    // Preserve dtype while packing strides. An array_t<std::byte> forcecast
-    // converts values rather than reinterpreting bytes: it allocated an unused
-    // buffer and emitted lossy-cast warnings (or failed under warnings=error).
+    // Obtain the C-contiguous view a second time (arr may have changed ownership
+    // after the first ensure() call due to pybind11 temporaries).
     py::array contig = py::array::ensure(arr, py::array::c_style | py::array::forcecast);
     if (!contig) {
         ErrorBuilder("from_numpy").fail("failed to obtain C-contiguous view");
@@ -578,85 +553,6 @@ std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
     walk_strided_to_contig(s.ptr.get() + storage_offset, out.data(), shape, stride, 0, 0, dst_off,
                            elem);
     return out;
-}
-
-// Lays ``packed`` — ``shape``'s elements, dense and row-major — into ``dst``
-// through ``stride`` from ``storage_offset``: the inverse of
-// :func:`contig_snapshot_cpu`, which is how a write reaches a view's own
-// elements rather than the buffer's first bytes.
-void scatter_contig_to_strided(const std::byte* packed,
-                               CpuStorage& dst,
-                               const Shape& shape,
-                               const Stride& stride,
-                               std::size_t storage_offset) {
-    const std::size_t elem = dtype_size(dst.dtype);
-    const std::size_t n = shape_numel(shape);
-    if (n == 0)
-        return;
-    std::vector<std::int64_t> idx(shape.size(), 0);
-    std::byte* first = dst.ptr.get() + storage_offset;
-    for (std::size_t i = 0; i < n; ++i) {
-        std::int64_t at = 0;
-        for (std::size_t d = 0; d < shape.size(); ++d)
-            at += idx[d] * stride[d];
-        std::memcpy(first + at, packed + i * elem, elem);
-        for (std::size_t d = shape.size(); d-- > 0;) {
-            if (++idx[d] < shape[d])
-                break;
-            idx[d] = 0;
-        }
-    }
-}
-
-// Whether two of a view's elements are the same byte.  A zero stride on an
-// axis longer than one — an expanded view — always makes one; so do windows
-// that overlap, as an unfold with step < size gives, though every stride is
-// non-zero.  Such a view reads fine and cannot be written: a repeated element
-// has no single value to take.
-bool overlaps_itself(const Shape& shape, const Stride& stride) {
-    std::vector<std::pair<std::int64_t, std::int64_t>> axes;  // |stride|, extent - 1
-    std::size_t n = 1;
-    for (std::size_t d = 0; d < shape.size(); ++d) {
-        n *= static_cast<std::size_t>(std::max<std::int64_t>(shape[d], 0));
-        if (shape[d] <= 1)
-            continue;
-        if (stride[d] == 0)
-            return true;
-        axes.emplace_back(stride[d] < 0 ? -stride[d] : stride[d], shape[d] - 1);
-    }
-    if (n == 0)
-        return false;
-    // Sorted by stride, if every axis steps past all that the smaller ones
-    // reach, each index lands on its own byte, as the digits of a
-    // mixed-radix number do.
-    std::sort(axes.begin(), axes.end());
-    std::int64_t reach = 0;
-    bool separated = true;
-    for (const auto& [step, span] : axes) {
-        if (step <= reach) {
-            separated = false;
-            break;
-        }
-        reach += step * span;
-    }
-    if (separated)
-        return false;
-    // Strides that interleave can still miss each other, so count addresses.
-    std::vector<std::int64_t> at(n);
-    std::vector<std::int64_t> idx(shape.size(), 0);
-    for (std::size_t i = 0; i < n; ++i) {
-        std::int64_t off = 0;
-        for (std::size_t d = 0; d < shape.size(); ++d)
-            off += idx[d] * stride[d];
-        at[i] = off;
-        for (std::size_t d = shape.size(); d-- > 0;) {
-            if (++idx[d] < shape[d])
-                break;
-            idx[d] = 0;
-        }
-    }
-    std::sort(at.begin(), at.end());
-    return std::adjacent_find(at.begin(), at.end()) != at.end();
 }
 
 // Format a single scalar element at ``ptr`` of dtype ``dt`` into ``os``.
@@ -1332,22 +1228,11 @@ void TensorImpl::copy_from(const TensorImpl& other) {
     if (other.shape() != shape()) {
         throw ShapeMismatch(meta_.shape, other.shape(), "copy_from");
     }
-    // A CPU view is written through its geometry: the source, packed, laid
-    // into this tensor's own elements at its offset and strides.  The copy
-    // below would land at the buffer's first byte.
-    if (storage_is_cpu(storage_) && storage_is_cpu(other.storage_) && !is_dense()) {
-        if (overlaps_itself(meta_.shape, meta_.stride))
-            ErrorBuilder("copy_from")
-                .fail(
-                    "copying into a tensor whose elements overlap (an "
-                    "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
-        const auto packed = contig_snapshot_cpu(std::get<CpuStorage>(other.storage_), other.shape(),
-                                                other.stride(), other.storage_offset());
-        scatter_contig_to_strided(packed.data(), std::get<CpuStorage>(storage_), meta_.shape,
-                                  meta_.stride, offset_);
-        bump_version();
-        return;
-    }
+    // A view is written through its geometry, and nothing does that yet: the
+    // copy below lands at the buffer's first byte.  Refuse rather than write
+    // where the view does not reach.
+    if (storage_is_cpu(storage_) && (offset_ != 0 || !is_contiguous()))
+        ErrorBuilder("copy_from").not_implemented("copying into a view is not supported yet");
     // A shared buffer is written in place so every alias sees the copy; the
     // GPU branch below would hand this tensor a fresh array instead.
     if (write_into_shared(other)) {
@@ -1415,7 +1300,7 @@ void TensorImpl::copy_from(const TensorImpl& other) {
                                             "copy_from (storage variant)");
                    },
                },
-               storage_, other.storage_);
+               storage_, other.storage());
 
     bump_version();
 }

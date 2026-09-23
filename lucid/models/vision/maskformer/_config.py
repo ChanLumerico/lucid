@@ -1,7 +1,7 @@
 """MaskFormer configuration (Cheng et al., NeurIPS 2021)."""
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
@@ -107,10 +107,8 @@ class MaskFormerConfig(ModelConfig):
     in_channels: int = 3
 
     # Backbone
-    # ResNet-50.  The stage counts are the only backbone knob: the stages
-    # are built from bottleneck blocks unconditionally, which is what every
-    # published MaskFormer ResNet backbone uses.
-    backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)
+    backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)  # ResNet-50
+    backbone_block: Literal["basic", "bottleneck"] = "bottleneck"
 
     # Transformer
     d_model: int = 256

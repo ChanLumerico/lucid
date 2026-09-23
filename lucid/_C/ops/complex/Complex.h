@@ -2,14 +2,14 @@
 //
 // Forward op that combines two real-valued tensors into one complex tensor.
 //
-// Given broadcastable real-floating inputs $a$ and $b$ on one device, build
-// the complex (C64, or CPU C128) tensor $z = a + b\,i$. CPU interleaves
-// the two arrays into the canonical ``[re, im, re, im, ...]``
+// Given real-floating inputs $a$ and $b$ of identical shape and device, build
+// the complex (C64) tensor $z = a + b\,i$.  CPU uses ``vDSP_ztoc`` to
+// interleave the two arrays into the canonical ``[re, im, re, im, ...]``
 // storage layout used by Lucid for complex dtypes; GPU constructs the result
 // as ``re + 1j * im`` via ``mlx::core::astype`` + ``multiply`` + ``add``.
 //
-// Native storage and graph backward are composed
-// from ``real`` / ``imag`` of the incoming
+// This entry point is forward-only — the Wirtinger-style backward is composed
+// at the Python autograd layer from ``real`` / ``imag`` of the incoming
 // gradient (``d complex(re, im) / d re = real(grad)``,
 // ``d complex(re, im) / d im = imag(grad)``).
 //
@@ -36,8 +36,8 @@ namespace lucid {
 
 // Combine two real tensors into a complex tensor.
 //
-// The result is C64 for F32 parts or C128 for CPU F64 parts, on the input device.
-// Both inputs must be real-floating; half formats widen to F32. The
+// The result has dtype ``C64`` and the same shape and device as the inputs.
+// Both inputs must be real-floating (``F16`` / ``F32`` / ``F64``); the
 // resulting interleaved storage holds $a + b\,i$ element-wise.
 //
 // Math
@@ -51,26 +51,27 @@ namespace lucid {
 // re : TensorImplPtr
 //     Real part.  Must be a real-floating dtype.
 // im : TensorImplPtr
-//     Imaginary part. Broadcastable shape, same device and widened dtype as re.
+//     Imaginary part.  Same shape, device, and dtype family as ``re``.
 //
 // Returns
 // -------
 // TensorImplPtr
-//     Complex tensor with the broadcast shape and input device.
+//     Complex (C64) tensor with the same shape and device as the inputs.
 //
 // Raises
 // ------
 // DtypeMismatch
 //     If either input is not a real-floating dtype.
 // ShapeMismatch
-//     If ``re`` and ``im`` cannot broadcast.
+//     If ``re`` and ``im`` have different shapes.
 // DeviceMismatch
 //     If ``re`` and ``im`` live on different devices.
 //
 // Notes
 // -----
-// Native backward extracts both lanes of the incoming complex gradient.
-// Graph mode uses the same projections to preserve higher derivatives.
+// Backward is supplied by the Python autograd layer via ``real`` / ``imag``
+// extraction of the incoming complex gradient; this entry point only
+// implements the forward.
 //
 // See Also
 // --------
@@ -84,8 +85,7 @@ public:
     Device device_ = Device::CPU;
 
     // Returns ``(real(g), imag(g))``, one per operand.
-    std::vector<Storage> apply(Storage grad_out) override;
-    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+    std::vector<Storage> apply(Storage grad_out);
 };
 
 LUCID_API TensorImplPtr complex_op(const TensorImplPtr& re, const TensorImplPtr& im);

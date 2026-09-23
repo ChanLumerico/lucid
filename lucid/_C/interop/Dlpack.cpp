@@ -154,7 +154,7 @@ DLManagedTensor* metal_to_dlpack(const TensorImplPtr& impl) {
 
     const Shape& shape = impl->shape();
     ctx->shape.assign(shape.begin(), shape.end());
-    // A metal tensor is never a view, so the layout is always row-major
+    // Lucid materialises every view, so the layout is always row-major
     // packed and the strides are derivable.  They are emitted explicitly
     // rather than left null because MLX emits them too, and a consumer
     // that trusts a null to mean "packed" is one we would rather not

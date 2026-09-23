@@ -68,12 +68,6 @@ public:
     // Graph-mode twin: the same sum, written in ops so the result can be
     // differentiated again.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
-
-    // Nothing to validate: the backward sums the gradient and never reads
-    // the input's values.  A CPU ``expand`` is a view of its input, so a
-    // write to that input moves its version — which, checked here, turned
-    // into a VersionMismatch on every later backward through the expansion.
-    void validate_versions() override {}
 };
 
 // Collapse a contiguous range of axes into a single dimension.

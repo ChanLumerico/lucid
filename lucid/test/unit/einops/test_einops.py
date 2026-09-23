@@ -107,25 +107,6 @@ class TestEinsum:
         np.testing.assert_array_equal(out.numpy(), np.einsum("ij,jk->ik", a, b))
         assert out.dtype == lucid.int64
 
-    def test_mixed_dtypes_meet_at_the_common_dtype(self, device: str) -> None:
-        # The engine contracts one dtype only, so an int64 operand beside a
-        # float32 one raised DtypeMismatch.
-        a = np.arange(6).reshape(2, 3).astype(np.int64)
-        b = (np.arange(12).reshape(3, 4) / 4).astype(np.float32)
-        out = lucid.einops.einsum(
-            "ij,jk->ik",
-            lucid.tensor(a.copy(), device=device),
-            lucid.tensor(b.copy(), device=device),
-        )
-        assert out.dtype == lucid.float32
-        np.testing.assert_allclose(out.numpy(), np.einsum("ij,jk->ik", a, b))
-        outer = lucid.einops.einsum(
-            "i,j->ij",
-            lucid.tensor([1, 2], dtype=lucid.int64, device=device),
-            lucid.tensor([0.5, 1.5], device=device),
-        )
-        assert outer.tolist() == [[0.5, 1.5], [1.0, 3.0]]
-
     def test_backward_flows(self, device: str) -> None:
         # The matmul-routed path must remain differentiable end to end.
         np.random.seed(3)

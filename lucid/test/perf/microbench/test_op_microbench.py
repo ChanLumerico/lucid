@@ -35,7 +35,7 @@ class TestArithMicrobench:
         b = lucid.tensor(
             np.random.standard_normal((2048,)).astype(np.float32), device=device
         )
-        bench(lambda: a + b)
+        bench(lambda: (a + b).numpy())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(f"add_2048_{device}", bench.last_elapsed, _THRESHOLDS)
 
@@ -46,7 +46,7 @@ class TestArithMicrobench:
         b = lucid.tensor(
             np.random.standard_normal((2048,)).astype(np.float32), device=device
         )
-        bench(lambda: a * b)
+        bench(lambda: (a * b).numpy())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(f"mul_2048_{device}", bench.last_elapsed, _THRESHOLDS)
 
@@ -60,7 +60,7 @@ class TestMatmulMicrobench:
         b = lucid.tensor(
             np.random.standard_normal((64, 64)).astype(np.float32), device=device
         )
-        bench(lambda: a @ b)
+        bench(lambda: (a @ b).numpy())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(f"matmul_64_{device}", bench.last_elapsed, _THRESHOLDS)
 
@@ -71,7 +71,7 @@ class TestMatmulMicrobench:
         b = lucid.tensor(
             np.random.standard_normal((256, 256)).astype(np.float32), device=device
         )
-        bench(lambda: a @ b)
+        bench(lambda: (a @ b).numpy())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(
                 f"matmul_256_{device}", bench.last_elapsed, _THRESHOLDS
@@ -84,7 +84,7 @@ class TestReductionMicrobench:
         a = lucid.tensor(
             np.random.standard_normal((4096,)).astype(np.float32), device=device
         )
-        bench(lambda: lucid.sum(a))
+        bench(lambda: lucid.sum(a).item())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(f"sum_4096_{device}", bench.last_elapsed, _THRESHOLDS)
 
@@ -97,7 +97,7 @@ class TestActivationMicrobench:
         a = lucid.tensor(
             np.random.standard_normal((32, 1024)).astype(np.float32), device=device
         )
-        bench(lambda: softmax(a, dim=-1))
+        bench(lambda: softmax(a, dim=-1).numpy())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(
                 f"softmax_1024_{device}", bench.last_elapsed, _THRESHOLDS
