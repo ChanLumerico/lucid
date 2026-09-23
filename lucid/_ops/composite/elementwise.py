@@ -1112,10 +1112,13 @@ def fmin(a: TensorOrScalar, b: TensorOrScalar) -> Tensor:
 def erfc(x: Tensor) -> Tensor:
     r"""Complementary error function :math:`\text{erfc}(x) = 1 - \text{erf}(x)`.
 
-    Preserves more precision than ``1 - erf(x)`` would for very large
-    positive ``x`` only if the engine offers a native ``erfc`` kernel;
-    in Lucid this is a composite that *does* subtract ``erf(x)`` from
-    one, so accuracy is bounded by ``erf`` near the tails.
+    Computed directly, not as ``1 - erf(x)``: past ``x ≈ 4`` that
+    difference is a few units of float32's spacing below one, so
+    ``erfc(4)`` came back 0 where the answer is 1.54e-8 — and every tail
+    probability built on it inherited the zero.  The form used is the
+    Chebyshev fit from Numerical Recipes (``erfcc``), whose relative error
+    stays below 1.2e-7 for every ``x``, carried to negative ``x`` by
+    :math:`\text{erfc}(-x) = 2 - \text{erfc}(x)`.
 
     Parameters
     ----------
@@ -1126,8 +1129,54 @@ def erfc(x: Tensor) -> Tensor:
     -------
     Tensor
         Same shape as ``x``, values in :math:`[0, 2]`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> abs(lucid.erfc(lucid.tensor(4.0)).item() - 1.5417e-08) < 1e-12
+    True
     """
-    return lucid.full_like(x, 1.0) - lucid.erf(x)
+    if x.dtype == lucid.float64:
+        return _erfc_double(x)
+    # ``where`` rather than ``abs``: the gradient of ``abs`` at 0 is 0,
+    # which would zero erfc's slope (-2/√π) at exactly the origin.
+    z = lucid.where(x >= 0.0, x, -x)
+    t = 1.0 / (1.0 + 0.5 * z)
+    poly = lucid.full_like(t, 0.17087277)
+    for c in (
+        -0.82215223,
+        1.48851587,
+        -1.13520398,
+        0.27886807,
+        -0.18628806,
+        0.09678418,
+        0.37409196,
+        1.00002368,
+        -1.26551223,
+    ):
+        poly = c + t * poly
+    tail = t * lucid.exp(poly - z * z)
+    return lucid.where(x >= 0.0, tail, 2.0 - tail)
+
+
+def _erfc_double(x: Tensor) -> Tensor:
+    """erfc in float64, where the Chebyshev fit's 1.2e-7 is float32 grade.
+
+    ``1 - erf(x)`` holds to float64's spacing until erfc itself shrinks
+    toward it, so it serves below x = 3; from there the continued fraction
+    for erfcx does, at 60 terms, without ever subtracting.  Both branches
+    are evaluated — ``where`` selects — so each is clamped onto its own
+    side first, keeping the losing one finite for the gradient.
+    """
+    z = lucid.where(x >= 0.0, x, -x)
+    head = 1.0 - lucid.erf(lucid.minimum(z, lucid.full_like(z, 3.0)))
+    far = lucid.maximum(z, lucid.full_like(z, 3.0))
+    frac = lucid.zeros_like(far)
+    for k in range(60, 0, -1):
+        frac = (0.5 * k) / (far + frac)
+    tail = lucid.exp(-far * far) / (_math.sqrt(_math.pi) * (far + frac))
+    value = lucid.where(z < 3.0, head, tail)
+    return lucid.where(x >= 0.0, value, 2.0 - value)
 
 
 def copysign(x: Tensor, y: Tensor) -> Tensor:

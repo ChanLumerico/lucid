@@ -10,6 +10,7 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
+#include "../complex/Conj.h"
 
 namespace lucid {
 
@@ -32,6 +33,11 @@ std::pair<Storage, Storage> MulBackward::grad_formula(const Storage& grad_out) {
 
     auto a_b = saved_input_broadcasted(0);
     auto b_b = saved_input_broadcasted(1);
+    if (is_complex(dtype_)) {
+        auto& be = backend::Dispatcher::for_device(device_);
+        a_b = be.complex_conj(a_b, out_shape_, dtype_);
+        b_b = be.complex_conj(b_b, out_shape_, dtype_);
+    }
     return {
         multiply_storages(grad_out, b_b, n, dtype_, device_),
         multiply_storages(grad_out, a_b, n, dtype_, device_),
@@ -42,7 +48,8 @@ std::pair<TensorImplPtr, TensorImplPtr> MulBackward::grad_formula_impl(
     const TensorImplPtr& grad_out, const TensorImplPtr& a, const TensorImplPtr& b) {
     // da = grad_out * b,  db = grad_out * a.
     // a and b are already broadcast-expanded to out_shape_ by BinaryKernel.
-    return {mul_op(grad_out, b), mul_op(grad_out, a)};
+    return {mul_op(grad_out, is_complex(dtype_) ? conj_op(b) : b),
+            mul_op(grad_out, is_complex(dtype_) ? conj_op(a) : a)};
 }
 
 TensorImplPtr mul_op(const TensorImplPtr& a, const TensorImplPtr& b) {

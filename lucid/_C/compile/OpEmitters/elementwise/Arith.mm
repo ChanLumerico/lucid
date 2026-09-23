@@ -36,15 +36,24 @@ namespace {
 // header pull-in for the single dtype enum mapping we need below).
 inline MPSDataType lucid_dtype_to_mps_local(Dtype dt) {
     switch (dt) {
-        case Dtype::F16:  return MPSDataTypeFloat16;
-        case Dtype::F32:  return MPSDataTypeFloat32;
-        case Dtype::F64:  return MPSDataTypeFloat32;  // MPS has no F64
-        case Dtype::I8:   return MPSDataTypeInt8;
-        case Dtype::I16:  return MPSDataTypeInt16;
-        case Dtype::I32:  return MPSDataTypeInt32;
-        case Dtype::I64:  return MPSDataTypeInt64;
-        case Dtype::Bool: return MPSDataTypeBool;
-        default:          return MPSDataTypeFloat32;
+    case Dtype::F16:
+        return MPSDataTypeFloat16;
+    case Dtype::F32:
+        return MPSDataTypeFloat32;
+    case Dtype::F64:
+        return MPSDataTypeFloat32;  // MPS has no F64
+    case Dtype::I8:
+        return MPSDataTypeInt8;
+    case Dtype::I16:
+        return MPSDataTypeInt16;
+    case Dtype::I32:
+        return MPSDataTypeInt32;
+    case Dtype::I64:
+        return MPSDataTypeInt64;
+    case Dtype::Bool:
+        return MPSDataTypeBool;
+    default:
+        return MPSDataTypeFloat32;
     }
 }
 
@@ -72,8 +81,7 @@ inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock bu
     //
     // When all dtypes match the output's, both casts are no-ops and
     // this branch is free.
-    const MPSDataType target_dt =
-        lucid_dtype_to_mps_local(node.outputs[0].dtype);
+    const MPSDataType target_dt = lucid_dtype_to_mps_local(node.outputs[0].dtype);
     if (a_t.dataType != target_dt) {
         a_t = [graph castTensor:a_t toType:target_dt name:@"binop_cast_a"];
     }
@@ -82,7 +90,8 @@ inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock bu
     }
 
     MPSGraphTensor* y = builder(graph, a_t, b_t);
-    if (y == nil) return false;
+    if (y == nil)
+        return false;
     ctx.bind(node.outputs[0].id, (__bridge void*)y);
     return true;
 }
@@ -166,10 +175,50 @@ public:
     std::string_view op_name() const override { return "floordiv"; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
-            // floor(a/b) — uses native floor builder on the quotient.
-            MPSGraphTensor* q =
-                [g divisionWithPrimaryTensor:a secondaryTensor:b name:nil];
-            return [g floorWithTensor:q name:@"floordiv"];
+            // ``floor(a/b)`` alone is right for floats and wrong for
+            // integers: MPSGraph's integer division truncates toward zero
+            // and flooring an integer is a no-op, so ``-7 // 2`` came back
+            // as -3 where eager and Python both give -4.  This emitter was
+            // unreachable until floordiv started recording its trace I/O,
+            // so nothing had ever measured it.
+            //
+            // Correct it the way C's truncating division is corrected:
+            // subtract one when the remainder is non-zero and disagrees in
+            // sign with the divisor.  The correction is written to be a
+            // no-op on the cases that are already right — on floats the
+            // remainder after flooring already carries the divisor's sign,
+            // and so does an integer division that floors on its own — so
+            // this stays correct whichever semantics the backend has.
+            MPSGraphTensor* q = [g divisionWithPrimaryTensor:a secondaryTensor:b name:nil];
+            q = [g floorWithTensor:q name:nil];
+
+            MPSGraphTensor* prod = [g multiplicationWithPrimaryTensor:q secondaryTensor:b name:nil];
+            MPSGraphTensor* rem = [g subtractionWithPrimaryTensor:a secondaryTensor:prod name:nil];
+
+            MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:a.dataType];
+            MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:a.dataType];
+            MPSGraphTensor* rem_nonzero = [g notEqualWithPrimaryTensor:rem
+                                                       secondaryTensor:zero
+                                                                  name:nil];
+            MPSGraphTensor* rem_neg = [g lessThanWithPrimaryTensor:rem
+                                                   secondaryTensor:zero
+                                                              name:nil];
+            MPSGraphTensor* div_neg = [g lessThanWithPrimaryTensor:b secondaryTensor:zero name:nil];
+            // XOR, not ``notEqual``: comparing two booleans with the
+            // latter is the same answer, but MPSGraph's
+            // ConvertBinaryCompareToZero pass then warns on every run
+            // that the second operand is not zero.
+            MPSGraphTensor* signs_differ = [g logicalXORWithPrimaryTensor:rem_neg
+                                                          secondaryTensor:div_neg
+                                                                     name:nil];
+            MPSGraphTensor* needs_adjust = [g logicalANDWithPrimaryTensor:rem_nonzero
+                                                          secondaryTensor:signs_differ
+                                                                     name:nil];
+            MPSGraphTensor* adjust = [g selectWithPredicateTensor:needs_adjust
+                                              truePredicateTensor:one
+                                             falsePredicateTensor:zero
+                                                             name:nil];
+            return [g subtractionWithPrimaryTensor:q secondaryTensor:adjust name:@"floordiv"];
         });
     }
 };
@@ -186,13 +235,11 @@ public:
         // approximation; the eager fallback path handles exact semantics.
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             MPSDataType dt = a.dataType;
-            MPSGraphTensor* diff =
-                [g subtractionWithPrimaryTensor:b secondaryTensor:a name:nil];
+            MPSGraphTensor* diff = [g subtractionWithPrimaryTensor:b secondaryTensor:a name:nil];
             MPSGraphTensor* s = [g signWithTensor:diff name:nil];
             const double eps = (dt == MPSDataTypeFloat16) ? 9.7656e-4 : 1.1921e-7;
             MPSGraphTensor* e = [g constantWithScalar:eps dataType:dt];
-            MPSGraphTensor* step =
-                [g multiplicationWithPrimaryTensor:s secondaryTensor:e name:nil];
+            MPSGraphTensor* step = [g multiplicationWithPrimaryTensor:s secondaryTensor:e name:nil];
             return [g additionWithPrimaryTensor:a secondaryTensor:step name:@"nextafter"];
         });
     }
@@ -215,12 +262,11 @@ public:
         double exp_v = 1.0;
         auto it = node.attrs.find("exp");
         if (it != node.attrs.end()) {
-            if (const auto* p = std::get_if<double>(&it->second)) exp_v = *p;
+            if (const auto* p = std::get_if<double>(&it->second))
+                exp_v = *p;
         }
         MPSGraphTensor* e = [graph constantWithScalar:exp_v dataType:x_t.dataType];
-        MPSGraphTensor* y = [graph powerWithPrimaryTensor:x_t
-                                          secondaryTensor:e
-                                                     name:@"pow_scalar"];
+        MPSGraphTensor* y = [graph powerWithPrimaryTensor:x_t secondaryTensor:e name:@"pow_scalar"];
         ctx.bind(node.outputs[0].id, (__bridge void*)y);
         return true;
     }
@@ -243,7 +289,8 @@ public:
         double base_v = std::exp(1.0);
         auto it = node.attrs.find("base");
         if (it != node.attrs.end()) {
-            if (const auto* p = std::get_if<double>(&it->second)) base_v = *p;
+            if (const auto* p = std::get_if<double>(&it->second))
+                base_v = *p;
         }
         MPSGraphTensor* b = [graph constantWithScalar:base_v dataType:x_t.dataType];
         MPSGraphTensor* y = [graph powerWithPrimaryTensor:b

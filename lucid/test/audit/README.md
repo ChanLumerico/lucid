@@ -4,12 +4,18 @@ Four stages, one verdict, one exit code.
 
 | stage | asks | catches |
 |---|---|---|
-| **self-check** | can the instruments still go red? | 30 mutants over 29 of 33 axes |
-| **sweep** | does each reachable symbol keep its contract? | 1,512 symbols × 33 axes = 10,800+ cells |
+| **self-check** | can the instruments still go red? | one or more negative controls for every axis, including an isolated fatal-call probe |
+| **sweep** | does each reachable symbol keep its contract? | the runtime public-symbol census × all applicable axes |
 | **suite** | are the specific values the right values? | `pytest lucid/test` + a line-coverage floor |
-| **doctests** | does the documentation run? | 5,499 examples + a per-module floor |
+| **doctests** | does the documentation run? | executable examples + a per-module floor |
 
 They fail independently, and none is a substitute for another.
+
+Use the report's counts instead of historical totals. `python -m tools.support_manifest`
+can attach a scoped audit report and link exports to source, stubs, generated
+documentation and static test references. References are not proof that tests ran.
+The smoke self-check terminates only a dedicated subprocess with a known exit
+code; a successful child or an unrelated import failure does not count as caught.
 
 The self-check runs **first**, on a clean interpreter, and the order is
 load-bearing: run after the sweep, four mutants stopped being caught,
@@ -84,7 +90,7 @@ cd /path/to/lucid
 #    ⚠️ `uv pip`, never plain `pip` — .venv has no pip, so `pip` leaks to
 #    the system pip3 and bakes that interpreter's absolute rpath into the
 #    .so. See [[debug-build-wrong-venv-rpath]].
-VIRTUAL_ENV=.venv MACOSX_DEPLOYMENT_TARGET=26.0 \
+VIRTUAL_ENV=.venv MACOSX_DEPLOYMENT_TARGET=15.0 \
     uv pip install -e ".[audit]" --no-build-isolation
 
 # 2. Confirm the engine linked against *this* venv.
@@ -119,7 +125,7 @@ python -m lucid.test.audit --coverage
 
 ### Requirements
 
-Inherited from Lucid itself: macOS 26+ on Apple Silicon, Python 3.14,
+Inherited from Lucid itself: macOS 15+ on Apple Silicon, Python 3.14,
 MLX ≥ 0.31. There is nothing the audit needs beyond what building the
 engine already needs.
 
@@ -221,10 +227,12 @@ lucid-audit --self-check
 Breaks the framework on purpose, once per axis, in exactly the way that
 axis exists to notice — a gradient that is not the derivative, a NaN that
 gets swallowed, a handle whose `remove` does not remove — and reports
-whether the axis said so. 30 mutants, 29 of 33 axes; the four with no
-mutant are printed as **unproven**, each with the reason it cannot be
-written — "nobody got to it" and "it cannot be done" are different
-facts and only the second is a finding.
+whether the axis said so. The 2026-09-20 validation caught 35/35 mutants
+covering 34/34 axes, including constant/extreme inputs and a fatal-call
+negative control in a dedicated subprocess. Always use the current report's
+counts: an axis without a mutant is printed as **unproven**, not silently
+treated as covered. A caught mutant proves sensitivity to that deliberate
+defect, not exhaustive correctness of every operation on the axis.
 
 It is not decoration. Three findings so far, all about this tool rather
 than the framework:
@@ -234,11 +242,14 @@ than the framework:
   nine directions;
 * the tokenizer round trip passed a decoder that silently dropped a
   character, on the grounds that dropping it was at least repeatable;
-* `layout` **cannot fail at all**. It compares a packed operand against a
-  strided view, and this engine materialises every view — `t[..., ::2]`,
-  `T`, `expand`, `broadcast_to`, `diagonal` and `unfold` all come back
-  packed — so the two operands are byte-identical. 688 cells per run were
-  reporting agreement between an op and itself. The axis now says so.
+* `layout` **could not fail at all**. It compared a packed operand against
+  a strided view, and the engine then materialised every view —
+  `t[..., ::2]`, `T`, `expand`, `broadcast_to`, `diagonal` and `unfold`
+  all came back packed — so the two operands were byte-identical. 688
+  cells per run were reporting agreement between an op and itself. On the
+  CPU those are views now and `t[..., ::2]` is the strided operand; on
+  metal, where tensors stay packed, the axis still says the layout half is
+  vacuous.
 
 `SKIP` is the number to watch. The summary's *applicable cells* line
 reports how many cells produced a verdict at all, and that is the honest

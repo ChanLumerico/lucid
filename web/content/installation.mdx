@@ -13,29 +13,35 @@ Lucid targets macOS on M1–M4 chips exclusively. Linux, Windows, and x86 are no
 
 | Requirement | Version |
 |---|---|
-| macOS | 13 Ventura or later |
+| macOS | 15 Sequoia or later |
 | Apple chip | M1 / M2 / M3 / M4 |
-| Python | 3.12 – 3.14 |
+| Python | 3.14 |
 | Xcode Command Line Tools | latest |
+
+One wheel covers macOS 15 and every later release. Python 3.14 is required: Lucid's type annotations rely on its lazy evaluation (PEP 649).
+
+<Callout variant="note">
+MLX 0.32's macOS 26 build is compiled for macOS 26.2. On an M5-class Mac still running 26.0 or 26.1 it can pick GPU kernels that release predates and fail at runtime; update macOS, or install the previous MLX with `pip install "mlx<0.32"`. M1–M4 Macs are not affected.
+</Callout>
 
 ## Install
 
 ```bash
-pip install lucid
+pip install lucid-dl
 ```
 
-If you manage multiple Python versions with [pyenv](https://github.com/pyenv/pyenv) or Conda, make sure you're on 3.12+:
+If you manage multiple Python versions with [pyenv](https://github.com/pyenv/pyenv) or Conda, make sure you're on 3.14:
 
 ```bash
-python --version   # Python 3.12.x or later
-pip install lucid
+python --version   # Python 3.14.x
+pip install lucid-dl
 ```
 
 ## Verify
 
 ```python
 import lucid
-print(lucid.__version__)  # 3.0.0
+print(lucid.__version__)
 
 t = lucid.ones(3, 3, device="metal")
 print(t.device)  # metal
@@ -49,16 +55,16 @@ If both lines print without error, Lucid is installed correctly and the MLX GPU 
 
 ```bash
 # Development tools (ruff, mypy, pytest)
-pip install "lucid[dev]"
+pip install "lucid-dl[dev]"
 
 # Parity test suite against reference framework
-pip install "lucid[test]"
+pip install "lucid-dl[test]"
 ```
 
 ## Upgrading
 
 ```bash
-pip install --upgrade lucid
+pip install --upgrade lucid-dl
 ```
 
 ## Building from source
@@ -66,10 +72,11 @@ pip install --upgrade lucid
 ```bash
 git clone https://github.com/ChanLumerico/lucid.git
 cd lucid
-pip install -e ".[dev]"
-cmake --build build/ -j$(sysctl -n hw.ncpu)
+python3.14 -m venv .venv && source .venv/bin/activate
+pip install setuptools wheel cmake ninja "pybind11>=3.0,<3.1" mlx
+pip install --no-build-isolation -e ".[dev]"
 ```
 
 <Callout variant="note">
-Building from source requires CMake ≥ 3.21, pybind11, and the full Xcode toolchain.
+Building from source requires CMake ≥ 3.24, Ninja ≥ 1.11, and the Xcode Command Line Tools. `--no-build-isolation` matters: the engine links against the `libmlx.dylib` of the MLX installed in your environment.
 </Callout>

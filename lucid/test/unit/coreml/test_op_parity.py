@@ -10,6 +10,9 @@ MIL op — ``negative_slope`` read where Lucid writes ``slope``, ``axis``
 where it writes ``dim`` — produces the right shape and the wrong numbers.
 """
 
+import types
+from typing import Any
+
 import pytest
 
 import lucid
@@ -253,8 +256,22 @@ class TestCoreMLDoesNotPromote:
                     lucid.float32
                 ),
             ),
+            (
+                # ``arange(n)`` is int64 and reaches the package as an
+                # integer buffer, which was recorded as float: the
+                # computed side was cast to float to "match" it.
+                "int-buffer-compared-to-computed-int",
+                lambda x: x
+                * (lucid.arange(x.shape[0]) == x.argmax(-1)).to(lucid.float32)[:, None],
+            ),
         ],
-        ids=["int-scalar", "float-int", "int-compare", "float-compare"],
+        ids=[
+            "int-scalar",
+            "float-int",
+            "int-compare",
+            "float-compare",
+            "int-buffer-compare",
+        ],
     )
     def test_a_mixed_operand_pair_is_reconciled(
         self, name: str, fn: object, tmp_path: object
@@ -1274,6 +1291,54 @@ _UNREACHED = [
 def test_an_emitter_no_test_had_reached(name, fn, tmp_path) -> None:
     lucid.manual_seed(0)
     _check(fn, lucid.randn(3, 5), tmp_path)
+
+
+class TestArangeEmitter:
+    """``arange`` goes out as a constant of the type the trace gave it.
+
+    No export reaches this emitter today: the tracer records the op, but
+    what its consumers read is the tensor it made, carried as a buffer.
+    It is called directly, so the integer branch is not an unvisited
+    corner waiting for the tracer to change.
+    """
+
+    @staticmethod
+    def _builder(tmp_path: object) -> Any:
+        from lucid.coreml import _spec
+        from lucid.coreml._build import Builder
+
+        body_mil, body_blob = _spec.body_dtypes(_spec.Precision.FLOAT32)
+        cm = _C_engine.coreml
+        blob = cm.BlobWriter(f"{tmp_path}/weights.bin")
+        return Builder(cm.MilProgram([]), blob, body_mil, body_blob, False)
+
+    @staticmethod
+    def _emit(builder: Any, dtype: object, start: float, count: int) -> str:
+        from lucid.coreml._emit import EMITTERS
+
+        out = types.SimpleNamespace(id=0, shape=(count,), dtype=dtype)
+        op = types.SimpleNamespace(
+            name="arange", attrs={"start": start, "step": 1.0}, outputs=[out]
+        )
+        return str(EMITTERS["arange"](builder, op, []).name)
+
+    def test_an_integer_sequence_is_an_int32_constant(self, tmp_path: object) -> None:
+        builder = self._builder(tmp_path)
+        name = self._emit(builder, _C_engine.I64, 2.0, 4)
+        assert builder.dtype_of(name) == _C_engine.coreml.DTYPE_INT32
+        assert builder.shape_of(name) == [4]
+
+    def test_a_float_sequence_is_the_body_float(self, tmp_path: object) -> None:
+        builder = self._builder(tmp_path)
+        name = self._emit(builder, _C_engine.F32, 0.5, 4)
+        assert builder.dtype_of(name) == _C_engine.coreml.DTYPE_FLOAT32
+
+    def test_integers_past_int32_are_refused(self, tmp_path: object) -> None:
+        from lucid.coreml._build import UnsupportedOp
+
+        builder = self._builder(tmp_path)
+        with pytest.raises(UnsupportedOp):
+            self._emit(builder, _C_engine.I64, float(2**31 - 2), 4)
 
 
 def test_a_grid_of_two_axes(tmp_path: object) -> None:

@@ -58,11 +58,18 @@ class _MetalBackend:
 class _QuantizedBackend:
     """Low-precision (int4/int8) GEMM backend selection.
 
-    ``engine`` chooses how quantized modules run their matmul:
+    ``engine`` chooses how the Linear layers built by
+    :func:`lucid.quantization.convert` and
+    :func:`lucid.quantization.quantize_dynamic` run their matmul:
 
-    * ``"auto"`` (default) — use the MLX group-wise quantized kernel when the
-      engine exposes it (``available`` is True) and the tensors are on Metal;
-      otherwise fall back to the dequantize-to-float path.
+    * ``"auto"`` (default) — use the MLX group-wise quantized kernel
+      (:class:`~lucid.nn.quantized.QuantizedLinearMLX`) whenever the engine
+      exposes it (``available`` is True), wherever the model lives.  The
+      kernel itself runs on Metal, but the layer is device-transparent: a
+      CPU activation is moved to Metal for the GEMM and the result comes
+      back on the CPU, so a CPU model gets the speed-up too.  Layers whose
+      ``in_features`` fits no MLX group size fall back to the
+      dequantize-to-float path.
     * ``"mlx_group"`` — force the MLX quantized kernel (errors if unavailable).
     * ``"reference"`` — always dequantize-to-float (portable, slower).
     """
@@ -88,7 +95,12 @@ class _QuantizedBackend:
         self._engine = value
 
     def use_mlx(self) -> bool:
-        """Whether the MLX quantized kernel should run given the current mode."""
+        """Whether quantized Linear layers should route to the MLX kernel.
+
+        Decided by the mode and by ``available`` alone — not by where any
+        tensor lives, because the layer it selects moves its own operands
+        onto Metal and back.
+        """
         if self._engine == "reference":
             return False
         if self._engine == "mlx_group":

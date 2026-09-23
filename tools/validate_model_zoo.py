@@ -69,6 +69,10 @@ KNOWN_TASK_SUFFIXES: set[str] = {
     "ForMultipleChoice",
     "ForPreTraining",
     "ForWorldModeling",
+    # A clip, not an image, but the task tag stays "image-classification":
+    # the taxonomy is deliberately coarse and the name is where the
+    # specificity lives (see V-JEPA, and CLIP's zero-shot classifier).
+    "ForVideoClassification",
     "ForZeroShotImageClassification",
     # Alternative head-style naming (GPT/GPT-2 use reference-framework names).
     "LMHeadModel",

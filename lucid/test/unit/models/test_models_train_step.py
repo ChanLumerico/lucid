@@ -450,6 +450,24 @@ ELSEWHERE: dict[str, str] = {
     "dreamer_v2": "test_models_recent_e2e.py — model.backward, three optimizers",
     "dreamer_v3": "test_models_recent_e2e.py — model.backward, three optimizers",
     "diamond": "test_models_recent_e2e.py — three losses",
+    "genie": "test_models_genie.py — one backward trains all three networks",
+    "ijepa": (
+        "test_models_ijepa.py — the target encoder is frozen by design, which "
+        "the check above refuses"
+    ),
+    "vjepa": (
+        "test_models_vjepa.py — the target encoder is frozen by design, as "
+        "I-JEPA's is"
+    ),
+    "vjepa2": (
+        "test_models_vjepa2.py — the target encoder is frozen and nine of "
+        "the ten mask-token slots sit out any one step, which the check "
+        "above refuses; the probe takes its own step there too"
+    ),
+    "vjepa2_ac": (
+        "test_models_vjepa2.py — the forward takes a video, actions and "
+        "states together, which no single-input case here can supply"
+    ),
     "ncsn": "test_models_recent_e2e.py",
     "ddpm": "test_models_recent_e2e.py — the caller noises the input",
     "planet": "test_models_planet.py — rewards=",

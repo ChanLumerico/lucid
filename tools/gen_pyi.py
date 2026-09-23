@@ -1244,6 +1244,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
             "contiguous",
             "detach",
             "diagonal",
+            "as_strided",
             "erf",
             "erfinv",
             "expand",
@@ -1357,7 +1358,8 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def reshape(self, *shape: _int | Sequence[_int]) -> Tensor: ...",
         "    def permute(self, *dims: _int | Sequence[_int]) -> Tensor: ...",
         "    def expand(self, *sizes: _int | Sequence[_int]) -> Tensor: ...",
-        "    def diagonal(self, offset: _int = 0, dim1: _int = 0, dim2: _int = 1) -> Tensor: ...",
+        "    def diagonal(self, offset: _int = 0, dim1: _int = -2, dim2: _int = -1) -> Tensor: ...",
+        "    def as_strided(self, size: Sequence[_int], stride: Sequence[_int], storage_offset: _int | None = None) -> Tensor: ...",
         "    def swapaxes(self, axis0: _int, axis1: _int) -> Tensor: ...",
         "    def broadcast_to(self, shape: Sequence[_int]) -> Tensor: ...",
         "    def unbind(self, axis: _int = 0) -> tuple[Tensor, ...]: ...",
@@ -1429,6 +1431,7 @@ class int32(dtype): ...
 class int64(dtype): ...
 class bool_(dtype): ...
 class complex64(dtype): ...
+class complex128(dtype): ...
 
 half = float16
 double = float64

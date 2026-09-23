@@ -214,4 +214,38 @@ LUCID_API TensorImplPtr squeeze_all_op(const TensorImplPtr& a);
 // :func:`squeeze_op`, :func:`reshape_op`.
 LUCID_API TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim);
 
+// Backward of :func:`as_strided_op`.
+//
+// The view reads input elements at positions the caller chose, so the
+// gradient scatter-adds, into zeros the shape of the input, at those
+// positions — a position read twice collects both.  It keeps the positions
+// (I32, one per view element), never the input's values.
+class LUCID_API AsStridedBackward : public FuncOp<AsStridedBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+    Storage indices_;
+    std::int64_t numel_ = 0;
+
+    std::vector<Storage> apply(Storage grad_out) override;
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+    std::string node_name() const override { return "as_strided"; }
+    // It never reads the input's values, and on the CPU its output is a view
+    // of the input: a write through that view moves the version.
+    void validate_versions() override {}
+};
+
+// View ``a``'s storage through ``size`` and ``stride`` from ``storage_offset``,
+// all in elements, as the reference's ``as_strided`` does: the offset counts
+// from the storage's start, and a negative one means ``a``'s own.  On the CPU
+// the result is a view sharing ``a``'s buffer; on metal, where a tensor owns a
+// packed buffer, it is a copy of the elements it names.
+//
+// Raises when ``size`` and ``stride`` differ in length, an entry is negative,
+// or the view reaches past the storage.  A gradient also needs every position
+// to be one of ``a``'s own elements, laid out contiguously.
+LUCID_API TensorImplPtr as_strided_op(const TensorImplPtr& a,
+                                      const Shape& size,
+                                      const std::vector<std::int64_t>& stride,
+                                      std::int64_t storage_offset);
+
 }  // namespace lucid

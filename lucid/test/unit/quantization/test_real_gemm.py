@@ -26,6 +26,23 @@ pytestmark = pytest.mark.skipif(
 
 
 class TestRealGEMM:
+    def test_metal_forward_has_no_python_host_observation(self, monkeypatch) -> None:
+        layer = nnq.QuantizedLinearMLX.from_float(nn.Linear(128, 64), bits=4)
+        x = lucid.randn(1, 128, device="metal")
+        expected = layer(x).numpy().copy()
+
+        def reject(*args, **kwargs):
+            raise AssertionError(
+                "Metal quantized forward must not observe a host value"
+            )
+
+        with monkeypatch.context() as guard:
+            for name in ("numpy", "item", "cpu", "tolist"):
+                guard.setattr(lucid.Tensor, name, reject)
+            output = layer(x)
+        assert output.is_metal
+        np.testing.assert_allclose(output.numpy(), expected, atol=1e-5)
+
     def test_int8_accuracy(self) -> None:
         lucid.manual_seed(0)
         lin = nn.Linear(256, 256)
@@ -76,18 +93,20 @@ class TestRealGEMM:
             q2.load_state_dict(lucid.load(path))
             assert np.allclose(y_before, q2(x).numpy(), atol=1e-4)
 
-    def test_engine_op_matches_dequant_path(self) -> None:
+    @pytest.mark.parametrize("bits", [4, 8])
+    @pytest.mark.parametrize("rows", [1, 2, 8, 32])
+    def test_engine_op_matches_dequant_path(self, bits: int, rows: int) -> None:
         # The real GEMM should agree with the reference dequant→float path.
         from lucid.quantization import _qgemm
 
         lucid.manual_seed(3)
         w = lucid.randn(64, 128).to("metal")
-        x = lucid.randn(8, 128).to("metal")
-        packed, scales, biases = _qgemm.quantize(w, group_size=64, bits=8)
+        x = lucid.randn(rows, 128).to("metal")
+        packed, scales, biases = _qgemm.quantize(w, group_size=64, bits=bits)
         y_kernel = _qgemm.quantized_matmul(
-            x, packed, scales, biases, transpose=True, group_size=64, bits=8
+            x, packed, scales, biases, transpose=True, group_size=64, bits=bits
         ).numpy()
-        w_deq = _qgemm.dequantize(packed, scales, biases, group_size=64, bits=8)
+        w_deq = _qgemm.dequantize(packed, scales, biases, group_size=64, bits=bits)
         y_deq = lucid.matmul(x, w_deq.mT).numpy()
         assert np.allclose(y_kernel, y_deq, atol=1e-3)
 

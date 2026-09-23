@@ -30,7 +30,7 @@ def _load_lucid_pretrained() -> object:
 
     try:
         model = resnet_18_cls(pretrained=True)
-    except (OSError, RuntimeError) as exc:  # network down / Hub unreachable
+    except OSError as exc:  # network down / Hub unreachable; model failures must fail
         pytest.skip(f"pretrained download unavailable: {exc}")
     model.eval()
     return model
@@ -55,6 +55,64 @@ def test_resnet18_pretrained_matches_source(ref) -> None:
     assert out_logits.shape == ref_logits.shape == (1, 1000)
     assert int(out_logits.argmax()) == int(ref_logits.argmax())
     np.testing.assert_allclose(out_logits, ref_logits, atol=1e-4)
+
+
+def test_resnet18_pretrained_stage_activations_match(ref) -> None:
+    """Localise a conversion mismatch before pooling and the classifier hide it."""
+    ours = _load_lucid_pretrained()
+    source = _tv.models.resnet18(
+        weights=_tv.models.ResNet18_Weights.IMAGENET1K_V1
+    ).eval()
+    wanted, got = {}, {}
+    handles = []
+
+    def record(destination, name):
+        def hook(module, inputs, output):
+            destination[name] = output.detach().numpy().copy()
+
+        return hook
+
+    pairs = [("stem", ours.stem, source.relu)] + [
+        (name, getattr(ours, name), getattr(source, name))
+        for name in ("layer1", "layer2", "layer3", "layer4", "avgpool")
+    ]
+    try:
+        for name, own_layer, ref_layer in pairs:
+            handles.append(own_layer.register_forward_hook(record(got, name)))
+            handles.append(ref_layer.register_forward_hook(record(wanted, name)))
+        values = (
+            np.random.default_rng(17)
+            .standard_normal((1, 3, 224, 224))
+            .astype(np.float32)
+        )
+        with lucid.no_grad(), ref.no_grad():
+            ours(lucid.tensor(values))
+            source(ref.from_numpy(values))
+    finally:
+        for handle in handles:
+            handle.remove()
+    assert set(got) == set(wanted) == {name for name, _, _ in pairs}
+    for name in got:
+        np.testing.assert_allclose(
+            got[name],
+            wanted[name],
+            atol=1e-4,
+            rtol=1e-4,
+            err_msg=f"first differing stage: {name}",
+        )
+
+
+def test_model_construction_failure_is_not_reported_as_a_download_skip(
+    monkeypatch,
+) -> None:
+    import lucid.models.vision.resnet as resnet
+
+    def broken(**kwargs):
+        raise RuntimeError("checkpoint shape mismatch")
+
+    monkeypatch.setattr(resnet, "resnet_18_cls", broken)
+    with pytest.raises(RuntimeError, match="checkpoint shape mismatch"):
+        _load_lucid_pretrained()
 
 
 def test_resnet18_pretrained_sha_pins_artifact() -> None:

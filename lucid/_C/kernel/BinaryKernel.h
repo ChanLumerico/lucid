@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <complex>
 #include <memory>
 #include <string>
 #include <utility>
@@ -249,11 +250,21 @@ broadcast_cpu(const CpuStorage& src, const Shape& src_shape, const Shape& out_sh
         run(std::uint8_t{});
         break;
     case Dtype::F16:
-        // Broadcasting replicates elements without reading them, so half
-        // rides the 16-bit path.  This gate sits above the backend and so
-        // blocked 41 ops on its own, none of which had anything to do with
-        // arithmetic on half.
+    case Dtype::BF16:
+        // Broadcasting replicates elements without reading them, so both
+        // 16-bit floats ride the 16-bit path.  This gate sits above the
+        // backend and so blocked 41 ops on its own, none of which had
+        // anything to do with arithmetic on half.
         run(std::uint16_t{});
+        break;
+    case Dtype::C64:
+        // Complex64 is two floats per element; copying it as one 64-bit
+        // word replicates it just as well.  Without this, ``a / 2`` on a
+        // complex CPU tensor failed here before reaching the backend.
+        run(std::uint64_t{});
+        break;
+    case Dtype::C128:
+        run(std::complex<double>{});
         break;
     default:
         ErrorBuilder("broadcast").not_implemented("dtype not supported");
@@ -550,9 +561,9 @@ protected:
 //
 // See the in-class declaration for parameter and return semantics.
 // The broadcast shape is inferred from ``a`` and ``b``; equal shapes
-// short-circuit the broadcast copy.  On CPU, non-contiguous inputs are
-// materialised via :func:`contiguous_op` before entering the typed
-// compute loop so :class:`Derived` may rely on flat pointer arithmetic.
+// short-circuit the broadcast copy.  A strided CPU input reaches the typed
+// compute loop packed, through ``storage()``, so :class:`Derived` may rely
+// on flat pointer arithmetic.
 template <class Derived>
 std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr<TensorImpl>& a,
                                                            const std::shared_ptr<TensorImpl>& b) {
@@ -572,14 +583,10 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
-    // Backend kernels read a Storage from its first byte, so any input that
-    // is not dense (non-contiguous, or a view at an offset) is laid out first.
-    const TensorImplPtr a_contig =
-        (a->device() == Device::CPU && !a->is_dense()) ? contiguous_op(a) : a;
-    const TensorImplPtr b_contig =
-        (b->device() == Device::CPU && !b->is_dense()) ? contiguous_op(b) : b;
-    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
-    const TensorImplPtr b_ptr = detail::maybe_cast_for_kernel(b_contig, eff_dt);
+    // A strided CPU input needs no copy here — ``storage()`` hands the
+    // backend its elements packed — see UnaryKernel.
+    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a, eff_dt);
+    const TensorImplPtr b_ptr = detail::maybe_cast_for_kernel(b, eff_dt);
 
     Shape out_shape = (a_ptr->shape() == b_ptr->shape())
                           ? a_ptr->shape()

@@ -268,12 +268,55 @@ void vzmul_c64(const float* a, const float* b, float* out, std::size_t n) {
         oc[i] = ac[i] * bc[i];
 }
 
+namespace {
+
+// ``out[i] = op(a[i], b[i])`` over interleaved complex64, the loop
+// :func:`vzmul_c64` spells out by hand.
+template <typename Scalar, typename Op>
+void zv_binary(const Scalar* a, const Scalar* b, Scalar* out, std::size_t n, Op op) {
+    const auto* ac = reinterpret_cast<const std::complex<Scalar>*>(a);
+    const auto* bc = reinterpret_cast<const std::complex<Scalar>*>(b);
+    auto* oc = reinterpret_cast<std::complex<Scalar>*>(out);
+    for (std::size_t i = 0; i < n; ++i)
+        oc[i] = op(ac[i], bc[i]);
+}
+
+}  // namespace
+
+void vzadd_c64(const float* a, const float* b, float* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<float> x, std::complex<float> y) { return x + y; });
+}
+
+void vzsub_c64(const float* a, const float* b, float* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<float> x, std::complex<float> y) { return x - y; });
+}
+
+void vzdiv_c64(const float* a, const float* b, float* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<float> x, std::complex<float> y) { return x / y; });
+}
+
 void vzconj_c64(const float* a, float* out, std::size_t n) {
     // Copy the full interleaved buffer, then negate only the imag halves
     // via a stride-2 view starting at offset 1.  ``vDSP_vneg`` handles the
     // stride natively.
     std::memcpy(out, a, n * 2 * sizeof(float));
     vDSP_vneg(out + 1, 2, out + 1, 2, L(n));
+}
+
+void vzadd_c128(const double* a, const double* b, double* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<double> x, std::complex<double> y) { return x + y; });
+}
+
+void vzsub_c128(const double* a, const double* b, double* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<double> x, std::complex<double> y) { return x - y; });
+}
+
+void vzmul_c128(const double* a, const double* b, double* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<double> x, std::complex<double> y) { return x * y; });
+}
+
+void vzdiv_c128(const double* a, const double* b, double* out, std::size_t n) {
+    zv_binary(a, b, out, n, [](std::complex<double> x, std::complex<double> y) { return x / y; });
 }
 
 }  // namespace lucid::backend::cpu

@@ -32,7 +32,12 @@ class autocast:
         default) or ``"cpu"`` (Accelerate stream).
     dtype : lucid.dtype, optional
         Lower-precision dtype that supported ops cast inputs to inside
-        the scope.  Default :data:`lucid.float16`.
+        the scope.  Default :data:`lucid.float16`.  On the CPU, float16
+        runs in float32 — Accelerate has no half-precision kernels — so a
+        CPU scope with the default dtype changes nothing; pass
+        ``dtype=lucid.bfloat16`` for reduced precision there, as the
+        reference framework's CPU autocast does by default.  Not every CPU
+        op has a bfloat16 kernel yet.
     enabled : bool, optional
         When ``False`` the context is a no-op — useful for ablation /
         A/B comparing AMP on vs off without changing call sites.

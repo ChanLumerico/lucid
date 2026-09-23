@@ -16,6 +16,8 @@
 #include "../../kernel/NaryKernel.h"
 #include "../ufunc/Astype.h"  // astype_op
 #include "../utils/Layout.h"  // broadcast_to_op
+#include "Imag.h"
+#include "Real.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -77,6 +79,10 @@ const OpSchema ComplexBackward::schema_v1{"complex", 1, AmpPolicy::KeepInput, tr
 std::vector<Storage> ComplexBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     return {be.complex_real(grad_out, shape_), be.complex_imag(grad_out, shape_)};
+}
+
+std::vector<TensorImplPtr> ComplexBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    return {real_op(grad_out), imag_op(grad_out)};
 }
 
 LUCID_REGISTER_OP(ComplexBackward)

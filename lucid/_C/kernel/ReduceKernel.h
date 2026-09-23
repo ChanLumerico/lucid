@@ -171,9 +171,9 @@ concept HasReduceDispatch =
 // 2. GPU + :concept:`HasReduceGpuKernel` — call ``Derived::gpu_kernel``.
 // 3. CPU — call ``Derived::cpu_kernel``.
 //
-// **Contiguity.**  CPU inputs are routed through :func:`contiguous_op`
-// before dispatch; GPU inputs are passed through as MLX handles strides
-// natively.
+// **Contiguity.**  A strided CPU input needs no copy first: its
+// ``storage()`` is packed.  GPU inputs are passed through as MLX handles
+// strides natively.
 //
 // See Also
 // --------
@@ -336,8 +336,8 @@ public:
 // --------
 // 1. Validate ``a`` is non-null.
 // 2. Enter the :class:`SchemaGuard` to resolve the AMP-effective dtype.
-// 3. On CPU, route through :func:`contiguous_op` so the kernel sees a
-//    stride-1 layout; on GPU, pass through unchanged.
+// 3. On CPU, read the input through ``storage()``, which packs a strided
+//    view; on GPU, pass through unchanged.
 // 4. Cast inputs to ``eff_dt`` via ``maybe_cast_for_kernel`` when AMP
 //    requires it.
 // 5. Normalise the user axis list and compute the reduced output shape
@@ -362,10 +362,8 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
     SchemaGuard sg{Derived::schema_v1, a->dtype(), a->device()};
     const Dtype eff_dt = sg.effective_dtype();
 
-    // Laid out densely first unless it already is — see UnaryKernel.
-    const TensorImplPtr a_contig =
-        (a->device() == Device::CPU && !a->is_dense()) ? contiguous_op(a) : a;
-    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a_contig, eff_dt);
+    // A strided CPU input needs no copy here — see UnaryKernel.
+    const TensorImplPtr a_ptr = detail::maybe_cast_for_kernel(a, eff_dt);
 
     // normalize_axes converts negative indices and deduplicates; the
     // result is a sorted, non-negative axis list suitable for the kernels.

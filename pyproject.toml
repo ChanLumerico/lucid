@@ -11,16 +11,17 @@ requires = [
     "ninja>=1.11",
     # setup.py imports mlx at build time to detect Metal sources, so it
     # must be available in the isolated build environment.
-    # 0.31 is the first release that ships native macOS 26 wheels
-    # (mlx-0.31.x-...-macosx_26_0_arm64.whl + mlx-metal split package),
-    # matching our MACOSX_DEPLOYMENT_TARGET=26.0 build target.
+    # Every mlx-metal release from 0.31 on ships macOS 14, 15 and 26 builds
+    # with one ABI (same headers, same exported symbols).  The engine targets
+    # 15.0 (setup.py), so one macosx_15_0_arm64 wheel links against whichever
+    # build pip picks for the machine.
     "mlx>=0.31; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lucid-dl"
-version = "3.12.0"
+version = "3.14.0"
 description = "Apple Silicon ML framework"
 readme = "README.md"
 license = "MIT"

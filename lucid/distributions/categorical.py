@@ -13,7 +13,12 @@ from lucid.distributions.constraints import (
 from lucid.distributions.distribution import Distribution
 
 
-from lucid.distributions._util import _as_tensor, _broadcast_shapes
+from lucid.distributions._util import (
+    _as_tensor,
+    _broadcast_shapes,
+    _clamp_probs,
+    _lazy_param,
+)
 
 
 def _normalize_probs(probs: Tensor) -> Tensor:
@@ -45,11 +50,11 @@ class Categorical(Distribution):
     Attributes
     ----------
     probs : Tensor
-        Normalised probability vector (shape ``(..., K)``; present when
-        constructed with ``probs``).
+        Normalised probability vector of shape ``(..., K)`` — stored when
+        given, otherwise ``softmax(logits)``, derived on access.
     logits : Tensor
-        Unnormalised log-probability vector (shape ``(..., K)``; present when
-        constructed with ``logits``).
+        Log-probability vector of shape ``(..., K)`` — as given
+        (unnormalised), otherwise ``log(probs)``, derived on access.
 
     Notes
     -----
@@ -143,6 +148,23 @@ class Categorical(Distribution):
             event_shape=(),
             validate_args=validate_args,
         )
+
+    @_lazy_param
+    def probs(self) -> Tensor:
+        """Normalised probabilities — as given, or ``softmax(logits)``."""
+        from lucid.nn.functional.activations import softmax
+
+        return softmax(self.logits, dim=-1)
+
+    @_lazy_param
+    def logits(self) -> Tensor:
+        """Log-probabilities — as given, or derived from ``probs`` on access.
+
+        Derived as ``log(probs)`` with ``probs`` clamped one epsilon inside
+        ``[0, 1]``, as the reference framework derives it, so a category of
+        probability zero gets a large negative logit rather than ``-inf``.
+        """
+        return _clamp_probs(self.probs).log()
 
     @override
     @property
@@ -353,10 +375,11 @@ class OneHotCategorical(Distribution):
     Attributes
     ----------
     probs : Tensor
-        Normalised probability vector (present when constructed with ``probs``).
+        Normalised probability vector — stored when given, otherwise derived
+        from ``logits`` on access.
     logits : Tensor
-        Unnormalised log-probability vector (present when constructed with
-        ``logits``).
+        Log-probability vector — as given, otherwise derived from ``probs``
+        on access.
 
     Notes
     -----
@@ -428,6 +451,16 @@ class OneHotCategorical(Distribution):
             event_shape=(self._cat._num_events,),
             validate_args=validate_args,
         )
+
+    @_lazy_param
+    def probs(self) -> Tensor:
+        """Normalised probabilities, from the underlying :class:`Categorical`."""
+        return self._cat.probs
+
+    @_lazy_param
+    def logits(self) -> Tensor:
+        """Log-probabilities, from the underlying :class:`Categorical`."""
+        return self._cat.logits
 
     @override
     @property

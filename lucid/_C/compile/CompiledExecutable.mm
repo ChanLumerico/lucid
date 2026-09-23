@@ -1006,11 +1006,13 @@ CompiledExecutable* load_executable(const std::string& path, std::string* error_
         };
         const bool half = std::any_of(input_dt_raw.begin(), input_dt_raw.end(), is_half) ||
                           std::any_of(output_dt_raw.begin(), output_dt_raw.end(), is_half);
-        MPSGraphCompilationDescriptor* cdesc = nil;
-        if (::lucid::Determinism::is_enabled() || half) {
-            cdesc = [[MPSGraphCompilationDescriptor alloc] init];
+        // Always a descriptor, never nil: macOS 15's MPSGraph asserts on a nil
+        // one here (``-[MPSGraphExecutable commonPreInitWithDescriptor:]``)
+        // and takes the process down.  Later releases read nil as the
+        // defaults, which a fresh descriptor also holds.
+        MPSGraphCompilationDescriptor* cdesc = [[MPSGraphCompilationDescriptor alloc] init];
+        if (::lucid::Determinism::is_enabled() || half)
             cdesc.optimizationLevel = MPSGraphOptimizationLevel0;
-        }
         MPSGraphExecutable* exec = [[MPSGraphExecutable alloc] initWithMPSGraphPackageAtURL:url
                                                                       compilationDescriptor:cdesc];
         if (exec == nil)

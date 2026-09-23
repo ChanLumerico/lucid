@@ -15,6 +15,180 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Performance
+
+- fingerprint model summaries by content, not mtime
+
+### Added
+
+- three instruments for the axis weight parity cannot see
+
+### Fixed
+
+- VideoClassification stole the neighbouring registration
+- the video crop places an odd margin down, not to nearest
+- the dead-config-field check was wrong about ten of seventeen
+- integer // never reached the graph, and would have floored wrong
+
+---
+
+## [3.14.0] — 2026-09-22
+
+A minor release adding the V-JEPA 2 family and its action-conditioned
+world model, both checked against the released implementations with the
+published weights rather than against random tensors. The four V-JEPA 2
+backbones reproduce their sources to between 1.7e-5 and 1.9e-4 relative;
+V-JEPA 2-AC, which has no port in any reference package, was compared by
+running the official repository's own code against its published
+checkpoint — 8.5e-5 on the encoder and 4.5e-5 on the predictor.
+
+- **V-JEPA 2** (Assran et al., arXiv:2506.09985) — the paper's four
+  checkpoints at `vjepa2_vit_large` / `_huge` / `_giant` / `_giant_384`,
+  each also under the attentive probe the paper evaluates through. Three
+  self-attention blocks and a cross-attention that carries no output
+  projection, matching the released classifier tensor for tensor. Weights
+  are re-hosted as SafeTensors; the probe's own head is not published and
+  `pretrained=True` refuses rather than returning an untrained one.
+- **V-JEPA 2-AC** — the action-conditioned latent world model, one
+  released ViT-g variant under `world-modeling`. One action-model step is
+  one frame: the encoder's three-dimensional patch embedding wants two, so
+  a frame is repeated to fill the tubelet, as the released training loop
+  does. A clip of `T` frames therefore takes `T - 1` conditioning rows and
+  is scored against the *next* frame's latents, both sides
+  layer-normalised.
+- **Three-axis rotary attention** reproduces the released layout, block
+  repeat and all — the upstream source marks that repeat as a bug and
+  keeps it, because the published weights were trained through it. Parity
+  tests pin both directions: ours matches the released rotation and
+  differs from the corrected one.
+- **Published checkpoints are compared against their sources.**
+  `tools.check_pretrained_parity` gained a V-JEPA 2 loader that compares
+  the encoder and the masked predictor. The two ViT-g entries sit just
+  over the tool's global 1e-4 bound; the gap grows monotonically with
+  depth and token count and `top1` agrees throughout, so the bound was
+  left where it is rather than widened.
+
+### Tooling
+
+- Add `python -m tools.doctor` to diagnose checkout dependencies and native import failures without importing Lucid in the diagnostic process.
+- Add a JSON support manifest separating registrations from scoped audit and checkpoint evidence.
+- Complete source-output comparisons for all 151 discovered default pretrained factory checkpoints; retain per-entry scope and earlier failure provenance. This does not cover every weight enum variant, generation sampling or dataset metrics.
+- Pretrained parity rejects non-finite comparisons, bounds all loaders by parameter count and reports unverified entries explicitly.
+- Isolated checkpoint checks preserve authentication paths without copying credentials; reference loads disable remote auto-conversion and cap inherited socket timeouts.
+- Strengthen checkpoint continuation, pretrained intermediate-activation and small-batch quantized GEMM checks.
+- Fail CI when required audit instruments crash; expose pending model families as explicit skips in file-sharded runs.
+- Benchmark CSVs include measurement metadata; failed rows fail the command and training baselines compare like-for-like.
+- Link public API registrations to source, typing, documentation, static test references and scoped audit findings; add the missing complex128 stub declaration.
+- Exercise every audit axis with negative controls, isolating the fatal smoke probe in a child process.
+- Share materialized end-to-end benchmark timing; validate training updates before reporting speed and preserve integer inputs during precision sweeps.
+- Apply perf thresholds with either benchmark provider, materialize returned gradients, and avoid speedup claims across different sampling protocols.
+
+### Fixed
+
+- Generated model cards call the model before reading its output, and a
+  world model's card shows the conditioning its forward actually takes
+  instead of an image classifier's call.
+- A converted checkpoint's card states what was verified — key set,
+  shapes and a strict load — rather than claiming a numerical comparison
+  that only some families have a reference for.
+- Register the existing Stable Diffusion generation and four CLIP zero-shot wrappers' pretrained weights for discovery.
+- Bound stalled checkpoint reads while preserving checksum verification and atomic cache writes.
+- Correct `from_numpy`'s owned-copy documentation and reduce the executable-docstring failure baseline to zero.
+- Published YOLOv2 checkpoints use the original passthrough layout; existing user configurations retain their previous layout.
+- Shared BatchNorm calls chain their running-stat updates inside compiled steps instead of overwriting the first update.
+- Explicit complex128 tensor construction preserves its dtype, imaginary components and double precision.
+- Layout auditing preserves dtype and imaginary values, checks nonzero storage offsets, and compares filtered runs only against their requested coverage scope.
+- An engine ABI mismatch now includes the project-environment rebuild command and diagnostic entry point.
+- CPU complex128 arithmetic, casts, broadcast, constants and reduction paths retain double-precision real and imaginary lanes.
+- Complex projections support higher derivatives; multiplication and division VJPs conjugate their Jacobians on CPU and Metal.
+- NumPy conversion avoids an unused byte cast and its lossy-conversion warnings; complex truth casts include both lanes and module dtype conversion includes complex128.
+- Compiled training advances BatchNorm batch counters for observed layers on every successful step.
+
+
+### Added
+
+- diagonal and unfold are CPU views
+- public broadcast_to and expand_as are CPU views
+- positive-step slices are CPU views
+- add as_strided
+- add Genie (world-modeling) — 4 factories
+- add I-JEPA (self-supervised pretraining) — 8 factories
+- add V-JEPA (video feature prediction) — 6 factories
+- add V-JEPA 2 (video representation) — 8 factories, four with published weights
+- add V-JEPA 2-AC (action-conditioned world modeling) — 2 factories
+
+---
+
+## [3.13.0] — 2026-09-17
+
+A minor release in which the CPU view work of 3.12.0 reaches transposes
+and slices along any axis: `x.T`, `x[:, 1:3]`, `split` along a later axis
+and `expand` share their input's buffer, and every op reads a strided
+view correctly. Alongside it the wheel's floor moves down — one wheel now
+covers macOS 15 and every later release — and a batch of silently wrong
+results is fixed.
+
+- **CPU transposes and slices are views.** `permute`, `transpose`, `.T`,
+  `.mT`, a slice along any axis (`x[:, 1:3]`, `x[:, i]`), `split` /
+  `chunk` / `unbind` / `narrow` on a later axis, and `expand` return
+  views of their input's buffer. A write through one reaches the tensor
+  it came from, and autograd follows a recorded write through it
+  (CopySlices splices by element positions as well as runs). `expand`'s
+  view repeats elements, so a write through it is refused. Metal keeps
+  copy semantics, and `diagonal`, `unfold`, `broadcast_to` and step
+  slices still copy.
+- **Every op reads a strided view correctly.** `TensorImpl::storage()`
+  hands a non-dense CPU tensor a packed copy of its elements, cached
+  against its version; the audit's layout axis found about a hundred ops
+  reading the wrong bytes before that, and none after.
+- **macOS 15 is the floor.** The wheel is built for macOS 15.0 and
+  installs on 15 and later. CI builds and tests on a macOS 15 runner on
+  every push, and a release publishes only once the built wheel has been
+  installed and exercised there.
+- **`arange` of integers gives int64**, as the reference does, and ranges
+  past 2^53 are built exactly.
+- **Mixed int and float operands meet at their common dtype** in `cat`,
+  `stack`, `where`, `clamp`, `outer` and `einsum` instead of raising —
+  and `clamp(int_t, 0.5, 2.5)` no longer answers in int64.
+- **`lucid.tensor(t)` copies** and honours `dtype=` and `device=`,
+  `F.one_hot` returns int64, and the distributions derive `probs` from
+  `logits` and back.
+- **float64 `erfc` keeps double precision**, and `erfc` holds its
+  relative precision in the tail.
+- **CPU complex arithmetic works**: `+`, `-`, `/`, broadcasting, and
+  casts between real and complex.
+
+### Changed
+
+- The engine ABI version is 12. `TensorImpl` gained a packed-storage
+  cache, so an extension built against 3.12.0's headers refuses to load
+  instead of misreading it.
+- **The minimum macOS is 15 Sequoia** (was 26 Tahoe). The wheel is tagged
+  `macosx_15_0_arm64`; MLX ships macOS 14, 15 and 26 builds of one ABI,
+  and pip picks the one for the machine.
+- On macOS 26.0 and 26.1, MLX 0.32's macOS 26 build is compiled for 26.2.
+  When it fails to load, the import error says so and points at a macOS
+  update or `mlx<0.32`.
+- `x.T.is_contiguous()` is `False` on the CPU, and the docstrings that
+  called these ops copies now describe the views.
+
+### Fixed
+
+- complex arithmetic, broadcasting and casts on the CPU
+- erfc keeps its relative precision in the tail
+- integer mean, norm and matmul stop truncating
+- tensor() copies, one_hot is int64, and the distributions derive
+- mixed int and float operands meet at the common dtype
+- erfc in float64 keeps double precision
+- load_compiled no longer aborts on macOS 15
+
+### Added
+
+- arange of integers is int64, as the reference has it
+- CPU transposes are views, and strided views read and write
+- CPU slices on any axis, split and expand are views
+
 ---
 
 ## [3.12.0] — 2026-09-15
@@ -3996,7 +4170,9 @@ across every public surface.
 
 ---
 
-[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.11.1...HEAD
+[Unreleased]: https://github.com/ChanLumerico/lucid/compare/v3.13.0...HEAD
+[3.13.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.13.0
+[3.12.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.12.0
 [3.11.1]: https://github.com/ChanLumerico/lucid/releases/tag/v3.11.1
 [3.11.0]: https://github.com/ChanLumerico/lucid/releases/tag/v3.11.0
 [3.10.2]: https://github.com/ChanLumerico/lucid/releases/tag/v3.10.2

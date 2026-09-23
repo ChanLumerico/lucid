@@ -301,18 +301,17 @@ def test_clip_grad_norm_reports_the_norm_before_clipping():
     assert np.isclose(float(reported.item()), before, rtol=1e-4)
 
 
-def test_the_reported_norm_is_rank_one_where_the_reference_is_a_scalar():
-    """Recorded, not endorsed.
+def test_the_reported_norm_is_a_scalar_as_in_the_reference():
+    """``clip_grad_norm_`` and ``get_total_norm`` hand back a 0-d tensor.
 
-    ``clip_grad_norm_`` and ``get_total_norm`` hand back a ``(1,)``
-    tensor; the reference hands back a 0-d one.  The number is the same
-    and ``.item()`` / ``float()`` work on both, so this only bites code
-    that stacks the results or checks ``norm.shape == ()``.  Pinned so a
-    later change to the shape is a deliberate one.
+    They used to hand back a ``(1,)`` one, pinned here as recorded rather
+    than endorsed: the number was the same and ``.item()`` worked on both,
+    but code that stacks the results or checks ``norm.shape == ()`` saw
+    the stray axis.  Both now match their docstrings and the reference.
     """
     layer = _with_gradients(scale=100.0)
-    assert U.clip_grad_norm_(layer.parameters(), max_norm=0.1).shape == (1,)
-    assert U.get_total_norm([p.grad for p in layer.parameters()]).shape == (1,)
+    assert U.clip_grad_norm_(layer.parameters(), max_norm=0.1).shape == ()
+    assert U.get_total_norm([p.grad for p in layer.parameters()]).shape == ()
 
 
 def test_clipping_preserves_the_direction():

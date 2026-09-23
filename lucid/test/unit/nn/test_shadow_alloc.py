@@ -28,6 +28,24 @@ def test_it_is_inactive_outside_and_active_inside():
     assert not is_active()
 
 
+def test_a_phantom_arange_has_the_real_length_dtype_and_device():
+    """The engine takes ``arange(start, end, step, dtype, device)``.
+
+    The phantom read dtype and device two places too far along, so every
+    one claimed float32 on the CPU; and its length formula was only right
+    for whole steps.
+    """
+    with shadow_alloc():
+        quarters = lucid.arange(0, 1, 0.25)
+        ids = lucid.arange(5, device="metal")
+        empty = lucid.arange(3, 0)
+    assert quarters.shape == (4,)
+    assert ids.shape == (5,)
+    assert ids.dtype == lucid.int64
+    assert ids.device.type == "metal"
+    assert empty.shape == (0,)
+
+
 def test_the_patch_is_undone_even_when_the_body_raises():
     """A leaked patch would make every later allocation phantom, and the
     failure would surface far from here."""

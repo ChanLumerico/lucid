@@ -49,6 +49,10 @@ std::vector<Storage> ConjBackward::apply(Storage grad_out) {
     return {be.complex_conj(grad_out, shape_, dtype_)};
 }
 
+std::vector<TensorImplPtr> ConjBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    return {conj_op(grad_out)};
+}
+
 LUCID_REGISTER_OP(ConjBackward)
 
 }  // namespace lucid

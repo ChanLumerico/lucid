@@ -105,10 +105,20 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
         scope.set_attr("permutation", std::move(perm64));
     }
 
-    Storage out_storage = backend::Dispatcher::for_device(a->device())
-                              .permute(a->storage(), a->shape(), perm, a->dtype());
-    TensorImplPtr out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
-                                                     a->device(), false);
+    // On the CPU the result is a view: the same buffer, the axes' strides
+    // reordered, so a write through either side reaches the other.  Every
+    // consumer reads a strided CPU tensor correctly (``TensorImpl::storage``
+    // packs it), and an in-place write follows its strides.  Metal keeps
+    // copy semantics — its arrays cannot see one another's writes.
+    TensorImplPtr out;
+    if (storage_is_cpu(a->raw_storage())) {
+        out = TensorImpl::make_view(a, out_shape, out_stride, 0);
+    } else {
+        Storage out_storage = backend::Dispatcher::for_device(a->device())
+                                  .permute(a->storage(), a->shape(), perm, a->dtype());
+        out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, a->dtype(),
+                                           a->device(), false);
+    }
 
     auto bwd = std::make_shared<PermuteBackward>();
     bwd->perm_ = perm;

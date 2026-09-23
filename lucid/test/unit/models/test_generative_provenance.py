@@ -45,6 +45,7 @@ import pytest
 from lucid.models.generative.dreamer import DreamerConfig
 from lucid.models.generative.dreamer_v2 import DreamerV2Config
 from lucid.models.generative.dreamer_v3 import DreamerV3Config
+from lucid.models.generative.genie import GenieConfig
 from lucid.models.generative.planet import PlaNetConfig
 from lucid.models.generative.score_sde import ScoreSDEConfig
 
@@ -475,12 +476,105 @@ SCORE_SDE: dict[str, tuple[Any, str]] = {
 }
 
 
+# Genie's paper tabulates layers, widths, heads and query/key sizes, and
+# leaves the rest unstated.  The ``lucid:`` entries are those gaps.
+_GENIE_UNSTATED_HEAD = (
+    "lucid: the paper gives no query/key size for the latent action model "
+    "(Table 5 lists layers, d_model and heads only), so dim // heads"
+)
+GENIE: dict[str, tuple[Any, str]] = {
+    "sample_size": (
+        (90, 160),
+        'paper: Section 3, Datasets: "16s video clips at 10FPS, with 160x90 resolution"',
+    ),
+    "in_channels": (3, _RGB),
+    "out_channels": (3, _RGB),
+    "act_fn": (
+        "gelu",
+        "lucid: not stated — GELU, as in the ViT encoders the ST-ViViT "
+        "tokenizer is built from",
+    ),
+    "num_frames": (
+        16,
+        'paper: Section 3, "For all modelling components we use a sequence '
+        'length of 16 frames with an FPS of 10"',
+    ),
+    "mlp_ratio": (
+        4.0,
+        "lucid: not stated — the transformer convention, and what Jasmine "
+        "(arXiv 2510.27002, ffn_dim 2048 at d_model 512) and 1X's ST "
+        "transformer (mlp_ratio 4.0) both use; Jafar uses 1x.  No ratio "
+        "reproduces the paper's parameter counts: the latent action model's "
+        "attention alone exceeds its 300M, and the tokenizer and dynamics "
+        "model would need ratios of 0.10 and 0.41",
+    ),
+    "commitment_cost": (
+        0.25,
+        "lucid: not stated — the commitment weight of the VQ-VAE paper the "
+        "tokenizer's objective is named after",
+    ),
+    "code_reset_threshold": (
+        0.1,
+        "lucid: not stated — a codebook of eight entries collapses to a few "
+        "live codes and the loss does not show it.  Jafar resets dead codes "
+        "on a schedule (vq_reset_thresh); this reads the same failure as a "
+        "share of the uniform one, so it does not depend on codebook size",
+    ),
+    "tokenizer_patch_size": (4, "paper: Table 7, patch size 4"),
+    "num_codes": (1024, "paper: Table 7, num codes 1024"),
+    "code_dim": (32, "paper: Table 7, latent dim 32"),
+    "tokenizer_encoder_layers": (12, "paper: Table 7, encoder num layers 12"),
+    "tokenizer_encoder_dim": (512, "paper: Table 7, encoder d model 512"),
+    "tokenizer_encoder_heads": (8, "paper: Table 7, encoder num heads 8"),
+    "tokenizer_encoder_head_dim": (64, "paper: Table 7, encoder k/q size 64"),
+    "tokenizer_decoder_layers": (20, "paper: Table 7, decoder num layers 20"),
+    "tokenizer_decoder_dim": (1024, "paper: Table 7, decoder d model 1024"),
+    "tokenizer_decoder_heads": (16, "paper: Table 7, decoder num heads 16"),
+    "tokenizer_decoder_head_dim": (64, "paper: Table 7, decoder k/q size 64"),
+    "action_patch_size": (16, "paper: Table 5, patch size 16"),
+    "num_latent_actions": (8, "paper: Table 5, num codes 8"),
+    "action_dim": (32, "paper: Table 5, latent dim 32"),
+    "action_encoder_layers": (20, "paper: Table 5, encoder num layers 20"),
+    "action_encoder_dim": (1024, "paper: Table 5, encoder d model 1024"),
+    "action_encoder_heads": (16, "paper: Table 5, encoder num heads 16"),
+    "action_encoder_head_dim": (None, _GENIE_UNSTATED_HEAD),
+    "action_decoder_layers": (20, "paper: Table 5, decoder num layers 20"),
+    "action_decoder_dim": (1024, "paper: Table 5, decoder d model 1024"),
+    "action_decoder_heads": (16, "paper: Table 5, decoder num heads 16"),
+    "action_decoder_head_dim": (None, _GENIE_UNSTATED_HEAD),
+    "dynamics_layers": (48, "paper: Table 12, num layers 48"),
+    "dynamics_dim": (5120, "paper: Table 12, d model 5120"),
+    "dynamics_heads": (36, "paper: Table 12, num heads 36"),
+    "dynamics_head_dim": (128, "paper: Table 12, k/q size 128"),
+    "dynamics_qk_norm": (
+        True,
+        'paper: Section 3, "we employ bfloat16 and QK norm for training our '
+        'dynamics model"',
+    ),
+    "mask_ratio_min": (
+        0.5,
+        'paper: Section 2.1, "a Bernoulli distribution masking rate sampled '
+        'uniformly between 0.5 and 1"',
+    ),
+    "mask_ratio_max": (1.0, "paper: Section 2.1, the upper end of that range, 1"),
+    "maskgit_steps": (
+        25,
+        'paper: Section 3, "we perform 25 MaskGIT steps for the sampling of each frame"',
+    ),
+    "temperature": (
+        2.0,
+        'paper: Section 3, "with a temperature of 2 using random sampling"',
+    ),
+}
+
+
 _FAMILIES = [
     ("planet", PlaNetConfig, PLANET),
     ("dreamer", DreamerConfig, DREAMER),
     ("dreamer_v2", DreamerV2Config, DREAMER_V2),
     ("dreamer_v3", DreamerV3Config, DREAMER_V3),
     ("score_sde", ScoreSDEConfig, SCORE_SDE),
+    ("genie", GenieConfig, GENIE),
 ]
 _KINDS = ("paper:", "code:", "lucid:")
 _LOCATORS = (

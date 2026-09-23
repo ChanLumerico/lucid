@@ -10,9 +10,9 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 BUILD_DIR="${BUILD_DIR:-build/compile_commands}"
 LUCID_BUILD_MODE="${LUCID_BUILD_MODE:-release}"
 # Match the canonical build target (setup.py / ci_publish.sh / CI all use
-# 26.0) so the generated compile_commands.json — and thus clang-tidy / IDE
+# 15.0) so the generated compile_commands.json — and thus clang-tidy / IDE
 # diagnostics — reflect the same SDK the real build uses.
-MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
+MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.0}"
 SDKROOT="$(xcrun --show-sdk-path)"
 
 find_cmake() {

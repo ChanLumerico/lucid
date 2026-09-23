@@ -165,6 +165,16 @@ from lucid.models.generative.diamond import (
     DIAMONDConfig, DIAMONDModel, DIAMONDForWorldModeling,
     diamond, diamond_csgo, diamond_world_model,
 )
+# 2024 — Genie (Bruce, Dennis, Edwards, Parker-Holder, Shi, Hughes, Lai, et al.)
+from lucid.models.generative.genie import (
+    GenieConfig, GenieModel, GenieForWorldModeling,
+    genie, genie_world_model, genie_coinrun, genie_coinrun_world_model,
+)
+# 2025 — V-JEPA 2-AC (Assran et al.)
+from lucid.models.generative.vjepa2_ac import (
+    VJEPA2ACConfig, VJEPA2ACModel, VJEPA2ACForWorldModeling,
+    VJEPA2ACOutput, vjepa2_ac_vit_giant, vjepa2_ac_vit_giant_world_model,
+)
 # 2025 — MeanFlow (Geng, Deng, Bai, Kolter & He)
 from lucid.models.generative.mean_flow import (
     MeanFlowConfig, MeanFlowModel, MeanFlowForImageGeneration,
@@ -451,6 +461,29 @@ from lucid.models.vision.inception_next import (
     inception_next_small, inception_next_small_cls,
     inception_next_base, inception_next_base_cls,
 )
+# 2023 — I-JEPA (Assran, Duval, Misra, Bojanowski, Vincent, Rabbat, LeCun & Ballas)
+from lucid.models.vision.ijepa import (
+    IJEPAConfig, IJEPAModel, IJEPAForImageClassification,
+    ijepa_base_16, ijepa_base_16_cls,
+    ijepa_large_16, ijepa_large_16_cls,
+    ijepa_huge_14, ijepa_huge_14_cls,
+    ijepa_huge_16_448, ijepa_huge_16_448_cls,
+)
+# 2024 — V-JEPA (Bardes, Garrido, Ponce, Chen, Rabbat, LeCun, Assran & Ballas)
+from lucid.models.vision.vjepa import (
+    VJEPAConfig, VJEPAModel, VJEPAForVideoClassification,
+    vjepa_large_16, vjepa_large_16_cls,
+    vjepa_huge_16, vjepa_huge_16_cls,
+    vjepa_huge_16_384, vjepa_huge_16_384_cls,
+)
+# 2025 — V-JEPA 2 (Assran et al.)
+from lucid.models.vision.vjepa2 import (
+    VJEPA2Config, VJEPA2Model, VJEPA2ForVideoClassification, VJEPA2Output,
+    vjepa2_vit_large, vjepa2_vit_large_cls,
+    vjepa2_vit_huge, vjepa2_vit_huge_cls,
+    vjepa2_vit_giant, vjepa2_vit_giant_cls,
+    vjepa2_vit_giant_384, vjepa2_vit_giant_384_cls,
+)
 # 2014 — R-CNN (Girshick et al.)
 from lucid.models.vision.rcnn import (
     RCNNConfig, RCNNForObjectDetection,
@@ -688,6 +721,23 @@ __all__ = [    # ── Infrastructure ─────────────�
     "inception_next_tiny", "inception_next_tiny_cls",
     "inception_next_small", "inception_next_small_cls",
     "inception_next_base", "inception_next_base_cls",
+    # ── Vision (2023) I-JEPA ─────────────────────────────────────────────────
+    "IJEPAConfig", "IJEPAModel", "IJEPAForImageClassification",
+    "ijepa_base_16", "ijepa_base_16_cls",
+    "ijepa_large_16", "ijepa_large_16_cls",
+    "ijepa_huge_14", "ijepa_huge_14_cls",
+    "ijepa_huge_16_448", "ijepa_huge_16_448_cls",
+    # ── Vision (2024) V-JEPA ─────────────────────────────────────────────────
+    "VJEPAConfig", "VJEPAModel", "VJEPAForVideoClassification",
+    "vjepa_large_16", "vjepa_large_16_cls",
+    "vjepa_huge_16", "vjepa_huge_16_cls",
+    "vjepa_huge_16_384", "vjepa_huge_16_384_cls",
+    # ── Vision (2025) V-JEPA 2 ───────────────────────────────────────────────
+    "VJEPA2Config", "VJEPA2Model", "VJEPA2ForVideoClassification", "VJEPA2Output",
+    "vjepa2_vit_large", "vjepa2_vit_large_cls",
+    "vjepa2_vit_huge", "vjepa2_vit_huge_cls",
+    "vjepa2_vit_giant", "vjepa2_vit_giant_cls",
+    "vjepa2_vit_giant_384", "vjepa2_vit_giant_384_cls",
     # ── Vision (2015) FCN ────────────────────────────────────────────────────
     "FCNConfig", "FCNForSemanticSegmentation",
     "fcn_resnet50", "fcn_resnet101",
@@ -857,6 +907,12 @@ __all__ = [    # ── Infrastructure ─────────────�
     # ── Generative (2024) DIAMOND ─────────────────────────────────────────────
     "DIAMONDConfig", "DIAMONDModel", "DIAMONDForWorldModeling",
     "diamond", "diamond_world_model", "diamond_csgo",
+    # ── Generative (2024) Genie ───────────────────────────────────────────────
+    "GenieConfig", "GenieModel", "GenieForWorldModeling",
+    "genie", "genie_world_model", "genie_coinrun", "genie_coinrun_world_model",
+    # ── Generative (2025) V-JEPA 2-AC ─────────────────────────────────────────
+    "VJEPA2ACConfig", "VJEPA2ACModel", "VJEPA2ACForWorldModeling", "VJEPA2ACOutput",
+    "vjepa2_ac_vit_giant", "vjepa2_ac_vit_giant_world_model",
     # ── Generative (2025) MeanFlow ────────────────────────────────────────────
     "MeanFlowConfig", "MeanFlowModel", "MeanFlowForImageGeneration",
     "mean_flow_base_4", "mean_flow_base_2", "mean_flow_medium_2",

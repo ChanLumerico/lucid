@@ -17,6 +17,8 @@ from typing import Any
 
 import pytest
 
+from tools import _bench_timing
+
 
 @functools.lru_cache(maxsize=1)
 def _benchmark_available() -> bool:
@@ -31,23 +33,30 @@ def _benchmark_available() -> bool:
 def bench(request: pytest.FixtureRequest) -> Callable[..., Any]:
     """Return a ``benchmark``-compatible callable.
 
-    When ``pytest-benchmark`` is installed we forward to its
-    ``benchmark`` fixture; otherwise we fall back to a tiny inline
-    runner that just calls the function once and records elapsed time
-    so the test still asserts behaviour without skipping the suite.
+    Both providers materialize returned Lucid outputs and synchronize. Callers
+    must return outputs and gradients they want timed, not discard lazy work.
+    ``last_elapsed`` is the plugin median, or a one-shot fallback/disabled-plugin
+    observation. These are host-observed end-to-end timings, not kernel timings.
     """
-    if _benchmark_available():
-        return request.getfixturevalue("benchmark")
+    benchmark = request.getfixturevalue("benchmark") if _benchmark_available() else None
 
-    def _fallback(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        t0 = time.perf_counter()
-        out = fn(*args, **kwargs)
-        elapsed = time.perf_counter() - t0
-        # Stash the timing so tests can assert on it if they want.
-        _fallback.last_elapsed = elapsed  # type: ignore[attr-defined]
+    def measured(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        def observed() -> Any:
+            _bench_timing.lucid.metal.synchronize()
+            t0 = time.perf_counter()
+            out = fn(*args, **kwargs)
+            _bench_timing.materialize(out)
+            _bench_timing.lucid.metal.synchronize()
+            measured.last_elapsed = time.perf_counter() - t0  # type: ignore[attr-defined]
+            return out
+
+        out = benchmark(observed) if benchmark is not None else observed()
+        stats = getattr(benchmark, "stats", None)
+        if stats:
+            measured.last_elapsed = float(stats["median"])  # type: ignore[attr-defined]
         return out
 
-    return _fallback
+    return measured
 
 
 def load_thresholds(area_dir: Path) -> dict[str, float]:

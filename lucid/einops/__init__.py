@@ -28,6 +28,7 @@ Wraps the C++ engine's einops module. Supports patterns like
 
 from lucid._C.engine import einops as _C_einops
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._adapters import _promote_impls
 
 
 def rearrange(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
@@ -208,7 +209,11 @@ def einsum(equation: str, *operands: Tensor) -> Tensor:
     >>> lucid.einops.einsum("ij,jk->ik", a, b).shape
     (2, 4)
     """
-    impl_list = [_unwrap(t) for t in operands]
+    # The engine contracts operands of one dtype only, so an integer operand
+    # beside a float one raised ``DtypeMismatch``.  They meet at their common
+    # dtype first, as in ``a * b``; all-integer operands are left as they
+    # are and keep the exact integer path.
+    impl_list = _promote_impls([_unwrap(t) for t in operands])
     return _wrap(_C_einops.einsum(equation, impl_list))  # type: ignore[arg-type]
 
 

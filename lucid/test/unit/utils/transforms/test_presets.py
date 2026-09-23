@@ -1,6 +1,6 @@
 """Preset round-trip + multi-target contract tests.
 
-Each of the 5 registered presets is exercised on three axes:
+Each of the 6 registered presets is exercised on three axes:
 
 1. :meth:`to_dict` / :meth:`from_dict` is a fixed-point — repeat
    round-trips do not drift.
@@ -63,6 +63,14 @@ class TestRoundTrip:
             )
         )
 
+    def test_video_classification(self) -> None:
+        _round_trip(T.VideoClassification(crop_size=256))
+
+    def test_video_classification_high_resolution(self) -> None:
+        # The 384 tag derives resize 438; the round-trip must carry the
+        # derived value, not recompute it from a different rule.
+        _round_trip(T.VideoClassification(crop_size=384))
+
     def test_detection(self) -> None:
         _round_trip(T.Detection(max_size=1333, min_area=4.0, min_visibility=0.3))
 
@@ -85,6 +93,7 @@ class TestAutoResolver:
             "ImageClassificationAugment",
             "Pose",
             "Segmentation",
+            "VideoClassification",
         ]
 
     def test_unknown_preset_raises_keyerror(self) -> None:

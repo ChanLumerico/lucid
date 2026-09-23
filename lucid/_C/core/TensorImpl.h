@@ -178,8 +178,27 @@ public:
     // Storage accessors
     // ---------------------------------------------------------------------------
 
-    // Returns a const reference to the backing :class:`Storage` variant.
-    const Storage& storage() const noexcept { return storage_; }
+    // The backing :class:`Storage`, as a dense row-major buffer of exactly
+    // this tensor's elements.
+    //
+    // Nearly every op hands ``storage()`` straight to a backend kernel that
+    // reads it as dense, from its first byte.  A CPU view at an offset or
+    // with strides read the wrong bytes there — about a hundred ops did, and
+    // the audit's layout axis found them once it fed them real views.  So a
+    // non-dense CPU tensor answers with a packed copy of the elements it
+    // reads, rebuilt whenever its version moves (a write through it or
+    // through any member of its view family).  Every other tensor answers
+    // with its own buffer, as before.
+    //
+    // Code that walks the geometry itself — ``contiguous``, the NumPy bridge,
+    // ``data_ptr``, buffer-identity and overlap tests — reads
+    // :func:`raw_storage` instead.
+    const Storage& storage() const;
+
+    // The backing :class:`Storage` as it is, before any packing: the whole
+    // buffer a view reads into, to be walked with :func:`stride` and
+    // :func:`storage_offset`.
+    const Storage& raw_storage() const noexcept { return storage_; }
 
     // Returns a mutable reference to the backing :class:`Storage` variant.
     //
@@ -914,6 +933,12 @@ public:
 
 private:
     Storage storage_;
+    // The packed copy :func:`storage` hands out for a non-dense CPU view, and
+    // the version it was packed at.  Guarded by ``packed_mu_``: the reference
+    // it returns has to outlive the call, so the copy lives here.
+    mutable std::mutex packed_mu_;
+    mutable std::optional<Storage> packed_;
+    mutable std::int64_t packed_version_ = -1;
     // Byte offset of the first element from the start of storage_.
     std::size_t offset_ = 0;
     TensorMeta meta_;

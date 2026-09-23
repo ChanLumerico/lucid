@@ -125,13 +125,13 @@ class TransformsPreset(_NoParams, Transform[Empty], abc.ABC):
     --------
     The base of the ready-made pipelines — :class:`ImageClassification`,
     :class:`ImageClassificationAugment`, :class:`Detection`,
-    :class:`Segmentation`, :class:`Pose`, :class:`VideoClassification`.
-    Each is the preprocessing its task expects, so a caller reaches for
-    one rather than assembling resize, crop and normalise by hand:
+    :class:`Segmentation`, :class:`Pose`. Each is the preprocessing its
+    task expects, so a caller reaches for one rather than assembling
+    resize, crop and normalise by hand:
 
     >>> import lucid.utils.transforms as T
     >>> sorted(c.__name__ for c in T.TransformsPreset.__subclasses__())
-    ['Detection', 'ImageClassification', 'ImageClassificationAugment', 'Pose', 'Segmentation', 'VideoClassification']
+    ['Detection', 'ImageClassification', 'ImageClassificationAugment', 'Pose', 'Segmentation']
     """
 
     preset_type: ClassVar[str]

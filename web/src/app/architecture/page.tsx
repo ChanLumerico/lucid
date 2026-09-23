@@ -35,25 +35,27 @@ function DiagramCard({ diagram }: { diagram: Diagram }) {
         <div className="flex items-center gap-3">
           <span
             aria-hidden
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-lucid-primary/30 bg-lucid-primary/10 text-lucid-primary"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-lucid-primary/30 bg-lucid-primary/10 text-lucid-primary"
           >
-            <Icon className="h-4 w-4" />
+            <Icon className="h-[18px] w-[18px]" />
           </span>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-lucid-text-disabled">
+            <p className="text-xs font-semibold uppercase tracking-widest text-lucid-text-disabled">
               {diagram.ordinal} · {diagram.group}
             </p>
-            <h2 className="text-base font-semibold leading-snug text-lucid-text-high transition-colors group-hover:text-lucid-primary">
+            <h2 className="text-lg font-semibold leading-snug text-lucid-text-high transition-colors group-hover:text-lucid-primary">
               {diagram.title}
             </h2>
           </div>
         </div>
-        <p className="mt-3 flex-1 text-sm leading-relaxed text-lucid-text-mid">{diagram.summary}</p>
+        <p className="mt-3 flex-1 text-[15px] leading-relaxed text-lucid-text-mid">
+          {diagram.summary}
+        </p>
         <div className="mt-4 flex items-center justify-between gap-3 border-t border-lucid-border pt-3">
-          <Badge variant="secondary" className="font-mono text-[10px]">
+          <Badge variant="secondary" className="font-mono text-[11px]">
             {DIAGRAM_KIND_LABEL[diagram.kind]}
           </Badge>
-          <span className="truncate font-mono text-xs text-lucid-text-low">{diagram.extent}</span>
+          <span className="truncate font-mono text-[13px] text-lucid-text-low">{diagram.extent}</span>
         </div>
       </div>
     </Card>
@@ -69,11 +71,11 @@ export default function ArchitecturePage() {
         <div className="mx-auto max-w-5xl px-4 sm:px-6 py-12">
           <FadeIn>
             <header className="mb-10">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-lucid-text-disabled">
+              <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-lucid-text-disabled">
                 Architecture
               </p>
               <h1 className="text-3xl font-bold text-lucid-text-high">How Lucid works</h1>
-              <p className="mt-3 max-w-3xl text-base leading-relaxed text-lucid-text-mid">
+              <p className="mt-3 max-w-3xl text-lg leading-relaxed text-lucid-text-mid">
                 Six diagrams traced from the source rather than drawn from memory — how a call
                 reaches a kernel, what backward really does, where tensor bytes live. Each opens
                 in a full interactive viewer: guided chapters, search, focus, route tracing, and

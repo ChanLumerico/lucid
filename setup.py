@@ -84,12 +84,12 @@ class CMakeExtension(Extension):
 #
 # Python 3.14 from python.org is itself a `universal2` build, so
 # `sysconfig.get_platform()` returns `macosx-10.15-universal2` and
-# setuptools would tag our wheel `macosx_26_0_universal2`. That tag
+# setuptools would tag our wheel `macosx_15_0_universal2`. That tag
 # advertises x86_64 compatibility, but the Lucid engine is arm64-only
 # (`_enforce_apple_silicon_only()` aborts on anything else), so the
 # universal2 tag is actively wrong.
 #
-# The canonical fix is to set `_PYTHON_HOST_PLATFORM=macosx-26.0-arm64`
+# The canonical fix is to set `_PYTHON_HOST_PLATFORM=macosx-15.0-arm64`
 # in the build environment before invoking `python -m build`. This is
 # what cibuildwheel and modern release tooling do; the CI workflows
 # (`publish.yml`, `release-testpypi.yml`) and `scripts/ci_publish.sh`
@@ -115,7 +115,8 @@ class CMakeBuildExt(build_ext):
         ext_dir.mkdir(parents=True, exist_ok=True)
 
         build_mode = os.environ.get("LUCID_BUILD_MODE", "release").lower()
-        deployment_target = os.environ.get("MACOSX_DEPLOYMENT_TARGET", "26.0")
+        # 15.0 is the floor Lucid supports: one wheel for macOS 15 and later.
+        deployment_target = os.environ.get("MACOSX_DEPLOYMENT_TARGET", "15.0")
         cmake_args = [
             "-S",
             ext.source_dir,

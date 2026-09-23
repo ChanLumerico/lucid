@@ -45,6 +45,7 @@ from lucid.models._utils._generative import (
     extract_into_tensor,
     make_beta_schedule,
 )
+from lucid.models.generative._common._schedulers import DDPMScheduler
 from lucid.models.generative.ddpm._config import DDPMConfig
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -744,6 +745,9 @@ class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
     def __init__(self, config: DDPMConfig) -> None:
         super().__init__(config)
         self.unet = _DDPMUNet(config)
+        # ``self.config`` is typed as the base ``ModelConfig``; keep the
+        # narrow one so the schedule fields can be read without a cast.
+        self._cfg = config
         self._in_channels = config.in_channels
         self._learn_sigma = config.learn_sigma
         self._prediction_type = config.prediction_type
@@ -763,6 +767,56 @@ class DDPMForImageGeneration(ImageGenerationModel, DiffusionMixin):
             self._log_betas = lucid.log(betas)
             self._posterior = diffusion_posterior_constants(betas)
             self._sqrt_recip_ab, self._sqrt_recipm1_ab = _x0_recovery_constants(betas)
+
+    def make_scheduler(self) -> DDPMScheduler:
+        r"""The ancestral sampler this model's own config describes.
+
+        :meth:`DiffusionMixin.generate` takes any scheduler, which leaves
+        the caller to retype the schedule::
+
+            scheduler = DDPMScheduler(
+                config.num_train_timesteps,
+                beta_schedule=config.beta_schedule,
+                beta_start=config.beta_start,
+                beta_end=config.beta_end,
+                prediction_type=config.prediction_type,
+            )
+
+        Every one of those is already on the config, and a scheduler
+        built with a different schedule from the one the weights were
+        trained under produces plausible-looking noise rather than an
+        error.  ``config.clip_denoised`` was not reachable at all: the
+        field existed, the sampler honoured its own copy, and nothing
+        carried one to the other.
+
+        Returns
+        -------
+        DDPMScheduler
+            Configured from ``self.config``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.ddpm import (
+        ...     DDPMConfig, DDPMForImageGeneration,
+        ... )
+        >>> cfg = DDPMConfig(sample_size=32, base_channels=32,
+        ...                  channel_mult=(1, 2), num_res_blocks=1,
+        ...                  resnet_groups=16, num_train_timesteps=100)
+        >>> model = DDPMForImageGeneration(cfg).eval()
+        >>> scheduler = model.make_scheduler()
+        >>> scheduler.num_train_timesteps, scheduler.clip_denoised
+        (100, True)
+        """
+        config = self._cfg
+        return DDPMScheduler(
+            config.num_train_timesteps,
+            beta_start=config.beta_start,
+            beta_end=config.beta_end,
+            beta_schedule=config.beta_schedule,
+            prediction_type=config.prediction_type,
+            clip_denoised=config.clip_denoised,
+        )
 
     def _split_output(self, raw: Tensor) -> tuple[Tensor, Tensor | None]:
         """When ``learn_sigma=True`` the network emits ``2·in_channels`` —

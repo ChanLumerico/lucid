@@ -6,10 +6,19 @@ missing — which was also taking the InceptionV3 and Inception-ResNet-v2 tests
 down with it.  Keeping v4 in its own module lets the implemented families run.
 """
 
+import importlib.util
 import unittest
+
+import pytest
 
 import lucid
 import lucid.models as models
+
+if importlib.util.find_spec("lucid.models.vision.inception_v4") is None:
+    pytest.skip(
+        "Inception-v4 is a pending family, not implemented", allow_module_level=True
+    )
+
 from lucid.models.vision.inception_v4 import (
     InceptionV4Config,
     InceptionV4,

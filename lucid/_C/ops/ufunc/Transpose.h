@@ -82,6 +82,12 @@ class LUCID_API PermuteBackward : public FuncOp<PermuteBackward, 1> {
 public:
     static const OpSchema schema_v1;
 
+    // Nothing to validate: the backward permutes the gradient and never
+    // reads the input's values.  On the CPU the output is a view, so a
+    // write through it moves the input's version — and checking it here
+    // turned every recorded write through a transpose into a VersionMismatch.
+    void validate_versions() override {}
+
     // Normalised forward permutation saved from ``forward``; used to derive
     // the inverse permutation in ``apply``.
     std::vector<int> perm_;

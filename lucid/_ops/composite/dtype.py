@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import lucid
 from lucid._dtype import dtype as _DType
+from lucid._dtype import complex128 as _complex128, float32 as _float32
 from lucid._ops.composite._shared import _is_tensor
 from lucid._types import Scalar
 
@@ -29,6 +30,7 @@ def _kind_width(d: _DType) -> tuple[int, int]:
         "lucid.float32": (2, 32),
         "lucid.float64": (2, 64),
         "lucid.complex64": (3, 64),
+        "lucid.complex128": (3, 128),
     }
     return table.get(str(d), (2, 32))
 
@@ -41,6 +43,10 @@ def _promote(a_dtype: _DType, b_dtype: _DType) -> _DType:
     """
     ka, wa = _kind_width(a_dtype)
     kb, wb = _kind_width(b_dtype)
+    if (ka == 3 and b_dtype == lucid.float64) or (kb == 3 and a_dtype == lucid.float64):
+        return _complex128
+    if ka == kb == 2 and wa == wb == 16 and a_dtype != b_dtype:
+        return _float32
     if ka != kb:
         return a_dtype if ka > kb else b_dtype
     return a_dtype if wa >= wb else b_dtype

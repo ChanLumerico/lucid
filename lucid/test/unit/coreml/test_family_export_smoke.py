@@ -72,6 +72,9 @@ FAMILIES = [
     ("swin_tiny", (1, 3, 224, 224)),
     ("vgg_11", (1, 3, 224, 224)),
     ("vit_base_16", (1, 3, 224, 224)),
+    # The probe, not the pretraining model: the latter samples its masks
+    # and answers with a loss.
+    ("ijepa_base_16_cls", (1, 3, 224, 224)),
     ("wide_resnet_50", (1, 3, 224, 224)),
     ("xception", (1, 3, 224, 224)),
     ("zfnet", (1, 3, 224, 224)),
@@ -246,6 +249,19 @@ NOT_SINGLE_IMAGE = {
     # covering it needs an agreed small configuration first, not a
     # translation it is missing.
     "stable",
+    # ``vjepa`` exports cleanly at a small configuration — a 64-pixel,
+    # four-frame probe traces and verifies to 2e-07 — but the factories
+    # here are built with their defaults, and V-JEPA's smallest is a pair
+    # of ViT-L encoders over a 16-frame clip: 630M parameters, and a
+    # package in gigabytes.  Covering it needs an agreed small
+    # configuration first, as ``stable`` does.
+    "vjepa",
+    # ``genie``'s ``forward`` is its three training objectives, and a
+    # tiny configuration stops on ``mse_loss``, which has no Core ML
+    # translation.  A packaged training loss has no caller; the playable
+    # rollout is a MaskGIT loop in Python around the dynamics model and
+    # was not tried.
+    "genie",
     # Covered above by a representative whose family key differs:
     # ``nice_cifar`` stands for the flow family, ``vqvae`` for itself,
     # ``ddpm``/``flow``/``ncsn``/``dit``/``mean`` and

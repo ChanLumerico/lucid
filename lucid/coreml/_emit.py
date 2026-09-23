@@ -510,9 +510,9 @@ def _out_shape(op: TracedOp, b: Builder | None = None) -> list[int]:
 # ── shape ops ────────────────────────────────────────────────────────
 #
 # ``squeeze`` / ``unsqueeze`` / ``contiguous`` all become a ``reshape`` to
-# the shape the trace already recorded.  Lucid materialises every view, so
-# the result shape is static and a reshape expresses each of them exactly,
-# which avoids carrying axis bookkeeping that could disagree with the trace.
+# the shape the trace already recorded.  A Core ML tensor holds values, not
+# strides, and the result shape is static, so a reshape expresses each of
+# them exactly and avoids axis bookkeeping that could disagree with the trace.
 
 
 @_emitter("squeeze")
@@ -865,14 +865,40 @@ def _full(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
 
 @_emitter("arange")
 def _arange(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
+    """The traced sequence, as a constant of the type the trace gave it.
+
+    ``const_from_tensor`` writes the body's float type, which was only
+    right while ``arange`` defaulted to floats. ``lucid.arange(n)`` is
+    int64 now, and declared float it would reach an index or a
+    comparison as the wrong type — in an fp16 program, as a rounded one.
+    An integer sequence goes out inline as int32, the integer width this
+    opset's operations take.
+    """
     import lucid
 
     attrs = op.attrs
     start = _as_float(attrs.get("start", 0.0))
     step = _as_float(attrs.get("step", 1.0))
     count = int(_out_shape(op)[0])
-    values = lucid.tensor([start + step * i for i in range(count)])
-    return Constant(b.const_from_tensor(values))
+    integer = _CAST_TARGETS.get(str(op.outputs[0].dtype).split(".")[-1]) == "int32"
+    if integer and count > 0:
+        # The attributes are doubles, which hold every int32 exactly.
+        first, stride = int(start), int(step)
+        last = first + stride * (count - 1)
+        if not -(2**31) <= min(first, last) <= max(first, last) < 2**31:
+            from lucid.coreml._build import UnsupportedOp
+
+            raise UnsupportedOp(
+                "arange",
+                f"its values run from {first} to {last}, and Core ML holds "
+                "integers as int32, so the package would wrap them",
+            )
+        values = [first + stride * i for i in range(count)]
+        return Constant(b.const_ints_shaped(values, [count]))
+    # An empty sequence goes this way too, and is refused there with the
+    # reason.
+    floats = lucid.tensor([start + step * i for i in range(count)])
+    return Constant(b.const_from_tensor(floats))
 
 
 # ── indexing, casting, reductions ────────────────────────────────────

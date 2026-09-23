@@ -54,6 +54,7 @@ class int32(dtype): ...
 class int64(dtype): ...
 class bool_(dtype): ...
 class complex64(dtype): ...
+class complex128(dtype): ...
 
 half = float16
 double = float64
@@ -1466,8 +1467,9 @@ def reshape(input: Tensor, *shape: _int | Sequence[_int]) -> Tensor:
     
     Notes
     -----
-    :func:`view` behaves the same way: every tensor Lucid hands out is
-    contiguous, so neither ever has to refuse a layout.
+    :func:`view` behaves the same way, and neither ever refuses a layout:
+    a CPU input that is not contiguous — a transpose, a column slice — is
+    copied, unless the new shape only adds or drops size-1 axes.
     
     Examples
     --------
@@ -1554,7 +1556,9 @@ def permute(input: Tensor, *dims: _int | Sequence[_int]) -> Tensor:
     
     The argument ``dims`` is a permutation of ``range(input.ndim)`` — the
     returned tensor's axis ``i`` corresponds to ``input``'s axis
-    ``dims[i]``.  The data is copied into the new order.
+    ``dims[i]``.  On the CPU the result is a view of ``input``'s buffer
+    with its strides permuted — no data moves, and a write through it
+    reaches ``input``; on metal the data is copied into the new order.
     
     Parameters
     ----------
@@ -1566,7 +1570,8 @@ def permute(input: Tensor, *dims: _int | Sequence[_int]) -> Tensor:
     Returns
     -------
     Tensor
-        A new tensor with the axes in the new order, stored contiguously.
+        ``input`` with its axes in the new order — a view on the CPU, a
+        contiguous copy on metal.
     
     Notes
     -----
@@ -1586,7 +1591,8 @@ def transpose(input: Tensor) -> Tensor:
     
     The zero-argument form: for a 2-D tensor this is the matrix
     transpose; for higher-rank tensors the final two axes are swapped
-    (batch dims are preserved).  The data is copied into the new order.
+    (batch dims are preserved).  On the CPU the result is a view with the
+    two strides swapped; on metal the data is copied.
     
     Parameters
     ----------
@@ -1596,7 +1602,8 @@ def transpose(input: Tensor) -> Tensor:
     Returns
     -------
     Tensor
-        Non-contiguous view with last two axes swapped.
+        ``input`` with its last two axes swapped — a non-contiguous view on
+        the CPU, a copy on metal.
     
     Notes
     -----
@@ -1613,12 +1620,12 @@ def transpose(input: Tensor) -> Tensor:
     """
     ...
 def broadcast_to(input: Tensor, shape: ShapeLike) -> Tensor:
-    r"""    Broadcast a tensor to a target shape as a *view*.
+    r"""    Broadcast a tensor to a target shape.
     
     Performs the standard right-aligned broadcasting rules: dimensions of
     size 1 in the input may be expanded to any size in ``shape``; new
-    leading dimensions may be prepended.  No data is copied — strides for
-    the broadcast axes are set to 0.
+    leading dimensions may be prepended.  On the CPU the result is a view of
+    ``input``'s buffer, as :func:`expand`'s is; on metal it is a copy.
     
     Parameters
     ----------
@@ -1630,14 +1637,14 @@ def broadcast_to(input: Tensor, shape: ShapeLike) -> Tensor:
     Returns
     -------
     Tensor
-        A new tensor of the requested shape; the data is copied.
+        ``input`` under the requested shape — a read-only view on the CPU,
+        a copy on metal.
     
     Notes
     -----
-    Because broadcast axes have stride 0, writing into the result will
-    alias multiple logical locations to the same physical element; prefer
-    :func:`expand` (also a view) or call :func:`contiguous` first to
-    materialise a copy.
+    On the CPU the broadcast axes have stride 0, so every repeated element is
+    one of ``input``'s and a write through the result is refused; call
+    ``contiguous()`` on it first for a writable copy.
     
     Examples
     --------
@@ -1653,8 +1660,10 @@ def expand(input: Tensor, *sizes: _int | Sequence[_int]) -> Tensor:
     
     For each axis whose current size is 1, ``expand`` repeats it to the
     requested size.  Axes that already have non-1 sizes must be passed
-    as ``-1`` (or the same size).  The result is materialised: every
-    repeated element is a copy.
+    as ``-1`` (or the same size).  On the CPU the result is a view: each
+    expanded axis has stride 0, so every repeated element is the same
+    memory as ``input``'s, and a write through the view is refused.  On
+    metal the result is a copy.
     
     Parameters
     ----------
@@ -1666,14 +1675,14 @@ def expand(input: Tensor, *sizes: _int | Sequence[_int]) -> Tensor:
     Returns
     -------
     Tensor
-        A new tensor of the requested shape; the data is copied.
+        ``input`` under the requested shape — a read-only view on the CPU,
+        a copy on metal.
     
     Notes
     -----
     :func:`expand` is the cousin of :func:`broadcast_to`; they produce
     equal results, but ``expand`` requires the input to already have a
-    1-sized dim where the expansion happens.  Since the result is a copy,
-    writing into it never reaches ``input``.
+    1-sized dim where the expansion happens.  On the CPU both are views.
     
     Examples
     --------
@@ -1681,6 +1690,50 @@ def expand(input: Tensor, *sizes: _int | Sequence[_int]) -> Tensor:
     >>> x = lucid.tensor([[1.0], [2.0], [3.0]])  # shape (3, 1)
     >>> lucid.expand(x, 3, 4).shape
     (3, 4)
+    """
+    ...
+def as_strided(input: Tensor, size: Sequence[_int], stride: Sequence[_int], storage_offset: _int | None = ...) -> Tensor:
+    r"""    View a tensor's storage through chosen sizes and strides.
+    
+    Element ``i`` of the result reads storage element
+    ``storage_offset + sum(i[k] * stride[k])``.  Everything counts in
+    elements, and ``storage_offset`` counts from the start of the storage
+    rather than from ``input``; it defaults to ``input``'s own offset.  On
+    the CPU the result is a view of that buffer; on metal it is a copy of
+    the elements it names.
+    
+    Parameters
+    ----------
+    input : Tensor
+        The tensor whose storage is read.
+    size : sequence of int
+        Shape of the result.
+    stride : sequence of int
+        Storage elements to step per unit along each axis of the result —
+        one per entry of ``size``, none negative.
+    storage_offset : int, optional
+        Storage element the result starts at.  Defaults to ``input``'s own
+        offset.
+    
+    Returns
+    -------
+    Tensor
+        A tensor of shape ``size`` — a view on the CPU, a copy on metal.
+    
+    Notes
+    -----
+    A view reaching past the end of the storage is refused.  Strides that
+    name one element twice give a view that reads correctly but refuses a
+    write.  The gradient adds each output element's gradient at the
+    element it read, and needs a contiguous ``input``.
+    
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.arange(6).float()
+    >>> lucid.as_strided(x, (2, 2), (3, 1))
+    Tensor([[0., 1.],
+            [3., 4.]])
     """
     ...
 def tile(input: Tensor, reps: Sequence[_int]) -> Tensor:
@@ -2659,8 +2712,8 @@ def chunk(input: Tensor, chunks: _int, dim: DimLike = ...) -> Tensor:
     Returns
     -------
     list of Tensor
-        Up to ``chunks`` pieces of ``input`` — views of its buffer along dim 0
-        of a dense CPU tensor, copies otherwise.
+        Up to ``chunks`` pieces of ``input`` — views of its buffer on the
+        CPU, copies on metal.
     
     Notes
     -----
@@ -2679,9 +2732,9 @@ def unbind(input: Tensor, dim: DimLike = ...) -> Tensor:
     r"""    Remove ``dim`` and return the slices along it.
     
     Equivalent to ``[x.select(dim, i) for i in range(x.size(dim))]`` but
-    implemented as a single op.  Along dim 0 of a dense CPU tensor each
-    slice is a view of ``x``'s buffer, so writing to one changes ``x``;
-    otherwise each slice is a copy.
+    implemented as a single op.  On the CPU each slice is a view of
+    ``x``'s buffer, so writing to one changes ``x``; on metal each slice
+    is a copy.
     
     Parameters
     ----------
@@ -3861,11 +3914,12 @@ def index_select(input: Tensor, dim: _int, index: Tensor) -> Tensor:
     """
     ...
 def narrow(input: Tensor, dim: _int, start: _int, length: _int) -> Tensor:
-    r"""    Return a contiguous slice of ``input`` along ``dim``.
+    r"""    Return a slice of ``input`` along ``dim``.
     
     Equivalent to ``input[..., start:start+length, ...]`` with the slice
-    applied at position ``dim``.  Along dim 0 of a dense CPU tensor the
-    slice is a view of ``input``'s buffer; otherwise it is a copy.
+    applied at position ``dim``.  On the CPU the slice is a view of
+    ``input``'s buffer — along a later axis a non-contiguous one; on metal
+    it is a copy.
     
     Parameters
     ----------
@@ -3996,7 +4050,7 @@ def movedim(input: Tensor, source: _int | Sequence[_int], destination: _int | Se
     Returns
     -------
     Tensor
-        A new tensor with the axes moved, stored contiguously.
+        ``input`` with the axes moved — a view on the CPU, a copy on metal.
     
     Notes
     -----
@@ -4863,8 +4917,10 @@ def view(input: Tensor, *shape: _int | Sequence[_int]) -> Tensor:
     
     Notes
     -----
-    :func:`view` and :func:`reshape` behave the same: every tensor Lucid
-    hands out is contiguous, so neither ever has to refuse a layout.
+    :func:`view` and :func:`reshape` behave the same, and neither ever
+    refuses a layout: a CPU input that is not contiguous — a transpose, a
+    column slice — is copied, unless the new shape only adds or drops
+    size-1 axes.
     
     Examples
     --------
@@ -5370,8 +5426,8 @@ def split(x: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -
     Returns
     -------
     list of Tensor
-        The pieces of ``x`` — views of its buffer along dim 0 of a dense CPU
-        tensor, copies otherwise.
+        The pieces of ``x`` — views of its buffer on the CPU, copies on
+        metal.
     
     Notes
     -----

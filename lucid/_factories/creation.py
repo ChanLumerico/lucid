@@ -2,7 +2,9 @@ r"""
 Tensor creation functions: zeros, ones, empty, full, eye, arange, linspace, *_like.
 """
 
-from typing import TYPE_CHECKING
+import numbers
+import struct
+from typing import TYPE_CHECKING, SupportsFloat
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _unwrap, _wrap, _impl_with_grad
 from lucid._types import DeviceLike, DTypeLike
@@ -394,6 +396,58 @@ def eye(
     return _wrap(_impl_with_grad(impl, _rg) if _rg else impl)
 
 
+#: Every integer of smaller magnitude is exactly a double.  The engine
+#: fills ``arange`` in double precision, so an int64 sequence is exact
+#: through it only inside this bound.
+_EXACT_IN_DOUBLE = 2**53
+_INT64_MIN = -(2**63)
+_INT64_MAX = 2**63 - 1
+
+
+def _arange_number(value: SupportsFloat) -> int | float:
+    r"""One ``arange`` argument as a Python number, keeping its integer-ness.
+
+    ``arange`` picks its dtype by whether its arguments are integers, and
+    the engine takes only doubles, so the question is answered here.
+    ``bool`` and other libraries' integer scalars count as integers; a
+    single-element tensor counts as whatever its element is.
+    """
+    if isinstance(value, numbers.Integral):
+        return int(value)
+    if isinstance(value, float):
+        return value
+    item = getattr(value, "item", None)
+    if callable(item):
+        value = item()
+        if isinstance(value, numbers.Integral):
+            return int(value)
+    return float(value)
+
+
+def _exact_int64_arange(
+    start: int, end: int, step: int, device: _C_engine.Device
+) -> _C_engine.TensorImpl:
+    r"""An int64 ``arange`` reaching past what a double holds exactly.
+
+    Through the engine's double-precision fill, ``arange(2**53 + 1,
+    2**53 + 5)`` comes back as ``[2**53, 2**53, 2**53 + 2, 2**53 + 4]``.
+    Python's ``range`` is exact at any size, so the sequence is built
+    from it and handed over as int64 bytes.
+    """
+    values = range(start, end, step)
+    if values:
+        low, high = sorted((values[0], values[-1]))
+        if low < _INT64_MIN or high > _INT64_MAX:
+            raise OverflowError(
+                f"arange: values from {values[0]} to {values[-1]} do not fit "
+                "in int64"
+            )
+    packed = struct.pack(f"={len(values)}q", *values)
+    return _C_engine.TensorImpl.from_bytes(
+        packed, [len(values)], _C_engine.I64, device, False
+    )
+
+
 def arange(
     start: float,
     end: float | None = None,
@@ -411,7 +465,7 @@ def arange(
         x_k = \texttt{start} + k \cdot \texttt{step},
         \quad k = 0, 1, \ldots, N-1
 
-    where $N = \left\lfloor \dfrac{\texttt{end} - \texttt{start}}{\texttt{step}} \right\rfloor$
+    where $N = \left\lceil \dfrac{\texttt{end} - \texttt{start}}{\texttt{step}} \right\rceil$
     is the number of elements.  The interval is **half-open**: ``start``
     is included, ``end`` is excluded, mirroring Python's built-in
     ``range``.
@@ -422,20 +476,24 @@ def arange(
 
     Parameters
     ----------
-    start : float
+    start : int or float
         Starting value of the sequence (inclusive).  When ``end`` is
         ``None``, this argument is treated as ``end`` and ``start`` is
         set to ``0``.
-    end : float, optional
+    end : int or float, optional
         End of the interval (exclusive).  Required unless using the
         single-argument form.
-    step : float, optional
+    step : int or float, optional
         Spacing between consecutive values.  May be negative (producing
         a decreasing sequence) provided ``start > end``.  Default: ``1``.
     dtype : lucid.dtype, optional
         Scalar data type of the output.  If ``None``, inferred from
-        the types of ``start``, ``end``, and ``step``: integer arguments
-        yield ``int64``; any float argument yields the global float default.
+        ``start``, ``end`` and ``step``: when every one of them is an
+        integer the result is ``int64``, and a single float among them
+        makes it the global default float dtype (`get_default_dtype`).
+        A ``bool``, another library's integer scalar and a
+        single-element integer tensor all count as integers.  An explicit
+        ``dtype`` always wins.
     device : str or lucid.device, optional
         Target device — ``"cpu"`` or ``"metal"``.
 
@@ -455,28 +513,53 @@ def arange(
     positive ``step``) or **strictly greater than** ``end`` (for negative
     ``step``).
 
+    An ``int64`` result is exact at any magnitude.  The engine computes
+    each element in double precision, which holds integers exactly only
+    up to $2^{53}$, so a range reaching past that is built from Python
+    integers instead.
+
     Examples
     --------
     >>> import lucid
-    >>> lucid.arange(5).tolist()
-    [0, 1, 2, 3, 4]
+    >>> x = lucid.arange(5)
+    >>> x.tolist(), x.dtype
+    ([0, 1, 2, 3, 4], lucid.int64)
 
-    >>> lucid.arange(1.0, 2.0, 0.25).tolist()
-    [1.0, 1.25, 1.5, 1.75]
+    One float argument makes the result floating point:
+
+    >>> y = lucid.arange(1.0, 2.0, 0.25)
+    >>> y.tolist(), y.dtype
+    ([1.0, 1.25, 1.5, 1.75], lucid.float32)
 
     Descending sequence:
 
     >>> lucid.arange(5, 0, -1).tolist()
     [5, 4, 3, 2, 1]
 
-    Position encoding indices:
+    An explicit ``dtype`` overrides the rule, as for position encoding
+    indices that are wanted as floats:
 
-    >>> pos = lucid.arange(512, dtype=lucid.float32)
+    >>> lucid.arange(4, dtype=lucid.float32).tolist()
+    [0.0, 1.0, 2.0, 3.0]
+
+    Integers past $2^{53}$ stay exact:
+
+    >>> lucid.arange(2**53 + 1, 2**53 + 3).tolist()
+    [9007199254740993, 9007199254740994]
     """
-    _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     if end is None:
-        start, end = 0.0, float(start)
-    return _wrap(_C_engine.arange(start, end, step, _dt, _dev))
+        start, end = 0, start
+    first = _arange_number(start)
+    stop = _arange_number(end)
+    stride = _arange_number(step)
+    _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
+    if isinstance(first, int) and isinstance(stop, int) and isinstance(stride, int):
+        if dtype is None:
+            _dt = _C_engine.I64
+        widest = max(abs(first), abs(stop), abs(stride), abs(stop - first))
+        if _dt == _C_engine.I64 and stride != 0 and widest > _EXACT_IN_DOUBLE:
+            return _wrap(_exact_int64_arange(first, stop, stride, _dev))
+    return _wrap(_C_engine.arange(first, stop, stride, _dt, _dev))
 
 
 def linspace(

@@ -88,6 +88,19 @@ def _select_int(impl: _C_engine.TensorImpl, dim: int, i: int) -> _C_engine.Tenso
     return _C_engine.squeeze(sliced, dim)
 
 
+def _narrow(
+    impl: _C_engine.TensorImpl, dim: int, start: int, stop: int, length: int
+) -> _C_engine.TensorImpl:
+    """``impl[start:stop]`` along ``dim`` with a unit step — a view on the CPU."""
+    if start == 0 and stop == length:
+        return impl
+    if start == 0:
+        return _C_engine.split_at(impl, [stop], dim)[0]
+    if stop == length:
+        return _C_engine.split_at(impl, [start], dim)[1]
+    return _C_engine.split_at(impl, [start, stop], dim)[1]
+
+
 def _select_slice(
     impl: _C_engine.TensorImpl, dim: int, s: slice
 ) -> _C_engine.TensorImpl:
@@ -106,13 +119,18 @@ def _select_slice(
         return _C_engine.zeros(empty_shape, impl.dtype, impl.device)
 
     if step == 1:
-        if start == 0 and stop == length:
-            return impl
-        if start == 0:
-            return _C_engine.split_at(impl, [stop], dim)[0]
-        if stop == length:
-            return _C_engine.split_at(impl, [start], dim)[1]
-        return _C_engine.split_at(impl, [start, stop], dim)[1]
+        return _narrow(impl, dim, start, stop, length)
+    if step > 0 and impl.device == _C_engine.Device.CPU:
+        # A positive step on the CPU is a view, as the reference's is: the run
+        # the slice covers, one-element windows every ``step`` along ``dim``,
+        # and the window axis squeezed away.  split_at, unfold_dim and squeeze
+        # each make a view, and each already has an emitter on every path.
+        # Metal copies below, and so does a negative step, which the
+        # reference does not have.
+        windows = _C_engine.unfold_dim(
+            _narrow(impl, dim, start, stop, length), dim, 1, step
+        )
+        return _C_engine.squeeze(windows, len(windows.shape) - 1)
     else:
         # Element count of the slice.  The hand-rolled ceil-division dropped
         # the ``step`` term from the numerator, so it was wrong for **both**
