@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VideoClassification stole the neighbouring registration
 - the video crop places an odd margin down, not to nearest
 - the dead-config-field check was wrong about ten of seventeen
+- integer // never reached the graph, and would have floored wrong
 
 ---
 
