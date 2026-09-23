@@ -1,0 +1,2552 @@
+{
+  "slug": "lucid.models.vision.vjepa",
+  "name": "vjepa",
+  "path": "lucid.models.vision.vjepa",
+  "kind": "module",
+  "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/__init__.py#L1",
+  "members": [
+    {
+      "name": "VJEPAConfig",
+      "path": "lucid.models.vision.vjepa._config.VJEPAConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelConfig"
+      ],
+      "labels": [],
+      "signature": "VJEPAConfig(image_size: int = 224, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 16, sampling_rate: int = 4, in_channels: int = 3, num_classes: int = 400, dim: int = 1024, depth: int = 24, num_heads: int = 16, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, uniform_power: bool = True, predictor_dim: int = 384, predictor_depth: int = 12, predictor_heads: int | None = None, short_range_blocks: int = 8, short_range_scale: tuple[float, float] = (0.15, 0.15), long_range_blocks: int = 2, long_range_scale: tuple[float, float] = (0.7, 0.7), aspect_ratio: tuple[float, float] = (0.75, 1.5), ema: tuple[float, float] = (0.998, 1.0), ema_schedule_scale: float = 1.25, objective: VJEPAObjective = 'l1', smooth_l1_beta: float = 1.0)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_config.py#L27",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "token_grid",
+          "path": "lucid.models.vision.vjepa._config.VJEPAConfig.token_grid",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "token_grid: tuple[int, int, int]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_config.py#L198",
+          "summary": "Tokens along time, row and column.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "tuple[int, int, int]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "num_tokens",
+          "path": "lucid.models.vision.vjepa._config.VJEPAConfig.num_tokens",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "num_tokens: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_config.py#L204",
+          "summary": "Tokens in a clip.  There is no class token to add to it.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "resolved_predictor_heads",
+          "path": "lucid.models.vision.vjepa._config.VJEPAConfig.resolved_predictor_heads",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "resolved_predictor_heads: int",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_config.py#L210",
+          "summary": "Heads the predictor runs with, taking the encoder's when unset.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vjepa._config.VJEPAConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(image_size: int = 224, patch_size: int = 16, tubelet_size: int = 2, num_frames: int = 16, sampling_rate: int = 4, in_channels: int = 3, num_classes: int = 400, dim: int = 1024, depth: int = 24, num_heads: int = 16, mlp_ratio: float = 4.0, layer_norm_eps: float = 1e-06, uniform_power: bool = True, predictor_dim: int = 384, predictor_depth: int = 12, predictor_heads: int | None = None, short_range_blocks: int = 8, short_range_scale: tuple[float, float] = (0.15, 0.15), long_range_blocks: int = 2, long_range_scale: tuple[float, float] = (0.7, 0.7), aspect_ratio: tuple[float, float] = (0.75, 1.5), ema: tuple[float, float] = (0.998, 1.0), ema_schedule_scale: float = 1.25, objective: VJEPAObjective = 'l1', smooth_l1_beta: float = 1.0)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_config.py#L1",
+          "subcategory": "config",
+          "summary": "Build the three networks. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Frozen configuration for the V-JEPA family.",
+      "extended": "Defaults are the paper's ViT-L/16 at 224 pixels (Table 6, Table 8).",
+      "parameters": [
+        {
+          "name": "image_size",
+          "annotation": "int",
+          "description": "Side of each frame.  The largest variant uses 384.",
+          "default": "224"
+        },
+        {
+          "name": "patch_size",
+          "annotation": "int",
+          "description": "Spatial side of a tubelet.",
+          "default": "16"
+        },
+        {
+          "name": "tubelet_size",
+          "annotation": "int",
+          "description": "Frames a tubelet spans.  Sixteen frames become eight temporal\npositions.",
+          "default": "2"
+        },
+        {
+          "name": "num_frames",
+          "annotation": "int",
+          "description": "Frames in a clip.",
+          "default": "16"
+        },
+        {
+          "name": "sampling_rate",
+          "annotation": "int",
+          "description": "Stride, in original frames, between the frames of a clip.  Carried\nbecause it defines what a clip is; nothing in the model reads it.",
+          "default": "4"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Channels per frame.",
+          "default": "3"
+        },
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Classes the probe predicts.  Kinetics-400's count, since that is\nthe benchmark the paper leads with.",
+          "default": "400"
+        },
+        {
+          "name": "dim",
+          "annotation": "int",
+          "description": "The encoder, a ViT of the named size.",
+          "default": "1024, 24, 16"
+        },
+        {
+          "name": "depth",
+          "annotation": "int",
+          "description": "The encoder, a ViT of the named size.",
+          "default": "1024, 24, 16"
+        },
+        {
+          "name": "num_heads",
+          "annotation": "int",
+          "description": "The encoder, a ViT of the named size.",
+          "default": "1024, 24, 16"
+        },
+        {
+          "name": "mlp_ratio",
+          "annotation": "float",
+          "description": "Feed-forward width as a multiple of `dim`.",
+          "default": "4.0"
+        },
+        {
+          "name": "layer_norm_eps",
+          "annotation": "float",
+          "description": "Epsilon of every LayerNorm.",
+          "default": "1e-6"
+        },
+        {
+          "name": "uniform_power",
+          "annotation": "bool",
+          "description": "How the position table splits its width between time, row and\ncolumn.  `True` gives each axis an equal share, which is what\nevery released configuration sets; the code's own default is\n`False`, which would give time half the width and the spatial\naxes a quarter each.  Getting this wrong loads released weights\nonto positions they were not trained with.",
+          "default": "True"
+        },
+        {
+          "name": "predictor_dim",
+          "annotation": "int",
+          "description": "Predictor width, for every variant.",
+          "default": "384"
+        },
+        {
+          "name": "predictor_depth",
+          "annotation": "int",
+          "description": "Predictor blocks, for every variant.",
+          "default": "12"
+        },
+        {
+          "name": "predictor_heads",
+          "annotation": "int or None",
+          "description": "Heads inside the predictor.  `None` takes the encoder's count,\nas the released code does — 16 heads across 384 channels, so 24\nper head.",
+          "default": "None"
+        },
+        {
+          "name": "short_range_blocks",
+          "annotation": "int",
+          "description": "Blocks in the first mask collection.",
+          "default": "8"
+        },
+        {
+          "name": "short_range_scale",
+          "annotation": "tuple of float",
+          "description": "Fraction of a frame each of those blocks covers.  The paper fixes\nit rather than sampling a range.",
+          "default": "(0.15, 0.15)"
+        },
+        {
+          "name": "long_range_blocks",
+          "annotation": "int",
+          "description": "Blocks in the second collection.",
+          "default": "2"
+        },
+        {
+          "name": "long_range_scale",
+          "annotation": "tuple of float",
+          "description": "Fraction of a frame each of those covers.",
+          "default": "(0.7, 0.7)"
+        },
+        {
+          "name": "aspect_ratio",
+          "annotation": "tuple of float",
+          "description": "Aspect-ratio range, shared by both collections.",
+          "default": "(0.75, 1.5)"
+        },
+        {
+          "name": "ema",
+          "annotation": "tuple of float",
+          "description": "Momentum of the target encoder at the first and last step of the\n*schedule*.",
+          "default": "(0.998, 1.0)"
+        },
+        {
+          "name": "ema_schedule_scale",
+          "annotation": "float",
+          "description": "How much longer the momentum schedule is than training.  The\nreleased runs stretch it by a quarter and stop early, so the\nmomentum never actually reaches 1.",
+          "default": "1.25"
+        },
+        {
+          "name": "objective",
+          "annotation": "(l1, l2, smooth_l1)",
+          "description": "How predicted and target features are compared.  L1 is what both\nthe paper and the released code use — Section 3.1 says it was\nfound more stable than I-JEPA's regression.",
+          "default": "\"l1\""
+        },
+        {
+          "name": "smooth_l1_beta",
+          "annotation": "float",
+          "description": "Where smooth L1 turns from quadratic to linear, when chosen.",
+          "default": "1.0"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.vision.vjepa import VJEPAConfig\n>>> config = VJEPAConfig()\n>>> config.token_grid, config.num_tokens\n((8, 14, 14), 1568)\n>>> config.short_range_blocks, config.long_range_blocks\n(8, 2)\nFour times the pixels is four times the tokens:\n>>> VJEPAConfig(image_size=384).num_tokens\n4608"
+      ],
+      "notes": [
+        "Reference: Bardes, Adrien, et al., *\"Revisiting Feature Prediction for\nLearning Visual Representations from Video\"*, [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), 2024\n— Table 6 for the variants and their results, Table 8 for the\narchitecture and the schedules, Section 3.2 for the masking."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPAForVideoClassification",
+      "path": "lucid.models.vision.vjepa._model.VJEPAForVideoClassification",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ImageClassificationModel",
+        "ClassificationHeadMixin"
+      ],
+      "labels": [],
+      "signature": "VJEPAForVideoClassification(config: VJEPAConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L681",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vjepa._model.VJEPAForVideoClassification.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VJEPAConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L726",
+          "subcategory": "model",
+          "summary": "Build the probe. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.vjepa._model.VJEPAForVideoClassification.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L736",
+          "subcategory": "model",
+          "summary": "Classify clips from the frozen feature map.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "Clips `(B, T, C, H, W)`.",
+              "default": null
+            },
+            {
+              "name": "labels",
+              "annotation": "Tensor or None",
+              "description": "Class indices `(B,)`; when given, the cross-entropy comes\nback with the logits.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "ImageClassificationOutput",
+            "description": "Logits `(B, num_classes)`, and the loss when labels came."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "V-JEPA under the paper's attentive probe.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "VJEPAConfig",
+          "description": "Frozen configuration; `num_classes` sizes the classifier.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vjepa import (\n...     VJEPAConfig, VJEPAForVideoClassification)\n>>> config = VJEPAConfig(\n...     image_size=32, patch_size=8, tubelet_size=2, num_frames=4,\n...     dim=24, depth=1, num_heads=2, predictor_dim=12,\n...     predictor_depth=1, num_classes=10)\n>>> model = VJEPAForVideoClassification(config).eval()\n>>> model(lucid.rand(2, 4, 3, 32, 32)).logits.shape\n(2, 10)"
+      ],
+      "notes": [
+        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Section 4.3.  The paper\nevaluates a frozen backbone with this probe rather than with a linear\nmap on averaged tokens, and reports the gap at 17 points on\nKinetics-400 — so a linear probe compared against its tables would be\nmeasuring something else.\n\nRegistered under `image-classification` because that is the task\nthis zoo has; the input is a clip rather than an image, which is what\nthe class name says."
+      ],
+      "attributes": [
+        {
+          "name": "vjepa",
+          "annotation": "VJEPAModel",
+          "description": "The pretrained networks.  Its target encoder is frozen."
+        },
+        {
+          "name": "pooler",
+          "annotation": "Module",
+          "description": "The attentive pooler: one learned query over the feature map."
+        },
+        {
+          "name": "head",
+          "annotation": "nn.Linear",
+          "description": "The classifier on the pooled vector."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPAModel",
+      "path": "lucid.models.vision.vjepa._model.VJEPAModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel",
+        "BackboneMixin"
+      ],
+      "labels": [],
+      "signature": "VJEPAModel(config: VJEPAConfig)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L426",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vjepa._model.VJEPAModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: VJEPAConfig)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L481",
+          "subcategory": "model",
+          "summary": "Build the three networks. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "feature_info",
+          "path": "lucid.models.vision.vjepa._model.VJEPAModel.feature_info",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "feature_info: list[FeatureInfo]",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L500",
+          "summary": "One stage: tubelet tokens at the encoder's width.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list[FeatureInfo]",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward_features",
+          "path": "lucid.models.vision.vjepa._model.VJEPAModel.forward_features",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward_features(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L504",
+          "subcategory": "model",
+          "summary": "The average-pooled target encoder, which is `encode`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "trainable_parameters",
+          "path": "lucid.models.vision.vjepa._model.VJEPAModel.trainable_parameters",
+          "kind": "function",
+          "labels": [],
+          "signature": "trainable_parameters()",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L511",
+          "subcategory": "model",
+          "summary": "Everything an optimiser should be given.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "list of Parameter",
+            "description": "The context encoder and the predictor.  The target encoder\nfollows by moving average and must not be optimised."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "momentum",
+          "path": "lucid.models.vision.vjepa._model.VJEPAModel.momentum",
+          "kind": "function",
+          "labels": [],
+          "signature": "momentum(step: int, total_steps: int)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L524",
+          "subcategory": "model",
+          "summary": "The target encoder's momentum at a training step.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "step",
+              "annotation": "int",
+              "description": "Steps already taken.",
+              "default": null
+            },
+            {
+              "name": "total_steps",
+              "annotation": "int",
+              "description": "Steps the run will take in total.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "float",
+            "description": "Linear from `config.ema[0]` toward `config.ema[1]` over\n`total_steps * config.ema_schedule_scale` steps.  The\nreleased runs stretch the schedule by a quarter and stop\nearly, so the momentum is still short of 1 when training\nends — reproducing it with a schedule the length of the run\nis a different experiment."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "update_target",
+          "path": "lucid.models.vision.vjepa._model.VJEPAModel.update_target",
+          "kind": "function",
+          "labels": [],
+          "signature": "update_target(momentum: float)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L551",
+          "subcategory": "model",
+          "summary": "Move the target encoder toward the context encoder.",
+          "extended": "Call it after the optimiser step: this writes parameters in place.",
+          "parameters": [
+            {
+              "name": "momentum",
+              "annotation": "float",
+              "description": "Weight kept on the target encoder, from `momentum`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "encode",
+          "path": "lucid.models.vision.vjepa._model.VJEPAModel.encode",
+          "kind": "function",
+          "labels": [],
+          "signature": "encode(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L571",
+          "subcategory": "model",
+          "summary": "The representation downstream tasks read.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "Clips `(B, T, C, H, W)`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "`(B, dim)`, the target encoder's tokens averaged.  The\npaper's own probe does better than this average — see\n`VJEPAForVideoClassification` — but a single vector is\nwhat a backbone owes its caller."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "tokens",
+          "path": "lucid.models.vision.vjepa._model.VJEPAModel.tokens",
+          "kind": "function",
+          "labels": [],
+          "signature": "tokens(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L589",
+          "subcategory": "model",
+          "summary": "The target encoder's whole feature map, `(B, N, dim)`.",
+          "extended": "What the attentive probe reads, and what average-pooling in\n`encode` throws away.",
+          "parameters": [],
+          "returns": {
+            "annotation": "Tensor",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.vision.vjepa._model.VJEPAModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L619",
+          "subcategory": "model",
+          "summary": "Run one pretraining step's worth of computation.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "Clips `(B, T, C, H, W)` at `config.image_size`.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "VJEPAOutput",
+            "description": "The averaged loss, and what each collection was asked and\nanswered."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "V-JEPA: a context encoder, an averaged target encoder, a predictor.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "VJEPAConfig",
+          "description": "Frozen configuration.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vjepa import VJEPAConfig, VJEPAModel\n>>> config = VJEPAConfig(\n...     image_size=32, patch_size=8, tubelet_size=2, num_frames=4,\n...     dim=24, depth=1, num_heads=2, predictor_dim=12,\n...     predictor_depth=1, short_range_blocks=2, long_range_blocks=1)\n>>> model = VJEPAModel(config)\n>>> out = model(lucid.rand(2, 4, 3, 32, 32))\n>>> out.short_prediction.shape == out.short_target.shape\nTrue\n>>> float(out.loss.item()) >= 0.0\nTrue\nThe representation a downstream task reads is the target encoder's:\n>>> model.encode(lucid.rand(2, 4, 3, 32, 32)).shape\n(2, 24)"
+      ],
+      "notes": [
+        "Reference: Bardes, Adrien, et al., *\"Revisiting Feature Prediction for\nLearning Visual Representations from Video\"*, [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), 2024,\nSections 3.1–3.3.\n\nClips are `(B, T, C, H, W)` with `T = config.num_frames`.  Call\n`update_target` after each optimiser step, with the value\n`momentum` gives.\n\nThe target features are layer-normalised without affine terms before\nany block is taken from them — that is in the released code and not\nin the paper, and it is the usual way a reimplementation fails."
+      ],
+      "attributes": [
+        {
+          "name": "encoder",
+          "annotation": "Module",
+          "description": "The context encoder — the one that is trained."
+        },
+        {
+          "name": "target_encoder",
+          "annotation": "Module",
+          "description": "Its exponential moving average.  Frozen; produces the targets and,\nafter pretraining, the representation everything downstream reads."
+        },
+        {
+          "name": "predictor",
+          "annotation": "Module",
+          "description": "The narrow transformer, with one mask token per mask collection."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "VJEPAOutput",
+      "path": "lucid.models.vision.vjepa._model.VJEPAOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "VJEPAOutput(loss: Tensor, short_prediction: Tensor, short_target: Tensor, long_prediction: Tensor, long_target: Tensor, short_context: Tensor, short_targets: Tensor, long_context: Tensor, long_targets: Tensor)",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L379",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.vision.vjepa._model.VJEPAOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(loss: Tensor, short_prediction: Tensor, short_target: Tensor, long_prediction: Tensor, long_target: Tensor, short_context: Tensor, short_targets: Tensor, long_context: Tensor, long_targets: Tensor)",
+          "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Build the three networks. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What one pretraining step produced, for both mask collections.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.vision.vjepa import VJEPAOutput\n>>> zero = lucid.zeros(1, 4, 8)\n>>> index = lucid.zeros(1, 4).to(lucid.int64)\n>>> out = VJEPAOutput(\n...     loss=lucid.zeros(()), short_prediction=zero, short_target=zero,\n...     long_prediction=zero, long_target=zero, short_context=index,\n...     short_targets=index, long_context=index, long_targets=index)\n>>> out.short_prediction.shape\n(1, 4, 8)"
+      ],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "loss",
+          "annotation": "Tensor",
+          "description": "The two collections' discrepancies, averaged.  Scalar."
+        },
+        {
+          "name": "short_prediction, short_target",
+          "annotation": "Tensor",
+          "description": "What the predictor said and what the target encoder said for the\neight-block collection, `(B, Ns, D)`."
+        },
+        {
+          "name": "long_prediction, long_target",
+          "annotation": "Tensor",
+          "description": "The same for the two-block collection, `(B, Nl, D)`."
+        },
+        {
+          "name": "short_context, short_targets",
+          "annotation": "Tensor",
+          "description": "The tubelets the encoder read and the ones it answered for,\n`(B, Cs)` and `(B, Ns)`."
+        },
+        {
+          "name": "long_context, long_targets",
+          "annotation": "Tensor",
+          "description": "The same for the second collection."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "vjepa_huge_16",
+      "path": "lucid.models.vision.vjepa._pretrained.vjepa_huge_16",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa_huge_16(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_pretrained.py#L135",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA with a ViT-H/16 encoder at 224 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The released checkpoints are not redistributed here; `True`\nraises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPAModel",
+        "description": "Context encoder, target encoder and predictor, untrained."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa_huge_16\")\n>>> config.dim, config.depth\n(1280, 32)\n>>> config.predictor_dim, config.predictor_depth\n(384, 12)"
+      ],
+      "notes": [
+        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Table 6 — 82.0% on\nKinetics-400 and 71.4% on Something-Something-v2, the paper's best at\n224 pixels.  630M parameters in the encoder."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPAModel",
+        "type": "VJEPAModel",
+        "params": 1285575808,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 631648000,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_TubeletEmbed",
+                "params": 1967360,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv3d",
+                    "params": 1967360,
+                    "own_params": 1967360,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 629678080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 19677440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 6558720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 4919040,
+                            "own_params": 4919040,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1639680,
+                            "own_params": 1639680,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 13113600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 6558720,
+                            "own_params": 6558720,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 6554880,
+                            "own_params": 6554880,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 32
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 22279808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 491904,
+                "own_params": 491904,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 492800,
+                "own_params": 492800,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa_huge_16_384",
+      "path": "lucid.models.vision.vjepa._pretrained.vjepa_huge_16_384",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa_huge_16_384(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_pretrained.py#L219",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA with a ViT-H/16 encoder at 384 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The released checkpoints are not redistributed here; `True`\nraises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPAModel",
+        "description": "Context encoder, target encoder and predictor, untrained."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa_huge_16_384\")\n>>> config.image_size, config.num_tokens\n(384, 4608)"
+      ],
+      "notes": [
+        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Table 6 — 72.2% on\nSomething-Something-v2 and 77.4% on ImageNet-1k, the paper's best on\nboth.  Three times the tokens of the 224-pixel model: 4608 against\n1568."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPAModel",
+        "type": "VJEPAModel",
+        "params": 1285575808,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 631648000,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_TubeletEmbed",
+                "params": 1967360,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv3d",
+                    "params": 1967360,
+                    "own_params": 1967360,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 629678080,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 19677440,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 6558720,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 4919040,
+                            "own_params": 4919040,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1639680,
+                            "own_params": 1639680,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2560,
+                        "own_params": 2560,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 13113600,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 6558720,
+                            "own_params": 6558720,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 6554880,
+                            "own_params": 6554880,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 32
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 22279808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 491904,
+                "own_params": 491904,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 492800,
+                "own_params": 492800,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa_huge_16_384_cls",
+      "path": "lucid.models.vision.vjepa._pretrained.vjepa_huge_16_384_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa_huge_16_384_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_pretrained.py#L262",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA ViT-H/16 at 384 pixels under the paper's attentive probe.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Not redistributed; `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPAForVideoClassification",
+        "description": "The pretraining networks, an attentive pooler and a classifier."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"vjepa_huge_16_384_cls\").image_size\n384"
+      ],
+      "notes": [
+        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Table 6.  The paper's\n77.9% on ImageNet-1k uses a two-layer probe; the 77.4% this one\nmatches is the single-layer setting."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPAForVideoClassification",
+        "type": "VJEPAForVideoClassification",
+        "params": 1305766928,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vjepa",
+            "type": "VJEPAModel",
+            "params": 1285575808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_Encoder",
+                "params": 631648000,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "_TubeletEmbed",
+                    "params": 1967360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv3d",
+                        "params": 1967360,
+                        "own_params": 1967360,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 629678080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Block",
+                        "params": 19677440,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "Attention",
+                            "params": 6558720,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 4919040,
+                                "own_params": 4919040,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1639680,
+                                "own_params": 1639680,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "MLP",
+                            "params": 13113600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 6558720,
+                                "own_params": 6558720,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 6554880,
+                                "own_params": 6554880,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 32
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_Predictor",
+                "params": 22279808,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 491904,
+                    "own_params": 491904,
+                    "children": []
+                  },
+                  {
+                    "name": "mask_tokens",
+                    "type": "ParameterList",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "Attention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 492800,
+                    "own_params": 492800,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_AttentivePooler",
+            "params": 19678720,
+            "own_params": 1280,
+            "children": [
+              {
+                "name": "norm_keys",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              },
+              {
+                "name": "query",
+                "type": "Linear",
+                "params": 1639680,
+                "own_params": 1639680,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "norm_out",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "MLP",
+                "params": 13113600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 6558720,
+                    "own_params": 6558720,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 6554880,
+                    "own_params": 6554880,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 512400,
+            "own_params": 512400,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa_huge_16_cls",
+      "path": "lucid.models.vision.vjepa._pretrained.vjepa_huge_16_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa_huge_16_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_pretrained.py#L179",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA ViT-H/16 under the paper's attentive probe.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Not redistributed; `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPAForVideoClassification",
+        "description": "The pretraining networks, an attentive pooler and a classifier."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"vjepa_huge_16_cls\").dim\n1280"
+      ],
+      "notes": [
+        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Table 6."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPAForVideoClassification",
+        "type": "VJEPAForVideoClassification",
+        "params": 1305766928,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vjepa",
+            "type": "VJEPAModel",
+            "params": 1285575808,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_Encoder",
+                "params": 631648000,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "_TubeletEmbed",
+                    "params": 1967360,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv3d",
+                        "params": 1967360,
+                        "own_params": 1967360,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 629678080,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Block",
+                        "params": 19677440,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "Attention",
+                            "params": 6558720,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 4919040,
+                                "own_params": 4919040,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1639680,
+                                "own_params": 1639680,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2560,
+                            "own_params": 2560,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "MLP",
+                            "params": 13113600,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 6558720,
+                                "own_params": 6558720,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 6554880,
+                                "own_params": 6554880,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 32
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2560,
+                    "own_params": 2560,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_Predictor",
+                "params": 22279808,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 491904,
+                    "own_params": 491904,
+                    "children": []
+                  },
+                  {
+                    "name": "mask_tokens",
+                    "type": "ParameterList",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "Attention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 492800,
+                    "own_params": 492800,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_AttentivePooler",
+            "params": 19678720,
+            "own_params": 1280,
+            "children": [
+              {
+                "name": "norm_keys",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              },
+              {
+                "name": "query",
+                "type": "Linear",
+                "params": 1639680,
+                "own_params": 1639680,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "norm_out",
+                "type": "LayerNorm",
+                "params": 2560,
+                "own_params": 2560,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "MLP",
+                "params": 13113600,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 6558720,
+                    "own_params": 6558720,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 6554880,
+                    "own_params": 6554880,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 512400,
+            "own_params": 512400,
+            "children": []
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa_large_16",
+      "path": "lucid.models.vision.vjepa._pretrained.vjepa_large_16",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa_large_16(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_pretrained.py#L48",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA with a ViT-L/16 encoder at 224 pixels.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The released checkpoints are not redistributed here; `True`\nraises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPAModel",
+        "description": "Context encoder, target encoder and predictor, untrained."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> config = AutoConfig.from_pretrained(\"vjepa_large_16\")\n>>> config.dim, config.depth, config.num_heads\n(1024, 24, 16)\n>>> config.token_grid, config.num_tokens\n((8, 14, 14), 1568)"
+      ],
+      "notes": [
+        "Reference: Bardes, Adrien, et al., *\"Revisiting Feature Prediction for\nLearning Visual Representations from Video\"*, [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), 2024,\nTable 6 — frozen with an attentive probe: 80.8% on Kinetics-400,\n69.5% on Something-Something-v2, 74.8% on ImageNet-1k.  The paper\nreports 200M parameters for this encoder."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPAModel",
+        "type": "VJEPAModel",
+        "params": 629853568,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "encoder",
+            "type": "_Encoder",
+            "params": 303885312,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "patch_embed",
+                "type": "_TubeletEmbed",
+                "params": 1573888,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "proj",
+                    "type": "Conv3d",
+                    "params": 1573888,
+                    "own_params": 1573888,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "blocks",
+                "type": "ModuleList",
+                "params": 302309376,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 12596224,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 4198400,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 3148800,
+                            "own_params": 3148800,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 1049600,
+                            "own_params": 1049600,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 2048,
+                        "own_params": 2048,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 8393728,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 4198400,
+                            "own_params": 4198400,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 4195328,
+                            "own_params": 4195328,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 24
+                  }
+                ]
+              },
+              {
+                "name": "norm",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              }
+            ],
+            "repeat": 2
+          },
+          {
+            "name": "predictor",
+            "type": "_Predictor",
+            "params": 22082944,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "predictor_embed",
+                "type": "Linear",
+                "params": 393600,
+                "own_params": 393600,
+                "children": []
+              },
+              {
+                "name": "mask_tokens",
+                "type": "ParameterList",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_blocks",
+                "type": "ModuleList",
+                "params": 21293568,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "Block",
+                    "params": 1774464,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "norm1",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "attn",
+                        "type": "Attention",
+                        "params": 591360,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "qkv",
+                            "type": "Linear",
+                            "params": 443520,
+                            "own_params": 443520,
+                            "children": []
+                          },
+                          {
+                            "name": "proj",
+                            "type": "Linear",
+                            "params": 147840,
+                            "own_params": 147840,
+                            "children": []
+                          }
+                        ]
+                      },
+                      {
+                        "name": "norm2",
+                        "type": "LayerNorm",
+                        "params": 768,
+                        "own_params": 768,
+                        "children": []
+                      },
+                      {
+                        "name": "mlp",
+                        "type": "MLP",
+                        "params": 1181568,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "fc1",
+                            "type": "Linear",
+                            "params": 591360,
+                            "own_params": 591360,
+                            "children": []
+                          },
+                          {
+                            "name": "fc2",
+                            "type": "Linear",
+                            "params": 590208,
+                            "own_params": 590208,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ],
+                    "repeat": 12
+                  }
+                ]
+              },
+              {
+                "name": "predictor_norm",
+                "type": "LayerNorm",
+                "params": 768,
+                "own_params": 768,
+                "children": []
+              },
+              {
+                "name": "predictor_proj",
+                "type": "Linear",
+                "params": 394240,
+                "own_params": 394240,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "vjepa_large_16_cls",
+      "path": "lucid.models.vision.vjepa._pretrained.vjepa_large_16_cls",
+      "kind": "function",
+      "labels": [],
+      "signature": "vjepa_large_16_cls(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/ChanLumerico/lucid/blob/160304914/lucid/models/vision/vjepa/_pretrained.py#L94",
+      "subcategory": "pretrained",
+      "summary": "V-JEPA ViT-L/16 under the paper's attentive probe.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "Not redistributed; `True` raises.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `VJEPAConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "VJEPAForVideoClassification",
+        "description": "The pretraining networks, an attentive pooler and a classifier."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import AutoConfig\n>>> AutoConfig.from_pretrained(\"vjepa_large_16_cls\").num_classes\n400"
+      ],
+      "notes": [
+        "Reference: Bardes et al., [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), Section 4.3.  `num_classes`\ndefaults to 400, Kinetics-400's count."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "model_summary": {
+        "name": "VJEPAForVideoClassification",
+        "type": "VJEPAForVideoClassification",
+        "params": 642860816,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "vjepa",
+            "type": "VJEPAModel",
+            "params": 629853568,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "encoder",
+                "type": "_Encoder",
+                "params": 303885312,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "patch_embed",
+                    "type": "_TubeletEmbed",
+                    "params": 1573888,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "proj",
+                        "type": "Conv3d",
+                        "params": 1573888,
+                        "own_params": 1573888,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "blocks",
+                    "type": "ModuleList",
+                    "params": 302309376,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Block",
+                        "params": 12596224,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "Attention",
+                            "params": 4198400,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 3148800,
+                                "own_params": 3148800,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 1049600,
+                                "own_params": 1049600,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 2048,
+                            "own_params": 2048,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "MLP",
+                            "params": 8393728,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 4198400,
+                                "own_params": 4198400,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 4195328,
+                                "own_params": 4195328,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 24
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm",
+                    "type": "LayerNorm",
+                    "params": 2048,
+                    "own_params": 2048,
+                    "children": []
+                  }
+                ],
+                "repeat": 2
+              },
+              {
+                "name": "predictor",
+                "type": "_Predictor",
+                "params": 22082944,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "predictor_embed",
+                    "type": "Linear",
+                    "params": 393600,
+                    "own_params": 393600,
+                    "children": []
+                  },
+                  {
+                    "name": "mask_tokens",
+                    "type": "ParameterList",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_blocks",
+                    "type": "ModuleList",
+                    "params": 21293568,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "Block",
+                        "params": 1774464,
+                        "own_params": 0,
+                        "children": [
+                          {
+                            "name": "norm1",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "attn",
+                            "type": "Attention",
+                            "params": 591360,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "qkv",
+                                "type": "Linear",
+                                "params": 443520,
+                                "own_params": 443520,
+                                "children": []
+                              },
+                              {
+                                "name": "proj",
+                                "type": "Linear",
+                                "params": 147840,
+                                "own_params": 147840,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "name": "norm2",
+                            "type": "LayerNorm",
+                            "params": 768,
+                            "own_params": 768,
+                            "children": []
+                          },
+                          {
+                            "name": "mlp",
+                            "type": "MLP",
+                            "params": 1181568,
+                            "own_params": 0,
+                            "children": [
+                              {
+                                "name": "fc1",
+                                "type": "Linear",
+                                "params": 591360,
+                                "own_params": 591360,
+                                "children": []
+                              },
+                              {
+                                "name": "fc2",
+                                "type": "Linear",
+                                "params": 590208,
+                                "own_params": 590208,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ],
+                        "repeat": 12
+                      }
+                    ]
+                  },
+                  {
+                    "name": "predictor_norm",
+                    "type": "LayerNorm",
+                    "params": 768,
+                    "own_params": 768,
+                    "children": []
+                  },
+                  {
+                    "name": "predictor_proj",
+                    "type": "Linear",
+                    "params": 394240,
+                    "own_params": 394240,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pooler",
+            "type": "_AttentivePooler",
+            "params": 12597248,
+            "own_params": 1024,
+            "children": [
+              {
+                "name": "norm_keys",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "query",
+                "type": "Linear",
+                "params": 1049600,
+                "own_params": 1049600,
+                "children": [],
+                "repeat": 4
+              },
+              {
+                "name": "norm_out",
+                "type": "LayerNorm",
+                "params": 2048,
+                "own_params": 2048,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "MLP",
+                "params": 8393728,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 4198400,
+                    "own_params": 4198400,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 4195328,
+                    "own_params": 4195328,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "head",
+            "type": "Linear",
+            "params": 410000,
+            "own_params": 410000,
+            "children": []
+          }
+        ]
+      }
+    }
+  ],
+  "summary": "V-JEPA — feature prediction for video.",
+  "extended": "Bardes et al., 2024 ([arXiv:2404.08471](https://arxiv.org/abs/2404.08471)).  A clip is cut into tubelets, two\ncollections of blocks hide most of them through the whole depth of the\nclip, and a predictor says what an averaged copy of the encoder would\nreport about what is hidden.  The image version is\n`lucid.models.vision.ijepa`; the transformer they share is in\n`vision/_common`.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "V-JEPA",
+  "citation": "Bardes, Adrien, et al. \"Revisiting Feature Prediction for Learning Visual Representations from Video.\" [arXiv:2404.08471](https://arxiv.org/abs/2404.08471), 2024.",
+  "theory": "V-JEPA learns from video by predicting *features* of what it cannot\nsee.  A clip of $T$ frames becomes $T/2 \\times H/16 \\times W/16$ tubelet tokens; a mask hides most of them; the encoder\n$f_\\theta$ reads what is left, and a predictor $g_\\phi$\nmust produce the output of an exponentially averaged encoder\n$f_{\\bar\\theta}$ at the hidden positions:\n\n\n\n$$\n\\mathcal{L} = \\frac{1}{M} \\sum_{k=1}^{M}\n\\bigl\\| g_\\phi\\bigl(f_\\theta(x_{\\text{context}}),\\, p_k\\bigr)\n- \\mathrm{sg}\\bigl[f_{\\bar\\theta}(x)\\bigr]_k \\bigr\\|_1 .\n$$\n\n**Two mask collections, not one.**  Eight blocks covering 15% of the\nframe each, and two covering 70%, both running the full depth of the\nclip in time.  Their union hides about 90% of the tokens.  A mask\nthat leaves a tube visible through time makes the task trivial ---\nthe answer is in the next frame --- so both collections extend\nthrough it, and the model is asked the two questions at once, with a\nlearned mask token of its own for each.\n\n**The target encoder sees everything; the context encoder does not.**\nMasking here removes tokens rather than attending around them, so the\ncontext encoder's sequence is genuinely shorter, while the averaged\nencoder reads the whole clip and its output is normalised before any\nblock is taken from it.  No gradient flows into it at all.\n\n**Prediction in feature space is what makes the video tractable.**\nA generative video objective must settle every detail that differs\nbetween plausible continuations; this one may drop whatever the\naveraged encoder has already learned to drop.  Frozen, with an\nattentive probe on top, the result reaches 82.0% on Kinetics-400 and\n71.4% on Something-Something-v2 --- the latter being the benchmark\nthat punishes models which only recognise appearance.",
+  "tasks": [
+    "image-classification"
+  ]
+}
